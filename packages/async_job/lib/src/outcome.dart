@@ -150,26 +150,28 @@ final class Done<T> extends Outcome<T> {
 ///
 /// The core hands it to [JobObserver.onError] first, once. If nobody then
 /// observes the job through [Job.done], [Job.value], [Job.ignoreFailure] or
-/// failure forwarding by [Job.then], it hands [error] to the job's creation
-/// zone through [Zone.handleUncaughtError]. The check runs on the microtask
+/// failure forwarding by [Job.then], somebody answers for [error]:
+/// [JobAnswerer.onUnanswered] of an observer that answers, by default the
+/// job's creation zone through [Zone.handleUncaughtError], where it goes
+/// straight away without such an observer. The check runs on the microtask
 /// after completion; a continuation attached within that grace period gets a
-/// chance to receive the outcome first.
+/// chance to receive the outcome first. A [Failed] made of a cancellation — a
+/// [Cancelled], or a `ParallelWaitError` of nothing but cancellations — goes
+/// to that zone past the answer, which never sees a cancellation.
 ///
 /// This is the error that has an outcome of its own. The failure of the body of
 /// a job that ends [Cancelled] has none: whoever reads that outcome gets the
 /// cancellation, and the error goes on the way of the errors below; one that
 /// [Job.isCancellationError] names stops after [JobObserver.onError], and
-/// [Job.ignoreFailure] silences it. [Cancelled] itself is never reported to the
-/// zone.
+/// [Job.ignoreFailure] silences it. A [Cancelled] outcome is never reported to
+/// the zone.
 ///
 /// The errors with no outcome to carry them — a late failure of an action
 /// [JobContext.abandonable] walked away from, a disposer, a callback of
 /// [JobContext.onCancel], [Job.whenCancelled] or [Job.whenFinished], a failure
 /// of work handed over with [JobContext.unattended], a failure an engine hands
-/// to a job already over — take the other path: [JobObserver.onError] hears
-/// them, and an observer that is a [JobAnswerer] answers for them, by default
-/// in the zone the job was created in, where they go straight away without such
-/// an observer.
+/// to a job already over — go the same way at once, with nobody to observe
+/// them first: [JobObserver.onError] hears them, and they are answered for.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
   final Object error;

@@ -28,10 +28,14 @@ package's too: see
   reads `ctx.state`. See
   [Why `currentState` and not `state`](README.md#why-currentstate-and-not-state).
 - **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
-  error no outcome carries.** Setting `Solo.observer`, or overriding `onError`
-  without calling `super`, no longer keeps such an error out of the zone: set
+  error nobody else has: one no outcome carries, and a `Failed` nobody
+  observes.** Setting `Solo.observer`, or overriding `onError` without calling
+  `super`, no longer keeps such an error out of the zone: set
   `Solo.unansweredHandler`, a `SoloUnansweredHandler`, or override
-  `onUnanswered`. See
+  `onUnanswered`. A `Failed` nobody observes reaches the zone as it did in
+  `0.2.0` only while neither is there: with a handler set, or `onUnanswered`
+  overridden, it goes there, a microtask after the job ends, and not to the
+  zone. So does the failure of a `canStart` that threw. See
   [Answering for an error](doc/errors.md#answering-for-an-error).
 - **The state of a closed controller is final.** Once the engine has finished
   closing, `externalSetState` throws a `StateError`: the new `Solo.isFinished`

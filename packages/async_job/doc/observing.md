@@ -705,17 +705,15 @@ runZonedGuarded(
 
 | The error | Reported by |
 | --- | --- |
-| A failure whose outcome nobody observed | the zone |
+| A failure whose outcome nobody observed | `Reports`, which names the job |
 | A failure whose outcome somebody observed | nobody: the code that observed it has it |
-| A failure of a child that its parent let out of the body | the zone once, as the parent's failure, if nobody observed the parent |
+| A failure of a child that its parent let out of the body | `Reports` once, as the parent's failure, if nobody observed the parent |
 | An error no outcome carries, such as one of the body of a cancelled job, of cleanup, of a callback, of an action the job stopped waiting for | `Reports`, which names the job |
+| An error the app throws outside its jobs | the zone |
 
-`Reports` answers for the errors no outcome carries, so they stop there and do
-not reach the zone. A failure whose outcome nobody observed goes to the zone
-and not to `onUnanswered`, and so does whatever the app throws outside its
-jobs. An observer cannot keep such a failure from the zone: the core sends it
-there itself, and the observer only hears it in `onError`. `onError` stays out
-of the report: a failure it hears may reach the zone as well, and it hears one
-failure once on each job whose outcome that failure is. The zone does not know
-the job, so its report does not name it.
+`Reports` answers for every error of a job that nobody else has, so they stop
+there and do not reach the zone; the zone gets what the app throws outside its
+jobs. The zone does not know a job, so its report does not name one. `onError`
+stays out of the report: a failure it hears may be reported as well, and it
+hears one failure once on each job whose outcome that failure is.
 [Where each error goes](#where-each-error-goes) shows every way an error takes.

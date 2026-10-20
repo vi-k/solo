@@ -2553,7 +2553,11 @@ void main() {
 
       expect(
         section,
-        contains('A `Failed` that nobody observed goes to the creation zone'),
+        contains(
+          '`onUnanswered` of the controller hands it to '
+          '`Solo.unansweredHandler`, and with no handler set to the creation '
+          'zone',
+        ),
       );
       expect(section, contains('leaves the reporting to the hooks'));
     });

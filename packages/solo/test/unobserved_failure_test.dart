@@ -10,7 +10,7 @@ import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
-  test('a failure nobody observed reaches the zone', () {
+  test('a failure nobody observed is answered for', () {
     runSolo((solo, journal, async) {
       final errors = <String>[];
       _inZone(errors, () {
@@ -19,11 +19,12 @@ void main() {
         });
       });
       async.flushMicrotasks();
-      expect(errors, ['Bad state: boom']);
+      expect(errors, isEmpty);
       expect(journal.take(), [
         '[bad] started',
         '[bad] error Bad state: boom',
         '[bad] finished Failed(Bad state: boom)',
+        '[bad] unanswered Bad state: boom',
       ]);
     });
   });
@@ -181,12 +182,13 @@ void main() {
       async.flushMicrotasks();
       solo.close();
       async.flushTimers();
-      expect(errors, ['Bad state: boom']);
+      expect(errors, isEmpty);
       expect(journal.take(), [
         '[job] started',
         '[job] error Bad state: boom',
         '[job] finished Failed(Bad state: boom)',
         'closed',
+        '[job] unanswered Bad state: boom',
       ]);
     });
   });
@@ -208,11 +210,12 @@ void main() {
       async.flushMicrotasks();
       job.cancel();
       async.flushTimers();
-      expect(errors, ['Bad state: boom']);
+      expect(errors, isEmpty);
       expect(journal.take(), [
         '[job] started',
         '[job] error Bad state: boom',
         '[job] finished Failed(Bad state: boom)',
+        '[job] unanswered Bad state: boom',
       ]);
     });
   });

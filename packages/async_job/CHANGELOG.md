@@ -10,9 +10,13 @@
 - **`Job` gains `whenFinished`.** A class that implements `Job` itself adds it,
   and a subclass of `JobBase` with a member of that name renames its own.
 - **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
-  error no outcome carries.** An observer from `0.2.0` compiles unchanged, and
-  the errors it used to swallow reach the zone; one that mixes in `JobAnswerer`
-  and overrides `onUnanswered` answers for them there. See
+  error nobody else has: one no outcome carries, and a `Failed` nobody
+  observes.** An observer from `0.2.0` compiles unchanged, and the errors it
+  used to swallow reach the zone; one that mixes in `JobAnswerer` and overrides
+  `onUnanswered` answers for them there. A `Failed` nobody observes reaches the
+  zone as it did in `0.2.0` only while nobody answers: an observer that answers
+  gets it in `onUnanswered`, a microtask after the job ends, and the zone does
+  not. A `Failed` made of a cancellation still goes to the zone. See
   [Answering for errors](doc/observing.md#answering-for-errors).
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`.** `JobBase.debug` is `Job.debug` now. See

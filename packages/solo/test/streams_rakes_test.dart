@@ -618,10 +618,10 @@ void main() {
         ]);
         expect(errors, ['Bad state: callback failed']);
         expect(bench.heard, ['Job(each): Bad state: callback failed']);
-        expect(bench.unanswered, isEmpty);
+        expect(bench.unanswered, ['Job(each): Bad state: callback failed']);
         _says("still holds the parent, but its failure is not the parent's: "
             'the parent ends `Done`, and the failure goes where a failure '
-            'nobody read goes, to the zone');
+            'nobody read goes, to `onUnanswered` and by default to the zone');
       });
 
       test('the progress in _sync is such a child', () {
@@ -643,8 +643,7 @@ void main() {
             '`_sync` at the top of [Children and chains](children.md)');
       });
 
-      test('ignoreFailure() on the child keeps its failure out of the zone',
-          () {
+      test('ignoreFailure() on the child keeps its failure out of both', () {
         late Bench bench;
         final errors = _zone((async) {
           bench = Bench()
@@ -660,7 +659,8 @@ void main() {
 
         expect(errors, isEmpty);
         expect(bench.heard, ['Job(each): Bad state: callback failed']);
-        _says('`ignoreFailure()` on the child keeps it out of the zone.');
+        expect(bench.unanswered, isEmpty);
+        _says('`ignoreFailure()` on the child keeps it out of both.');
       });
 
       test('events are delivered one at a time', () {

@@ -35,8 +35,9 @@ part 'queue.dart';
 /// returned. [onUnanswered] is the one with a body of its own: what reaches
 /// it and has nowhere else to go — a disposer, an `onCancel` callback, a late
 /// failure of an abandoned call or of work handed to `JobContext.unattended`,
-/// the failure of the body of a job that ends [Cancelled], a rule that threw —
-/// goes on to [unansweredHandler], or to the zone when none is set. If it
+/// the failure of the body of a job that ends [Cancelled], a rule that threw,
+/// a [Failed] nobody observes — goes on to [unansweredHandler], or to the zone
+/// when none is set. If it
 /// throws, the error it was asked about goes to the zone first. [publish] is
 /// not one of them: it is how a subclass delivers the state, and an error
 /// there is the subclass's own business.
@@ -53,9 +54,10 @@ abstract class Solo<S extends Object> {
   /// The errors [onError] describes — a disposer, an `onCancel` callback, a
   /// late failure of an abandoned call, the failure of the body of a job that
   /// ends [Cancelled], a rule that threw — have no outcome of their own to
-  /// carry them anywhere. With nobody set here they reach the zone the job was
-  /// created in; with a handler set they go to it instead, for every controller
-  /// of the process, and what it does with one is the end of it.
+  /// carry them anywhere, and a [Failed] nobody observes has nobody to read
+  /// it. With nobody set here they reach the zone the job was created in; with
+  /// a handler set they go to it instead, for every controller of the process,
+  /// and what it does with one is the end of it.
   ///
   /// One global handler, set once at startup, the way [observer] is. It is
   /// separate from the observer on purpose: answering for an error is a
@@ -935,7 +937,7 @@ abstract class Solo<S extends Object> {
         ),
       );
       // `untilFinished`, not `done`: closing waits for the job, it does not
-      // observe its outcome, so a failure here still reaches the zone.
+      // observe its outcome, so a failure here is still answered for.
       current._untilFinished.then((_) => _finishClose(completer));
     }
   }
@@ -1024,12 +1026,12 @@ abstract class Solo<S extends Object> {
   /// cancellation, whoever reads it: `job.value`, `ctx.run`, a group.
   /// [Job.ignoreFailure] keeps the last two from coming here, and
   /// [Job.isCancellationError] keeps away the failures it names of a job that
-  /// has accepted a cancellation. Any other failure of a body does not come
-  /// here — it becomes a [Failed], where `run(ifFailed: ...)` computes a state
-  /// from it and an outcome nobody observes reaches the zone by itself — and
-  /// neither does a `canStart` that threw, for the same reason. Every error
-  /// that comes here has been through [onError] already: one error is announced
-  /// once.
+  /// has accepted a cancellation. Any other failure of a body becomes a
+  /// [Failed], where `run(ifFailed: ...)` computes a state from it, and so does
+  /// a `canStart` that threw; it comes here only when nobody observes that
+  /// outcome, a microtask after the job ends. A [Failed] made of a
+  /// cancellation goes to the zone past this hook. Every error that comes here
+  /// has been through [onError] already: one error is announced once.
   ///
   /// **What the default body does.** With no [unansweredHandler] set, the error
   /// goes to the zone the job was created in — the same thing the core does

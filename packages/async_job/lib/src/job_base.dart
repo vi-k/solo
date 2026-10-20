@@ -52,7 +52,8 @@ abstract class JobBase<T> implements Job<T> {
   /// observer when it is adopted.
   JobObserver? _observer;
 
-  /// The zone the job was created in; an unobserved [Failed] goes here.
+  /// The zone the job was created in; an unobserved [Failed] goes here unless
+  /// an observer answers for it.
   ///
   /// A job created inside [JobContext.unattended] takes the zone that work
   /// was started from, not the fork: the failure is the new job's own, and
@@ -192,11 +193,11 @@ abstract class JobBase<T> implements Job<T> {
   /// Whether anyone observed the outcome, directly or by forwarding it.
   bool _observed = false;
 
-  /// Whether the zone has heard the failure of this job: it went there because
-  /// nobody observed it in time — see [_reportUnobserved] — or it is the
-  /// failure of a source the zone heard it from, carried on. A continuation
-  /// attached later still carries it, and must not send it there a second time.
-  bool _failureWentToZone = false;
+  /// Whether somebody has answered for the failure of this job: nobody
+  /// observed it in time — see [_reportUnobserved] — or it is the failure of
+  /// a source that was answered for, carried on. A continuation attached
+  /// later still carries it, and must not answer for it a second time.
+  bool _failureAnswered = false;
 
   /// Whether [Job.ignoreFailure] was called: nobody wants this job's failure.
   ///
@@ -1008,13 +1009,13 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Waiting without observing: an engine waits for a job to finish
   /// without marking its outcome observed, so a failure nobody looked at
-  /// still reaches the zone. Code outside an engine registers with
+  /// is still answered for. Code outside an engine registers with
   /// [whenFinished] instead.
   @protected
   Future<void> get untilFinished => _done.future.then((_) {});
 
   /// The zone the job was created in, where an unobserved failure of the
-  /// job goes.
+  /// job goes when no observer answers for it.
   ///
   /// An engine that starts a job later, from a queue, starts it here, as
   /// `creationZone.run(start)`: the queue runs in the zone of whatever woke
@@ -1194,7 +1195,7 @@ abstract class JobBase<T> implements Job<T> {
   /// of the body, which is announced while the job still runs, it is
   /// announced after the job is over, so an `onError` that cancels finds
   /// it finished and the outcome stays [Failed]. If nobody then observes
-  /// the outcome, the error reaches the zone as any [Failed] does. Do not
+  /// the outcome, the error is answered for as any [Failed] is. Do not
   /// call [notifyObserver] for it first: the observer would hear it twice.
   /// An error the core has announced for this job already — one its body
   /// threw — is not announced again.
@@ -1370,8 +1371,8 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Announces [error] to the observer and asks nobody to answer for it.
   ///
-  /// For an error that has an outcome of its own — the body's. It reaches the
-  /// zone through that outcome, if nobody observes it, and shouting twice about
+  /// For an error that has an outcome of its own — the body's. It is answered
+  /// for through that outcome, if nobody observes it, and shouting twice about
   /// one error is worse than once. When the job ends [Cancelled], the outcome
   /// does not carry it, and it is answered later without being announced again
   /// — unless [Job.ignoreFailure] was called or [Job.isCancellationError] names
@@ -1444,9 +1445,9 @@ abstract class JobBase<T> implements Job<T> {
   /// the zone: `solo`, for example, sends one here when neither an override of
   /// `Solo.onUnanswered` nor `Solo.unansweredHandler` took it. The core reaches
   /// the zone by itself, through the default body of
-  /// [JobAnswerer.onUnanswered], through [notifyError] without an observer that
-  /// answers and through an unobserved [Failed]. A cancellation is held back
-  /// here as it is there, so an engine does not write that rule again.
+  /// [JobAnswerer.onUnanswered] and through the answer of a job without an
+  /// observer that answers. A cancellation is held back here as it is there,
+  /// so an engine does not write that rule again.
   @protected
   void reportToZone(Object error, StackTrace stackTrace) =>
       _toZone(error, stackTrace);
@@ -1463,7 +1464,8 @@ abstract class JobBase<T> implements Job<T> {
   /// after the group heard of it (see [_failureWentToGroup]), and comes here
   /// only as the first, when the group does not throw it. The job told its
   /// observer itself, where its body was caught, and one error is announced
-  /// once — but an error nobody answered for still has to reach somebody.
+  /// once — but an error nobody answered for still has to reach somebody. So
+  /// does a [Failed] outcome nobody observed, from [_reportUnobserved].
   ///
   /// The answer is asked for one failure at a time: a `ParallelWaitError` is
   /// walked as [Job.visitErrors] walks it, each failure in it goes to the
@@ -1561,12 +1563,12 @@ abstract class JobBase<T> implements Job<T> {
   /// In Flutter the zone is `PlatformDispatcher.onError`, and a
   /// cancellation reaching it says nothing anybody can act on.
   ///
-  /// The route of an unobserved [Failed] is not this one and keeps its own
-  /// rule: there the outcome decides, not the object it carries, so a failure
-  /// somebody built out of a [Cancelled] on purpose still reaches the zone. A
-  /// failure the outcome does not carry — of a branch the group did not throw,
-  /// or of the body of a job that ends [Cancelled] — has no outcome to decide,
-  /// comes this way, and such a [Cancelled] stays out.
+  /// An unobserved [Failed] made of a cancellation does not come this way and
+  /// keeps its own rule: there the outcome decides, not the object it carries,
+  /// so a failure somebody built out of a [Cancelled] on purpose still reaches
+  /// the zone. A failure the outcome does not carry — of a branch the group did
+  /// not throw, or of the body of a job that ends [Cancelled] — has no outcome
+  /// to decide, comes this way, and such a [Cancelled] stays out.
   void _toZone(Object error, StackTrace stackTrace) {
     if (_isCancellation(error)) {
       _debug(() => '$this kept a cancellation out of the zone: $error');
@@ -2247,7 +2249,10 @@ abstract class JobBase<T> implements Job<T> {
     }
   }
 
-  /// Hands an unobserved failure to the zone that created the job.
+  /// Answers for a failure nobody observed, through [_handleUnanswered]: the
+  /// observer's [JobAnswerer.onUnanswered], or the zone that created the job.
+  /// A failure made of a cancellation goes to that zone past the answer,
+  /// which never sees a cancellation.
   ///
   /// One microtask of grace, the same as Dart gives an unhandled `Future`
   /// error: a listener attached right after the job finished still counts.
@@ -2260,9 +2265,15 @@ abstract class JobBase<T> implements Job<T> {
         _reportUnobserved(outcome);
         return;
       }
-      _debug(() => '$this failure went to the zone');
-      _failureWentToZone = true;
-      _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
+      _failureAnswered = true;
+      if (_isCancellation(outcome.error)) {
+        // Made of a cancellation on purpose: the outcome decides here, not
+        // the object it carries, and an answer never sees a cancellation.
+        _debug(() => '$this failure went to the zone');
+        _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
+        return;
+      }
+      _handleUnanswered(outcome.error, outcome.stackTrace);
     });
   }
 

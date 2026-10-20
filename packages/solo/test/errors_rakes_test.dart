@@ -681,8 +681,8 @@ void main() {
   group('Answering for an error', () {
     test('the override of the page answers, and the error stops there', () {
       _says(
-        'The override above answers for them, and they reach nothing '
-        'else',
+        'The override above answers for them, and for a `Failed` nobody '
+        'observes, and they reach nothing else',
       );
       final handled = <String>[];
       late answering.ProfileController profile;
@@ -707,15 +707,16 @@ void main() {
       _row(
         'An error of the body, and the job ends `Failed` with it',
         '`onError`',
-        'Whoever observes the outcome; the creation zone if nobody does',
+        'Whoever observes the outcome; `onUnanswered` if nobody does',
       );
       _says(
         '`run(ifFailed: ...)` turns the failure into the state the '
         'screen shows',
       );
       _says(
-        'When nobody observes the outcome, the error goes to the '
-        'creation zone, the zone the job was created in',
+        'When nobody observes the outcome, `onUnanswered` answers for the '
+        'error, and by default it sends the error to the creation zone, the '
+        'zone the job was created in',
       );
       final handled = <String>[];
       late Bench bench;
@@ -734,9 +735,13 @@ void main() {
       expect('${job.outcome}', 'Failed(Bad state: the body)');
       expect(bench.currentState, -1, reason: 'the state handler ran');
       expect(bench.heard, ['body: the body']);
-      expect(bench.unanswered, isEmpty, reason: 'nobody is asked to answer');
-      expect(handled, isEmpty);
-      expect(ran.errors, ['the body'], reason: 'nobody observed the outcome');
+      expect(
+        bench.unanswered,
+        ['body: the body'],
+        reason: 'nobody observed the outcome',
+      );
+      expect(handled, ['the body'], reason: 'the handler is asked');
+      expect(ran.errors, isEmpty, reason: 'and the zone is not');
     });
 
     group('what no outcome carries:', () {
@@ -774,8 +779,9 @@ void main() {
           'reads that outcome gets the cancellation.',
         );
         _says(
-          'Some errors have no outcome to ride on, and the controller '
-          'whose job it was answers for them in `onUnanswered`',
+          'When nobody does, and for the errors that have no outcome to '
+          'ride on, the controller whose job it was answers in '
+          '`onUnanswered`',
         );
       });
 
@@ -2596,8 +2602,10 @@ void main() {
           'whichever hook it is',
         );
         _says(
-          'A `Failed` that nobody observed goes to the creation zone '
-          'through `Zone.handleUncaughtError`',
+          'Nobody answers for that `Failed` either. `onUnanswered` of the '
+          'controller hands it to `Solo.unansweredHandler`, and with no '
+          'handler set to the creation zone through '
+          '`Zone.handleUncaughtError`',
         );
         late Bench bench;
         final ran = _run((async) {
@@ -2611,7 +2619,7 @@ void main() {
 
         expect(stage.crashes, ['no network'], reason: 'the reporter has it');
         expect(ran.errors, ['no network'], reason: 'and so has the zone');
-        expect(bench.unanswered, isEmpty);
+        expect(bench.unanswered, ['load: no network']);
       });
 
       test('a load that is cancelled, and one that succeeds', () {
@@ -2664,7 +2672,7 @@ void main() {
 
         expect(stage.crashes, ['no network'], reason: 'the reporter has it');
         expect(ran.errors, ['no network'], reason: 'and so has the zone');
-        expect(bench.unanswered, isEmpty);
+        expect(bench.unanswered, ['load: no network']);
       });
     });
 
@@ -2782,8 +2790,9 @@ void main() {
         '`onUnanswered`',
       );
       _says(
-        'An override of `onUnanswered` or an installed '
-        '`Solo.unansweredHandler` closes the second',
+        'The way to the creation zone through `onUnanswered` is the '
+        "application's to close: an override of `onUnanswered` or an "
+        'installed `Solo.unansweredHandler` closes it',
       );
       _says(
         'With no handler set, the error goes to the creation zone',
@@ -2991,7 +3000,7 @@ void main() {
         [
           'An error of the body, and the job ends `Failed` with it',
           '`onError`',
-          'Whoever observes the outcome; the creation zone if nobody does',
+          'Whoever observes the outcome; `onUnanswered` if nobody does',
         ],
         [
           'An error of a start rule: `canStart` throws instead of answering',
@@ -4161,8 +4170,8 @@ void main() {
       test('no free slot', () {
         _says(
           '1. The error goes to `onError`: a crash report for an ordinary '
-          '"not now". 2. The job ends `Failed`, and that outcome reaches '
-          'the creation zone unless somebody observes it',
+          '"not now". 2. The job ends `Failed`, and `onUnanswered` answers '
+          'for that outcome unless somebody observes it',
         );
         _says(
           'The state handler passed as `ifFailed` to that same `run` is '
@@ -4189,7 +4198,7 @@ void main() {
 
         expect('${job.outcome}', 'Failed(Bad state: no free slot)');
         expect(pool.heard, ['take: no free slot']);
-        expect(pool.unanswered, isEmpty);
+        expect(pool.unanswered, ['take: no free slot']);
         expect(ran.errors, ['no free slot']);
         expect(stage.trace, isEmpty, reason: 'neither body nor handler ran');
         expect('${pool.currentState}', 'Slots(0)');

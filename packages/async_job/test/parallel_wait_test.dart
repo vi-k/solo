@@ -1036,7 +1036,10 @@ void main() {
       expect((result.error as ParallelWaitError).values, same(values));
     });
 
-    fakeAsyncTest('an unobserved mixed envelope reaches the zone once',
+    // Answered for one failure at a time, as any error nobody answered for:
+    // the cancellation inside is left out.
+    fakeAsyncTest(
+        'an unobserved mixed envelope reaches the zone as its failure alone',
         () async {
       final caught = <Object>[];
       final failure = StateError('mixed zone failure');
@@ -1053,7 +1056,7 @@ void main() {
         },
         (error, stackTrace) => caught.add(error),
       );
-      expect(caught, [same(envelope)]);
+      expect(caught, [same(failure)]);
     });
 
     fakeAsyncTest('a mixed nested envelope stays as the outer object',

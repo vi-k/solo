@@ -73,15 +73,15 @@ final class _ThenJob<T, R> extends JobBase<R> {
         start();
       case Failed():
         final source = _source!.._observed = true;
-        // Attached after the zone heard the failure of the source: the
+        // Attached after the failure of the source was answered for: the
         // continuation carries the failure on, and its observer hears it,
-        // but nobody is left to answer it for. Unobserved, it would reach a
-        // zone a second time -- and so would it from a continuation of this
-        // one, which is why the mark passes on.
-        final heardAlready = source._failureWentToZone;
+        // but nobody is left to answer it for. Unobserved, it would be
+        // answered for a second time -- and so would it from a continuation
+        // of this one, which is why the mark passes on.
+        final heardAlready = source._failureAnswered;
         if (heardAlready) {
           _observed = true;
-          _failureWentToZone = true;
+          _failureAnswered = true;
         }
         _noteAnnounced(result.error);
         notifyObserver(result.error, result.stackTrace);

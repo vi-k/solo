@@ -12,6 +12,7 @@ import 'support/test_solo.dart';
 final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
   final log = <String>[];
   final errors = <Object>[];
+  final unanswered = <Object>[];
   void Function(S state)? changed;
 
   _Controller(super.initialState);
@@ -39,7 +40,8 @@ final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
   // A recorder of a test: it reads the errors and answers for them here,
   // so nothing reaches the handler or the zone.
   @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {}
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      unanswered.add(error);
 }
 
 void _run(void Function(_Controller<String> solo, FakeAsync clock) body) {
@@ -561,23 +563,17 @@ void main() {
   });
 
   test('an error handler does not observe a failed job for its caller', () {
-    final uncaught = <Object>[];
-    final failure = StateError('unobserved');
-    runZonedGuarded(
-      () {
-        _run((solo, clock) {
-          solo.run<String, void>(
-            (_) async => throw failure,
-            ifFailed: (_, __, ___) => 'failure',
-          );
-          clock.flushMicrotasks();
-          expect(solo.currentState, 'failure');
-          expect(solo.errors, [failure]);
-        });
-      },
-      (error, _) => uncaught.add(error),
-    );
-    expect(uncaught, [failure]);
+    _run((solo, clock) {
+      final failure = StateError('unobserved');
+      solo.run<String, void>(
+        (_) async => throw failure,
+        ifFailed: (_, __, ___) => 'failure',
+      );
+      clock.flushMicrotasks();
+      expect(solo.currentState, 'failure');
+      expect(solo.errors, [failure]);
+      expect(solo.unanswered, [failure]);
+    });
   });
 
   test('observer changes a parent predicate without replacing state again', () {

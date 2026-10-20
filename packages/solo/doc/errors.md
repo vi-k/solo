@@ -6,11 +6,12 @@ A job that fails ends `Failed`. Three parts of the code deal with its error:
 - `onError`, a hook of the controller, hears the error, to report it;
 - whoever observes the outcome answers for the error.
 
-When nobody observes the outcome, the error goes to the creation zone, the zone
-the job was created in. There it is an uncaught error, and in the root zone an
-uncaught error can end the application. Some errors have no outcome to ride on,
-and `onUnanswered` answers for those.
-[Where each error goes](#where-each-error-goes) lists every kind.
+When nobody observes the outcome, `onUnanswered` answers for the error, and by
+default it sends the error to the creation zone, the zone the job was created
+in. There it is an uncaught error, and in the root zone an uncaught error can
+end the application. Some errors have no outcome to ride on, and `onUnanswered`
+answers for those as well. [Where each error goes](#where-each-error-goes)
+lists every kind.
 
 The sections of the page, by what the application needs:
 
@@ -107,9 +108,10 @@ happens:
    the error and reports it.
 2. A hook that is told of a failure does not observe the outcome, whichever
    hook it is. Nobody has read the outcome of the load.
-3. A `Failed` that nobody observed goes to the creation zone through
-   `Zone.handleUncaughtError`. In the root zone that can end the application, a
-   moment after the report was sent.
+3. Nobody answers for that `Failed` either. `onUnanswered` of the controller
+   hands it to `Solo.unansweredHandler`, and with no handler set to the
+   creation zone through `Zone.handleUncaughtError`. In the root zone that can
+   end the application, a moment after the report was sent.
 
 ### Observing the outcome
 
@@ -137,9 +139,9 @@ go too.
 ## Answering for an error
 
 Most errors ride on an outcome: a failed body becomes `Failed`, and whoever
-observes it answers for it. Some errors have no outcome to ride on, and the
-controller whose job it was answers for them in `onUnanswered`. Here the
-profile keeps them in a list:
+observes it answers for it. When nobody does, and for the errors that have no
+outcome to ride on, the controller whose job it was answers in `onUnanswered`.
+Here the profile keeps them in a list:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -162,8 +164,9 @@ These are the errors that no outcome carries:
 - the failure of the body of a job that ends `Cancelled`: whoever reads that
   outcome gets the cancellation.
 
-The override above answers for them, and they reach nothing else. This
-controller owns what its jobs failed at and says so.
+The override above answers for them, and for a `Failed` nobody observes, and
+they reach nothing else. This controller owns what its jobs failed at and says
+so.
 
 A controller without such an override keeps the default body. It hands the
 error to `Solo.unansweredHandler`, one handler for the whole application, set
@@ -220,7 +223,7 @@ created in; for a change made by `externalSetState`, the zone of its caller.
 
 | The error | Who hears it | Who answers for it |
 | --- | --- | --- |
-| An error of the body, and the job ends `Failed` with it | `onError` | Whoever observes the outcome; the creation zone if nobody does |
+| An error of the body, and the job ends `Failed` with it | `onError` | Whoever observes the outcome; `onUnanswered` if nobody does |
 | An error of a start rule: `canStart` throws instead of answering | `onError` | The same: the job ends `Failed` with it |
 | An error of the body, and the job ends `Cancelled` | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the job |
 | A late error of an operation `abandonable` stopped waiting for | `onError` | `onUnanswered` |
@@ -237,10 +240,10 @@ created in; for a change made by `externalSetState`, the zone of its caller.
 | An error a listener throws while it is notified | `onListenerError` | `onListenerError`; by default the current zone |
 
 An error can reach both `onError` and the zone, and an application that reports
-in both places hears it twice. Two of the ways to the creation zone are the
-application's to close: nobody observed the outcome, or nobody answers for the
-error. Observing the outcome closes the first way. An override of
-`onUnanswered` or an installed `Solo.unansweredHandler` closes the second.
+in both places hears it twice. The way to the creation zone through
+`onUnanswered` is the application's to close: an override of `onUnanswered` or
+an installed `Solo.unansweredHandler` closes it. Observing the outcome keeps a
+failure off that way to begin with.
 
 An error that `onUnanswered` takes can come after the job has completed. It
 does not replace the outcome the job already has.
@@ -462,7 +465,7 @@ canStart: (state) {
 A throw reads like a refusal, and it is a failure. This is what happens:
 
 1. The error goes to `onError`: a crash report for an ordinary "not now".
-2. The job ends `Failed`, and that outcome reaches the creation zone unless
+2. The job ends `Failed`, and `onUnanswered` answers for that outcome unless
    somebody observes it.
 3. The state handler passed as `ifFailed` to that same `run` is not called. A
    state handler computes the state after a job that ran, and this one never

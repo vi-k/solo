@@ -539,7 +539,10 @@ void main() {
       expect(zone, ['Bad state: read failed']);
     });
 
-    test('nor does the observer of the job, answering or not', () {
+    // Hearing is not observing: the failure is still nobody's, and it goes
+    // where any error nobody answered for goes — to the answer of an
+    // observer that answers, or to the zone.
+    test('nor does the observer of the job, and one that answers takes it', () {
       for (final observer in [Listening(), Answering()]) {
         final zone = zoneErrorsOf((async) {
           Job<void>(
@@ -548,13 +551,21 @@ void main() {
           );
         });
 
-        final kind = observer is Answering ? 'answering' : 'listening';
+        final answering = observer is Answering;
+        final kind = answering ? 'answering' : 'listening';
         expect(
           observer.heard,
-          ['onError: Bad state: read failed'],
+          [
+            'onError: Bad state: read failed',
+            if (answering) 'onUnanswered: Bad state: read failed',
+          ],
           reason: kind,
         );
-        expect(zone, ['Bad state: read failed'], reason: kind);
+        expect(
+          zone,
+          [if (!answering) 'Bad state: read failed'],
+          reason: kind,
+        );
       }
     });
 

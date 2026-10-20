@@ -27,10 +27,11 @@ final class _Recorder extends Solo<TestState> with OpenSolo<TestState> {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       lines.add('$name.onError [${job.key}] $error');
-  // A recorder of a test: it reads the errors and answers for them here,
-  // so nothing reaches the handler or the zone.
+  // A recorder of a test: it answers for the errors here, so nothing
+  // reaches the handler or the zone.
   @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {}
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      lines.add('$name.onUnanswered [${job.key}] $error');
 }
 
 void main() {
@@ -44,10 +45,9 @@ void main() {
         host.run<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() {
             // A job of the other controller, started from the background
-            // of this one. Its failure is its own: it goes to the hook of
-            // the controller that made it, and, unobserved, to the zone
-            // the body runs in — not to the hook of the job that started
-            // the work.
+            // of this one. Its failure is its own: it goes to the hooks of
+            // the controller that made it, unobserved to its answer too —
+            // not to the hooks of the job that started the work.
             other.run<TestState, void>(
               key: 'stray',
               (c) async => throw StateError('stray boom'),
@@ -61,8 +61,11 @@ void main() {
       other.close();
       async.flushTimers();
     });
-    expect(lines, ['other.onError [stray] Bad state: stray boom']);
-    expect(zone, ['Bad state: stray boom']);
+    expect(lines, [
+      'other.onError [stray] Bad state: stray boom',
+      'other.onUnanswered [stray] Bad state: stray boom',
+    ]);
+    expect(zone, isEmpty);
   });
 
   test('a late failure arrives after the controller has closed', () {

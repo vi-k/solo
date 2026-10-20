@@ -11,7 +11,8 @@ import 'package:test/test.dart';
 import 'support/delay.dart';
 import 'support/probe_job.dart';
 
-// Two hooks see an error no outcome carries, and they do different work:
+// Two hooks see an error no outcome carries, or one whose outcome nobody
+// observed, and they do different work:
 // `onError` is told about it, `onUnanswered` answers for it. An observer
 // that overrides only the first changes nowhere the error goes; one that
 // overrides the second takes the answer, and `super` hands it on to the
@@ -506,13 +507,17 @@ void main() {
     );
   });
 
-  group('a failure of a job that ends Failed never comes to onUnanswered', () {
+  group('the failure a job ends Failed with comes to onUnanswered', () {
     // Each job also fails in its cleanup, so a hook that is never called
     // at all cannot pass for one that is called at the right times.
-    List<String> asked(Job<void> Function(JobObserver observer) start) {
+    List<String> asked({required bool read}) {
       final observer = Counting(answers: true);
       zoneOf((async) {
-        final job = start(observer);
+        final job = Job<void>(observer: observer, (ctx) async {
+          ctx.onDispose(() => throw StateError('cleanup'));
+          throw StateError('body');
+        });
+        if (read) job.done.ignore();
         async.elapse(const Duration(milliseconds: 10));
         job.cancel().ignore();
         async.flushTimers();
@@ -523,16 +528,15 @@ void main() {
       ];
     }
 
-    test('a Failed outcome', () {
+    test('when nobody observes the outcome', () {
       expect(
-        asked(
-          (observer) => Job<void>(observer: observer, (ctx) async {
-            ctx.onDispose(() => throw StateError('cleanup'));
-            throw StateError('body');
-          }),
-        ),
-        ['onUnanswered: Bad state: cleanup'],
+        asked(read: false),
+        ['onUnanswered: Bad state: cleanup', 'onUnanswered: Bad state: body'],
       );
+    });
+
+    test('and not when somebody does', () {
+      expect(asked(read: true), ['onUnanswered: Bad state: cleanup']);
     });
   });
 

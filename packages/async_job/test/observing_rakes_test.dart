@@ -2497,10 +2497,10 @@ void main() {
     test('each error is reported once, by one of the two places', () {
       expect(reported()..sort(), [
         'read: Failed(Bad state: two)',
-        'report: Bad state: one',
-        'report: Bad state: three',
         'report: Job(cancelled): Bad state: four',
         'report: Job(cleanup): Bad state: five',
+        'report: Job(parent): Bad state: three',
+        'report: Job(unread): Bad state: one',
       ]);
     });
 

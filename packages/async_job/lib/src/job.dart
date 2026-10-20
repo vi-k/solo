@@ -8,7 +8,8 @@ part of 'job_base.dart';
 /// and one for the end with [whenFinished].
 ///
 /// A job that ends with [Failed] and is never observed hands its error to
-/// the zone that created the job, the way Dart reports an unhandled
+/// [JobAnswerer.onUnanswered] of its observer, and without one that answers
+/// to the zone that created the job, the way Dart reports an unhandled
 /// `Future` error. Touching [done], [value] or [ignoreFailure], or forwarding a
 /// failure through [then], counts as observing it; see [ignoreFailure].
 abstract interface class Job<T> {
@@ -329,16 +330,16 @@ abstract interface class Job<T> {
 
   /// Completes with the outcome; never throws.
   ///
-  /// Reading it marks the job observed, so a [Failed] outcome is not
-  /// reported to the zone.
+  /// Reading it marks the job observed, so nobody is asked to answer for a
+  /// [Failed] outcome: the one reading has it.
   Future<Outcome<T>> get done;
 
   /// Completes with the returned value, or throws [Cancelled] with the
   /// cancellation stack trace, or throws the body's error.
   ///
-  /// Reading it marks the job observed, so a [Failed] outcome is not
-  /// reported to the zone. Handle the error the future carries, or it
-  /// becomes an unhandled `Future` error instead.
+  /// Reading it marks the job observed, so nobody is asked to answer for a
+  /// [Failed] outcome. Handle the error the future carries, or it becomes an
+  /// unhandled `Future` error instead.
   Future<T> get value;
 
   /// Creates a job that runs [onValue] after this job succeeds and cleans up.
@@ -446,7 +447,7 @@ abstract interface class Job<T> {
   /// calls it then, ahead of any cleanup still to run.
   ///
   /// Registering does not observe the outcome: a [Failed] handed to
-  /// [callback] still reaches the zone, unless somebody observes it — reads
+  /// [callback] is still answered for, unless somebody observes it — reads
   /// [done] or [value], or calls [ignoreFailure]. That is what it is for: a
   /// widget that turns a spinner off when the job ends without taking over
   /// a failure the job's owner answers for.
@@ -496,11 +497,13 @@ abstract interface class Job<T> {
   /// [JobObserver.onError] still hears it.
   ///
   /// A job that ends with [Failed] without ever being observed hands its
-  /// error to the zone that created it; call this on a fire-and-forget job
-  /// whose failure is already handled elsewhere, by a [JobObserver] of your
-  /// own. Like `Future.ignore`, it keeps the error from the zone. Unlike it,
-  /// the error is still told: [JobObserver.onError] hears it, and the outcome
-  /// stays there to be read.
+  /// error to [JobAnswerer.onUnanswered] of its observer, and without one
+  /// that answers to the zone that created it; call this on a fire-and-forget
+  /// job whose failure is already handled elsewhere, by a [JobObserver] of
+  /// your own. Like `Future.ignore`, it keeps the error from the zone, and
+  /// from the answer too. Unlike it, the error is still told:
+  /// [JobObserver.onError] hears it, and the outcome stays there to be
+  /// read.
   ///
   /// ```dart
   /// Job<void>(

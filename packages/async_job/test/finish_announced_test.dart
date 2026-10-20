@@ -45,7 +45,7 @@ List<Object> zoneOf(void Function(FakeAsync async) scenario) {
 
 void main() {
   group('a Failed an engine hands to finish', () {
-    test('is announced once, before onFinish, and reaches the zone', () {
+    test('is announced once, before onFinish, and answered for', () {
       final hearing = Hearing();
       late ProbeJob<int> job;
       final zone = zoneOf((async) {
@@ -64,7 +64,13 @@ void main() {
       // Outside the guarded zone: a failing `expect` inside it would be
       // swallowed by the handler and never fail the test.
       expect(job.outcome, isA<Failed>());
-      expect(hearing.seen, ['onError j: Bad state: by hand', 'onFinish j']);
+      // Nobody observed the outcome, so it is answered for, as any failure
+      // nobody observed; the answer of the test goes on to the zone.
+      expect(hearing.seen, [
+        'onError j: Bad state: by hand',
+        'onFinish j',
+        'onUnanswered j: Bad state: by hand',
+      ]);
       expect(job.hooks, ['started', 'finished']);
       expect(zone, [isA<StateError>()]);
     });
@@ -210,7 +216,11 @@ void main() {
           ..drop(failed);
         async.flushTimers();
       });
-      expect(hearing.seen, ['onError j: Bad state: twice', 'onFinish j']);
+      expect(hearing.seen, [
+        'onError j: Bad state: twice',
+        'onFinish j',
+        'onUnanswered j: Bad state: twice',
+      ]);
       expect(zone, [isA<StateError>()]);
     });
 
@@ -231,7 +241,11 @@ void main() {
         job.drop(Failed(error, StackTrace.current));
         async.flushTimers();
       });
-      expect(hearing.seen, ['onError j: Bad state: both', 'onFinish j']);
+      expect(hearing.seen, [
+        'onError j: Bad state: both',
+        'onFinish j',
+        'onUnanswered j: Bad state: both',
+      ]);
       expect(zone, [error]);
     });
 
@@ -262,7 +276,11 @@ void main() {
       // The child inherits the observer; only the parent's lines count.
       expect(
         hearing.seen.where((line) => line.contains(' j')),
-        ['onError j: Bad state: both', 'onFinish j'],
+        [
+          'onError j: Bad state: both',
+          'onFinish j',
+          'onUnanswered j: Bad state: both',
+        ],
       );
       expect(zone, [error]);
     });
@@ -399,6 +417,7 @@ void main() {
     expect(hearing.seen, [
       'onError j: Bad state: by hand',
       'onFinish j',
+      'onUnanswered j: Bad state: by hand',
       'onError j: Bad state: body',
       'onUnanswered j: Bad state: body',
     ]);
@@ -468,7 +487,8 @@ void main() {
     });
 
     // The engine ends the job with a failure of its own: that one is the
-    // outcome, and the body's is answered for all the same, once.
+    // outcome, answered for as nobody observes it, and the body's is answered
+    // for all the same, once.
     for (final awaited in [false, true]) {
       final when = awaited ? 'while a cleanup is awaited' : 'from a cleanup';
       test('with a failure of its own $when is answered for once', () {
@@ -504,6 +524,7 @@ void main() {
           'onError j: Bad state: body',
           'onError j: Bad state: own',
           'onFinish j',
+          'onUnanswered j: Bad state: own',
           'onUnanswered j: Bad state: body',
         ]);
         expect(zone, unorderedEquals([own, error]));
@@ -945,7 +966,11 @@ void main() {
       });
       async.flushTimers();
     });
-    expect(hearing.seen, ['onError j: Bad state: body', 'onFinish j']);
+    expect(hearing.seen, [
+      'onError j: Bad state: body',
+      'onFinish j',
+      'onUnanswered j: Bad state: body',
+    ]);
     expect(zone, [isA<StateError>()]);
   });
 

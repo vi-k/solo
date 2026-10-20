@@ -11,8 +11,9 @@ part of 'job_base.dart';
 /// goes to the zone first.
 ///
 /// An observer watches: [onError] is told about the errors the job catches,
-/// all but its own cancellation, and answers for none. The errors no outcome
-/// carries are answered by an observer that is also a [JobAnswerer], and
+/// all but its own cancellation, and answers for none. The errors nobody else
+/// has — those no outcome carries, and a failure whose outcome nobody
+/// observes — are answered by an observer that is also a [JobAnswerer], and
 /// without one they go to the zone the job was created in — the same place
 /// they go when the job has no observer at all. An observer written to
 /// watch changes nowhere an error goes.
@@ -31,7 +32,7 @@ abstract mixin class JobObserver {
   /// next is called all the same. The one among them that is a [JobAnswerer]
   /// watches in its place and answers as well: [JobAnswerer.onUnanswered]
   /// goes to it alone, after every observer has heard [onError]. With no
-  /// [JobAnswerer] among them the errors no outcome carries go to the zone
+  /// [JobAnswerer] among them the errors nobody answers for go to the zone
   /// the job was created in, once, as they do for a job with no observer.
   ///
   /// ```dart
@@ -119,7 +120,8 @@ abstract mixin class JobObserver {
   /// heard of the failure before an engine handed in a value, and the group
   /// throws it or answers for it as for a failure it did not throw (see
   /// [JobBase.finish]). Any other failure of the job is carried by the outcome,
-  /// and one nobody observes reaches the zone. Once the job has accepted a
+  /// and one nobody observes goes on to [JobAnswerer.onUnanswered] as well.
+  /// Once the job has accepted a
   /// cancellation, a failure [Job.isCancellationError] names stops here too: an
   /// operation stopping at the job's token throws such an error, and only this
   /// hook hears it.
@@ -147,7 +149,8 @@ abstract mixin class JobObserver {
   void onLog(Job<Object?> job, Object? message) {}
 }
 
-/// An observer that answers for the errors no outcome carries.
+/// An observer that answers for the errors nobody else has: those no
+/// outcome carries, and a failure whose outcome nobody observes.
 ///
 /// The job asks [onUnanswered] of its observer only when the observer is a
 /// [JobAnswerer]; otherwise those errors go to the zone the job was created
@@ -190,9 +193,15 @@ mixin JobAnswerer on JobObserver {
   /// that failure in place of a value (see [JobBase.finish]), and a failure an
   /// engine hands to a job already over. [Job.ignoreFailure] keeps the last
   /// four from coming here, and [Job.isCancellationError] keeps away the
-  /// failures it names of a job that has accepted a cancellation. Any other
-  /// failure of a body does not come here: it has an outcome, and one nobody
-  /// observes reaches the zone by itself. Every error that comes here has been
+  /// failures it names of a job that has accepted a cancellation.
+  ///
+  /// A failure a [Failed] outcome carries comes here when nobody observes
+  /// that outcome: a microtask after the job ends, the grace Dart gives an
+  /// unhandled `Future` error. [Job.ignoreFailure], or reading [Job.done] or
+  /// [Job.value], keeps it away. A [Failed] made of a cancellation — a
+  /// [Cancelled], or a `ParallelWaitError` of nothing but cancellations — goes
+  /// to the zone the job was created in past this hook: somebody made that
+  /// outcome a failure on purpose. Every error that comes here has been
   /// through [onError] already.
   ///
   /// **One failure at a time.** The job walks a `ParallelWaitError` the way
