@@ -20,6 +20,13 @@ Four controllers, each with more events arriving than there is work worth
 doing. What differs is what survives: the last value, a merge of all of them,
 or every event in a list.
 
+| Recipe | What reaches the work | The accumulator |
+| --- | --- | --- |
+| [A search that fires on every keystroke](#a-search-that-fires-on-every-keystroke) | The last query, after a pause in the typing | `accumulate`, a `merge` that keeps `incoming`, `debounce` |
+| [Settings saved on every flip of a switch](#settings-saved-on-every-flip-of-a-switch) | One patch merged from every flip | `accumulate`, a `merge` that combines the patches, `debounce` |
+| [One request per log line](#one-request-per-log-line) | Every entry, in at most one request a second | `collect`, `throttle` with `startAtOnce: false` |
+| [Commands where only the last one counts](#commands-where-only-the-last-one-counts) | The last of the commands tapped in a row | `accumulate`, a `merge` that keeps `incoming`, `policy: adjacent` |
+
 Under each version of a controller is what the scenario above it leads to: what
 reaches the server or the device, and what the controller's state ends up as.
 

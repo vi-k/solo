@@ -11,6 +11,10 @@ words name where it goes:
   [Answering for errors](#answering-for-errors) shows, and the zone if the job
   has no such observer.
 
+An app that only wants every error reported once starts from
+[Reporting each error once](#reporting-each-error-once), at the end of the
+page.
+
 The lines under the code are what the code prints:
 
 | Line | What it is |
@@ -673,3 +677,43 @@ answers for the whole list once every observer has heard `onError`. With no
 does not answer. Two observers that answer, or the same observer twice, make
 `JobObserver.all` throw `ArgumentError`. An observer made by `JobObserver.all`
 can stand in the list of another, and answers there when one inside it does.
+
+## Reporting each error once
+
+An app that reports errors wants each of them once. Two places that do not
+overlap take them all: an observer that answers for errors, and the zone the
+app runs in.
+
+```dart
+final class Reports extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      print('report: $job: $error');
+}
+```
+
+```dart
+runZonedGuarded(
+  startApp,
+  (error, stackTrace) => print('report: $error'),
+);
+```
+
+`startApp` is the function that starts the app, such as
+`() => runApp(const App())` in Flutter. Each root job gets
+`observer: Reports()`, and its children inherit it. This is who reports what:
+
+| The error | Reported by |
+| --- | --- |
+| A failure whose outcome nobody observed | the zone |
+| A failure whose outcome somebody observed | nobody: the code that observed it has it |
+| A failure of a child that its parent let out of the body | the zone once, as the parent's failure, if nobody observed the parent |
+| An error no outcome carries, such as one of the body of a cancelled job, of cleanup, of a callback, of an action the job stopped waiting for | `Reports`, which names the job |
+
+`Reports` answers for the errors no outcome carries, so they stop there and do
+not reach the zone. A failure whose outcome nobody observed goes to the zone
+and not to `onUnanswered`, and so does whatever the app throws outside its
+jobs. `onError` stays out of the report: a failure it hears may reach the zone
+as well, and it hears one failure once on each job whose outcome that failure
+is. The zone does not know the job, so its report does not name it.
+[Where each error goes](#where-each-error-goes) shows every way an error takes.

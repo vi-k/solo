@@ -157,7 +157,7 @@ void main() {
       expect(strayFences(_doc), ['```sh']);
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
-        hasLength(13),
+        hasLength(15),
         reason: 'a new block of the page needs a place in the support files '
             'and a test that runs it',
       );
@@ -815,7 +815,9 @@ void main() {
       expect(apart, ['build 0', '0->3', 'build 3', '3->5']);
       expect(endsAt, '3');
       expect(endsApartAt, '3');
-      _says('The builder has usually been given that pick, but not always: '
+      _says('`changed:` is handed two picks: the last one the widget '
+          'accepted, as `previous`, and the new one.');
+      _says('The builder has usually been given `previous`, but not always: '
           'when two changes come before a frame and the first is accepted, '
           'the second is put against it, and the builder has not seen it '
           'yet.');
@@ -1051,6 +1053,36 @@ void main() {
       await controller.close();
       _says('The state is its `value`, and `ValueListenableBuilder` takes the '
           'controller as it is:');
+    });
+
+    testWidgets('the widget over two profiles rebuilds when either changes',
+        (tester) async {
+      // Each order loads the other profile last, so the widget has to hear
+      // each of the two to end up 'both loaded'.
+      for (final leftFirst in [true, false]) {
+        final left = listenable.ProfileController(ProfileApi());
+        final right = listenable.ProfileController(ProfileApi());
+        await tester.pumpWidget(_app(mergedBuilder(left, right)));
+        expect(_texts(tester), ['waiting']);
+
+        final (first, second) = leftFirst ? (left, right) : (right, left);
+        first.load().ignoreFailure();
+        await tester.pump(const Duration(milliseconds: 10));
+        expect(_texts(tester), ['waiting']);
+        second.load().ignoreFailure();
+        await tester.pump(const Duration(milliseconds: 10));
+        expect(
+          _texts(tester),
+          ['both loaded'],
+          reason: 'leftFirst: $leftFirst',
+        );
+
+        await left.close();
+        await right.close();
+        await tester.pumpWidget(const SizedBox());
+      }
+      _says('A widget over two profiles rebuilds when either of them '
+          'changes:');
     });
 
     testWidgets('ListenableBuilder, AnimatedBuilder and a merge take it too',

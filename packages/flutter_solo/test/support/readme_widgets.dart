@@ -46,6 +46,20 @@ Widget listenableBuilder(listenable.ProfileController controller) => [
       )
     ].single;
 
+/// The merge of "The controller as a `ValueListenable`".
+Widget mergedBuilder(
+  listenable.ProfileController left,
+  listenable.ProfileController right,
+) =>
+    [
+      ListenableBuilder(
+        listenable: Listenable.merge([left, right]),
+        builder: (context, _) => Text(
+          left.value.canSave && right.value.canSave ? 'both loaded' : 'waiting',
+        ),
+      )
+    ].single;
+
 /// The selector of "Selecting one value".
 Widget saveSelector(ProfileController controller) => [
       SoloSelector<Profile, bool>(

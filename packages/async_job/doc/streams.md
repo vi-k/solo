@@ -5,6 +5,18 @@ that child, delivers the events to a callback one at a time, and ends the
 subscription with the job. `Job.each` is the same for a job with nothing else
 to do.
 
+```dart
+Job<void>((ctx) async {
+  final saving = ctx.each(messages, (childCtx, message) {
+    return childCtx.join(() => store.saveBody(message));
+  });
+  await saving.value;
+});
+```
+
+[Processing a stream](#processing-a-stream) comes to this code after three
+attempts that a plain subscription leads to.
+
 ## Processing a stream
 
 A job saves every message of a stream: one at a time, failing when a save

@@ -5,6 +5,8 @@
 // turned into a line of a first attempt must not be found among the
 // answers. A block that declares names another block declares too lives in
 // a function of its own.
+import 'dart:async';
+
 import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart' show isA;
@@ -201,6 +203,19 @@ void timeMovedByTheTest(Declare test, Check expect) {
       expect(closed, 1); // what the test is named for
     });
   });
+}
+
+final class Reports extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      print('report: $job: $error');
+}
+
+void reportingOnce(void Function() startApp) {
+  runZonedGuarded(
+    startApp,
+    (error, stackTrace) => print('report: $error'),
+  );
 }
 
 void failureReadByTheTest(Declare test, Check expect) {

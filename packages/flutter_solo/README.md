@@ -71,7 +71,14 @@ import 'package:flutter_solo/flutter_solo.dart';
 The package's own part arrives with the same import: the mixin
 `SoloListenable`, the widgets `SoloBuilder` and `SoloSelector`, and the class
 `SoloSelection`. A second import next door adds `select` and `listen` as
-methods, with the subscriptions `listen` hands back.
+methods, with the subscriptions `listen` hands back:
+
+```dart
+import 'package:flutter_solo/listenable.dart';
+```
+
+[Methods from a second import](#methods-from-a-second-import) says why it is a
+second one.
 
 ## Usage
 
@@ -164,7 +171,17 @@ needs; [Outcomes](#outcomes) has the rule. The full API, with rules, the queue,
 children and observers, is documented in [solo](https://pub.dev/packages/solo).
 
 `SoloBuilder` is what draws the state: it takes the controller as `solo`,
-rebuilds on every change of the state and hands `child` through untouched.
+rebuilds on every change of the state and hands `child` through untouched. The
+table gives every way to follow a controller, and the sections below take the
+others apart:
+
+| What the screen needs | What to take |
+| --- | --- |
+| A widget drawn from the whole state | `SoloBuilder`, or `ValueListenableBuilder` with `SoloListenable` |
+| A widget that rebuilds only when one value changes | `SoloSelector` |
+| That value as a `ValueListenable` a `State` holds | `SoloSelection` |
+| One widget over two controllers | `Listenable.merge` in a `ListenableBuilder`, with `SoloListenable` |
+| A callback on every change, outside `build` | `listen` from the second import, with `SoloListenable` |
 
 ## The controller as a `ValueListenable`
 
@@ -194,7 +211,17 @@ ValueListenableBuilder<Profile>(
 ```
 
 `ListenableBuilder` and `AnimatedBuilder` take it the same way, and
-`Listenable.merge` joins it with other listenables.
+`Listenable.merge` joins it with other listenables. A widget over two profiles
+rebuilds when either of them changes:
+
+```dart
+ListenableBuilder(
+  listenable: Listenable.merge([left, right]),
+  builder: (context, _) => Text(
+    left.value.canSave && right.value.canSave ? 'both loaded' : 'waiting',
+  ),
+)
+```
 
 `SoloBuilder` goes on taking it, as it takes any controller: with the mixin,
 without it, or `with SoloStream`. One thing sets it apart from
@@ -241,15 +268,17 @@ The rules of `SoloSelector`:
   that gives the same answer for the same state;
 - `solo` is any controller, a `ValueListenable` or not.
 
+`changed:` is handed two picks: the last one the widget accepted, as
+`previous`, and the new one. The builder has usually been given `previous`, but
+not always: when two changes come before a frame and the first is accepted, the
+second is put against it, and the builder has not seen it yet. So where the
+screen ends up depends on the changes alone, not on how they fall into frames.
+
 The selector and `changed:` can be closures written in place, as the selector
 is above. Such a closure is a new one on every build of the parent, and it may
 pick something else. So the widget picks once more and puts the pick to
 `changed:`. It moves no subscription for that. `changed:` still compares
-against the last pick the widget accepted. The builder has usually been given
-that pick, but not always: when two changes come before a frame and the first
-is accepted, the second is put against it, and the builder has not seen it yet.
-So where the screen ends up depends on the changes alone, not on how they fall
-into frames.
+against the last pick the widget accepted.
 
 Where a listenable of the picked value is what you need, the same pick is made
 by an object, a `SoloSelection`, and a `State` holds it in a field:

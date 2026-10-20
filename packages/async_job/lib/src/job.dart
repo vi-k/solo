@@ -491,7 +491,9 @@ abstract interface class Job<T> {
   /// Cancelled('why')` instead.
   Future<void> cancel({CancelReason reason = const ManualCancelReason()});
 
-  /// Tells the core that nobody is interested in this job's failure.
+  /// Tells the core that nobody is interested in this job's failure. The
+  /// failure then reaches neither the zone nor [JobAnswerer.onUnanswered];
+  /// [JobObserver.onError] still hears it.
   ///
   /// A job that ends with [Failed] without ever being observed hands its
   /// error to the zone that created it; call this on a fire-and-forget job

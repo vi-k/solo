@@ -84,7 +84,9 @@ abstract mixin class JobObserver {
   /// A job has an outcome, including jobs dropped before start.
   void onFinish(Job<Object?> job) {}
 
-  /// Something the job did threw.
+  /// Something the job did threw. Every error the job catches comes here,
+  /// except a [Cancelled] the job ends with. The hook only hears it:
+  /// overriding it moves the error nowhere.
   ///
   /// The job's failure — its body's, or one an engine ended it with by hand —
   /// or one of the errors with no outcome to carry them: an action abandoned by
@@ -108,8 +110,7 @@ abstract mixin class JobObserver {
   /// alive. An error thrown as a constant is the same object at every throw,
   /// and two such failures count as one.
   ///
-  /// Notification only: overriding it changes nothing about where the error
-  /// goes. The errors with no outcome go on to [JobAnswerer.onUnanswered] of an
+  /// The errors with no outcome go on to [JobAnswerer.onUnanswered] of an
   /// observer that answers, and so do three failures of the body: that of a
   /// branch of [JobContext.runAll] the group did not throw, that of a job that
   /// ends [Cancelled], and that of a job an engine ended by hand with an
@@ -173,7 +174,9 @@ abstract mixin class JobObserver {
 /// uncaught [Cancelled], alone or inside one, it does not ask.
 mixin JobAnswerer on JobObserver {
   /// Nobody answered for this error, and this observer is the last one
-  /// holding it.
+  /// holding it. What this hook does is the answer: the default hands the
+  /// error to the zone the job was created in, and an override that returns
+  /// without calling `super` keeps it from the zone.
   ///
   /// The errors no outcome carries: an action abandoned by
   /// [JobContext.abandonable] failing later, a disposer, a callback of

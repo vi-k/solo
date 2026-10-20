@@ -1,5 +1,10 @@
 # Groups
 
+A group is several children of one job that run at the same time, and the job
+waits for all of them. `.wait` over the futures of `ctx.run` lets every branch
+run to its end, and `ctx.runAll` cancels the branches still running as soon as
+one ends without a value.
+
 The lines under the code are what the code reports:
 
 - `rows closed`: the source of the rows is closed;

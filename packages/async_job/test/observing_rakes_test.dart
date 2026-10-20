@@ -350,6 +350,7 @@ void main() {
       '### Several failures in one error': page,
       '## Several observers': page,
       '### Observers in one list': page,
+      '## Reporting each error once': page,
     };
     for (final MapEntry(key: heading, value: holder) in holders.entries) {
       test('the code under "$heading" is a run of lines of $holder', () {
@@ -2441,6 +2442,80 @@ void main() {
           'onUnanswered: Bad state: analytics offline',
         ],
       );
+    });
+  });
+
+  group('Reporting each error once', () {
+    /// What [reportingOnce] reports while five jobs given [Reports] end
+    /// the five ways the page's table names.
+    List<String> reported() {
+      final printed = <String>[];
+      runZoned(
+        () => fakeAsync((async) {
+          reportingOnce(() {
+            Job<void>(
+              observer: Reports(),
+              key: 'unread',
+              (ctx) => throw StateError('one'),
+            );
+            final read = Job<void>(
+              observer: Reports(),
+              key: 'read',
+              (ctx) => throw StateError('two'),
+            );
+            unawaited(read.done.then((outcome) => print('read: $outcome')));
+            Job<void>(observer: Reports(), key: 'parent', (ctx) async {
+              await ctx.run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (ctx) => throw StateError('three'),
+                ),
+              );
+            });
+            final cancelled = Job<void>(
+              observer: Reports(),
+              key: 'cancelled',
+              (ctx) async {
+                await Future<void>.delayed(const Duration(milliseconds: 10));
+                throw StateError('four');
+              },
+            );
+            Timer(const Duration(milliseconds: 1), cancelled.cancel);
+            Job<void>(observer: Reports(), key: 'cleanup', (ctx) async {
+              ctx.onDispose(() => throw StateError('five'));
+            });
+          });
+          async.flushTimers();
+        }),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => printed.add(line),
+        ),
+      );
+      return printed;
+    }
+
+    test('each error is reported once, by one of the two places', () {
+      expect(reported()..sort(), [
+        'read: Failed(Bad state: two)',
+        'report: Bad state: one',
+        'report: Bad state: three',
+        'report: Job(cancelled): Bad state: four',
+        'report: Job(cleanup): Bad state: five',
+      ]);
+    });
+
+    test('onError hears a failure the zone reports as well', () {
+      final heard = <(Job<Object?>, Object)>[];
+      final zone = <Object>[];
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          Job<void>(observer: _Heard(heard), (ctx) => throw StateError('one'));
+          async.flushTimers();
+        }),
+        (error, stackTrace) => zone.add(error),
+      );
+      expect(heard, hasLength(1));
+      expect(zone, [same(heard.single.$2)]);
     });
   });
 

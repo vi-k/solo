@@ -12,6 +12,21 @@ uncaught error can end the application. Some errors have no outcome to ride on,
 and `onUnanswered` answers for those.
 [Where each error goes](#where-each-error-goes) lists every kind.
 
+The sections of the page, by what the application needs:
+
+| The application needs | What gives it | Section |
+| --- | --- | --- |
+| A report of every error of a job | `onError` of the controller, or of a `SoloObserver` for every controller | [Reporting an error](#reporting-an-error) |
+| A failure kept out of the zone | Observing the outcome: `await job.value` where the error is caught, or `job.ignoreFailure()` | [Handled and unhandled failures](#handled-and-unhandled-failures) |
+| An answer for an error that no outcome carries | `onUnanswered`, or `Solo.unansweredHandler` for the whole application | [Answering for an error](#answering-for-an-error) |
+| A catch that lets a cancellation through | `ctx.check()` at the top of the catch | [Catching errors inside a body](#catching-errors-inside-a-body) |
+| Another attempt after a failure | `ctx.pause` between attempts, or a loop in the caller | [Retrying a failed call](#retrying-a-failed-call) |
+| A rule that refuses | A rule that answers `false` instead of throwing | [Errors in state rules](#errors-in-state-rules) |
+| Background work whose errors reach the hooks | `ctx.unattended` | [Background work and logs](#background-work-and-logs) |
+| A log of every controller | `Solo.observer` | [Watching every controller](#watching-every-controller) |
+| What holds `close()`, or a job that hangs | `pending` | [What is holding the controller](#what-is-holding-the-controller) |
+| The jobs that ran on past their cancellation | A stamp from `whenCancelled` in an observer | [Why cancellation was slow](#why-cancellation-was-slow) |
+
 The lines under some blocks are what the code prints. `report:` is an error
 handed to the crash reporter, and `zone:` is an error that reached the creation
 zone uncaught.
