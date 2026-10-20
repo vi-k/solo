@@ -117,8 +117,8 @@ Job.isCancellationError = (error) => error is SeekStopped;
 ```
 
 An error it names reaches `onError` and goes no further.
-[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#errors-of-a-cancellation)
-on the observing page of `async_job` takes the field apart. A body can let the
+[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#errors-of-a-cancellation)
+on the errors page of `async_job` takes the field apart. A body can let the
 cancellation out instead of the player's error: put the call in a `try` and
 make `ctx.check()` the first line of its `catch`.
 [Asking the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#asking-the-job)

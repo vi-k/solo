@@ -216,14 +216,14 @@ fails with it. The child still ends `Cancelled`, and `await ctx.run(child)`
 throws that `Cancelled`. The body's error does not come with it. It goes where
 an error that no outcome carries goes: to the child's observer and, unless that
 observer catches it in `onUnanswered`, to the zone.
-[Where errors go](observing.md#where-errors-go) on the observing page has the
-whole route.
+[Where errors go](errors.md#where-errors-go) on the errors page has the whole
+route.
 
 Three things keep that error out of the zone:
 
 - `Job.isCancellationError`, where the app names the error once. Then it goes
   no further than the child's observer, as in
-  [Errors of a cancellation](observing.md#errors-of-a-cancellation).
+  [Errors of a cancellation](errors.md#errors-of-a-cancellation).
 - An observer of the child that catches the error: a `JobAnswerer` with
   `onUnanswered` overridden.
 - `child.ignoreFailure()`, which silences the error, whatever it is.

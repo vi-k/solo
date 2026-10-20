@@ -159,7 +159,7 @@ final outcome = await job.done; // Cancelled(manual)
 - **`ctx.join(Database.open)`** дожидается открытия и после отмены, а затем
   бросает `Cancelled` или собственную ошибку открытия, если оно упало. Ошибку,
   которая пришла после отмены, не несёт ни один исход; см.
-  [«Куда уходят ошибки»](../../docs/ru/async_job/observing.md#куда-уходят-ошибки).
+  [«Куда уходят ошибки»](../../docs/ru/async_job/errors.md#куда-уходят-ошибки).
 - **`discard: (database) => database.close()`** закрывает базу, когда задача
   кончается `Failed` или `Cancelled`; при `Done(database)` база остаётся
   открытой для вызывающего. См.
@@ -172,7 +172,7 @@ final outcome = await job.done; // Cancelled(manual)
   отправляет эту ошибку наблюдателю задачи, а затем к ответу, по умолчанию
   в зону, если только приложение не назвало её один раз
   в `Job.isCancellationError`; см.
-  [«Ошибки отмены»](../../docs/ru/async_job/observing.md#ошибки-отмены).
+  [«Ошибки отмены»](../../docs/ru/async_job/errors.md#ошибки-отмены).
 - **`ctx.uncancellable(() async { ... })`** держит версию и её флаг готовности
   вместе: ребёнок запускается, а отмена ждёт конца шага, но задача всё равно
   кончается `Cancelled`, а `discard` закрывает базу. См.
@@ -258,7 +258,8 @@ Cancelled(manual)
 | [Цепочки](../../docs/ru/async_job/chains.md) | `then`, продолжение ребёнка, шаги подряд |
 | [Стримы](../../docs/ru/async_job/streams.md) | `ctx.each`, `Job.each` и что делают `await for` и `listen` в теле |
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |
-| [Наблюдение](../../docs/ru/async_job/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, логи, `unattended`, `Job.debug` |
+| [Наблюдение](../../docs/ru/async_job/observing.md) | `JobObserver`, имя задачи, логи |
+| [Ошибки](../../docs/ru/async_job/errors.md) | Куда идёт ошибка, `JobAnswerer`, `Job.isCancellationError`, `Job.visitErrors`, `unattended`, `Job.debug` |
 | [Тестирование](../../docs/ru/async_job/testing.md) | Задача под `fakeAsync` и что двигает её время |
 | [Своё поверх ядра](../../docs/ru/async_job/extending.md) | `JobBase`, `JobContextBase`, свой движок |
 

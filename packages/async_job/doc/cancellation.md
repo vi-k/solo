@@ -192,9 +192,9 @@ Job.isCancellationError = (error) => error is DatabaseStopped;
 ```
 
 An error it names reaches the observer and stops there.
-[Errors of a cancellation](observing.md#errors-of-a-cancellation) on the
-observing page takes the filter apart. What a `catch` around this `join` sees
-is the subject of
+[Errors of a cancellation](errors.md#errors-of-a-cancellation) on the errors
+page takes the filter apart. What a `catch` around this `join` sees is the
+subject of
 [Catching errors of the operation](#catching-errors-of-the-operation), below.
 
 ## A step that must finish
@@ -303,8 +303,8 @@ the same section.
 If the step fails and the body lets the error through, the job still ends
 `Cancelled`, and the failure goes where any failure of the body of a cancelled
 job goes: the observer hears it, and then the zone does, unless the observer
-catches it in `onUnanswered`. [Where errors go](observing.md#where-errors-go)
-on the observing page has the table.
+catches it in `onUnanswered`. [Where errors go](errors.md#where-errors-go) on
+the errors page has the table.
 
 Always await `ctx.uncancellable`. The section opens when called, even if you do
 not await its future. An unawaited section can outlive the body; if the job
@@ -504,9 +504,9 @@ too, but the job does not hear what becomes of it:
 
 `ctx.unattended` keeps the errors of the stop with the job: they reach the
 observer, and after it, by default, the zone the job was created in;
-[Work the job does not wait for](observing.md#work-the-job-does-not-wait-for)
-on the observing page takes it apart. That is all it does: the job does not
-wait for the stop, and the device is released while it is still stopping.
+[Work the job does not wait for](errors.md#work-the-job-does-not-wait-for) on
+the errors page takes it apart. That is all it does: the job does not wait for
+the stop, and the device is released while it is still stopping.
 
 ### Waiting for the stop
 

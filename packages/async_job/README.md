@@ -157,7 +157,7 @@ final outcome = await job.done; // Cancelled(manual)
 - **`ctx.join(Database.open)`** waits for the open even after a cancellation,
   then throws `Cancelled`, or the open's own error if it failed. An error that
   comes after the cancellation has no outcome to carry it; see
-  [Where errors go](doc/observing.md#where-errors-go).
+  [Where errors go](doc/errors.md#where-errors-go).
 - **`discard: (database) => database.close()`** closes the database when the
   job ends `Failed` or `Cancelled`; with `Done(database)` it stays open for the
   caller. See
@@ -170,7 +170,7 @@ final outcome = await job.done; // Cancelled(manual)
   error to the job's observer and then to the answer, the zone by default, on
   every cancellation, unless the app names it once in
   `Job.isCancellationError`; see
-  [Errors of a cancellation](doc/observing.md#errors-of-a-cancellation).
+  [Errors of a cancellation](doc/errors.md#errors-of-a-cancellation).
 - **`ctx.uncancellable(() async { ... })`** keeps the version and its ready
   flag together: the child starts and a cancellation waits for the step, yet
   the job still ends `Cancelled` and `discard` closes the database. See
@@ -257,7 +257,8 @@ search.
 | [Chains](doc/chains.md) | `then`, a continuation of a child, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each`, `Job.each`, and what `await for` and `listen` do in a body |
 | [Cleanup](doc/cleanup.md) | `dispose`, `discard`, `onDispose`, ordering |
-| [Observing](doc/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, logs, `unattended`, `Job.debug` |
+| [Observing](doc/observing.md) | `JobObserver`, a job's name, logs |
+| [Errors](doc/errors.md) | Where an error goes, `JobAnswerer`, `Job.isCancellationError`, `Job.visitErrors`, `unattended`, `Job.debug` |
 | [Testing](doc/testing.md) | A job under `fakeAsync`, and what moves its time |
 | [Building on the core](doc/extending.md) | `JobBase`, `JobContextBase`, your own engine |
 

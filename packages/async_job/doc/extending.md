@@ -90,11 +90,11 @@ as the body is about to start, with the job already running. `finished()` runs
 once the job has its outcome. It runs for a job dropped before its body ran
 too, with no `started()` before it. An error either of them throws goes to
 `onError` and then to the zone, unless the observer catches it in
-`onUnanswered`, as [Where each error goes](observing.md#where-each-error-goes)
-on the observing page describes for an error no outcome carries, and the job
-goes on as it would have. Your own bookkeeping is what is left half-done, so
-keep both short and unconditional. `MyJob` drops its body in `finished()`:
-kept, it would hold everything it captured for as long as anyone holds the job.
+`onUnanswered`, as [Where each error goes](errors.md#where-each-error-goes) on
+the errors page describes for an error no outcome carries, and the job goes on
+as it would have. Your own bookkeeping is what is left half-done, so keep both
+short and unconditional. `MyJob` drops its body in `finished()`: kept, it would
+hold everything it captured for as long as anyone holds the job.
 
 For the engine to answer for such errors itself, put an observer of your own on
 every job, mix `JobAnswerer` into it and override its `onUnanswered`, the way
@@ -116,8 +116,8 @@ the observer. It is protected, so the engine reaches it through a wrapper, as
 it reaches `start`, and only on jobs of its own. A context method that must not
 be called from the work of `ctx.unattended` calls `throwIfUnattended` first;
 that work is the subject of
-[Work the job does not wait for](observing.md#work-the-job-does-not-wait-for)
-on the observing page.
+[Work the job does not wait for](errors.md#work-the-job-does-not-wait-for) on
+the errors page.
 
 The full protected API is in the reference of
 [JobBase](https://pub.dev/documentation/async_job/latest/engine/JobBase-class.html)

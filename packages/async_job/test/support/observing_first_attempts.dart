@@ -1,7 +1,8 @@
-// The first attempts of `doc/observing.md` and `doc/testing.md`, verbatim:
-// the versions their sections open with. They live apart from the answers in
-// `observing_page.dart`, because a line of an answer turned into a line of a
-// first attempt must not be found among the answers.
+// The first attempts of `doc/observing.md`, `doc/errors.md` and
+// `doc/testing.md`, verbatim: the versions their sections open with. They
+// live apart from the answers in `observing_page.dart`, because a line of an
+// answer turned into a line of a first attempt must not be found among the
+// answers.
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';

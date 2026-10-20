@@ -150,14 +150,14 @@ that refuses cancellation» на `cancellation.md` написан по прос�
 **17. Готового наблюдателя «для приложения» нет.** Один `onUnanswered`
 закрывает оба пути в зону, пункт 15, но класс не нужен: отчёт о каждой ошибке
 ровно один раз — четыре строки рецепта «Reporting each error once»
-на `observing.md`, и класс их не сократит, а `runZonedGuarded` приложению нужен
+на `errors.md`, и класс их не сократит, а `runZonedGuarded` приложению нужен
 для ошибок вне задач. (2026-10-20; `2026-10-20-async-job-project-review.md`,
 L21; `2026-10-20-api-0-3-0-design.md`.)
 
 **18. Общий наблюдатель слышит одну ошибку на каждой задаче, через которую она
 прошла.** `onError` значит «задача упала», и строка родителя в журнале
-правдива. Отсев по `identical` — в dartdoc `onError` и на `observing.md`.
-(2026-10-20; `2026-10-20-async-job-project-review.md`, M6.)
+правдива. Отсев по `identical` — в dartdoc `onError` и на `errors.md`, в «Where
+each error goes». (2026-10-20; `2026-10-20-async-job-project-review.md`, M6.)
 
 **19. Провал тела задачи, которая кончилась `Cancelled`, идёт к ответу
 всегда.** Шум снимает статический фильтр `Job.isCancellationError`. Его
@@ -197,9 +197,10 @@ L21; `2026-10-20-api-0-3-0-design.md`.)
 `2026-09-08[14]-jobs-readme-review.md`.)
 
 **25. Отладочный канал `Job.debug` может отдать брошенный `Cancelled` в зону.**
-Ядро не трогали, обещание сужено на `observing.md` и в dartdoc `JobObserver`.
-Строка «handed its value over» печатается после исхода. (2026-10-02,
-2026-10-12; `2026-10-02-observing-reread-report.md`,
+Ядро не трогали, обещание сужено в dartdoc `JobObserver` и на двух страницах:
+о хуке — на `observing.md`, об отмене, которую в зону отдаёт Dart, —
+на `errors.md`. Строка «handed its value over» печатается после исхода.
+(2026-10-02, 2026-10-12; `2026-10-02-observing-reread-report.md`,
 `2026-10-12-async-job-project-review.md`.)
 
 **26. Медленная отмена диагностируется рецептом, а не хуком ядра.** Рецепт «Why

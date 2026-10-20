@@ -10,7 +10,7 @@
   zone as it did in `0.2.0` only while nobody answers: an observer that answers
   gets it in `onUnanswered`, a microtask after the job ends, and the zone does
   not. A `Failed` made of a cancellation still goes to the zone. See
-  [Answering for errors](doc/observing.md#answering-for-errors).
+  [Answering for errors](doc/errors.md#answering-for-errors).
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`.**
 - **`JobBase.whenDone` is renamed to `JobBase.untilFinished`,** so that a
   `when` member is always a listener: `whenCancelled` and the new
@@ -105,7 +105,7 @@ job was created in. In a test that zone is the test's, and the test fails:
 the first two for that job alone: a child whose body failed answers for its
 failure itself, whatever its parent calls. An observer that mixes in
 `JobAnswerer` and overrides `onUnanswered` answers for the rest. See
-[Where errors go](doc/observing.md#where-errors-go).
+[Where errors go](doc/errors.md#where-errors-go).
 
 A job that gives up inside a call it walked away from no longer reaches
 `onError` as a failure.
@@ -123,7 +123,7 @@ in a call of its own, where `0.2.0` handed it the whole error once. A `Failed`
 with such an error that nobody observes is answered for failure by failure, and
 its cancellations stay out: the zone gets each failure on its own, where
 `0.2.0` passed it the whole error. See
-[Answering for errors](doc/observing.md#answering-for-errors).
+[Answering for errors](doc/errors.md#answering-for-errors).
 
 A child's cancellation that the body lets out names the child as the job prints
 itself: `Cancelled(handler: Job(thumbnail): Cancelled(timeout))`, where `0.2.0`
@@ -165,7 +165,7 @@ new wording.
 - **`Job.each` makes a root job that follows a stream.** See
   [A job that only follows a stream](doc/streams.md#a-job-that-only-follows-a-stream).
 - **`JobObserver.all` makes one observer of several.** See
-  [Several observers](doc/observing.md#several-observers).
+  [Several observers](doc/errors.md#several-observers).
 - **`JobObserver` is an `abstract mixin class`,** where `0.2.0` declared an
   `abstract class`: an observer that already extends another class mixes
   `JobObserver` in: `with JobObserver`. See
@@ -176,10 +176,10 @@ new wording.
   `(error) => error is DatabaseStopped`, and a wrapper of the job's own
   cancellation by its cause,
   `(error) => error is AppException && error.cause is Cancelled`. See
-  [Errors of a cancellation](doc/observing.md#errors-of-a-cancellation).
+  [Errors of a cancellation](doc/errors.md#errors-of-a-cancellation).
 - **`Job.visitErrors` hands each failure and each cancellation inside an error
   to a callback of its own.** See
-  [Answering for errors](doc/observing.md#answering-for-errors).
+  [Answering for errors](doc/errors.md#answering-for-errors).
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it. See
   [Registering on arrival](doc/cleanup.md#registering-on-arrival). A job that

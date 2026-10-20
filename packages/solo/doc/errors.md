@@ -203,8 +203,8 @@ failure of the call. So the application names such errors once, at startup, in
 names reaches `onError` and goes no further: neither `onUnanswered` nor
 `Solo.unansweredHandler` hears it. [The token](cancellation.md#the-token) on
 the cancellation page names the stop of a player, and
-[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#errors-of-a-cancellation)
-on the observing page of `async_job` takes the field apart. A body that catches
+[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#errors-of-a-cancellation)
+on the errors page of `async_job` takes the field apart. A body that catches
 such an error asks the job, not the error:
 [Letting cancellation through](#letting-cancellation-through) has the `catch`.
 
@@ -539,8 +539,8 @@ end in the creation zone. Use it for work with a lifetime of its own.
 
 Start that work inside the callback. A future made before the call and only
 awaited inside fails past the hooks, into the zone it was made in.
-[Work handed to the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#work-handed-to-the-job)
-on the observing page of `async_job` draws that boundary both ways.
+[Work handed to the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#work-handed-to-the-job)
+on the errors page of `async_job` draws that boundary both ways.
 
 Unattended work is not the job, and the context refuses there whatever acts on
 the job. `ctx.run`, `ctx.runAll`, `ctx.each` and `ctx.uncancellable` all throw

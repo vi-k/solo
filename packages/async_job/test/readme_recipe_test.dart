@@ -1023,7 +1023,7 @@ void main() {
         ).firstMatch(read(page))!.group(1)!;
         expect(item, contains('`Job.isCancellationError`'), reason: page);
         // The anchor is the page's own; `tool/check_links.py` holds it.
-        expect(item, contains('observing.md#'), reason: page);
+        expect(item, contains('errors.md#'), reason: page);
       }
     });
 

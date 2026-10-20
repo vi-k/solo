@@ -131,9 +131,9 @@ Waiting does not observe the failure of the body of a job that ends
 `Cancelled`. If `backup` is cancelled and its body fails, the code waiting for
 it gets the cancellation, not the error, and the status line says
 `backup cancelled`. The error goes the way of an error no outcome carries.
-[Where errors go](observing.md#where-errors-go) on the observing page shows
-that way. `ignoreFailure()` keeps it from being answered for, and then only an
-observer's `onError` hears it.
+[Where errors go](errors.md#where-errors-go) on the errors page shows that way.
+`ignoreFailure()` keeps it from being answered for, and then only an observer's
+`onError` hears it.
 
 ### Hearing the end without the failure
 
@@ -394,10 +394,10 @@ not take it out of the pass. Unregistering more than once is safe.
 
 A synchronous listener error goes to `onError` and then to the job's creation
 zone, unless the observer catches it in `onUnanswered`, as
-[Where errors go](observing.md#where-errors-go) on the observing page shows.
-Without an observer, it goes straight to that zone. A thrown `Cancelled` is
-never forwarded to the zone. Listener errors do not change cancellation or
-prevent other listeners from running.
+[Where errors go](errors.md#where-errors-go) on the errors page shows. Without
+an observer, it goes straight to that zone. A thrown `Cancelled` is never
+forwarded to the zone. Listener errors do not change cancellation or prevent
+other listeners from running.
 
 `whenCancelled` is made for a synchronous callback, though Dart lets an `async`
 one be passed. The job does not wait for the future of such a callback, and

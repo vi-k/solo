@@ -648,10 +648,10 @@ of the test and turns the test red. The app names the stop of its device once,
 in `main`, with `Job.isCancellationError` of the core, and the test names it
 the same way and puts the field back. Then nothing reaches the zone, and the
 test needs no `ignoreFailure()`.
-[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#errors-of-a-cancellation)
-on the observing page of `async_job` takes the field apart. The five seconds
-cost the test nothing; its `FakeCamera` is a device that never answers on its
-own, so the deadline is what ends the call:
+[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#errors-of-a-cancellation)
+on the errors page of `async_job` takes the field apart. The five seconds cost
+the test nothing; its `FakeCamera` is a device that never answers on its own,
+so the deadline is what ends the call:
 
 ```dart
 test('connect gives up after five seconds', () {

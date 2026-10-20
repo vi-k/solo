@@ -1,7 +1,7 @@
-// What the code of `doc/observing.md` takes for granted: the database, the
-// operations it waits for, the token that stops them and the analytics it
-// sends. Each test sets the
-// stage first, so the same open can succeed or fail.
+// What the code of `doc/observing.md` and `doc/errors.md` takes for granted:
+// the database, the operations it waits for, the token that stops them and
+// the analytics it sends. Each test sets the stage first, so the same open
+// can succeed or fail.
 import 'delay.dart';
 
 /// How the stubs behave in the test at hand.
