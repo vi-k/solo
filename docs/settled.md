@@ -374,7 +374,10 @@ M7; поднимали M3 2026-10-12, M7 2026-10-20.)
 а `SoloJob<T>` — только для того, кто читает `isQueued`, и у метода, который
 делает ребёнка для `ctx.run`: тот берёт `ChildJob<T>`, а `Job<T>` им
 не является. `hasListeners` защищён, как у `ChangeNotifier`. `@protected` стоит
-и у `SoloStream.publish`. (2026-09-19, 2026-10-03, 2026-10-07;
+и у `SoloStream.publish`, и у семи хуков, которые зовёт движок: `onStart`,
+`onFinish`, `onError`, `onUnanswered`, `onLog`, `onChange`, `onClose`; хук —
+точка расширения подкласса, а не API вызывающего. (2026-09-19, 2026-10-03,
+2026-10-07, 2026-10-21; `2026-10-21-solo-project-review.md`, M1;
 `2026-09-19-solo-project-review.md`, `2026-10-03-solo-state-reread-report.md`,
 `2026-10-03-solo-jobs-reread-report.md`, `2026-10-20-solo-project-review.md`,
 L1.)

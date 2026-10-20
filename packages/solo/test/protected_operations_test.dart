@@ -16,4 +16,23 @@ void main() {
       );
     }
   });
+
+  test('the hooks the engine calls are protected', () {
+    final source = File('lib/src/solo.dart').readAsStringSync();
+    for (final name in [
+      'onStart',
+      'onFinish',
+      'onError',
+      'onUnanswered',
+      'onLog',
+      'onChange',
+      'onClose',
+    ]) {
+      expect(
+        source,
+        contains(RegExp(r'@protected\s+void ' '$name\\(')),
+        reason: '$name is protected',
+      );
+    }
+  });
 }

@@ -34,6 +34,8 @@ package's too: see
   the controller a method for each operation called from outside. See
   [Creating and scheduling jobs](doc/jobs.md#creating-and-scheduling-jobs).
 - **`SoloStream.publish` is `@protected`.**
+- **The hooks `onStart`, `onFinish`, `onError`, `onUnanswered`, `onLog`,
+  `onChange` and `onClose` are `@protected`.**
 - **`SoloJob` is a `ChildJob`, the type `ctx.run` and `ctx.runAll` of
   `async_job` take now.** A job of `job(...)` held as a `Job` no longer
   compiles there: type the helper that makes it `SoloJob`, as
@@ -171,6 +173,8 @@ is asked once.
   [What is holding the controller](doc/diagnostics.md#what-is-holding-the-controller).
 - `AccumulationTiming.throttle` takes `startAtOnce`. With `startAtOnce: false`
   the interval is counted before the first group as well.
+- `AccumulationTiming` has `==`, `hashCode` and a `toString` that prints the
+  constructor call.
 - `package:solo/listeners.dart`: `Listeners`, the list of listeners a notifier
   walks, for a package that builds a delivery of its own on top of `solo`.
 

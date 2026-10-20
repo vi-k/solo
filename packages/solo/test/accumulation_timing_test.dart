@@ -502,6 +502,46 @@ void main() {
     });
   });
 
+  test('a timing compares and prints by kind, duration and startAtOnce', () {
+    const second = Duration(seconds: 1);
+    expect(
+      AccumulationTiming.debounce(second),
+      AccumulationTiming.debounce(second),
+    );
+    expect(
+      AccumulationTiming.debounce(second).hashCode,
+      AccumulationTiming.debounce(second).hashCode,
+    );
+    expect(
+      AccumulationTiming.throttle(second, startAtOnce: false),
+      AccumulationTiming.throttle(second, startAtOnce: false),
+    );
+    expect(
+      AccumulationTiming.debounce(second),
+      isNot(AccumulationTiming.throttle(second)),
+    );
+    expect(
+      AccumulationTiming.throttle(second),
+      isNot(AccumulationTiming.throttle(second, startAtOnce: false)),
+    );
+    expect(
+      AccumulationTiming.debounce(second),
+      isNot(AccumulationTiming.debounce(second * 2)),
+    );
+    expect(
+      [
+        AccumulationTiming.debounce(second),
+        AccumulationTiming.throttle(second),
+        AccumulationTiming.throttle(second, startAtOnce: false),
+      ].map((timing) => '$timing'),
+      [
+        'AccumulationTiming.debounce(0:00:01.000000)',
+        'AccumulationTiming.throttle(0:00:01.000000)',
+        'AccumulationTiming.throttle(0:00:01.000000, startAtOnce: false)',
+      ],
+    );
+  });
+
   test('negative timing is rejected and zero preserves queue order', () {
     expect(
       () => AccumulationTiming.debounce(

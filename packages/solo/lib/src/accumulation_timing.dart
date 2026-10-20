@@ -10,6 +10,7 @@ enum _AccumulationTimingKind { debounce, throttle }
 /// none of its own queued or running; either way it is shared by the
 /// groups of one accumulator. The same setting can be reused by
 /// independent accumulators without sharing their timers.
+@immutable
 final class AccumulationTiming {
   /// The length of the debounce window or throttle interval.
   final Duration duration;
@@ -45,6 +46,29 @@ final class AccumulationTiming {
         _startAtOnce = startAtOnce {
     _validateDuration(duration);
   }
+
+  /// Two timings are equal when they are of the same kind, with the same
+  /// [duration] and, for a throttle, the same `startAtOnce`.
+  @override
+  bool operator ==(Object other) =>
+      other is AccumulationTiming &&
+      other.duration == duration &&
+      other._kind == _kind &&
+      other._startAtOnce == _startAtOnce;
+
+  @override
+  int get hashCode => Object.hash(duration, _kind, _startAtOnce);
+
+  /// The constructor call that makes this timing, such as
+  /// `AccumulationTiming.throttle(0:00:01.000000, startAtOnce: false)`.
+  @override
+  String toString() => switch (_kind) {
+        _AccumulationTimingKind.debounce =>
+          'AccumulationTiming.debounce($duration)',
+        _AccumulationTimingKind.throttle => _startAtOnce
+            ? 'AccumulationTiming.throttle($duration)'
+            : 'AccumulationTiming.throttle($duration, startAtOnce: false)',
+      };
 
   static void _validateDuration(Duration duration) {
     if (duration.isNegative) {

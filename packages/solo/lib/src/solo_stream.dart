@@ -15,7 +15,7 @@ import 'solo.dart';
 /// `SoloStream`; sitting below it, the throw happens on the way back
 /// through `SoloStream`'s own line, and the stream never sees the
 /// event. Either order, the error itself still escapes to whoever wrote
-/// the state -- see "A failure should stay in `publish`" in
+/// the state — see "A failure should stay in `publish`" in
 /// `doc/state.md`.
 mixin SoloStream<S extends Object> on Solo<S> {
   final _controller = StreamController<S>.broadcast();

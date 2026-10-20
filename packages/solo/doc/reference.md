@@ -59,7 +59,9 @@ sees those. Every member here is protected.
 
 The engine calls these. The hooks do nothing by default, except the two that
 hand an error on, and `publish` delivers the state: an override calls
-`super.publish` first.
+`super.publish` first. Every member here is protected too. Dart does not carry
+the annotation over to an override, so an override that should stay protected
+repeats `@protected`.
 
 | Member | What it does | Where |
 | --- | --- | --- |

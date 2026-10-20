@@ -20,7 +20,7 @@ import 'package:solo/solo.dart';
 /// [value], and an operation's result is awaited through its `Job`. A
 /// controller that needs a broadcast `stream` as well mixes `SoloStream`
 /// in too, `with SoloStream, SoloListenable`. The order makes no difference
-/// here -- this mixin overrides nothing `SoloStream` does -- and
+/// here — this mixin overrides nothing `SoloStream` does — and
 /// `SoloStream` goes first by its own rule; see "A controller with both
 /// deliveries" in `doc/mixins.md` for what the combination costs.
 ///

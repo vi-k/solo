@@ -228,7 +228,7 @@ abstract class Solo<S extends Object> {
   /// subscribes and unsubscribes with a method of its own: `addListener` in
   /// `initState`, `removeListener` in `dispose`. Naming the method twice
   /// tears it off twice, and the two function values are equal without being
-  /// identical -- matching by identity would leave the listener registered
+  /// identical — matching by identity would leave the listener registered
   /// for good. `ChangeNotifier` matches the same way.
   ///
   /// If the listener was not registered or was already removed, this is a
@@ -896,8 +896,9 @@ abstract class Solo<S extends Object> {
       return closing.future;
     }
     final completer = _closing = Completer<void>();
-    // Kept for `add` after close: section 5.1 points every `closed` outcome
-    // at the `close` call, whichever of the two sources made it.
+    // Kept for `add` after close: every `Cancelled(closed)` points its stack
+    // trace at the `close` call, whether `close` cancelled the job or `add`
+    // refused it after the close.
     final stackTrace = _closeStackTrace = StackTrace.current;
     switch (mode) {
       case SoloCloseMode.cancel:
@@ -1009,9 +1010,11 @@ abstract class Solo<S extends Object> {
   }
 
   /// A job body is about to run.
+  @protected
   void onStart(Job<Object?> job) {}
 
   /// A job has an outcome, including jobs dropped before start.
+  @protected
   void onFinish(Job<Object?> job) {}
 
   /// Something a job did threw, whether its outcome carries the error or not.
@@ -1030,6 +1033,7 @@ abstract class Solo<S extends Object> {
   /// cancellation is not an error and never comes here; a [Cancelled] thrown by
   /// an abandoned action does, because for an observer that is a late failure
   /// like any other. See [Failed] for the errors that also reach the zone.
+  @protected
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 
   /// Nobody answered for this error, and this controller is the last one
@@ -1070,6 +1074,7 @@ abstract class Solo<S extends Object> {
   /// keep the default route as well. An override that throws does not take
   /// the error with it, as a [unansweredHandler] that throws does not; one
   /// that reported the error before it threw has it reported twice.
+  @protected
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     final handler = unansweredHandler;
     if (handler == null) {
@@ -1083,6 +1088,7 @@ abstract class Solo<S extends Object> {
   }
 
   /// A job called [JobContext.log].
+  @protected
   void onLog(Job<Object?> job, Object? message) {}
 
   /// The state changed, from a job or from [externalSetState].
@@ -1090,6 +1096,7 @@ abstract class Solo<S extends Object> {
   /// [SoloTransition.job] says whose change it was — a job of this
   /// controller, a child of one, or nobody for an external change — and
   /// [SoloTransition.revision] puts two of them in order.
+  @protected
   void onChange(SoloTransition<S> transition) {}
 
   /// The engine is about to finish closing.
@@ -1111,6 +1118,7 @@ abstract class Solo<S extends Object> {
   /// depends on the source, and it runs on every call, where this runs
   /// once. A future started here is not waited for: [close] completes
   /// without it.
+  @protected
   void onClose() {}
 
   _SoloJob<S, S, T> _own<T>(Job<T> job) {
