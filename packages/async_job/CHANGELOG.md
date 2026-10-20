@@ -5,79 +5,42 @@
 - **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
   error nobody else has: one no outcome carries, and a `Failed` nobody
   observes.** An observer from `0.2.0` compiles unchanged, and the errors it
-  used to swallow reach the zone; one that mixes in `JobAnswerer` and overrides
-  `onUnanswered` answers for them there. A `Failed` nobody observes reaches the
-  zone as it did in `0.2.0` only while nobody answers: an observer that answers
-  gets it in `onUnanswered`, a microtask after the job ends, and the zone does
-  not. A `Failed` made of a cancellation still goes to the zone. See
+  used to swallow reach the zone; see
   [Answering for errors](doc/errors.md#answering-for-errors).
-- **`Job.ignore()` is renamed to `Job.ignoreFailure()`.**
-- **`JobBase.whenDone` is renamed to `JobBase.untilFinished`,** so that a
-  `when` member is always a listener: `whenCancelled` and the new
-  `whenFinished`. A subclass of `JobBase` with a member named `untilFinished`
-  renames its own.
-- **`Job` gains `whenFinished`.** A class that implements `Job` itself adds it,
-  and a subclass of `JobBase` with a member of that name renames its own.
+- **`Job.ignore()` is renamed to `Job.ignoreFailure()`, and `JobBase.whenDone`
+  to `JobBase.untilFinished`.**
 - **A job is continued once: by one `then`, or by handles of the new
-  `Job.shared`.** A second `then` on a job, `then` on a job with a handle and
-  `shared` on a job with a `then` throw a `StateError` before anything is made.
-  In `0.2.0`, cancelling one of two continuations cancelled the source and the
-  other. Give each branch a handle of `shared()`: cancelling a handle ends it
-  at once and leaves the source alone. A class that implements `Job` itself
-  adds `shared`, and a subclass of `JobBase` with a member of that name renames
-  its own. A job an engine marks with the new protected `JobBase.requireShared`
-  refuses `then` from the first call. See
+  `Job.shared`.** A second continuation throws a `StateError`: give each branch
+  a handle of `shared()`, see
   [A handle for each branch](doc/chains.md#a-handle-for-each-branch).
+- **`ctx.run` takes a `ChildJob`.** A handle declared `Job<T>` no longer
+  compiles there: declare it `ChildJob<T>`, or `DeferredJob<T>` where the code
+  calls `start()`, and give the jobs of an engine `implements ChildJob<T>`.
+- **A class that implements `Job` or `JobContext` itself adds the new members,
+  and a subclass of `JobBase` renames a member of its own that has a new
+  name.** `Job` gains `whenFinished` and `shared`, `JobBase` gains
+  `untilFinished`, and `JobContext` gains `abandonable`, `pause`, `runAll`,
+  `start` and the `dispose` and `discard` of `run`; an extension on
+  `JobContext` named `runAll` or `start` is shadowed without a warning.
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
-  `package:async_job/engine.dart`.** `JobBase.debug` is `Job.debug` now. See
+  `package:async_job/engine.dart`, and `JobBase.debug` is `Job.debug`.** See
   [Building on the core](doc/extending.md).
-- **`JobContextBase.check` is marked `@mustCallSuper`.** See
-  [A rule of your own](doc/extending.md#a-rule-of-your-own).
-- **`JobBase.finish` and `JobContextBase.startChild` are marked
-  `@mustCallSuper`, and the hooks an engine overrides are marked
-  `@visibleForOverriding`:** `started`, `finished`, `adoptedBy`,
-  `createContext`, `execute`, `createEachJob` and `beforeChildStart`.
-- **`JobBase.cascadeToChildren` and the `JobBase.level` setter are no longer
-  part of the protected surface.** Cancel a job through `cancelWith` or
-  `cancelOwnJob`, and adopt a child through `startChild`.
-- **The core announces a `Failed` an engine hands to `finish`.** An engine that
+- **The protected surface of an engine changed.** `JobContextBase.check`,
+  `JobBase.finish` and `JobContextBase.startChild` are `@mustCallSuper`;
+  `started`, `finished`, `adoptedBy`, `createContext`, `execute`,
+  `createEachJob` and `beforeChildStart` are `@visibleForOverriding`;
+  `cascadeToChildren` and the `level` setter are gone in favour of
+  `cancelWith`, `cancelOwnJob` and `startChild`; `inUncancellableSection`,
+  `heldCancel`, `creationZone` and `requireShared` are new.
+- **The core announces a `Failed` an engine hands to `finish`:** an engine that
   called `notifyObserver` before `finish` drops that call, or the observer
   hears the error twice.
-- **`ctx.run` takes `dispose` and `discard`,** the way `ctx.abandonable` does.
-  See [Registering on arrival](doc/cleanup.md#registering-on-arrival).
-- **`ctx.run` and `ctx.runAll` take a `ChildJob`,** the new interface of a job
-  a parent may start. `Job.deferred` returns a `DeferredJob`, which is one, so
-  a body that runs those compiles unchanged where the type of the handle is
-  inferred. A handle declared `Job<T>` no longer compiles in `ctx.run`: the
-  return type of a helper, a parameter, a variable, a `List<Job<T>>`. Declare
-  it `ChildJob<T>`, or `DeferredJob<T>` where the code calls `start()`. A job
-  from `Job(body)`, `then` or `Job.each`, which `ctx.run` refused with an
-  `ArgumentError`, no longer compiles there. An engine whose jobs a body runs
-  as children declares `implements ChildJob<T>` on them;
-  `JobContextBase.startChild` still takes any `Job`. See
-  [A job of your own](doc/extending.md#a-job-of-your-own).
-- **`JobContext` gains `runAll`,** which runs children side by side and asks
-  the rest to stop as soon as one of them goes wrong; the branches it asks to
-  stop get the new `SiblingCancelReason`. An extension named `runAll` on
-  `JobContext` is shadowed by it without a warning. See
-  [When one failure makes the rest pointless](doc/groups.md#when-one-failure-makes-the-rest-pointless).
-- **A cancellation that travels inside a `ParallelWaitError` is a cancellation
-  again.** A child cancelled under `[ctx.run(a), ctx.run(b)].wait` ends the
-  parent `Cancelled`, where it ended it `Failed`; an envelope that carries a
-  real failure is untouched. See
-  [Registered on arrival, waited for in one envelope](doc/groups.md#registered-on-arrival-waited-for-in-one-envelope).
-- **A body that cancels itself is cancelled the way a cancelled job is.** When
-  a body throws `Cancelled`, or lets out the cancellation of a child, the
-  children are asked to stop, then the `ctx.onCancel` callbacks run and
+- **A cancellation inside a `ParallelWaitError` is a cancellation again:** a
+  child cancelled under `[ctx.run(a), ctx.run(b)].wait` ends the parent
+  `Cancelled`, where it ended it `Failed`.
+- **A body that cancels itself is cancelled the way a cancelled job is:** its
+  children are asked to stop, then its `ctx.onCancel` callbacks run and
   `whenCancelled` fires.
-- **`JobBase` gains the protected `inUncancellableSection`, `heldCancel`,
-  `creationZone` and `requireShared`.**
-- **`JobContext` gains `pause`,** a delay a cancellation ends. See
-  [Letting time pass](doc/time.md#letting-time-pass).
-- **A class that implements `JobContext` itself adds `abandonable`, `pause`,
-  `runAll` and `start`.** One that extends `JobContextBase` inherits them. An
-  extension named `start` on `JobContext` is shadowed by the new `start`
-  without a warning.
 
 ### Deprecated
 
@@ -87,188 +50,114 @@
 ### Changes you will see on upgrade
 
 Errors that `0.2.0` lost, or told only to the observer, now reach the zone the
-job was created in. In a test that zone is the test's, and the test fails:
+job was created in, and a test fails on them:
 
-- the failure of the body of a job that ends `Cancelled`: an operation that
-  stops at a token the job cancels through `ctx.onCancel` throws one on every
-  cancellation, and so does a body that wraps its own cancellation in an
-  exception of its own;
-- the failure of the body of a job that an engine ends by hand with an outcome
-  of its own, earlier or later than the body throws;
-- the late failure of an action under `ctx.abandonable` that the body left
-  through `.timeout` or `Future.any`, arriving once the job is over;
+- the failure of the body of a job that ends `Cancelled`, such as an operation
+  stopping at a token the job cancels;
+- the failure of the body of a job an engine ends by hand;
+- the late failure of an action the body left under `ctx.abandonable` through
+  `.timeout` or `Future.any`;
 - an error no outcome carries, of a job that has an observer;
 - the failure of a source's own cleanup when `ctx.each` lets go of a stream.
 
-`Job.isCancellationError` names the errors a cancellation causes, once, in
-`main`: they reach `onError` and go no further. `job.ignoreFailure()` silences
-the first two for that job alone: a child whose body failed answers for its
-failure itself, whatever its parent calls. An observer that mixes in
-`JobAnswerer` and overrides `onUnanswered` answers for the rest. See
+`Job.isCancellationError`, set once in `main`, stops the errors a cancellation
+causes at `onError`, `job.ignoreFailure()` silences the first two for one job,
+and an observer that mixes in `JobAnswerer` answers for the rest; see
 [Where errors go](doc/errors.md#where-errors-go).
 
 A job that gives up inside a call it walked away from no longer reaches
 `onError` as a failure.
 
-`ctx.check()` throws the job's `Cancelled` while the core cleans up after the
-body of a cancelled job, where `0.2.0` threw a `StateError`: an action the body
-walked away from that polls it to stop gets the cancellation it waits for. A
-cleanup callback that calls it on a cancelled job stops there, and the
-`Cancelled` reaches `onError` and no further, where `0.2.0` sent a `StateError`
-on to the zone. See
-[Cleanup order and late results](doc/cleanup.md#cleanup-order-and-late-results).
+`ctx.check()` throws the job's `Cancelled` in the cleanup of a cancelled job,
+where `0.2.0` threw a `StateError`.
 
 `onError` hears each failure and each cancellation inside a `ParallelWaitError`
-in a call of its own, where `0.2.0` handed it the whole error once. A `Failed`
-with such an error that nobody observes is answered for failure by failure, and
-its cancellations stay out: the zone gets each failure on its own, where
-`0.2.0` passed it the whole error. See
-[Answering for errors](doc/errors.md#answering-for-errors).
+in a call of its own, and the zone gets each failure of one nobody observes on
+its own, where `0.2.0` passed on the whole error once.
 
-A child's cancellation that the body lets out names the child as the job prints
-itself: `Cancelled(handler: Job(thumbnail): Cancelled(timeout))`, where `0.2.0`
-printed `child thumbnail`, and `child null` for a child without a key.
+A child's cancellation that the body lets out prints as
+`Cancelled(handler: Job(thumbnail): Cancelled(timeout))`, where `0.2.0` printed
+`child thumbnail`.
 
-`JobBase.children` is a copy taken at the call: a child that finishes later is
-still in it and one adopted later is not, where the view `0.2.0` returned
-followed both.
+`JobBase.children` is a copy taken at the call, where `0.2.0` returned a live
+view.
 
 With asserts on, an `AssertionError` reaches the zone when an engine ends two
-children of one job with one `Cancelled` instance. See
-[Not waiting for the checkpoint](doc/extending.md#not-waiting-for-the-checkpoint).
+children of one job with one `Cancelled` instance.
 
-A `Job<void>` whose body returns a job of `Job.deferred` that nobody has
-started, a `then<void>` continuation whose callback does the same, and a child
-of `ctx.each` whose callback does it for an event end `Failed` with an
-`ArgumentError`, where `0.2.0` ended them `Done`. `Job.each` refuses it the
-same way. See [Chains](doc/chains.md).
+A job whose body or callback returns a job of `Job.deferred` nobody has started
+ends `Failed` with an `ArgumentError`, where `0.2.0` ended it `Done`.
 
 Several error messages are reworded: a test that matches them by text needs the
 new wording.
 
 ### Added
 
-- **`ctx.start` starts a child the body does not wait for.** Its outcome stays
-  with whoever holds the child: a failure goes the way a failure nobody
-  observed goes, a cancellation goes nowhere, and neither changes the outcome
-  of the parent. `ctx.run(child).ignore()`, which a body that did not await a
-  child used until now, drops a failure instead, and nobody answers for it.
-- **`started` of `Cancelled.by` is optional and defaults to `true`.**
+- **`ctx.start` starts a child the body does not wait for;** its outcome stays
+  with whoever holds the child and leaves the parent's alone.
+- **`ctx.runAll` runs children side by side and asks the rest to stop as soon
+  as one of them goes wrong,** with the new `SiblingCancelReason`. See
+  [When one failure makes the rest pointless](doc/groups.md#when-one-failure-makes-the-rest-pointless).
+- **`ctx.pause` is a delay a cancellation ends.**
+- **`ctx.run` takes `dispose` and `discard`,** as `ctx.abandonable` does.
 - **`Job.whenFinished` hears the end of a job without observing its outcome.**
-  A screen that redraws when the job is over no longer takes over a failure the
-  job's owner is responsible for, as waiting for `done` does. See
-  [Hearing the end without the failure](doc/outcomes.md#hearing-the-end-without-the-failure).
-- **`timeout` gives a job a deadline of its own.** `Job(...)`,
-  `Job.deferred(...)` and the constructor of `JobBase` take it; when it runs
-  out, the job ends `Cancelled(timeout)` with the new `TimeoutCancelReason`.
-  See [A deadline](doc/time.md#a-deadline).
-- **`Job.each` makes a root job that follows a stream.** See
-  [A job that only follows a stream](doc/streams.md#a-job-that-only-follows-a-stream).
-- **`JobObserver.all` makes one observer of several.** See
-  [Several observers](doc/errors.md#several-observers).
-- **`JobObserver` is an `abstract mixin class`,** where `0.2.0` declared an
-  `abstract class`: an observer that already extends another class mixes
-  `JobObserver` in: `with JobObserver`. See
-  [Observer](doc/observing.md#observer).
-- **`Job.isCancellationError` names the errors a cancellation causes.** Set
-  once, in `main`, it keeps them out of the answer: `onError` hears them, and
-  nobody is asked to answer for them. A stop at a token is named by its type,
-  `(error) => error is DatabaseStopped`, and a wrapper of the job's own
-  cancellation by its cause,
-  `(error) => error is AppException && error.cause is Cancelled`. See
+- **`timeout` gives a job a deadline of its own,** after which it ends
+  `Cancelled(timeout)` with the new `TimeoutCancelReason`.
+- **`Job.each` makes a root job that follows a stream.**
+- **`JobObserver.all` makes one observer of several.**
+- **`JobObserver` is an `abstract mixin class`,** so that an observer that
+  extends another class mixes it in.
+- **`Job.isCancellationError` names the errors a cancellation causes:**
+  `onError` hears them, and nobody is asked to answer for them. See
   [Errors of a cancellation](doc/errors.md#errors-of-a-cancellation).
 - **`Job.visitErrors` hands each failure and each cancellation inside an error
-  to a callback of its own.** See
-  [Answering for errors](doc/errors.md#answering-for-errors).
-- The debug channel names a job that handed its value over and dropped the
-  conditional registrations that went with it. See
-  [Registering on arrival](doc/cleanup.md#registering-on-arrival). A job that
-  ended `Done` without the value of such a registration is named with that
-  value instead: unless the value is inside the result, nothing will dispose of
-  it. See
-  [A value the job keeps back](doc/cleanup.md#a-value-the-job-keeps-back).
+  to a callback of its own.**
+- **`started` of `Cancelled.by` is optional and defaults to `true`.**
+- The debug channel names a job that dropped the conditional registrations of a
+  value it handed over, and a job that ended `Done` without handing over such a
+  value: unless the value is inside the result, nothing will dispose of it.
 
 ### Fixed
 
-- A `ParallelWaitError` whose list of errors throws when its length is read is
-  a failure like any other; a job whose body threw it never finished.
-- A `whenCancelled` registered from `onFinish` of a job cancelled before its
-  start runs; it was dropped.
-- A job made by `Job(...)` inside work handed to `ctx.unattended`, or started
-  there, runs in the zone the work was started from: in the zone of the work, a
-  bare `unawaited` error in it reached the observer of the job that started the
-  work.
-- A `Cancelled` a hook of the observer throws no longer reaches the zone.
-- A job an engine ends while `createContext` builds its context keeps that
-  outcome; its body ran anyway, and the job ended twice.
-- `ctx.run`, `ctx.runAll` and `ctx.each` refuse, with an `ArgumentError` as
-  they promise, a class that implements `JobBase` instead of extending it. It
-  threw `NoSuchMethodError`.
+- `ctx.run` and `ctx.each` refuse a class that implements `JobBase` instead of
+  extending it with the `ArgumentError` they promise, not a
+  `NoSuchMethodError`.
 - A value that comes to a call of `ctx.abandonable` the cancellation has
-  already ended is released as soon as it arrives; held until the children had
-  ended, it left a child waiting for the same lock for good.
-- An error thrown by `JobBase.started` goes to `onError` and `onUnanswered`,
-  and the body runs. It left the job running with no body, forever.
-- A child leaves its parent's waiting list by identity: with children equal by
-  `==`, the parent finished while one of them still ran.
-- A child leaves its parent's waiting list without a search of it: a parent of
-  thousands of children took time quadratic in their number.
-- A cancel callback or a listener of a job leaves without a search either:
-  thousands of calls of `ctx.abandonable` in flight in one job took time
-  quadratic in their number.
-- Two jobs equal by `==` are no longer taken for one another inside work handed
-  to `ctx.unattended`.
-- A body that cancels itself with `throw Cancelled(...)` has accepted that
-  cancellation there and then: until the job had waited for its children,
-  `isCancelled` answered `false`, and a `cancel()` put its own reason over the
-  one the body chose.
-- A `whenCancelled` registered while the cancellation is still reaching the
-  children runs after the ones registered earlier, instead of ahead of them.
-- A finished job lets go of its body and of its parent: a kept handle held
-  everything the body captured.
-- A job made inside work handed to `ctx.unattended` lets go of the job that
-  started the work: a kept handle held that job, and everything it held,
-  through the zone of the work. A job made there under a zone with a microtask
-  queue of its own, such as that of `fakeAsync`, no longer leaves its outcome
-  waiting in that queue for good.
-- `JobContextBase.startChild` refuses a continuation, the job `then` returns,
-  with the same `ArgumentError` whenever it is called; once the source had
-  finished it threw a `StateError`.
+  already ended is released at once; held until the children had ended, it left
+  a child waiting for the same lock for good.
+- An error thrown by `JobBase.started` goes to `onError`, and the body runs;
+  the job was left running with no body, forever.
+- Jobs equal by `==` are no longer taken for one another: a parent of two such
+  children finished while one of them still ran.
+- A child, a cancel callback or a listener leaves its list without a search:
+  thousands of them in one job took time quadratic in their number.
+- A body that throws `Cancelled` accepts that cancellation at once: until the
+  children were done, `isCancelled` answered `false`, and a `cancel()` put its
+  own reason over the one the body chose.
+- A finished job lets go of its body, its parent and the cleanups it never ran,
+  and a job made inside work handed to `ctx.unattended` lets go of the job that
+  started the work: a kept handle held everything they captured.
+- A job made by `Job(...)` inside work handed to `ctx.unattended` runs in the
+  zone the work was started from, so a bare `unawaited` error in it no longer
+  reaches the observer of the job that started the work.
 - `ctx.join` releases the value through `dispose` or `discard` when the
   checkpoint after the action throws anything, not only a `Cancelled`.
 - `ctx.join` and `ctx.abandonable` called from work handed to `ctx.unattended`
   no longer hand that work a resource they have already closed.
-- A value that comes back after the body has ended no longer completes the same
-  wait twice: a cancellation arriving at that moment made the core throw
-  `Future already completed`.
-- A job that has accepted a cancellation no longer ends with a value: a `Done`
-  or `Failed` an engine hands to `finish` after that ends it `Cancelled`.
+- A value that comes back after the body has ended no longer makes the core
+  throw `Future already completed`.
 - A value arriving for a job an engine ended by hand is released instead of
-  leaking, and the body hears why: a `StateError` about the job, or the
-  cancellation the job was ended with.
-- A cancellation that runs out of stack in a deep tree runs the `onCancel`
-  callbacks of the jobs it reached as it unwinds; it used to run none of them.
+  leaking.
+- A tree of jobs that runs out of stack while it is being built ends with the
+  `StackOverflowError`, where its root could be left running for good, and a
+  cancellation that runs out of stack in a deep tree still runs the `onCancel`
+  callbacks of the jobs it reached.
 - A call of `ctx.abandonable` the body did not await no longer sends the job's
   cancellation to the zone when the job accepts it after the body has ended.
-- A tree of jobs that runs out of stack while it is being built ends with the
-  `StackOverflowError`; its root could be left running for good, with nothing
-  reported.
-- A key whose `toString` throws, or a `describe` that throws, is printed as a
-  mark in the job's string representation; its error took the place of the
-  core's error message that named the job.
-- Thousands of jobs that wake up together, such as children waiting on one
-  future, no longer cost about two milliseconds each under JIT (`dart test`,
-  `dart run`, a debug build): the VM compiled the routine of a job again for
-  every one of them.
-- On a running job, a cancellation made from `Job.debug` on the line about
-  another cancellation of the same job comes too late, as any later
-  cancellation does; the `whenCancelled` callbacks used to hear its reason
-  while the outcome carried the other one. Inside `ctx.uncancellable` it no
-  longer takes the place of the cancellation the section holds back.
-- A continuation `then` attached to a job whose failure has already been
-  answered for no longer answers for it a second time.
-- A job that an engine ends by hand while it runs lets go of the cleanups it
-  never ran: a kept handle held everything they captured.
+- Thousands of jobs that wake up together no longer cost about two milliseconds
+  each under JIT.
+- A `then` attached to a job whose failure has already been answered for no
+  longer answers for it a second time.
 
 ### Documentation
 
@@ -278,12 +167,10 @@ new wording.
   [Chains](doc/chains.md), [Streams](doc/streams.md),
   [Cleanup](doc/cleanup.md), [Observing](doc/observing.md),
   [Testing](doc/testing.md) and [Building on the core](doc/extending.md).
-- One recommendation of the `0.2.0` README is replaced:
-  `on Cancelled { rethrow; }` in front of the `catch` logs an operation stopped
-  by its token as a failure.
+- `on Cancelled { rethrow; }` in front of the `catch`, which the `0.2.0` README
+  recommended, logs an operation stopped by its token as a failure;
   [Asking the job](doc/cancellation.md#asking-the-job) calls `ctx.check()` in
-  the `catch` instead and names its price: a real failure that comes after the
-  cancellation is lost, unless the `catch` rethrows on a cancelled job.
+  the `catch` instead.
 
 ## 0.2.0
 
