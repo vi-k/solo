@@ -224,7 +224,8 @@ what a cancellation that comes while it runs does to it:
 | `ctx.abandonable(action)` | Runs the action and waits for it, but no longer than the job lives | Throws `Cancelled` | Throws at once; the action runs on |
 | `ctx.uncancellable(action)` | Runs a step with the cancellation held back | Throws `Cancelled` | Holds the cancellation until the step ends; the next checkpoint throws |
 | `ctx.pause(duration)` | Lets time pass | Throws `Cancelled` | Ends the pause and throws |
-| `ctx.run(child)` | Starts a `ChildJob`, such as one made with `Job.deferred`, and waits for its value; a future the body does not await takes `.ignore()` | Throws `Cancelled` | Passes the cancellation to the child, waits for it and throws |
+| `ctx.run(child)` | Starts a `ChildJob`, such as one made with `Job.deferred`, and waits for its value | Throws `Cancelled` | Passes the cancellation to the child, waits for it and throws |
+| `ctx.start(child)` | Starts a `ChildJob` the body does not wait for, and leaves its outcome to whoever holds it | Throws `Cancelled` | Passes the cancellation to the child |
 | `ctx.runAll(children)` | Runs children side by side and stops the rest as soon as one ends without a value | Throws `Cancelled` | Passes the cancellation to the children, waits for them and throws |
 | `ctx.each(stream, onData)` | Starts a child that takes the events of a stream one at a time | Throws `Cancelled` | Passes the cancellation to the child |
 | `ctx.onCancel(callback)` | Calls back the moment the job accepts a cancellation | Throws `Cancelled` |  |

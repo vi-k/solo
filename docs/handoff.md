@@ -1497,7 +1497,11 @@ M7 задевает (`jobs.md`, `mistakes.md`, `testing.md`, `children.md`, READ
 continuations of one source» `chains.md` и строка таблицы отмены переписаны
 с переводом, набор `shared_test.dart` держит строки таблицы M4, записи
 CHANGELOG обоих пакетов с переводами. Пункт 8 `docs/settled.md` (веер `then`) —
-в волне документов. Следующий — L4.
+в волне документов. L4 закоммичен: `ctx.start` в `JobContext`
+и `JobContextBase`, наборы `start_test.dart` ядра и `solo`, строка `ctx.start`
+в таблице «The context at a glance» README ядра с переводом и её сторож, записи
+CHANGELOG. Ответ `ctx.start` на `children.md` и разница
+с `ctx.run(child).ignore()` — в волне документов. Следующий — M5.
 
 Имя ядра решено 2026-09-19: держатель `job` ответил, и владелец остаётся
 на `async_job`. Напоминаний больше не нужно, переписку не продолжать; разбор —

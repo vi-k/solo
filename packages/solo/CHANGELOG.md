@@ -135,6 +135,10 @@ is asked once.
 
 ### Added
 
+- **`ctx.start` of `async_job` starts a child the body does not wait for.** The
+  rules of the controller decide as they do for `ctx.run`: a child they turn
+  away ends `Cancelled(rules)`, and `start` returns as usual; a `canStart` that
+  throws throws from `start`. A failure of the child goes to `onUnanswered`.
 - **`timeout` gives a job of the controller a deadline of its own.** `job`,
   `run`, `collect` and `accumulate` take it; when it runs out, the job ends
   `Cancelled(timeout)` with the new `TimeoutCancelReason` of `async_job`. See

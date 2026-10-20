@@ -1100,6 +1100,7 @@ void main() {
         'uncancellable': (ctx) => ctx.uncancellable(() => 1),
         'pause': (ctx) => ctx.pause(),
         'run': (ctx) => ctx.run(Job.deferred<int>((ctx) async => 1)),
+        'start': (ctx) => ctx.start(Job.deferred<int>((ctx) async => 1)),
         'runAll': (ctx) => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),
         'each': (ctx) => ctx.each(Stream.value(1), (ctx, event) {}),
         'onCancel': (ctx) => ctx.onCancel(() {}),
@@ -1286,6 +1287,26 @@ void main() {
       expect(
         cancelledWhile((ctx, say) async {
           final child = ctx.each(StreamController<int>().stream, (ctx, _) {});
+          unawaited(child.done.then((outcome) => say('child $outcome')));
+          await ctx.pause(const Duration(milliseconds: 100));
+          return null;
+        }),
+        [
+          'cancel at 10',
+          'threw Cancelled(manual) at 10',
+          'child Cancelled(parent) at 10',
+        ],
+      );
+    });
+
+    test('start passes it to the child', () {
+      expect(cell('start'), 'Passes the cancellation to the child');
+      expect(
+        cancelledWhile((ctx, say) async {
+          final child = Job.deferred<void>(
+            (ctx) => ctx.pause(const Duration(milliseconds: 100)),
+          );
+          ctx.start(child);
           unawaited(child.done.then((outcome) => say('child $outcome')));
           await ctx.pause(const Duration(milliseconds: 100));
           return null;

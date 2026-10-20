@@ -454,6 +454,34 @@ abstract interface class JobContext {
     FutureOr<void> Function(T value)? discard,
   });
 
+  /// Starts [child] right now, as a child of this job, and leaves its outcome
+  /// to whoever holds it.
+  ///
+  /// Starts synchronously and returns nothing: keep [child] itself to read its
+  /// outcome. Nothing here observes it, so a failure of the child goes the way
+  /// a failure nobody observed goes: to [JobAnswerer.onUnanswered] of its
+  /// observer, otherwise to the zone, unless [Job.ignoreFailure] was called on
+  /// [child]. A cancellation of the child goes nowhere. Neither changes the
+  /// outcome of this job.
+  ///
+  /// The child is a child like one of [run]: the parent finishes only after
+  /// it, the parent's cancellation cascades onto it, and a child created with
+  /// `cancellable: false` refuses that cascade. A child with no observer of its
+  /// own takes the parent's.
+  ///
+  /// Admission errors are those of [run], and as synchronous. A rule of the
+  /// engine's domain that throws ends [child] [Failed], with
+  /// [Job.ignoreFailure] called on it, and its error is thrown from here.
+  ///
+  /// `ctx.run(child).ignore()` is not the same: [run] observes the value of
+  /// the child, and `ignore()` drops the error, so nobody answers for a
+  /// failure and only [JobObserver.onError] hears it.
+  ///
+  /// ```dart
+  /// ctx.start(Job.deferred<void>((ctx) => sendReport(rows)));
+  /// ```
+  void start(ChildJob<Object?> child);
+
   /// Runs [children] side by side and stops the rest as soon as one of
   /// them goes wrong.
   ///
@@ -1413,6 +1441,9 @@ abstract class JobContextBase implements JobContext {
 
     return _awaitChild(child, dispose: dispose, discard: discard);
   }
+
+  @override
+  void start(ChildJob<Object?> child) => startChild(child);
 
   @override
   Future<List<T>> runAll<T>(Iterable<ChildJob<T>> children) {

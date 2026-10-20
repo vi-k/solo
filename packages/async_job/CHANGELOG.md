@@ -72,8 +72,8 @@
   `creationZone`.**
 - **`JobContext` gains `pause`,** a delay a cancellation ends. See
   [Letting time pass](doc/time.md#letting-time-pass).
-- **A class that implements `JobContext` itself adds `abandonable`, `pause` and
-  `runAll`.** One that extends `JobContextBase` inherits them.
+- **A class that implements `JobContext` itself adds `abandonable`, `pause`,
+  `runAll` and `start`.** One that extends `JobContextBase` inherits them.
 
 ### Deprecated
 
@@ -141,6 +141,11 @@ new wording.
 
 ### Added
 
+- **`ctx.start` starts a child the body does not wait for.** Its outcome stays
+  with whoever holds the child: a failure goes the way a failure nobody
+  observed goes, a cancellation goes nowhere, and neither changes the outcome
+  of the parent. `ctx.run(child).ignore()`, which a body that did not await a
+  child used until now, drops a failure instead, and nobody answers for it.
 - **`started` of `Cancelled.by` is optional and defaults to `true`.**
 - **`Job.whenFinished` hears the end of a job without observing its outcome.**
   A screen that redraws when the job is over no longer takes over a failure the
