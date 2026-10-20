@@ -213,6 +213,9 @@ new wording.
   `==`, the parent finished while one of them still ran.
 - A child leaves its parent's waiting list without a search of it: a parent of
   thousands of children took time quadratic in their number.
+- A cancel callback or a listener of a job leaves without a search either:
+  thousands of calls of `ctx.abandonable` in flight in one job took time
+  quadratic in their number.
 - Two jobs equal by `==` are no longer taken for one another inside work handed
   to `ctx.unattended`.
 - A body that cancels itself with `throw Cancelled(...)` has accepted that

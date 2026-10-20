@@ -900,10 +900,8 @@ abstract class JobContextBase implements JobContext {
   /// cancellation only when the job finishes, not when it is accepted.
   /// Register through [onCancel] for code that may throw.
   @protected
-  void Function() addCancelCallback(void Function() callback) {
-    _owner._onCancel.add(callback);
-    return () => _owner._onCancel.remove(callback);
-  }
+  void Function() addCancelCallback(void Function() callback) =>
+      _owner._onCancel.add(callback);
 
   /// Cancels the owner with a cancellation it cannot refuse: the rules of
   /// a domain come here, and they cancel a job whatever `cancellable`

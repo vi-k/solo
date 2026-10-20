@@ -38,6 +38,85 @@ final class _Cleanup {
   _Cleanup(this.run, {required this.always, required this.order, this.value});
 }
 
+/// Callbacks of one kind a job keeps, in the order they were registered.
+///
+/// A chain and not a list, as the children of a job are. A registration
+/// leaves at once, where a list had to be searched: a job with thousands of
+/// calls of `abandonable` in flight under `.wait` lets each one go at its
+/// end, and that took time quadratic in their number. A remover takes back
+/// the registration it was handed and no other, where a list searched by
+/// `==` let it take a second registration of the same function. And
+/// joining the chain is only stores.
+final class _Callbacks<F> {
+  _Callback<F>? _first;
+  _Callback<F>? _last;
+
+  /// Adds [callback] at the end and returns its remover. A remover called
+  /// again, or after [clear], does nothing.
+  void Function() add(F callback) {
+    final entry = _Callback<F>(callback);
+    final last = _last;
+    if (last == null) {
+      _first = entry;
+    } else {
+      last._next = entry;
+      entry._previous = last;
+    }
+    _last = entry;
+    return () => _remove(entry);
+  }
+
+  void _remove(_Callback<F> entry) {
+    if (!entry._linked) return;
+    entry._linked = false;
+    final previous = entry._previous;
+    final next = entry._next;
+    if (previous == null) {
+      _first = next;
+    } else {
+      previous._next = next;
+    }
+    if (next == null) {
+      _last = previous;
+    } else {
+      next._previous = previous;
+    }
+    entry
+      .._previous = null
+      .._next = null;
+  }
+
+  /// The callbacks registered now, in order: a snapshot, so a callback may
+  /// register or remove another while the snapshot is walked.
+  List<F> toList() => [
+        for (var entry = _first; entry != null; entry = entry._next)
+          entry.callback,
+      ];
+
+  void clear() {
+    var entry = _first;
+    while (entry != null) {
+      final next = entry._next;
+      entry
+        .._linked = false
+        .._previous = null
+        .._next = null;
+      entry = next;
+    }
+    _first = null;
+    _last = null;
+  }
+}
+
+final class _Callback<F> {
+  final F callback;
+  bool _linked = true;
+  _Callback<F>? _previous;
+  _Callback<F>? _next;
+
+  _Callback(this.callback);
+}
+
 /// The lifecycle of a job: start, body, children, cancellation, outcome.
 ///
 /// Subclass it to add a domain of your own — the state, the rules and the
@@ -84,15 +163,15 @@ abstract class JobBase<T> implements Job<T> {
   }
 
   Cancelled? _cancelled;
-  final _cancelListeners = <void Function(Cancelled)>[];
+  final _cancelListeners = _Callbacks<void Function(Cancelled)>();
 
   /// Whether the pass that tells the [whenFinished] listeners has run: from
   /// then on a registration is called at once. Not `isFinished`: the outcome
   /// is set before `onFinish` and the pass, and a registration made in there
   /// belongs to the pass, after the ones made earlier.
   bool _finishTold = false;
-  final _finishListeners = <void Function(Outcome<T>)>[];
-  final _onCancel = <void Function()>[];
+  final _finishListeners = _Callbacks<void Function(Outcome<T>)>();
+  final _onCancel = _Callbacks<void Function()>();
   final _cleanups = <_Cleanup>[];
 
   /// The registrations the first pass of the unwinding has put aside.
@@ -734,8 +813,7 @@ abstract class JobBase<T> implements Job<T> {
     // its start there was no mark to set `_cancelled` earlier -- still has
     // the pass ahead of it, and this registration belongs in it.
     if (isFinished && _outcome is! Cancelled) return () {};
-    _cancelListeners.add(guarded);
-    return () => _cancelListeners.remove(guarded);
+    return _cancelListeners.add(guarded);
   }
 
   @override
@@ -745,8 +823,7 @@ abstract class JobBase<T> implements Job<T> {
       guarded(_outcome!);
       return () {};
     }
-    _finishListeners.add(guarded);
-    return () => _finishListeners.remove(guarded);
+    return _finishListeners.add(guarded);
   }
 
   @override
