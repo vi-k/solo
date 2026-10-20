@@ -539,5 +539,6 @@ the method waits its turn.
 
 `ignoreFailure()` stands where the second attempt read `done`. Nobody waits for
 the outcome of this job, and without `ignoreFailure()` a logout that fails
-would reach the zone as an unhandled error. The controller's `onError` hook
-hears that failure in either version, and the controller closes all the same.
+would reach the zone as an unhandled error, with no `Solo.unansweredHandler`
+set to answer for it. The controller's `onError` hook hears that failure in
+either version, and the controller closes all the same.

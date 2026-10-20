@@ -20,8 +20,9 @@ import 'solo_selection.dart';
 /// )
 /// ```
 ///
-/// The button drops the job `save` hands back: a failed save goes on to the
-/// zone. A screen that tells the user of it waits for the job's `done`.
+/// The button drops the job `save` hands back: a failed save goes on to
+/// `Solo.unansweredHandler`, or to the zone when none is set. A screen that
+/// tells the user of it waits for the job's `done`.
 ///
 /// It takes any [Solo] — one with `SoloListenable`, one with `SoloStream`
 /// or a plain one — and is to [SoloBuilder] what a pick is to the whole

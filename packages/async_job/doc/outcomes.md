@@ -91,12 +91,13 @@ zone: Bad state: disk full
 status: backup failed: Bad state: disk full
 ```
 
-A failure nobody observes goes to the job's creation zone on the microtask
-after the job finishes: that keeps it visible when no caller waits for the
-result. In a test that zone is the test's, and the test fails. Reading
-`outcome` does not count as observing. A read that comes after that microtask
-still works, `done` with the `Failed` and `value` with its error, but the zone
-has heard the error by then.
+A failure nobody observes is answered for on the microtask after the job
+finishes: an observer that mixes in `JobAnswerer` answers in `onUnanswered`,
+and without one the job's creation zone receives it, as here. That keeps it
+visible when no caller waits for the result. In a test that zone is the test's,
+and the test fails. Reading `outcome` does not count as observing. A read that
+comes after that microtask still works, `done` with the `Failed` and `value`
+with its error, but the failure has been answered for by then.
 
 ### Telling the core it is handled
 
@@ -116,12 +117,12 @@ only way to observe a failure:
 | --- | --- |
 | Reads `done` | yes, even without awaiting it, and `done` never throws |
 | Reads `value` | yes, even without awaiting it, and the waiting code gets the error itself and has to handle it, as with any `Future` |
-| Reads `done` or `value` after the microtask that follows the end | too late: the zone has heard the error |
+| Reads `done` or `value` after the microtask that follows the end | too late: the failure has been answered for |
 | Forwards the failure through `then` | yes, and the continuation takes responsibility for it |
 | Reads `outcome` | no |
 | Awaits `job.cancel()` | no |
 | Registers a listener with `whenCancelled` or `whenFinished` | no |
-| Gives the job an observer | no: `onError` and `onFinish` hear the failure, and it reaches the zone all the same |
+| Gives the job an observer | no: `onError` and `onFinish` hear the failure, and it is answered for all the same — by the observer's `onUnanswered` if it mixes in `JobAnswerer` |
 
 So code that waits for the job and handles its result needs no
 `ignoreFailure()`.
@@ -131,7 +132,7 @@ Waiting does not observe the failure of the body of a job that ends
 it gets the cancellation, not the error, and the status line says
 `backup cancelled`. The error goes the way of an error no outcome carries.
 [Where errors go](observing.md#where-errors-go) on the observing page shows
-that way. `ignoreFailure()` keeps it out of the zone, and then only an
+that way. `ignoreFailure()` keeps it from being answered for, and then only an
 observer's `onError` hears it.
 
 ### Hearing the end without the failure
@@ -152,7 +153,7 @@ A status line that waits for `done` to redraw itself observes the failure, and
 the zone stops hearing about it, even when the line is not the code responsible
 for the backup. `whenFinished` calls its listener with the outcome once the job
 is over: after its cleanup, and before anything waiting on `done` resumes.
-Registering observes nothing: the failure reaches the zone as in the first
+Registering observes nothing: the failure is answered for as in the first
 attempt, and the owner of `backup` keeps the choice of who observes it. A
 screen that closes before the job ends calls `unregister()`; a listener
 registered on a job that is already over runs at once.

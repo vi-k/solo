@@ -164,11 +164,12 @@ spinner of a job that is no longer running.
 
 They answer on the screen and not for the caller. The button drops the job that
 `load` hands back. A failure nobody reads goes on to the zone even after
-`ifFailed` has put `Empty` on the screen: in an app towards
-`PlatformDispatcher.onError`, in a widget test into the test, which fails.
-`ignoreFailure()` on the button says the screen is all the answer the failure
-needs; [Outcomes](#outcomes) has the rule. The full API, with rules, the queue,
-children and observers, is documented in [solo](https://pub.dev/packages/solo).
+`ifFailed` has put `Empty` on the screen, unless `Solo.unansweredHandler`
+answers for it: in an app towards `PlatformDispatcher.onError`, in a widget
+test into the test, which fails. `ignoreFailure()` on the button says the
+screen is all the answer the failure needs; [Outcomes](#outcomes) has the rule.
+The full API, with rules, the queue, children and observers, is documented in
+[solo](https://pub.dev/packages/solo).
 
 `SoloBuilder` is what draws the state: it takes the controller as `solo`,
 rebuilds on every change of the state and hands `child` through untouched. The
@@ -256,8 +257,9 @@ SoloSelector<Profile, bool>(
 The button drops the job that `save` hands back, on purpose, and so does
 `SaveButton` below. A save that fails leaves the state `Loaded`, and nothing on
 the screen says so: `save` has no `ifFailed`, so its failure goes on to the
-zone, in an app towards `PlatformDispatcher.onError`. `ignoreFailure()` would
-leave it unheard. A screen that tells the user waits for `save().done`, as in
+zone, with no `Solo.unansweredHandler` set, in an app towards
+`PlatformDispatcher.onError`. `ignoreFailure()` would leave it unheard. A
+screen that tells the user waits for `save().done`, as in
 [Outcomes](#outcomes).
 
 The rules of `SoloSelector`:
@@ -523,7 +525,8 @@ outcome is nobody's business.
 
 The same road carries the errors no outcome holds, such as the failure of work
 a body handed to `ctx.unattended`. A controller that overrides `onUnanswered`,
-or a `Solo.unansweredHandler`, answers for them instead.
+or a `Solo.unansweredHandler`, answers for them instead, and for an unobserved
+`Failed` as well.
 [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#where-each-error-goes)
 on the errors page of `solo` has the table of them. A `SoloObserver` sees such
 a failure and does not take it: watching is not answering.

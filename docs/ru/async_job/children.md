@@ -2,8 +2,9 @@
 
 Тело может отдать работу другой задаче тремя способами:
 
-1. Тело запускает ребёнка и дожидается его. Несколько детей, которых ждут
-   вместе, составляют [группу](groups.md).
+1. Тело запускает ребёнка через `ctx.run` и дожидается его или через
+   `ctx.start` и оставляет его исход тому, кто его держит. Несколько детей,
+   которых ждут вместе, составляют [группу](groups.md).
 2. [Стрим](streams.md) обрабатывается по одному событию в ребёнке, которому
    принадлежит подписка.
 3. [Продолжение](chains.md), созданное через `then`, стартует, когда задача,
@@ -121,32 +122,69 @@ Job(parent): Cancelled(manual)
 ## Ребёнок без `await`
 
 Задача загружает строки и одновременно прогревает кэш. Кэш здесь никто
-не читает:
+не читает, а родитель всё равно должен кончиться только после него.
+
+### Первая попытка
 
 ```dart
-final parent = Job<void>((ctx) async {
-  final rows = ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
-  final child = Job.deferred<void>((c) => c.abandonable(warmCache));
-  ctx.run(child).ignore();
-  ctx.log('${await rows} rows');
+// Первая попытка: ignore() теряет провал кэша.
+final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+  final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
+  final cache =
+      Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+  ctx.run(cache).ignore();
+  final count = ctx.run(rows);
+  ctx.log('${await count} rows');
 });
 ```
 
-Оба ребёнка запускаются сразу. В `rows` лежит future, которую вернул `ctx.run`,
-и тело дожидается её позже. Future кэша никому не нужна, и `ignore()` это
-говорит. Родитель ждёт обоих детей, прежде чем кончиться, дождалось их тело или
-нет.
+Оба ребёнка запускаются сразу, и родитель ждёт обоих, прежде чем кончиться,
+дождалось их тело или нет. Когда кэш падает, лог это показывает, и только:
+
+```text
+Job(rows): Done(21)
+Job(parent): 21 rows
+Job(cache): Failed(Bad state: cold)
+Job(parent): Done(null)
+```
 
 Future от `ctx.run` — обычная future Dart. Она бросает ошибку ребёнка, если
-ребёнок упал, и его `Cancelled`, если ребёнка отменили. Необработанное,
-и то и другое уходит в зону. Поэтому future, сохранённую на потом, нужно
-дождаться или обработать её ошибки. `ignore()` не пускает ошибку кэша в зону,
-а наблюдатель ребёнка всё равно слышит её в `onError`.
+ребёнок упал, и его `Cancelled`, если ребёнка отменили. Чтобы её завершить,
+`ctx.run` наблюдает исход ребёнка, поэтому ядро за провал не отвечает: его
+несёт future. `ignore()` выбрасывает future, а с ней и ошибку. Наблюдатель всё
+равно слышит её в `onError`, но никто за неё не отвечает.
+`cache.ignoreFailure()` ничего бы не изменил: он снимает ответ за провал,
+на который никто не посмотрел, а `ctx.run` посмотрел.
 
-`child.ignoreFailure()` здесь не подходит. Он гасит отчёт ядра о провале,
-на который никто не посмотрел, как описано в разделе
+### Запуск без future
+
+```dart
+final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+  final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
+  final cache =
+      Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+  ctx.start(cache);
+  final count = ctx.run(rows);
+  ctx.log('${await count} rows');
+});
+```
+
+```text
+Job(rows): Done(21)
+Job(parent): 21 rows
+Job(cache): Failed(Bad state: cold)
+Job(parent): Done(null)
+zone: Bad state: cold
+```
+
+`ctx.start(child)` запускает ребёнка сразу, как `ctx.run`, и ничего
+не возвращает. Исход ребёнка никто не наблюдает, поэтому его провал идёт путём
+провала, который никто не наблюдал: в `onUnanswered` его наблюдателя, если тот
+подмешивает `JobAnswerer`, а иначе в зону, как здесь. Отмена ребёнка не уходит
+никуда, и ни то ни другое не меняет исход родителя. Если провал никому
+не нужен, это говорит `cache.ignoreFailure()`, и наблюдатель всё равно слышит
+его в `onError`, как описано в разделе
 [«Сказать ядру, что она обработана»](outcomes.md#сказать-ядру-что-она-обработана).
-А здесь на провал смотрит `ctx.run`: ошибку несёт future, которую он вернул.
 
 ## Когда отменённый ребёнок падает
 

@@ -66,7 +66,7 @@ hand an error on, and `publish` delivers the state: an override calls
 | `onStart(job)` | A job body is about to run | [Watching every controller](errors.md#watching-every-controller) |
 | `onFinish(job)` | A job has an outcome, a job dropped before its start included | [Watching every controller](errors.md#watching-every-controller) |
 | `onError(job, error, stackTrace)` | Hears every error a job runs into; it reports and moves nothing | [Reporting an error](errors.md#reporting-an-error) |
-| `onUnanswered(job, error, stackTrace)` | Answers for an error no outcome carries; by default hands it to `Solo.unansweredHandler` or the zone | [Answering for an error](errors.md#answering-for-an-error) |
+| `onUnanswered(job, error, stackTrace)` | Answers for an error no outcome carries and a `Failed` nobody observes; by default hands it to `Solo.unansweredHandler` or the zone | [Answering for an error](errors.md#answering-for-an-error) |
 | `onLog(job, message)` | A job called `ctx.log` | [Logs](errors.md#logs) |
 | `onChange(transition)` | The state changed; the `SoloTransition` says which job changed it | [Watching every controller](errors.md#watching-every-controller) |
 | `onClose()` | The engine is about to finish closing: the place to release what the controller holds beside its jobs | [externalSetState](state.md#externalsetstate) |

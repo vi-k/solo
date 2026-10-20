@@ -452,7 +452,7 @@ final job = Job<Database>((ctx) async {
     discard: (database) => database.close(),
   );
   // Кэш ждёт не тело, а задача.
-  ctx.run(Job.deferred<void>((c) => c.join(database.warmCache))).ignore();
+  ctx.start(Job.deferred<void>((c) => c.join(database.warmCache)));
 
   return database;
 });

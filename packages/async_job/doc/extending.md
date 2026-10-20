@@ -66,7 +66,7 @@ A `@protected` member is for the subclass alone, and an engine reaches a job
 from the side, from its queue. The wrappers are private, so the engine lives in
 the Dart library of `MyJob`, and nobody else who holds the job can start it
 behind the engine's back. `untilFinished` waits for the job without observing
-its outcome, so a failure nobody looked at still reaches the zone; waiting for
+its outcome, so a failure nobody looked at is still answered for; waiting for
 `done` would count as looking.
 
 A body runs a job of your engine as its child with `ctx.run(job)`, and

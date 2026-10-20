@@ -25,6 +25,15 @@ final class Listening extends JobObserver {
       heard.add('$job: $error');
 }
 
+/// Answers for what reaches it, and keeps it out of the zone.
+final class _Answering extends JobObserver with JobAnswerer {
+  final answered = <String>[];
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      answered.add('$error');
+}
+
 /// Starts a job under fake time and returns what was printed.
 ///
 /// The code around the job cancels it at [cancelAt] ms, printing `cancel`
@@ -213,6 +222,17 @@ void main() {
         'Job(rows): Done(21)',
         'Job(parent): Cancelled(manual)',
       ]);
+      stubs.stage = stubs.Stage()..warmError = StateError('cold');
+      final ignored = play(page.childIgnored);
+      stubs.stage = stubs.Stage()..warmError = StateError('cold');
+      final started = play(page.childStarted);
+      expect(ignored, [
+        'Job(rows): Done(21)',
+        'Job(parent): 21 rows',
+        'Job(cache): Failed(Bad state: cold)',
+        'Job(parent): Done(null)',
+      ]);
+      expect(started, [...ignored, 'zone: Bad state: cold']);
       stubs.stage = stubs.Stage();
       final failed = play(page.cancelledChildFails, cancelAt: 15);
       expect(failed, [
@@ -221,30 +241,72 @@ void main() {
         'zone: DatabaseStopped',
         'Job(parent): Cancelled(manual)',
       ]);
-      expect(quotedOutputs(), [run, cancelled, refused, failed]);
+      expect(
+        quotedOutputs(),
+        [run, cancelled, refused, ignored, started, failed],
+      );
     });
 
-    for (final fails in [false, true]) {
-      test(
-          'a child the body does not await: the parent waits for it, and '
-          'its ignored ${fails ? 'failure' : 'value'} stays out of the zone',
-          () {
-        final zone = <Object>[];
-        late Job<void> parent;
-        runZonedGuarded(
-          () => fakeAsync((async) {
-            if (fails) stubs.stage.warmError = StateError('cold');
-            parent = page.childNotAwaited();
-            parent.done.then((outcome) => trace().add('parent $outcome'));
-            async.flushTimers();
-          }),
-          (error, stackTrace) => zone.add(error),
-        );
-        expect(parent.outcome, isA<Done<void>>());
-        expect(trace(), [if (!fails) 'cache warm', 'parent Done(null)']);
-        expect(zone, isEmpty);
-      });
-    }
+    test(
+        'a child started and not awaited warms the cache, and the parent '
+        'waits for it', () {
+      final ignored = play(page.childIgnored);
+      final started = play(page.childStarted);
+
+      final warmed = [
+        'Job(rows): Done(21)',
+        'Job(parent): 21 rows',
+        'Job(cache): Done(null)',
+        'Job(parent): Done(null)',
+      ];
+      expect(ignored, warmed);
+      expect(started, warmed);
+      expect(trace(), ['cache warm', 'cache warm']);
+    });
+
+    test('a started child that fails is answered for by its observer', () {
+      stubs.stage.warmError = StateError('cold');
+      final answering = _Answering();
+      final zone = <Object>[];
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          Job<void>((ctx) async {
+            ctx.start(
+              Job.deferred<void>(
+                observer: answering,
+                (c) => c.abandonable(stubs.warmCache),
+              ),
+            );
+          });
+          async.flushTimers();
+        }),
+        (error, stackTrace) => zone.add(error),
+      );
+      expect(answering.answered, ['Bad state: cold']);
+      expect(zone, isEmpty);
+    });
+
+    test('ignoreFailure() keeps a started child from being answered for', () {
+      stubs.stage.warmError = StateError('cold');
+      final listening = Listening();
+      final zone = <Object>[];
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          Job<void>((ctx) async {
+            ctx.start(
+              Job.deferred<void>(
+                observer: listening,
+                (c) => c.abandonable(stubs.warmCache),
+              )..ignoreFailure(),
+            );
+          });
+          async.flushTimers();
+        }),
+        (error, stackTrace) => zone.add(error),
+      );
+      expect(listening.heard, ['Job(): Bad state: cold']);
+      expect(zone, isEmpty);
+    });
 
     test(
         'how deep a tree goes: with the await, fifty thousand levels build '

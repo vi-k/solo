@@ -168,8 +168,8 @@ Where an error goes depends on what failed:
 
 | What failed | Where the error goes |
 | --- | --- |
-| The body of a link or the callback of a continuation | Down the chain, to whoever observes the last link. Unobserved, it goes to the zone the last `then` was called in |
-| A source that refused the cancellation of its continuation and failed later | To the zone the source was made in, unless something observes the source. The cancelled continuation does not forward the error, so it does not observe it either |
+| The body of a link or the callback of a continuation | Down the chain, to whoever observes the last link. Unobserved, the last link answers for it: in `onUnanswered` of its observer if the observer mixes in `JobAnswerer`, otherwise in the zone the last `then` was called in |
+| A source that refused the cancellation of its continuation and failed later | Answered for by the source, unless something observes it: in `onUnanswered` of its observer if the observer mixes in `JobAnswerer`, otherwise in the zone the source was made in. The cancelled continuation does not forward the error, so it does not observe it either |
 | Work of `ctx.unattended` or a disposer, which no outcome carries | The observer of the link where it happened, then, unless the observer catches it in `onUnanswered`, the zone the link was made in. For a continuation, that is the zone `then` was called in |
 
 ## What the callback returns
@@ -304,9 +304,10 @@ parent: Cancelled(handler: Job(): Cancelled(chain)), child: Cancelled(chain)
 ```
 
 A failure in the continuation is nobody's business but its own. Observe it
-through `value`, `done` or `ignoreFailure`; an unobserved one goes to the zone
-`then` was called in, after the parent has already finished. Its outcome comes
-back to you, not to the parent.
+through `value`, `done` or `ignoreFailure`; an unobserved one is answered for
+by the continuation, in `onUnanswered` of its observer or in the zone `then`
+was called in, after the parent has already finished. Its outcome comes back to
+you, not to the parent.
 
 ## Steps in a row
 

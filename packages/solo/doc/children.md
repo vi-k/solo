@@ -127,16 +127,23 @@ unhandled one. `ignore()` on the kept future says that the error is not to be
 reported there. The body fails with that error all the same, at the `return`,
 where it hands the future on.
 
-## Two ways to ignore a child
+## Three ways to ignore a child
 
 | In the parent | An error the future of `ctx.run` throws | A failure of the body of a child that ends `Cancelled` |
 | --- | --- | --- |
-| `ctx.run(child).ignore()` | handled | goes to `onUnanswered` |
+| `ctx.run(child).ignore()` | dropped: nobody answers for it | goes to `onUnanswered` |
 | `child.ignoreFailure()` | not handled, goes to the zone | silenced |
+| `ctx.start(child)` | there is no future: a failure of the child goes to `onUnanswered` | goes to `onUnanswered` |
 
 `ctx.run(child).ignore()` explicitly ignores that future's result while the
 parent still waits for its children. `child.ignoreFailure()` alone does not
-handle errors of the future returned by `run`.
+handle errors of the future returned by `run`. `ctx.start(child)` starts the
+child and returns no future: its failure goes to the controller's
+`onUnanswered`, as any failure nobody observed does, and the parent waits for
+the child all the same. Take `ctx.start` for a child whose failure somebody
+still has to answer for, and `ctx.run(child).ignore()` only for one whose
+failure nobody needs: the controller's `onError` hears it, and nothing answers
+for it.
 
 If the child ends `Cancelled` and its body failed, its error is not thrown into
 the parent body. That happens, for instance, when the cancellation stops an
@@ -209,8 +216,10 @@ or queue position. It has its own optional observer, and its name is one `then`
 gives it: `Job(then)`. It belongs to whoever called `then`, not to the
 controller: the controller's hooks and `Solo.observer` do not hear it. A
 failure reaches whoever reads its outcome, the failure of `sync` passed down
-the chain included, and one nobody reads goes to the zone. An error with no
-outcome goes to the zone where `then` was called.
+the chain included. The continuation answers for one nobody reads, and for an
+error with no outcome, itself: in `onUnanswered` of its observer when that
+observer mixes in `JobAnswerer`, and otherwise in the zone where `then` was
+called. `Solo.unansweredHandler` does not hear them either.
 
 The queue does not wait for what comes after a job: the slot is freed when the
 root job finishes, and the next queued job starts while the continuation still

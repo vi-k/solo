@@ -2,7 +2,8 @@
 
 A body can hand work to another job in three ways:
 
-1. The body starts a child and waits for it. Several children waited for
+1. The body starts a child with `ctx.run` and waits for it, or with `ctx.start`
+   and leaves its outcome to whoever holds it. Several children waited for
    together make a [group](groups.md).
 2. A [stream](streams.md) is processed one event at a time in a child that owns
    the subscription.
@@ -119,32 +120,70 @@ names the child.
 ## A child the body does not await
 
 A job loads rows and warms a cache at the same time. Nobody reads the cache
-here:
+here, and the parent should still end only after it.
+
+### The first attempt
 
 ```dart
-final parent = Job<void>((ctx) async {
-  final rows = ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
-  final child = Job.deferred<void>((c) => c.abandonable(warmCache));
-  ctx.run(child).ignore();
-  ctx.log('${await rows} rows');
+// The first attempt: ignore() drops the failure of the cache.
+final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+  final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
+  final cache =
+      Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+  ctx.run(cache).ignore();
+  final count = ctx.run(rows);
+  ctx.log('${await count} rows');
 });
 ```
 
-Both children start at once. `rows` is the future that `ctx.run` returned, and
-the body awaits it later. Nobody wants the future of the cache, and `ignore()`
-says so. The parent waits for both children before it ends, awaited or not.
+Both children start at once, and the parent waits for both before it ends,
+awaited or not. When the cache fails, the log shows it, and that is all:
+
+```text
+Job(rows): Done(21)
+Job(parent): 21 rows
+Job(cache): Failed(Bad state: cold)
+Job(parent): Done(null)
+```
 
 The future of `ctx.run` is an ordinary Dart future. It throws the child's error
-if the child fails, and the child's `Cancelled` if the child is cancelled. Left
-unhandled, either goes to the zone. So a future kept for later must be awaited
-or have its errors handled. `ignore()` keeps the error of the cache from the
-zone, and the child's observer still hears it in `onError`.
+if the child fails, and the child's `Cancelled` if the child is cancelled.
+`ctx.run` observes the child's outcome to complete it, so the core does not
+answer for the failure: the future carries it. `ignore()` drops the future, and
+the error with it. The observer still hears it in `onError`, and nothing
+answers for it. `cache.ignoreFailure()` would change nothing: it quenches the
+answer for a failure nobody looked at, and `ctx.run` has looked.
 
-`child.ignoreFailure()` would not do here. It quenches the report the core
-makes of a failure nobody looked at, as
+### Starting without a future
+
+```dart
+final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+  final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
+  final cache =
+      Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+  ctx.start(cache);
+  final count = ctx.run(rows);
+  ctx.log('${await count} rows');
+});
+```
+
+```text
+Job(rows): Done(21)
+Job(parent): 21 rows
+Job(cache): Failed(Bad state: cold)
+Job(parent): Done(null)
+zone: Bad state: cold
+```
+
+`ctx.start(child)` starts the child at once, as `ctx.run` does, and returns
+nothing. Nothing observes the child, so its failure goes the way of a failure
+nobody observed: to `onUnanswered` of its observer if the observer mixes in
+`JobAnswerer`, and otherwise to the zone, as here. A cancellation of the child
+goes nowhere, and neither changes the outcome of the parent. When nobody needs
+the failure, `cache.ignoreFailure()` says so, and the observer still hears it
+in `onError`, as
 [Telling the core it is handled](outcomes.md#telling-the-core-it-is-handled)
-describes. Here `ctx.run` looks at the failure: the future it returned carries
-the error.
+describes.
 
 ## When a cancelled child fails
 

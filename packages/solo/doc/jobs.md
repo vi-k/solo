@@ -46,12 +46,14 @@ queued job or a state the job's rules do not accept can all end work
 
 Every failure reaches the `onError` hook of the controller and of
 `Solo.observer`. A failed job whose outcome nobody has accessed through `done`,
-`value` or `ignoreFailure()` by the microtask after it ends also reports an
-unhandled error to the Dart zone in which it was created. The job decides this
-once, on that microtask: `done` read later still returns the `Failed`, but the
-error is already in the zone. Use `ignoreFailure()` when error reporting
-elsewhere is sufficient: leaving a job unawaited does not by itself mark the
-error as handled, and neither does reading `outcome`. See
+`value` or `ignoreFailure()` by the microtask after it ends is also answered
+for: the controller's `onUnanswered` hands the error to
+`Solo.unansweredHandler` when one is set, and otherwise reports it as unhandled
+to the Dart zone in which the job was created. The job decides this once, on
+that microtask: `done` read later still returns the `Failed`, but the error has
+been answered for by then. Use `ignoreFailure()` when error reporting elsewhere
+is sufficient: leaving a job unawaited does not by itself mark the error as
+handled, and neither does reading `outcome`. See
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page.
 
@@ -92,10 +94,10 @@ does not change the zone: a job queued just before it from another zone, the
 end of the job before, or the timer of an accumulation window. The body's
 timers and zone values, the job's deadline, the `onStart` hooks and the errors
 of futures the body does not await all stay in that zone, which is also where
-the job's failure goes when nobody reads its outcome. Inside `ctx.unattended`
-the zone is the one that work was started from, as in the core. A child is not
-the queue's to start: it runs where `ctx.run` starts it, like any
-`Job.deferred`.
+the job's failure goes when nobody reads its outcome and nothing else answers
+for it. Inside `ctx.unattended` the zone is the one that work was started from,
+as in the core. A child is not the queue's to start: it runs where `ctx.run`
+starts it, like any `Job.deferred`.
 
 The code of this section and of the ones below belongs to one controller of a
 camera, a `Solo<CameraState>`. The two type arguments of `job` and `run` are

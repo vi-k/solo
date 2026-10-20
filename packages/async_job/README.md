@@ -167,8 +167,9 @@ final outcome = await job.done; // Cancelled(manual)
   client, not to this package.
 - **`ctx.join(() => database.migrate(stop))`** waits for the migration, and on
   a cancellation for it to stop. A client that stops by throwing sends that
-  error to the job's observer and then the zone on every cancellation, unless
-  the app names it once in `Job.isCancellationError`; see
+  error to the job's observer and then to the answer, the zone by default, on
+  every cancellation, unless the app names it once in
+  `Job.isCancellationError`; see
   [Errors of a cancellation](doc/observing.md#errors-of-a-cancellation).
 - **`ctx.uncancellable(() async { ... })`** keeps the version and its ready
   flag together: the child starts and a cancellation waits for the step, yet
@@ -251,7 +252,7 @@ search.
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and observing a failure |
 | [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable` |
 | [Time](doc/time.md) | `ctx.pause`, a deadline with `timeout` |
-| [Children](doc/children.md) | `Job.deferred`, `ctx.run`, a child the body does not await, how deep a tree goes |
+| [Children](doc/children.md) | `Job.deferred`, `ctx.run`, `ctx.start` for a child the body does not await, how deep a tree goes |
 | [Groups](doc/groups.md) | `.wait`, `ctx.runAll`, what a group hands back |
 | [Chains](doc/chains.md) | `then`, a continuation of a child, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each`, `Job.each`, and what `await for` and `listen` do in a body |

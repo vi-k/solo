@@ -65,12 +65,27 @@ Job<void> cancelledChildFails() {
   return parent;
 }
 
-Job<void> childNotAwaited() {
-  final parent = Job<void>((ctx) async {
-    final rows = ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
-    final child = Job.deferred<void>((c) => c.abandonable(warmCache));
-    ctx.run(child).ignore();
-    ctx.log('${await rows} rows');
+Job<void> childIgnored() {
+  // The first attempt: ignore() drops the failure of the cache.
+  final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+    final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
+    final cache =
+        Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+    ctx.run(cache).ignore();
+    final count = ctx.run(rows);
+    ctx.log('${await count} rows');
+  });
+  return parent;
+}
+
+Job<void> childStarted() {
+  final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+    final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
+    final cache =
+        Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+    ctx.start(cache);
+    final count = ctx.run(rows);
+    ctx.log('${await count} rows');
   });
   return parent;
 }

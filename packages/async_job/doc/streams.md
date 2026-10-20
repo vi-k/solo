@@ -298,7 +298,7 @@ Three things are different from the child:
 - **It is a root wherever it is made.** Called in the body of another job, it
   is not a child of that job: the body neither waits for it nor cancels it, and
   it is not a `ChildJob`, so `ctx.run` does not take it. Inside a body, follow
-  the stream with `ctx.each`. A failure nobody reads goes to the zone, as from
+  the stream with `ctx.each`. A failure nobody reads is answered for, as from
   any root.
 - **With `cancellable: false` nothing outside stops it.** Such a job refuses
   every cancellation, and `cancel()` does not return until the job ends by

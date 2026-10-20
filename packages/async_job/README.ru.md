@@ -169,8 +169,9 @@ final outcome = await job.done; // Cancelled(manual)
   базы, а не этому пакету.
 - **`ctx.join(() => database.migrate(stop))`** ждёт миграцию, а при отмене — её
   остановки. Клиент, который останавливается броском, при каждой отмене
-  отправляет эту ошибку наблюдателю задачи, а затем в зону, если только
-  приложение не назвало её один раз в `Job.isCancellationError`; см.
+  отправляет эту ошибку наблюдателю задачи, а затем к ответу, по умолчанию
+  в зону, если только приложение не назвало её один раз
+  в `Job.isCancellationError`; см.
   [«Ошибки отмены»](../../docs/ru/async_job/observing.md#ошибки-отмены).
 - **`ctx.uncancellable(() async { ... })`** держит версию и её флаг готовности
   вместе: ребёнок запускается, а отмена ждёт конца шага, но задача всё равно
@@ -252,7 +253,7 @@ Cancelled(manual)
 | [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и наблюдение за провалом |
 | [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable` |
 | [Время](../../docs/ru/async_job/time.md) | `ctx.pause`, срок через `timeout` |
-| [Дети](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, ребёнок без `await`, глубина дерева |
+| [Дети](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, `ctx.start` для ребёнка без `await`, глубина дерева |
 | [Группы](../../docs/ru/async_job/groups.md) | `.wait`, `ctx.runAll`, что группа отдаёт обратно |
 | [Цепочки](../../docs/ru/async_job/chains.md) | `then`, продолжение ребёнка, шаги подряд |
 | [Стримы](../../docs/ru/async_job/streams.md) | `ctx.each`, `Job.each` и что делают `await for` и `listen` в теле |

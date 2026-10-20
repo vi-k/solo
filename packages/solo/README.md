@@ -116,10 +116,11 @@ error or a cancellation here would leave `Loading`. The job's outcome stays
 `Failed` or `Cancelled` even when a handler updates the state.
 
 A `Failed` that nobody observes goes on to the zone the job was created in,
-even when `ifFailed` has published a state: a plain Dart program ends there,
-and a Flutter app hands it to its error handlers. Reading the job's `done` or
-`value` observes the outcome; a caller that needs no result says so with
-`ignoreFailure()`, as in `profile.load().ignoreFailure()`. See
+even when `ifFailed` has published a state, unless `Solo.unansweredHandler`
+answers for it: a plain Dart program ends there, and a Flutter app hands it to
+its error handlers. Reading the job's `done` or `value` observes the outcome; a
+caller that needs no result says so with `ignoreFailure()`, as in
+`profile.load().ignoreFailure()`. See
 [Handled and unhandled failures](doc/errors.md#handled-and-unhandled-failures)
 on the errors page.
 
@@ -289,9 +290,9 @@ await player.close(mode: SoloCloseMode.drain);
 
 `setVolume` hands back a job too, and the call site drops it on purpose:
 nothing here can answer for a volume the device refuses. Its failure goes on to
-the zone, as [Quick start](#quick-start) says, and ends this plain Dart
-program. A caller that can answer for it reads the job's `done`, as the call
-site does for `play`.
+the zone, as [Quick start](#quick-start) says, since no `unansweredHandler` is
+set, and ends this plain Dart program. A caller that can answer for it reads
+the job's `done`, as the call site does for `play`.
 
 ## Why `currentState` and not `state`
 

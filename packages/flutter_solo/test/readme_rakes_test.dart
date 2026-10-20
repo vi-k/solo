@@ -429,7 +429,8 @@ void main() {
       expect(reported.single.exception, isA<StateError>());
       _says('The button drops the job that `load` hands back. A failure '
           'nobody reads goes on to the zone even after `ifFailed` has put '
-          '`Empty` on the screen: in an app towards '
+          '`Empty` on the screen, unless `Solo.unansweredHandler` answers for '
+          'it: in an app towards '
           '`PlatformDispatcher.onError`, in a widget test into the test, '
           'which fails.');
     });
@@ -551,7 +552,7 @@ void main() {
       expect('${reported.single.exception}', 'Bad state: save offline');
       _says('A save that fails leaves the state `Loaded`, and nothing on the '
           'screen says so: `save` has no `ifFailed`, so its failure goes on '
-          'to the zone');
+          'to the zone, with no `Solo.unansweredHandler` set');
     });
 
     testWidgets('the selector rebuilds only when the pick changes',
@@ -1822,12 +1823,26 @@ void main() {
           (solo, job, error, stackTrace) => handled.add(error);
       expect(await inZone(Background()), isEmpty);
       expect(handled, [isA<StateError>()]);
+      handled.clear();
+      final errors = <Object>[];
+      final profile = ProfileController(
+        ProfileApi(error: StateError('no network')),
+      );
+      runZonedGuarded(
+        profile.load,
+        (error, stackTrace) => errors.add(error),
+      );
+      await tester.pump(const Duration(milliseconds: 10));
+      await profile.close();
+      expect(errors, isEmpty);
+      expect(handled, [isA<StateError>()], reason: 'an unobserved Failed');
       Solo.unansweredHandler = null;
 
       _says('The same road carries the errors no outcome holds, such as the '
           'failure of work a body handed to `ctx.unattended`. A controller '
           'that overrides `onUnanswered`, or a `Solo.unansweredHandler`, '
-          'answers for them instead.');
+          'answers for them instead, and for an unobserved `Failed` as '
+          'well.');
     });
 
     testWidgets('an observer sees such a failure and does not take it',

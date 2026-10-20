@@ -16,7 +16,8 @@ and every job on this page runs with that line.
 The lines under the code are what it prints when it runs. The database says
 what it writes, and `printing`, the observer of the migration jobs, prints what
 reaches it: `onError:` for an error. `outcome:` is what `job.done` completes
-with. A failure nobody observes goes on to the zone, as
+with. A failure nobody observes goes on to the answer, which for `printing` is
+the zone, as
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) shows.
 
 ## Letting time pass

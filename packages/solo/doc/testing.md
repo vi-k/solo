@@ -218,12 +218,12 @@ test('a failed load shows the failure', () async {
 ```
 
 The expectation holds and the test is red anyway. Nobody read the job's
-outcome, so the engine reports the failure to the zone the job was created in —
-here the zone of the test — and the runner fails the test with
-`Bad state: no network`, under a stack trace that names the line of the fake
-that threw and a frame of the engine, and no line of the test. A test that does
-not wait for the job at all pays more: the failure arrives after the test has
-ended, and the runner says so —
+outcome, and no `Solo.unansweredHandler` is set, so the engine reports the
+failure to the zone the job was created in — here the zone of the test — and
+the runner fails the test with `Bad state: no network`, under a stack trace
+that names the line of the fake that threw and a frame of the engine, and no
+line of the test. A test that does not wait for the job at all pays more: the
+failure arrives after the test has ended, and the runner says so —
 `This test failed after it had already completed`, against the name of a test
 that has already passed while a later one is running. With no later test still
 running by then, the run is over before the failure arrives: nobody says
@@ -495,9 +495,10 @@ what the tear-down above puts back.
 
 ## Assertions inside a zone
 
-That an unread failure reaches the zone is a promise of the engine, and a test
-of it needs a zone of its own to catch the failure in: left to the zone of the
-test, the failure is what turns the test red.
+That an unread failure reaches the zone when no `Solo.unansweredHandler` is set
+is a promise of the engine, and a test of it needs a zone of its own to catch
+the failure in: left to the zone of the test, the failure is what turns the
+test red.
 
 ### The first attempt
 

@@ -262,8 +262,8 @@ new wording.
   cancellation does; the `whenCancelled` callbacks used to hear its reason
   while the outcome carried the other one. Inside `ctx.uncancellable` it no
   longer takes the place of the cancellation the section holds back.
-- A continuation `then` attached to a job whose failure has already reached the
-  zone no longer sends it to the zone a second time.
+- A continuation `then` attached to a job whose failure has already been
+  answered for no longer answers for it a second time.
 - A job that an engine ends by hand while it runs lets go of the cleanups it
   never ran: a kept handle held everything they captured.
 

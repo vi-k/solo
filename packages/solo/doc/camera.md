@@ -614,8 +614,8 @@ closed
 
 The disposal failed and the camera is still open, but the controller closed
 right after it, and a second `dispose()` comes back `Cancelled(closed)`. Nobody
-reads the outcome of the first one, so its failure goes to the zone as an
-unhandled error, the way
+reads the outcome of the first one, and no `Solo.unansweredHandler` is set, so
+its failure goes to the zone as an unhandled error, the way
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page describes. The failure arrives where nothing can act on it.
 

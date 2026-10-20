@@ -181,8 +181,9 @@ page.
 
 ## Answering for every failure
 
-A failure nobody reads goes to the zone the job was created in, where an
-unhandled error can end the app.
+A failure nobody reads is answered for: by `Solo.unansweredHandler` when one is
+set, and otherwise in the zone the job was created in, where an unhandled error
+can end the app.
 
 Don't do this:
 
@@ -213,9 +214,11 @@ profile.load().ignoreFailure();
 ```
 
 Do it by the microtask after the job ends: a failure nobody has asked about is
-reported on that microtask. See
+answered for on that microtask. See
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
-the errors page.
+the errors page. To answer for every such failure in one place instead, set
+`Solo.unansweredHandler` once at startup, as
+[Answering for an error](errors.md#answering-for-an-error) shows.
 
 ## Moving the clock in fakeAsync
 

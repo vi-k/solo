@@ -168,6 +168,9 @@ Bench _coveredFailure(
     if (silence == 'ctx.run(child).ignore()') {
       ctx.run(child).ignore();
       await ctx.abandonable(() => stage.start<void>('parent step', null));
+    } else if (silence == 'ctx.start(child)') {
+      ctx.start(child);
+      await ctx.abandonable(() => stage.start<void>('parent step', null));
     } else {
       try {
         await ctx.run(child);
@@ -203,6 +206,14 @@ final class _Own extends JobObserver {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       heard.add('$job: $error');
+}
+
+final class _Answering extends _Own with JobAnswerer {
+  final answered = <String>[];
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      answered.add('$job: $error');
 }
 
 void main() {
@@ -1161,10 +1172,30 @@ void main() {
             ['Job(child): Bad state: child failed first'],
           );
           expect(errors, ['Bad state: child failed first']);
-          _says('| `ctx.run(child).ignore()` | handled | goes to '
-              '`onUnanswered` |');
+          _says('| `ctx.run(child).ignore()` | dropped: nobody answers for '
+              'it | goes to `onUnanswered` |');
           _says('`ctx.run(child).ignore()` does not: it handles what the '
               'future throws, and the future throws the cancellation.');
+        });
+
+        test('ctx.start(child) leaves it to onUnanswered', () {
+          late Bench bench;
+          final errors = _zone((async) {
+            bench = _coveredFailure(
+              async,
+              window,
+              silence: 'ctx.start(child)',
+            );
+          });
+
+          expect(_seen, ['parent Cancelled(manual)']);
+          expect(
+            bench.unanswered,
+            ['Job(child): Bad state: child failed first'],
+          );
+          expect(errors, ['Bad state: child failed first']);
+          _says('| `ctx.start(child)` | there is no future: a failure of the '
+              'child goes to `onUnanswered` | goes to `onUnanswered` |');
         });
       });
     }
@@ -1275,37 +1306,54 @@ void main() {
       for (final silence in [
         'child.ignoreFailure()',
         'ctx.run(child).ignore()',
+        'ctx.start(child)',
       ]) {
         test('a child that fails under $silence', () {
+          late Bench bench;
           final errors = _zone((async) {
-            final bench = Bench();
+            bench = Bench();
             bench.run<Ready, void>(key: 'parent', (ctx) async {
               final child = bench.job<Ready, void>(
                 key: 'child',
                 (childCtx) =>
                     childCtx.join(() => stage.start<void>('work', null)),
               );
-              if (silence == 'child.ignoreFailure()') {
-                child.ignoreFailure();
-                unawaited(ctx.run(child));
-              } else {
-                ctx.run(child).ignore();
+              switch (silence) {
+                case 'child.ignoreFailure()':
+                  child.ignoreFailure();
+                  unawaited(ctx.run(child));
+                case 'ctx.run(child).ignore()':
+                  ctx.run(child).ignore();
+                default:
+                  ctx.start(child);
               }
             });
             async.flushMicrotasks();
             _fail(async, 'work', StateError('child failed'));
           });
 
-          expect(
-            errors,
-            silence == 'child.ignoreFailure()'
-                ? ['Bad state: child failed']
-                : isEmpty,
-          );
-          _says('`child.ignoreFailure()` alone does not handle errors of the '
-              'future returned by `run`.');
-          _says("`ctx.run(child).ignore()` explicitly ignores that future's "
-              'result while the parent still waits for its children.');
+          expect(bench.heard, ['Job(child): Bad state: child failed']);
+          switch (silence) {
+            case 'child.ignoreFailure()':
+              expect(bench.unanswered, isEmpty);
+              expect(errors, ['Bad state: child failed']);
+              _says('`child.ignoreFailure()` alone does not handle errors of '
+                  'the future returned by `run`.');
+            case 'ctx.run(child).ignore()':
+              expect(bench.unanswered, isEmpty);
+              expect(errors, isEmpty);
+              _says('| `ctx.run(child).ignore()` | dropped: nobody answers for '
+                  'it | goes to `onUnanswered` |');
+              _says('`ctx.run(child).ignore()` explicitly ignores that '
+                  "future's result while the parent still waits for its "
+                  'children.');
+            default:
+              expect(bench.unanswered, ['Job(child): Bad state: child failed']);
+              expect(errors, ['Bad state: child failed']);
+              _says('`ctx.start(child)` starts the child and returns no '
+                  "future: its failure goes to the controller's "
+                  '`onUnanswered`, as any failure nobody observed does');
+          }
         });
       }
 
@@ -1490,8 +1538,11 @@ void main() {
 
     test('a failure of sync nobody reads on the continuation goes to the zone',
         () {
+      final handled = <String>[];
       late page.Syncer solo;
       final errors = _zone((async) {
+        Solo.unansweredHandler =
+            (solo, job, error, stackTrace) => handled.add('$job: $error');
         solo = page.Syncer()..syncAndReport(1);
         async.flushMicrotasks();
         unawaited(stage.progress.close());
@@ -1499,11 +1550,17 @@ void main() {
       });
 
       expect(errors, ['Bad state: push failed']);
+      expect(handled, isEmpty);
+      expect(solo.unanswered, isEmpty);
       expect(solo.heard, [
         'Job(_Op.upload): Bad state: push failed',
         'Job(_Op.sync): Bad state: push failed',
       ]);
-      _says('and one nobody reads goes to the zone');
+      _says('The continuation answers for one nobody reads, and for an error '
+          'with no outcome, itself: in `onUnanswered` of its observer when '
+          'that observer mixes in `JobAnswerer`, and otherwise in the zone '
+          'where `then` was called. `Solo.unansweredHandler` does not hear '
+          'them either.');
     });
 
     test(
@@ -1549,10 +1606,36 @@ void main() {
           'gives it: `Job(then)`.');
     });
 
+    test('an observer that mixes in JobAnswerer answers for the continuation',
+        () {
+      final own = _Answering();
+      final handled = <String>[];
+      final errors = _zone((async) {
+        Solo.unansweredHandler =
+            (solo, job, error, stackTrace) => handled.add('$job: $error');
+        final solo = page.Syncer();
+        unawaited(stage.progress.close());
+        solo.sync(1).then((ctx, path) => analytics.send(path), observer: own);
+        async.flushMicrotasks();
+        _end(async, 'push 1');
+        _fail(async, 'send path/1', StateError('send failed'));
+      });
+
+      expect(errors, isEmpty);
+      expect(handled, isEmpty);
+      expect(own.heard, ['Job(then): Bad state: send failed']);
+      expect(own.answered, ['Job(then): Bad state: send failed']);
+      _says('in `onUnanswered` of its observer when that observer mixes in '
+          '`JobAnswerer`');
+    });
+
     test('an error with no outcome goes to the zone where then was called', () {
       final inner = <String>[];
+      final handled = <String>[];
       late page.Syncer solo;
       final errors = _zone((async) {
+        Solo.unansweredHandler =
+            (solo, job, error, stackTrace) => handled.add('$job: $error');
         solo = page.Syncer();
         unawaited(stage.progress.close());
         final source = solo.sync(1);
@@ -1567,11 +1650,11 @@ void main() {
       });
 
       expect(inner, ['Bad state: unattended failed']);
+      expect(handled, isEmpty);
       expect(errors, isEmpty);
       expect(solo.heard, isEmpty);
       expect(solo.unanswered, isEmpty);
-      _says('An error with no outcome goes to the zone where `then` was '
-          'called.');
+      _says('and otherwise in the zone where `then` was called');
     });
 
     test('the job queued behind sync starts while the report still has to run',

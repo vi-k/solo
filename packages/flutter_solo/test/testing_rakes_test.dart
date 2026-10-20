@@ -394,9 +394,10 @@ void main() {
       expect(taken, isNull);
       expect(outcome, isA<Failed>(), reason: 'the test did read done');
       _says('a test that reads `done` reads it before it moves the clock');
-      _says('A `Failed` nobody has asked about is reported on the microtask '
-          'after the job ends, to the zone it was created in. Here that is '
-          'the zone of the test, '
+      _says('A `Failed` nobody has asked about is answered for on the '
+          'microtask after the job ends, and with no `Solo.unansweredHandler` '
+          'set it goes to the zone it was created in. Here that is the zone '
+          'of the test, '
           'which fails the test on the spot, and `tester.takeException()` '
           'has nothing to take afterwards.');
       _says('A load that fails makes a test red even though it reads `done`, '

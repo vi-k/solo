@@ -88,11 +88,12 @@ final outcome = await done;
 shows the last state.
 
 `done` is read on the first line, before the clock moves, and the order
-matters. A `Failed` nobody has asked about is reported on the microtask after
-the job ends, to the zone it was created in. Here that is the zone of the test,
-which fails the test on the spot, and `tester.takeException()` has nothing to
-take afterwards. A load that fails makes a test red even though it reads
-`done`, if it reads it after the pump.
+matters. A `Failed` nobody has asked about is answered for on the microtask
+after the job ends, and with no `Solo.unansweredHandler` set it goes to the
+zone it was created in. Here that is the zone of the test, which fails the test
+on the spot, and `tester.takeException()` has nothing to take afterwards. A
+load that fails makes a test red even though it reads `done`, if it reads it
+after the pump.
 
 A job the test starts and drops says so with `ignoreFailure()`.
 

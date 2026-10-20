@@ -85,7 +85,7 @@ Job<Database> afterTheReturn() {
       discard: (database) => database.close(),
     );
     // The body does not wait for the cache; the job does.
-    ctx.run(Job.deferred<void>((c) => c.join(database.warmCache))).ignore();
+    ctx.start(Job.deferred<void>((c) => c.join(database.warmCache)));
 
     return database;
   });

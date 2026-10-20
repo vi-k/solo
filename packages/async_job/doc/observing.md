@@ -67,7 +67,7 @@ The hooks of an observer, and when the job calls them:
 | `onFinish` | the job has its outcome; for every job, even one cancelled before it started |
 | `onError` | the job catches an error, except its own cancellation |
 | `onLog` | the body calls `ctx.log(message)` |
-| `onUnanswered` | of an observer that mixes in `JobAnswerer`: a failure no outcome carries, after `onError`; see [Answering for errors](#answering-for-errors) |
+| `onUnanswered` | of an observer that mixes in `JobAnswerer`: a failure no outcome carries, after `onError`, and a `Failed` nobody observes, a microtask after the job ends; see [Answering for errors](#answering-for-errors) |
 
 The hooks do nothing by default, so an observer overrides only the hooks it
 needs. A class that already extends another class mixes the observer in with

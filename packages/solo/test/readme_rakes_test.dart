@@ -257,7 +257,7 @@ void main() {
         allOf(
           contains('A `Failed` that nobody observes goes on to the zone the '
               'job was created in, even when `ifFailed` has published a '
-              'state'),
+              'state, unless `Solo.unansweredHandler` answers for it'),
           contains("Reading the job's `done` or `value` observes the outcome; "
               'a caller that needs no result says so with `ignoreFailure()`, '
               'as in `profile.load().ignoreFailure()`.'),
