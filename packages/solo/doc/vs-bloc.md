@@ -2,9 +2,9 @@
 
 This guide compares [solo](https://pub.dev/packages/solo) with `Bloc` and
 `Cubit` through eleven controller scenarios. Each section states the required
-behavior, starts from the code habit or the API's own vocabulary leads to, says
-what that code actually does, and only then shows the implementations that meet
-it — bloc's and solo's — with what the library handles and what remains
+behavior, starts from the code that habit or the API's own vocabulary leads to,
+says what that code actually does, and only then shows the implementations that
+meet it — bloc's and solo's — with what the library handles and what remains
 application code.
 
 That code is the section's first attempt, and the states and traces quoted
@@ -15,22 +15,22 @@ follows under its own heading. Reading the attempts before the answer is the
 point of the section; a reader who already knows the trap can skip to the bloc
 heading and `### Solo`.
 
-The scenarios in order, with what the first attempt does and what the solo
+The scenarios in order, with what the first attempt tries and what the solo
 version uses:
 
-| Scenario | What the first attempt does | What solo uses |
+| Scenario | What the first attempt tries | What solo uses |
 | --- | --- | --- |
-| [Ordering updates to shared state](#ordering-updates-to-shared-state) | Two registrations run upload and refresh at once, and the new note is lost | The one queue of the controller |
-| [An observer fails during a state update](#an-observer-fails-during-a-state-update) | A throwing observer breaks the handler, and the state stays `Idle` | `Solo.observer`, whose failure does not reach the job |
-| [Closing and cancelling in-flight work](#closing-and-cancelling-in-flight-work) | `close()` waits for the reply, and the handler publishes it into a closing bloc | `close()`, which cancels the running job at `ctx.abandonable` |
-| [Leaving a loading state when the work is cancelled](#leaving-a-loading-state-when-the-work-is-cancelled) | The reset in `finally` goes to a cancelled emitter, and the state stays `Loading` | `ifCancelled`, and `lastJobWhere` to find the job to cancel |
-| [Restarting one operation within a shared queue](#restarting-one-operation-within-a-shared-queue) | Five commands run on the device at once, and the replaced seeks are not stopped | `Policy.restart` on `seek`, with `ctx.onCancel` and `ctx.join` |
-| [Typed methods with queued execution](#typed-methods-with-queued-execution) | `Cubit` methods overlap, and the oldest position can win | Methods that return a `Job`, with `Policy.restart` |
-| [Removing selected pending work](#removing-selected-pending-work) | A leaving flag lets a stale read run when the screen comes back before the queue drains | `queue.removeWhere`, and `cancellable: false` on what has to run |
-| [Awaiting a particular request](#awaiting-a-particular-request) | `droppable()` drops the other order too, and two callers in three are never answered | A key per order with `Policy.droppable`, and the job the caller awaits |
-| [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change) | The revocation waits behind the build it makes worthless | `externalSetState`, and `run<SignedIn, void>` on the build |
-| [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting) | Both upload loops go on writing, and their chunks interleave | `Policy.restart`, with `ctx.join` around each write |
-| [Releasing a resource returned after cancellation](#releasing-a-resource-returned-after-cancellation) | The stale native buffer is never released | `dispose` on `ctx.abandonable` |
+| [Ordering updates to shared state](#ordering-updates-to-shared-state) | An event type per command, and `sequential()` on each of the two handlers | The one queue of the controller |
+| [An observer fails during a state update](#an-observer-fails-during-a-state-update) | An observer, and a journal kept in `onChange`, both calling `super` first | `Solo.observer`, whose failure does not reach the job |
+| [Closing and cancelling in-flight work](#closing-and-cancelling-in-flight-work) | A `sequential()` handler that publishes the reply, then adds `MarkReplyRead` | `close()`, which cancels the running job at `ctx.abandonable` |
+| [Leaving a loading state when the work is cancelled](#leaving-a-loading-state-when-the-work-is-cancelled) | The reset to `Initial` in `finally` | `ifCancelled`, and `lastJobWhere` to find the job to cancel |
+| [Restarting one operation within a shared queue](#restarting-one-operation-within-a-shared-queue) | A registration per command, and `restartable()` on `seek` | `Policy.restart` on `seek`, with `ctx.onCancel` and `ctx.join` |
+| [Typed methods with queued execution](#typed-methods-with-queued-execution) | `Cubit` methods that return futures | Methods that return a `Job`, with `Policy.restart` |
+| [Removing selected pending work](#removing-selected-pending-work) | A leaving flag that the handler checks | `queue.removeWhere`, and `cancellable: false` on what has to run |
+| [Awaiting a particular request](#awaiting-a-particular-request) | A completer on the event, and `droppable()` on the payment | A key per order with `Policy.droppable`, and the job the caller awaits |
+| [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change) | One registration for the build and the revocation | `externalSetState`, and `run<SignedIn, void>` on the build |
+| [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting) | `restartable()` on the upload loop | `Policy.restart`, with `ctx.join` around each write |
+| [Releasing a resource returned after cancellation](#releasing-a-resource-returned-after-cancellation) | A check of `emit.isDone` before the result is used | `dispose` on `ctx.abandonable` |
 
 `Bloc` processes events in handlers, and each `on<E>` call is one registration:
 a handler for the events of type `E` and the transformer that determines how
