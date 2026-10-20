@@ -59,7 +59,7 @@
 - **`JobBase` gains the protected `inUncancellableSection`, `heldCancel` and
   `creationZone`.**
 - **`JobContext` gains `pause`,** a delay a cancellation ends. See
-  [Letting time pass](doc/cancellation.md#letting-time-pass).
+  [Letting time pass](doc/time.md#letting-time-pass).
 - **A class that implements `JobContext` itself adds `abandonable`, `pause` and
   `runAll`.** One that extends `JobContextBase` inherits them.
 
@@ -137,7 +137,7 @@ new wording.
 - **`timeout` gives a job a deadline of its own.** `Job(...)`,
   `Job.deferred(...)` and the constructor of `JobBase` take it; when it runs
   out, the job ends `Cancelled(timeout)` with the new `TimeoutCancelReason`.
-  See [A deadline](doc/cancellation.md#a-deadline).
+  See [A deadline](doc/time.md#a-deadline).
 - **`Job.each` makes a root job that follows a stream.** See
   [A job that only follows a stream](doc/streams.md#a-job-that-only-follows-a-stream).
 - **`JobObserver.all` makes one observer of several.** See

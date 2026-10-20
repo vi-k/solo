@@ -120,7 +120,7 @@ A job adds three things:
 rules: [solo](#solo) adds them. Neither package provides retries or a task
 pool. A deadline is built in: `Job(body, timeout: limit)` cancels the job once
 the limit has run out, and it ends `Cancelled(timeout)`; see
-[A deadline](doc/cancellation.md#a-deadline) on the cancellation page.
+[A deadline](doc/time.md#a-deadline) on the time page.
 
 ## A fuller example
 
@@ -248,7 +248,8 @@ search.
 | Page | What it covers |
 | --- | --- |
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and observing a failure |
-| [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable`, `timeout` |
+| [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable` |
+| [Time](doc/time.md) | `ctx.pause`, a deadline with `timeout` |
 | [Children](doc/children.md) | `Job.deferred`, `ctx.run`, a child the body does not await, how deep a tree goes |
 | [Groups](doc/groups.md) | `.wait`, `ctx.runAll`, what a group hands back |
 | [Chains](doc/chains.md) | `then`, a continuation of a child, steps in a row |

@@ -1,7 +1,7 @@
-// What the code of `doc/cancellation.md` takes for granted: the database and
-// its stop signal, the device, the thumbnail and the observer of the page's
-// jobs. Each test sets the stage first, so one stub can fail or be
-// cancelled; what the stubs say goes to [printed].
+// What the code of `doc/cancellation.md` and `doc/time.md` takes for
+// granted: the database and its stop signal, the device, the thumbnail and
+// the observer of the pages' jobs. Each test sets the stage first, so one
+// stub can fail or be cancelled; what the stubs say goes to [printed].
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';
@@ -34,6 +34,10 @@ Stage stage = Stage();
 /// 10 ms".
 const stepMs = 10;
 
+/// How long [Database.readAll] takes: the time page's "reads the rows in
+/// 10 ms".
+const readMs = 10;
+
 /// The stop signal of the database client, the kind `onCancel` is for.
 final class CancelToken {
   bool cancelled = false;
@@ -57,9 +61,9 @@ final class Database {
 
   static Future<Database> open() async => Database();
 
-  /// A read of 10 ms, the kind a job may walk away from.
+  /// A read of [readMs], the kind a job may walk away from.
   Future<List<String>> readAll() async {
-    await delay(10);
+    await delay(readMs);
     say('rows read');
     return ['row'];
   }

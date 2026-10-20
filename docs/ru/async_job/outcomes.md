@@ -278,7 +278,7 @@ request failed: Bad state: token expired
 `ChainCancelReason`, `SiblingCancelReason` и `TimeoutCancelReason`; все они
 наследуют `CancelReason`. `TimeoutCancelReason` получает задача, у которой
 вышел срок, заданный через `timeout`, как показывает раздел
-[«Срок»](cancellation.md#срок).
+[«Срок»](time.md#срок).
 
 Проверяйте причину по типу, например `reason is ParentCancelReason`. Свойство
 `name` служит меткой для лога и не определяет равенство. По умолчанию причины

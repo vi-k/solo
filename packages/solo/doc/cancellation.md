@@ -282,9 +282,8 @@ A delay written as `await Future.delayed(...)` is such a plain `await`: a
 cancelled job sits it out to its end, and `close()` waits with it.
 `ctx.pause(duration)` is the delay that is a checkpoint: it ends the moment the
 job accepts a cancellation, and its timer is cancelled with it.
-[Letting time pass](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#letting-time-pass)
-on the cancellation page of `async_job` compares the three ways to wait for
-time.
+[Letting time pass](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/time.md#letting-time-pass)
+on the time page of `async_job` compares the three ways to wait for time.
 
 Do not retain a context to start work after its job ends. Methods such as
 `emit`, `run`, `each`, `abandonable`, `join`, `pause` and `uncancellable` then
@@ -386,8 +385,8 @@ Job<void> seek(Duration position) => run<Ready, void>(
 cancelled the way `restart` cancels it: the token stops the seek, `join` waits
 for the device, and the job ends `Cancelled(timeout)`. The deadline is a
 cancellation of `async_job` with a `TimeoutCancelReason`, and
-[A deadline](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-deadline)
-on the cancellation page of `async_job` takes it apart.
+[A deadline](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/time.md#a-deadline)
+on the time page of `async_job` takes it apart.
 
 A deadline that runs out is not the `TimeoutException` of `Future.timeout`.
 With `.timeout(...)` on the call of `_player.seek` the exception is thrown into

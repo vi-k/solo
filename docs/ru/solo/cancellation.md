@@ -284,8 +284,8 @@ Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
 с ней. `ctx.pause(duration)` даёт задержку с контрольной точкой: такая задержка
 кончается в тот момент, когда `Job` принимает отмену, а таймер задержки
 отменяется вместе с ней. Три способа выждать время сравнивает раздел
-[«Дать времени пройти»](../async_job/cancellation.md#дать-времени-пройти)
-страницы об отмене пакета `async_job`.
+[«Дать времени пройти»](../async_job/time.md#дать-времени-пройти) страницы
+о времени пакета `async_job`.
 
 Не сохраняйте контекст для запуска работы после конца `Job`. Методы `emit`,
 `run`, `each`, `abandonable`, `join`, `pause` и `uncancellable` тогда бросят
@@ -387,8 +387,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 так же, как её отменяет `restart`: токен останавливает перемотку, `join` ждёт
 устройство, и задача кончается `Cancelled(timeout)`. Срок устроен как отмена
 `async_job` с причиной `TimeoutCancelReason`, и разбирает его раздел
-[«Срок»](../async_job/cancellation.md#срок) на странице об отмене
-в `async_job`.
+[«Срок»](../async_job/time.md#срок) на странице о времени в `async_job`.
 
 Вышедший срок отличается от `TimeoutException`, который бросает
 `Future.timeout`. С `.timeout(...)` на вызове `_player.seek` исключение

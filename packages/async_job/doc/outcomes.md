@@ -278,8 +278,7 @@ whether the body ran or was cancelled before start. The built-in reason classes
 are `ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`,
 `ChainCancelReason`, `SiblingCancelReason` and `TimeoutCancelReason`.
 `TimeoutCancelReason` is what a job gets when the deadline given with `timeout`
-runs out, as [A deadline](cancellation.md#a-deadline) shows. All extend
-`CancelReason`.
+runs out, as [A deadline](time.md#a-deadline) shows. All extend `CancelReason`.
 
 Check reasons by type, for example `reason is ParentCancelReason`. The `name`
 property is a label for logs and does not determine equality. Reasons use

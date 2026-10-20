@@ -122,7 +122,7 @@ final operation = CancelableOperation.fromFuture(
 добавляет [solo](#solo). Повторы и пул задач не входят ни в один из пакетов.
 Срок встроен: `Job(body, timeout: limit)` отменяет задачу, когда предел вышел,
 и она кончается `Cancelled(timeout)`; см. раздел
-[«Срок»](../../docs/ru/async_job/cancellation.md#срок) на странице об отмене.
+[«Срок»](../../docs/ru/async_job/time.md#срок) на странице о времени.
 
 ## Развёрнутый пример
 
@@ -249,7 +249,8 @@ Cancelled(manual)
 | Страница | О чём |
 | --- | --- |
 | [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и наблюдение за провалом |
-| [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable`, `timeout` |
+| [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable` |
+| [Время](../../docs/ru/async_job/time.md) | `ctx.pause`, срок через `timeout` |
 | [Дети](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, ребёнок без `await`, глубина дерева |
 | [Группы](../../docs/ru/async_job/groups.md) | `.wait`, `ctx.runAll`, что группа отдаёт обратно |
 | [Цепочки](../../docs/ru/async_job/chains.md) | `then`, продолжение ребёнка, шаги подряд |
