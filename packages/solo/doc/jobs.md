@@ -167,6 +167,19 @@ running job is the existing one for as long as it has not been cancelled. One
 that has already accepted a cancellation is on its way out and will not do the
 work, so a call that finds it queues a job of its own.
 
+Every caller of a `droppable` key may get the same job back, so a plain `then`
+on that job throws `StateError`, on the first call as well: a `then` of one
+caller would leave the next one nothing to continue with. Each caller continues
+it through `shared()` instead, `load('ada').shared().then(...)`: what
+`shared()` returns ends with the job, and cancelling it leaves the job alone.
+See
+[A handle for each branch](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/chains.md#a-handle-for-each-branch).
+
+A key `droppable` shares with another policy hands back that policy's job too,
+and from then on a plain `then` on it throws as well. A `then` its own caller
+took before stays, and then `shared()` throws for the `droppable` caller, who
+is left with `done` and `value`. Give `droppable` a key of its own.
+
 `restart` requests cancellation when the new job is submitted. The new job goes
 to the tail of the queue like any other, behind what was queued before it, and
 it still waits for the current job to finish: their bodies do not overlap. A

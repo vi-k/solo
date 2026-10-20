@@ -301,6 +301,8 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   void _drop(Outcome<T> outcome) => finish(outcome);
 
+  void _requireShared(String reason) => requireShared(reason);
+
   void _notifyError(Object error, StackTrace stackTrace) =>
       notifyError(error, stackTrace);
 

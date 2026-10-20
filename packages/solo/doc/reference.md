@@ -149,13 +149,13 @@ field: events combine only within one accumulator, even under the same key.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job: everyone who added to it holds the same handle | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
+| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job: everyone who added to it holds the same handle, and each continues it through `shared()`: a plain `then` on it throws | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
 
 ## Other types
 
 | Type | What it is | Where |
 | --- | --- | --- |
-| `Policy` | What `add` and `run` do with a job whose key is already queued or running: `sequential`, `droppable`, `replace` or `restart` | [Queue and policies](jobs.md#queue-and-policies) |
+| `Policy` | What `add` and `run` do with a job whose key is already queued or running: `sequential`, `droppable`, `replace` or `restart`; a job `droppable` may hand back is continued through `shared()` | [Queue and policies](jobs.md#queue-and-policies) |
 | `SoloCloseMode` | How `close()` stops: `cancel` or `drain` | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `SoloObserver` | What `Solo.observer` takes: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate`; `SoloObserver.all` joins several | [Watching every controller](errors.md#watching-every-controller) |
 | `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](errors.md#watching-every-controller) |

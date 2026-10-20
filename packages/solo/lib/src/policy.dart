@@ -36,6 +36,14 @@ enum Policy {
   /// found a live duplicate is lost along with it, and the job handed back
   /// keeps the deadline it was made with, or none. Once that job has ended
   /// — by its own deadline too — the next call queues a job of its own.
+  ///
+  /// Every caller of the key may hold the same job, so each one continues
+  /// it through its own handle of `shared()`, and a plain `then` on a job
+  /// of this policy throws a [StateError], on the first call as well. So
+  /// does one on a job of another policy from the moment a call of this
+  /// one hands it back. A `then` its own caller took before stays, and then
+  /// `shared()` throws for the caller of this policy, who is left with
+  /// `done` and `value`: give this policy a key of its own.
   droppable,
 
   /// Remove queued jobs with the same key, then append. The running root

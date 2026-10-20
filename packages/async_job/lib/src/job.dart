@@ -354,7 +354,9 @@ abstract interface class Job<T> {
   /// anything is made, and so does a call on a job that [shared] has
   /// continued: the count is for the whole life of the job, the way a
   /// single-subscription stream counts its one `listen`. To continue one job
-  /// in several branches, give each branch a handle of [shared].
+  /// in several branches, give each branch a handle of [shared]. An engine
+  /// that hands one job to several callers may refuse this call from the
+  /// first one on; such a job is continued through [shared] alone.
   ///
   /// Cancellation also travels backwards: cancelling the continuation asks
   /// its unfinished source to cancel, back through earlier links.

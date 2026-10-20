@@ -216,6 +216,10 @@ abstract class JobBase<T> implements Job<T> {
   /// ran.
   _Continuation _continuation = _Continuation.none;
 
+  /// Why [then] is refused on this job, set by [requireShared]; `null` while
+  /// it is not.
+  String? _sharedOnly;
+
   /// Whether [Job.ignoreFailure] was called: nobody wants this job's failure.
   ///
   /// More than [_observed]. Whoever reads the outcome has the failure the
@@ -647,10 +651,35 @@ abstract class JobBase<T> implements Job<T> {
     return _SharedJob<T>(this, observer: observer);
   }
 
+  /// Refuses [then] on this job from now on, with [reason] in the error:
+  /// every continuation is a handle of [shared].
+  ///
+  /// For an engine that hands one job to more than one caller. A job is
+  /// continued once, so a plain [then] by one caller would make [then] and
+  /// [shared] throw for the next one, and which caller throws would depend
+  /// on who came first. With the mark, [then] throws for every caller, the
+  /// first one included, and on the first call. [reason] completes the job's
+  /// name: `is handed to every caller of its key` reads
+  /// `Job(load) is handed to every caller of its key: continue it through
+  /// shared(), a handle for each caller`.
+  ///
+  /// Mark the job before it is handed out. A [then] taken earlier stays,
+  /// and [shared] throws next to it as it would without the mark. A second
+  /// call keeps the first [reason].
+  @protected
+  void requireShared(String reason) => _sharedOnly ??= reason;
+
   /// Takes the one way this job is continued, or throws before anything is
-  /// made: a second [then], [then] next to [shared], or [shared] next to
-  /// [then].
+  /// made: a second [then], [then] next to [shared], [shared] next to [then],
+  /// or [then] on a job [requireShared] marked.
   void _continueBy(_Continuation how) {
+    final sharedOnly = _sharedOnly;
+    if (sharedOnly != null && how == _Continuation.then) {
+      throw StateError(
+        '$this $sharedOnly: continue it through shared(), '
+        'a handle for each caller',
+      );
+    }
     final current = _continuation;
     if (current != _Continuation.none &&
         !(current == _Continuation.shared && how == _Continuation.shared)) {

@@ -876,6 +876,12 @@ rather than building another, so the handle outlives the move: cancelling it
 cancels the group wherever the job now stands, and there is no second handle to
 await.
 
+For the same reason a plain `then` on the group's job throws `StateError`, on
+the first event as well. Each caller continues the job through `shared()`,
+`group.shared().then(...)`, and cancelling what `shared()` returned ends that
+branch alone. See
+[A handle for each branch](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/chains.md#a-handle-for-each-branch).
+
 `merge` must be synchronous and pure. It must not mutate either argument or
 call into the controller. If it throws, `add` throws the same error and the
 existing group, its job and its timer remain unchanged. Calling the same

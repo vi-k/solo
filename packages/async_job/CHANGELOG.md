@@ -25,7 +25,8 @@
   other. Give each branch a handle of `shared()`: cancelling a handle ends it
   at once and leaves the source alone. A class that implements `Job` itself
   adds `shared`, and a subclass of `JobBase` with a member of that name renames
-  its own. See
+  its own. A job an engine marks with the new protected `JobBase.requireShared`
+  refuses `then` from the first call. See
   [A handle for each branch](doc/chains.md#a-handle-for-each-branch).
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`.** `JobBase.debug` is `Job.debug` now. See
@@ -69,8 +70,8 @@
   a body throws `Cancelled`, or lets out the cancellation of a child, the
   children are asked to stop, then the `ctx.onCancel` callbacks run and
   `whenCancelled` fires.
-- **`JobBase` gains the protected `inUncancellableSection`, `heldCancel` and
-  `creationZone`.**
+- **`JobBase` gains the protected `inUncancellableSection`, `heldCancel`,
+  `creationZone` and `requireShared`.**
 - **`JobContext` gains `pause`,** a delay a cancellation ends. See
   [Letting time pass](doc/time.md#letting-time-pass).
 - **A class that implements `JobContext` itself adds `abandonable`, `pause`,

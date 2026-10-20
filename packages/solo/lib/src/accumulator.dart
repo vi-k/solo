@@ -30,6 +30,10 @@ abstract interface class SoloAccumulator<E, T> {
   /// `Cancelled(closed)` job without retaining the event or calling the
   /// merge function.
   ///
+  /// The caller of every event may hold the same job, so each one continues
+  /// it through its own handle of `shared()`: a plain `then` on the job
+  /// throws a [StateError], on the first call as well.
+  ///
   /// A merge error escapes synchronously without accepting the event.
   /// Throws [StateError] on recursive addition from this accumulator's
   /// merge, or if the merge invalidates its candidate or closes the
@@ -133,7 +137,11 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
         timeout: _timeout,
         describe: _describe,
         observer: _solo._jobObserver,
-      ).._accumulation = group;
+      )
+        .._accumulation = group
+        // Every event of the group gets this job back, so a plain `then`
+        // by one caller would leave the next one nothing but a throw.
+        .._requireShared('is handed back to every event of its group');
 
   @override
   SoloJob<T> add(E event) {

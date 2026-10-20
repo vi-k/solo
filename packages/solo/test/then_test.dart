@@ -54,7 +54,179 @@ final class _Watching extends SoloObserver {
       heard.add('log $job: $message');
 }
 
+/// The error of a plain `then` on a job a droppable call may hand back.
+const _droppable = 'Bad state: Job(load) is handed back to every call of its '
+    'key under Policy.droppable: continue it through shared(), a handle for '
+    'each caller';
+
+/// The error of a second continuation of one job.
+const _continuedOnce = 'Bad state: Job(load) already has a continuation: a '
+    'job is continued once; call shared() for each branch';
+
+/// The error of a plain `then` on a job of an accumulation group.
+const _group = 'Bad state: Job(events) is handed back to every event of its '
+    'group: continue it through shared(), a handle for each caller';
+
+/// A plain `then`, the way a caller writes it.
+Job<int> _plainThen(Job<int> job) => job.then<int>((ctx, value) => value);
+
+Matcher _throwing(String text) =>
+    throwsA(isA<StateError>().having((e) => '$e', 'text', text));
+
 void main() {
+  group('a job handed to more than one caller is continued through shared()',
+      () {
+    SoloJob<int> load(PlainSolo<int> solo, [Policy? policy]) =>
+        solo.run<int, int>(
+          key: 'load',
+          policy: policy ?? Policy.droppable,
+          (ctx) async => 1,
+        );
+
+    test('then throws on the job of the first droppable call', () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0);
+        final first = load(solo);
+        expect(() => _plainThen(first), _throwing(_droppable));
+        final second = load(solo);
+        expect(identical(first, second), isTrue);
+        final a = first.shared().then<int>((ctx, value) => value + 1);
+        final b = second.shared().then<int>((ctx, value) => value + 2);
+        async.flushMicrotasks();
+        expect(['${a.outcome}', '${b.outcome}'], ['Done(2)', 'Done(3)']);
+        solo.close().ignore();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('then throws on a droppable job a closed controller dropped', () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0)..close().ignore();
+        final job = load(solo);
+        expect(() => _plainThen(job), _throwing(_droppable));
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a droppable call marks the job of another policy it hands back', () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0);
+        final first = load(solo, Policy.replace);
+        final second = load(solo);
+        expect(identical(first, second), isTrue);
+        expect(() => _plainThen(second), _throwing(_droppable));
+        async.flushMicrotasks();
+        solo.close().ignore();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('the job a droppable call drops refuses then as well', () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0);
+        final first = load(solo);
+        final mine = solo.job<int, int>(key: 'load', (ctx) async => 2);
+        final taken = solo.add(mine, policy: Policy.droppable);
+        expect(identical(taken, first), isTrue);
+        expect(mine.isCancelled, isTrue);
+        expect(() => _plainThen(mine), _throwing(_droppable));
+        async.flushMicrotasks();
+        solo.close().ignore();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a droppable call during a drain marks the job it hands back', () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0);
+        final gate = Completer<int>();
+        final first = solo.run<int, int>(
+          key: 'load',
+          (ctx) => ctx.abandonable(() => gate.future),
+        );
+        async.flushMicrotasks();
+        solo.close(mode: SoloCloseMode.drain).ignore();
+        final second = load(solo);
+        expect(identical(first, second), isTrue);
+        expect(() => _plainThen(second), _throwing(_droppable));
+        gate.complete(1);
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a then taken before a droppable call leaves that caller no shared',
+        () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0);
+        final first = load(solo, Policy.sequential);
+        final next = first.then<int>((ctx, value) => value + 1);
+        final second = load(solo);
+        expect(identical(first, second), isTrue);
+        expect(second.shared, _throwing(_continuedOnce));
+        expect(() => _plainThen(second), _throwing(_droppable));
+        async.flushMicrotasks();
+        expect('${next.outcome}', 'Done(2)');
+        expect('${second.outcome}', 'Done(1)');
+        solo.close().ignore();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a job of another policy keeps its then', () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0);
+        for (final policy in [
+          Policy.sequential,
+          Policy.replace,
+          Policy.restart,
+        ]) {
+          final next = load(solo, policy).then<int>((ctx, value) => value + 1);
+          async.flushMicrotasks();
+          expect('${next.outcome}', 'Done(2)', reason: '$policy');
+        }
+        solo.close().ignore();
+        async.flushMicrotasks();
+      });
+    });
+
+    for (final policy in AccumulationPolicy.values) {
+      test('then throws on the job of an accumulation group, $policy', () {
+        fakeAsync((async) {
+          final solo = PlainSolo<int>(0);
+          final events = solo.collect<int, int, int>(
+            key: 'events',
+            policy: policy,
+            (ctx, values) async => values.length,
+          );
+          final first = events.add(1);
+          expect(() => _plainThen(first), _throwing(_group));
+          final second = events.add(2);
+          expect(identical(first, second), isTrue);
+          final a = first.shared().then<int>((ctx, value) => value);
+          final b = second.shared().then<int>((ctx, value) => value);
+          async.flushMicrotasks();
+          expect(['${a.outcome}', '${b.outcome}'], ['Done(2)', 'Done(2)']);
+          solo.close().ignore();
+          async.flushMicrotasks();
+        });
+      });
+    }
+
+    test('then throws on an accumulation job a closed controller dropped', () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0);
+        final events = solo.collect<int, int, int>(
+          key: 'events',
+          (ctx, values) async => values.length,
+        );
+        solo.close().ignore();
+        final job = events.add(1);
+        expect(() => _plainThen(job), _throwing(_group));
+        async.flushMicrotasks();
+      });
+    });
+  });
+
   test('a continuation belongs to whoever called then, not to the controller',
       () {
     fakeAsync((async) {

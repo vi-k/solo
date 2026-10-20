@@ -145,6 +145,11 @@ abstract class Solo<S extends Object> {
   /// How many `keepWhile` calls are answering right now: a write of the
   /// state from inside one is refused.
   int _askingKeepWhile = 0;
+
+  /// Why a job a [Policy.droppable] call may hand back refuses `then`.
+  static const _handedBack =
+      'is handed back to every call of its key under Policy.droppable';
+
   static const Object _closedListeners = Object();
   Object? _listeners;
 
@@ -484,6 +489,10 @@ abstract class Solo<S extends Object> {
   /// Queues [job] and returns it, or the existing job found by
   /// [Policy.droppable].
   ///
+  /// A job [Policy.droppable] may hand back to another caller refuses a
+  /// plain `then`: every caller continues it through `shared()`. See
+  /// [Policy.droppable].
+  ///
   /// [first] puts the job at the head of the queue instead of the tail. It
   /// passes what is waiting and nothing else: the running job is not the
   /// queue's to touch, so this one starts when that job finishes. A
@@ -552,6 +561,11 @@ abstract class Solo<S extends Object> {
     // Set before anything can go wrong below: a job dropped by a closed
     // controller has been added too, and one handle is one add.
     impl._added = true;
+    // Any job of this call may be handed to the next caller of the key, so
+    // every one of them refuses a plain `then` from the start, the first
+    // caller's included: otherwise whether a caller throws would depend on
+    // who came first.
+    if (policy == Policy.droppable) impl._requireShared(_handedBack);
     if (isClosed && duplicate == null) {
       _debug(() => 'add $impl: closed');
       impl._drop(
@@ -565,6 +579,10 @@ abstract class Solo<S extends Object> {
     }
     // Found by [Policy.droppable] only.
     if (duplicate != null) {
+      // A job of another policy is marked here, when it first has a second
+      // caller, and before any code of the caller runs below; a `then` its
+      // own caller took before stays.
+      duplicate._requireShared(_handedBack);
       _debug(() {
         final name = '$duplicate';
         final line = 'add $impl: duplicate of $name';

@@ -18,7 +18,12 @@ package's too: see
   [Answering for an error](doc/errors.md#answering-for-an-error).
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
 - **A job is continued once, by one `then` or by handles of `shared()`,** in
-  `async_job`: a second `then` on a job of `run` throws a `StateError`.
+  `async_job`: a second `then` on a job of `run` throws a `StateError`. A job
+  `Policy.droppable` may hand to another caller, and the job of an accumulator
+  group, refuse a plain `then` from the first call: every caller continues it
+  through a handle of `shared()`. See
+  [Queue and policies](doc/jobs.md#queue-and-policies) and
+  [Start, cancellation and errors](doc/accumulation.md#start-cancellation-and-errors).
 - **The state handlers of `run` and `job` are renamed: `onError` to `ifFailed`,
   `onCancel` to `ifCancelled`.**
 - **`SoloBase` is renamed to `Solo`, and the former `Solo` — the class that

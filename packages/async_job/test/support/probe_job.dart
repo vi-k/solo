@@ -13,6 +13,9 @@ final class ProbeJob<T> extends JobBase<T> implements ChildJob<T> {
 
   ProbeJob(this._body, {super.key, super.observer, super.cancellable});
 
+  /// Marks the job as one an engine hands to several callers.
+  void handOut(String reason) => requireShared(reason);
+
   @override
   void started() => hooks.add('started');
 

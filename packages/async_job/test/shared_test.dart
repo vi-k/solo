@@ -124,6 +124,83 @@ void main() {
     });
   });
 
+  group('a job an engine hands to several callers', () {
+    const handedOut = 'Bad state: Job(load) is handed to every caller of its '
+        'key: continue it through shared(), a handle for each caller';
+
+    ProbeJob<int> handed() => ProbeJob<int>(key: 'load', (ctx) async => 1)
+      ..handOut('is handed to every caller of its key');
+
+    test('throws on the first then, before anything is made', () {
+      fakeAsync((async) {
+        final load = handed();
+        expect(
+          () => load.then<int>((ctx, value) => value),
+          throwsA(isA<StateError>().having((e) => '$e', 'text', handedOut)),
+        );
+        // Nothing was taken: every caller still gets a handle.
+        final first = load.shared();
+        final second = load.shared();
+        load.launch();
+        async.flushMicrotasks();
+        expect('${first.outcome}', 'Done(1)');
+        expect('${second.outcome}', 'Done(1)');
+      });
+    });
+
+    test('throws on then next to a handle with its own reason', () {
+      fakeAsync((async) {
+        final load = handed()..shared();
+        expect(
+          () => load.then<int>((ctx, value) => value),
+          throwsA(isA<StateError>().having((e) => '$e', 'text', handedOut)),
+        );
+        load.launch();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('keeps a then taken before the mark', () {
+      fakeAsync((async) {
+        final load = ProbeJob<int>(key: 'load', (ctx) async => 1);
+        final first = load.then<int>((ctx, value) => value + 1);
+        load.handOut('is handed to every caller of its key');
+        expect(
+          load.shared,
+          throwsA(isA<StateError>().having((e) => '$e', 'text', continuedOnce)),
+        );
+        expect(
+          () => load.then<int>((ctx, value) => value),
+          throwsA(isA<StateError>().having((e) => '$e', 'text', handedOut)),
+        );
+        load.launch();
+        async.flushMicrotasks();
+        expect('${first.outcome}', 'Done(2)');
+      });
+    });
+
+    test('keeps the reason it was first given', () {
+      fakeAsync((async) {
+        final load = handed()..handOut('is somebody else');
+        expect(
+          () => load.then<int>((ctx, value) => value),
+          throwsA(isA<StateError>().having((e) => '$e', 'text', handedOut)),
+        );
+        load.launch();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('leaves the handles free to be continued by then', () {
+      fakeAsync((async) {
+        final handle = handed().shared();
+        final next = handle.then<int>((ctx, value) => value + 1);
+        expect('${next.outcome}', 'null');
+        async.flushMicrotasks();
+      });
+    });
+  });
+
   group('a handle of shared()', () {
     test('ends with the Done of its source', () {
       fakeAsync((async) {
