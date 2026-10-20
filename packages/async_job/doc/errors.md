@@ -2,7 +2,8 @@
 
 A `JobObserver` hears the errors that no outcome carries, as
 [Observing](observing.md) shows. Such an error, unless it is a cancellation,
-goes on to the answer. Two words name where it goes:
+goes on to the answer, and so does a failure whose outcome nobody observes. Two
+words name where they go:
 
 - the zone is the zone the job was created in, and an error that reaches it is
   an uncaught error there;
@@ -93,8 +94,8 @@ send the failure to the answer, and only then. An error it names still reaches
 `onError` and goes no further: neither `onUnanswered` nor the zone hears it.
 The filter changes no outcome either. A failure of a job that nobody cancelled
 is not asked about: a body that throws `DatabaseStopped` while its own job goes
-on ends `Failed` with it, and if nobody observes that outcome, it reaches the
-zone. Somebody else cancelled the token then, and the job has to say so.
+on ends `Failed` with it, and if nobody observes that outcome, it goes on to
+the answer. Somebody else cancelled the token then, and the job has to say so.
 
 The filter is called synchronously, with one failure at a time and never with a
 `Cancelled`, so keep it to a type test. The job walks a `ParallelWaitError` and
@@ -148,10 +149,12 @@ cancellation. It only hears them: overriding `onError` moves no error anywhere.
 The failed open still reaches the zone, as it would without the observer: the
 job ends `Cancelled`, and the filter above does not name a `StateError`.
 
-The outcome counts as observed when somebody reads `done` or `value`, calls
-`ignoreFailure()`, or forwards the failure through `then`: a continuation
-cancelled before its source failed forwards nothing, and the failure stays
-unobserved. See
+A failure the outcome carries goes on to the answer only if nobody observes the
+outcome, a microtask after the job ends, and an observer that answers gets it
+in `onUnanswered`. The outcome counts as observed when somebody reads `done` or
+`value`, calls `ignoreFailure()`, or forwards the failure through `then`: a
+continuation cancelled before its source failed forwards nothing, and the
+failure stays unobserved. See
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
 outcomes page. The observer's hooks do not observe the outcome, even a hook
 that reads `job.outcome`, as the `onFinish` of `Log` in
@@ -164,7 +167,7 @@ zone and the answer are as the introduction defines them.
 
 | The error | With an observer | Without one |
 | --- | --- | --- |
-| The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
+| The body's, and the job ends `Failed` with it | `onError`, then the answer if nobody observed the outcome | The zone if nobody observed the outcome |
 | The body's, and the job ends `Cancelled` | `onError`, then the answer | The zone |
 | The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then the answer | The zone |
 | A late error of an action `ctx.abandonable` stopped waiting for | `onError`, then the answer | The zone |
@@ -175,6 +178,10 @@ zone and the answer are as the introduction defines them.
 | A `Cancelled` thrown outside the body | `onError` | Nobody |
 | The job's own cancellation, out of an action `ctx.abandonable` stopped waiting for or out of work of `ctx.unattended` | Nobody | Nobody |
 | An error of a context call the body did not await, the job's own cancellation included | The zone the body runs in | The zone the body runs in |
+
+An engine that ends a job `Failed` with a `Cancelled`, or with a
+`ParallelWaitError` of nothing but cancellations, makes it fail on purpose: if
+nobody observes that outcome, it goes to the zone past the answer.
 
 Once the job has accepted a cancellation, an error that
 `Job.isCancellationError` names goes no further than `onError` in the rows that
@@ -196,10 +203,11 @@ the late error of an action `ctx.abandonable` stopped waiting for: `onError`
 hears it, and then it goes on to the answer.
 
 An error can reach both `onError` and the zone, and an app that reports in both
-places hears it twice. The table shows two ways to the zone. The first: nobody
-observed the outcome. The second: nobody answers for the error, or
-`onUnanswered` sends it on or throws. Observing the outcome closes the first
-way. An observer that answers (`with JobAnswerer`) closes the second.
+places hears it twice. The table shows one way from the job to the zone: the
+answer, when nobody answers for the error, or `onUnanswered` sends it on or
+throws. A failure the outcome carries takes that way only if nobody observed
+the outcome, so observing the outcome takes it off the way. An observer that
+answers (`with JobAnswerer`) closes the way itself.
 
 One failure can also reach `onError` more than once: once on each job whose
 outcome it is. A child of `ctx.run` fails, its parent lets the failure out of
@@ -351,11 +359,12 @@ zone the work was started from.
 
 ## Answering for errors
 
-The errors that no outcome carries go on from `onError` to an answer. An
-observer written only to watch, like `Reporter`, gives no answer, so these
-errors go where they would go without an observer: to the zone. Watching alone
-does not change where an error goes. An observer that answers for these errors
-itself mixes in `JobAnswerer` and overrides `onUnanswered`:
+The errors that no outcome carries go on from `onError` to an answer, and so do
+the failures whose outcome nobody observes. An observer written only to watch,
+like `Reporter`, gives no answer, so these errors go where they would go
+without an observer: to the zone. Watching alone does not change where an error
+goes. An observer that answers for these errors itself mixes in `JobAnswerer`
+and overrides `onUnanswered`:
 
 ```dart
 final class Answering extends JobObserver with JobAnswerer {
@@ -422,11 +431,12 @@ zone: Bad state: analytics offline
 `onUnanswered` is asked about one failure at a time. The job walks a
 `ParallelWaitError` and asks about each failure inside it, with that failure's
 stack trace. So the observer answers for the database error, and the zone hears
-the analytics error on its own. An uncaught `Cancelled` is not a failure, and
-nobody is asked about it, whether it comes alone or inside a
-`ParallelWaitError`. Nor is anybody asked about an error that the app named in
-[Errors of a cancellation](#errors-of-a-cancellation), once the job has
-accepted a cancellation.
+the analytics error on its own. A `Failed` with such an error that nobody
+observes is answered for the same way, failure by failure. An uncaught
+`Cancelled` is not a failure, and nobody is asked about it, whether it comes
+alone or inside a `ParallelWaitError`. Nor is anybody asked about an error that
+the app named in [Errors of a cancellation](#errors-of-a-cancellation), once
+the job has accepted a cancellation.
 
 `onError` also hears them one at a time, and hears a `Cancelled` inside a
 `ParallelWaitError` in a call of its own. The outcome keeps the error as it was

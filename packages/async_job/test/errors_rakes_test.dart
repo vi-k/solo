@@ -24,6 +24,7 @@ import 'support/observing_page.dart';
 import 'support/observing_rakes.dart';
 import 'support/observing_stubs.dart';
 import 'support/page_code.dart';
+import 'support/probe_job.dart';
 
 void main() {
   group('The code of the page', () {
@@ -141,14 +142,27 @@ void main() {
     test('the filter is not asked about a job nobody cancelled', () {
       // Somebody else has cancelled the token: the job goes on, and its body
       // fails with the stop.
-      Job<void> stoppedByAnother() => Job<void>((ctx) async {
-            final stop = CancelToken()..cancel();
-            await ctx.join(() => database.migrate(stop));
-          });
+      Job<void> stoppedByAnother({JobObserver? observer}) => Job<void>(
+            observer: observer,
+            (ctx) async {
+              final stop = CancelToken()..cancel();
+              await ctx.join(() => database.migrate(stop));
+            },
+          );
 
       expect(
         withTheStopNamed(() => play(stoppedByAnother, outcomeObserved: false)),
         ['zone: DatabaseStopped'],
+      );
+      expect(
+        withTheStopNamed(
+          () => play(
+            () => stoppedByAnother(observer: Answerer()),
+            outcomeObserved: false,
+          ),
+        ),
+        ['onError: DatabaseStopped', 'onUnanswered: DatabaseStopped'],
+        reason: 'it goes on to the answer',
       );
       expect(
         withTheStopNamed(() => play(stoppedByAnother)),
@@ -401,11 +415,24 @@ void main() {
       );
     });
 
-    test('a failure the job ends with: onError, and the zone if unobserved',
+    test('a failure the job ends with: onError, then the answer if unobserved',
         () {
       expect(
         play(() => failing(observer: Reporter()), outcomeObserved: false),
         ['onError: Bad state: disk full', 'zone: Bad state: disk full'],
+      );
+      expect(
+        play(() => failing(observer: Answerer()), outcomeObserved: false),
+        ['onError: Bad state: disk full', 'onUnanswered: Bad state: disk full'],
+        reason: 'an observer that answers gets it, and the zone does not',
+      );
+      expect(
+        play(() => failing(observer: Answerer())),
+        [
+          'onError: Bad state: disk full',
+          'outcome: Failed(Bad state: disk full)',
+        ],
+        reason: 'observing the outcome takes it off the way',
       );
       expect(
         play(() => failing(observer: Reporter())),
@@ -419,6 +446,74 @@ void main() {
         ['zone: Bad state: disk full'],
       );
       expect(play(failing), ['outcome: Failed(Bad state: disk full)']);
+    });
+
+    test('a failure an engine makes of a cancellation goes past the answer',
+        () {
+      for (final error in [
+        const Cancelled('as a failure'),
+        ParallelWaitError<List<void>, List<AsyncError?>>(
+          [null, null],
+          [
+            AsyncError(const Cancelled('one'), StackTrace.empty),
+            AsyncError(const Cancelled('two'), StackTrace.empty),
+          ],
+        ),
+      ]) {
+        final lines = play(
+          () => ProbeJob<void>((ctx) async {}, observer: Answerer())
+            ..drop(Failed(error, StackTrace.empty)),
+          outcomeObserved: false,
+        );
+        expect(lines, isNot(contains(startsWith('onUnanswered:'))));
+        expect(lines.last, 'zone: $error');
+      }
+    });
+
+    test('the page sends an unobserved failure to the answer', () {
+      // The translation is not in the archive: it is read where it is.
+      const said = {
+        'doc/errors.md': [
+          '`onError`, then the answer if nobody observed the outcome',
+          'if nobody observes that outcome, it goes on to the answer',
+          'it goes to the zone past the answer',
+          'is answered for the same way, failure by failure',
+        ],
+        '../../docs/ru/async_job/errors.md': [
+          '`onError`, затем ответ, если исход никто не наблюдал',
+          'если этот исход никто не наблюдает, он идёт к ответу',
+          'он идёт в зону мимо ответа',
+          'отвечают так же, провал за провалом',
+        ],
+      };
+      for (final MapEntry(key: page, value: phrases) in said.entries) {
+        if (!File(page).existsSync()) {
+          continue;
+        }
+        final text =
+            File(page).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+        for (final phrase in phrases) {
+          expect(text, contains(phrase), reason: page);
+        }
+      }
+    });
+
+    test('an unobserved failure of several is answered for one by one', () {
+      // `saving` of the page with the two calls in the body: the job ends
+      // `Failed` with the `ParallelWaitError` they throw.
+      expect(
+        play(
+          () => Job<void>(
+            observer: DatabaseErrors(),
+            (ctx) => [saveDraft(), sendAnalytics()].wait,
+          ),
+          outcomeObserved: false,
+        ),
+        [
+          'onUnanswered: DatabaseException',
+          'zone: Bad state: analytics offline',
+        ],
+      );
     });
 
     Job<void> failingBeforeCancel({JobObserver? observer}) => Job<void>(

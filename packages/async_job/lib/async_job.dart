@@ -6,8 +6,8 @@
 /// for its outcome or `job.value` for what the body returned.
 ///
 /// The guides — outcomes, cancellation, time, children, groups, chains,
-/// streams, cleanup, observing and building on the core — are on the
-/// documentation site:
+/// streams, cleanup, observing, errors, testing and building on the core —
+/// are on the documentation site:
 /// https://docs.yet-another.dev/async_job/
 ///
 /// This is the import for code that runs jobs. The protocol for building an
