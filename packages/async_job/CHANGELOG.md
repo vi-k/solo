@@ -10,15 +10,16 @@
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`, and `JobBase.whenDone`
   to `JobBase.untilFinished`.**
 - **A job is continued once: by one `then`, or by handles of the new
-  `Job.shared`.** A second continuation throws a `StateError`: give each branch
-  a handle of `shared()`, see
+  `Job.shared`.** A second `then`, a `then` on a job with a handle and `shared`
+  on a job with a `then` throw a `StateError`: give each branch a handle of
+  `shared()`, see
   [A handle for each branch](doc/chains.md#a-handle-for-each-branch).
 - **`ctx.run` takes a `ChildJob`.** A handle declared `Job<T>` no longer
   compiles there: declare it `ChildJob<T>`, or `DeferredJob<T>` where the code
   calls `start()`, and give the jobs of an engine `implements ChildJob<T>`.
 - **A class that implements `Job` or `JobContext` itself adds the new members,
-  and a subclass of `JobBase` renames a member of its own that has a new
-  name.** `Job` gains `whenFinished` and `shared`, `JobBase` gains
+  and a subclass of `JobBase` renames its own member whose name a new one now
+  takes.** `Job` gains `whenFinished` and `shared`, `JobBase` gains
   `untilFinished`, and `JobContext` gains `abandonable`, `pause`, `runAll`,
   `start` and the `dispose` and `discard` of `run`; an extension on
   `JobContext` named `runAll` or `start` is shadowed without a warning.
@@ -85,8 +86,10 @@ view.
 With asserts on, an `AssertionError` reaches the zone when an engine ends two
 children of one job with one `Cancelled` instance.
 
-A job whose body or callback returns a job of `Job.deferred` nobody has started
-ends `Failed` with an `ArgumentError`, where `0.2.0` ended it `Done`.
+A `Job<void>` or a `then<void>` continuation whose body or callback returns a
+job of `Job.deferred` nobody has started, and a child of `ctx.each` whose
+callback does it for an event, end `Failed` with an `ArgumentError`, where
+`0.2.0` ended them `Done`.
 
 Several error messages are reworded: a test that matches them by text needs the
 new wording.

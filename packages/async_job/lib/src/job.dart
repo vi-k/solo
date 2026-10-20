@@ -140,12 +140,12 @@ abstract interface class Job<T> {
   /// is what [JobContext.each] says of its child.
   ///
   /// The cleanup stack unwinds when the job ends, not after an event: a
-  /// [JobContext.onDispose] registered for every event piles up for as long
-  /// as the stream lasts, and so does a `dispose` or a `discard` of
-  /// [JobContext.join]. A [JobContext.onCancel] callback piles up the same
-  /// way unless the event takes it back with the function `onCancel`
-  /// returns. What one event opens belongs to a child started for that event
-  /// with [JobContext.run]: its stack unwinds when it ends.
+  /// [JobContext.onDispose] registered for every event piles up for as long as
+  /// the stream lasts, and so does a `dispose` or a `discard` of
+  /// [JobContext.join]. A [JobContext.onCancel] callback piles up the same way
+  /// unless the callback takes it back with the function `onCancel` returns.
+  /// What one event opens belongs to a child started for that event with
+  /// [JobContext.run]: its stack unwinds when it ends.
   ///
   /// The named parameters are those of [Job.new] but `timeout`: a deadline on
   /// following a stream is set from outside. With `cancellable: false`

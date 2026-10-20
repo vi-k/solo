@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:async_job/async_job.dart';
 import 'package:test/test.dart';
 
+import 'support/probe_job.dart';
+
 void main() {
   group('a registration leaves without a search', () {
     // A clock, and not the timeout: everything here ends in microtasks, and
@@ -73,19 +75,22 @@ void main() {
 
   group('a remover takes back its own registration', () {
     test('and no other of the same function', () async {
+      // Through the engine's door, which keeps the function as it is given:
+      // `onCancel` wraps it, so two registrations there are never equal.
       final calls = <String>[];
       void heard() => calls.add('heard');
-      final release = Completer<void>();
-      final job = Job<void>((ctx) async {
-        final first = ctx.onCancel(heard);
-        ctx.onCancel(heard);
+      final job = ProbeJob<void>((ctx) async {
+        final probe = ctx as ProbeContext;
+        final first = probe.onCancelRaw(heard);
+        probe.onCancelRaw(heard);
         first();
         first();
-        await ctx.abandonable(() => release.future);
-      });
+        await ctx.abandonable(() => Completer<void>().future);
+      })
+        ..launch();
       await Future<void>.delayed(Duration.zero);
       await job.cancel();
-      expect(calls, ['heard']);
+      expect(calls, ['heard'], reason: 'a second call takes back nothing');
     });
 
     test('and the others run in the order they came', () async {

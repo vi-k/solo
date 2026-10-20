@@ -127,11 +127,10 @@ final class SoloPendingJob extends SoloPending {
   /// marked with [cancellation], or an open section holds
   /// [heldCancellation].
   ///
-  /// Not the same as "somebody asked". A job created with
-  /// `cancellable: false` turns a rejectable cancellation down instead of
-  /// keeping it, so nothing is pending on it however many times it was
-  /// asked — [cancellable] is the half of that story the engine
-  /// can tell.
+  /// Not the same as "somebody asked". A job created with `cancellable: false`
+  /// turns a rejectable cancellation down instead of keeping it, so nothing is
+  /// pending on it however many times it was asked — [cancellable] is the half
+  /// of that story the engine can tell.
   bool get cancellationPending =>
       cancellation != null || heldCancellation != null;
 

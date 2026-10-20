@@ -511,18 +511,18 @@ abstract interface class JobContext {
   /// branch silences both: [JobObserver.onError] hears them, and nobody answers
   /// for them.
   ///
-  /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
-  /// for every branch and stop none, so a branch whose sibling has already
-  /// failed runs to its end and settles its own registrations on the way. They
-  /// differ in what comes out: `.wait` throws a `ParallelWaitError` holding the
-  /// values and the errors of every branch at once, and [Future.wait] throws
-  /// the first error to reach it and lets the rest go. Take either when the
-  /// branches do not depend on each other's failure, or when one of them waits
-  /// for another. Take this one when a result missing one of its parts is of no
-  /// use anyway: it asks the rest to stop, holds every branch until the
-  /// decision is made, and throws the outcome itself. `eagerError: true` is not
-  /// the middle ground it looks like: it wakes the body on the first error and
-  /// asks nobody to stop, so the job still ends with its last child.
+  /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait for
+  /// every branch and stop none, so a branch whose sibling has already failed
+  /// runs to its end and settles its own registrations on the way. They differ
+  /// in what comes out: `.wait` throws a `ParallelWaitError` holding the values
+  /// and the errors of every branch at once, and [Future.wait] throws the first
+  /// error to reach it and lets the rest go. Take either when the branches do
+  /// not depend on each other's failure, or when one of them waits for another.
+  /// Take this one when a result missing one of its parts is of no use anyway:
+  /// it asks the rest to stop, holds every branch until the decision is made,
+  /// and throws the outcome itself. `eagerError: true` is not the middle ground
+  /// it looks like: it wakes the body on the first error and asks nobody to
+  /// stop, so the job still ends with its last child.
   ///
   /// **The stop is cooperative.** A branch that waits through [abandonable]
   /// ends, and the operation behind it plays on and writes its result; to stop
@@ -532,14 +532,14 @@ abstract interface class JobContext {
   /// failed are not cancelled — a failure never cascades — so the group waits
   /// for them too.
   ///
-  /// **No branch ends before the group has decided.** A branch stands
-  /// twice: once when its body and its children are over and before it unwinds,
-  /// once between the two passes of its unwinding. That is what keeps a
-  /// resource a branch took for the caller — one registered through `discard` —
-  /// alive until the group is sure the caller will get it, and closed by the
-  /// branch itself when it will not. While a branch is held, its outcome is not
-  /// final: a body that returned a value may still end [Cancelled]. The hold
-  /// has a price, and the next two paragraphs name it: a branch that waits for
+  /// **No branch ends before the group has decided.** A branch stands twice:
+  /// once when its body and its children are over and before it unwinds, once
+  /// between the two passes of its unwinding. That is what keeps a resource a
+  /// branch took for the caller — one registered through `discard` — alive
+  /// until the group is sure the caller will get it, and closed by the branch
+  /// itself when it will not. While a branch is held, its outcome is not final:
+  /// a body that returned a value may still end [Cancelled]. The hold has a
+  /// price, and the next two paragraphs name it: a branch that waits for
   /// another branch can hang the group.
   ///
   /// **A branch must not wait for another branch of the same group.** Awaiting
@@ -621,12 +621,12 @@ abstract interface class JobContext {
   /// child's [abandonable] or [join] as appropriate. Do not await the child's
   /// own completion or cancellation from its callback.
   ///
-  /// The child's cleanup stack unwinds when the child ends, not after an
-  /// event: an [onDispose] registered for every event piles up for as long as
-  /// the stream lasts, and so does a `dispose` or a `discard` of [join]. An
-  /// [onCancel] callback piles up the same way unless the event takes it back
-  /// with the function [onCancel] returns. What one event opens belongs to a
-  /// child started for that event with [run]: its stack unwinds when it ends.
+  /// The child's cleanup stack unwinds when the child ends, not after an event:
+  /// an [onDispose] registered for every event piles up for as long as the
+  /// stream lasts, and so does a `dispose` or a `discard` of [join]. An
+  /// [onCancel] callback piles up the same way unless the callback takes it
+  /// back with the function [onCancel] returns. What one event opens belongs to
+  /// a child started for that event with [run]: its stack unwinds when it ends.
   ///
   /// The future returned by the subscription's cancellation is not awaited:
   /// cleanup owned by the source is the source's to finish. If it fails, the

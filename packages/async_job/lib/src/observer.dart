@@ -209,9 +209,9 @@ mixin JobAnswerer on JobObserver {
   /// not come here — a [Cancelled], alone or inside a `ParallelWaitError`:
   /// it is a decision somebody made, not a failure.
   ///
-  /// **What the default body does.** It hands the error to the zone the
-  /// job was created in — where the error goes when the job has no observer, or
-  /// one that does not answer.
+  /// **What the default body does.** It hands the error to the zone the job was
+  /// created in — where the error goes when the job has no observer, or one
+  /// that does not answer.
   ///
   /// **Override it to answer here instead** — an observer that reports to
   /// its own system and stops there. An override that says nothing keeps

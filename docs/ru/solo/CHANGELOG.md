@@ -178,7 +178,7 @@ future падала, а само тело работало под другим `
 - `AccumulationTiming.throttle` принимает `startAtOnce`. С `startAtOnce: false`
   интервал отсчитывается и перед первой группой.
 - У `AccumulationTiming` есть `==`, `hashCode` и `toString`, который печатает
-  вызов конструктора.
+  вид, длительность и `startAtOnce` в форме вызова конструктора.
 - `package:solo/listeners.dart`: `Listeners`, список слушателей, по которому
   идёт уведомитель, для пакета, который строит собственную доставку поверх
   `solo`.

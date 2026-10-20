@@ -4,12 +4,11 @@ enum _AccumulationTimingKind { debounce, throttle }
 
 /// Controls when accumulated event groups become ready to run.
 ///
-/// A debounce window restarts after every accepted event. A throttle
-/// interval starts when a group actually starts, or, with
-/// `startAtOnce: false`, when a group appears on an accumulator that has
-/// none of its own queued or running; either way it is shared by the
-/// groups of one accumulator. The same setting can be reused by
-/// independent accumulators without sharing their timers.
+/// A debounce window restarts after every accepted event. A throttle interval
+/// starts when a group actually starts, or, with `startAtOnce: false`, when a
+/// group appears on an accumulator that has none of its own queued or running;
+/// either way it is shared by the groups of one accumulator. The same setting
+/// can be reused by independent accumulators without sharing their timers.
 @immutable
 final class AccumulationTiming {
   /// The length of the debounce window or throttle interval.
@@ -59,7 +58,8 @@ final class AccumulationTiming {
   @override
   int get hashCode => Object.hash(duration, _kind, _startAtOnce);
 
-  /// The constructor call that makes this timing, such as
+  /// The kind, the duration and `startAtOnce` in the shape of the
+  /// constructor, such as
   /// `AccumulationTiming.throttle(0:00:01.000000, startAtOnce: false)`.
   @override
   String toString() => switch (_kind) {

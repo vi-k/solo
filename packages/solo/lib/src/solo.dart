@@ -300,15 +300,14 @@ abstract class Solo<S extends Object> {
   /// and, once the job runs, `close` — but not a state that stopped matching
   /// `W` or `keepWhile`.
   ///
-  /// The flag is consulted only once the engine holds the job. One this
-  /// method has made and nobody has added is cancelled like any other.
-  /// Queued, it turns down `cancel` and a `clear` without `force`, while
-  /// `close` and `clear` with `force` take it out anyway — they do not
-  /// ask. Running, it turns down all four. A queued job that turned down
-  /// `cancel` starts in its turn and runs to its end, and
-  /// `await job.cancel()` comes back only then: [Job.cancel] waits for the
-  /// job to finish. [JobContext.uncancellable] says the same about one step
-  /// of the body rather than about the whole job.
+  /// The flag is consulted only once the engine holds the job. One this method
+  /// has made and nobody has added is cancelled like any other. Queued, it
+  /// turns down `cancel` and a `clear` without `force`, while `close` and
+  /// `clear` with `force` take it out anyway — they do not ask. Running, it
+  /// turns down all four. A queued job that turned down `cancel` starts in its
+  /// turn and runs to its end, and `await job.cancel()` comes back only then:
+  /// [Job.cancel] waits for the job to finish. [JobContext.uncancellable] says
+  /// the same about one step of the body rather than about the whole job.
   ///
   /// [ifFailed] and [ifCancelled] synchronously map the current state to the
   /// state after a failed or cancelled body. They run after children and
@@ -863,14 +862,13 @@ abstract class Solo<S extends Object> {
   /// finishes, the state is final and cannot change.
   ///
   /// [SoloCloseMode.cancel], the default, drops every queued job with
-  /// `Cancelled(closed)` and cancels the current one — a
-  /// `cancellable: false` job is waited for instead.
-  /// [SoloCloseMode.drain] leaves the queue alone and closes once it has
-  /// run: new root jobs are refused from the call onwards, and the ones
-  /// already accepted go by the usual rules, children, cleanup and
-  /// accumulation windows included. A [Policy.droppable] call whose key a
-  /// draining job holds gets that job back, as before the close: it is not
-  /// new work.
+  /// `Cancelled(closed)` and cancels the current one — a `cancellable: false`
+  /// job is waited for instead. [SoloCloseMode.drain] leaves the queue alone
+  /// and closes once it has run: new root jobs are refused from the call
+  /// onwards, and the ones already accepted go by the usual rules, children,
+  /// cleanup and accumulation windows included. A [Policy.droppable] call whose
+  /// key a draining job holds gets that job back, as before the close: it is
+  /// not new work.
   ///
   /// A plain `close()` over a running drain stops it where it is: the
   /// queue is dropped and the current job cancelled, and the same future
@@ -1057,8 +1055,8 @@ abstract class Solo<S extends Object> {
   /// goes there instead, and nowhere else. Setting an [observer] changes
   /// neither: watching is not answering.
   ///
-  /// **One failure at a time.** This hook is called for each failure inside
-  /// a `ParallelWaitError` on its own, with the stack trace of that failure. An
+  /// **One failure at a time.** This hook is called for each failure inside a
+  /// `ParallelWaitError` on its own, with the stack trace of that failure. An
   /// uncaught [Cancelled], alone or inside one, does not come here: a
   /// cancellation is a decision somebody made, not a failure.
   ///
@@ -1268,8 +1266,7 @@ abstract class Solo<S extends Object> {
           Cancelled.by(
             reason: const RulesCancelReason(),
             description: rejection,
-            // Still inside the change, so the trace leads back to whoever made
-            // it.
+            // Still inside the change: the trace leads back to whoever made it.
             stackTrace: StackTrace.current,
           ),
           rejectable: false,

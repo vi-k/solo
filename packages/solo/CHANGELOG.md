@@ -174,7 +174,7 @@ is asked once.
 - `AccumulationTiming.throttle` takes `startAtOnce`. With `startAtOnce: false`
   the interval is counted before the first group as well.
 - `AccumulationTiming` has `==`, `hashCode` and a `toString` that prints the
-  constructor call.
+  kind, the duration and `startAtOnce` in the shape of the constructor.
 - `package:solo/listeners.dart`: `Listeners`, the list of listeners a notifier
   walks, for a package that builds a delivery of its own on top of `solo`.
 

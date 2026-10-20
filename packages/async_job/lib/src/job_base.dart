@@ -843,14 +843,13 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// [cancelled] belongs to this job alone, as [finish] explains.
   ///
-  /// Idempotent. [rejectable] is what a job created with
-  /// `cancellable: false` may refuse, and its refusal is final — nothing
-  /// is replayed later. Inside [JobContext.uncancellable] a rejectable
-  /// cancellation is held instead: the step runs untouched, and the
-  /// cancellation lands the moment the last section closes — it comes
-  /// through here a second time then, so an override hears a held
-  /// cancellation twice. The rules of a domain pass `false` and go through
-  /// both.
+  /// Idempotent. [rejectable] is what a job created with `cancellable: false`
+  /// may refuse, and its refusal is final — nothing is replayed later. Inside
+  /// [JobContext.uncancellable] a rejectable cancellation is held instead: the
+  /// step runs untouched, and the cancellation lands the moment the last
+  /// section closes — it comes through here a second time then, so an override
+  /// hears a held cancellation twice. The rules of a domain pass `false` and go
+  /// through both.
   ///
   /// A subclass extends this member rather than replacing it: `solo` adds the
   /// branch for a job still waiting in its queue and then calls `super`. An
