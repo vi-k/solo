@@ -46,12 +46,12 @@ queued job or a state the job's rules do not accept can all end work
 
 Every failure reaches the `onError` hook of the controller and of
 `Solo.observer`. A failed job whose outcome nobody has accessed through `done`,
-`value` or `ignoreFailure()` by the time it ends also reports an unhandled
-error to the Dart zone in which it was created. The job decides this once, as
-it ends: `done` read after that still returns the `Failed`, but the error is
-already in the zone. Use `ignoreFailure()` when error reporting elsewhere is
-sufficient: leaving a job unawaited does not by itself mark the error as
-handled, and neither does reading `outcome`. See
+`value` or `ignoreFailure()` by the microtask after it ends also reports an
+unhandled error to the Dart zone in which it was created. The job decides this
+once, on that microtask: `done` read later still returns the `Failed`, but the
+error is already in the zone. Use `ignoreFailure()` when error reporting
+elsewhere is sufficient: leaving a job unawaited does not by itself mark the
+error as handled, and neither does reading `outcome`. See
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page.
 
@@ -82,7 +82,9 @@ controller exposes domain methods such as `load()` or `setZoom()`, and callers
 see those, not the members they are built from. A domain method declares
 `Job<T>`, as `setZoom` above does: that is all its caller needs to await the
 result or cancel the job. It declares `SoloJob<T>` only for a caller that reads
-`isQueued`.
+`isQueued`. A private method that makes a child for `ctx.run` declares
+`SoloJob<T>` as well: `ctx.run` takes a `ChildJob<T>`, which `SoloJob<T>` is
+and `Job<T>` is not.
 
 A job the queue starts runs its body in the Dart zone of the call that made the
 job: `run`, or `job` for `saving` above, and not `add`. What woke the queue

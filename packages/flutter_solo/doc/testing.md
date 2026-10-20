@@ -65,12 +65,14 @@ a job still running never comes back, and an expectation that failed halfway
 through a load is enough to leave one running. The test stands until its
 timeout, and the test after it fails with it.
 
-A job given a `timeout` brings a timer of its own, which the core holds until
-the job ends. Left running when the body of a `testWidgets` ends, such a job
-fails the test with
-`A Timer is still pending even after the widget tree was disposed`. The same
-job without a deadline lets the test pass. Closing the controller in the body,
-as above, ends the job and takes its timer along.
+A timer still pending when the body of a `testWidgets` ends fails the test with
+`A Timer is still pending even after the widget tree was disposed`, and a load
+left running holds one: the ten milliseconds of the fake. A job given a
+`timeout` brings another, which the core holds until the job ends. Closing the
+controller in the body, as above, ends the job and takes its deadline along,
+but not the call the job walked away from: the fake still answers ten
+milliseconds after it was called, and the test ends cleanly once `pump` with a
+duration has moved the clock past that.
 
 ## Waiting for the job
 
@@ -86,11 +88,11 @@ final outcome = await done;
 shows the last state.
 
 `done` is read on the first line, before the clock moves, and the order
-matters. A `Failed` nobody has asked about is reported as the job ends, to the
-zone it was created in. Here that is the zone of the test, which fails the test
-on the spot, and `tester.takeException()` has nothing to take afterwards. A
-load that fails makes a test red even though it reads `done`, if it reads it
-after the pump.
+matters. A `Failed` nobody has asked about is reported on the microtask after
+the job ends, to the zone it was created in. Here that is the zone of the test,
+which fails the test on the spot, and `tester.takeException()` has nothing to
+take afterwards. A load that fails makes a test red even though it reads
+`done`, if it reads it after the pump.
 
 A job the test starts and drops says so with `ignoreFailure()`.
 

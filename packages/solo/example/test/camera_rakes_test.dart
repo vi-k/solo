@@ -2405,6 +2405,30 @@ void main() {
       ]);
     });
 
+    test('the README of the example quotes the head and tail of that run', () {
+      final readme = File('README.md').readAsStringSync();
+      final block = RegExp(r'```text\n(.*?)\n```', dotAll: true)
+          .firstMatch(readme)!
+          .group(1)!
+          .split('\n');
+      final cut = block.indexOf('...');
+      final head = block.sublist(0, cut);
+      final tail = block.sublist(cut + 1);
+      final seen = alone((async, journal) {
+        unawaited(program.main());
+        async.flushTimers();
+      });
+
+      expect(seen.printed.take(head.length), head);
+      expect(seen.printed.skip(seen.printed.length - tail.length), tail);
+      expect(
+        readme.replaceAll('\n', ' '),
+        contains('The shot is cancelled on purpose: the program disposes of '
+            'the camera while the shot is halfway through, and `dispose` '
+            'cancels it before it closes the device.'),
+      );
+    });
+
     test('the tests of the example exercise what the page leaves out', () {
       _says(
         _part(_running),

@@ -284,7 +284,7 @@ void main() {
       await bench.close();
       _says('a cancellation the caller can ask for: the next checkpoint of '
           'the context throws it, and a body that never reaches one still '
-          'ends `Cancelled` and writes no state');
+          'ends `Cancelled` and writes no state of its own');
     });
 
     testWidgets('every job ends with one of three outcomes', (tester) async {

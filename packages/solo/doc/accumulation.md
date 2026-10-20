@@ -629,10 +629,14 @@ seconds further on" — are merged by adding them up, not by replacing.
 
 `adjacent` adjoins an event to a group only at the queue's tail, so a job of
 another kind added between two commands is a boundary and the merging stops
-there. That is what keeps the order with the rest of the work, and why this
-recipe names the policy instead of taking the default: `join` joins the group
-where it stands, and here that would drop the `resume` the user tapped and
-leave the device with the `pause` alone.
+there. Three taps in a row have no such job between them, and `join`, the
+default, would merge them the same way. The two part when the player has other
+work queued: with a job of another kind between a `resume` and a `pause`,
+`join` folds the `pause` into the group ahead of that job, so the device never
+hears the `resume` and pauses before the job runs. `adjacent` sends the
+`resume`, lets the job run and then sends the `pause`, in the order of the
+calls, and that is why this recipe names the policy instead of taking the
+default.
 
 #### When they are separate jobs after all
 

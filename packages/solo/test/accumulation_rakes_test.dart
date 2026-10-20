@@ -1174,10 +1174,25 @@ void main() {
       );
     });
 
+    test('three taps in a row come out the same under join', () {
+      _says('Three taps in a row have no such job between them, and `join`, '
+          'the default, would merge them the same way.');
+      final adjacent = _tap(Player.new, (c) => c.resume(), (c) => c.pause());
+      final join = _tap(
+        (device) => JoiningPlayer(device as FakeDevice),
+        (c) => c.resume(),
+        (c) => c.pause(),
+      );
+      expect(join.trace, adjacent.trace);
+      expect(join.trace, _quotes()[10]);
+    });
+
     test('under join the resume would be dropped and the pause left alone', () {
-      _says('`join` joins the group where it stands, and here that would '
-          'drop the `resume` the user tapped and leave the device with the '
-          '`pause` alone');
+      _says('with a job of another kind between a `resume` and a `pause`, '
+          '`join` folds the `pause` into the group ahead of that job, so the '
+          'device never hears the `resume` and pauses before the job runs');
+      _says('`adjacent` sends the `resume`, lets the job run and then sends '
+          'the `pause`, in the order of the calls');
       final device = FakeDevice();
       _zone((async) {
         JoiningPlayer(device)

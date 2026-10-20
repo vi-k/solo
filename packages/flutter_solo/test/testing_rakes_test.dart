@@ -227,9 +227,10 @@ void main() {
     });
 
     for (final timed in [true, false]) {
-      test(
-          'a job ${timed ? 'with' : 'without'} a deadline left running when '
-          'the body ends', () async {
+      final kind = timed
+          ? 'with a deadline over an API that never answers'
+          : 'over the fake of the page';
+      test('a load $kind left running when the body ends', () async {
         late Solo<Profile> controller;
         final reported = await _asWidgetTest((binding) async {
           if (timed) {
@@ -237,7 +238,7 @@ void main() {
             controller = load;
             load.load().ignoreFailure();
           } else {
-            final load = ProfileController(SilentApi());
+            final load = ProfileController(FakeApi());
             controller = load;
             load.load().ignoreFailure();
           }
@@ -248,22 +249,61 @@ void main() {
         expect(
           [for (final details in reported) '${details.exception}'],
           [
-            if (timed)
+            contains(
+              'A Timer is still pending even after the widget tree was '
+              'disposed',
+            ),
+          ],
+        );
+        if (timed) {
+          _says('A job given a `timeout` brings another, which the core '
+              'holds until the job ends.');
+        } else {
+          _says('A timer still pending when the body of a `testWidgets` ends '
+              'fails the test with '
+              '`A Timer is still pending even after the widget tree was '
+              'disposed`, and a load left running holds one: the ten '
+              'milliseconds of the fake.');
+        }
+        unawaited(controller.close());
+      });
+    }
+
+    for (final pumped in [false, true]) {
+      test(
+          'closed in the body, a load over the fake of the page '
+          '${pumped ? 'with' : 'without'} the clock moved past the call',
+          () async {
+        late ProfileController controller;
+        final reported = await _asWidgetTest((binding) async {
+          controller = ProfileController(FakeApi());
+          final job = controller.load()..ignoreFailure();
+          await binding.pump();
+          await controller.close();
+          expect('${job.outcome}', 'Cancelled(closed)');
+          if (pumped) {
+            await binding.pump(const Duration(milliseconds: 10));
+          }
+        });
+
+        expect(
+          [for (final details in reported) '${details.exception}'],
+          [
+            if (!pumped)
               contains(
                 'A Timer is still pending even after the widget tree was '
                 'disposed',
               ),
           ],
         );
-        _says('Left running when the body of a `testWidgets` ends, such a job '
-            'fails the test with '
-            '`A Timer is still pending even after the widget tree was '
-            'disposed`. The same job without a deadline lets the test pass.');
-        unawaited(controller.close());
+        _says('but not the call the job walked away from: the fake still '
+            'answers ten milliseconds after it was called, and the test ends '
+            'cleanly once `pump` with a duration has moved the clock past '
+            'that.');
       });
     }
 
-    test('closed in the body, a job with a deadline takes its timer along',
+    test('closed in the body, a job with a deadline takes its deadline along',
         () async {
       late TimedLoad controller;
       final reported = await _asWidgetTest((binding) async {
@@ -277,7 +317,7 @@ void main() {
       expect(reported, isEmpty);
       expect(controller.isFinished, isTrue);
       _says('Closing the controller in the body, as above, ends the job and '
-          'takes its timer along.');
+          'takes its deadline along');
     });
   });
 
@@ -354,8 +394,9 @@ void main() {
       expect(taken, isNull);
       expect(outcome, isA<Failed>(), reason: 'the test did read done');
       _says('a test that reads `done` reads it before it moves the clock');
-      _says('A `Failed` nobody has asked about is reported as the job ends, '
-          'to the zone it was created in. Here that is the zone of the test, '
+      _says('A `Failed` nobody has asked about is reported on the microtask '
+          'after the job ends, to the zone it was created in. Here that is '
+          'the zone of the test, '
           'which fails the test on the spot, and `tester.takeException()` '
           'has nothing to take afterwards.');
       _says('A load that fails makes a test red even though it reads `done`, '

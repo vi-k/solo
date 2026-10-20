@@ -1972,10 +1972,15 @@ void main() {
       test('Hangs only reports, and a deadline stops the job', () {
         _says('`Hangs` only reports: the job it names goes on running');
         _says('A job that must stop at its limit takes the limit itself, '
-            '`run(timeout: ...)`, and ends `Cancelled(timeout)`');
+            '`run(timeout: ...)`. The limit cancels the job, and the job '
+            'ends `Cancelled(timeout)` when its body reaches a checkpoint or '
+            'returns');
+        _says('`ctx.abandonable` around the call ends the wait and leaves '
+            'the call running');
         late SoloJob<void> reported;
         late SoloJob<void> limited;
         var runningAtSix = false;
+        var callRunsOn = false;
         _run((async) {
           Solo.observer = page.Hangs();
           final bench = Bench();
@@ -1990,6 +1995,7 @@ void main() {
             (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
           );
           async.elapse(const Duration(seconds: 6));
+          callRunsOn = limited.isFinished && stage.isRunning('op');
         });
 
         expect(
@@ -1999,6 +2005,44 @@ void main() {
         expect(runningAtSix, isTrue);
         expect('${reported.outcome}', 'Done(null)');
         expect('${limited.outcome}', 'Cancelled(timeout)');
+        expect(callRunsOn, isTrue, reason: 'abandonable leaves the call');
+      });
+
+      test('a deadline does not stop a body that awaits a call bare', () {
+        _says('A body that awaits a call bare reaches none until the call '
+            'returns, and the queue and `close()` wait for it all that time');
+        late SoloJob<void> deaf;
+        late SoloJob<void> queued;
+        late bool cancelledAtSix;
+        late bool finishedAtSix;
+        late bool queuedFinishedAtSix;
+        var closed = false;
+        _run((async) {
+          final bench = Bench();
+          deaf = bench.run<int, void>(
+            key: 'deaf',
+            timeout: const Duration(seconds: 3),
+            (ctx) => stage.start<void>('op', null),
+          );
+          queued = bench.run<int, void>(key: 'queued', (ctx) async {});
+          unawaited(
+            bench.close(mode: SoloCloseMode.drain).then((_) => closed = true),
+          );
+          async.elapse(const Duration(seconds: 6));
+          cancelledAtSix = deaf.isCancelled;
+          finishedAtSix = deaf.isFinished;
+          queuedFinishedAtSix = queued.isFinished;
+          expect(closed, isFalse, reason: 'close() waits for the body');
+          _end(async, 'op');
+          async.flushTimers();
+        });
+
+        expect(cancelledAtSix, isTrue);
+        expect(finishedAtSix, isFalse);
+        expect(queuedFinishedAtSix, isFalse);
+        expect('${deaf.outcome}', 'Cancelled(timeout)');
+        expect('${queued.outcome}', 'Done(null)');
+        expect(closed, isTrue);
       });
 
       test('the two recipes that read onFinish say nothing about a hang', () {

@@ -39,7 +39,7 @@ What the engine holds to:
   condition it lives under, and it is cancelled when they stop holding;
 - a cancellation the caller can ask for: the next checkpoint of the context
   throws it, and a body that never reaches one still ends `Cancelled` and
-  writes no state;
+  writes no state of its own;
 - an outcome for every job, one of `Done`, `Failed` and `Cancelled`, which is
   what a screen has to show anyway.
 

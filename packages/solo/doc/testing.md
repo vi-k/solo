@@ -247,11 +247,11 @@ test('a failed load shows the failure', () async {
 `ignoreFailure()` marks the job observed without waiting for it, and an
 observed failure is the test's business rather than the zone's. Reading `done`
 or `value` marks it as well, so a test that awaits the outcome, as the first
-section does, needs nothing more. The mark has to come before the job ends: a
-failure nobody has asked about is reported as the job finishes, so a test that
-holds the job, drains the controller and reads `done` afterwards is red all the
-same. Reading `job.outcome` does not mark anything: it is a look at a field,
-and the field is `null` until the job has finished.
+section does, needs nothing more. The mark has to come by the microtask after
+the job ends: a failure nobody has asked about is reported on that microtask,
+so a test that holds the job, drains the controller and reads `done` afterwards
+is red all the same. Reading `job.outcome` does not mark anything: it is a look
+at a field, and the field is `null` until the job has finished.
 
 One failure is out of reach of all three: that of a call the job has walked
 away from. Cancel a load while the fake is still answering, or close the

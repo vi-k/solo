@@ -212,8 +212,8 @@ Do this:
 profile.load().ignoreFailure();
 ```
 
-Do it before the job ends: a failure nobody has asked about is reported as the
-job finishes. See
+Do it by the microtask after the job ends: a failure nobody has asked about is
+reported on that microtask. See
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page.
 

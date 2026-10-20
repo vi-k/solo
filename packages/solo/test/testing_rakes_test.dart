@@ -672,7 +672,7 @@ void main() {
 
         expect(run.state, _failed);
         expect(_errors(run), ['StateError: no network']);
-        _says('The mark has to come before the job ends');
+        _says('The mark has to come by the microtask after the job ends');
         _says('so a test that holds the job, drains the controller and reads '
             '`done` afterwards is red all the same');
       });

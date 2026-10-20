@@ -116,9 +116,10 @@ does `ctx.each`.
 What `run`, `job`, `add` and an accumulator's `add` return: a `Job<T>` of the
 core plus the queue. `value`, `done`, `outcome`, `cancel()` and
 `ignoreFailure()` are the core's, in the table of
-[Jobs and results](jobs.md#jobs-and-results) on the jobs page. A method of the
-controller declares `Job<T>`, and `SoloJob<T>` only for a caller that reads
-`isQueued`.
+[Jobs and results](jobs.md#jobs-and-results) on the jobs page. A method the
+screen calls declares `Job<T>`, and `SoloJob<T>` only for a caller that reads
+`isQueued`. A method that makes a child for `ctx.run` declares `SoloJob<T>`:
+`ctx.run` takes a `ChildJob<T>`, which `SoloJob<T>` is and `Job<T>` is not.
 
 | Member | What it does | Where |
 | --- | --- | --- |

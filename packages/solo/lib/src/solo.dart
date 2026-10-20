@@ -291,14 +291,18 @@ abstract class Solo<S extends Object> {
   /// it: a write from inside it throws [StateError], and the rule throws
   /// with it. `cancellable: false` turns down every cancellation that may
   /// be turned down — `cancel`, `clear` without `force`, parent cancellation
-  /// and `close` — but not a state that stopped matching `W` or `keepWhile`.
+  /// and, once the job runs, `close` — but not a state that stopped matching
+  /// `W` or `keepWhile`.
   ///
   /// The flag is consulted only once the engine holds the job. One this
   /// method has made and nobody has added is cancelled like any other.
   /// Queued, it turns down `cancel` and a `clear` without `force`, while
   /// `close` and `clear` with `force` take it out anyway — they do not
-  /// ask. Running, it turns down all four. [JobContext.uncancellable] says
-  /// the same about one step of the body rather than about the whole job.
+  /// ask. Running, it turns down all four. A queued job that turned down
+  /// `cancel` starts in its turn and runs to its end, and
+  /// `await job.cancel()` comes back only then: [Job.cancel] waits for the
+  /// job to finish. [JobContext.uncancellable] says the same about one step
+  /// of the body rather than about the whole job.
   ///
   /// [ifFailed] and [ifCancelled] synchronously map the current state to the
   /// state after a failed or cancelled body. They run after children and

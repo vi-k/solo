@@ -75,7 +75,8 @@ and
 
 - The README's examples compile, and the page gained the sections on the
   controller as a `ValueListenable`, on selections and on `listen`.
-- The package has a guide of its own, [Mixins](doc/mixins.md).
+- The package has guides of its own, [Mixins](doc/mixins.md) and
+  [Testing](doc/testing.md).
 - The example no longer sticks on a failed load.
 
 ## 0.2.0
