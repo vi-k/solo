@@ -578,7 +578,10 @@ abstract interface class JobContext {
   /// [onData] receives the child's context. Use its checkpoints to react to the
   /// child's cancellation. An asynchronous callback is awaited before the next
   /// event is delivered. Stream and callback errors end the child and follow
-  /// the usual [Job] error reporting rules.
+  /// the usual [Job] error reporting rules. A callback that returns a job of
+  /// [Job.deferred] nobody has started ends the child [Failed] with an
+  /// [ArgumentError]: nothing here starts it, and the event would count as
+  /// handled.
   ///
   /// Cancellation stops delivery and cancels the subscription immediately, then
   /// waits for an active callback before finishing the child and running its
@@ -1415,15 +1418,18 @@ abstract class JobContextBase implements JobContext {
     // a key, and two children of one queue are equal and still two jobs.
     // Before the first start, so that a repeat is refused without half of
     // the group already running.
-    final seen = Set<Job<T>>.identity();
-    for (final child in branches) {
-      if (!seen.add(child)) {
+    // The places go into the message: a job with no key reads `Job()`, and
+    // two of those are told apart only by where they stand.
+    final seen = Map<Job<T>, int>.identity();
+    for (final (index, child) in branches.indexed) {
+      if (seen[child] case final first?) {
         throw ArgumentError.value(
           '$child',
           'children',
-          'is in the group more than once',
+          'is in the group more than once, at $first and at $index',
         );
       }
+      seen[child] = index;
     }
     // Everything that needs no adoption, for every handle, before the first
     // start: otherwise a handle refused at the end of the list leaves the

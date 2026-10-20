@@ -84,6 +84,104 @@ void main() {
       });
     });
 
+    // `FutureOr<void>` takes any value here too. A delivered event and one
+    // played back from inside `listen` go two ways through the code: a
+    // broadcast stream hands `listen` the events its `onListen` adds before
+    // `listen` returns, where a single-subscription one would buffer them
+    // and deliver them after. And an `async` callback hides the job in its
+    // future, the form the mistake most often takes.
+    for (final (route, subscribe) in [
+      ('delivered', (Stream<int> Function() make) => make()),
+      (
+        'played back',
+        (Stream<int> Function() make) {
+          late final StreamController<int> source;
+          source = StreamController<int>.broadcast(
+            sync: true,
+            onListen: () => source
+              ..add(1)
+              ..add(2),
+          );
+          addTearDown(source.close);
+          return source.stream;
+        },
+      ),
+    ]) {
+      for (final asynchronous in [false, true]) {
+        final form = asynchronous ? 'an async callback' : 'a callback';
+        test('$form of Job.each, $route', () {
+          fakeAsync((async) {
+            var ran = false;
+            final events = <int>[];
+            final saving = Job.deferred<void>((ctx) async => ran = true);
+            Job<void> handle(int event) {
+              events.add(event);
+              return saving;
+            }
+
+            final job = Job.each<int>(
+              subscribe(() => Stream.fromIterable([1, 2])),
+              asynchronous
+                  // The mistake under test, which no lint sees.
+                  ? (ctx, event) async => handle(event)
+                  // The same mistake, one the lint sees.
+                  // ignore: void_checks
+                  : (ctx, event) => handle(event),
+            )..ignoreFailure();
+
+            async.flushTimers();
+
+            expect(
+              job.outcome,
+              isA<Failed>().having(
+                (failed) => failed.error,
+                'error',
+                isA<ArgumentError>().having(
+                  (error) => error.message,
+                  'message',
+                  '$job: the callback returned $saving, a deferred job that '
+                      'never started; run it with ctx.run or start it',
+                ),
+              ),
+            );
+            expect(events, [1], reason: 'nothing after the callback failed');
+            expect(ran, isFalse);
+            saving.cancel().ignore();
+            async.flushTimers();
+          });
+        });
+      }
+    }
+
+    for (final asynchronous in [false, true]) {
+      final form = asynchronous ? 'an async callback' : 'a callback';
+      test('$form of ctx.each, and its parent through it', () {
+        fakeAsync((async) {
+          final saving = Job.deferred<void>((ctx) async {});
+          late Job<void> child;
+          final parent = Job<void>((ctx) async {
+            child = ctx.each<int>(
+              Stream.value(1),
+              asynchronous
+                  ? (child, event) async => saving
+                  // ignore: void_checks
+                  : (child, event) => saving,
+            );
+            await child.value;
+          })
+            ..ignoreFailure();
+
+          async.flushTimers();
+
+          expect(child.outcome, isA<Failed>());
+          expect((child.outcome! as Failed).error, isA<ArgumentError>());
+          expect(parent.outcome, isA<Failed>());
+          saving.cancel().ignore();
+          async.flushTimers();
+        });
+      });
+    }
+
     test('a body of FutureOr<void>, which is void', () {
       fakeAsync((async) {
         final saving = Job.deferred<void>((ctx) async {});

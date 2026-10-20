@@ -102,9 +102,33 @@ extension _JobStreamBody on JobContext {
       fail(error, stackTrace);
     }
 
+    // `FutureOr<void>` takes any value, so the analyzer lets a callback hand
+    // back a deferred job it meant to run: nothing here starts it, the event
+    // counts as handled, and the work in it is lost without a word. Refused
+    // the way a body of `void` and a continuation refuse it, and, as there,
+    // by the value an `async` callback completes with too: `async => saving`
+    // is the form the mistake most often takes, and a `Future` hides it.
+    void refuseDeferred(Object? handled) {
+      if (JobBase._neverStartedDeferredJob(handled)) {
+        throw ArgumentError(
+          '$job: the callback returned $handled, a deferred job that never '
+          'started; run it with ctx.run or start it',
+        );
+      }
+    }
+
+    FutureOr<void> handle(T event) {
+      final handled = onData(event);
+      refuseDeferred(handled);
+      if (handled is! Future<void>) {
+        return null;
+      }
+      return handled.then<void>((value) => refuseDeferred(value as Object?));
+    }
+
     void deliver(T event) {
       try {
-        final handled = onData(event);
+        final handled = handle(event);
         if (handled is Future<void>) {
           // Delivery waits for the callback, so the events keep their order.
           // The signal never carries the error: it only says when to go on,
@@ -125,7 +149,7 @@ extension _JobStreamBody on JobContext {
       try {
         while (early.isNotEmpty && !letGo) {
           try {
-            await onData(early.removeFirst());
+            await handle(early.removeFirst());
           } on Object catch (error, stackTrace) {
             thrown(error, stackTrace);
             return;

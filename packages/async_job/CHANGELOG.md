@@ -117,9 +117,10 @@ children of one job with one `Cancelled` instance. See
 [Not waiting for the checkpoint](doc/extending.md#not-waiting-for-the-checkpoint).
 
 A `Job<void>` whose body returns a job of `Job.deferred` that nobody has
-started, and a `then<void>` continuation whose callback does the same, end
-`Failed` with an `ArgumentError`, where `0.2.0` ended them `Done`. See
-[Chains](doc/chains.md).
+started, a `then<void>` continuation whose callback does the same, and a child
+of `ctx.each` whose callback does it for an event end `Failed` with an
+`ArgumentError`, where `0.2.0` ended them `Done`. `Job.each` refuses it the
+same way. See [Chains](doc/chains.md).
 
 Several error messages are reworded: a test that matches them by text needs the
 new wording.

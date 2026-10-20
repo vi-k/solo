@@ -227,6 +227,33 @@ void main() {
     });
   });
 
+  test('a branch twice in the list is named by both of its places', () {
+    fakeAsync((async) {
+      final first = Job.deferred<int>((ctx) async => 1);
+      final repeated = Job.deferred<int>((ctx) async => 2);
+      Object? thrown;
+      Job<void>((ctx) async {
+        try {
+          await ctx.runAll(
+            [first, repeated, Job.deferred((ctx) async => 3), repeated],
+          );
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignoreFailure();
+      async.flushTimers();
+      expect(
+        '$thrown',
+        'Invalid argument (children): is in the group more than once, '
+            'at 1 and at 3: "Job()"',
+      );
+      for (final job in [first, repeated]) {
+        job.cancel().ignore();
+      }
+      async.flushTimers();
+    });
+  });
+
   test('an ArgumentError or a StateError leaves the jobs untouched', () {
     fakeAsync((async) {
       final repeated = Job.deferred<int>((ctx) async => 1);
@@ -1933,6 +1960,89 @@ final parent = Job<void>((ctx) async {
       expect(heardCancelled, 0);
     });
   });
+
+  // The commit says what the branches dropped on the debug channel, and that
+  // line runs the code of whoever turned the channel on: [Job.debug] and the
+  // `describe` of the branch. Either may cancel something; the branches must
+  // already be marked as handed over when it does.
+  for (final from in ['Job.debug', 'describe']) {
+    for (final target in ['the branch', 'a sibling', 'the parent']) {
+      test(
+          'a cancellation of $target from $from on the line of the commit '
+          'finds the values handed over', () {
+        fakeAsync((async) {
+          addTearDown(() => Job.debug = null);
+          final closed = <String>[];
+          final heard = <String>[];
+          late Job<void> parent;
+          late ChildJob<String> a;
+          late ChildJob<String> b;
+          var armed = false;
+          var fired = false;
+          void fire() {
+            if (!armed || fired) {
+              return;
+            }
+            fired = true;
+            switch (target) {
+              case 'the branch':
+                a.cancel(reason: const TestCancelReason('own')).ignore();
+              case 'a sibling':
+                b.cancel(reason: const TestCancelReason('sibling')).ignore();
+              default:
+                parent.cancel().ignore();
+            }
+          }
+
+          a = Job.deferred<String>(
+            key: 'a',
+            describe: () {
+              if (from == 'describe') {
+                fire();
+              }
+              return 'a';
+            },
+            (ctx) async {
+              ctx
+                ..onCancel(() => heard.add('a onCancel'))
+                ..onDiscard(() => closed.add('a'));
+              // From here the next line that names this branch is the one of
+              // the commit.
+              armed = from == 'describe';
+              return 'a';
+            },
+          )..whenCancelled((_) => heard.add('a whenCancelled'));
+          b = Job.deferred<String>(key: 'b', (ctx) async {
+            ctx
+              ..onCancel(() => heard.add('b onCancel'))
+              ..onDiscard(() => closed.add('b'));
+            return 'b';
+          })
+            ..whenCancelled((_) => heard.add('b whenCancelled'));
+          Job.debug = (line) {
+            if (line.contains('handed its value over')) {
+              armed = true;
+              if (from == 'Job.debug') {
+                fire();
+              }
+            }
+          };
+          List<String>? values;
+          parent = Job<void>(key: 'parent', (ctx) async {
+            values = await ctx.runAll([a, b]);
+          })
+            ..ignoreFailure();
+          async.flushTimers();
+          expect(fired, isTrue, reason: 'the trigger has to run');
+          expect(values, ['a', 'b']);
+          expect(a.outcome, isA<Done<String>>());
+          expect(b.outcome, isA<Done<String>>());
+          expect(closed, isEmpty, reason: 'the values are with the caller');
+          expect(heard, isEmpty, reason: 'no branch accepted a cancellation');
+        });
+      });
+    }
+  }
 
   test('on success the group does not wait for the tails of its branches', () {
     fakeAsync((async) {

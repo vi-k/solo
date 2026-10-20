@@ -159,11 +159,10 @@ final class _RunAllGroup<T> {
         }
         break;
       }
-      if (child is! JobBase<T>) {
-        // Unreachable: `startChild` refuses a handle that is not a job of
-        // this core before it starts anything.
-        continue;
-      }
+      // Always so: `startChild` refuses a handle that is not a job of this
+      // core before it starts anything. A cast and not a branch that skips
+      // the child: such a branch would hide the day this stops being true.
+      child as JobBase<T>;
       // Attached after the admission and not before it, and the difference
       // is not cosmetic: a handle already running as a branch of another
       // group is refused here by `StateError`, and touching its hold on
@@ -589,15 +588,18 @@ final class _RunAllGroup<T> {
         (_provisionalOf(branch)! as Done<T>).value,
     ];
     _committed = true;
+    final traces = <void Function()>[];
     for (final branch in _branches) {
       // Step four. On the successful path nobody runs them — exactly as
       // nobody runs what is still put aside at the end of the unwinding.
-      // Traced here and not by the branch: by the time it reaches the end
-      // of its own unwinding the list is already empty, and the receiver of
-      // the values would learn nothing.
-      branch.job
-        .._traceDroppedCleanups()
-        .._skipped.clear();
+      // Traced by the group and not by the branch: by the time it reaches
+      // the end of its own unwinding the list is already empty, and the
+      // receiver of the values would learn nothing.
+      final trace = branch.job._droppedCleanupsTrace();
+      if (trace != null) {
+        traces.add(trace);
+      }
+      branch.job._skipped.clear();
     }
     for (final branch in _branches) {
       // Step five: released with the verdict, and the list goes back. The
@@ -607,6 +609,12 @@ final class _RunAllGroup<T> {
       // a [Cancelled] outcome.
       branch.job._committedByGroup = true;
       _letPastSecondBarrier(branch, committed: true);
+    }
+    // Said only now. The line runs the code of whoever turned the channel
+    // on, `describe` and [Job.debug] both, and that code may cancel a
+    // branch: every branch must already be marked when it does.
+    for (final trace in traces) {
+      trace();
     }
     return values;
   }

@@ -131,7 +131,9 @@ abstract interface class Job<T> {
   /// is awaited before the next event is delivered; use the checkpoints of the
   /// context, [JobContext.abandonable] and [JobContext.join], to stop for a
   /// cancellation. The job ends [Done] when the stream ends, and an error of
-  /// the stream or of the callback ends it [Failed]. A cancellation cancels the
+  /// the stream or of the callback ends it [Failed] — and so does a callback
+  /// that returns a job of [Job.deferred] nobody has started, with an
+  /// [ArgumentError]: nothing here starts it. A cancellation cancels the
   /// subscription at once and waits for the callback that is running. Do not
   /// await the job's own completion or cancellation from the callback. The rest
   /// is what [JobContext.each] says of its child.
