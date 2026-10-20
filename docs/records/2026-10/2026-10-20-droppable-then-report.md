@@ -117,7 +117,8 @@ shared() for each branch» — совет, которому он уже посл
 политикой: что бросает и совет дать `droppable` свой ключ; то же в dartdoc
 `Policy.droppable`. Тест «a then taken before a droppable call leaves that
 caller no shared» держит поведение. Поведение `droppable` не меняется, пункт 91
-`docs/settled.md` говорит об этом случае.
+`docs/settled.md` говорит об этом случае. Владелец 2026-10-20 подтвердил:
+остаются документы, `droppable` задачу с простым `then` не обходит.
 
 ### M2. Итог H1 не дописан в план и handoff
 
