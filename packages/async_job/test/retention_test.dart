@@ -555,4 +555,83 @@ void main() {
     release.complete(1);
     await source.done;
   });
+
+  // The handle waits for its source in its own zone, and a zone can put a
+  // closure of its own around what it is given to wait with. The three
+  // below are the zones a handle is made in outside a test: one of tooling
+  // that wraps every callback, as `Chain.capture` of `stack_trace` does,
+  // one of `runZonedGuarded`, and the one of unattended work.
+  test(
+      'a cancelled shared handle lets go under a zone that wraps every '
+      'callback', () async {
+    final release = Completer<int>();
+    final source = Job<int>((ctx) => ctx.join(() => release.future));
+    final capture = await runZoned(
+      () => cancelledShared(source),
+      zoneSpecification: wrappingEveryCallback(),
+    );
+    expect(source.isFinished, isFalse);
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the wrapper holds what it was given to wait with, and that '
+          'must not be the handle',
+    );
+    release.complete(1);
+    await source.done;
+  });
+
+  test('a cancelled shared handle lets go in a guarded zone', () async {
+    final release = Completer<int>();
+    final source = Job<int>((ctx) => ctx.join(() => release.future));
+    final caught = <Object>[];
+    final capture = await runZonedGuarded(
+      () => cancelledShared(source),
+      (error, stackTrace) => caught.add(error),
+    )!;
+    expect(source.isFinished, isFalse);
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'a guarded zone is where an app runs; the handle made there '
+          'must let go as it does in the root zone',
+    );
+    release.complete(1);
+    await source.done;
+    expect(caught, isEmpty);
+  });
+
+  test('a cancelled shared handle made in unattended work lets go', () async {
+    final release = Completer<int>();
+    final source = Job<int>((ctx) => ctx.join(() => release.future));
+    final made = Completer<WeakReference<Payload>>();
+    await Job<void>((ctx) async {
+      ctx.unattended(() async => made.complete(await cancelledShared(source)));
+    }).done;
+    final capture = await made.future;
+    expect(source.isFinished, isFalse);
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the handle waits in the zone of the work it was made in, '
+          'and that zone is not one to keep it in either',
+    );
+    release.complete(1);
+    await source.done;
+  });
 }
+
+/// A zone that puts a closure of its own around every callback it
+/// registers, the way tooling that records where a callback came from
+/// does.
+ZoneSpecification wrappingEveryCallback() => ZoneSpecification(
+      registerCallback: <R>(self, parent, zone, f) =>
+          parent.registerCallback(zone, () => f()),
+      registerUnaryCallback: <R, T>(self, parent, zone, f) =>
+          parent.registerUnaryCallback(zone, (arg) => f(arg)),
+      registerBinaryCallback: <R, T1, T2>(self, parent, zone, f) =>
+          parent.registerBinaryCallback(
+        zone,
+        (arg1, arg2) => f(arg1, arg2),
+      ),
+    );
