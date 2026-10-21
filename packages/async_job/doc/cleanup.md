@@ -301,7 +301,9 @@ When the cancellation comes decides who closes the database:
 | While a `connect` with `cancellable: false` opens it | nobody: `connect` ends `Done` all the same | `ready` |
 
 This holds for every hand-over, a group included: a branch of `ctx.runAll`
-registers on arrival each value its own children hand it, like anyone else.
+registers on arrival each value its own children hand it, like anyone else. The
+checkpoint of `ctx.join` after its action releases the value the same way,
+whatever it throws, a rule of the engine that throws included.
 
 The receiver that registered the value on arrival is the one that closes it.
 The same value stays reachable through the child's `Job.value` for as long as
@@ -382,6 +384,12 @@ Inside the action the two steps cannot be separated: whatever the call throws
 afterwards, the release and its unregistration have already happened together.
 The same holds for a value registered by the call itself: `ctx.disown(value)`
 belongs where ownership changes, not on the line after it.
+
+An asynchronous hand-over and its `ctx.disown` go together inside one awaited
+`ctx.uncancellable` section. The step is a bare `await`, not `ctx.join`, and
+nothing between it and `ctx.disown` throws the job's cancellation, no member of
+the context and no `await child.value`, because a section does not hold a
+cancellation the rules of an engine make.
 
 ### Registering after a plain `await`
 
@@ -522,3 +530,13 @@ But the stack has run by then, the callback that closes the pool included, and
 only the end of the branch waits for the release. Kept for the second pass, the
 value would keep the slot from the cleanup of another branch the group waits
 for, and the group would wait for good.
+
+A value that comes to a call the body walked away from without a cancellation
+still goes to whoever holds the call's future, and its release waits for the
+unwinding on the stack. The core takes a value for late from the moment it
+learns the body has ended, not from the body's `return`, so a call that gives
+out a resource is not one to walk away from.
+
+A call left unawaited on purpose has its type written out,
+`unawaited(ctx.abandonable<Database>(...))`. Without it `T` is inferred from
+`unawaited` as `void`, and `dispose` has to take `void`.

@@ -99,6 +99,9 @@ is `started`. A refused start ends the job with `started: false`. A `W` or
 These rules reject unsuitable work; they do not keep it queued until the state
 becomes suitable.
 
+A rule answers and does not write: a write from inside `keepWhile` throws a
+`StateError`, and the rule throws with it.
+
 ### Reading and updating state
 
 ```dart
@@ -520,7 +523,9 @@ object is published, as an `emit` of it would be.
 
 The matching handler runs before the next queued job and before the `onFinish`
 hook. Changing state does not turn `Failed` or `Cancelled` into `Done`, and
-does not mark the outcome as handled for error reporting.
+does not mark the outcome as handled for error reporting. `ifCancelled` runs at
+completion, so the signal to stop the operation belongs in `ctx.onCancel`,
+which delivers it at once.
 
 ### Preserving an incompatible external state
 
@@ -600,6 +605,7 @@ permit the operation and the correction after it.
 | `Policy.restart` cancels the running job for a newer one with its key | `ifCancelled` runs, as for any cancellation, and its state is published before the newer job starts. |
 | A handler throws | The error is reported; the outcome and the queue are untouched. |
 | A rule throws while eligibility is checked | Handlers disabled and the error reported. Resource cleanup still runs. |
+| A rule throws at a checkpoint of the body, `ctx.state` or `ctx.check()` | The body receives the error, and `ifFailed` corrects a `Failed` it leaves like any other. |
 
 These extra checks apply to jobs with their own state handlers. A parent
 without handlers stops checking its rules when its body ends; children then

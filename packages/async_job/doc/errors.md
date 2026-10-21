@@ -348,7 +348,20 @@ in an error zone of its own, and the boundary holds both ways:
   If the body awaits it, the job hangs.
 
 A job started inside the callback is outside the boundary: its body runs in the
-zone the work was started from.
+zone the work was started from. It has an outcome and an observer of its own,
+and its unobserved failure lands in that zone too. For work inside the work of
+another job, that is the zone the outer work was started from.
+
+`ctx.abandonable` and `ctx.join` work inside the callback on the body's terms,
+even after the body has ended. On a job that has accepted a cancellation, the
+value is released and the call throws the cancellation. On a job that is over,
+a value with a `dispose` or `discard` is released, and the call throws a
+`StateError` instead of handing it over closed.
+
+Polling `ctx.check()` is no way to stop such work with the job. On a job nobody
+cancelled, it throws a `StateError` while the core unwinds the cleanup stack,
+and once the job has ended `Done` it does not throw at all, so a loop waiting
+for it holds the job forever. Ask `job.isFinished`, or wait for `job.done`.
 
 ## Answering for errors
 
@@ -444,6 +457,14 @@ if (outcome case Failed(:final error, :final stackTrace)) {
   );
 }
 ```
+
+`Job.visitErrors` hands a `Cancelled` to `onCancelled` and any other error to
+`onFailure`. It walks a `ParallelWaitError` depth first, its branches in order,
+each with its own stack trace, and skips a `null` branch, which succeeded.
+Nothing is lost: what the walk cannot read goes to `onFailure` whole, with the
+stack trace of the error around it, and so does an error with neither a failure
+nor a cancellation in it. Each `ParallelWaitError` is walked once and handed
+over whole at most once, however many branches lead to it.
 
 ## Several observers
 

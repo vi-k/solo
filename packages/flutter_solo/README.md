@@ -234,6 +234,9 @@ controller that equals the old one by `==` but not by `identical`,
 `SoloBuilder` moves to it, and `ValueListenableBuilder` goes on listening to
 the old one.
 
+In a type position, write the type argument out, `SoloListenable<Profile>`: the
+analyzer lets a bare `SoloListenable` through as a `SoloListenable<Object>`.
+
 The sections below on selecting and listening take the controller with the
 mixin.
 
@@ -324,14 +327,30 @@ as it is at that moment. The `State` outlives the widget: a parent that
 rebuilds can hand it a new `SaveButton` with another controller. Without
 `didUpdateWidget` the button would go on taking its permission from the old
 controller while its tap went to the new one. The field and its
-`didUpdateWidget` are what `SoloSelector` spares you.
+`didUpdateWidget` are what `SoloSelector` spares you: the widget that picks
+needs no `State`, and nothing has to be disposed of.
 
 The source is subscribed to only while the selection has listeners, and there
-is nothing to dispose of.
+is nothing to dispose of. With nobody listening, `value` picks every time and
+keeps nothing it picked. A selection outlives its source harmlessly: `value`
+keeps reading the final state of a closed controller.
 
 The constructor takes a `ValueListenable`: here, the controller with
 `SoloListenable`. For a controller without the mixin,
-`SoloSelection.from(controller, selector)` builds the same selection.
+`SoloSelection.from(controller, selector)` builds the same selection. A
+`ValueListenable` that is not a controller is picked from the same way, with a
+`SoloSelection` under a `ValueListenableBuilder`: `SoloSelector` takes only a
+controller.
+
+The selector of a selection runs inside the change that triggered it, so it
+should only pick: over a controller with `SoloListenable` it must not change
+the state, start a job or close the controller.
+
+While somebody listens, the selection picks once per change, and a listener
+reads the very pick that decided whether to notify. A source that changes its
+value in place keeps the object, so a listener the source calls ahead of the
+selection reads the pick from before the change. A `solo` controller with an
+immutable state never meets this.
 
 ## Listening without keeping the callback
 

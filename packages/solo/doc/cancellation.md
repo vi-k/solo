@@ -218,6 +218,11 @@ waits in the queue, `queue.remove`, `queue.removeWhere`, `queue.clear` and
 `cancelAll()` leave it in place; called with `force: true`, they take it out.
 `close()` drops it from the queue too, and waits for it once it is running.
 
+The flag counts only once the engine holds the job: a job that `job` made and
+`add` never queued is cancelled like any other. A queued job that turned down
+`cancel` starts in its turn and runs to its end, and `await job.cancel()` comes
+back only then.
+
 Neither a section nor `cancellable: false` holds back the state rules of a job.
 The working type of a job is the first type argument of `run`, `Ready` on this
 page. That type and the job's `keepWhile` cancel the job when the state stops

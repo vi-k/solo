@@ -333,11 +333,13 @@ the errors page has the table.
 Always await `ctx.uncancellable`. The section opens when called, even if you do
 not await its future. An unawaited section can outlive the body; if the job
 finishes first, the held cancellation is lost: `cancel()` completes, and the
-outcome is `Done`. A section holds back a cancellation request, not a
-cancellation the body throws itself. If the body goes on without awaiting the
-section and then cancels itself, by throwing `Cancelled` or by letting out the
-cancellation of a child, the job accepts that cancellation at once. `onCancel`
-runs while the section is still open, and `abandonable` inside it throws.
+outcome is `Done`. If a child still runs when the section closes, the
+cancellation lands then and becomes the outcome over the body's value. A
+section holds back a cancellation request, not a cancellation the body throws
+itself. If the body goes on without awaiting the section and then cancels
+itself, by throwing `Cancelled` or by letting out the cancellation of a child,
+the job accepts that cancellation at once. `onCancel` runs while the section is
+still open, and `abandonable` inside it throws.
 
 ## A job that refuses cancellation
 

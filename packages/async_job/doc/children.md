@@ -102,7 +102,8 @@ Job(parent): Cancelled(manual)
 The child loads its rows, and the parent waits for it. Before `ctx.run` hands
 the value to the body, it checks the parent's cancellation. The parent is
 cancelled, so `ctx.run` throws the parent's `Cancelled`, and the line that logs
-the rows never runs.
+the rows never runs. If the body has ended without awaiting the future, a later
+success returns its value without that check, and so does `ctx.runAll`.
 
 What the parent does to its children depends on how it ends:
 
@@ -256,7 +257,15 @@ job of the list as it was: the group starts none of them, the sound ones
 included, and the `done` of each waits until the code that made it starts or
 cancels it. A body that has caught the refusal and awaits a job of the list
 waits for good. Under a cancelled parent, every job of the list is cancelled
-before its start.
+before its start. So is the rest of the list when a branch cancels the parent
+before its first `await`.
+
+The list is read once, by copy, before the first start. Some refusals come only
+as a job is taken in: from an engine that turns the parent down, or from a rule
+of the engine that throws. Such a refusal may come after some branches have
+started: the group stops them and waits for them, and the jobs after the
+refused one never start. An empty list comes back empty, after the checks
+`ctx.run` makes.
 
 ## How deep a tree goes
 

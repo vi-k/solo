@@ -133,7 +133,10 @@ it gets the cancellation, not the error, and the status line says
 `backup cancelled`. The error goes the way of an error no outcome carries.
 [Where errors go](errors.md#where-errors-go) on the errors page shows that way.
 `ignoreFailure()` keeps it from being answered for, and then only an observer's
-`onError` hears it.
+`onError` hears it. For such a failure the call comes in time before the job
+ends, or at the latest from `onFinish` or from a `whenCancelled` or
+`whenFinished` listener registered before the end. The failure is answered for
+as the job finishes, so a call from a listener of `done` comes too late.
 
 ### Hearing the end without the failure
 

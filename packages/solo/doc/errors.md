@@ -75,7 +75,8 @@ caller observes the outcome, and
 handler and `Job.isCancellationError`.
 
 An error that `onUnanswered` takes can come after the job has completed. It
-does not replace the outcome the job already has.
+does not replace the outcome the job already has. Every error that reaches
+`onUnanswered` has been through `onError` already.
 
 Dart's route in the table above is not the engine's. An unhandled error of
 `job.value` or of `ctx.run(child)` is an unhandled future error under the rules

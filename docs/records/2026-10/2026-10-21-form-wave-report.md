@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-22:** волна идёт. Части 1–5 сделаны и закоммичены;
-> переезды разбора из dartdoc на страницы, ревью сделанного и закрытие
+> **Состояние на 2026-10-22:** волна идёт. Части 1–5 и переезды разбора
+> из dartdoc на страницы сделаны и закоммичены; ревью сделанного и закрытие
 > впереди.
 > **Что это:** отчёт волны формы по плану `2026-10-21-form-wave-plan.md`:
 > что ушло из dartdoc и где это сказано на странице, проверенные решения,
@@ -510,8 +510,68 @@ each error goes» на `errors.md` `solo`; слушатель проекции �
 части 4 или 5»: переезжать на страницы ему полагалось в этих частях. В задания
 частей 4 и 5 я переезды не включил, и списки «Ждёт страниц частей 4 и 5» выше
 пока не исполнены. Ничего не потеряно — разбор стоит в dartdoc, пока страница
-его не скажет. Переезды идут следующим шагом, отдельным коммитом, до ревью
-волны.
+его не скажет. Переезды сделаны следующим шагом, отдельным коммитом, — раздел
+«Переезды из dartdoc».
+
+## Переезды из dartdoc
+
+Оба списка «Ждёт страниц частей 4 и 5». Писал исполнитель на Opus в копии
+на вершине части 5; дифф я прочёл целиком и сверил утверждения с dartdoc,
+из которого они взяты. Dartdoc и код не менялись: разбор остался в dartdoc
+коротким, как велит правило 4, а страница теперь его говорит. Каждый факт —
+краевой случай, после основного пути своего раздела.
+
+| Член | Что | Где теперь |
+| --- | --- | --- |
+| `runAll` | список читается один раз копией; пустая группа; ветвь, отменившая родителя до первого `await`; отказ после старта части ветвей | `children.md` ядра, «When `ctx.run` refuses a child» |
+| `runAll`, `run` | значения без проверки после конца тела | `children.md` ядра, «When the parent is cancelled» |
+| `runAll` | регистрация на прибытии через `ctx.run(locked, discard: ...)`, `discard` без замка | `groups.md`, «The lock in a child of the branch» |
+| `unattended` | зона вложенной работы; `abandonable` и `join` после конца тела; опрос `check` | `errors.md` ядра, «Work handed to the job» |
+| `uncancellable` | передача с `disown` в одной секции | `cleanup.md`, «Unregistering inside the action» |
+| `uncancellable` | позднее приземление при живом ребёнке | `cancellation.md` ядра, «Holding the cancellation back» |
+| `abandonable` | тип при `unawaited`; значение вызова, брошенного без отмены; с какого момента значение опоздало | `cleanup.md`, «A value that comes late» |
+| `join` | проверка после действия отпускает значение, что бы ни бросила | `cleanup.md`, «Registering on arrival» |
+| `ignoreFailure` | не позже `onFinish` | `outcomes.md`, «Telling the core it is handled» |
+| `visitErrors` | правила обхода | `errors.md` ядра, «Several failures in one error» |
+| `Solo.job` | запись изнутри `keepWhile` | `state.md`, «The rules» |
+| `Solo.job` | `cancellable: false` — только у движка; очередная задача, отказавшая `cancel`, доходит до конца | `cancellation.md` `solo`, «A whole job» |
+| `Solo.job` | `ifCancelled` по завершении, `onCancel` — сразу | `state.md`, «The handlers» |
+| `Solo.job` | правило, бросившее на контрольной точке, и `ifFailed` | строка таблицы «Handler eligibility and errors» |
+| `Solo.onUnanswered` | каждая ошибка уже прошла `onError` | `errors.md` `solo`, «Where each error goes» |
+| `SoloListenable` | голый — это `SoloListenable<Object>` | README `flutter_solo`, «The controller as a `ValueListenable`» |
+| `SoloSelection`, `SoloSelector` | селектор только выбирает; выборка раз на изменение и источник, меняющий значение на месте; без слушателей; выборка переживает источник; чужой `ValueListenable`; виджету не нужен `State` | README `flutter_solo`, «Selecting one value» |
+
+Три места разошлись с названными. На `groups.md` нет ни «When `runAll`
+refuses», ни абзаца о допуске: допуск `runAll` разобран на `children.md` ядра,
+туда и ушло. «Running a child» ещё не вводит проверку, о которой фраза про
+поздний успех, поэтому фраза — в «When the parent is cancelled», где проверка
+названа. Чужой `ValueListenable` дописан к абзацу о конструкторе
+`SoloSelection`: список правил `SoloSelector` стоит раньше, чем `SoloSelection`
+введён.
+
+Уже было на страницах и не добавлялось: `abandonable` без `await` бросает
+в зону, пока тело идёт, — `errors.md` ядра; сбой селектора проекции — таблица
+«Notes» README; дешёвая выборка с одним ответом — список правил `SoloSelector`.
+
+Одна правка при сверке: исполнитель написал о селекторе проекции «it does not
+change the state», dartdoc `SoloSelection` говорит «must not». Это запрет,
+а не описание: на странице и в переводе стоит «must not».
+
+Для итога L7: «Finishing a job by hand» называет dartdoc `JobBase.finish` и два
+его случая; третий — `Failed`, поданный уже законченной задаче, — есть только
+в dartdoc `finish`.
+
+Решения 50, 59, 61 и 64 не менялись; то, на чём они стоят, теперь сказано
+и на страницах.
+
+### Проверки переездов
+
+`async_job`: формат без изменений, анализ чистый, +1789. `solo`: формат,
+анализ, +2063; пример +112. `flutter_solo`: формат, анализ, +241; пример +6.
+Стенды вне репозитория: `bin/v` без замечаний, все драйверы прошли,
+`check_traces.py` — ни одной не напечатанной цитаты; `flutter_check` +47.
+Документные — все семь зелёные. Линтер `humanizer--ru` по изменённым абзацам
+переводов: 0 `ERROR`.
 
 ## Счётчик длинных фраз
 

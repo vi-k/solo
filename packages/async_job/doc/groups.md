@@ -263,6 +263,9 @@ anything, and the second branch takes the lock. For branches that depend on
 each other, `[...].wait` is the other way out: under it, every branch unwinds
 on its own.
 
+What the child `locked` opens for the caller, the branch registers on arrival,
+with `ctx.run(locked, discard: ...)`, and that `discard` runs without the lock.
+
 ### The two barriers
 
 A successful `ctx.runAll` holds its branches at two barriers, and no branch
