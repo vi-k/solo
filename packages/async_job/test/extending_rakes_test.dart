@@ -177,6 +177,19 @@ Future<void> runQueue() async {
   print('second: ${await second.done}');
 }
 
+Future<void> runWholeEngine() async {
+  final queue = MyQueue();
+  for (final name in ['photo', 'video']) {
+    final job = MyJob<void>((ctx) async {
+      print('$name starts');
+      await ctx.abandonable(upload);
+      print('$name ends');
+    });
+    queue.add(job);
+  }
+  await Future.wait([queue.run(), queue.run()]);
+}
+
 void runDownload(String act) {
   final job = MyJob<void>(observer: printer, (ctx) async {
     ctx.onCancel(() => print('close the connection'));
@@ -1302,6 +1315,7 @@ void main() {
     final prints = [
       printed(() => first.runQueue().ignore()),
       printed(() => runQueue().ignore()),
+      printed(() => runWholeEngine().ignore()),
       printed(() => first.runDownload('cancel')),
       printed(() => first.runDownload('sign out')),
       printed(() {
@@ -1335,7 +1349,6 @@ void main() {
     '### The first attempt': 'test/support/extending_first_attempts.dart',
     '### Refusing while the job waits': 'test/extending_rakes_test.dart',
     '### One loop, and no other way to start': 'test/extending_rakes_test.dart',
-    '### The whole engine': 'test/extending_rakes_test.dart',
     "### A cancellation of the engine's own": 'test/extending_rakes_test.dart',
     '### Not waiting for the checkpoint': 'test/extending_rakes_test.dart',
   };
@@ -1350,6 +1363,36 @@ void main() {
       expect(pieces, isEmpty);
     });
   }
+
+  // The whole engine ends with `MyContext` as the page first shows it, and
+  // that is the one piece of it this file does not hold: here `MyContext`
+  // has the rule. With the job as first shown it holds all of it.
+  test(
+      'the code under "### The whole engine" is a run of lines of this file, '
+      'but for MyContext as first shown', () {
+    final missing = codeMissingFrom(
+      'doc/extending.md',
+      'test/extending_rakes_test.dart',
+      alsoIn: ['test/support/extending_stubs.dart'],
+      under: '### The whole engine',
+    );
+    const firstShown = 'final class MyContext extends JobContextBase {\n'
+        '  MyContext(super.owner);\n'
+        '}';
+    expect(missing, [firstShown]);
+    expect(
+      codeMissingFrom(
+        'doc/extending.md',
+        'test/extending_rakes_test.dart',
+        alsoIn: [
+          'test/support/extending_stubs.dart',
+          'test/support/extending_plain.dart',
+        ],
+        under: '### The whole engine',
+      ),
+      isEmpty,
+    );
+  });
 
   test('every piece of code on the page is a run of lines of these files', () {
     expect(

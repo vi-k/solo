@@ -400,6 +400,69 @@ void main() {
     });
   }
 
+  // `doc/extending.md` puts `pause` with them: its action is the wait.
+  test('pause asks check() before the wait begins', () {
+    fakeAsync((async) {
+      Object? thrown;
+      final job = CheckingJob<void>((ctx) async {
+        ctx.rules = () => throw const RuleBroken();
+        try {
+          await ctx.pause(const Duration(milliseconds: 10));
+        } on RuleBroken catch (error) {
+          thrown = error;
+        }
+      })
+        ..launch();
+      async.flushMicrotasks();
+      expect(thrown, isA<RuleBroken>(), reason: 'no time has passed');
+      expect(async.pendingTimers, isEmpty, reason: 'the wait never began');
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  // `doc/extending.md`: `join` asks `check()` again after its action, and
+  // the other three do not. A rule broken while the action runs is noticed
+  // there by `join` alone.
+  final during = <String,
+      Future<void> Function(CheckingContext ctx, void Function() breakRule)>{
+    'abandonable': (ctx, breakRule) => ctx.abandonable(() async => breakRule()),
+    'join': (ctx, breakRule) => ctx.join(() async => breakRule()),
+    'pause': (ctx, breakRule) {
+      Timer(const Duration(milliseconds: 5), breakRule);
+      return ctx.pause(const Duration(milliseconds: 10));
+    },
+    'uncancellable': (ctx, breakRule) =>
+        ctx.uncancellable(() async => breakRule()),
+  };
+  for (final MapEntry(key: name, value: call) in during.entries) {
+    final asksAfter = name == 'join';
+    test(
+        '$name ${asksAfter ? 'asks' : 'does not ask'} check() after the action',
+        () {
+      fakeAsync((async) {
+        Object? thrown;
+        late CheckingContext context;
+        final job = CheckingJob<void>((ctx) async {
+          context = ctx;
+          try {
+            await call(ctx, () => ctx.rules = () => throw const RuleBroken());
+          } on RuleBroken catch (error) {
+            thrown = error;
+          }
+        })
+          ..launch();
+        async.flushTimers();
+        if (asksAfter) {
+          expect(thrown, isA<RuleBroken>());
+        } else {
+          expect(thrown, isNull);
+          expect(context.rules, isNotNull, reason: 'nobody asked the rule');
+        }
+        expect(job.outcome, isA<Done<void>>());
+      });
+    });
+  }
+
   test('an empty runAll asks check(), as a group of children does', () {
     fakeAsync((async) {
       Object? thrown;
