@@ -735,6 +735,40 @@ void main() {
       });
     });
 
+    test('replace queues the new job before it cancels the old one', () {
+      fakeAsync((async) {
+        final camera = page.CameraController()..work('running');
+        async.flushMicrotasks();
+        final removed = camera.run<Ready, void>(key: 'k', (ctx) async {});
+        List<String>? seen;
+        removed.whenCancelled(
+          (_) => seen = [for (final job in camera.queue.jobs) '${job.key}'],
+        );
+        camera.run<Ready, void>(
+          key: 'k',
+          policy: Policy.replace,
+          (ctx) async {},
+        );
+
+        expect(
+          seen,
+          ['k'],
+          reason: 'as the page and the dartdoc say: the cancellation of the '
+              'old job already sees the new one queued',
+        );
+        expect(
+          _page(),
+          contains('| `Policy.replace` | Enqueue the new job, then remove'),
+        );
+        expect(
+          File('lib/src/policy.dart').readAsStringSync(),
+          contains('/// Append, then remove queued jobs with the same key'),
+        );
+        camera.close().ignore();
+        async.flushTimers();
+      });
+    });
+
     test('replace removes cancellable queued jobs only', () {
       fakeAsync((async) {
         final camera = page.CameraController()..work('running');

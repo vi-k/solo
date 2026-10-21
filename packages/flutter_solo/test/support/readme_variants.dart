@@ -33,8 +33,9 @@ final class Bench extends Solo<Profile> with SoloListenable {
   Job<T> go<W extends Profile, T>(
     Future<T> Function(SoloContext<Profile, W> ctx) body, {
     bool Function(W state)? keepWhile,
+    bool cancellable = true,
   }) =>
-      run<W, T>(body, keepWhile: keepWhile);
+      run<W, T>(body, keepWhile: keepWhile, cancellable: cancellable);
 
   @override
   void addListener(void Function() listener) {

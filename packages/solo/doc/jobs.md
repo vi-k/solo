@@ -154,7 +154,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 | --- | --- |
 | `Policy.sequential` | Add the new job to the queue. |
 | `Policy.droppable` | Return the existing job, queued or the running root job; discard the new one. |
-| `Policy.replace` | Remove cancellable queued jobs with that key, then enqueue the new job. |
+| `Policy.replace` | Enqueue the new job, then remove cancellable queued jobs with that key: their cancellation already sees the new one queued. |
 | `Policy.restart` | Do the same as `replace` and request cancellation of the running root job with that key. |
 
 A root job holds the queue until its body, its children, its cleanup and its

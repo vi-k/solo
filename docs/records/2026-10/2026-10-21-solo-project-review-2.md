@@ -1,7 +1,7 @@
 > **Состояние на 2026-10-21:** ревью проведено, у каждой находки стоит
-> вердикт, владелец ответил на вопросы в конце записи. Правки идут: M1, M2
-> и L2 сделаны, остальное в работе; итог каждой закрытой находки — в её
-> вердикте.
+> вердикт, владелец ответил на вопросы в конце записи. Все восемь находок
+> закрыты, итог каждой — в её вердикте. Сделанное ещё ждёт независимого
+> ревью; волна читаемости по советам ревьюеров идёт отдельно.
 > **Что это:** пятое полное ревью `solo` и `flutter_solo`, на подготовленном
 > выпуске 0.3.0, двумя ревьюерами Codex — Astra и Sol 6.1: оценка из десяти,
 > ответ на вопрос «что сделать, чтобы поставить 10», оценка читаемости каждой
@@ -219,6 +219,12 @@ REPLACE [old cancelled; queue=[new], body from listener]; new=Cancelled(replaced
 прежние», с полуфразой о том, что колбэки отмены её уже видят. Сторож на строку
 таблицы и dartdoc. Воспроизведено зондами обоих.
 
+Итог: сделано как предложено, все три места с переводами. Тест
+`replace queues the new job before it cancels the old one`
+в `jobs_rakes_test.dart`: слушатель отмены старой задачи видит в очереди новую,
+а строка таблицы `jobs.md` и dartdoc `Policy.replace` говорят тот же порядок.
+Фраза `camera.md` сторожа не получила.
+
 ### L2. Накопитель: отмена из `Solo.debug` при переносе группы оставляет таймер
 
 **Нашёл:** Sol (C2). **Где:** `packages/solo/lib/src/accumulator.dart`,
@@ -261,6 +267,11 @@ drain: late load is the original job, Done(Ada Lovelace)
 работа получает `Cancelled(closed)`, а `droppable` может вернуть ту, что уже
 стоит; ссылка из строки `reference.md`.
 
+Итог: сделано, кроме ссылки. Полуфразы в dartdoc `run` и в абзаце о `drain`
+на `cancellation.md` с переводом. Строка `close()` в `reference.md` и так ведёт
+в «Three ways to stop», где исключение теперь названо, и правки не потребовала.
+Поведение держит прежний тест в `drain_test.dart`.
+
 ### L4. Dartdoc `Solo.job`: «A rule error suppresses correction» шире правды
 
 **Нашёл:** Sol (D3). **Где:** dartdoc `Solo.job`, абзац о том, когда
@@ -279,6 +290,11 @@ outcome=Failed(Bad state: rule at checkpoint); corrected=true; state=corrected
 
 Вердикт: принято. Сузить фразу до ошибки на проверке права и назвать второй
 путь — через тело в `ifFailed`.
+
+Итог: сделано как предложено. Тест
+`a rule that throws at a checkpoint of the body fails it instead`
+в `state_rakes_test.dart` рядом с тестом проверки права: правило бросает
+на `ctx.state`, задача кончается `Failed`, и `ifFailed` исправляет состояние.
 
 ### L5. README `flutter_solo`, «The controller's life»: `close()` упрощён
 
@@ -300,6 +316,10 @@ CLOSE cancellable=false; after-call=[1]; outcome=Done(null); closed=true
 `cancellable: false`; подписки самого экрана снимает его `dispose`, ждать
 `close()` для этого не нужно.
 
+Итог: сделано как предложено, с переводом. Тесты в `readme_rakes_test.dart`:
+задача с `cancellable: false` доходит до `Done` и пишет состояние, которое
+слушатели ещё слышат; `SoloBuilder` отписывается, пока закрытие идёт.
+
 ### L6. README `flutter_solo`, «Usage»: `ProfileApi` не объявлен
 
 **Нашёл:** Astra (D3). **Где:** `packages/flutter_solo/README.md`, «Usage».
@@ -313,6 +333,11 @@ README подставляют свой `ProfileApi`, поэтому разрыв
 Вердикт: принято. Короткий абстрактный класс с двумя сигнатурами в блоке или
 фраза «`ProfileApi` — ваш сервис с `fetchName` и `saveName`» перед ним,
 со ссылкой на запускаемый пример.
+
+Итог: сделано фразой перед блоком, без ссылки на пример: README на пример
+не ссылается нигде, а `ProfileApi` примера знает один `fetchName`. Тест
+в `readme_rakes_test.dart` сверяет фразу с сигнатурами `ProfileApi` из опоры
+тестов README.
 
 ## Вопросы владельцу
 

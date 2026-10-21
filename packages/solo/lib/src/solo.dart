@@ -322,8 +322,11 @@ abstract class Solo<S extends Object> {
   /// handlers, including during cancellation, child waiting or cleanup. A
   /// parent's lost permission also suppresses its descendants' handlers. A
   /// parent without state handlers stops checking its rules when its body ends,
-  /// as usual. A rule error suppresses correction and is reported. [canStart]
-  /// is not repeated, and the job's own emit is exempt.
+  /// as usual. A rule that throws while the handlers' permission is checked
+  /// suppresses correction, and its error is reported. The same rule throwing
+  /// at `ctx.state` or `ctx.check()` surfaces in the body instead: a body that
+  /// lets it out ends `Failed`, and [ifFailed] corrects that as any failure.
+  /// [canStart] is not repeated, and the job's own emit is exempt.
   ///
   /// Handlers receive `S`, which may differ from the body's working `W`, and
   /// should only compute the next state: the value they return is their write.
@@ -663,7 +666,9 @@ abstract class Solo<S extends Object> {
   /// Every parameter but [policy] belongs to [job], which documents them
   /// all; [policy] belongs to [add]. Returns the queued job; on a closed
   /// controller it gives back one already finished with
-  /// `Cancelled(closed)` rather than throwing. It does throw what [add]
+  /// `Cancelled(closed)` rather than throwing — except that a
+  /// [Policy.droppable] call during a [SoloCloseMode.drain] gets back the
+  /// draining job that holds its key, as from [add]. It does throw what [add]
   /// throws for a job it cannot take: [ArgumentError] for a policy that
   /// needs a key without one, and another from [Policy.droppable] when one
   /// key is shared by jobs with different result types. And it throws what

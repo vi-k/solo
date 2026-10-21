@@ -46,8 +46,9 @@ enum Policy {
   /// `done` and `value`: give this policy a key of its own.
   droppable,
 
-  /// Remove queued jobs with the same key, then append. The running root
-  /// job is left alone, and so is a queued job created with
+  /// Append, then remove queued jobs with the same key: their `onFinish`
+  /// and cancellation listeners already see the new job queued. The running
+  /// root job is left alone, and so is a queued job created with
   /// `cancellable: false` — the removal is the one `SoloQueue.removeWhere`
   /// does without `force`. A removed job ends `Cancelled(replaced)`, whose
   /// reason is a `ReplacedCancelReason`.

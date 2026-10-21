@@ -637,6 +637,19 @@ final class _Eligible extends Solo<String> {
         },
       );
 
+  /// The rule and both handlers of [guarded], with a body that reads the
+  /// state once [gate] opens.
+  Job<String> readsAfter(Completer<void> gate) => run<String, String>(
+        key: 'reader',
+        keepWhile: _keep,
+        ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
+        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
+        (ctx) async {
+          await gate.future;
+          return ctx.state;
+        },
+      );
+
   Job<void> stateAsMismatch() => run<String, void>(
         key: 'stateAs',
         ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
@@ -2606,6 +2619,29 @@ void main() {
           reason: 'reported once, and the cleanup still runs',
         );
         eligible.close().ignore();
+        async.flushTimers();
+      });
+    });
+
+    test('a rule that throws at a checkpoint of the body fails it instead', () {
+      fakeAsync((async) {
+        final eligible = _Eligible();
+        final gate = Completer<void>();
+        final job = eligible.readsAfter(gate)..ignoreFailure();
+        async.flushMicrotasks();
+        eligible.ruleThrows = true;
+        gate.complete();
+        async.flushTimers();
+
+        expect('${job.outcome}', 'Failed(Bad state: rule boom)');
+        expect(
+          eligible.currentState,
+          'corrected by ifFailed',
+          reason: 'the error came out of the body, as any failure',
+        );
+        eligible
+          ..ruleThrows = false
+          ..close().ignore();
         async.flushTimers();
       });
     });

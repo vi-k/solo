@@ -82,6 +82,9 @@ second one.
 
 ## Usage
 
+`ProfileApi` stands for the app's own service: `fetchName()` returns a
+`Future<String>`, and `saveName(name)` a `Future<void>`.
+
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
@@ -484,12 +487,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 ```
 
-`close()` cancels whatever is queued or running, drops every listener and stops
-notifying for good. A running body stops at its next context call, which is
-what makes leaving the screen cheap. `close()` is safe on either side of
-`super.dispose()`. Even with `SoloListenable` a controller is not a
-`ChangeNotifier`: the method is `close()`, not `dispose()`, and it returns a
-`Future` that completes when the job has actually stopped.
+`close()` cancels whatever is queued or running. A running body stops at its
+next context call, which is what makes leaving the screen cheap; a job made
+with `cancellable: false` turns the cancellation down and runs to its end. Once
+the close is over, it drops every listener and stops notifying for good. Until
+then the listeners still hear what the closing jobs write, from `ifCancelled`
+or from the body of a job that turned the cancellation down. The screen does
+not wait for that: `SoloBuilder` lets go of the controller in its own
+`dispose`. `close()` is safe on either side of `super.dispose()`. Even with
+`SoloListenable` a controller is not a `ChangeNotifier`: the method is
+`close()`, not `dispose()`, and it returns a `Future` that completes when the
+job has actually stopped.
 
 A controller shared by several screens lives where the other objects they share
 live: a `get_it` registration, an `InheritedWidget` above those screens, a

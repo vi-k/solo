@@ -334,6 +334,20 @@ void main() {
   });
 
   group('Usage', () {
+    test('ProfileApi is the service with the two methods the page names',
+        () async {
+      final api = ProfileApi(delay: Duration.zero);
+      expect(api.fetchName, isA<Future<String> Function()>());
+      expect(api.saveName, isA<Future<void> Function(String)>());
+
+      expect(await api.fetchName(), 'Ada Lovelace');
+      await api.saveName('Grace Hopper');
+      expect(api.saved, ['Grace Hopper']);
+      _says("`ProfileApi` stands for the app's own service: `fetchName()` "
+          'returns a `Future<String>`, and `saveName(name)` a '
+          '`Future<void>`.');
+    });
+
     testWidgets('a second tap returns the first job', (tester) async {
       final api = ProfileApi();
       final controller = ProfileController(api);
@@ -1650,6 +1664,63 @@ void main() {
       _says('A running body stops at its next context call');
     });
 
+    testWidgets('a job made with cancellable: false runs to its end',
+        (tester) async {
+      final bench = Bench();
+      final heard = <String>[];
+      bench.addListener(() => heard.add(show(bench.value)));
+      final job = bench.go<Profile, void>(
+        cancellable: false,
+        (ctx) async {
+          await ctx.pause(const Duration(milliseconds: 10));
+          ctx.emit(Loaded('written while closing'));
+        },
+      );
+      await tester.pump(const Duration(milliseconds: 3));
+
+      var closed = false;
+      unawaited(bench.close().then((_) => closed = true));
+      await tester.pump();
+      expect(job.outcome, isNull);
+      expect(closed, isFalse);
+      await tester.pump(const Duration(milliseconds: 10));
+
+      expect('${job.outcome}', 'Done(null)');
+      expect(heard, ['Loaded(written while closing)']);
+      expect(closed, isTrue);
+      _says('a job made with `cancellable: false` turns the cancellation down '
+          'and runs to its end');
+      _says('from `ifCancelled` or from the body of a job that turned the '
+          'cancellation down');
+    });
+
+    testWidgets('the screen lets go of the controller without waiting',
+        (tester) async {
+      final bench = Bench();
+      await tester.pumpWidget(
+        _app(
+          SoloBuilder<Profile>(
+            solo: bench,
+            builder: (context, state, _) => Text(show(state)),
+          ),
+        ),
+      );
+      final job = bench.go<Profile, void>(
+        cancellable: false,
+        (ctx) => ctx.pause(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 3));
+      final closing = bench.close();
+      await tester.pumpWidget(const SizedBox());
+
+      expect(job.outcome, isNull, reason: 'the close is not over yet');
+      expect([bench.added, bench.removed], [1, 1]);
+      await tester.pump(const Duration(milliseconds: 10));
+      await closing;
+      _says('The screen does not wait for that: `SoloBuilder` lets go of the '
+          'controller in its own `dispose`.');
+    });
+
     testWidgets('it drops every listener and stops notifying for good',
         (tester) async {
       // What the closing itself changes is still heard: the handler of the
@@ -1662,6 +1733,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 3));
       await controller.close();
       expect(heard, ['Loading', 'Empty']);
+      _says('Until then the listeners still hear what the closing jobs write');
       await tester.pump(const Duration(milliseconds: 10));
 
       // Once it has finished, nothing is: a listener added then is not

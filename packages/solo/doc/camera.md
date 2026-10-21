@@ -374,7 +374,7 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
     );
 ```
 
-`replace` drops the queued job with the same key before it queues the new one,
+`replace` queues the new job and then drops the queued one with the same key,
 so the same three calls reach the hardware once:
 
 ```text
