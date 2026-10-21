@@ -277,6 +277,31 @@ The caller closes the rows through `opened` the way the body of a group closes
 the value of
 [a branch that refuses the group's stop](groups.md#what-a-group-hands-back).
 
+A source continued in several branches through
+[`shared()`](#a-handle-for-each-branch) hands every branch the same rows. Each
+handle is cancelled on its own, but the value is one: a branch that registers
+the closing closes the rows under the other, and the second branch to do it
+closes them twice. With branches, the rows belong to the code that waits for
+all of them:
+
+```dart
+final opened = Job<Source>(
+  (ctx) => ctx.abandonable(openRows, discard: (rows) => rows.close()),
+);
+final archived = opened.shared().then<void>(
+  (ctx, rows) => ctx.join(() => writeArchive([rows])),
+);
+final warmed = opened.shared().then<void>(
+  (ctx, rows) => ctx.join(() => cache.warm(rows)),
+);
+await [archived.done, warmed.done].wait;
+if (await opened.done case Done(:final value)) value.close();
+```
+
+A handle does not cancel `opened`, so the closing waits for `opened` itself as
+well as for the branches. If `opened` ends otherwise than `Done`, the rows are
+closed by its `discard` or were never opened.
+
 ## A continuation of a child
 
 The parent needs the rows; the report on them may finish after the parent has:

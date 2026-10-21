@@ -230,13 +230,19 @@ its own, whose reason is `HandlerCancelReason`: its body cancelled itself. The
 ### Following the cause
 
 ```dart
-CancelReason origin(Cancelled cancelled) => switch (cancelled.reason) {
-      HandlerCancelReason(:final cause?) ||
-      ParentCancelReason(:final cause?) ||
-      ChainCancelReason(:final cause) =>
-        origin(cause),
-      final reason => reason,
-    };
+CancelReason origin(Cancelled cancelled) {
+  var reason = cancelled.reason;
+  while (true) {
+    if (reason
+        case HandlerCancelReason(:final cause?) ||
+            ParentCancelReason(:final cause?) ||
+            ChainCancelReason(:final cause)) {
+      reason = cause.reason;
+    } else {
+      return reason;
+    }
+  }
+}
 
 final message = switch (await report.done) {
   Done(:final value) => 'report: $value',
@@ -266,7 +272,9 @@ The three links `origin` follows preserve the original reason and its data.
 `origin` follows them to the end: `cause` is `null` where nothing stands behind
 the reason, as for a body that threw `Cancelled('why')` itself. A child whose
 parent ran out of its deadline gets a `ParentCancelReason` too: its `origin` is
-the parent's `TimeoutCancelReason`.
+the parent's `TimeoutCancelReason`. A chain of `then` has no limit on its
+length, and its `ChainCancelReason`s nest as deep as the chain is long, so
+`origin` walks them in a loop: a long chain costs it no stack.
 
 A body that awaits `value` of a job it does not own gets no
 `HandlerCancelReason` for it. That job's cancellation goes through with its

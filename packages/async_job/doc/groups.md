@@ -64,10 +64,13 @@ final sources = await Future.wait(
 ```
 
 It changes only when the body wakes: at the first error, not after the last
-branch. Nothing asks the other branches to stop, and the core waits for its
-children anyway, so the job ends no earlier. The outcome is still decided by
-whichever trouble came first, and the source of the branch that succeeded is
-still lost.
+branch. If that error is a failure, nothing asks the other branches to stop,
+and the core waits for its children anyway, so the job ends no earlier. If it
+is the `Cancelled` a branch ended with, the body lets out a cancellation that
+is not its own, and the job cancels itself: the other branch ends `Cancelled`
+with a `ParentCancelReason`, and what it was opening goes to its `discard`. The
+outcome is still decided by whichever trouble came first, and the source of a
+branch that succeeded is still lost.
 
 ### Registered on arrival, waited for in one envelope
 
@@ -156,7 +159,7 @@ extending page.
 | Form | Waits for | Stops the others | Values of the branches that succeeded |
 | --- | --- | --- | --- |
 | `Future.wait` | every branch | no | dropped before the body sees them |
-| `Future.wait(eagerError: true)` | the first error, then the job waits anyway | no | dropped |
+| `Future.wait(eagerError: true)` | the first error, then the job waits anyway | only when the first error is a branch's `Cancelled`: the job cancels itself, with `ParentCancelReason` | dropped |
 | `[...].wait` | every branch | no | in `ParallelWaitError.values` |
 | `ctx.runAll` | on success, the cleanup of every branch, except one a branch registers after running it; on failure, every branch to its end | yes, with `SiblingCancelReason` | returned in order when every branch succeeds |
 

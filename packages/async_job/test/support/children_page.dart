@@ -355,6 +355,22 @@ Job<String> loadedAwaitingParsed() {
   return (opened, archived);
 }
 
+/// Chains: two branches of one source share what it hands out, and the
+/// code that waits for both closes it.
+Future<void> archiveAndWarm(Cache cache) async {
+  final opened = Job<Source>(
+    (ctx) => ctx.abandonable(openRows, discard: (rows) => rows.close()),
+  );
+  final archived = opened.shared().then<void>(
+        (ctx, rows) => ctx.join(() => writeArchive([rows])),
+      );
+  final warmed = opened.shared().then<void>(
+        (ctx, rows) => ctx.join(() => cache.warm(rows)),
+      );
+  await [archived.done, warmed.done].wait;
+  if (await opened.done case Done(:final value)) value.close();
+}
+
 /// The first attempt of the chain, as the page shows it. It does not
 /// compile, so it stands here as text, and the test hands it to the
 /// analyzer.

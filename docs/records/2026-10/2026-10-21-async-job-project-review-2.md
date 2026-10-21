@@ -1,6 +1,6 @@
-> **Состояние на 2026-10-21:** ревью проведено, у каждой находки стоит
-> вердикт. Правок по нему ещё нет: что чинить, решает владелец, вопросы —
-> в конце записи.
+> **Состояние на 2026-10-21:** ревью проведено, владелец ответил на вопросы
+> в конце записи, все восемь находок закрыты; итог каждой — в её вердикте.
+> Сделанное ещё ждёт независимого ревью.
 > **Что это:** пятое полное ревью `async_job`, на подготовленном выпуске 0.3.0,
 > двумя ревьюерами Codex — Astra и Sol 6.1: оценка из десяти, ответ на вопрос
 > «что сделать, чтобы поставить 10», оценка читаемости каждой страницы. После
@@ -173,6 +173,15 @@ shared resource close calls: 2
 веток — не продолжение-ветка. Строка в dartdoc `shared`, ссылка на неё из «What
 the source hands out». Сторож — тест страницы на две ветки.
 
+Итог: сделано, с одним отступлением: ссылка из «What the source hands out»
+ведёт не в dartdoc, а в раздел «A handle for each branch» той же страницы,
+и под абзацем стоит код с двумя ветками и закрытием после обеих — читателю
+нужно было и правило, и как по нему писать. В dartdoc `shared` — та же граница:
+отмена у ручек своя, значение общее. Тесты
+`two branches of shared() that each close the rows close them twice`
+и `the code that waits for both branches closes the rows once`
+в `chains_rakes_test.dart`; код страницы лежит в `children_page.dart`.
+
 ### M3. `outcomes.md`: рекурсивный `origin` переполняет стек на длинной цепочке
 
 **Нашёл:** Sol (D2). **Где:** `packages/async_job/doc/outcomes.md`, «Following
@@ -193,6 +202,11 @@ origin of source: StackOverflowError
 Вердикт: принято, документом, тяжесть Low: цепочка в 20 000 звеньев —
 не обычный код, но рецепт не должен падать там, где ядро не падает. `origin` —
 циклом с теми же тремя переходами; тест рецепта на длинной цепочке.
+
+Итог: сделано как предложено, и под таблицей причин добавлена фраза о том, что
+цепочка `then` не ограничена и `origin` идёт по ней циклом. Тест
+`origin follows a chain of then of any length` в `outcomes_rakes_test.dart`
+на 20 000 звеньях краснел на рекурсивном `origin` со `Stack Overflow`.
 
 ## Low
 
@@ -215,6 +229,13 @@ eager=true parent=Cancelled(handler: Job(): Cancelled(manual)) sibling=Cancelled
 случай `Cancelled`; тест страницы на него. Это следствие решения 7, а не спор
 с ним.
 
+Итог: сделано как предложено. Абзац делит первую ошибку на провал и `Cancelled`
+ветки; во втором случае задача отменяет себя, другая ветка кончается
+`Cancelled` с `ParentCancelReason`, а её открытое уходит в `discard`. Строка
+таблицы говорит то же в столбце «Stops the others». Тест `eagerError: a branch
+that ends Cancelled first cancels the job and the other branch`
+в `groups_rakes_test.dart`.
+
 ### L2. `observing.md`: «The hooks do nothing by default»
 
 **Нашёл:** Astra (D2). **Где:** `packages/async_job/doc/observing.md`,
@@ -231,6 +252,9 @@ default onUnanswered forwarded: Bad state: failure
 
 Вердикт: принято. Фраза — о четырёх хуках `JobObserver`, и рядом умолчание
 `onUnanswered`.
+
+Итог: сделано как предложено: «The four hooks of `JobObserver` do nothing by
+default», и следом — что `onUnanswered` по умолчанию отдаёт провал зоне.
 
 ### L3. `extending.md`: завершённая `MyJob` держит очередь
 
@@ -250,6 +274,13 @@ without finished handle queue and pending payload were collected
 `_queue` снимается при конце задачи; проверка достижимости в тесте рецепта.
 Ядра не касается.
 
+Итог: сделано: `finished()` рецепта снимает `_queue` вместе с телом, и страница
+показывает это в «Refusing while the job waits» с причиной. Сверх предложенного
+`add` не даёт очередь задаче, которая к добавлению уже кончилась: иначе задача,
+отменённая до добавления, держала бы очередь так же. Тест
+`a finished job lets go of the queue it ran in` в `extending_rakes_test.dart`
+краснеет на старом рецепте.
+
 ### L4. `extending.md`: одна задача в двух очередях
 
 **Нашёл:** Sol (D3). **Где:** `packages/async_job/doc/extending.md`, «One loop,
@@ -267,6 +298,11 @@ following queued job finished: false
 
 Вердикт: принято. `add` отказывает задаче, у которой уже есть очередь,
 до изменения полей; тест рецепта.
+
+Итог: сделано как предложено; отказ ловит и ту же очередь, добавляющую задачу
+дважды. Абзац «One loop, and no other way to start» объясняет первую строку
+`add`. Тест `a job in a queue is refused by another, and by its own`
+в `extending_rakes_test.dart` краснеет на старом рецепте.
 
 ### L5. Совет с `Expando` не знает ошибок строкой и числом
 
@@ -287,6 +323,12 @@ Expando observer errors: [Invalid argument (object): Cannot be a string, number,
 Вердикт: принято, довод новый. Решение 18 не меняется; к совету — что `Expando`
 берёт не всякую ошибку, и что делать с остальными. Пункт 18 `docs/settled.md`
 дополнить той же оговоркой.
+
+Итог: сделано: на `errors.md` и в dartdoc `onError` — что `Expando` не берёт
+строку, число, логическое значение и запись, и что такую ошибку наблюдатель
+считает при каждом вызове: своей идентичности, по которой отличить два вызова,
+у неё нет. Пункт 18 `docs/settled.md` дополнен. Теста нет: оговорка — о самом
+`Expando`, а не о ядре.
 
 ## Вопросы владельцу
 

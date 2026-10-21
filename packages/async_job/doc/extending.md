@@ -225,11 +225,28 @@ runs, and a cancellation it lets through takes it out of the queue:
   }
 ```
 
-The queue tells each job whose it is:
+The queue tells each job whose it is, unless the job is over by then:
 
 ```dart
-  void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
+  void add(MyJob<Object?> job) {
+    if (job._queue != null) throw StateError('$job is in a queue already');
+    _waiting.add(job);
+    if (!job.isFinished) job._queue = this;
+  }
 ```
+
+The job lets go of the queue once it is over, together with its body:
+
+```dart
+  @override
+  void finished() {
+    _body = null;
+    _queue = null;
+  }
+```
+
+A job is held to read its outcome long after it ran, and the queue holds every
+job still waiting in it, with everything their bodies captured.
 
 Only a job that waits in the queue refuses. Who answers a cancellation of a
 `cancellable: false` job depends on where the job is:
@@ -303,7 +320,9 @@ job that waits in its queue refuses:
 The `StateError` comes out of that `ctx.run`, and the job keeps its turn.
 Started by a parent, it would be started again by the queue, and the error of
 that second start would end the loop and leave the jobs behind it waiting for
-good.
+good. A second queue would start it again the same way, and so would its own
+queue holding it twice: the first line of `add` refuses a job that is in a
+queue already.
 
 ### The whole engine
 
@@ -332,7 +351,10 @@ final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
   Future<T> execute(covariant MyContext ctx) => _body!(ctx);
 
   @override
-  void finished() => _body = null;
+  void finished() {
+    _body = null;
+    _queue = null;
+  }
 
   // `start` and `untilFinished` are protected: the rest of the engine calls
   // them through these wrappers, private to its library. The queue starts
@@ -362,7 +384,11 @@ final class MyQueue {
   final _waiting = <MyJob<Object?>>[];
   Future<void>? _running;
 
-  void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
+  void add(MyJob<Object?> job) {
+    if (job._queue != null) throw StateError('$job is in a queue already');
+    _waiting.add(job);
+    if (!job.isFinished) job._queue = this;
+  }
 
   // One loop at a time: a second call gets the future of the loop that
   // runs. Started in a microtask, the loop clears `_running` after it is

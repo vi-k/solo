@@ -224,7 +224,9 @@ What the table does not show:
   `identical`, and an `Expando` remembers the errors it has heard without
   keeping them alive. An error thrown as a constant, such as
   `throw const SignedOut()`, is the same object at every throw, and two such
-  failures count as one.
+  failures count as one. An `Expando` takes no string, number, boolean or
+  record and throws when given one: such a value has no identity of its own to
+  tell two calls apart, and the observer counts it at every call.
 
 ### The debug channel
 

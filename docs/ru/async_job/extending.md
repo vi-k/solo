@@ -231,11 +231,30 @@ second: Cancelled(manual)
   }
 ```
 
-Очередь сообщает каждой задаче, чья она:
+Очередь сообщает каждой задаче, чья она, если задача к этому времени ещё
+не кончилась:
 
 ```dart
-  void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
+  void add(MyJob<Object?> job) {
+    if (job._queue != null) throw StateError('$job is in a queue already');
+    _waiting.add(job);
+    if (!job.isFinished) job._queue = this;
+  }
 ```
+
+Кончившись, задача отпускает очередь вместе со своим телом:
+
+```dart
+  @override
+  void finished() {
+    _body = null;
+    _queue = null;
+  }
+```
+
+Задачу держат, чтобы прочесть исход, ещё долго после того, как она отработала,
+а очередь держит каждую задачу, которая в ней ещё ждёт, со всем, что захватили
+их тела.
 
 Отмену отклоняет только задача, которая ждёт в очереди. Кто отвечает на отмену
 задачи с `cancellable: false`, зависит от того, где она:
@@ -310,6 +329,9 @@ future каждому следующему вызову.
 `StateError` выходит из этого `ctx.run`, а задача сохраняет своё место
 в очереди. Запущенную родителем, её запустила бы ещё раз и очередь, и ошибка
 этого второго старта кончила бы цикл и оставила задачи за ней ждать навсегда.
+Так же запустила бы её ещё раз вторая очередь, и так же — её собственная
+очередь, если держит её дважды: первая строка `add` отказывает задаче, которая
+уже стоит в очереди.
 
 ### Движок целиком
 
@@ -338,7 +360,10 @@ final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
   Future<T> execute(covariant MyContext ctx) => _body!(ctx);
 
   @override
-  void finished() => _body = null;
+  void finished() {
+    _body = null;
+    _queue = null;
+  }
 
   // `start` и `untilFinished` защищены: остальной движок вызывает их
   // через эти обёртки, приватные для его библиотеки. Очередь запускает
@@ -368,7 +393,11 @@ final class MyQueue {
   final _waiting = <MyJob<Object?>>[];
   Future<void>? _running;
 
-  void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
+  void add(MyJob<Object?> job) {
+    if (job._queue != null) throw StateError('$job is in a queue already');
+    _waiting.add(job);
+    if (!job.isFinished) job._queue = this;
+  }
 
   // Один цикл за раз: второй вызов получает future цикла, который идёт.
   // Запущенный в микротаске, цикл обнуляет `_running` после того, как её

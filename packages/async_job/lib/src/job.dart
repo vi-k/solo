@@ -403,7 +403,9 @@ abstract interface class Job<T> {
   /// reach it: one branch of a job continued in several.
   ///
   /// A job is continued once: by one [then], or by handles of this. Each call
-  /// makes a new handle, independent of the others. A call on a job that
+  /// makes a new handle, cancelled independently of the others; the value
+  /// is the same for all of them, so a resource it holds is closed by code
+  /// that waits for every branch, not by each branch. A call on a job that
   /// [then] has continued throws a [StateError] before anything is made, and
   /// so does [then] on a job that has a handle.
   ///

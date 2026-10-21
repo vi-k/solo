@@ -296,6 +296,50 @@ void main() {
       });
     });
 
+    test('two branches of shared() that each close the rows close them twice',
+        () {
+      fakeAsync((async) {
+        stubs.stage = stubs.Stage();
+        final opened = Job<stubs.Source>(
+          (ctx) => ctx.abandonable(
+            stubs.openRows,
+            discard: (rows) => rows.close(),
+          ),
+        );
+        final received = <stubs.Source>[];
+        for (var branch = 0; branch < 2; branch++) {
+          opened.shared().then<void>((ctx, rows) {
+            received.add(rows);
+            ctx.onDispose(rows.close);
+          });
+        }
+
+        async.flushTimers();
+
+        expect(identical(received.first, received.last), isTrue);
+        expect(stubs.stage.trace, ['rows closed', 'rows closed']);
+      });
+    });
+
+    test('the code that waits for both branches closes the rows once', () {
+      fakeAsync((async) {
+        stubs.stage = stubs.Stage();
+        var finished = false;
+        unawaited(
+          page.archiveAndWarm(stubs.Cache()).then((_) => finished = true),
+        );
+
+        async.flushTimers();
+
+        expect(finished, isTrue);
+        expect(
+          stubs.stage.trace,
+          unorderedEquals(['archive of 1', 'cache warmed', 'rows closed']),
+        );
+        expect(stubs.stage.trace.last, 'rows closed');
+      });
+    });
+
     test(
         'cancelled while it waited, the continuation never runs, and the '
         'discard of the source closes what arrives', () {

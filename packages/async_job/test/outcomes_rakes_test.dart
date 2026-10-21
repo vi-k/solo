@@ -511,6 +511,24 @@ void main() {
       });
     });
 
+    test('origin follows a chain of then of any length', () {
+      fakeAsync((async) {
+        final source = Job<int>(
+          (ctx) => ctx.abandonable(() => Completer<int>().future),
+        );
+        var tail = source;
+        for (var link = 0; link < 20000; link++) {
+          tail = tail.then<int>((ctx, value) => value);
+        }
+        async.flushMicrotasks();
+        final reason = page.RequestCancelReason('offline', StackTrace.current);
+        tail.cancel(reason: reason).ignore();
+        async.flushMicrotasks();
+
+        expect(page.origin(source.outcome! as Cancelled), same(reason));
+      });
+    });
+
     test('origin stops where a body threw Cancelled itself', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) async => throw const Cancelled('why'))

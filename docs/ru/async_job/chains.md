@@ -280,6 +280,30 @@ final archived = opened.then<void>((ctx, rows) async {
 значение
 [ветки, отвергающей остановку группы](groups.md#что-группа-отдаёт-обратно).
 
+Источник, продолженный через [`shared()`](#ручка-на-каждую-ветку) в несколько
+веток, отдаёт каждой ветке одни и те же строки. Каждую ручку отменяют отдельно,
+но значение у них одно: ветка, которая регистрирует закрытие, закрывает строки
+из-под другой, а вторая такая ветка закрывает их второй раз. Когда веток
+несколько, строки принадлежат коду, который ждёт их все:
+
+```dart
+final opened = Job<Source>(
+  (ctx) => ctx.abandonable(openRows, discard: (rows) => rows.close()),
+);
+final archived = opened.shared().then<void>(
+  (ctx, rows) => ctx.join(() => writeArchive([rows])),
+);
+final warmed = opened.shared().then<void>(
+  (ctx, rows) => ctx.join(() => cache.warm(rows)),
+);
+await [archived.done, warmed.done].wait;
+if (await opened.done case Done(:final value)) value.close();
+```
+
+Ручка не отменяет `opened`, поэтому закрытие ждёт саму `opened` так же, как
+ветки. Если `opened` кончилась не `Done`, строки закрыл её `discard` или они
+так и не открылись.
+
 ## Продолжение ребёнка
 
 Родителю нужны строки, а доклад о них может кончиться позже родителя:

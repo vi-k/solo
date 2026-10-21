@@ -44,7 +44,10 @@ final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
   Future<T> execute(covariant MyContext ctx) => _body!(ctx);
 
   @override
-  void finished() => _body = null;
+  void finished() {
+    _body = null;
+    _queue = null;
+  }
 
   // `start` and `untilFinished` are protected: the rest of the engine calls
   // them through these wrappers, private to its library. The queue starts
@@ -96,6 +99,19 @@ enum _Copy { firstShown, firstQueue, withQueue }
   }
 }
 
+/// A job that ran in a queue, and a payload held by a job added to that
+/// queue after it, which nobody runs. A frame of its own, as for
+/// [_capturing]. The payload, weakly.
+(MyJob<void>, Future<void>, WeakReference<Object>) _ranThenQueued() {
+  final payload = List<int>.filled(1024, 7);
+  final ran = MyJob<void>((ctx) async {});
+  final queue = MyQueue()..add(ran);
+  final over = queue.run().then((_) {
+    queue.add(MyJob<int>((ctx) async => payload.length));
+  });
+  return (ran, over, WeakReference(payload));
+}
+
 final class MyContext extends JobContextBase {
   MyContext(super.owner);
 
@@ -118,7 +134,11 @@ final class MyQueue {
   final _waiting = <MyJob<Object?>>[];
   Future<void>? _running;
 
-  void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
+  void add(MyJob<Object?> job) {
+    if (job._queue != null) throw StateError('$job is in a queue already');
+    _waiting.add(job);
+    if (!job.isFinished) job._queue = this;
+  }
 
   // One loop at a time: a second call gets the future of the loop that
   // runs. Started in a microtask, the loop clears `_running` after it is
@@ -626,6 +646,27 @@ void main() {
   });
 
   group('A queue of your own', () {
+    test('a finished job lets go of the queue it ran in', () async {
+      final (job, over, payload) = _ranThenQueued();
+      await over;
+      expect(
+        await collected(payload),
+        isTrue,
+        reason: 'held for its outcome, the job would hold the queue and the '
+            'job left waiting in it',
+      );
+      expect(job.outcome, isA<Done<void>>());
+    });
+
+    test('a job in a queue is refused by another, and by its own', () async {
+      final job = MyJob<void>((ctx) async {});
+      final queue = MyQueue()..add(job);
+      expect(() => MyQueue().add(job), throwsStateError);
+      expect(() => queue.add(job), throwsStateError);
+      await queue.run();
+      expect(job.outcome, isA<Done<void>>());
+    });
+
     test('the first attempt cancels a waiting job that may not be cancelled',
         () {
       expect(printed(() => first.runQueue().ignore()), [

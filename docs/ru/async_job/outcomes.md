@@ -230,13 +230,19 @@ cancelled: handler
 ### По цепочке `cause`
 
 ```dart
-CancelReason origin(Cancelled cancelled) => switch (cancelled.reason) {
-      HandlerCancelReason(:final cause?) ||
-      ParentCancelReason(:final cause?) ||
-      ChainCancelReason(:final cause) =>
-        origin(cause),
-      final reason => reason,
-    };
+CancelReason origin(Cancelled cancelled) {
+  var reason = cancelled.reason;
+  while (true) {
+    if (reason
+        case HandlerCancelReason(:final cause?) ||
+            ParentCancelReason(:final cause?) ||
+            ChainCancelReason(:final cause)) {
+      reason = cause.reason;
+    } else {
+      return reason;
+    }
+  }
+}
 
 final message = switch (await report.done) {
   Done(:final value) => 'report: $value',
@@ -266,7 +272,9 @@ request failed: Bad state: token expired
 `origin` проходит по ним до конца: `cause` равен `null` там, где за причиной
 ничего нет, как у тела, которое само бросило `Cancelled('why')`. Дочерняя
 задача, у родителя которой вышел срок, тоже получает `ParentCancelReason`: её
-`origin` даёт `TimeoutCancelReason` родителя.
+`origin` даёт `TimeoutCancelReason` родителя. Длина цепочки `then` ничем
+не ограничена, и её `ChainCancelReason` вложены друг в друга на всю её длину,
+поэтому `origin` проходит по ним циклом: длинная цепочка не стоит ему стека.
 
 Тело, которое ждёт `value` чужой задачи, `HandlerCancelReason` для неё
 не получает. Отмена чужой задачи проходит с причиной как есть, и исход читается

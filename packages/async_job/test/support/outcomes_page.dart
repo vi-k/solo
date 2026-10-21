@@ -62,13 +62,19 @@ Future<void> refresh(Job<Data> fetch) async {
   }
 }
 
-CancelReason origin(Cancelled cancelled) => switch (cancelled.reason) {
-      HandlerCancelReason(:final cause?) ||
-      ParentCancelReason(:final cause?) ||
-      ChainCancelReason(:final cause) =>
-        origin(cause),
-      final reason => reason,
-    };
+CancelReason origin(Cancelled cancelled) {
+  var reason = cancelled.reason;
+  while (true) {
+    if (reason
+        case HandlerCancelReason(:final cause?) ||
+            ParentCancelReason(:final cause?) ||
+            ChainCancelReason(:final cause)) {
+      reason = cause.reason;
+    } else {
+      return reason;
+    }
+  }
+}
 
 /// Following the cause: what the code that started `report` prints.
 Future<void> tellTheRequest(Job<Report> report) async {

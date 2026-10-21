@@ -566,6 +566,51 @@ void main() {
       });
     });
 
+    test(
+        'eagerError: a branch that ends Cancelled first cancels the job '
+        'and the other branch', () {
+      fakeAsync((async) {
+        stubs.stage
+          ..rowsTake = 20
+          ..rowsError = stubs.selfCancel()
+          ..imagesTake = 80;
+        late final ChildJob<stubs.Source> images;
+        final parent = Job<void>((ctx) async {
+          final rows = Job.deferred<stubs.Source>(
+            (ctx) => ctx.abandonable(
+              stubs.openRows,
+              discard: (source) => source.close(),
+            ),
+          );
+          images = Job.deferred<stubs.Source>(
+            (ctx) => ctx.abandonable(
+              stubs.openImages,
+              discard: (source) => source.close(),
+            ),
+          );
+          final sources = await Future.wait(
+            [ctx.run(rows), ctx.run(images)],
+            eagerError: true,
+          );
+          await ctx.join(() => stubs.writeArchive(sources));
+        });
+
+        async.elapse(const Duration(milliseconds: 40));
+
+        expect(
+          (parent.outcome! as Cancelled).reason,
+          isA<HandlerCancelReason>(),
+        );
+        expect(
+          (images.outcome! as Cancelled).reason,
+          isA<ParentCancelReason>(),
+          reason: 'the job ended before images opened',
+        );
+        async.flushTimers();
+        expect(trace(), ['images closed']);
+      });
+    });
+
     test('.wait: every source is closed once when the export succeeds', () {
       fakeAsync((async) {
         final parent = page.exportWithWait();

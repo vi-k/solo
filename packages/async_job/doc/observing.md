@@ -49,10 +49,11 @@ The hooks of an observer, and when the job calls them:
 | `onLog` | the body calls `ctx.log(message)` |
 | `onUnanswered` | of an observer that mixes in `JobAnswerer`: a failure no outcome carries, after `onError`, and a `Failed` nobody observes, a microtask after the job ends; see [Answering for errors](errors.md#answering-for-errors) |
 
-The hooks do nothing by default, so an observer overrides only the hooks it
-needs. A class that already extends another class mixes the observer in with
-`with JobObserver`, or `with JobObserver, JobAnswerer`, and overrides the hooks
-the same way.
+The four hooks of `JobObserver` do nothing by default, so an observer overrides
+only the hooks it needs. `onUnanswered` is the exception: by default it hands
+the failure to the zone, as if no `JobAnswerer` were there. A class that
+already extends another class mixes the observer in with `with JobObserver`, or
+`with JobObserver, JobAnswerer`, and overrides the hooks the same way.
 
 Whoever runs the job passes the observer when creating it. The children the job
 runs inherit it unless they have their own. A continuation made with `then`

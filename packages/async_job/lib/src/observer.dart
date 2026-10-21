@@ -109,7 +109,10 @@ abstract mixin class JobObserver {
   /// counts failures tells the second call from a new error by [identical],
   /// and an [Expando] remembers the errors it has heard without keeping them
   /// alive. An error thrown as a constant is the same object at every throw,
-  /// and two such failures count as one.
+  /// and two such failures count as one. An [Expando] takes no string,
+  /// number, boolean or record and throws when given one: such a value has
+  /// no identity of its own to tell two calls apart, and the observer counts
+  /// it at every call.
   ///
   /// The errors with no outcome go on to [JobAnswerer.onUnanswered] of an
   /// observer that answers, and so do three failures of the body: that of a
