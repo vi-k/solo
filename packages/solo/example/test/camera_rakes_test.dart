@@ -1364,8 +1364,8 @@ void main() {
       final answer = _part(_zoom, '### Policy.replace');
       _says(
         answer,
-        '`replace` drops the queued job with the same key before it queues '
-        'the new one, so the same three calls reach the hardware once:',
+        '`replace` queues the new job and then drops the queued one with the '
+        'same key, so the same three calls reach the hardware once:',
       );
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
