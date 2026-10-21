@@ -125,6 +125,10 @@ final class _SoloContext<S extends Object, W extends S, R>
         description: rejection,
         stackTrace: StackTrace.current,
       );
+      // The rules give the job up, so its handlers may not correct a state
+      // the rules turned down. The reason cannot say it: anyone may build a
+      // `RulesCancelReason` and pass it to `cancel`.
+      _job._stateCorrectionRevoked = true;
       cancelOwnJob(cancelled);
       throw pendingCancel ?? cancelled;
     }
@@ -150,6 +154,7 @@ final class _SoloContext<S extends Object, W extends S, R>
         description: 'is not $T',
         stackTrace: StackTrace.current,
       );
+      _job._stateCorrectionRevoked = true;
       cancelOwnJob(cancelled);
       throw pendingCancel ?? cancelled;
     }

@@ -6,9 +6,9 @@ enum AccumulationPolicy {
   /// intervening jobs as boundaries.
   adjacent,
 
-  /// Replaces the last matching group's job at the queue's tail, keeping its
-  /// handle. Nothing is cancelled, so `cancellable: false` has nothing to
-  /// refuse.
+  /// Joins the last matching group, as [join] does, and moves that group's
+  /// job to the queue's tail, keeping its handle. Nothing is cancelled, so
+  /// `cancellable: false` has nothing to refuse.
   replace,
 
   /// Joins the last matching group at its existing position in the queue.
@@ -28,7 +28,9 @@ abstract interface class SoloAccumulator<E, T> {
   /// policy: replacement moves that group's job to the tail and gives back
   /// the same job. After controller closure, returns a new
   /// `Cancelled(closed)` job without retaining the event or calling the
-  /// merge function.
+  /// merge function. That holds during a [SoloCloseMode.drain] as well, even
+  /// for a group still waiting to run: unlike a [Policy.droppable] call,
+  /// which gets back the draining job that holds its key.
   ///
   /// The caller of every event may hold the same job, so each one continues
   /// it through its own handle of `shared()`: a plain `then` on the job

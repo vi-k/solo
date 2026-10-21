@@ -95,9 +95,10 @@ final class ProfileController extends Solo<ProfileState> {
 
 `run<ProfileState, String>` creates and queues a job. `ProfileState` is the
 job's working type `W`: the states its body works with, which may be narrower
-than the controller's state type `S`. `String` is the job's result type. The
-body receives a context, `ctx`, which provides state updates and
-cancellation-aware waiting:
+than the controller's state type `S`. `String` is the job's result type. Both
+can be left to inference: `W` is then the whole of `S`, and the result type is
+what the body returns. The body receives a context, `ctx`, which provides state
+updates and cancellation-aware waiting:
 
 - `ctx.emit` updates the controller's state.
 - `ctx.abandonable` waits for the API response, or throws `Cancelled` if the
@@ -115,15 +116,6 @@ cancellation. Without a handler, the state stays where the body left it: an
 error or a cancellation here would leave `Loading`. A handler that hands back
 the state it was given, the same object, publishes nothing. The job's outcome
 stays `Failed` or `Cancelled` even when a handler updates the state.
-
-A `Failed` that nobody observes goes on to the zone the job was created in,
-even when `ifFailed` has published a state, unless `Solo.unansweredHandler`
-answers for it: a plain Dart program ends there, and a Flutter app hands it to
-its error handlers. Reading the job's `done` or `value` observes the outcome; a
-caller that needs no result says so with `ignoreFailure()`, as in
-`profile.load().ignoreFailure()`. See
-[Handled and unhandled failures](doc/errors.md#handled-and-unhandled-failures)
-on the errors page.
 
 `Policy.droppable` and `key: 'load'` make repeated calls share the queued or
 running load. A second call returns the existing job. Once that job finishes,
@@ -155,6 +147,14 @@ Future<void> main() async {
 synchronously too, inside the change itself. `job.value` returns the loaded
 name, or throws the job's error or `Cancelled`. The `finally` block removes the
 listener and closes the controller even if loading fails.
+
+A `Failed` that nobody observes goes on to the zone the job was created in,
+even when `ifFailed` has published a state, unless `Solo.unansweredHandler`
+answers for it. Reading the job's `done` or `value` observes the outcome; a
+caller that needs no result says so with `ignoreFailure()`, as in
+`profile.load().ignoreFailure()`. See
+[Handled and unhandled failures](doc/errors.md#handled-and-unhandled-failures)
+on the errors page.
 
 For a broadcast `stream` as well, delivered on the next microtask, mix in
 `SoloStream`:

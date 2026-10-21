@@ -654,6 +654,9 @@ abstract class Solo<S extends Object> {
           current != null &&
           current.key == impl.key) {
         unawaited(current.cancel(reason: const ReplacedCancelReason()));
+        // The line above it says the new job waits for the running one,
+        // and from it alone a refused restart reads as `sequential`.
+        _debug(() => 'restart: ${current._restartAnswer}');
       }
     }
     _schedulePump();

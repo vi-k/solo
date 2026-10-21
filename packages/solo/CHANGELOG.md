@@ -24,13 +24,13 @@ below.
 
 - **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
   error nobody else has: one no outcome carries, and a `Failed` nobody
-  observes.** Setting `Solo.observer`, or overriding `onError` without calling
-  `super`, no longer keeps such an error out of the zone: set
+  observes.** To keep such an error out of the zone, set
   `Solo.unansweredHandler`, a `SoloUnansweredHandler`, or override
-  `onUnanswered`. A `Failed` nobody observes reaches the zone as it did in
-  `0.2.0` only while neither is there: with a handler set, or `onUnanswered`
-  overridden, it goes there, a microtask after the job ends, and not to the
-  zone. So does the failure of a `canStart` that threw. See
+  `onUnanswered`: setting `Solo.observer`, or overriding `onError` without
+  calling `super`, no longer does it. A `Failed` nobody observes goes to the
+  handler or to the overridden `onUnanswered`, a microtask after the job ends,
+  and reaches the zone, as in `0.2.0`, only when neither is set. So does the
+  failure of a `canStart` that threw. See
   [Answering for an error](doc/errors.md#answering-for-an-error).
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
 - **`JobBase.debug` is `Job.debug`** in `async_job`, which no longer exports

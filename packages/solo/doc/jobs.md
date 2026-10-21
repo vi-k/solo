@@ -83,7 +83,8 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
 The code of this section and of the ones below belongs to one controller of a
 camera, a `Solo<CameraState>`. The two type arguments of `job` and `run` are
 the working type — the states the body works in, here `Ready`, one of the
-states of the camera — and the type of the result.
+states of the camera — and the type of the result. Left out, the working type
+is the whole of `S`, and the result type is what the body returns.
 [State and rules](state.md#state-and-rules) on the state page is about the
 first.
 

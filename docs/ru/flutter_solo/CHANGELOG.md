@@ -58,7 +58,8 @@
   [«Как пользоваться»](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md#как-пользоваться).
 - `SoloSelection<S, T>`: проекция, то есть `ValueListenable` одного значения,
   выбранного из другого, который уведомляет, только когда это значение
-  меняется. См.
+  меняется. Для контроллера, который не реализует `ValueListenable`, её создаёт
+  `SoloSelection.from`. См.
   [«Выбор одного значения»](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md#выбор-одного-значения).
 - `SoloSelector`, виджет, который выбирает за вас: контроллер, `selector`
   и `builder`.

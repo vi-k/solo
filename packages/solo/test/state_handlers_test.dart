@@ -264,6 +264,76 @@ void main() {
     });
   });
 
+  test('a manual cancellation with the reason of the rules keeps correction',
+      () {
+    _run((solo, clock) {
+      final job = solo.run<String, void>(
+        ifCancelled: (_, __) => 'cancelled',
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
+      );
+      clock.flushMicrotasks();
+      job.cancel(reason: const RulesCancelReason());
+      clock.flushMicrotasks();
+      expect(solo.currentState, 'cancelled');
+    });
+  });
+
+  test('rules turning a checkpoint down suppress correction', () {
+    _run((solo, clock) {
+      var allowed = true;
+      final gate = Completer<void>();
+      final job = solo.run<String, void>(
+        keepWhile: (_) => allowed,
+        ifCancelled: (_, __) => 'corrected',
+        (ctx) async {
+          await gate.future;
+          ctx.state;
+        },
+      );
+      clock.flushMicrotasks();
+      allowed = false;
+      gate.complete();
+      clock.flushMicrotasks();
+      expect(
+        job.outcome,
+        isA<Cancelled>().having(
+          (cancelled) => cancelled.reason,
+          'reason',
+          isA<RulesCancelReason>(),
+        ),
+      );
+      expect(solo.currentState, 'initial');
+    });
+  });
+
+  test('a stateAs that does not match suppresses correction', () {
+    fakeAsync((clock) {
+      final solo = _Controller<Object>('initial');
+      final gate = Completer<void>();
+      final job = solo.run<Object, void>(
+        ifCancelled: (_, __) => 'corrected',
+        (ctx) async {
+          await gate.future;
+          ctx.stateAs<int>();
+        },
+      );
+      clock.flushMicrotasks();
+      gate.complete();
+      clock.flushMicrotasks();
+      expect(
+        job.outcome,
+        isA<Cancelled>().having(
+          (cancelled) => cancelled.reason,
+          'reason',
+          isA<RulesCancelReason>(),
+        ),
+      );
+      expect(solo.currentState, 'initial');
+      solo.close();
+      clock.flushMicrotasks();
+    });
+  });
+
   test('a forbidden external type suppresses correction', () {
     fakeAsync((clock) {
       final solo = _Controller<Object>('initial');

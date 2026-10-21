@@ -107,9 +107,6 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
-    if (cancelled.reason is RulesCancelReason) {
-      _stateCorrectionRevoked = true;
-    }
     final queued = _solo._queue._jobs.contains(this);
     // A job the pump holds between the queue and the start is queued work
     // too: it has not run a line, and a `cancellable: false` one turns
@@ -315,6 +312,17 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   void _cancelWith(Cancelled cancelled, {bool rejectable = true}) =>
       cancelWith(cancelled, rejectable: rejectable);
+
+  /// What the cancellation of a [Policy.restart] came to, read right after
+  /// it was asked, for the line of [Solo.debug].
+  String get _restartAnswer {
+    if (isCancelled) return 'cancel $this';
+    if (heldCancel != null) {
+      return '$this holds the cancellation back until its uncancellable '
+          'section closes';
+    }
+    return '$this turns the cancellation down: it is not cancellable';
+  }
 
   JobStatus get _jobStatus => status;
 

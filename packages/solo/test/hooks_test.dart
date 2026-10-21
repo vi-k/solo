@@ -682,6 +682,45 @@ void main() {
     );
   });
 
+  test('Solo.debug says what the cancellation of a restart came to', () {
+    List<String> trace({required bool cancellable, required bool section}) {
+      final engine = <String>[];
+      Solo.debug = engine.add;
+      try {
+        runSolo((solo, journal, async) {
+          final gate = Completer<void>();
+          SoloJob<void> restart() => solo.run<TestState, void>(
+                key: 'k',
+                policy: Policy.restart,
+                cancellable: cancellable,
+                (ctx) => section
+                    ? ctx.uncancellable(() => gate.future)
+                    : gate.future,
+              );
+          restart();
+          async.flushMicrotasks();
+          restart();
+          gate.complete();
+          async.flushMicrotasks();
+        });
+      } finally {
+        Solo.debug = null;
+      }
+      return engine.where((line) => line.startsWith('restart')).toList();
+    }
+
+    const held = 'restart: Job(k) holds the cancellation back until its '
+        'uncancellable section closes';
+    expect(
+      trace(cancellable: true, section: false),
+      ['restart: cancel Job(k)'],
+    );
+    expect(trace(cancellable: false, section: false), [
+      'restart: Job(k) turns the cancellation down: it is not cancellable',
+    ]);
+    expect(trace(cancellable: true, section: true), [held]);
+  });
+
   test('a describe that throws is a mark on Solo.debug, and no more', () {
     final engine = <String>[];
     final zone = <Object>[];

@@ -139,7 +139,10 @@ errors page.
 ## Steps as children
 
 The controller runs one root job at a time, and a method of the controller
-queues one more.
+queues one more. The examples use two pairs of the controller's methods from
+the children page. `_sync(item)` and `_recordPath(path)` make a job with
+`job(...)` and start nothing. `sync(item)` and `recordPath(path)` are the
+public methods that queue it: `sync(item)` returns `add(_sync(item))`.
 
 Don't do this:
 
@@ -155,9 +158,7 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
 ```
 
 The current job waits for the new one, and the new one waits for the current
-one: nothing moves until `close()` cancels both. `_sync` and `_recordPath` make
-the jobs and start nothing, and `sync` and `recordPath` put them into the
-queue: `sync(item)` returns `add(_sync(item))`. Run the jobs through `ctx.run`
+one: nothing moves until `close()` cancels both. Run the jobs through `ctx.run`
 instead: they start at once as children of the current job, bypassing the
 queue.
 

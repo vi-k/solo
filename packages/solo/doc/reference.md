@@ -91,8 +91,8 @@ parameters after it. The first type argument of each is the working type, in
 | `timing` | `collect`, `accumulate` | When a group may start, an `AccumulationTiming`: `debounce` or `throttle` | [Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready) |
 | `merge` | `accumulate` | A required, synchronous and pure function that merges an incoming event into the value of the group | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
 | `canStart` | `run`, `job`, `collect`, `accumulate` | Asked once as the job is about to start, ending it `Cancelled(rules: canStart)` on `false` | [The rules](state.md#the-rules) |
-| `keepWhile` | `run`, `job`, `collect`, `accumulate` | Asked before the start, on state updates while the body runs and at state checkpoints, cancelling the job `Cancelled(rules: keepWhile)` on `false` | [The rules](state.md#the-rules) |
-| `cancellable` | `run`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing, and keeps a queued job through removals and `cancelAll()` without `force: true`, though not through `close()` | [A whole job](cancellation.md#a-whole-job) |
+| `keepWhile` | `run`, `job`, `collect`, `accumulate` | Keeps the job while the state allows it, and on `false` cancels it `Cancelled(rules: keepWhile)` | [The rules](state.md#the-rules) |
+| `cancellable` | `run`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing | [A whole job](cancellation.md#a-whole-job) |
 | `timeout` | `run`, `job`, `collect`, `accumulate` | A deadline counted from the start of the body, after which the job ends `Cancelled(timeout)` | [A deadline of a job](cancellation.md#a-deadline-of-a-job) |
 | `ifFailed` | `run`, `job` | The state to write when the job fails, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
 | `ifCancelled` | `run`, `job` | The state to write when the job is cancelled, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
@@ -152,13 +152,13 @@ field: events combine only within one accumulator, even under the same key.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job, one handle for every caller, each of whom continues it through `shared()` because a plain `then` on it throws | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
+| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job, which every caller continues through `shared()` | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
 
 ## Other types
 
 | Type | What it is | Where |
 | --- | --- | --- |
-| `Policy` | What `add` and `run` do with a job whose key is already queued or running: `sequential`, `droppable`, `replace` or `restart`; a job `droppable` may hand back is continued through `shared()` | [Queue and policies](jobs.md#queue-and-policies) |
+| `Policy` | What `add` and `run` do with a job whose key is already queued or running: `sequential`, `droppable`, `replace` or `restart` | [Queue and policies](jobs.md#queue-and-policies) |
 | `SoloCloseMode` | How `close()` stops: `cancel` or `drain` | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `SoloObserver` | What `Solo.observer` takes, one or several joined by `SoloObserver.all`: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate` | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](diagnostics.md#watching-every-controller) |

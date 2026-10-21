@@ -7,7 +7,10 @@ enum SoloCloseMode {
   /// Run what is already queued, then close: no new root job is taken, and
   /// the ones accepted before the call run by the usual rules — in order,
   /// with their own children and cleanup, waiting out an accumulation
-  /// window where there is one.
+  /// window where there is one. A `Policy.droppable` call for a key a
+  /// queued or running job holds gets that job back, but an accumulator
+  /// takes no event, not even into a group that is still waiting: it
+  /// returns a new `Cancelled(closed)` job.
   ///
   /// Running the queue is not a promise of delivery. A drained job can
   /// still fail or be turned down by its rules; a buffer that keeps events

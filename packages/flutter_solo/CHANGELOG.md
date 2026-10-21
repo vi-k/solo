@@ -58,7 +58,8 @@ and
 - `SoloBuilder`: what `ValueListenableBuilder` is, for a controller that is not
   a `ValueListenable`. See [Usage](README.md#usage).
 - `SoloSelection<S, T>`: a `ValueListenable` of one value picked out of
-  another, notifying only when that value changes. See
+  another, notifying only when that value changes. For a controller that is not
+  a `ValueListenable`, `SoloSelection.from` makes one. See
   [Selecting one value](README.md#selecting-one-value).
 - `SoloSelector`, the widget that picks for you: a controller, a `selector` and
   a `builder`.

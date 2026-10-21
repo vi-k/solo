@@ -25,9 +25,6 @@ analyzer:
     strict-raw-types: true
 
   errors:
-    # Ignore
-    # invalid_annotation_target: ignore ???
-
     # Info
     todo: info
     directives_ordering: info
