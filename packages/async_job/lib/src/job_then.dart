@@ -21,7 +21,6 @@ void _forwardCancellation(
       target.cancelWith(
         Cancelled.by(
           reason: ChainCancelReason(cause: cause),
-          started: target.isRunning,
           stackTrace: cause.stackTrace,
         ),
       );

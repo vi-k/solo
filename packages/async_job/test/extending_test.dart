@@ -728,4 +728,61 @@ void main() {
       ]);
     });
   });
+
+  group('heldCancellation', () {
+    test('goes back to null when a cancellation the job cannot refuse lands',
+        () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final job = SectionJob<void>((ctx) async {
+          await ctx.uncancellable(() async {
+            await delay(10);
+            seen.add('held: ${ctx.heldCancellation}');
+            await delay(10);
+            seen.add(
+              'after the rule: ${ctx.heldCancellation}, '
+              '${ctx.job.isCancelled}',
+            );
+          });
+        })
+          ..launch();
+        async.elapse(const Duration(milliseconds: 5));
+        unawaited(job.cancel());
+        async.elapse(const Duration(milliseconds: 10));
+        job.context.breakRule();
+        async.flushTimers();
+        expect(seen, ['held: Cancelled(manual)', 'after the rule: null, true']);
+      });
+    });
+
+    test('the step keeps what it made under a rule of the engine', () {
+      for (final asked in [true, false]) {
+        fakeAsync((async) {
+          final saved = <int>[];
+          final job = SectionJob<int>((ctx) async {
+            final receipt = await ctx.uncancellable(() async {
+              final receipt = await delay(20).then((_) => 42);
+              if (ctx.heldCancellation != null || ctx.job.isCancelled) {
+                saved.add(receipt);
+              }
+              return receipt;
+            });
+            return receipt;
+          })
+            ..launch();
+          async.elapse(const Duration(milliseconds: 5));
+          if (asked) unawaited(job.cancel());
+          async.elapse(const Duration(milliseconds: 5));
+          job.context.breakRule();
+          async.flushTimers();
+          expect(saved, [42], reason: 'cancel() asked first: $asked');
+          expect(
+            (job.outcome! as Cancelled).reason,
+            isA<RuleReason>(),
+            reason: 'cancel() asked first: $asked',
+          );
+        });
+      }
+    });
+  });
 }

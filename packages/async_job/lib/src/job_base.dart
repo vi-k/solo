@@ -1066,14 +1066,15 @@ abstract class JobBase<T> implements Job<T> {
   /// Set when a cancellation the job may refuse arrives inside a section opened
   /// by [enterUncancellable], and cleared when the outermost section closes and
   /// lets it through. The job does not accept it meanwhile — [pendingCancel]
-  /// stays `null` — so this is the only place such a request shows. A
-  /// cancellation the job cannot refuse is not held: the job accepts it at
-  /// once, and the one held until then is dropped and cleared here. So is one a
-  /// section the body walked away from still holds when the body cancels itself
-  /// or the job ends: it would land on a job already cancelled or over. And so
-  /// is the request of the job's own deadline once the body and the children
-  /// are over: the deadline ends there, and a rejectable request that arrived
-  /// behind it shows here in its place.
+  /// stays `null` — so this, and `JobContext.heldCancellation` for the body,
+  /// are the only places such a request shows. A cancellation the job cannot
+  /// refuse is not held: the job accepts it at once, and the one held until
+  /// then is dropped and cleared here. So is one a section the body walked away
+  /// from still holds when the body cancels itself or the job ends: it would
+  /// land on a job already cancelled or over. And so is the request of the
+  /// job's own deadline once the body and the children are over: the deadline
+  /// ends there, and a rejectable request that arrived behind it shows here in
+  /// its place.
   @protected
   Cancelled? get heldCancel => _heldCancel;
 
@@ -1323,6 +1324,12 @@ abstract class JobBase<T> implements Job<T> {
     _timeoutTimer = null;
     final held = _heldCancel;
     if (held != null && _isOwnTimeout(held)) {
+      // The trace said the deadline was held until the step ends, so it says
+      // the deadline never landed.
+      _debug(
+        () => '$this drops the deadline a section held, along with its timer: '
+            '$held',
+      );
       _heldCancel = _heldBehindTimeout;
       _heldBehindTimeout = null;
     }
@@ -1432,7 +1439,15 @@ abstract class JobBase<T> implements Job<T> {
       _failureWentToGroup = _hold?.takeFailure() ?? false;
     }
     // A section the body walked away from may still hold a cancellation;
-    // it would land on a job that is over, which drops it.
+    // it would land on a job that is over, which drops it. The trace said
+    // it was held until the step ends, so it says it never landed.
+    final dropped = _heldCancel;
+    if (dropped != null) {
+      _debug(
+        () => '$this ends with a held cancellation, which is dropped: '
+            '$dropped',
+      );
+    }
     _heldCancel = null;
     _heldBehindTimeout = null;
     // However the job ended — the core's route has lifted the deadline already,

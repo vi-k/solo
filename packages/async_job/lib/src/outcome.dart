@@ -85,10 +85,13 @@ final class SiblingCancelReason extends CancelReason {
 /// The core cancels a job with this reason when the deadline set by the
 /// `timeout` of [Job.new] or [Job.deferred] runs out before the body and the
 /// children it waits for are over. The request is an ordinary rejectable
-/// cancellation: an uncancellable section holds it, and a job already
-/// cancelled for another reason keeps that one. A request a section still
-/// holds when the body and the children are over goes with the timer. Its
-/// children hear it as the cause of their [ParentCancelReason].
+/// cancellation: an uncancellable section holds it, and a job already cancelled
+/// for another reason keeps that one. A held request lands when the section
+/// closes, so a body that returns what the section returned still ends with
+/// this reason, and the registrations of [JobContext.onDiscard] run. Only a
+/// request a section the body did not await still holds when the body and the
+/// children are over goes with the timer. Its children hear it as the cause of
+/// their [ParentCancelReason].
 ///
 /// Each deadline that runs out makes a reason of its own, so a reason is
 /// told apart by identity as well as by type.

@@ -190,13 +190,18 @@ void main() {
 
     test('the overview: a child, a stream and a chain', () {
       fakeAsync((async) {
-        final job = page.overview();
+        final job = page.overview()
+          ..whenFinished((_) => trace().add('finished'));
         stubs.stage.messages
           ..add('e1')
           ..close().ignore();
         async.flushTimers();
         expect(job.outcome, isA<Done<void>>());
-        expect(trace(), ['saved e1', 'reported 21']);
+        expect(
+          trace(),
+          ['saved e1', 'reported 21', 'finished'],
+          reason: 'the body waits for its chain',
+        );
       });
     });
 

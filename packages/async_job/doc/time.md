@@ -175,10 +175,14 @@ The deadline is a cancellation like that of `cancel()`, not the
 `TimeoutException` of `Future.timeout`:
 
 - The body stops at its next checkpoint.
-- An `uncancellable` section holds the request until it closes. If the body and
-  the children it waits for are over while the section still holds the request,
-  the request goes with the timer, and the job ends with what the body
-  returned.
+- An `uncancellable` section holds the request until it closes, and the job
+  takes it then, before the body returns: a body that ends with
+  `return ctx.uncancellable(...)` ends `Cancelled(timeout)`, the value of the
+  section reaches neither the outcome nor `value`, and the registrations of
+  `onDiscard` run. Only a body that went on without awaiting the section can be
+  over while the section still holds the request: then the request goes with
+  the timer, and the job ends with what the body returned. See
+  [Holding the cancellation back](cancellation.md#holding-the-cancellation-back).
 - A job cancelled already keeps its own reason.
 - The children hear the deadline as the cause of their `ParentCancelReason`.
 

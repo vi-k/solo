@@ -233,9 +233,10 @@ what a cancellation that comes while it runs does to it:
 | `ctx.onDispose(disposer)` | Cleans up when the job ends, whatever the outcome | Works as usual |  |
 | `ctx.onDiscard(disposer)` | Cleans up unless the job ends `Done`; a body that ends `Done` without returning the value disposes of it itself | Works as usual |  |
 | `ctx.disown(value)` | Drops the cleanup registered for a value | Works as usual |  |
-| `ctx.unattended(action)` | Starts work the job does not wait for; its errors go where those of cleanup go | Works as usual | The work is not cancelled |
+| `ctx.unattended(action)` | Starts work the job does not wait for; its errors go to `onError`, then are answered for | Works as usual | The work is not cancelled |
 | `ctx.log(message)` | Hands a message to the observer; a closure is called by the observer that builds the line | Works as usual |  |
 | `ctx.job` | The job of this context | Works as usual |  |
+| `ctx.heldCancellation` | The cancellation an open `uncancellable` section holds back, or `null` | Works as usual |  |
 
 The last column holds where the job accepts the cancellation as it comes.
 Inside `ctx.uncancellable`, and in a job created with `cancellable: false`, the
@@ -249,7 +250,7 @@ it does in everyday English:
 
 | Word | What it means | Page |
 | --- | --- | --- |
-| Observe a failure | Read `done` or `value`, forward the failure through `then`, or call `ignoreFailure()`, by the microtask after the job ends; reading `outcome` or giving the job an observer does not count. | [Outcomes](doc/outcomes.md#telling-the-core-it-is-handled) |
+| Observe a failure | Read `done` or `value`, forward the failure through `then`, or call `ignoreFailure()`, by the microtask after the job ends; reading `outcome` or giving the job an observer does not count. | [Outcomes](doc/outcomes.md#a-failure-nobody-waits-for) |
 | Answer for an error | What happens to a failure nobody observes and to an error no outcome carries: `onUnanswered` of an observer that mixes in `JobAnswerer` takes it, or the zone if the job has no such observer. | [Errors](doc/errors.md#answering-for-errors) |
 | The zone | The zone the job was created in; an error that reaches it is an uncaught error there. | [Errors](doc/errors.md) |
 | Accept a cancellation | The job becomes cancelled: the cancellation passes to its children, its `onCancel` callbacks run, and it ends `Cancelled` whatever the body does next. | [Cancellation](doc/cancellation.md) |

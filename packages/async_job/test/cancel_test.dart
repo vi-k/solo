@@ -673,4 +673,122 @@ void main() {
           'goes',
     );
   });
+
+  group('heldCancellation', () {
+    test('is null with nothing held, and on a job that refuses', () {
+      fakeAsync((async) {
+        final seen = <Cancelled?>[];
+        Job<void>((ctx) async {
+          seen.add(ctx.heldCancellation);
+          await ctx.uncancellable(() async {
+            await delay(10);
+            seen.add(ctx.heldCancellation);
+          });
+        });
+        final stubborn = Job<void>(cancellable: false, (ctx) async {
+          await ctx.uncancellable(() async {
+            await delay(10);
+            seen.add(ctx.heldCancellation);
+          });
+        });
+        async.elapse(const Duration(milliseconds: 5));
+        stubborn.cancel().ignore();
+        async.flushTimers();
+        expect(seen, [null, null, null]);
+      });
+    });
+
+    test('names what a section holds, until it lands', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final job = Job<void>((ctx) async {
+          await ctx.uncancellable(() async {
+            await delay(10);
+            seen.add('in: ${ctx.heldCancellation}');
+          });
+          seen.add('after: ${ctx.heldCancellation}, ${ctx.job.isCancelled}');
+        });
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(seen, ['in: Cancelled(manual)', 'after: null, true']);
+        expect('${job.outcome}', 'Cancelled(manual)');
+      });
+    });
+
+    test('is the same in a nested section, which the outer one holds', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final job = Job<void>((ctx) async {
+          await ctx.uncancellable(() async {
+            await ctx.uncancellable(() async {
+              await delay(10);
+              seen.add('inner: ${ctx.heldCancellation}');
+            });
+            seen.add('outer: ${ctx.heldCancellation}');
+          });
+          seen.add('after: ${ctx.heldCancellation}');
+        });
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(seen, [
+          'inner: Cancelled(manual)',
+          'outer: Cancelled(manual)',
+          'after: null',
+        ]);
+      });
+    });
+
+    test('names the deadline when a cancel() comes behind it', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final job = Job<void>(
+          timeout: const Duration(milliseconds: 10),
+          (ctx) => ctx.uncancellable(() async {
+            await delay(20);
+            seen.add('in: ${ctx.heldCancellation}');
+          }),
+        );
+        async.elapse(const Duration(milliseconds: 15));
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(seen, ['in: Cancelled(timeout)']);
+        expect('${job.outcome}', 'Cancelled(timeout)');
+      });
+    });
+
+    test('lets the step keep what it made', () {
+      (String, List<int>) pay({required bool cancel}) {
+        late final String outcome;
+        final saved = <int>[];
+        fakeAsync((async) {
+          final job = Job<int>((ctx) async {
+            final receipt = await ctx.uncancellable(() async {
+              final receipt = await delay(10).then((_) => 42);
+              if (ctx.heldCancellation != null || ctx.job.isCancelled) {
+                saved.add(receipt);
+              }
+              return receipt;
+            });
+            return receipt;
+          });
+          if (cancel) {
+            async.elapse(const Duration(milliseconds: 5));
+            job.cancel().ignore();
+          }
+          async.flushTimers();
+          outcome = '${job.outcome}';
+        });
+        return (outcome, saved);
+      }
+
+      final (cancelled, kept) = pay(cancel: true);
+      expect(cancelled, 'Cancelled(manual)');
+      expect(kept, [42]);
+      final (done, none) = pay(cancel: false);
+      expect(done, 'Done(42)');
+      expect(none, isEmpty);
+    });
+  });
 }

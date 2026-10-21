@@ -445,9 +445,36 @@ void main() {
       expect(outcome, 'Done(1)');
       expect(
         text.replaceAll(RegExp(r'\s+'), ' '),
-        contains('If the body and the children it waits for are over while '
-            'the section still holds the request, the request goes with the '
-            'timer, and the job ends with what the body returned.'),
+        contains('Only a body that went on without awaiting the section can be '
+            'over while the section still holds the request: then the request '
+            'goes with the timer, and the job ends with what the body '
+            'returned.'),
+      );
+    });
+
+    test('a section the body returns lands the request before the return', () {
+      late final String outcome;
+      var discarded = false;
+      fakeAsync((async) {
+        final job = Job<int>(
+          timeout: const Duration(milliseconds: 100),
+          (ctx) {
+            ctx.onDiscard(() => discarded = true);
+            return ctx.uncancellable(() => delay(300).then((_) => 7));
+          },
+        );
+        async.flushTimers();
+        outcome = '${job.outcome}';
+      });
+
+      expect(outcome, 'Cancelled(timeout)');
+      expect(discarded, isTrue);
+      expect(
+        text.replaceAll(RegExp(r'\s+'), ' '),
+        contains('a body that ends with `return ctx.uncancellable(...)` ends '
+            '`Cancelled(timeout)`, the value of the section reaches neither '
+            'the outcome nor `value`, and the registrations of `onDiscard` '
+            'run.'),
       );
     });
 

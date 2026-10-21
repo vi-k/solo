@@ -153,6 +153,25 @@ Job<void> holdTheCancellationBack() {
   return job;
 }
 
+/// "Holding the cancellation back": the step keeps the receipt it made
+/// when the job is about to lose it.
+Job<String> keepTheReceipt() {
+  final job = Job<String>(observer: printing, (ctx) async {
+    // #docregion
+    final receipt = await ctx.uncancellable(() async {
+      final receipt = await api.pay(order);
+      if (ctx.heldCancellation != null || ctx.job.isCancelled) {
+        // The job ends Cancelled once the section closes: keep the receipt.
+        await store.save(receipt);
+      }
+      return receipt;
+    });
+    // #enddocregion
+    return receipt;
+  });
+  return job;
+}
+
 /// The first attempt of "Catching errors of the operation".
 Job<void> catchCancelledFirst() {
   final job = Job<void>(observer: printing, (ctx) async {
@@ -189,6 +208,28 @@ Job<void> askTheJob() {
     } on Exception catch (error) {
       ctx.check();
       // ignore: cascade_invocations
+      ctx.log('migration failed: $error');
+    }
+    // #enddocregion
+    await ctx.join(() async {
+      await database.writeVersion();
+      await database.writeReadyFlag();
+    });
+  });
+  return job;
+}
+
+/// "Asking the job", the clause that rethrows on a cancelled job.
+Job<void> rethrowOnACancelledJob() {
+  final job = Job<void>(observer: printing, (ctx) async {
+    final stop = CancelToken();
+    ctx.onCancel(stop.cancel);
+
+    // #docregion
+    try {
+      await ctx.join(() => database.migrate(stop));
+    } on Exception catch (error) {
+      if (ctx.job.isCancelled) rethrow;
       ctx.log('migration failed: $error');
     }
     // #enddocregion

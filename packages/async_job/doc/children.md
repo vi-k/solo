@@ -23,12 +23,14 @@ final job = Job<void>((ctx) async {
   final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
 
   // A chain: it starts itself when its source succeeds, and no parent
-  // can adopt it.
+  // can adopt it, so the body waits for it as for any future.
   final tail = saving.then<void>((c, _) => report(rows));
+  await ctx.abandonable(() => tail.value);
 });
 ```
 
-The lines under the code below are what that code prints:
+In the sections below, the lines under a block of code are what that code
+prints:
 
 - `cancel`: the user cancels the parent;
 - `Job(…)`: a message a body logged, or how a job ended, as the `Log` observer
@@ -250,8 +252,11 @@ starts or cancels it.
 [`ctx.runAll`](groups.md) makes the same checks for every job of its list
 before the first start. It also refuses the same job twice with an
 `ArgumentError`. A refusal with `ArgumentError` or `StateError` leaves every
-job of the list as it was. Under a cancelled parent, every job of the list is
-cancelled before its start.
+job of the list as it was: the group starts none of them, the sound ones
+included, and the `done` of each waits until the code that made it starts or
+cancels it. A body that has caught the refusal and awaits a job of the list
+waits for good. Under a cancelled parent, every job of the list is cancelled
+before its start.
 
 ## How deep a tree goes
 

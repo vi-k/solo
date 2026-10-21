@@ -47,12 +47,16 @@ abstract interface class Job<T> {
   /// cancellation like that of [cancel]. The body stops at its next checkpoint,
   /// a section of [JobContext.uncancellable] holds the request until the
   /// section closes, a job cancelled already keeps its own reason, and the
-  /// children hear it as the cause of their [ParentCancelReason]. If the body
-  /// and its children are over while a section still holds the request, the
-  /// request goes with the timer, and the job ends with what the body returned.
-  /// The timer is cancelled once the body and its children are over, or
-  /// whenever else the job ends, and cancelling it observes nothing: a failure
-  /// goes where it would go without a deadline. A job still running when a test
+  /// children hear it as the cause of their [ParentCancelReason]. The job takes
+  /// a held request when the section closes, before the body returns, so
+  /// `return ctx.uncancellable(...)` ends `Cancelled(timeout)`: the value of
+  /// the section reaches neither the outcome nor `value`, and the registrations
+  /// of [JobContext.onDiscard] run. Only a body that went on without awaiting
+  /// the section can be over while it still holds the request: then the request
+  /// goes with the timer, and the job ends with what the body returned. The
+  /// timer is cancelled once the body and its children are over, or whenever
+  /// else the job ends, and cancelling it observes nothing: a failure goes
+  /// where it would go without a deadline. A job still running when a test
   /// ends — under `fakeAsync` or in `testWidgets` — still holds that timer: end
   /// the job or wait for it.
   ///
@@ -415,7 +419,9 @@ abstract interface class Job<T> {
   /// this job refuses or holds a cancellation, the handle waits. Cancelling
   /// the handle, or a continuation after it, ends the handle at once and
   /// leaves this job alone. Nor does the handle start a job of
-  /// [Job.deferred] that nobody has started.
+  /// [Job.deferred] that nobody has started. The handle of a job that has
+  /// already finished ends on the next microtask, not inside the call: until
+  /// then its [outcome] is `null`, as with [then].
   ///
   /// A failure the handle carries observes this job, and the handle answers
   /// for it unless somebody observes the handle. Several handles that carry

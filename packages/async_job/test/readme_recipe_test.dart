@@ -1110,6 +1110,7 @@ void main() {
         'unattended': (ctx) => ctx.unattended(() {}),
         'log': (ctx) => ctx.log('message'),
         'job': (ctx) => ctx.job,
+        'heldCancellation': (ctx) => ctx.heldCancellation,
       };
       const said = {
         'Throws `Cancelled`': 'throws Cancelled(manual)',
@@ -1149,10 +1150,10 @@ void main() {
           'Передаёт отмену детям, ждёт их и бросает',
       'Passes the cancellation to the child': 'Передаёт отмену ребёнку',
       'The work is not cancelled': 'Работа не отменяется',
-      'Starts work the job does not wait for; its errors go where those of '
-              'cleanup go':
-          'Запускает работу, которую задача не ждёт; её ошибки идут туда же, '
-              'куда ошибки уборки',
+      'Starts work the job does not wait for; its errors go to `onError`, '
+              'then are answered for':
+          'Запускает работу, которую задача не ждёт; её ошибки идут '
+              'в `onError`, затем к ответу',
     };
     String cell(String member, {int column = 2}) {
       final original = contextTable('README.md')[member]![column];
@@ -1338,13 +1339,14 @@ void main() {
       );
     });
 
-    test('the errors of unattended work go where those of cleanup go', () {
+    test('the errors of unattended work go to onError, then to the answer', () {
       expect(
         cell('unattended', column: 0),
-        'Starts work the job does not wait for; its errors go where those of '
-        'cleanup go',
+        'Starts work the job does not wait for; its errors go to `onError`, '
+        'then are answered for',
       );
-      // Who hears the error: the observer, if there is one, and the zone.
+      // Who hears the error: the observer, if there is one, and the zone or
+      // the answerer, the same as for an error of cleanup.
       List<String> heardOf(
         Listening? observer,
         void Function(JobContext ctx) fail,
@@ -1432,6 +1434,7 @@ void main() {
             'disown',
             'log',
             'job',
+            'heldCancellation',
           ],
           reason: page,
         );

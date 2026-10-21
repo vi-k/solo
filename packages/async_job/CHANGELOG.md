@@ -20,9 +20,10 @@
 - **A class that implements `Job` or `JobContext` itself adds the new members,
   and a subclass of `JobBase` renames its own member whose name a new one now
   takes.** `Job` gains `whenFinished` and `shared`, `JobBase` gains
-  `untilFinished`, and `JobContext` gains `abandonable`, `pause`, `runAll`,
-  `start` and the `dispose` and `discard` of `run`; an extension on
-  `JobContext` named `runAll` or `start` is shadowed without a warning.
+  `untilFinished`, and `JobContext` gains `abandonable`, `heldCancellation`,
+  `pause`, `runAll`, `start` and the `dispose` and `discard` of `run`; an
+  extension on `JobContext` named `heldCancellation`, `runAll` or `start` is
+  shadowed without a warning.
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`, and `JobBase.debug` is `Job.debug`.** See
   [Building on the core](doc/extending.md).
@@ -102,6 +103,10 @@ new wording.
   as one of them goes wrong,** with the new `SiblingCancelReason`. See
   [When one failure makes the rest pointless](doc/groups.md#when-one-failure-makes-the-rest-pointless).
 - **`ctx.pause` is a delay a cancellation ends.**
+- **`ctx.heldCancellation` names the cancellation an `uncancellable` section
+  holds back,** so the step keeps what it made when the job is about to lose
+  it. See
+  [Holding the cancellation back](doc/cancellation.md#holding-the-cancellation-back).
 - **`ctx.run` takes `dispose` and `discard`,** as `ctx.abandonable` does.
 - **`Job.whenFinished` hears the end of a job without observing its outcome.**
 - **`timeout` gives a job a deadline of its own,** after which it ends

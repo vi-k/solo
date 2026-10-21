@@ -112,6 +112,31 @@ void main() {
     });
   });
 
+  test('the body sees the cancellation its section holds, as pending does', () {
+    runSolo((solo, journal, async) {
+      final seen = <String>[];
+      solo.run<Initial, void>(
+        key: 'job',
+        (ctx) => ctx.uncancellable(() async {
+          await delay(10);
+          final pending = solo.pending! as SoloPendingJob;
+          seen.add(
+            '${ctx.heldCancellation}, '
+            '${identical(ctx.heldCancellation, pending.heldCancellation)}',
+          );
+          await delay(10);
+          seen.add('${ctx.heldCancellation}, ${ctx.job.isCancelled}');
+        }),
+      );
+      async.flushMicrotasks();
+      solo.cancelAll();
+      async.elapse(const Duration(milliseconds: 15));
+      solo.externalSetState(const Working(a: 1));
+      async.flushTimers();
+      expect(seen, ['Cancelled(manual), true', 'null, true']);
+    });
+  });
+
   test('an open section nobody asked to leave is only an open section', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(

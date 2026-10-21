@@ -654,6 +654,20 @@ void main() {
       expect(watch(page.holdTheCancellationBack, cancelAt: 5), quoted[6]);
     });
 
+    test('the step keeps the receipt only when the job is about to lose it',
+        () {
+      expect(watch(page.keepTheReceipt, cancelAt: 5), [
+        'cancel',
+        'order 1 paid',
+        'receipt of order 1 saved',
+        'outcome: Cancelled(manual)',
+      ]);
+      expect(watch(page.keepTheReceipt), [
+        'order 1 paid',
+        'outcome: Done(receipt of order 1)',
+      ]);
+    });
+
     test('a held cancellation reaches no child until the section ends', () {
       fakeAsync((async) {
         final seen = <String>[];
@@ -967,6 +981,25 @@ void main() {
         );
       });
     }
+
+    test('the clause that rethrows stops the job, and logs its own failure',
+        () {
+      expect(watch(page.rethrowOnACancelledJob, cancelAt: cancelMs), [
+        'step 1',
+        'cancel',
+        'step 2',
+        'migration stopped',
+        'onError: DatabaseStopped',
+        'outcome: Cancelled(manual)',
+      ]);
+      stage.migrationFails = true;
+      expect(watch(page.rethrowOnACancelledJob), [
+        'log: migration failed: FormatException: bad schema',
+        'version written',
+        'ready flag written',
+        'outcome: Done(null)',
+      ]);
+    });
 
     test('a caught Cancelled of the job does not undo it', () {
       fakeAsync((async) {

@@ -198,6 +198,10 @@ it there. Keep all required work inside the section and always await it. An
 unawaited section can outlive the job and lose a held request. Sections can
 nest.
 
+Inside the section, `ctx.heldCancellation` names the request it holds, the same
+one `Solo.pending` shows, and the core's page tells
+[what a step does with it](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#holding-the-cancellation-back).
+
 ### A whole job
 
 ```dart

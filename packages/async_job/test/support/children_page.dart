@@ -21,9 +21,9 @@ Job<void> overview() {
     final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
 
     // A chain: it starts itself when its source succeeds, and no parent
-    // can adopt it.
-    // ignore: unused_local_variable
+    // can adopt it, so the body waits for it as for any future.
     final tail = saving.then<void>((c, _) => report(rows));
+    await ctx.abandonable(() => tail.value);
   });
   return job;
 }

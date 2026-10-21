@@ -20,9 +20,10 @@
 - **Класс, который сам реализует `Job` или `JobContext`, добавляет новые члены,
   а подкласс `JobBase` переименовывает свой член, чьё имя теперь занято.**
   У `Job` появились `whenFinished` и `shared`, у `JobBase` — `untilFinished`,
-  у `JobContext` — `abandonable`, `pause`, `runAll`, `start` и параметры
-  `dispose` и `discard` у `run`; расширение на `JobContext` с именем `runAll`
-  или `start` затеняется без предупреждения.
+  у `JobContext` — `abandonable`, `heldCancellation`, `pause`, `runAll`,
+  `start` и параметры `dispose` и `discard` у `run`; расширение на `JobContext`
+  с именем `heldCancellation`, `runAll` или `start` затеняется без
+  предупреждения.
 - **`JobBase`, `JobContextBase` и `JobStatus` переехали
   в `package:async_job/engine.dart`, а `JobBase.debug` теперь называется
   `Job.debug`.** См. [«Своё поверх ядра»](extending.md).
@@ -103,6 +104,9 @@
   `SiblingCancelReason`. См.
   [«Когда один провал делает остальное бессмысленным»](groups.md#когда-один-провал-делает-остальное-бессмысленным).
 - **`ctx.pause` — задержка, которую кончает отмена.**
+- **`ctx.heldCancellation` называет отмену, которую придерживает секция
+  `uncancellable`,** и шаг сохраняет сделанное, когда задача вот-вот его
+  потеряет. См. [«Придержать отмену»](cancellation.md#придержать-отмену).
 - **`ctx.run` принимает `dispose` и `discard`,** как `ctx.abandonable`.
 - **`Job.whenFinished` слышит конец задачи, не наблюдая её исход.**
 - **`timeout` даёт задаче собственный срок,** после которого она кончается

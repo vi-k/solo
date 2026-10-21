@@ -8,19 +8,19 @@ part of 'job_base.dart';
 /// only register do not — [onDispose], [onDiscard], [disown] and [unattended]
 /// go on working, so a body that has just been cancelled can still put what it
 /// holds on the cleanup stack, and still hand out a stop nobody waits for — and
-/// neither do [log] and [job]. What a cancellation arriving *during* a call
-/// does to that call is the call's own business: see [abandonable], [join],
-/// [pause] and [uncancellable].
+/// neither do [log], [job] and [heldCancellation]. What a cancellation
+/// arriving *during* a call does to that call is the call's own business: see
+/// [abandonable], [join], [pause] and [uncancellable].
 ///
 /// A context that outlived its job — captured by a closure nobody awaited
 /// — neither waits nor starts nor registers anything: every member throws
-/// a [StateError] once the job has finished, except [check], [log] and
-/// [job]. While the core unwinds the cleanup stack the same holds for
-/// the members that wait or start something, and for [check] on a job
-/// that is not cancelled — but [onDispose], [onDiscard], [disown] and
-/// [unattended] go on working, because a value arriving that late is put
-/// on the stack the core is unwinding, and a disposer may hand out work
-/// nobody waits for.
+/// a [StateError] once the job has finished, except [check], [log], [job]
+/// and [heldCancellation]. While the core unwinds the cleanup stack the same
+/// holds for the members that wait or start something, and for [check] on a
+/// job that is not cancelled — but [onDispose], [onDiscard], [disown] and
+/// [unattended] go on working, because a value arriving that late is put on
+/// the stack the core is unwinding, and a disposer may hand out work nobody
+/// waits for.
 abstract interface class JobContext {
   /// Gives up if the job was cancelled, or if a rule its engine adds stopped
   /// holding.
@@ -190,10 +190,15 @@ abstract interface class JobContext {
   /// on, and the body itself learns of the cancellation after that. So the
   /// step is protected, and the job still ends up cancelled — anything
   /// after the step that has to happen anyway belongs inside the same
-  /// section, and a job that must survive a cancellation altogether is
-  /// created with `cancellable: false`. That refusal is final and is what a
-  /// section leaves alone. Sections nest — only the outermost lets a held
-  /// cancellation through — and it is let through even if [action] throws.
+  /// section. Returning the section is no way out: the job takes the held
+  /// cancellation before `return ctx.uncancellable(...)` returns, the value
+  /// of the section reaches neither the outcome nor [Job.value], and the
+  /// registrations of [onDiscard] run. [heldCancellation] tells the step
+  /// whether a cancellation is held, so it can keep what it made. A job that
+  /// must survive a cancellation altogether is created with
+  /// `cancellable: false`. That refusal is final and is what a section leaves
+  /// alone. Sections nest — only the outermost lets a held cancellation
+  /// through — and it is let through even if [action] throws.
   ///
   /// When [action] throws while a cancellation is held, the section closes, the
   /// cancellation lands, and the body receives the error. A body that lets it
@@ -588,14 +593,16 @@ abstract interface class JobContext {
   /// Admission errors are those of [run]. Everything that needs no adoption is
   /// asked of every handle before the first one starts, so such a refusal
   /// leaves nothing running and every handle untouched, the way [run] leaves a
-  /// child it refuses with an [ArgumentError] or a [StateError]. Under a parent
-  /// that is already cancelled every branch is turned away the way [run] turns
-  /// away its child, and so is the rest of the list when a branch cancels the
-  /// parent before its first `await`, while the list starts. A refusal only the
-  /// adoption can give — an engine turning the parent down, a rule of its
-  /// domain that throws — may arrive after some branches have started: it stops
-  /// them and waits for them before it comes out, and the handles after the
-  /// refused one are left as they were, never started.
+  /// child it refuses with an [ArgumentError] or a [StateError]. The group
+  /// starts none of them, the sound ones included: each stays with the code
+  /// that made it, and its `done` waits until that code starts or cancels it.
+  /// Under a parent that is already cancelled every branch is turned away the
+  /// way [run] turns away its child, and so is the rest of the list when a
+  /// branch cancels the parent before its first `await`, while the list starts.
+  /// A refusal only the adoption can give — an engine turning the parent down,
+  /// a rule of its domain that throws — may arrive after some branches have
+  /// started: it stops them and waits for them before it comes out, and the
+  /// handles after the refused one are left as they were, never started.
   Future<List<T>> runAll<T>(Iterable<ChildJob<T>> children);
 
   /// Starts a child job that processes [stream] one event at a time.
@@ -756,6 +763,38 @@ abstract interface class JobContext {
 
   /// The job this context belongs to.
   Job<Object?> get job;
+
+  /// The cancellation an open [uncancellable] section of this job is holding
+  /// back, or `null`.
+  ///
+  /// The job takes a held cancellation as the section closes, before the
+  /// body returns, so a step that made something worth keeping — a receipt
+  /// of a payment that went through — keeps it inside the section:
+  ///
+  /// ```dart
+  /// final receipt = await ctx.uncancellable(() async {
+  ///   final receipt = await api.pay(order);
+  ///   if (ctx.heldCancellation != null || ctx.job.isCancelled) {
+  ///     // The job ends Cancelled once the section closes: keep the receipt.
+  ///     await store.save(receipt);
+  ///   }
+  ///   return receipt;
+  /// });
+  /// ```
+  ///
+  /// A cancellation the job cannot refuse is not held: it marks the job at
+  /// once, and the one held until then is dropped, so this goes back to
+  /// `null` while [job]'s `isCancelled` turns `true` — hence both checks
+  /// above. A job created with `cancellable: false` refuses a cancellation
+  /// rather than holding it, and this stays `null`.
+  ///
+  /// One value for the whole job, not for one section: code of the job
+  /// outside a section, a branch next to it or [unattended] work, sees what
+  /// another section holds. A snapshot: a cancellation asked after the read
+  /// is held all the same, and one read here may still never land — a
+  /// section the body did not await outlives a job that ends first. `null`
+  /// once the job is over. Never throws.
+  Cancelled? get heldCancellation;
 }
 
 /// The base of a job context: everything a body does without a state.
@@ -789,6 +828,9 @@ abstract class JobContextBase implements JobContext {
 
   @override
   Job<Object?> get job => _owner;
+
+  @override
+  Cancelled? get heldCancellation => _owner.heldCancel;
 
   /// Creates the unstarted child used by [each].
   ///

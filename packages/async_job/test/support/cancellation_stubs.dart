@@ -112,6 +112,30 @@ final class Database {
 /// The database of the sections that do not open one.
 Database database = Database();
 
+/// The payment server: a payment is the step that cannot be taken back.
+final class Api {
+  /// Pays [order] in 10 ms and returns its receipt.
+  Future<String> pay(String order) async {
+    await delay(10);
+    say('$order paid');
+    return 'receipt of $order';
+  }
+}
+
+/// The payment server of the page.
+final api = Api();
+
+/// The order the page pays.
+const order = 'order 1';
+
+/// Where a receipt is kept.
+final class Store {
+  Future<void> save(String receipt) async => say('$receipt saved');
+}
+
+/// The store of the page.
+final store = Store();
+
 /// A device that records until it has stopped; a stop takes 10 ms.
 final class Device {
   // Made by the first recording, inside the job: a future made outside the

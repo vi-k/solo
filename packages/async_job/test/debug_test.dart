@@ -126,6 +126,55 @@ void main() {
     );
   });
 
+  test('a deadline a section held is traced as dropped with its timer', () {
+    final traces = <String>[];
+    Job.debug = traces.add;
+    fakeAsync((async) {
+      Job<int>(
+        key: 'job',
+        timeout: const Duration(milliseconds: 10),
+        (ctx) async {
+          // Not awaited, which is the mistake: the body ends before the step.
+          ctx.uncancellable(() => delay(50)).ignore();
+          await delay(20);
+          return 1;
+        },
+      );
+      async.flushTimers();
+    });
+    const dropped = 'Job(job) drops the deadline a section held, along with '
+        'its timer: Cancelled(timeout)';
+    expect(traces, [
+      'Job(job) started',
+      'cancel Job(job): held until the step ends: Cancelled(timeout)',
+      dropped,
+      'Job(job) finished: Done(1)',
+    ]);
+  });
+
+  test('a held cancellation a job ends with is traced as dropped', () {
+    final traces = <String>[];
+    Job.debug = traces.add;
+    fakeAsync((async) {
+      final job = Job<void>(key: 'job', (ctx) async {
+        // Not awaited, which is the mistake: the body ends before the step.
+        ctx.uncancellable(() => delay(50)).ignore();
+        await delay(20);
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+    });
+    const dropped = 'Job(job) ends with a held cancellation, which is '
+        'dropped: Cancelled(manual)';
+    expect(traces, [
+      'Job(job) started',
+      'cancel Job(job): held until the step ends: Cancelled(manual)',
+      dropped,
+      'Job(job) finished: Done(null)',
+    ]);
+  });
+
   test('finish called by hand tells the tracer about the stack', () {
     final lines = <String>[];
     Job.debug = lines.add;

@@ -303,6 +303,27 @@ the next checkpoint throws it. The job still ends `Cancelled`, even if the body
 returns a value, so whatever has to happen after the step anyway belongs inside
 the same section.
 
+`return ctx.uncancellable(...)` does not carry the value out either: the job
+takes the cancellation before the body returns, the value reaches neither the
+outcome nor `value`, and the registrations of `onDiscard` run.
+`ctx.heldCancellation` tells the step whether a cancellation is held, so the
+step keeps what it made when the job is about to lose it:
+
+```dart
+final receipt = await ctx.uncancellable(() async {
+  final receipt = await api.pay(order);
+  if (ctx.heldCancellation != null || ctx.job.isCancelled) {
+    // The job ends Cancelled once the section closes: keep the receipt.
+    await store.save(receipt);
+  }
+  return receipt;
+});
+```
+
+A cancellation the job cannot refuse, such as a rule an engine adds, is not
+held: it marks the job at once, and `ctx.heldCancellation` does not show it.
+`ctx.job.isCancelled` does, hence the second check.
+
 If the step fails and the body lets the error through, the job still ends
 `Cancelled`. The failure goes where any failure of the body of a cancelled job
 goes: the observer hears it, and then the zone does, unless the observer
@@ -435,10 +456,22 @@ the job has accepted one, `ctx.check()` throws it whatever the `catch` took, a
 real failure too. A migration that fails on its own after the user cancelled is
 not logged, and the body ends with the cancellation, so neither `onError` nor
 the zone hears of it. Where such a failure has to be heard, the clause rethrows
-on a cancelled job, `if (ctx.job.isCancelled) rethrow;` in place of
-`ctx.check()`. The failure then reaches `onError` and the zone, and the stop of
-the migration goes no further than `onError`, because the filter set in `main`
-names it.
+on a cancelled job in place of `ctx.check()`:
+
+```dart
+try {
+  await ctx.join(() => database.migrate(stop));
+} on Exception catch (error) {
+  if (ctx.job.isCancelled) rethrow;
+  ctx.log('migration failed: $error');
+}
+```
+
+The failure then reaches `onError` and the zone, and the stop of the migration
+goes no further than `onError`, because the filter set in `main` names it. So
+the choice is this: the clause with `ctx.check()` loses a failure that comes
+after a cancellation, and the clause that rethrows needs
+`Job.isCancellationError` set in `main`, or the stop reaches the zone too.
 
 If the job has already accepted cancellation, catching its `Cancelled` does not
 undo it. Code after the catch runs, but the next checkpoint throws again, and

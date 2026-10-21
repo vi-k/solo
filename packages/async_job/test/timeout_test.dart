@@ -754,6 +754,31 @@ void main() {
         expect(discarded, isTrue);
       });
     });
+
+    test('arriving behind the deadline with a reason of the deadline', () {
+      // The deadline is told from a request by identity, not by type: a
+      // `TimeoutCancelReason` built by hand is somebody else's request, and
+      // it lands in the cleanup instead of going with the timer.
+      fakeAsync((async) {
+        const foreign = TimeoutCancelReason(Duration(seconds: 999));
+        final job = Engine<int>(timeout: ms(10), (ctx) async {
+          ctx.onDispose(() => delay(100));
+          unawaited(ctx.uncancellable(() => delay(50)));
+          await ctx.join(() => delay(20));
+          return 1;
+        })
+          ..launch();
+        async.elapse(ms(15));
+        job.cancel(reason: foreign).ignore();
+        async.elapse(ms(10));
+        expect(job.held?.reason, same(foreign));
+        async.elapse(ms(300));
+        expect(
+          job.outcome,
+          isA<Cancelled>().having((c) => c.reason, 'reason', same(foreign)),
+        );
+      });
+    });
   });
 
   group('a request behind the deadline is let go of', () {
