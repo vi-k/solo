@@ -185,7 +185,9 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       _solo._queue._insert(previous, first: false);
       Solo._debug(() => 'move $previous to the tail');
     }
-    group._accepted();
+    // The debug line is foreign code, and it may cancel the group's job: a
+    // group released that way is not armed again, as for a new one above.
+    if (previous.isQueued && group._open) group._accepted();
     return previous;
   }
 

@@ -946,6 +946,32 @@ void main() {
     });
   });
 
+  test('a group cancelled from the debug line of its move leaves no timer', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async {},
+        policy: AccumulationPolicy.replace,
+        timing: AccumulationTiming.debounce(_interval),
+      );
+      final first = events.add(1);
+      Solo.debug = (message) {
+        if (message.startsWith('move ')) unawaited(first.cancel());
+      };
+
+      expect(events.add(2), same(first));
+      expect(first.isCancelled, isTrue);
+      expect(
+        async.nonPeriodicTimerCount,
+        0,
+        reason: 'the cancelled group is not armed again after the move',
+      );
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
   // Criterion 20: the timers a replacement leaves behind. The first half
   // lives today in the second assertion of `throttle replace re-entry keeps
   // the running cooldown`, and step 2 of the wave deletes that test with the
