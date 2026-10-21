@@ -164,12 +164,13 @@ new wording.
 
 ### Documentation
 
-- The README is a starting page, and the reference moved to ten pages:
+- The README is a starting page, and the reference moved to twelve pages:
   [Outcomes](doc/outcomes.md), [Cancellation](doc/cancellation.md),
-  [Children](doc/children.md), [Groups](doc/groups.md),
+  [Time](doc/time.md), [Children](doc/children.md), [Groups](doc/groups.md),
   [Chains](doc/chains.md), [Streams](doc/streams.md),
   [Cleanup](doc/cleanup.md), [Observing](doc/observing.md),
-  [Testing](doc/testing.md) and [Building on the core](doc/extending.md).
+  [Errors](doc/errors.md), [Testing](doc/testing.md) and
+  [Building on the core](doc/extending.md).
 - `on Cancelled { rethrow; }` in front of the `catch`, which the `0.2.0` README
   recommended, logs an operation stopped by its token as a failure;
   [Asking the job](doc/cancellation.md#asking-the-job) calls `ctx.check()` in
