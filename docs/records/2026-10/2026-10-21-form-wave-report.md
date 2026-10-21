@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-21:** волна идёт. Части 1–3 сделаны и закоммичены,
-> части 4 и 5, ревью сделанного и закрытие впереди.
+> **Состояние на 2026-10-21:** волна идёт. Части 1–4 сделаны и закоммичены,
+> часть 5, ревью сделанного и закрытие впереди.
 > **Что это:** отчёт волны формы по плану `2026-10-21-form-wave-plan.md`:
 > что ушло из dartdoc и где это сказано на странице, проверенные решения,
 > строки `///` до и после.
@@ -304,6 +304,94 @@ and runs to its end, and `await job.cancel()` comes back only then». 50, 61, 63
 `flutter_solo`: формат без изменений, анализ чистый, +241; его пример +6.
 `check_links.py` зелёный. Стенд `flutter_snippets.py` исполнитель собрал вне
 репозитория: анализ чистый, +47.
+
+## Часть 4. Страницы ядра
+
+`extending.md`, `groups.md` и `cleanup.md` в `packages/async_job/doc/` и их
+переводы. Писал исполнитель на Opus в копии дерева; дифф я прочёл целиком,
+каждое удаление сверил с dartdoc и страницами своей командой.
+
+| Файл | До | После |
+| --- | ---: | ---: |
+| `extending.md` | 699 | 616 |
+| `groups.md` | 491 | 489 |
+| `cleanup.md` | 523 | 524 |
+
+### `extending.md`
+
+«The whole engine» больше не повторяет листинг: каждая его строка уже стояла
+в разделах «A job of your own», «Refusing while the job waits» и «One loop, and
+no other way to start». Раздел говорит то, чего в разделах нет: движок — одна
+библиотека Dart, которая импортирует `engine.dart`, потому что задача и очередь
+ходят к приватным членам друг друга; таблица «Class | Members | Shown in»
+по строке на кусок со ссылкой на раздел; из двух показов члена действует
+поздний — `finished()`, который отпускает и очередь, `add` и `run` вместо
+первой попытки. Пример двух `run()`, его трасса и ссылка на «A rule of your
+own» остались. Пункт входа: «says which piece goes where».
+
+Два последних абзаца «Finishing a job by hand» сжаты до одного, который
+называет dartdoc `JobBase.finish` по имени, без адреса. Одной фразой
+не обошлось: двух фактов в dartdoc нет, и они остались на странице —
+`onSignOut` строит `Cancelled` при каждом вызове, и `Cancelled`, брошенный
+телом или правилом из `check()`, может быть общим, `const` тоже: задача
+кончается тем, который строит ядро. Второго не говорит ни одна страница
+и ни один публичный dartdoc, только комментарий приватного `_outcomeChild`.
+Остальное ушло туда, где сказано:
+
+- `Done` ветке `runAll` после провала тела, когда группа о нём слышит, что она
+  бросает и где остаётся значение — dartdoc `finish`, `job_base.dart`
+  1357–1366;
+- `ignoreFailure()` на ветке — dartdoc `runAll`, `job_context.dart` 397–402:
+  в dartdoc `finish` этого нет;
+- один `Cancelled` на двух детей, поиск по экземпляру, `const`
+  и `AssertionError` — dartdoc `finish`, 1385–1390. Со страницы ушло
+  и «а не того, кого ждало тело»: dartdoc говорит «names the child that ended
+  last», и это следует из него.
+
+Тест `extending_rakes_test.dart` с ожиданием `missing == [firstShown]` снят.
+Пример под разделом теперь держит общий проход `holders`, а новый тест держит
+таблицу: каждый член строки объявлен в коде раздела, на который строка
+ссылается; члены `MyJob` — ровно члены `MyJob` этого файла без `_stop` правила,
+`MyQueue` — ровно его `MyQueue`, у `MyContext` нет ни одного, как
+в `extending_plain.dart`. Шесть мутаций таблицы исполнитель уронил; одна дыра
+названа: `finished()`, перенесённый в строку «A job of your own», тест
+пропустит — он объявлен и там.
+
+### `groups.md`
+
+Ссылка из «When one failure makes the rest pointless» на «Finishing a job by
+hand» ушла, правило осталось своей фразой: «The group then goes by that failure
+and not by the branch's `Done`.» Таблица стадий и два абзаца под ней переехали
+в конец «Branches that wait for each other» подразделом «The two barriers».
+Фраза «Branches that wait for each other shows how» внутри самого раздела стала
+«as the lock of The first attempt above does». Ссылка из «What `runAll` does
+not promise» ведёт теперь на «The two barriers»: прежняя была верна, новая
+точнее называет то, о чём фраза. Dartdoc `runAll` не тронут: его первая
+ссылка — на таблицу форм, она осталась на месте, вторая — на зависание.
+
+Порядок разделов до: «Waiting for several children» (…, «When one failure makes
+the rest pointless»: формы, таблица форм, абзацы о закрытии, таблица стадий
+и два абзаца), «Branches that wait for each other» («The first attempt», «The
+lock in a child of the branch»). После: таблица стадий и два абзаца — третьим
+подразделом «Branches that wait for each other», после «The lock in a child of
+the branch».
+
+### `cleanup.md`
+
+Вход «Callback | When it runs» в две строки стал «What the job holds | Member
+| When it runs» в пять: `dispose` и `discard` вызова, `ctx.onDispose`,
+`ctx.onDiscard`, `ctx.disown`. Строки сверены с dartdoc `abandonable`, `join`,
+`run`, `onDispose`, `onDiscard` и `disown` в `job_context.dart`. Сверх задания
+абзац под таблицей сжат до фразы об `ArgumentError`: остальное говорит таблица,
+а об `onDispose` и `onDiscard` — ещё и «Registering without a call».
+
+### Проверки части 4
+
+`async_job`: формат без изменений, анализ чистый, +1789. `solo` +2063.
+Документные: `reflow.py --check`, `check_line_width.py`, `check_links.py`,
+`check_translations.py`, `check_doc_shape.py`, `check_page_code.py`,
+`build_site_test.py` — зелёные. Линтер `humanizer--ru` по изменённым абзацам
+перевода: 0 `ERROR`.
 
 ## Счётчик строк `///`
 

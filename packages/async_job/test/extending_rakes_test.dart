@@ -1366,6 +1366,7 @@ void main() {
     '### One loop, and no other way to start': 'test/extending_rakes_test.dart',
     "### A cancellation of the engine's own": 'test/extending_rakes_test.dart',
     '### Not waiting for the checkpoint': 'test/extending_rakes_test.dart',
+    '### The whole engine': 'test/extending_rakes_test.dart',
   };
   for (final MapEntry(key: heading, value: holder) in holders.entries) {
     test('the code under "$heading" is a run of lines of $holder', () {
@@ -1379,32 +1380,72 @@ void main() {
     });
   }
 
-  // The whole engine ends with `MyContext` as the page first shows it, and
-  // that is the one piece of it this file does not hold: here `MyContext`
-  // has the rule. With the job as first shown it holds all of it.
+  // The whole engine shows no code of the engine: a table names, class by
+  // class, the members each section above shows. Every member of the job
+  // and the queue of this file is in that table, but for `_stop`, which
+  // comes with the rule, and `MyContext` has none, as first shown. Each
+  // member a row names is declared in the code under the heading the row
+  // links to. A member moved to another section, renamed or added turns
+  // this red.
   test(
-      'the code under "### The whole engine" is a run of lines of this file, '
-      'but for MyContext as first shown', () {
-    final missing = codeMissingFrom(
-      'doc/extending.md',
-      'test/extending_rakes_test.dart',
-      alsoIn: ['test/support/extending_stubs.dart'],
-      under: '### The whole engine',
+      'the table under "### The whole engine" names every member of this '
+      'file and the section that declares it', () {
+    // A declaration at the indentation of a member: a type, `final` or
+    // `get` in front of the name, and a parameter list, a value or a `;`
+    // after it. The front is greedy: `Future<T> Function(MyContext ctx)?`
+    // in front of `_body` would otherwise give `Function`.
+    final declaration = RegExp(
+      r'^  (?! )(?:final |[\w<>?,() ]*[\w>?)] )(?:get )?(\w+) *[(=;]',
+      multiLine: true,
     );
-    const firstShown = 'final class MyContext extends JobContextBase {\n'
-        '  MyContext(super.owner);\n'
-        '}';
-    expect(missing, [firstShown]);
+    Set<String> declaredIn(String code) => {
+          for (final match in declaration.allMatches(code)) match.group(1)!,
+        };
+    String body(String type, String path) {
+      final file = File(path).readAsStringSync();
+      final start = file.indexOf('final class $type');
+      return file.substring(start, file.indexOf('\n}\n', start));
+    }
+
+    final dart = RegExp(r'```dart\n(.*?)\n```', dotAll: true);
+    final code = <String, String>{};
+    var table = '';
+    for (final part in File('doc/extending.md')
+        .readAsStringSync()
+        .split(RegExp('^(?=#)', multiLine: true))) {
+      final heading = part.split('\n').first;
+      final name = heading.replaceFirst(RegExp('^#+ '), '');
+      code[name] = [
+        if (code[name] case final before?) before,
+        for (final block in dart.allMatches(part)) block.group(1)!,
+      ].join('\n');
+      if (heading == '### The whole engine') table = part;
+    }
+
+    final named = <String, Set<String>>{};
+    final row = RegExp(r'^\| `(\w+)` \| (.*) \| \[(.*)\]\(#.*\) \|$');
+    for (final line in table.split('\n')) {
+      final match = row.firstMatch(line);
+      if (match == null) continue;
+      final [type!, members!, section!] = match.groups([1, 2, 3]);
+      final names = {
+        for (final name in RegExp(r'`(\w+)(?:\(\))?`').allMatches(members))
+          name.group(1)!,
+      };
+      expect(
+        declaredIn(code[section] ?? ''),
+        containsAll(names),
+        reason: section,
+      );
+      (named[type] ??= {}).addAll(names);
+    }
+    const file = 'test/extending_rakes_test.dart';
+    expect(named.keys, unorderedEquals(['MyJob', 'MyQueue', 'MyContext']));
+    expect(named['MyJob'], declaredIn(body('MyJob', file))..remove('_stop'));
+    expect(named['MyQueue'], declaredIn(body('MyQueue', file)));
+    expect(named['MyContext'], isEmpty);
     expect(
-      codeMissingFrom(
-        'doc/extending.md',
-        'test/extending_rakes_test.dart',
-        alsoIn: [
-          'test/support/extending_stubs.dart',
-          'test/support/extending_plain.dart',
-        ],
-        under: '### The whole engine',
-      ),
+      declaredIn(body('MyContext', 'test/support/extending_plain.dart')),
       isEmpty,
     );
   });

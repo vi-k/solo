@@ -19,7 +19,7 @@ The page builds one engine, a queue of jobs with a rule:
   protected API the engine reaches them through.
 - [A queue of your own](#a-queue-of-your-own): jobs run one at a time, a
   `cancellable: false` job keeps its turn, and
-  [The whole engine](#the-whole-engine) puts the code together.
+  [The whole engine](#the-whole-engine) says which piece goes where.
 - [A rule of your own](#a-rule-of-your-own): the jobs stop at a sign-out.
 - [Deferred start](#deferred-start): a plain `Job` that starts when the caller
   chooses, with no engine.
@@ -341,94 +341,23 @@ again by the queue too: the second line of `add` refuses a job that runs.
 
 ### The whole engine
 
-```dart
-import 'package:async_job/engine.dart';
+The engine is the code of the sections above, in one Dart library that imports
+`package:async_job/engine.dart`: the job and the queue reach each other's
+private members.
 
-final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
-  // Dropped once the job is over, as the core drops its own: the body
-  // holds everything it captured, and a job is held to read its outcome
-  // long after.
-  Future<T> Function(MyContext ctx)? _body;
+| Class | Members | Shown in |
+| --- | --- | --- |
+| `MyJob` | `_body`, the constructor, `createContext`, `execute`, `_launch`, `_untilFinished` | [A job of your own](#a-job-of-your-own) |
+| `MyJob` | `_queue`, `cancelWith`, `finished()` | [Refusing while the job waits](#refusing-while-the-job-waits) |
+| `MyJob` | `adoptedBy` | [One loop, and no other way to start](#one-loop-and-no-other-way-to-start) |
+| `MyQueue` | `_waiting` | [The first attempt](#the-first-attempt) |
+| `MyQueue` | `add` | [Refusing while the job waits](#refusing-while-the-job-waits) |
+| `MyQueue` | `_running`, `run`, `_loop` | [One loop, and no other way to start](#one-loop-and-no-other-way-to-start) |
+| `MyContext` | the constructor alone | [A job of your own](#a-job-of-your-own) |
 
-  MyQueue? _queue;
-
-  MyJob(
-    Future<T> Function(MyContext ctx) body, {
-    super.key,
-    super.observer,
-    super.cancellable,
-  }) : _body = body;
-
-  @override
-  JobContextBase createContext() => MyContext(this);
-
-  @override
-  Future<T> execute(covariant MyContext ctx) => _body!(ctx);
-
-  @override
-  void finished() {
-    _body = null;
-    _queue = null;
-  }
-
-  // `start` and `untilFinished` are protected: the rest of the engine calls
-  // them through these wrappers, private to its library. The queue starts
-  // a job later, from a zone of its own, so `_launch` starts it in the zone
-  // it was created in.
-  void _launch() => creationZone.run(start);
-
-  Future<void> get _untilFinished => untilFinished;
-
-  @override
-  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
-    final waits = _queue?._waiting.contains(this) ?? false;
-    if (waits && !cancellable && rejectable) return;
-    _queue?._waiting.remove(this);
-    super.cancelWith(cancelled, rejectable: rejectable);
-  }
-
-  @override
-  void adoptedBy(JobContextBase parent) {
-    if (_queue?._waiting.contains(this) ?? false) {
-      throw StateError('$this waits in its queue');
-    }
-  }
-}
-
-final class MyQueue {
-  final _waiting = <MyJob<Object?>>[];
-  Future<void>? _running;
-
-  void add(MyJob<Object?> job) {
-    if (job._queue != null) throw StateError('$job is in a queue already');
-    if (job.isRunning) throw StateError('$job runs already');
-    _waiting.add(job);
-    if (!job.isFinished) job._queue = this;
-  }
-
-  // One loop at a time: a second call gets the future of the loop that
-  // runs. Started in a microtask, the loop clears `_running` after it is
-  // set, even when there is nothing to run.
-  Future<void> run() => _running ??= Future.microtask(_loop);
-
-  Future<void> _loop() async {
-    try {
-      while (_waiting.isNotEmpty) {
-        final job = _waiting.removeAt(0);
-        if (job.isFinished) continue;
-        job._launch();
-        await job._untilFinished;
-      }
-    } finally {
-      _running = null;
-    }
-  }
-}
-
-final class MyContext extends JobContextBase {
-  MyContext(super.owner);
-}
-```
+Where a member is shown twice, the later one stands: the `finished()` that lets
+go of the queue replaces the one that drops only the body, and `add` and `run`
+replace those of the first attempt.
 
 Two calls of `run()` share one loop, and the jobs run one after the other:
 
@@ -677,23 +606,11 @@ after, is in no outcome unless it is the very one handed in. `onError` hears
 it, and it goes on to `onUnanswered` or the zone, as the failure of the body of
 a cancelled job does. `ignoreFailure()` on the job stops it at `onError`.
 
-A `Done` handed to a branch of `runAll` after its group heard that the branch's
-body failed comes too late for the group. The group hears of the failure right
-after `onError` does. For a body that is not `async` and threw while `runAll`
-was starting the branches, the group hears once all of them have started. The
-group then goes by the failure, as if the branch had ended with it. It throws
-the failure, or sends it where any failure of a branch it did not throw goes,
-and there `ignoreFailure()` on the branch silences it. The value stays in the
-outcome of the branch alone.
-
-A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the way
+Two narrow cases are in the dartdoc of `JobBase.finish`: a `Done` handed to a
+branch of `runAll` after its group heard the body fail, and one `Cancelled`
+handed to two jobs, through `finish` or `cancelWith`. The second is why
 `onSignOut` in
-[Not waiting for the checkpoint](#not-waiting-for-the-checkpoint) builds one at
-every call. A parent finds the child behind a cancellation by the instance.
-With one instance for two of its children, the parent's outcome names the child
-that ended last, not the one its body waited for. A `const` `Cancelled` is one
-instance for the whole program. With asserts on, the second child of one parent
-to end with the instance sends an `AssertionError` to the zone it was created
-in, and ends the way it does without them. A `Cancelled` that a body throws, or
-a rule from `check()`, is not bound by this: the job ends with one the core
-builds from it.
+[Not waiting for the checkpoint](#not-waiting-for-the-checkpoint) builds a
+`Cancelled` at every call. A `Cancelled` that a body throws, or a rule from
+`check()`, may be shared, a `const` one included: the job ends with one the
+core builds from it.

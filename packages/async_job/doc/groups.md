@@ -160,9 +160,7 @@ group asked for itself. It throws the object that outcome carries, as
 `await ctx.run(child)` would. A failure the group received and did not throw
 goes the way of an error that no outcome carries. An engine may end a branch by
 hand with a value after the group heard its body fail. The group then goes by
-that failure and not by the branch's `Done`: see
-[Finishing a job by hand](extending.md#finishing-a-job-by-hand) on the
-extending page.
+that failure and not by the branch's `Done`.
 
 When every branch succeeds, every form hands the body the values in the order
 of the branches. The forms differ when a branch fails:
@@ -186,30 +184,6 @@ made when it arrived. Under `ctx.run`, that is the `dispose` passed with each
 call. `ctx.runAll` takes no such argument, and
 [The list a group returns](#the-list-a-group-returns) shows how to register
 that list.
-
-A successful `ctx.runAll` holds its branches at two barriers, and no branch
-passes a barrier until every branch has reached it:
-
-| Stage | What each branch does |
-| --- | --- |
-| Body | returns a value and waits for its children |
-| First barrier | waits for the bodies and children of the others |
-| Cleanup | runs its cleanup stack; a `discard` is set aside, and on success it never runs |
-| Second barrier | waits for the cleanup of the others |
-| Hand-over | `runAll` returns the values; then the branch ends `Done` |
-
-The body of the parent gets the values before the branches end. A cleanup a
-branch registers while it waits at the second barrier, from a timer or an event
-of its own, runs after that, under the parent, which waits for its children as
-always.
-
-The first barrier holds the `dispose` callbacks of a branch too. So a branch
-that waits for a sibling, or for what a sibling releases in its cleanup, hangs
-the group;
-[Branches that wait for each other](#branches-that-wait-for-each-other) shows
-how. A body that ends without a value ends the wait instead: the group cancels
-the other branches, and `ctx.runAll` waits for every branch to end. By the time
-the error arrives, everything the branches took is closed.
 
 ## Branches that wait for each other
 
@@ -288,6 +262,31 @@ branch. Its cleanup releases the lock then, before the group has decided
 anything, and the second branch takes the lock. For branches that depend on
 each other, `[...].wait` is the other way out: under it, every branch unwinds
 on its own.
+
+### The two barriers
+
+A successful `ctx.runAll` holds its branches at two barriers, and no branch
+passes a barrier until every branch has reached it:
+
+| Stage | What each branch does |
+| --- | --- |
+| Body | returns a value and waits for its children |
+| First barrier | waits for the bodies and children of the others |
+| Cleanup | runs its cleanup stack; a `discard` is set aside, and on success it never runs |
+| Second barrier | waits for the cleanup of the others |
+| Hand-over | `runAll` returns the values; then the branch ends `Done` |
+
+The body of the parent gets the values before the branches end. A cleanup a
+branch registers while it waits at the second barrier, from a timer or an event
+of its own, runs after that, under the parent, which waits for its children as
+always.
+
+The first barrier holds the `dispose` callbacks of a branch too. So a branch
+that waits for a sibling, or for what a sibling releases in its cleanup, hangs
+the group, as the lock of [The first attempt](#the-first-attempt-1) above does.
+A body that ends without a value ends the wait instead: the group cancels the
+other branches, and `ctx.runAll` waits for every branch to end. By the time the
+error arrives, everything the branches took is closed.
 
 ## What a group hands back
 
@@ -466,9 +465,8 @@ attempt.
 ## What `runAll` does not promise
 
 A branch whose body has returned a value is not over yet: it waits for the rest
-of the group, as
-[Branches that wait for each other](#branches-that-wait-for-each-other) shows.
-Three things one might expect do not happen:
+of the group, as [The two barriers](#the-two-barriers) shows. Three things one
+might expect do not happen:
 
 | What one might expect | What happens |
 | --- | --- |

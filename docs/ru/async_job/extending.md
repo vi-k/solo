@@ -20,7 +20,7 @@
   который до них добирается движок.
 - [«Своя очередь»](#своя-очередь): задачи выполняются по одной, задача
   с `cancellable: false` сохраняет свой черёд,
-  а [«Движок целиком»](#движок-целиком) собирает код вместе.
+  а [«Движок целиком»](#движок-целиком) говорит, какой кусок куда встаёт.
 - [«Своё правило»](#своё-правило): задачи останавливаются при выходе
   из аккаунта.
 - [«Отложенный старт»](#отложенный-старт): обычная `Job`, которая стартует,
@@ -352,94 +352,23 @@ future каждому следующему вызову.
 
 ### Движок целиком
 
-```dart
-import 'package:async_job/engine.dart';
+Движок — это код разделов выше в одной библиотеке Dart, которая импортирует
+`package:async_job/engine.dart`: задача и очередь обращаются к приватным членам
+друг друга.
 
-final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
-  // Отпускается, когда задача кончилась, как ядро отпускает своё: тело
-  // держит всё, что захватило, а задачу держат, чтобы прочесть исход
-  // много позже.
-  Future<T> Function(MyContext ctx)? _body;
+| Класс | Члены | Показаны в разделе |
+| --- | --- | --- |
+| `MyJob` | `_body`, конструктор, `createContext`, `execute`, `_launch`, `_untilFinished` | [«Своя задача»](#своя-задача) |
+| `MyJob` | `_queue`, `cancelWith`, `finished()` | [«Отказ, пока задача ждёт»](#отказ-пока-задача-ждёт) |
+| `MyJob` | `adoptedBy` | [«Один цикл и никакого другого старта»](#один-цикл-и-никакого-другого-старта) |
+| `MyQueue` | `_waiting` | [«Первая попытка»](#первая-попытка) |
+| `MyQueue` | `add` | [«Отказ, пока задача ждёт»](#отказ-пока-задача-ждёт) |
+| `MyQueue` | `_running`, `run`, `_loop` | [«Один цикл и никакого другого старта»](#один-цикл-и-никакого-другого-старта) |
+| `MyContext` | только конструктор | [«Своя задача»](#своя-задача) |
 
-  MyQueue? _queue;
-
-  MyJob(
-    Future<T> Function(MyContext ctx) body, {
-    super.key,
-    super.observer,
-    super.cancellable,
-  }) : _body = body;
-
-  @override
-  JobContextBase createContext() => MyContext(this);
-
-  @override
-  Future<T> execute(covariant MyContext ctx) => _body!(ctx);
-
-  @override
-  void finished() {
-    _body = null;
-    _queue = null;
-  }
-
-  // `start` и `untilFinished` защищены: остальной движок вызывает их
-  // через эти обёртки, приватные для его библиотеки. Очередь запускает
-  // задачу позже, из своей зоны, поэтому `_launch` запускает её в зоне,
-  // где задачу создали.
-  void _launch() => creationZone.run(start);
-
-  Future<void> get _untilFinished => untilFinished;
-
-  @override
-  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
-    final waits = _queue?._waiting.contains(this) ?? false;
-    if (waits && !cancellable && rejectable) return;
-    _queue?._waiting.remove(this);
-    super.cancelWith(cancelled, rejectable: rejectable);
-  }
-
-  @override
-  void adoptedBy(JobContextBase parent) {
-    if (_queue?._waiting.contains(this) ?? false) {
-      throw StateError('$this waits in its queue');
-    }
-  }
-}
-
-final class MyQueue {
-  final _waiting = <MyJob<Object?>>[];
-  Future<void>? _running;
-
-  void add(MyJob<Object?> job) {
-    if (job._queue != null) throw StateError('$job is in a queue already');
-    if (job.isRunning) throw StateError('$job runs already');
-    _waiting.add(job);
-    if (!job.isFinished) job._queue = this;
-  }
-
-  // Один цикл за раз: второй вызов получает future цикла, который идёт.
-  // Запущенный в микротаске, цикл обнуляет `_running` после того, как её
-  // присвоили, даже когда выполнять нечего.
-  Future<void> run() => _running ??= Future.microtask(_loop);
-
-  Future<void> _loop() async {
-    try {
-      while (_waiting.isNotEmpty) {
-        final job = _waiting.removeAt(0);
-        if (job.isFinished) continue;
-        job._launch();
-        await job._untilFinished;
-      }
-    } finally {
-      _running = null;
-    }
-  }
-}
-
-final class MyContext extends JobContextBase {
-  MyContext(super.owner);
-}
-```
+Где член показан дважды, в силе последний: `finished()`, который отпускает
+и очередь, заменяет тот, что отпускает только тело, а `add` и `run` заменяют
+свои версии из первой попытки.
 
 Два вызова `run()` делят один цикл, и задачи выполняются одна за другой:
 
@@ -697,22 +626,11 @@ job.start();
 провал тела отменённой задачи. `ignoreFailure()` на задаче останавливает его
 на `onError`.
 
-`Done`, поданный ветке `runAll` после того, как группа услышала о провале тела
-ветки, для группы опоздал. Группа слышит о провале сразу после `onError`. Если
-тело не `async` и бросило, пока `runAll` запускал ветки, группа слышит
-о провале, когда запущены все. Тогда группа идёт по провалу, как если бы ветка
-им кончилась. Она бросает его или отправляет туда, куда идёт любой провал
-ветки, который она не бросила, и там его гасит `ignoreFailure()` на ветке.
-Значение остаётся только в исходе ветки.
-
-`Cancelled`, переданный в `cancelWith` или в `finish`, принадлежит одной
-задаче, как в `onSignOut` из раздела
-[«Не дожидаясь контрольной точки»](#не-дожидаясь-контрольной-точки): тот строит
-новый при каждом вызове. Родитель находит ребёнка, от которого пришла отмена,
-по экземпляру. Если один экземпляр достался двум его детям, исход родителя
-назовёт того, кто закончился последним, а не того, кого ждало тело.
-`const`-экземпляр `Cancelled` один на всю программу. С включёнными `assert`
-второй ребёнок того же родителя, который кончается этим экземпляром, отправляет
-`AssertionError` в зону, где он создан, а кончается так же, как без них.
-На `Cancelled`, который бросает тело или правило из `check()`, это
-не распространяется: задача кончается тем, который ядро строит из него.
+Два узких случая описаны в dartdoc `JobBase.finish`: `Done`, поданный ветке
+`runAll` после того, как группа услышала о провале тела, и один `Cancelled`,
+поданный двум задачам через `finish` или `cancelWith`. Второй случай — причина,
+по которой `onSignOut` из раздела
+[«Не дожидаясь контрольной точки»](#не-дожидаясь-контрольной-точки) строит
+новый `Cancelled` при каждом вызове. `Cancelled`, который бросает тело или
+правило из `check()`, может быть общим, в том числе `const`: задача кончается
+тем, который ядро строит из него.

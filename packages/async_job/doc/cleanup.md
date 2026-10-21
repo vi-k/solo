@@ -17,14 +17,15 @@ await ctx.join(() => database.migrate());
 return database;
 ```
 
-| Callback | When it runs |
-| --- | --- |
-| `dispose` | on every outcome |
-| `discard` | unless the job ends `Done` |
+| What the job holds | Member | When it runs |
+| --- | --- | --- |
+| What it keeps to itself, from a call: a lock, a temporary file, a subscription | `dispose` of `abandonable`, `join` or `run` | on every outcome |
+| What the body returns or hands outside, from a call | `discard` of `abandonable`, `join` or `run` | unless the job ends `Done` |
+| What it keeps to itself, with no call to wrap | `ctx.onDispose` | on every outcome |
+| What the body returns or hands outside, with no call to wrap | `ctx.onDiscard` | unless the job ends `Done` |
+| A value of `abandonable`, `join` or `run` that changes hands | `ctx.disown(value)` | never: it drops the registration the call made |
 
-`abandonable`, `join` and `run` take either; `ctx.onDispose` and
-`ctx.onDiscard` register a callback where there is no call to wrap. Passing a
-`dispose` and a `discard` to one call is an `ArgumentError`.
+Passing a `dispose` and a `discard` to one call is an `ArgumentError`.
 
 The lines under the code below are what it prints when it runs. The lock, the
 database, its cache and the cursor say what happens to them, `cancel` is the
