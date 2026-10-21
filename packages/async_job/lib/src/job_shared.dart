@@ -10,11 +10,15 @@ part of 'job_base.dart';
 /// a handle's to wait for.
 final class _SharedJob<T> extends JobBase<T> {
   /// The source until the handle is detached: on the source's outcome, on
-  /// the handle's own end, or on the source's accepted cancellation. The
-  /// listener on `_done` of the source cannot be removed, so this is what
-  /// tells it to do nothing.
+  /// the handle's own end, or on the source's accepted cancellation.
   JobBase<T>? _source;
   void Function() _unregisterSource = () {};
+
+  /// What the source's `_done` holds instead of the handle. A listener on a
+  /// future cannot be removed, and one bound to the handle would keep a
+  /// cancelled handle, its observer and all they hold for as long as the
+  /// source runs; [_detach] empties the relay instead.
+  late final _relay = _SharedRelay<T>(this);
 
   _SharedJob(JobBase<T> source, {super.observer})
       : _source = source,
@@ -22,7 +26,7 @@ final class _SharedJob<T> extends JobBase<T> {
     source._pendingContinuations++;
     _unregisterSource = source.whenCancelled(_sourceCancelled);
     // In the handle's own zone, as a continuation subscribes in its own.
-    _zone.run(() => unawaited(source._done.future.then(_sourceFinished)));
+    _zone.run(() => unawaited(source._done.future.then(_relay.call)));
   }
 
   /// At the mark: the outcome of the source is decided, and its cleanup is
@@ -39,6 +43,7 @@ final class _SharedJob<T> extends JobBase<T> {
     final source = _source;
     if (source == null) return;
     _source = null;
+    _relay.handle = null;
     source._pendingContinuations--;
     _unregisterSource();
     _unregisterSource = () {};
@@ -92,4 +97,14 @@ final class _SharedJob<T> extends JobBase<T> {
   @override
   Future<T> execute(JobContextBase ctx) =>
       throw StateError('$this has no body to run');
+}
+
+/// Stands between the source's `_done` and a [_SharedJob]: holds the handle
+/// until it lets go of the source, and nothing after.
+final class _SharedRelay<T> {
+  _SharedJob<T>? handle;
+
+  _SharedRelay(this.handle);
+
+  void call(Outcome<T> result) => handle?._sourceFinished(result);
 }

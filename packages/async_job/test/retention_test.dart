@@ -255,6 +255,25 @@ WeakReference<Payload> holdInACleanup(
   return WeakReference(payload);
 }
 
+/// An observer that holds a payload, the way one made for a screen holds
+/// what the screen needs.
+final class HoldingObserver extends JobObserver {
+  final Payload payload;
+
+  HoldingObserver(this.payload);
+
+  @override
+  void onFinish(Job<Object?> job) => payload.bytes.length;
+}
+
+/// A handle of [source] with an observer that holds a payload, cancelled
+/// while [source] still runs.
+Future<WeakReference<Payload>> cancelledShared(Job<int> source) async {
+  final payload = Payload();
+  await source.shared(observer: HoldingObserver(payload)).cancel();
+  return WeakReference(payload);
+}
+
 void main() {
   test('a finished job lets go of its body', () async {
     final (job, capture) = captureInBody();
@@ -518,5 +537,22 @@ void main() {
       reason: 'the stack is never read again, and what is on it is held for '
           'as long as the handle is',
     );
+  });
+
+  test('a cancelled shared handle lets go while its source still runs',
+      () async {
+    final release = Completer<int>();
+    final source = Job<int>((ctx) => ctx.join(() => release.future));
+    final capture = await cancelledShared(source);
+    expect(source.isFinished, isFalse);
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the handle has ended and waits for nothing; held by the '
+          'source, every screen that left keeps its observer for as long '
+          'as the source runs',
+    );
+    release.complete(1);
+    await source.done;
   });
 }
