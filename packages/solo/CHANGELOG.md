@@ -144,8 +144,9 @@ the write through and asked the rule again about the new state, and a rule that
 wrote every time it was asked ran out of stack. `canStart` may still write: it
 is asked once.
 
-An `ifFailed` or `ifCancelled` handler that hands back the state it was given
-publishes nothing, where `0.2.0` published the same state again as a change.
+An `ifFailed` or `ifCancelled` handler that hands back the state it was given,
+or a `const` the state already holds, publishes nothing and leaves in place a
+write it made itself, where `0.2.0` published that state again as a change.
 
 ### Added
 

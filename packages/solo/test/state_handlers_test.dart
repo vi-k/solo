@@ -738,6 +738,24 @@ void main() {
       });
     });
 
+    test('and a const the state already holds is that same object', () {
+      fakeAsync((clock) {
+        final solo = _Controller<_Box>(const _Box(1));
+        var notified = 0;
+        solo.addListener(() => notified++);
+        solo
+            .run<_Box, void>(
+              (_) async => throw StateError('body'),
+              ifFailed: (_, __, ___) => const _Box(1),
+            )
+            .ignoreFailure();
+        clock.flushMicrotasks();
+        expect(notified, 0);
+        solo.close();
+        clock.flushMicrotasks();
+      });
+    });
+
     test('and an equal state that is another object is published', () {
       fakeAsync((clock) {
         final solo = _Controller<_Box>(const _Box(1));

@@ -477,8 +477,9 @@ leave a temporary state such as `Loading` when an operation fails or is
 cancelled. They receive the current state of type `S`, plus the error and stack
 trace or the `Cancelled` outcome, and return the next state synchronously. A
 handler that hands back the state it was given, the same object, leaves the
-state as it is, and nothing is published. An equal state that is another object
-is published, as an `emit` of it would be.
+state as it is, and nothing is published; a `const` value the state already
+holds is that same object. An equal state that is another object is published,
+as an `emit` of it would be.
 
 The matching handler runs before the next queued job and before the `onFinish`
 hook. Changing state does not turn `Failed` or `Cancelled` into `Done`, and
@@ -569,7 +570,8 @@ remain subject to their own rules and any permission the parent already lost.
 Keep these functions limited to computing state: the value they return is their
 write. A state write made from inside one, through `externalSetState` or a
 source that calls it synchronously, does not combine with that value. If the
-job's rules accept the write, the handler's result lands on top of it, computed
-from the state before it, and the fact is lost. If they refuse it, the
-handler's result is dropped. Resource release belongs in the cleanup API, on
-the page [Resources and cleanup](resources.md).
+job's rules accept the write, any other result of the handler lands on top of
+it, computed from the state before it, and the fact is lost; the state it was
+given, handed back, leaves the write in place. If they refuse it, the handler's
+result is dropped. Resource release belongs in the cleanup API, on the page
+[Resources and cleanup](resources.md).

@@ -325,19 +325,20 @@ abstract class Solo<S extends Object> {
   /// as usual. A rule error suppresses correction and is reported. [canStart]
   /// is not repeated, and the job's own emit is exempt.
   ///
-  /// Handlers receive `S`, which may differ from the body's working `W`,
-  /// and should only compute the next state: the value they return is
-  /// their write. The state they were given, handed back as the same object,
-  /// is no write: the state stays as it is and nothing is published. An equal
-  /// state that is another object is published, as an `emit` of it would be.
-  /// A write made from inside one — [externalSetState], or a source that
-  /// calls it synchronously — does not combine with the value: if the job's
-  /// rules accept it, any other result of the handler lands on top of it,
-  /// computed from the state before it; if they refuse it, the handler's
-  /// result is dropped. Cleanup belongs in
-  /// [JobContext.onDispose] or [JobContext.onDiscard]. [ifCancelled] runs at
-  /// completion; the signal to the operation being stopped belongs in
-  /// [JobContext.onCancel], which delivers it immediately.
+  /// Handlers receive `S`, which may differ from the body's working `W`, and
+  /// should only compute the next state: the value they return is their write.
+  /// The state they were given, handed back as the same object, is no write:
+  /// the state stays as it is and nothing is published, and a `const` the state
+  /// already holds is that object. An equal state that is another object is
+  /// published, as an `emit` of it would be. A write made from inside one —
+  /// [externalSetState], or a source that calls it synchronously — does not
+  /// combine with the value: if the job's rules accept it, any other result of
+  /// the handler lands on top of it, computed from the state before it, while
+  /// the state it was given leaves the write in place; if they refuse it, the
+  /// handler's result is dropped. Cleanup belongs in [JobContext.onDispose] or
+  /// [JobContext.onDiscard]. [ifCancelled] runs at completion; the signal to
+  /// the operation being stopped belongs in [JobContext.onCancel], which
+  /// delivers it immediately.
   ///
   /// [timeout] gives the job a deadline counted from the start of its body,
   /// not from [add]: the time in the queue is not counted. What it bounds
