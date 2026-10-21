@@ -6,31 +6,43 @@ down to one rule. Four are for a test that awaits its job or the controller's
 `close`:
 
 - [Awaiting a job](#awaiting-a-job): the call only queues the job, so the test
-  awaits its `done` or `value` before it reads the state.
+  awaits its `done` or `value` before it reads the state. A test that skips the
+  wait fails with the state `Initial`.
 - [Closing the controller](#closing-the-controller): a plain `close()` cancels
-  the load; a test that holds no job waits with `SoloCloseMode.drain`.
+  the load, and the test sees `Initial`; a test that holds no job waits with
+  `SoloCloseMode.drain`.
 - [A failure nobody read](#a-failure-nobody-read): a failure nobody reads turns
-  the test red, so a job the test does not await gets `ignoreFailure()`.
+  the test red with an error none of its expectations raised, or arrives after
+  the test has passed, so a job the test does not await gets `ignoreFailure()`.
 - [Assertions inside a zone](#assertions-inside-a-zone): the job is created
   inside `runZonedGuarded`, the zone collects its errors, and the test asserts
-  outside it.
+  outside it. A test that asserts inside passes having checked nothing, or
+  hangs until its own timeout.
 
 The other four are for a test under `fakeAsync`, which awaits nothing:
 
 - [The order of what happened](#the-order-of-what-happened): an observer
   records the order, and `flushMicrotasks()` between two calls lets the first
-  job start.
+  job start. Without the flush the test fails on an order it did not expect.
 - [Awaiting inside fakeAsync](#awaiting-inside-fakeasync): `async.elapse` moves
   the clock, the test reads `job.outcome` where it would await `done`, and
-  `ignoreFailure()` marks the job.
+  `ignoreFailure()` marks the job. A test that awaits inside `fakeAsync` hangs
+  until its own timeout, or passes before its expectations run.
 - [What one test leaves for the next](#what-one-test-leaves-for-the-next): the
   observer is a static, and so are four more; the test that sets one puts it
-  back in `addTearDown`, not on its last line.
+  back in `addTearDown`, not on its last line: a failed test skips that line
+  and leaves its observer to the next one.
 - [Timeouts](#timeouts): `Future.timeout` ends the waiting, not the call; a
-  call that must stop gets the job's `timeout` and `ctx.onCancel`.
+  call that must stop gets the job's `timeout` and `ctx.onCancel`, and
+  `Job.isCancellationError` names the error of its stop, which otherwise turns
+  the test red.
 
-The examples below use `package:test`, and all but the last drive the `load` of
-the controller from
+The tests of the page import `dart:async`,
+`package:fake_async/fake_async.dart`, `package:solo/solo.dart` and
+`package:test/test.dart`; `dart pub add dev:test dev:fake_async` adds
+`package:test` and `fake_async` as dev dependencies.
+
+Of the examples below, all but the last drive the `load` of the controller from
 [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
 in the package README:
 
@@ -84,8 +96,7 @@ outcome is the only signal it needs, and the fake's twenty milliseconds are
 waited out for real. The other has to look between the events — the order two
 calls ended up in, a deadline five seconds away — and can await nothing at all.
 It runs under `package:fake_async`, where the clock moves when the test says
-so. The first three sections below await; `fakeAsync` starts with the fourth,
-and the seventh, on assertions inside a zone, awaits again.
+so. The first four sections below await; `fakeAsync` starts with the fifth.
 
 ## Awaiting a job
 
@@ -291,12 +302,85 @@ by then the test is over. A test that expects such an error sets
 `Solo.unansweredHandler`, which takes it in place of the zone:
 [Answering for an error](errors.md#answering-for-an-error) on the errors page.
 
+## Assertions inside a zone
+
+That an unread failure reaches the zone when no `Solo.unansweredHandler` is set
+is a promise of the engine. A test of it needs a zone of its own to catch the
+failure in: left to the zone of the test, the failure is what turns the test
+red.
+
+### The first attempt
+
+```dart
+// The first attempt: the test proves nothing about the zone.
+test('a failure nobody read reaches the zone', () async {
+  await runZonedGuarded(
+    () async {
+      final profile = ProfileController(
+        FakeProfileApi(error: StateError('no network')),
+      )..load();
+      await profile.close(mode: SoloCloseMode.drain);
+
+      expect(profile.currentState, isA<Failure>());
+    },
+    (error, stackTrace) => expect(error, isA<StateError>()),
+  );
+});
+```
+
+The test passes, and it would pass with no failure reaching the zone at all.
+The expectation in the handler saves nothing on its own: the handler is called
+only when an error arrives. When none does it never runs, the test is green,
+and nothing has been said about the zone.
+
+The expectation in the body is no better off. A job reports to the zone it was
+created in, so `load()`, the call that creates it, has to be made inside
+`runZonedGuarded`, and the expectation about the state comes inside with it.
+There it stops being an expectation: `expect` reports a failure by throwing
+`TestFailure`, and a throw from inside the zone belongs to the zone's handler,
+like any other error. With a state other than `Failure` the handler would be
+handed that `TestFailure`, compare it to `StateError`, find no match and report
+that on a line of the handler rather than the line the expectation was on. And
+the `await` would never return — the body's error went to the zone instead of
+into its future — so the test would end on a timeout.
+
+### Collecting in the zone, asserting outside
+
+```dart
+test('a failure nobody read reaches the zone', () async {
+  final zoneErrors = <Object>[];
+  late final ProfileController profile;
+
+  await runZonedGuarded(
+    () async {
+      profile = ProfileController(
+        FakeProfileApi(error: StateError('no network')),
+      )..load();
+      await profile.close(mode: SoloCloseMode.drain);
+    },
+    (error, stackTrace) => zoneErrors.add(error),
+  );
+
+  expect(profile.currentState, isA<Failure>());
+  expect(zoneErrors, [isA<StateError>()]);
+});
+```
+
+The zone collects, and the test asserts after it, on lines of its own: the
+state and the errors both. `profile` is declared outside the zone for that and
+assigned inside it, where the job has to be created. The drain is what makes
+those lines safe to write: by the time `close` returns, the job has finished
+and its failure has been reported.
+
 ## The order of what happened
 
 `Policy.droppable` is there so that a second `load()` made while the first one
 runs starts nothing of its own. The state cannot show that: it ends up `Loaded`
-either way. The test has to see the order of what happened. Timing and ordering
-are tested with `package:fake_async`, and what happened is collected by an
+either way. The test has to see the order of what happened. The sections on
+timing and order run under `fakeAsync`: this one,
+[Awaiting inside fakeAsync](#awaiting-inside-fakeasync) and
+[Timeouts](#timeouts). There the test moves the clock and runs the microtasks
+itself, so it can stop between two calls. What happened is collected by an
 observer — one for every controller in the process.
 
 ### The first attempt
@@ -522,76 +606,6 @@ way: `Solo.observer`, `Solo.unansweredHandler`, `Solo.debug` with the
 `Job.isCancellationError` of the core. All five start as `null`, and `null` is
 what the tear-down above puts back.
 
-## Assertions inside a zone
-
-That an unread failure reaches the zone when no `Solo.unansweredHandler` is set
-is a promise of the engine. A test of it needs a zone of its own to catch the
-failure in: left to the zone of the test, the failure is what turns the test
-red.
-
-### The first attempt
-
-```dart
-// The first attempt: the test proves nothing about the zone.
-test('a failure nobody read reaches the zone', () async {
-  await runZonedGuarded(
-    () async {
-      final profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
-      )..load();
-      await profile.close(mode: SoloCloseMode.drain);
-
-      expect(profile.currentState, isA<Failure>());
-    },
-    (error, stackTrace) => expect(error, isA<StateError>()),
-  );
-});
-```
-
-The test passes, and it would pass with no failure reaching the zone at all.
-The expectation in the handler saves nothing on its own: the handler is called
-only when an error arrives. When none does it never runs, the test is green,
-and nothing has been said about the zone.
-
-The expectation in the body is no better off. A job reports to the zone it was
-created in, so `load()`, the call that creates it, has to be made inside
-`runZonedGuarded`, and the expectation about the state comes inside with it.
-There it stops being an expectation: `expect` reports a failure by throwing
-`TestFailure`, and a throw from inside the zone belongs to the zone's handler,
-like any other error. With a state other than `Failure` the handler would be
-handed that `TestFailure`, compare it to `StateError`, find no match and report
-that on a line of the handler rather than the line the expectation was on. And
-the `await` would never return — the body's error went to the zone instead of
-into its future — so the test would end on a timeout.
-
-### Collecting in the zone, asserting outside
-
-```dart
-test('a failure nobody read reaches the zone', () async {
-  final zoneErrors = <Object>[];
-  late final ProfileController profile;
-
-  await runZonedGuarded(
-    () async {
-      profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
-      )..load();
-      await profile.close(mode: SoloCloseMode.drain);
-    },
-    (error, stackTrace) => zoneErrors.add(error),
-  );
-
-  expect(profile.currentState, isA<Failure>());
-  expect(zoneErrors, [isA<StateError>()]);
-});
-```
-
-The zone collects, and the test asserts after it, on lines of its own: the
-state and the errors both. `profile` is declared outside the zone for that and
-assigned inside it, where the job has to be created. The drain is what makes
-those lines safe to write: by the time `close` returns, the job has finished
-and its failure has been reported.
-
 ## Timeouts
 
 A call that never answers would hold the queue for good, so the job that makes
@@ -648,20 +662,27 @@ alone is enough.
 For a device operation that must stop before the next job, give the job the
 deadline with `timeout` and hand the device's cancellation mechanism to
 `ctx.onCancel`. The example is the controller of a camera rather than of the
-profile. `hw` is the device, `CancelToken` is the token of its API and not a
-type of this package, and `Idle` and `Connected` are the states:
+profile. The controller keeps the device in `hw`; `CancelToken` is the token of
+the device's API, not a type of this package, and `Idle` and `Connected` are
+the states:
 
 ```dart
-Job<void> connect() => run<Idle, void>(
-      key: 'connect',
-      timeout: const Duration(seconds: 5),
-      (ctx) async {
-        final token = CancelToken();
-        ctx.onCancel(token.cancel);
-        await ctx.join(() => hw.open(cancelToken: token));
-        ctx.emit(const Connected());
-      },
-    );
+final class CameraController extends Solo<CameraState> {
+  final Camera hw;
+
+  CameraController(this.hw) : super(const Idle());
+
+  Job<void> connect() => run<Idle, void>(
+        key: 'connect',
+        timeout: const Duration(seconds: 5),
+        (ctx) async {
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await ctx.join(() => hw.open(cancelToken: token));
+          ctx.emit(const Connected());
+        },
+      );
+}
 ```
 
 Five seconds after the body starts, the job is cancelled the way `cancel()`
@@ -678,9 +699,15 @@ in `main`, with `Job.isCancellationError` of the core, and the test names it
 the same way and puts the field back. Then nothing reaches the zone, and the
 test needs no `ignoreFailure()`.
 [Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#errors-of-a-cancellation)
-on the errors page of `async_job` takes the field apart. The five seconds cost
-the test nothing; its `FakeCamera` is a device that never answers on its own,
-so the deadline is what ends the call:
+on the errors page of `async_job` takes the field apart.
+
+The five seconds cost the test nothing: its `FakeCamera` is a device that never
+answers on its own, a `Camera` whose `open` waits until the test makes it
+answer. A cancelled token fails the waiting call with `OpenCancelled` and
+counts it in `refused`. The fake is in full in
+[`test/support/testing_camera.dart`](../test/support/testing_camera.dart), with
+stand-ins for the `CancelToken` and `OpenCancelled` of the device's API. The
+test looks a millisecond before the deadline and at it:
 
 ```dart
 test('connect gives up after five seconds', () {
@@ -688,12 +715,16 @@ test('connect gives up after five seconds', () {
   addTearDown(() => Job.isCancellationError = null);
 
   fakeAsync((async) {
-    final camera = CameraController(FakeCamera());
+    final hw = FakeCamera();
+    final camera = CameraController(hw);
 
     final job = camera.connect();
-    async.elapse(const Duration(seconds: 5));
+    async.elapse(const Duration(milliseconds: 4999));
+    expect(job.outcome, isNull);
 
+    async.elapse(const Duration(milliseconds: 1));
     expect('${job.outcome}', 'Cancelled(timeout)');
+    expect(hw.refused, 1);
     expect(camera.currentState, isA<Idle>());
 
     camera.close();
@@ -702,9 +733,11 @@ test('connect gives up after five seconds', () {
 });
 ```
 
-`connect()` gives `run` no state handlers, so the state stays `Idle`. A `run`
-with `ifCancelled` gets the deadline there, not in `ifFailed`. The timer the
-core keeps for it is gone as soon as the job ends: `async.pendingTimers` is
-empty after the five seconds.
+A millisecond before the deadline the job has no outcome, and the device is
+still waiting; at the deadline the token is cancelled, and `refused` counts the
+call the device let go. `connect()` gives `run` no state handlers, so the state
+stays `Idle`. A `run` with `ifCancelled` gets the deadline there, not in
+`ifFailed`. The timer the core keeps for it is gone as soon as the job ends:
+`async.pendingTimers` is empty after the five seconds.
 [A deadline of a job](cancellation.md#a-deadline-of-a-job) on the cancellation
 page tells a deadline from the other cancellations in that handler.

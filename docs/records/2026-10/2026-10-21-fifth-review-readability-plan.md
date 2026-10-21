@@ -1447,6 +1447,9 @@ the snapshot has data from the first frame, and `requireData` reads it with no
 разборов без заливки, строка исправлена, блоки П3 и пп. 4 и 6 `testing.md`
 целы. Переносы кода на странице — по выводу `dart format` опоры, не по записи.
 
+Итог: сделано до коммита записи плана `bb8d489e`; страницы волны брали код
+из отформатированных опор, а не из записи.
+
 **2. Medium, механика. Таблица симптомов `testing.md` стоит внутри ```text
 (план:957–967).** Если исполнитель перенесёт ограду вместе с таблицей,
 на странице появится лишний `text`-блок. Это противоречит собственному
@@ -1458,6 +1461,8 @@ the snapshot has data from the first frame, and `requireData` reads it with no
 
 Вердикт: принято. На странице симптомы встают в пункты правил (находка 25),
 отдельной таблицы и ограды нет.
+
+Итог: таблицы симптомов на странице нет, см. итог находки 25.
 
 **3. Low, механика. Общий раздел приписывает `check_traces.py` всем страницам
 (план:35, 69).** В CI он гоняется только по `flutter_solo/doc/mixins.md`,
@@ -1474,6 +1479,9 @@ the snapshot has data from the first frame, and `requireData` reads it with no
 Вердикт: принято. Сторож каждой страницы назван в её разделе; общий раздел
 говорит о блоках `text` в целом. Два заголовка `## 1.` ушли при пересборке:
 разделы страниц теперь «Страница N».
+
+Итог: исполнители гоняли сторожей своих страниц; `check_traces.py` касался
+только `mixins.md`, где огороженные блоки не менялись.
 
 #### 1. `errors.md` ядра
 
@@ -1797,6 +1805,12 @@ final class. - invalid_use_of_type_outside_library`. Расширение (exten
 Вердикт: принято, первый вариант: публичный `QueuedCamera` с `next()` объявлен
 в `testing_page.dart`, в той же библиотеке, что `CameraController`.
 
+Итог: сделано коммитом страницы
+`docs(solo): point testing.md at symptoms and show the camera`: публичный
+`final class QueuedCamera extends CameraController` с `next()` объявлен
+в `testing_page.dart`, на него переведён тест
+`the next job waits for the device to stop`.
+
 **24. Medium, верность/нагрузка. `final FakeCamera hw;` в опубликованном
 контроллере (план:1038).** Код страницы показывает, как писать
 продакшен-контроллер, а он привязан к фейку из тестов.
@@ -1807,6 +1821,14 @@ final class. - invalid_use_of_type_outside_library`. Расширение (exten
 Вердикт: принято. Поле получает тип устройства `Camera` — интерфейс с тем, что
 вызывает `connect`; `FakeCamera` его реализует. Страница называет `Camera`
 в той же фразе, что описывает фейк.
+
+Итог: сделано тем же коммитом страницы. Интерфейс `Camera`
+и `FakeCamera implements Camera` лежат в новом
+`test/support/testing_camera.dart` вместе с состояниями и заменами
+`CancelToken` и `OpenCancelled`; на странице весь `CameraController` с полем
+`final Camera hw;`, а страница ссылается на файл фейка. Счётчик `refused`
+держит новый тест
+`refused counts the waiting calls a cancelled token failed, alone`.
 
 **25. Medium, нагрузка. Таблица симптомов (п. 1) — второй указатель на те же
 восемь разделов.** Вместе с абзацем об импортах вступление вырастает примерно
@@ -1820,6 +1842,10 @@ red with an error none of its expectations raised …`) или оставить 
 
 Вердикт: принято: симптом вписывается в пункт правила, отдельной таблицы нет.
 
+Итог: сделано тем же коммитом страницы: симптом стоит после правила в каждом
+из восьми пунктов. В пункте «Timeouts» для этого названо
+`Job.isCancellationError`: без него у симптома «тест красный» не было правила.
+
 **26. Low/Medium, верность. «From this section on the tests run under
 `fakeAsync`» (план:1017).** Это неверно для «What one test leaves for the
 next»: по решению 97 её первая попытка часов не запускает. Фраза ещё
@@ -1832,12 +1858,23 @@ next»: по решению 97 её первая попытка часов не 
 Вердикт: принято: «The sections on time run under `fakeAsync`» с перечнем; тест
 `sections[6]` сверяется по новому порядку.
 
+Итог: сделано тем же коммитом страницы, в одном слове иначе: «The sections on
+timing and order run under `fakeAsync`», потому что «sections on time» читается
+и как «разделы вовремя». Перечень держит новый тест
+`the sections on timing and order are the three under fakeAsync`. Раздел
+«Assertions inside a zone» переехал четвёртым, и фраза вступления стала «The
+first four sections below await; `fakeAsync` starts with the fifth».
+
 **27. Low.** «`answer()`» в прозе называет метод фейка, которого страница
 не показывает: у слова нет предмета в примере. «The two packages of tests»
 звучит коряво — «`package:test` and `fake_async`».
 
 Вердикт: принято: `answer()` в прозе не называется, «`package:test` and
 `fake_async`».
+
+Итог: сделано тем же коммитом страницы: абзац об импортах говорит «The tests of
+the page import …», `answer()` в прозе не назван; импорты держит новый тест
+`the imports the page names are those of its tests and its camera`.
 
 Сверено: тест камеры ждёт семь `false`, затем `true`. Список `_says` (259,
 1787, 919, 1517 сохраняются, 1723 меняется и тест правится) с планом сходится.

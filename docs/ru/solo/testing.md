@@ -6,31 +6,45 @@
 который ждёт свою задачу или `close` контроллера:
 
 - [«Ожидание задачи»](#ожидание-задачи): вызов только ставит задачу в очередь,
-  поэтому тест ждёт её `done` или `value` и только потом читает состояние.
+  поэтому тест ждёт её `done` или `value` и только потом читает состояние. Тест
+  без этого ожидания падает с состоянием `Initial`.
 - [«Закрытие контроллера»](#закрытие-контроллера): обычный `close()` отменяет
-  загрузку; тест, который не держит `Job`, ждёт через `SoloCloseMode.drain`.
+  загрузку, и тест видит `Initial`; тест, который не держит `Job`, ждёт через
+  `SoloCloseMode.drain`.
 - [«Ошибка, которую никто не прочитал»](#ошибка-которую-никто-не-прочитал):
-  провал, который никто не прочитал, делает тест красным, поэтому задача,
-  которую тест не ждёт, получает `ignoreFailure()`.
+  провал, который никто не прочитал, делает тест красным с ошибкой, которую
+  не бросала ни одна его проверка, или приходит, когда тест уже прошёл, поэтому
+  задача, которую тест не ждёт, получает `ignoreFailure()`.
 - [«Проверки внутри зоны»](#проверки-внутри-зоны): задача создаётся внутри
-  `runZonedGuarded`, зона собирает её ошибки, а тест проверяет снаружи.
+  `runZonedGuarded`, зона собирает её ошибки, а тест проверяет снаружи. Тест,
+  который проверяет внутри, проходит, ничего не проверив, или висит до своего
+  таймаута.
 
 Другие четыре — для теста под `fakeAsync`, который не ждёт ничего:
 
 - [«Порядок событий»](#порядок-событий): порядок записывает наблюдатель,
-  а `flushMicrotasks()` между двумя вызовами даёт первой задаче стартовать.
+  а `flushMicrotasks()` между двумя вызовами даёт первой задаче стартовать. Без
+  этого `flushMicrotasks()` тест падает на порядке, которого не ждал.
 - [«Ожидание внутри fakeAsync»](#ожидание-внутри-fakeasync): часы двигает
   `async.elapse`, тест читает `job.outcome` там, где ждал бы `done`,
-  а `ignoreFailure()` помечает задачу.
+  а `ignoreFailure()` помечает задачу. Тест, который ждёт внутри `fakeAsync`,
+  висит до своего таймаута или проходит раньше, чем выполнятся его проверки.
 - [«Что один тест оставляет следующему»](#что-один-тест-оставляет-следующему):
   наблюдатель — статическое поле, и таких полей ещё четыре; тест, который
   ставит такое поле, возвращает его в `addTearDown`, а не своей последней
-  строкой.
+  строкой: упавший тест эту строку пропускает и оставляет свой наблюдатель
+  следующему.
 - [«Таймауты»](#таймауты): `Future.timeout` прекращает ожидание, а не вызов;
-  вызову, который должен остановиться, нужны `timeout` задачи и `ctx.onCancel`.
+  вызову, который должен остановиться, нужны `timeout` задачи и `ctx.onCancel`,
+  а `Job.isCancellationError` называет ошибку его остановки, иначе она делает
+  тест красным.
 
-Примеры ниже используют `package:test`, и все, кроме последнего, гоняют `load`
-контроллера из раздела
+Тесты страницы импортируют `dart:async`, `package:fake_async/fake_async.dart`,
+`package:solo/solo.dart` и `package:test/test.dart`;
+`dart pub add dev:test dev:fake_async` добавляет `package:test` и `fake_async`
+в dev-зависимости.
+
+Из примеров ниже все, кроме последнего, гоняют `load` контроллера из раздела
 [«Быстрый старт»](https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#быстрый-старт)
 README пакета:
 
@@ -83,9 +97,8 @@ class FakeProfileApi implements ProfileApi {
 а двадцать миллисекунд фейка он честно выжидает. Другому нужно смотреть между
 событиями (в каком порядке легли два вызова, что будет со сроком в пять
 секунд), и ждать он не может ничего вовсе. Такой тест идёт под
-`package:fake_async`, где часы двигает сам тест. Первые три раздела ниже ждут;
-`fakeAsync` начинается с четвёртого, а седьмой, о проверках внутри зоны, снова
-ждёт.
+`package:fake_async`, где часы двигает сам тест. Первые четыре раздела ниже
+ждут; `fakeAsync` начинается с пятого.
 
 ## Ожидание задачи
 
@@ -292,13 +305,83 @@ test('a failed load shows the failure', () async {
 `Solo.unansweredHandler`, и ошибка приходит ему вместо зоны: об этом раздел
 [«Ответ за ошибку»](errors.md#ответ-за-ошибку) страницы об ошибках.
 
+## Проверки внутри зоны
+
+То, что непрочитанный провал доходит до зоны, когда `Solo.unansweredHandler`
+не задан, обещает движок. Тесту этого обещания нужна своя зона, чтобы провал
+в ней поймать: в зоне самого теста он и делает тест красным.
+
+### Первая попытка
+
+```dart
+// Первая попытка: тест ничего не доказывает о зоне.
+test('a failure nobody read reaches the zone', () async {
+  await runZonedGuarded(
+    () async {
+      final profile = ProfileController(
+        FakeProfileApi(error: StateError('no network')),
+      )..load();
+      await profile.close(mode: SoloCloseMode.drain);
+
+      expect(profile.currentState, isA<Failure>());
+    },
+    (error, stackTrace) => expect(error, isA<StateError>()),
+  );
+});
+```
+
+Тест проходит, и прошёл бы, даже если бы до зоны не дошло ни одной ошибки.
+Проверка в обработчике сама по себе не спасает: его зовут, только когда ошибка
+пришла. Не пришло ни одной, и он не выполнится ни разу, тест зелёный, а о зоне
+не сказано ничего.
+
+Проверке в теле не лучше. `Job` отправляет ошибку в зону, в которой создана,
+поэтому `load()`, вызов, который её создаёт, приходится делать внутри
+`runZonedGuarded`, а вместе с ним внутрь уезжает и проверка состояния. Там она
+перестаёт быть проверкой: о провале `expect` сообщает броском `TestFailure`,
+а бросок изнутри зоны достаётся её обработчику, как любая другая ошибка. Будь
+состояние не `Failure`, обработчик получил бы этот `TestFailure`, сравнил его
+со `StateError`, не нашёл совпадения и написал об этом со строкой обработчика,
+а не той, на которой стояла проверка. А `await` не вернулся бы никогда, потому
+что ошибка тела ушла в зону, а не в его future, и тест кончился бы таймаутом.
+
+### Собрать в зоне, проверить снаружи
+
+```dart
+test('a failure nobody read reaches the zone', () async {
+  final zoneErrors = <Object>[];
+  late final ProfileController profile;
+
+  await runZonedGuarded(
+    () async {
+      profile = ProfileController(
+        FakeProfileApi(error: StateError('no network')),
+      )..load();
+      await profile.close(mode: SoloCloseMode.drain);
+    },
+    (error, stackTrace) => zoneErrors.add(error),
+  );
+
+  expect(profile.currentState, isA<Failure>());
+  expect(zoneErrors, [isA<StateError>()]);
+});
+```
+
+Зона собирает, а тест проверяет после неё, на своих строках: и состояние,
+и ошибки. Для этого `profile` объявлен снаружи зоны, а присвоен внутри, где
+и должна быть создана `Job`. Эти строки делает безопасными дренаж: к возврату
+из `close` задача закончилась и её провал отправлен.
+
 ## Порядок событий
 
 `Policy.droppable` нужна, чтобы второй `load()`, сделанный, пока идёт первый,
 ничего своего не запускал. По состоянию этого не увидеть: оно кончается
-`Loaded` в обоих случаях. Тесту нужно видеть порядок событий. Время и порядок
-тестируются через `package:fake_async`, а что именно произошло, собирает
-наблюдатель, один на все контроллеры процесса.
+`Loaded` в обоих случаях. Тесту нужно видеть порядок событий. Разделы о времени
+и порядке идут под `fakeAsync`: этот,
+[«Ожидание внутри fakeAsync»](#ожидание-внутри-fakeasync)
+и [«Таймауты»](#таймауты). Там тест сам двигает часы и сам выполняет
+микротаски, поэтому может остановиться между двумя вызовами. А что именно
+произошло, собирает наблюдатель, один на все контроллеры процесса.
 
 ### Первая попытка
 
@@ -524,73 +607,6 @@ addTearDown(() => Solo.observer = null);
 с `Job.debug` ядра, который ставят рядом с ним, и `Job.isCancellationError`
 ядра. Все пять начинают с `null`, его и возвращает сброс выше.
 
-## Проверки внутри зоны
-
-То, что непрочитанный провал доходит до зоны, когда `Solo.unansweredHandler`
-не задан, обещает движок. Тесту этого обещания нужна своя зона, чтобы провал
-в ней поймать: в зоне самого теста он и делает тест красным.
-
-### Первая попытка
-
-```dart
-// Первая попытка: тест ничего не доказывает о зоне.
-test('a failure nobody read reaches the zone', () async {
-  await runZonedGuarded(
-    () async {
-      final profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
-      )..load();
-      await profile.close(mode: SoloCloseMode.drain);
-
-      expect(profile.currentState, isA<Failure>());
-    },
-    (error, stackTrace) => expect(error, isA<StateError>()),
-  );
-});
-```
-
-Тест проходит, и прошёл бы, даже если бы до зоны не дошло ни одной ошибки.
-Проверка в обработчике сама по себе не спасает: его зовут, только когда ошибка
-пришла. Не пришло ни одной, и он не выполнится ни разу, тест зелёный, а о зоне
-не сказано ничего.
-
-Проверке в теле не лучше. `Job` отправляет ошибку в зону, в которой создана,
-поэтому `load()`, вызов, который её создаёт, приходится делать внутри
-`runZonedGuarded`, а вместе с ним внутрь уезжает и проверка состояния. Там она
-перестаёт быть проверкой: о провале `expect` сообщает броском `TestFailure`,
-а бросок изнутри зоны достаётся её обработчику, как любая другая ошибка. Будь
-состояние не `Failure`, обработчик получил бы этот `TestFailure`, сравнил его
-со `StateError`, не нашёл совпадения и написал об этом со строкой обработчика,
-а не той, на которой стояла проверка. А `await` не вернулся бы никогда, потому
-что ошибка тела ушла в зону, а не в его future, и тест кончился бы таймаутом.
-
-### Собрать в зоне, проверить снаружи
-
-```dart
-test('a failure nobody read reaches the zone', () async {
-  final zoneErrors = <Object>[];
-  late final ProfileController profile;
-
-  await runZonedGuarded(
-    () async {
-      profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
-      )..load();
-      await profile.close(mode: SoloCloseMode.drain);
-    },
-    (error, stackTrace) => zoneErrors.add(error),
-  );
-
-  expect(profile.currentState, isA<Failure>());
-  expect(zoneErrors, [isA<StateError>()]);
-});
-```
-
-Зона собирает, а тест проверяет после неё, на своих строках: и состояние,
-и ошибки. Для этого `profile` объявлен снаружи зоны, а присвоен внутри, где
-и должна быть создана `Job`. Эти строки делает безопасными дренаж: к возврату
-из `close` задача закончилась и её провал отправлен.
-
 ## Таймауты
 
 Вызов, который не отвечает никогда, занял бы очередь насовсем, поэтому задача,
@@ -646,21 +662,27 @@ test('the deadline ends the job, not the call', () {
 
 Если операция устройства должна остановиться до следующей задачи, дайте задаче
 срок через `timeout` и передайте механизм отмены устройства в `ctx.onCancel`.
-Пример взят с контроллера камеры, а не профиля. `hw` в нём обозначает
-устройство, `CancelToken` принадлежит API этого устройства, а не пакету,
-а `Idle` и `Connected` служат состояниями:
+Пример взят с контроллера камеры, а не профиля. Устройство контроллер держит
+в `hw`; `CancelToken` принадлежит API устройства, а не этому пакету, а `Idle`
+и `Connected` служат состояниями:
 
 ```dart
-Job<void> connect() => run<Idle, void>(
-      key: 'connect',
-      timeout: const Duration(seconds: 5),
-      (ctx) async {
-        final token = CancelToken();
-        ctx.onCancel(token.cancel);
-        await ctx.join(() => hw.open(cancelToken: token));
-        ctx.emit(const Connected());
-      },
-    );
+final class CameraController extends Solo<CameraState> {
+  final Camera hw;
+
+  CameraController(this.hw) : super(const Idle());
+
+  Job<void> connect() => run<Idle, void>(
+        key: 'connect',
+        timeout: const Duration(seconds: 5),
+        (ctx) async {
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await ctx.join(() => hw.open(cancelToken: token));
+          ctx.emit(const Connected());
+        },
+      );
+}
 ```
 
 Через пять секунд после старта тела задача отменяется так же, как её отменяет
@@ -677,8 +699,15 @@ Job<void> connect() => run<Idle, void>(
 а тест называет её так же и возвращает поле на место. Тогда до зоны ничего
 не доходит, и `ignoreFailure()` тесту не нужен. Поле разобрано в разделе
 [«Ошибки отмены»](../async_job/errors.md#ошибки-отмены) страницы об ошибках
-пакета `async_job`. Тесту эти пять секунд не стоят ничего; его `FakeCamera`
-сама не отвечает никогда, поэтому вызов заканчивает именно срок:
+пакета `async_job`.
+
+Тесту эти пять секунд не стоят ничего: его `FakeCamera` — устройство, которое
+само не отвечает никогда, `Camera`, чей `open` ждёт, пока тест не велит ему
+ответить. Отменённый токен роняет ждущий вызов с `OpenCancelled` и засчитывает
+его в `refused`. Фейк целиком лежит
+в [`test/support/testing_camera.dart`](../../../packages/solo/test/support/testing_camera.dart),
+вместе с заменами `CancelToken` и `OpenCancelled` из API устройства. Тест
+смотрит за миллисекунду до срока и в сам срок:
 
 ```dart
 test('connect gives up after five seconds', () {
@@ -686,12 +715,16 @@ test('connect gives up after five seconds', () {
   addTearDown(() => Job.isCancellationError = null);
 
   fakeAsync((async) {
-    final camera = CameraController(FakeCamera());
+    final hw = FakeCamera();
+    final camera = CameraController(hw);
 
     final job = camera.connect();
-    async.elapse(const Duration(seconds: 5));
+    async.elapse(const Duration(milliseconds: 4999));
+    expect(job.outcome, isNull);
 
+    async.elapse(const Duration(milliseconds: 1));
     expect('${job.outcome}', 'Cancelled(timeout)');
+    expect(hw.refused, 1);
     expect(camera.currentState, isA<Idle>());
 
     camera.close();
@@ -700,6 +733,8 @@ test('connect gives up after five seconds', () {
 });
 ```
 
+За миллисекунду до срока у задачи нет исхода, а устройство ещё ждёт; в срок
+токен отменяется, и `refused` засчитывает вызов, который устройство отпустило.
 `connect()` не даёт `run` обработчиков состояния, поэтому состояние остаётся
 `Idle`. У `run` с `ifCancelled` срок попадает туда, а не в `ifFailed`. Таймер,
 который ядро держит для него, исчезает, как только задача кончилась: после пяти

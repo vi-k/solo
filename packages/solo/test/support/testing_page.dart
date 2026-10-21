@@ -1,15 +1,17 @@
 // The code of `doc/testing.md` that works, verbatim: the tests under every
-// heading but "The first attempt", and the controller of the camera around
-// the `connect` of "A deadline of the job". `test` is the one of
-// `testing_stubs.dart`, and `testing_rakes_test` runs each of these as a
-// test of its suite. Where the page shows a few lines of a test, the test
-// around them is this file's own.
+// heading but "The first attempt", and the controller of the camera of "A
+// deadline of the job". `test` is the one of `testing_stubs.dart`, and
+// `testing_rakes_test` runs each of these as a test of its suite. Where the
+// page shows a few lines of a test, the test around them is this file's
+// own. The camera the controller holds is the one of `testing_camera.dart`,
+// which the page links to.
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart' hide test;
 
+import 'testing_camera.dart';
 import 'testing_page_fixtures.dart';
 import 'testing_stubs.dart';
 
@@ -166,10 +168,9 @@ final collectedInTheZone =
   expect(zoneErrors, [isA<StateError>()]);
 });
 
-/// The controller of the camera: `connect` is the page's, the class around
-/// it is what the page takes for granted.
+/// `### A deadline of the job`: the controller of the camera.
 final class CameraController extends Solo<CameraState> {
-  final FakeCamera hw;
+  final Camera hw;
 
   CameraController(this.hw) : super(const Idle());
 
@@ -183,25 +184,35 @@ final class CameraController extends Solo<CameraState> {
           ctx.emit(const Connected());
         },
       );
+}
 
-  /// A job behind `connect` in the queue, for the tests of what the queue
-  /// waits for.
+/// The page's controller with a job to queue behind `connect`, for the
+/// tests of what the queue waits for.
+final class QueuedCamera extends CameraController {
+  QueuedCamera(super.hw);
+
+  /// A job behind `connect` in the queue.
   Job<void> next() => run<CameraState, void>(key: 'next', (ctx) async {});
 }
 
-/// `### A deadline of the job`: the five seconds under fake time, with the
-/// stop of the device named the way the app names it in `main`.
+/// `### A deadline of the job`: the five seconds under fake time, a
+/// millisecond before the deadline and at it, with the stop of the device
+/// named the way the app names it in `main`.
 final connectGivesUp = test('connect gives up after five seconds', () {
   Job.isCancellationError = (error) => error is OpenCancelled;
   addTearDown(() => Job.isCancellationError = null);
 
   fakeAsync((async) {
-    final camera = CameraController(FakeCamera());
+    final hw = FakeCamera();
+    final camera = CameraController(hw);
 
     final job = camera.connect();
-    async.elapse(const Duration(seconds: 5));
+    async.elapse(const Duration(milliseconds: 4999));
+    expect(job.outcome, isNull);
 
+    async.elapse(const Duration(milliseconds: 1));
     expect('${job.outcome}', 'Cancelled(timeout)');
+    expect(hw.refused, 1);
     expect(camera.currentState, isA<Idle>());
 
     camera.close();

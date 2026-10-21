@@ -11,6 +11,7 @@ import 'package:test/test.dart';
 import 'package:test_api/hooks_testing.dart' as nested;
 
 import 'support/page_code.dart';
+import 'support/testing_camera.dart';
 import 'support/testing_first_attempt_timeout.dart' as deadline;
 import 'support/testing_first_attempts.dart' as first;
 import 'support/testing_page.dart' as page;
@@ -33,7 +34,7 @@ import 'support/testing_stubs.dart' hide test;
 /// What the prose of the page says about that code is pinned next to it:
 /// a test that checks a sentence holds the page to it through [_says].
 ///
-/// The first three sections of the page await real time, twenty
+/// The first four sections of the page await real time, twenty
 /// milliseconds a load, and so do the tests of them here.
 
 String _page() => File('doc/testing.md').readAsStringSync();
@@ -200,7 +201,7 @@ const _tooLate = 'This test failed after it had already completed.';
 /// The `connect` of "A deadline of the job" with both state handlers of
 /// `run`, each saying it was called.
 final class _HandledCamera extends Solo<CameraState> {
-  final FakeCamera hw;
+  final Camera hw;
   final List<String> seen;
 
   _HandledCamera(this.hw, this.seen) : super(const Idle());
@@ -1504,17 +1505,61 @@ final name = await ctx.abandonable(
       setUp(() => Job.isCancellationError = (error) => error is OpenCancelled);
       tearDown(() => Job.isCancellationError = null);
 
-      test('the fake camera never answers on its own', () {
+      test('the fake camera never answers on its own, only when told to', () {
         fakeAsync((async) {
+          final hw = FakeCamera();
           var answered = false;
-          FakeCamera()
-              .open(cancelToken: CancelToken())
-              .then((_) => answered = true);
+          hw.open(cancelToken: CancelToken()).then((_) => answered = true);
 
           async.elapse(const Duration(hours: 1));
+          final before = answered;
+          hw.answer();
+          async.flushMicrotasks();
 
-          expect(answered, isFalse);
-          _says('its `FakeCamera` is a device that never answers on its own');
+          expect(before, isFalse);
+          expect(answered, isTrue);
+          expect(hw.refused, 0);
+          _says('its `FakeCamera` is a device that never answers on its own, '
+              'a `Camera` whose `open` waits until the test makes it answer');
+        });
+      });
+
+      test('refused counts the waiting calls a cancelled token failed, alone',
+          () {
+        fakeAsync((async) {
+          final hw = FakeCamera();
+          final seen = <String>[];
+
+          final answered = CancelToken();
+          hw.open(cancelToken: answered).then(
+                (_) => seen.add('answered'),
+                onError: (Object error) => seen.add('$error'),
+              );
+          hw.answer();
+          async.flushMicrotasks();
+          answered.cancel();
+          async.flushMicrotasks();
+          seen.add('after an answer and its cancel: refused ${hw.refused}');
+
+          final dropped = CancelToken();
+          hw.open(cancelToken: dropped).then(
+                (_) => seen.add('answered'),
+                onError: (Object error) => seen.add('$error'),
+              );
+          dropped
+            ..cancel()
+            ..cancel();
+          async.flushMicrotasks();
+          seen.add('after a cancel, twice: refused ${hw.refused}');
+
+          expect(seen, [
+            'answered',
+            'after an answer and its cancel: refused 0',
+            'OpenCancelled',
+            'after a cancel, twice: refused 1',
+          ]);
+          _says('A cancelled token fails the waiting call with `OpenCancelled` '
+              'and counts it in `refused`.');
         });
       });
 
@@ -1538,6 +1583,9 @@ final name = await ctx.abandonable(
               'is cancelled by then: it ends `Cancelled(timeout)`, not '
               '`Failed`');
           _says('`async.pendingTimers` is empty after the five seconds');
+          _says('A millisecond before the deadline the job has no outcome, and '
+              'the device is still waiting');
+          _says('`refused` counts the call the device let go');
 
           camera.close();
           async.flushTimers();
@@ -1614,7 +1662,7 @@ final name = await ctx.abandonable(
 
       test('the next job waits for the device to stop', () {
         fakeAsync((async) {
-          final camera = page.CameraController(FakeCamera())..connect();
+          final camera = page.QueuedCamera(FakeCamera())..connect();
           async.flushMicrotasks();
           final next = camera.next();
 
@@ -1710,19 +1758,35 @@ final name = await ctx.abandonable(
       }
     });
 
-    test('the three sections that await come first, fakeAsync is the fourth',
-        () {
+    test(
+        'the four sections that await come first, fakeAsync starts with '
+        'the fifth', () {
       final sections = _sections();
       final underFakeTime = [
         for (final section in sections) section.contains('fakeAsync(('),
       ];
 
-      expect(underFakeTime.take(4), [false, false, false, true]);
-      expect(sections[6], startsWith('## Assertions inside a zone'));
-      expect(underFakeTime[6], isFalse);
-      _says('The first three sections below await; `fakeAsync` starts with '
-          'the fourth, and the seventh, on assertions inside a zone, awaits '
-          'again.');
+      expect(underFakeTime.take(5), [false, false, false, false, true]);
+      expect(sections[3], startsWith('## Assertions inside a zone'));
+      _says('The first four sections below await; `fakeAsync` starts with '
+          'the fifth.');
+    });
+
+    test('the sections on timing and order are the three under fakeAsync', () {
+      final underFakeTime = [
+        for (final section in _sections())
+          if (section.contains('fakeAsync(('))
+            section.substring(3, section.indexOf('\n')),
+      ];
+
+      expect(underFakeTime, [
+        'The order of what happened',
+        'Awaiting inside fakeAsync',
+        'Timeouts',
+      ]);
+      _says('The sections on timing and order run under `fakeAsync`: this '
+          'one, [Awaiting inside fakeAsync](#awaiting-inside-fakeasync) and '
+          '[Timeouts](#timeouts).');
     });
 
     test('the rules on top name every section, four of each kind of test', () {
@@ -1747,7 +1811,8 @@ final name = await ctx.abandonable(
       final awaiting = rules.take(4).map((rule) => rule.heading);
       final underFakeTime = rules.skip(4).map((rule) => rule.heading);
 
-      expect(rules.map((rule) => rule.heading), unorderedEquals(sections.keys));
+      // The rules in the order of the sections.
+      expect(rules.map((rule) => rule.heading), orderedEquals(sections.keys));
       for (final rule in rules) {
         expect(rule.anchor, anchor(rule.heading));
       }
@@ -1785,6 +1850,29 @@ final name = await ctx.abandonable(
 
       expect(ofTheCamera, [...List.filled(7, false), true]);
       _says('all but the last drive the `load` of the controller');
+    });
+
+    test('the imports the page names are those of its tests and its camera',
+        () {
+      final imports = {
+        for (final file in [
+          'test/support/testing_page.dart',
+          'test/support/testing_camera.dart',
+        ])
+          for (final match in RegExp("^import '([^']*)'", multiLine: true)
+              .allMatches(File(file).readAsStringSync()))
+            if (match.group(1)!.contains(':')) match.group(1)!,
+      };
+
+      expect(imports, {
+        'dart:async',
+        'package:fake_async/fake_async.dart',
+        'package:solo/solo.dart',
+        'package:test/test.dart',
+      });
+      _says('The tests of the page import `dart:async`, '
+          '`package:fake_async/fake_async.dart`, `package:solo/solo.dart` and '
+          '`package:test/test.dart`');
     });
 
     test('has no fence the checks do not read', () {
