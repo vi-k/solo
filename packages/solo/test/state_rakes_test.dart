@@ -2116,6 +2116,58 @@ void main() {
       });
     });
 
+    test('a replaced reload publishes Initial unless its handler asks', () {
+      fakeAsync((async) {
+        final asking = byHandlers();
+        final first = asking.reloadAskingNothing();
+        async.flushMicrotasks();
+        final second = asking.reloadAskingNothing();
+        async.flushMicrotasks();
+        api.answer('Ada');
+        async.flushMicrotasks();
+
+        expect(
+          heard,
+          ['Loading', 'Initial', 'Loading', 'Loaded(Ada)'],
+          reason: 'the replaced job writes its resting state in between',
+        );
+        expect('${first.outcome}', 'Cancelled(replaced)');
+        expect('${second.outcome}', 'Done(Ada)');
+        asking.close().ignore();
+        async.flushTimers();
+
+        final controller = byHandlers();
+        final replaced = controller.reload();
+        async.flushMicrotasks();
+        final newer = controller.reload();
+        async.flushMicrotasks();
+        api.answer('Ada');
+        async.flushMicrotasks();
+
+        expect(
+          heard,
+          ['Loading', 'Loading', 'Loaded(Ada)'],
+          reason: 'the handler handed back Loading, which publishes nothing',
+        );
+        expect('${replaced.outcome}', 'Cancelled(replaced)');
+        expect('${newer.outcome}', 'Done(Ada)');
+
+        controller.close().ignore();
+        async.flushTimers();
+
+        // A cancellation of another kind still returns Initial.
+        final byHand = byHandlers();
+        final cancelled = byHand.reload();
+        async.flushMicrotasks();
+        cancelled.cancel().ignore();
+        async.flushMicrotasks();
+        expect(heard, ['Loading', 'Initial']);
+        expect('${cancelled.outcome}', 'Cancelled(manual)');
+        byHand.close().ignore();
+        async.flushTimers();
+      });
+    });
+
     test('the handlers: a cancellation leaves Loading for Initial', () {
       fakeAsync((async) {
         final controller = byHandlers();
@@ -2713,6 +2765,7 @@ void main() {
       '### The handlers': profileAnswers,
       '#### The first attempt': firstAttempts,
       '#### The rules': profileAnswers,
+      '### Handler eligibility and errors': profileAnswers,
     };
     for (final MapEntry(key: heading, value: holder) in holders.entries) {
       test('the code under "$heading" is a run of lines of $holder', () {

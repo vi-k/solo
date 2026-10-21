@@ -58,5 +58,18 @@ enum Policy {
   /// key without waiting for it — unless that one was created with
   /// `cancellable: false`, which refuses. The reason of that cancellation
   /// is a `ReplacedCancelReason` as well.
+  ///
+  /// The `ifCancelled` of the cancelled job runs, and its state is published
+  /// before the newer job starts. A handler that should leave the state to
+  /// the newer job hands back the state it was given, which publishes
+  /// nothing:
+  ///
+  /// ```dart
+  /// ifCancelled: (state, cancelled) =>
+  ///     cancelled.reason is ReplacedCancelReason ? state : const Initial(),
+  /// ```
+  ///
+  /// The table of `doc/state.md`, "Handler eligibility and errors", has the
+  /// rest.
   restart,
 }

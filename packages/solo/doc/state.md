@@ -583,6 +583,7 @@ permit the operation and the correction after it.
 | Success, a discarded duplicate, a body that never started | Not run at all. |
 | The job's own `emit` | Stay enabled: the job's own `emit` does not disable them. |
 | The job's rules cancel it at a checkpoint of its own: after its own `emit` of a state they refuse, or on a `stateAs` mismatch | Not run: a job its rules cancelled leaves the state as it is. |
+| `Policy.restart` cancels the running job for a newer one with its key | `ifCancelled` runs, as for any cancellation, and its state is published before the newer job starts. |
 | A handler throws | The error is reported; the outcome and the queue are untouched. |
 | A rule throws while eligibility is checked | Handlers disabled and the error reported. Resource cleanup still runs. |
 
@@ -598,3 +599,30 @@ it, computed from the state before it, and the fact is lost. The state it was
 given, handed back, leaves the write in place. If they refuse it, the handler's
 result is dropped. Resource release belongs in the cleanup API, on the page
 [Resources and cleanup](resources.md).
+
+A reload under `Policy.restart` shows the row about replacement. The second
+call cancels the first load while it waits for the name, and a handler that
+returns `Initial` publishes it between the two: listeners hear `Loading`,
+`Initial`, `Loading`, `Loaded`. The reason of the cancellation tells the
+replacement from the rest. A handler that hands back the state it was given
+publishes nothing, and listeners hear `Loading`, `Loading`, `Loaded`:
+
+```dart
+Job<String> reload() => run<ProfileState, String>(
+      key: 'load',
+      policy: Policy.restart,
+      ifFailed: (state, error, stackTrace) => Failure(error),
+      // The newer reload publishes its own state.
+      ifCancelled: (state, cancelled) =>
+          cancelled.reason is ReplacedCancelReason ? state : const Initial(),
+      (ctx) async {
+        ctx.emit(const Loading());
+        final name = await ctx.abandonable(api.fetchName);
+        ctx.emit(Loaded(name));
+        return name;
+      },
+    );
+```
+
+Cancelled any other way, by hand or by `close()`, the reload still returns
+`Initial`.
