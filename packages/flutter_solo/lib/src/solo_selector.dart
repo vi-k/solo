@@ -9,6 +9,16 @@ import 'solo_selection.dart';
 /// changes: what a [SoloSelection] does, for a widget that has nowhere to
 /// keep one.
 ///
+/// It takes any [Solo], one with `SoloListenable`, one with `SoloStream` or a
+/// plain one, is to [SoloBuilder] what a pick is to the whole state, and
+/// carries what a `State` field would: its subscription to [solo] and the pick
+/// it last accepted. So the picking widget needs no `State`, and nothing has to
+/// be disposed of. Of what it is given the widget compares [solo] alone:
+/// [selector] and [changed] are called as the widget has them at the moment, so
+/// a closure written in place moves no subscription and does not start the
+/// value over. A [ValueListenable] that is not a controller is picked from with
+/// a [SoloSelection] of its own and a `ValueListenableBuilder`.
+///
 /// ```dart
 /// SoloSelector<Profile, bool>(
 ///   solo: controller,
@@ -20,28 +30,7 @@ import 'solo_selection.dart';
 /// )
 /// ```
 ///
-/// The button drops the job `save` hands back: a failed save goes on to
-/// `Solo.unansweredHandler`, or to the zone when none is set. A screen that
-/// tells the user of it waits for the job's `done`.
-///
-/// It takes any [Solo] — one with `SoloListenable`, one with `SoloStream`
-/// or a plain one — and is to [SoloBuilder] what a pick is to the whole
-/// state. A [ValueListenable] that is not a controller is picked from with
-/// a [SoloSelection] of its own and a `ValueListenableBuilder`.
-///
-/// A selection earns its keep by being kept: one built in `build` and dropped
-/// at the end of it is subscribed to and unsubscribed from on every build, and
-/// the announced value it holds notifications back with goes with it. That is
-/// what a `State` field was for, and it is what this widget carries instead:
-/// its subscription to [solo] and the pick it last accepted. So the picking
-/// widget can be a `StatelessWidget`, and a screen that picks three values out
-/// of one controller needs no `State` at all. Nothing has to be disposed of:
-/// the widget going away takes its listener off [solo].
-///
-/// Of what it is given the widget compares [solo] alone. [selector] and
-/// [changed] are called as the widget has them at the moment, so a closure
-/// written in place is as good as a function held in a field: a parent
-/// rebuild moves no subscription and does not start the value over.
+/// See [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) in the package README.
 final class SoloSelector<S extends Object, T> extends StatefulWidget {
   /// The controller to pick out of.
   ///

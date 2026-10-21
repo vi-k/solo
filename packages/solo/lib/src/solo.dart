@@ -281,89 +281,40 @@ abstract class Solo<S extends Object> {
     }
   }
 
-  /// Creates a job without queueing it. Use for job factories such as
-  /// `_closeCameraJob()` that are added or run as children later.
+  /// Creates a job without queueing it, for [add] or for [JobContext.run].
   ///
-  /// Queued, the job starts in the zone this method is called in — inside
-  /// [JobContext.unattended], the zone that work was started from — where
-  /// an unread failure of the job goes as well, and not in the zone of
-  /// [add] or of whatever wakes the queue. Run as a child, it starts where
-  /// [JobContext.run] starts it.
+  /// Queued, the job starts in the zone this method is called in, where an
+  /// unread failure of it goes as well, and not in the zone of [add]. Throws
+  /// [ArgumentError] when [timeout] is zero or negative, or comes with
+  /// `cancellable: false`: the deadline is a cancellation, and such a job
+  /// would refuse it.
   ///
-  /// `canStart` is checked once, when the job is taken from the queue or, run
-  /// as a child, when [JobContext.run] starts it; `keepWhile` is checked at
-  /// start, on every state change while the job runs, and on every read through
-  /// the context. `keepWhile` answers about the state and does not change
-  /// it: a write from inside it throws [StateError], and the rule throws
-  /// with it. `cancellable: false` turns down every cancellation that may
-  /// be turned down — `cancel`, `clear` without `force`, parent cancellation
-  /// and, once the job runs, `close` — but not a state that stopped matching
-  /// `W` or `keepWhile`.
+  /// `canStart` is asked once, at start; `keepWhile` at start, on every state
+  /// change while the job runs and on every read through the context. A rule
+  /// answers and does not write: a write from inside `keepWhile` throws
+  /// [StateError], and the rule throws with it.
   ///
-  /// The flag is consulted only once the engine holds the job. One this method
-  /// has made and nobody has added is cancelled like any other. Queued, it
-  /// turns down `cancel` and a `clear` without `force`, while `close` and
-  /// `clear` with `force` take it out anyway — they do not ask. Running, it
-  /// turns down all four. A queued job that turned down `cancel` starts in its
-  /// turn and runs to its end, and `await job.cancel()` comes back only then:
-  /// [Job.cancel] waits for the job to finish. [JobContext.uncancellable] says
-  /// the same about one step of the body rather than about the whole job.
+  /// `cancellable: false` turns down `cancel`, `clear` without `force`, parent
+  /// cancellation and, once the job runs, `close` — not a state that stops
+  /// matching `W` or `keepWhile`. The flag counts only once the engine holds
+  /// the job: one made here that nobody has added is cancelled like any other.
+  /// A queued job that turned down `cancel` starts in its turn and runs to its
+  /// end, and `await job.cancel()` comes back only then.
   ///
-  /// [ifFailed] and [ifCancelled] synchronously map the current state to the
-  /// state after a failed or cancelled body. They run after children and
-  /// resource cleanup, with the outcome fixed, before [Solo.onFinish]
-  /// and before the next queued job. They do not change or observe the
-  /// outcome: [Job.value] still throws, and an unobserved failure is still
-  /// reported. A handler error goes to the error hook and observer without
-  /// replacing the original outcome.
+  /// [ifFailed] and [ifCancelled] compute the state after a failed or
+  /// cancelled body, once its children and cleanup are over, and change
+  /// nothing about the outcome. [ifCancelled] runs at completion: the signal
+  /// to stop the operation belongs in [JobContext.onCancel], which delivers it
+  /// at once. A rule that throws at `ctx.state` or `ctx.check()` reaches the
+  /// body instead, and a `Failed` it leaves is corrected like any other.
   ///
-  /// Neither runs on success or when the body never started. An external state
-  /// change that violates `W` or [keepWhile] permanently suppresses both
-  /// handlers, including during cancellation, child waiting or cleanup. A
-  /// parent's lost permission also suppresses its descendants' handlers. A
-  /// parent without state handlers stops checking its rules when its body ends,
-  /// as usual. A rule that throws while the handlers' permission is checked
-  /// suppresses correction, and its error is reported. The same rule throwing
-  /// at `ctx.state` or `ctx.check()` surfaces in the body instead: a body that
-  /// lets it out ends `Failed`, and [ifFailed] corrects that as any failure.
-  /// [canStart] is not repeated, and the job's own emit is exempt.
+  /// [timeout] counts from the start of the body, not from [add], and lands as
+  /// a cancellation, as that of [Job.new] does: [ifCancelled] gets a
+  /// [TimeoutCancelReason], [ifFailed] is not called, and
+  /// `on TimeoutException` catches nothing.
   ///
-  /// Handlers receive `S`, which may differ from the body's working `W`, and
-  /// should only compute the next state: the value they return is their write.
-  /// The state they were given, handed back as the same object, is no write:
-  /// the state stays as it is and nothing is published, and a `const` the state
-  /// already holds is that object. An equal state that is another object is
-  /// published, as an `emit` of it would be. A write made from inside one —
-  /// [externalSetState], or a source that calls it synchronously — does not
-  /// combine with the value: if the job's rules accept it, any other result of
-  /// the handler lands on top of it, computed from the state before it, while
-  /// the state it was given leaves the write in place; if they refuse it, the
-  /// handler's result is dropped. Cleanup belongs in [JobContext.onDispose] or
-  /// [JobContext.onDiscard]. [ifCancelled] runs at completion; the signal to
-  /// the operation being stopped belongs in [JobContext.onCancel], which
-  /// delivers it immediately.
-  ///
-  /// [timeout] gives the job a deadline counted from the start of its body,
-  /// not from [add]: the time in the queue is not counted. What it bounds
-  /// and how it lands are what [Job.new] says of its own `timeout`. The
-  /// deadline is a cancellation, not an error: [ifCancelled] receives a
-  /// `Cancelled(timeout)` whose reason is a [TimeoutCancelReason], [ifFailed]
-  /// is not called, and [Job.value] throws that [Cancelled], which
-  /// `on TimeoutException` does not catch. A handler that rolls back a
-  /// cancellation and reports an error tells the two apart by the reason:
-  ///
-  /// ```dart
-  /// ifCancelled: (state, cancelled) => cancelled.reason is TimeoutCancelReason
-  ///     ? const Failure('timed out')
-  ///     : const Initial(),
-  /// ```
-  ///
-  /// The queue is not cleared after a deadline: the next job starts once
-  /// this one has cleaned up, as after any cancellation.
-  ///
-  /// Throws [ArgumentError] when [timeout] is zero or negative, or comes
-  /// with `cancellable: false`: the deadline is a cancellation the job may
-  /// refuse, and such a job would refuse it.
+  /// See [Parameters of a job](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#parameters-of-a-job)
+  /// on the reference page, which leads to the section of each parameter.
   @protected
   SoloJob<T> job<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
@@ -693,19 +644,7 @@ abstract class Solo<S extends Object> {
   /// throws for a job it cannot take: [ArgumentError] for a policy that
   /// needs a key without one, and another from [Policy.droppable] when one
   /// key is shared by jobs with different result types. And it throws what
-  /// [job] throws, before anything is queued: [ArgumentError] for a
-  /// [timeout] that is zero or negative or comes with `cancellable: false`.
-  ///
-  /// A [timeout] that runs out reaches [ifCancelled], not [ifFailed]: the
-  /// deadline is a cancellation with a [TimeoutCancelReason], counted from
-  /// the start of the body and not from this call. To show it as a failure,
-  /// branch on the reason:
-  ///
-  /// ```dart
-  /// ifCancelled: (state, cancelled) => cancelled.reason is TimeoutCancelReason
-  ///     ? const Failure('timed out')
-  ///     : const Initial(),
-  /// ```
+  /// [job] throws, before anything is queued.
   ///
   /// ```dart
   /// Job<String> load() => run<Profile, String>(
@@ -719,6 +658,10 @@ abstract class Solo<S extends Object> {
   ///       },
   ///     );
   /// ```
+  ///
+  /// See [Creating and scheduling jobs](https://github.com/vi-k/solo/blob/main/packages/solo/doc/jobs.md#creating-and-scheduling-jobs)
+  /// and [Queue and policies](https://github.com/vi-k/solo/blob/main/packages/solo/doc/jobs.md#queue-and-policies)
+  /// on the jobs page.
   @protected
   SoloJob<T> run<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
@@ -1063,40 +1006,30 @@ abstract class Solo<S extends Object> {
   /// Nobody answered for this error, and this controller is the last one
   /// holding it.
   ///
-  /// The errors an outcome cannot carry: an action abandoned by
-  /// [JobContext.abandonable] failing later, a disposer, an `onCancel`
-  /// callback, work handed over with [JobContext.unattended], a `keepWhile`
-  /// that threw anywhere but at a checkpoint of the body, the failure of a
-  /// branch of [JobContext.runAll] that the group did not throw, and a failure
-  /// of the body of a job that ends [Cancelled] — the outcome carries the
-  /// cancellation, whoever reads it: `job.value`, `ctx.run`, a group.
-  /// [Job.ignoreFailure] keeps the last two from coming here, and
-  /// [Job.isCancellationError] keeps away the failures it names of a job that
-  /// has accepted a cancellation. Any other failure of a body becomes a
-  /// [Failed], where `run(ifFailed: ...)` computes a state from it, and so does
-  /// a `canStart` that threw; it comes here only when nobody observes that
-  /// outcome, a microtask after the job ends. A [Failed] made of a
-  /// cancellation goes to the zone past this hook. Every error that comes here
-  /// has been through [onError] already: one error is announced once.
+  /// The default body hands the error to [unansweredHandler], or, with none
+  /// set, to the zone the job was created in; setting an [observer] changes
+  /// neither: watching is not answering. Override it to answer here instead: an
+  /// override that says nothing keeps the error out of the handler and the
+  /// zone, `super.onUnanswered(job, error, stackTrace)` keeps the default route
+  /// as well, and one that throws does not take the error with it.
   ///
-  /// **What the default body does.** With no [unansweredHandler] set, the error
-  /// goes to the zone the job was created in — the same thing the core does
-  /// by default, with an observer or without one. With a handler set it
-  /// goes there instead, and nowhere else. Setting an [observer] changes
-  /// neither: watching is not answering.
+  /// What comes here: a [Failed] nobody observes, a microtask after the job
+  /// ends — `run(ifFailed: ...)` is no observing — and the errors an outcome
+  /// cannot carry: an action abandoned by [JobContext.abandonable] failing
+  /// later, a disposer, an `onCancel` callback, work handed over with
+  /// [JobContext.unattended], a `keepWhile` that threw anywhere but at a
+  /// checkpoint of the body, a failed branch of [JobContext.runAll] the group
+  /// did not throw, and a failed body of a job that ends [Cancelled].
+  /// [Job.ignoreFailure] keeps the last two away, and [Job.isCancellationError]
+  /// the failures it names of a job that has accepted a cancellation. Each
+  /// failure inside a `ParallelWaitError` comes on its own; a [Cancelled],
+  /// alone or inside one, never comes, and a [Failed] made of a cancellation
+  /// goes to the zone past this hook. Every error here has been through
+  /// [onError] already.
   ///
-  /// **One failure at a time.** This hook is called for each failure inside a
-  /// `ParallelWaitError` on its own, with the stack trace of that failure. An
-  /// uncaught [Cancelled], alone or inside one, does not come here: a
-  /// cancellation is a decision somebody made, not a failure.
-  ///
-  /// **Override it to answer here instead** — a controller that owns what
-  /// its jobs failed at reports to its own system and stops there. An
-  /// override that says nothing keeps these errors out of the handler and
-  /// out of the zone; call `super.onUnanswered(job, error, stackTrace)` to
-  /// keep the default route as well. An override that throws does not take
-  /// the error with it, as a [unansweredHandler] that throws does not; one
-  /// that reported the error before it threw has it reported twice.
+  /// See [Answering for an error](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#answering-for-an-error)
+  /// and [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#where-each-error-goes)
+  /// on the errors page.
   @protected
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     final handler = unansweredHandler;

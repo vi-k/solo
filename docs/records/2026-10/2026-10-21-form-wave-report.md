@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-21:** волна идёт. Части 1 и 2 сделаны и закоммичены,
-> части 3–5, ревью сделанного и закрытие впереди.
+> **Состояние на 2026-10-21:** волна идёт. Части 1–3 сделаны и закоммичены,
+> части 4 и 5, ревью сделанного и закрытие впереди.
 > **Что это:** отчёт волны формы по плану `2026-10-21-form-wave-plan.md`:
 > что ушло из dartdoc и где это сказано на странице, проверенные решения,
 > строки `///` до и после.
@@ -203,6 +203,107 @@ lands» осталась в `uncancellable` нарочно — её держит
 +1788. `solo` против нового ядра: `dart analyze` чисто, `dart test` +2063.
 `check_links.py` и `check_links_test.py` зелёные: ссылки dartdoc ведут
 в существующие разделы.
+
+## Часть 3. Dartdoc `solo` и `flutter_solo`
+
+Шесть членов `packages/solo/lib/src/solo.dart` и трёх файлов
+`packages/flutter_solo/lib/src/`. Писал исполнитель на Opus в копии дерева,
+каждое удаление я сверил со страницами своей командой; выброшенных фактов,
+которых нет на страницах, на этот раз нет. Код вне `///` не менялся.
+
+| Член | До | После |
+| --- | ---: | ---: |
+| `Solo.job` | 83 | 34 |
+| `Solo.run` | 38 | 30 |
+| `Solo.onUnanswered` | 37 | 27 |
+| `SoloSelection` | 55 | 45 |
+| `SoloListenable` | 38 | 29 |
+| `SoloSelector` | 37 | 26 |
+| Всего | 288 | 191 |
+
+Блоки кода: у `Solo.job` ушёл блок с `TimeoutCancelReason` — тот же разбор
+причины на `cancellation.md`, «A deadline of a job»; у `Solo.run` из двух
+блоков ушёл повтор того же `ifCancelled`, пример `load()` остался; у трёх типов
+`flutter_solo` их единственные блоки на месте. Две ссылки dartdoc остались ради
+импортов: `solo_selection.dart` импортирует `solo_selector.dart`, а тот
+`solo_builder.dart` только для ссылок dartdoc, и без них `dart analyze` находит
+неиспользованный импорт.
+
+### Длиннее 30 строк
+
+- `Solo.job` (34): абзацы решений 50 и 59 и три факта, которых нет
+  на страницах, — запись изнутри `keepWhile` бросает `StateError`;
+  `ifCancelled` срабатывает по завершении, а `onCancel` — сразу; правило,
+  которое бросило на контрольной точке, доходит до тела, и `Failed` правится
+  как любой другой.
+- `SoloSelection` (45): блок кода — 14 строк; из текста абзац решения 61
+  и правило «селектор только выбирает» не говорит ни одна страница.
+
+### Что ушло и где это сказано
+
+Строки — на `359e12d4`.
+
+- **`Solo.job`.** Зона задачи в очереди и внутри `ctx.unattended` — `jobs.md`,
+  112. Очередная и идущая задача с `cancellable: false`, `close` и `force` —
+       `cancellation.md`, «A whole job», 215–219. Обработчики состояния: когда
+       срабатывают, что не меняют, кто их отключает, запись изнутри
+       обработчика, тот же объект и равный — `state.md`, «The handlers» 497–509
+       и «Handler eligibility and errors» 577–599. Срок и очередь после него —
+       `cancellation.md`, «A deadline of a job», 372–420.
+- **`Solo.run`.** Отказы `timeout` — сказаны в `job`, на который `run`
+  ссылается; ветвление по причине срока — `cancellation.md`, «A deadline of a
+  job».
+- **`Solo.onUnanswered`.** Умолчание, переопределение, брошенное
+  переопределением и доклад дважды — `errors.md`, «Answering for an error»;
+  `canStart`, который бросил, — там же, таблица «Where each error goes».
+- **`SoloListenable`.** Обе доставки — `mixins.md` пакета `flutter_solo`, «A
+  controller with both deliveries»; отчёт базы под другим именем — «A report
+  under another name», 251–253.
+- **`SoloSelection`.** Выборка в `build` и `didUpdateWidget`, подписка только
+  со слушателями — README `flutter_solo`, «Selecting one value», 319–330.
+- **`SoloSelector`.** Кнопка бросает задачу `save` — README, 260–263; три
+  выборки без `State` — там же.
+
+Фразы удалённых абзацев искались по `packages/*/test`, `packages/*/example`
+и `tool/`: совпадения — имя метода примера, имена тестов, цитата `vs-bloc.md`
+и фраза «watching is not answering», которая в dartdoc осталась; dartdoc
+ни один тест не цитирует.
+
+### Решения `docs/settled.md`
+
+44, 45, 46, 50, 54, 55, 59, 60, 61, 63, 64 и 95. Текст, на котором стоит
+решение, остался договором или сказан страницей; правки решений не нужны. 59 —
+дословно по смыслу: «A queued job that turned down `cancel` starts in its turn
+and runs to its end, and `await job.cancel()` comes back only then». 50, 61, 63
+и 64 — договором. 44 — в `onUnanswered`: `Failed` из отмены идёт мимо хука,
+а `ifFailed` — не наблюдение. 95 — фраза ушла, `state.md` 501–505 говорит её.
+
+### Ждёт страниц частей 4 и 5
+
+- `Solo.job`: запись изнутри `keepWhile` — `state.md`, «The rules»; флаг
+  `cancellable: false` действует, только когда задача у движка (решение 50),
+  и очередная задача, отказавшая `cancel`, доходит до конца (решение 59), —
+  `cancellation.md`, «A whole job»; `ifCancelled` против `onCancel` —
+  `state.md`, «The handlers»; брошенное правилом на контрольной точке
+  и `ifFailed` — строкой таблицы «Handler eligibility and errors».
+- `Solo.onUnanswered`: каждая ошибка здесь уже прошла `onError` — `errors.md`,
+  «Where each error goes».
+- `SoloSelection`: селектор только выбирает; выборка раз на изменение
+  и отставание от источника, который меняет значение на месте (решение 61); без
+  слушателей выборка каждый раз; выборка переживает источник — README,
+  «Selecting one value».
+- `SoloListenable`: голый `SoloListenable` — это `SoloListenable<Object>` —
+  README, «The controller as a `ValueListenable`».
+- `SoloSelector`: чужой `ValueListenable` — через `SoloSelection`
+  и `ValueListenableBuilder` (решение 64); виджету не нужен `State` — README,
+  «Selecting one value».
+
+### Проверки части 3
+
+`solo`: формат без изменений, анализ чистый, +2063; его пример +112.
+`flutter_solo`: формат без изменений, анализ чистый, +241; его пример +6.
+`check_links.py` зелёный. Стенд `flutter_snippets.py` исполнитель собрал вне
+репозитория: анализ чистый, +47.
 
 ## Счётчик строк `///`
 

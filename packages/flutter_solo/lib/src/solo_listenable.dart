@@ -3,7 +3,15 @@ import 'package:solo/solo.dart';
 
 /// Makes a [Solo] a [ValueListenable] as well, so the controller drops
 /// into `ValueListenableBuilder`, `ListenableBuilder`, `AnimatedBuilder`
-/// and `Listenable.merge`:
+/// and `Listenable.merge`.
+///
+/// [value] is [currentState], the same object, and has no setter on purpose: a
+/// `ValueNotifier` setter would break the ownership guarantee. The type
+/// argument comes from the superclass; in a type position write it out,
+/// `SoloListenable<Profile>`, because the analyzer lets a bare `SoloListenable`
+/// through as a `SoloListenable<Object>`. A controller that needs a broadcast
+/// `stream` as well mixes `SoloStream` in first:
+/// `with SoloStream, SoloListenable`.
 ///
 /// ```dart
 /// final class ProfileController extends Solo<Profile> with SoloListenable {
@@ -11,34 +19,17 @@ import 'package:solo/solo.dart';
 /// }
 /// ```
 ///
-/// The type argument comes from the superclass. In a type position it is
-/// written out, `SoloListenable<Profile>`, and nothing makes you: the
-/// analyzer lets a bare `SoloListenable` through as a
-/// `SoloListenable<Object>`.
-///
-/// The engine's listeners are the whole delivery: a widget rebuilds from
-/// [value], and an operation's result is awaited through its `Job`. A
-/// controller that needs a broadcast `stream` as well mixes `SoloStream`
-/// in too, `with SoloStream, SoloListenable`. The order makes no difference
-/// here — this mixin overrides nothing `SoloStream` does — and
-/// `SoloStream` goes first by its own rule; see "A controller with both
-/// deliveries" in `doc/mixins.md` for what the combination costs.
-///
 /// A listener's failure is reported through [FlutterError] by
-/// [onListenerError], and which report wins follows the chain, where a class
-/// sits above the mixins it mixes in, as in the rule of `SoloStream`. The class
-/// that mixes `SoloListenable` in, and every class above it, overrides the
-/// mixin: a base that mixes it in and overrides [onListenerError] keeps its own
-/// report. The classes below the mixin are overridden by it: a base without
-/// Flutter, with the mixin on the leaf, loses its override to this one, and the
-/// leaf cannot reach it through `super` either, which lands here. A base that
-/// wants its own report keeps it in a method of another name, and the leaf's
-/// override calls that. Mix it in once, in the base or in the leaf: mixed in
-/// again on a leaf over a base that has it already, it sits above the base's
-/// override and silences it the same way.
+/// [onListenerError], and the chain decides whose report wins. The class that
+/// mixes `SoloListenable` in, and every class above it, overrides the mixin;
+/// the mixin overrides the classes below it, so a base without Flutter, with
+/// the mixin on the leaf, loses its override to this one, and `super` from the
+/// leaf lands here. Mix it in once: mixed in again on a leaf over a base that
+/// has it, it silences the base's override the same way.
 ///
-/// Read-only on purpose: a `ValueNotifier` setter would break the
-/// ownership guarantee. [value] and [currentState] are the same object.
+/// See [The controller as a `ValueListenable`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#the-controller-as-a-valuelistenable) in the package README,
+/// and [A controller with both deliveries](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/mixins.md#a-controller-with-both-deliveries)
+/// and [A base class without Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/mixins.md#a-base-class-without-flutter) on the mixins page.
 mixin SoloListenable<S extends Object> on Solo<S>
     implements ValueListenable<S> {
   /// The current state; the same object as [currentState].
