@@ -1,6 +1,7 @@
 > **Состояние на 2026-10-21:** план прошёл ревью на Opus, все тридцать
-> находок приняты, вердикты — в «Ревью плана» в конце; правок страниц ещё
-> нет.
+> находок приняты; страницы сделаны и закоммичены по одной, итог каждой
+> находки — в её вердикте, коммиты — в «Итогах коммитов» в конце. Сделанное
+> ждёт независимого ревью.
 > **Что это:** план волны читаемости по советам пятого полного ревью: шесть
 > страниц с самыми низкими оценками читаемости, с переводами.
 > **Связанные записи:** `2026-10-21-async-job-project-review-2.md`
@@ -1968,3 +1969,22 @@ mixin sits above the class written before `with`», а следующая фра
 **`packages/flutter_solo/doc/mixins.md` — делать с правками.** Пункт 2
 вступления выдаёт исходы попыток (28): переписать, не называя результата.
 Остальное мелочь (29, 30). Таблица цепочек и тест к ней годятся.
+
+## Итоги коммитов
+
+| Страница | Коммит |
+| --- | --- |
+| `errors.md` ядра | `5c88338c` docs(async_job): lay out the places of an error in errors.md |
+| `groups.md` ядра | `3f89cec6` docs(async_job): map the forms of a group in groups.md |
+| `extending.md` ядра | `be05185d` docs(async_job): map extending.md and run the whole engine |
+| `errors.md` `solo` | `fe9c07df` docs(solo): make the error routes of errors.md readable |
+| `testing.md` `solo` | `b5c3c3e4` docs(solo): point testing.md at symptoms and show the camera |
+| `mixins.md` `flutter_solo` | `c0c9445d` docs(flutter_solo): open mixins.md with what it covers |
+
+Рост страниц: `errors.md` ядра 585 → 582 строки, `groups.md` 460 → 491,
+`extending.md` 651 → 696, `errors.md` `solo` 557 → 566, `testing.md` 710 → 743,
+`mixins.md` 322 → 339. Отступления от черновиков названы в итогах находок;
+сверх них в `extending.md` правка 3 кладёт задачу в переменную ради
+`require_trailing_commas`, а в `testing.md` новая опора
+`test/support/testing_camera.dart` держит интерфейс `Camera`, фейк и замены API
+устройства, и страница на неё ссылается.
