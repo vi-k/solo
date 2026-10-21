@@ -6,19 +6,23 @@ as well. The framework's `ValueListenableBuilder`, `ListenableBuilder` and
 the first of them in
 [The controller as a `ValueListenable`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#the-controller-as-a-valuelistenable).
 The builders of this package, `SoloBuilder` and `SoloSelector`, take any
-controller, with the mixin or without it. This page is about what sits around
-`SoloListenable` — `SoloStream` of `solo` beside it, a screen built on that
-stream, and a base class of controllers in a package without Flutter, where
-`SoloListenable` cannot go.
+controller, with the mixin or without it. This page is about three things
+around the mixin:
 
-The short answer for that base class: the base keeps its report of a listener's
-failure in `reportListenerError`, a method no mixin overrides. Between the base
-and the app's controllers, the leaves, the app puts a class of its own,
-`ListenableController`. It mixes `SoloListenable` in and overrides
-`onListenerError` to call that method, and a leaf extends it without mixing
-`SoloListenable` in again.
-[A base class without Flutter](#a-base-class-without-flutter) shows why: where
-a mixin sits decides whose `onListenerError` runs.
+- [A controller with both deliveries](#a-controller-with-both-deliveries):
+  `SoloListenable` combines with `SoloStream` of `solo`, in either order. One
+  change then has two error routes, and `close()` waits for every subscriber of
+  `stream`.
+- [A screen built on the stream](#a-screen-built-on-the-stream): a badge over
+  `stream` that must show the state from its first frame.
+- [A base class without Flutter](#a-base-class-without-flutter): such a base
+  cannot mix `SoloListenable` in, so the base keeps its report of a listener's
+  failure in `reportListenerError`, a method no mixin overrides. Between the
+  base and the app's controllers, the leaves, the app puts a class of its own,
+  `ListenableController`. It mixes `SoloListenable` in and overrides
+  `onListenerError` to call that method, and a leaf extends it without mixing
+  `SoloListenable` in again. Where a mixin sits decides whose `onListenerError`
+  runs.
 
 The lines under a block of code are what a run of it shows: the text on the
 screen after each step, or where a listener's failure was reported.
@@ -235,11 +239,14 @@ FlutterError: Bad state: the listener blew up
 ```
 
 Where the mixin sits decides whose `onListenerError` reports a listener's
-failure. A mixin sits above the class written before `with`, here above
-`AppController`, so its override wins, with a report through `FlutterError`,
-and the base's override never runs. The analyzer says nothing about it. Nor
-does `super` reach the base from the leaf: `super` there is the mixin, and an
-override that only calls it is one the analyzer calls unnecessary.
+failure. A mixin sits above the class written before `with`, so a call of the
+hook starts at the leaf and goes down in this order: `ProfileController`,
+`SoloListenable`, `AppController`, `Solo`. The first `onListenerError` on the
+way is the one that runs, here the one in `SoloListenable`, so its override
+wins, with a report through `FlutterError`, and the base's override never runs.
+The analyzer says nothing about it. Nor does `super` reach the base from the
+leaf: `super` there is the mixin, and an override that only calls it is one the
+analyzer calls unnecessary.
 
 ### A report under another name
 
@@ -320,3 +327,13 @@ base with Flutter in it mixes `SoloListenable` in itself and keeps its own
 override the same way. Mix it in once, though: mixed in again on a leaf over
 such a class, it sits above that override and silences it as in the first
 attempt.
+
+Four leaves of this section side by side, each chain from the leaf down, with
+the `onListenerError` that runs in bold:
+
+| `ProfileController` | Chain from the leaf down | Report |
+| --- | --- | --- |
+| `extends AppController with SoloListenable` | `ProfileController` → **`SoloListenable`** → `AppController` → `Solo` | `FlutterError` |
+| the same, with an override of its own | **`ProfileController`** → `SoloListenable` → `AppController` → `Solo` | `AppLog` |
+| `extends ListenableController` | `ProfileController` → **`ListenableController`** → `SoloListenable` → `AppController` → `Solo` | `AppLog` |
+| `extends ListenableController with SoloListenable` | `ProfileController` → **`SoloListenable`** → `ListenableController` → `SoloListenable` → `AppController` → `Solo` | `FlutterError` |

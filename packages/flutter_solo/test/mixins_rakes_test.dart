@@ -152,6 +152,24 @@ Future<String> _reached(
   return 'AppLog: ${said(AppLog.errors)}\nFlutterError: ${said(reports)}';
 }
 
+/// The rows of the table of chains at the foot of the page, each a list of
+/// its cells.
+List<List<String>> _chainRows() {
+  final lines = _page().split('\n');
+  final header = lines.indexWhere(
+    (line) => line.startsWith('| `ProfileController` | Chain from the leaf'),
+  );
+  expect(header, isNot(-1), reason: '$_doc has no table of chains');
+  return [
+    for (final line
+        in lines.skip(header + 2).takeWhile((line) => line.startsWith('|')))
+      [
+        for (final cell in line.split('|').skip(1).toList()..removeLast())
+          cell.trim(),
+      ],
+  ];
+}
+
 const _toBoth = 'AppLog: Bad state: the listener blew up\n'
     'FlutterError: Bad state: the listener blew up';
 
@@ -586,6 +604,7 @@ void main() {
       final profile = first.DrivenProfile();
       expect(await _reached(profile, profile.set), _quotes()[4]);
       expect(profile, isA<ValueListenable<Profile>>());
+      _says('first `onListenerError` on the way is the one that runs');
     });
 
     test('whose override runs where nothing is mixed in', () async {
@@ -636,7 +655,8 @@ void main() {
       _says('`ProfileController` here reports to `AppLog` and not through '
           '`FlutterError`');
       _says('in every leaf that extends it');
-      // The short answer at the top of the page names the same class.
+      // The last item of the list at the top of the page names the same
+      // class.
       _says("the base keeps its report of a listener's failure in "
           '`reportListenerError`, a method no mixin overrides');
       _says('a leaf extends it without mixing `SoloListenable` in again');
@@ -654,6 +674,38 @@ void main() {
       expect(await _reached(profile, profile.set), _quotes()[4]);
       _says('mixed in again on a leaf over such a class, it sits above that '
           'override and silences it as in the first attempt');
+    });
+
+    test('the table of chains is what the four leaves report', () async {
+      // One leaf for a row, in the order of the table.
+      final leaves = <String, Future<String> Function()>{
+        '`extends AppController with SoloListenable`': () {
+          final profile = first.DrivenProfile();
+          return _reached(profile, profile.set);
+        },
+        'the same, with an override of its own': () {
+          final profile = answer.DrivenProfile();
+          return _reached(profile, profile.set);
+        },
+        '`extends ListenableController`': () {
+          final profile = shared.DrivenProfile();
+          return _reached(profile, profile.set);
+        },
+        '`extends ListenableController with SoloListenable`': () {
+          final profile = _Twice();
+          return _reached(profile, profile.set);
+        },
+      };
+      final quoted = {
+        '`FlutterError`': _quotes()[4],
+        '`AppLog`': _quotes()[5],
+      };
+      final rows = _chainRows();
+      expect(rows.map((row) => row.first), leaves.keys);
+      for (final row in rows) {
+        expect(quoted, contains(row.last), reason: row.first);
+        expect(await leaves[row.first]!(), quoted[row.last], reason: row.first);
+      }
     });
   });
 }
