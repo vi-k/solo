@@ -62,23 +62,23 @@ inspect the outcome, or retain the returned job and call its `cancel()` to stop
 only this subscription.
 
 The child ends when the source sends `onDone`, so an open stream with no events
-is a child still running; and the parent waits for its children with or without
-an explicit await, so it keeps running too, and holds the queue. Accepted
-parent cancellation, including during `close()`, cancels the child; a draining
+is a child still running. The parent waits for its children with or without an
+explicit await, so it keeps running too, and holds the queue. Accepted parent
+cancellation, including during `close()`, cancels the child; a draining
 `close(mode: SoloCloseMode.drain)` cancels nothing and waits for the stream to
 end. The child is cancellable even if the parent is not. It retains the
 parent's working type and `keepWhile` after the parent body returns, but does
 not repeat `canStart`. Observers see it as a separate job, and the name is one
 `ctx.each` gives it: `Job(each)`. Since the child would keep the parent's
-working type and `keepWhile`, `ctx.each` asks them first, as `ctx.state` does:
-after the parent's own `emit` of a state they refuse, it ends the parent
+working type and `keepWhile`, `ctx.each` asks them first, as `ctx.state` does.
+After the parent's own `emit` of a state they refuse, it ends the parent
 `Cancelled` and throws, rather than return a child that never listened.
 
 Cancelling only the child does not directly cancel the parent. An uncaught
 `Cancelled` from the child's `.value` does cancel the parent through its body.
 A child whose outcome nobody reads, like the progress in `_sync` at the top of
 [Children and chains](children.md), still holds the parent, but its failure is
-not the parent's: the parent ends `Done`, and the failure goes where a failure
+not the parent's. The parent ends `Done`, and the failure goes where a failure
 nobody read goes, to `onUnanswered` and by default to the zone, as in
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page. `ignoreFailure()` on the child keeps it out of both.
@@ -87,10 +87,10 @@ Events are delivered one at a time, and a cancellation waits for the callback
 in flight. That is why waits belong to the callback's context:
 `childCtx.abandonable` ends with the cancellation the moment it arrives and
 leaves the action running alone, while a plain `await` ends only when its own
-future does — and until the callback returns, the child and the parent are
-still running, the queue is held and `close()` does not come back. Do not await
-the child's own completion or its `cancel()` inside an event callback: that is
-a deadlock. The child waits for the callback to return, the callback waits for
+future does. Until the callback returns, the child and the parent are still
+running, the queue is held and `close()` does not come back. Do not await the
+child's own completion or its `cancel()` inside an event callback: that is a
+deadlock. The child waits for the callback to return, the callback waits for
 the child, and the parent waits for the child — nothing moves again. To stop
 the subscription from inside a callback, call `cancel()` and do not await it.
 
@@ -101,9 +101,10 @@ its `onUnanswered`, as an error no outcome carries does. A job that must not
 end before its source has closed waits for that itself, the way
 [Waiting for the source to close](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/streams.md#waiting-for-the-source-to-close)
 on the streams page of `async_job` does. The rest of that page holds here as
-well, with `job(...)` where it writes `Job.deferred`: what `await for` and a
-`listen` tied to the job do in a body, how a callback in several steps stops
-for a cancellation, and where the cleanup of one event belongs.
+well, with `job(...)` where it writes `Job.deferred`. The rest covers what
+`await for` and a `listen` tied to the job do in a body, how a callback in
+several steps stops for a cancellation, and where the cleanup of one event
+belongs.
 
 ## Following another controller
 
@@ -161,7 +162,8 @@ no other job of that controller starts before the session closes its stream,
 and a draining `close` waits for the same. So this job suits a controller that
 does nothing but follow. A controller with other jobs to run holds a
 subscription of its own instead, made in its constructor and cancelled in
-`onClose`, and from it either queues a short job for each update or, when the
-update is a fact the running work has to hear at once, writes it with
-`externalSetState`. [External state](state.md#external-state) on the state page
-shows such a subscription and says which of the two an update calls for.
+`onClose`. For each update that subscription brings, it either queues a short
+job or, when the update is a fact the running work has to hear at once, writes
+it with `externalSetState`. [External state](state.md#external-state) on the
+state page shows such a subscription and says which of the two an update calls
+for.

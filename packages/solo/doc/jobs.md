@@ -172,6 +172,18 @@ running job is the existing one for as long as it has not been cancelled. One
 that has already accepted a cancellation is on its way out and will not do the
 work, so a call that finds it queues a job of its own.
 
+`restart` requests cancellation when the new job is submitted. The new job goes
+to the tail of the queue like any other, behind what was queued before it, and
+it still waits for the current job to finish: their bodies do not overlap. A
+job that refuses cancellation, one created with `cancellable: false`, can
+therefore delay its replacement. So can one that has nothing to hand the
+request to: a `join` around a call the request cannot reach waits that call out
+to the end, and the outcome is `Cancelled` all the same. The token above is the
+way in; `ctx.abandonable` is the other, for an operation that can be left to
+finish on its own. Both are in
+[Stopping the underlying operation](cancellation.md#stopping-the-underlying-operation)
+on the cancellation page.
+
 Every caller of a `droppable` key may get the same job back. So a plain `then`
 on that job throws `StateError`, on the first call as well: a `then` of one
 caller would leave the next one nothing to continue with. Each caller continues
@@ -184,18 +196,6 @@ A key `droppable` shares with another policy hands back that policy's job too,
 and from then on a plain `then` on it throws as well. A `then` its own caller
 took before stays, and then `shared()` throws for the `droppable` caller, who
 is left with `done` and `value`. Give `droppable` a key of its own.
-
-`restart` requests cancellation when the new job is submitted. The new job goes
-to the tail of the queue like any other, behind what was queued before it, and
-it still waits for the current job to finish: their bodies do not overlap. A
-job that refuses cancellation, one created with `cancellable: false`, can
-therefore delay its replacement. So can one that has nothing to hand the
-request to: a `join` around a call the request cannot reach waits that call out
-to the end, and the outcome is `Cancelled` all the same. The token above is the
-way in; `ctx.abandonable` is the other, for an operation that can be left to
-finish on its own. Both are in
-[Stopping the underlying operation](cancellation.md#stopping-the-underlying-operation)
-on the cancellation page.
 
 ### A key for each request
 

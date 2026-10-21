@@ -258,7 +258,7 @@ SAID = [
     'The three requests again make two API calls',
     'the stale buffer is released zero times',
     'the guarded version releases both, once each',
-    'the failure is reported twice',
+    'The failure is reported twice',
     'for each of the four commands',
     'would not cancel `StartRefresh` by itself',
     'leaves the ones already alive as they were',

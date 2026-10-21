@@ -15,12 +15,12 @@ this page and the guides of the packages below it.
 
 ## Why
 
-A screen has a lifecycle, and so does the work on it: a load that must be
-dropped when the user leaves, a save that must not be cut in half, a second tap
-that must not start a second request. `setState` and `ChangeNotifier` give you
-somewhere to keep the state and say nothing about the work. `Bloc` schedules
-the work and asks for an event class per call; `Cubit` keeps plain methods and
-schedules nothing.
+A screen has a lifecycle, and so does the work on it. A load must be dropped
+when the user leaves, a save must not be cut in half, and a second tap must not
+start a second request. `setState` and `ChangeNotifier` give you somewhere to
+keep the state and say nothing about the work. `Bloc` schedules the work and
+asks for an event class per call; `Cubit` keeps plain methods and schedules
+nothing.
 
 Here a method stays a method, and it hands back a handle:
 
@@ -33,14 +33,14 @@ print(job.outcome); // Cancelled(manual)
 
 What the engine holds to:
 
-- one root job of a controller at a time, so two of them never write the same
-  state;
-- rules instead of flags: a job declares the states it works with and the
-  condition it lives under, and it is cancelled when they stop holding;
-- a cancellation the caller can ask for: the next checkpoint of the context
+- One root job of a controller at a time, so two of them never write the same
+  state.
+- Rules instead of flags: a job declares the states it works with and the
+  condition it lives under, and it is cancelled when they stop holding.
+- A cancellation the caller can ask for: the next checkpoint of the context
   throws it, and a body that never reaches one still ends `Cancelled` and
-  writes no state of its own;
-- an outcome for every job, one of `Done`, `Failed` and `Cancelled`, which is
+  writes no state of its own.
+- An outcome for every job, one of `Done`, `Failed` and `Cancelled`, which is
   what a screen has to show anyway.
 
 The long argument, eleven scenarios solved in bloc first and then here, is in
@@ -156,9 +156,9 @@ class ProfileView extends StatelessWidget {
 state, it ends `Cancelled` there, and its body reads a `Loaded` with a `name`
 in it. Inside a body:
 
-- `ctx.emit` is the only way to write the state;
+- `ctx.emit` is the only way to write the state.
 - `ctx.abandonable` awaits like `await`, except that it gives up the moment the
-  job is cancelled;
+  job is cancelled.
 - `ctx.join` waits its call out either way, so a save is not cut in half.
 
 `ifFailed` and `ifCancelled` are the way back. They say what state a load that
@@ -168,11 +168,11 @@ spinner of a job that is no longer running.
 They answer on the screen and not for the caller. The button drops the job that
 `load` hands back. A failure nobody reads goes on to the zone even after
 `ifFailed` has put `Empty` on the screen, unless `Solo.unansweredHandler`
-answers for it: in an app towards `PlatformDispatcher.onError`, in a widget
-test into the test, which fails. `ignoreFailure()` on the button says the
-screen is all the answer the failure needs; [Outcomes](#outcomes) has the rule.
-The full API, with rules, the queue, children and observers, is documented in
-[solo](https://pub.dev/packages/solo).
+answers for it. In an app it goes towards `PlatformDispatcher.onError`, in a
+widget test into the test, which fails. `ignoreFailure()` on the button says
+the screen is all the answer the failure needs; [Outcomes](#outcomes) has the
+rule. The full API, with rules, the queue, children and observers, is
+documented in [solo](https://pub.dev/packages/solo).
 
 `SoloBuilder` is what draws the state: it takes the controller as `solo`,
 rebuilds on every change of the state and hands `child` through untouched. The
@@ -259,7 +259,7 @@ SoloSelector<Profile, bool>(
 
 The button drops the job that `save` hands back, on purpose, and so does
 `SaveButton` below. A save that fails leaves the state `Loaded`, and nothing on
-the screen says so: `save` has no `ifFailed`, so its failure goes on to the
+the screen says so. `save` has no `ifFailed`, so its failure goes on to the
 zone, with no `Solo.unansweredHandler` set, in an app towards
 `PlatformDispatcher.onError`. `ignoreFailure()` would leave it unheard. A
 screen that tells the user waits for `save().done`, as in
@@ -267,15 +267,15 @@ screen that tells the user waits for `save().done`, as in
 
 The rules of `SoloSelector`:
 
-- picks count as changed when they are `!=`, unless `changed:` answers that
-  question itself;
-- the selector runs once for every change of the state, so keep it a cheap pick
-  that gives the same answer for the same state;
+- Picks count as changed when they are `!=`, unless `changed:` answers that
+  question itself.
+- The selector runs once for every change of the state, so keep it a cheap pick
+  that gives the same answer for the same state.
 - `solo` is any controller, a `ValueListenable` or not.
 
 `changed:` is handed two picks: the last one the widget accepted, as
 `previous`, and the new one. The builder has usually been given `previous`, but
-not always: when two changes come before a frame and the first is accepted, the
+not always. When two changes come before a frame and the first is accepted, the
 second is put against it, and the builder has not seen it yet. So where the
 screen ends up depends on the changes alone, not on how they fall into frames.
 
@@ -414,10 +414,10 @@ void dispose() {
 selection, a `ScrollController` of the framework's own. Cancelling goes by
 three rules:
 
-- cancelling twice does nothing the second time;
-- a group that has been cancelled cancels what it is handed rather than keeping
-  it;
-- if one member refuses to let go, the others are cancelled all the same, and
+- Cancelling twice does nothing the second time.
+- A group that has been cancelled cancels what it is handed rather than keeping
+  it.
+- If one member refuses to let go, the others are cancelled all the same, and
   every failure goes to `FlutterError.reportError`.
 
 Cancelling a group never throws. Its place is `dispose()`, and an exception out
@@ -554,12 +554,18 @@ Flutter's.
 
 ## Notes
 
+| A failure of | Where it goes |
+| --- | --- |
+| A listener of a controller with `SoloListenable` | To `FlutterError.reportError`, as [A base class without Flutter](doc/mixins.md#a-base-class-without-flutter) on the mixins page shows. |
+| A listener of a controller without it | To the zone, as [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#where-each-error-goes) on the errors page of `solo` has it: `SoloBuilder` and `SoloSelector` take such a controller, but `FlutterError.onError` never hears of a failure of its listeners. |
+| A listener of a selection | Through `FlutterError`, whether the controller has `SoloListenable` or not: a selection reports its own listeners. |
+| The selector of a selection | The controller's route, one of the two rows above: the selector runs inside a listener of the controller. |
+
 | Question | Answer |
 | --- | --- |
 | When do listeners run? | Synchronously, in subscription order, on every state change. With `SoloListenable`, `value` and `currentState` are the same object. There is no `stream` unless `SoloStream` is mixed in: the builders listen to the controller itself. |
-| Where does a listener's failure go? | With `SoloListenable`, to `FlutterError.reportError`. Without it, to the zone, as in `solo`: `SoloBuilder` and `SoloSelector` take such a controller, but `FlutterError.onError` never hears of a failure of its listeners. A selection reports its own listeners through `FlutterError` either way, while its selector runs inside a listener of the controller and takes the controller's route. |
-| Are equal states filtered? | No. `emit` of a state equal to the current one still notifies: the listeners are the engine's own, and the engine compares nothing. A frame may swallow several of them, a listener will not. A selection filters its own value, which is the one a widget usually cares about. |
-| Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two; it takes controllers with `SoloListenable`. |
+| Are equal states filtered? | No. `emit` of a state equal to the current one still notifies: the listeners are the engine's own, and the engine compares nothing. A frame may swallow several of them, a listener will not. A selection filters its own value, which is the one a widget usually cares about, as [Selecting one value](#selecting-one-value) shows. |
+| Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two; it takes controllers with `SoloListenable`, as [The controller as a `ValueListenable`](#the-controller-as-a-valuelistenable) shows. |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |
 | How do I test a screen? | On the fake clock of `testWidgets`: a timer a job waits on, such as the delay of a fake API, fires only when the test moves the clock. [Testing](doc/testing.md) has the three rules that follow from it. |
 

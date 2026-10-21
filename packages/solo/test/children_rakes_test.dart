@@ -692,7 +692,7 @@ void main() {
         _says('A child the start rules turn away never runs. It is adopted '
             'first — parent and level — and only then finished `Cancelled` '
             'with a `RulesCancelReason`');
-        _says('the observer hears the drop as an outcome of this tree, with '
+        _says('The observer hears the drop as an outcome of this tree, with '
             '`job.level` telling it how deep under the parent the job '
             'stands');
       });
@@ -884,7 +884,7 @@ void main() {
 
       expect(errors, isEmpty);
       expect(_seen, ['released handle', 'parent Cancelled(manual)']);
-      _says('so a value the parent has to release is registered on the call, '
+      _says('So a value the parent has to release is registered on the call, '
           '`ctx.run(child, dispose: ...)`, and not on the line after it');
     });
 
@@ -1054,7 +1054,7 @@ void main() {
         expect(_seen, [
           'parent Cancelled(rules: $reason), child Cancelled(parent)',
         ]);
-        _says("a write of the child that the parent's working type or "
+        _says("A write of the child that the parent's working type or "
             '`keepWhile` does not accept cancels the parent, and the child '
             'with it');
       });
@@ -1448,7 +1448,7 @@ void main() {
             'Invalid argument (job): was not created by this Solo: "Job()"',
           ]);
           _says('Where those pages make a child with `Job.deferred`, a '
-              'controller makes it with `job(...)`: its `ctx.run` and '
+              'controller makes it with `job(...)`. Its `ctx.run` and '
               '`ctx.runAll` take no other job');
         });
       }

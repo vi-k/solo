@@ -44,13 +44,14 @@ closed the progress.
 What passes between a parent and its child beyond what this page shows is the
 core's, and
 [the children page](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md)
-of `async_job` has it — that a cancellation the parent accepts passes to its
-children, that a body that fails lets them finish and waits for them, and why
-`child.ignoreFailure()` is no substitute for handling the future of `ctx.run`.
-Several children side by side are a group of `ctx.runAll`, under
+of `async_job` has it. That page shows that a cancellation the parent accepts
+passes to its children and that a body that fails lets them finish and waits
+for them. It also says why `child.ignoreFailure()` is no substitute for
+handling the future of `ctx.run`. Several children side by side are a group of
+`ctx.runAll`, under
 [Waiting for several children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/groups.md#waiting-for-several-children)
 on the groups page. Where those pages make a child with `Job.deferred`, a
-controller makes it with `job(...)`: its `ctx.run` and `ctx.runAll` take no
+controller makes it with `job(...)`. Its `ctx.run` and `ctx.runAll` take no
 other job, and each branch of a group answers to its start rules as a child of
 `ctx.run` does.
 
@@ -85,7 +86,7 @@ Job<bool> trySync(int item) => run<Ready, bool>(
 `ctx.run(child)` returns a `Future<T>` of the child's result. It waits for the
 child, the child's children and cleanup: the `catch` above runs once the API
 has closed the progress `_sync` follows. On success, it checks the parent's
-cancellation and state rules before returning the value, so a value the parent
+cancellation and state rules before returning the value. So a value the parent
 has to release is registered on the call, `ctx.run(child, dispose: ...)`, and
 not on the line after it:
 [Discard, for a value that leaves](resources.md#discard-for-a-value-that-leaves)
@@ -117,7 +118,7 @@ Job<String> syncAndAnnounce(int item) => run<Ready, String>(
 
 To work in the parent while a child runs, keep the future `ctx.run` returned
 and await it later. The state writes of the two can then interleave, and each
-job answers to its own rules for every one of them: a write of the child that
+job answers to its own rules for every one of them. A write of the child that
 the parent's working type or `keepWhile` does not accept cancels the parent,
 and the child with it.
 
@@ -180,7 +181,7 @@ Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))
 ```
 
 A child the start rules turn away never runs. It is adopted first — parent and
-level — and only then finished `Cancelled` with a `RulesCancelReason`: the
+level — and only then finished `Cancelled` with a `RulesCancelReason`. The
 observer hears the drop as an outcome of this tree, with `job.level` telling it
 how deep under the parent the job stands, and `child.done` holds the
 cancellation. It joins no waiting list, so the parent waits for nothing; the
@@ -236,7 +237,7 @@ already running after the source finished.
 
 A continuation is never a child. Inside a controller's body `ctx.run` takes
 jobs of that controller, the ones `job(...)` makes and nobody has queued, and a
-continuation is none of those: it is a root job of the core, a plain `Job` and
+continuation is none of those. It is a root job of the core, a plain `Job` and
 not a `ChildJob`, so `ctx.run(tail)` does not compile:
 
 ```text

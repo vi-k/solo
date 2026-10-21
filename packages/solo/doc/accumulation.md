@@ -3,6 +3,15 @@
 Several events can share one queued job. `collect` keeps every event in a list;
 `accumulate` combines each event with a single accumulated value.
 
+Where to start, by what the controller needs:
+
+| The controller needs | Read |
+| --- | --- |
+| One of four common cases: a search box, settings saved on every flip, log lines sent in batches, commands where only the last counts | [Recipes](#recipes), whose table names what reaches the work and the accumulator of each |
+| A group that starts after a pause in the events, at a limited rate, or at once | [Choosing when a group is ready](#choosing-when-a-group-is-ready): `timing` |
+| An event that joins a queued group, or starts a group of its own behind another job | [Choosing where events join](#choosing-where-events-join): `AccumulationPolicy` |
+| One handle for every caller of a group, and how its job starts, is cancelled, fails and ends on `close()` | [Start, cancellation and errors](#start-cancellation-and-errors) |
+
 ## Recipes
 
 Four controllers, each with more events arriving than there is work worth
@@ -863,17 +872,6 @@ true
 cancelled: manual
 ```
 
-All three policies operate on queued groups. A group stops accepting events
-when debounce seals it or when it is taken from the queue, before `canStart`
-and `onStart`. Events added from either callback go to a later group. The
-handler runs with the configured working type and rules, and the group's job is
-an ordinary job to the queue in every other way.
-
-An accumulator creates no job until the first event. Without timing, if each
-group finishes before the next event arrives, each event starts a separate job.
-A `join` policy's search can scan the queue; `adjacent` only checks its tail.
-`replace` also searches the queue.
-
 Additions to one group share one handle, result and cancellation under every
 policy, and cancelling it affects the whole group. `replace` moves the job
 rather than building another, so the handle outlives the move: cancelling it
@@ -885,6 +883,17 @@ the first event as well. Each caller continues the job through `shared()`,
 `group.shared().then(...)`, and cancelling what `shared()` returned ends that
 branch alone. See
 [A handle for each branch](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/chains.md#a-handle-for-each-branch).
+
+All three policies operate on queued groups. A group stops accepting events
+when debounce seals it or when it is taken from the queue, before `canStart`
+and `onStart`. Events added from either callback go to a later group. The
+handler runs with the configured working type and rules, and the group's job is
+an ordinary job to the queue in every other way.
+
+An accumulator creates no job until the first event. Without timing, if each
+group finishes before the next event arrives, each event starts a separate job.
+A `join` policy's search can scan the queue; `adjacent` only checks its tail.
+`replace` also searches the queue.
 
 `merge` must be synchronous and pure. It must not mutate either argument or
 call into the controller. If it throws, `add` throws the same error and the

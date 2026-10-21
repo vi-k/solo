@@ -115,15 +115,15 @@ notified.
   for;
 - a rule that threw instead of answering.
 
+The hook reports and returns. It answers for nothing, and overriding it moves
+no error anywhere.
+
 It hears each error once for each job. An error that a child throws and its
 parent lets through is a failure of both, so the hook hears it twice. The `job`
 it is given tells the two calls apart. A crash reporter fed from here can get
 one error three times: from the child, from the parent and, when nobody
 observes the parent's outcome, from `onUnanswered`. By default `onUnanswered`
 hands it to `Solo.unansweredHandler` or the creation zone.
-
-The hook reports and returns. It answers for nothing, and overriding it moves
-no error anywhere.
 
 ## Handled and unhandled failures
 
@@ -443,11 +443,6 @@ for it. How the loop ends:
 - Close the profile, and the next attempt is refused: the loop returns its
   `Cancelled(closed)` at the end of the gap.
 
-The gap itself is the caller's to stop. Until it does, the timer outlives a
-closed profile: a widget test that closes the profile in the gap fails on it,
-where the loop in the body passes. Nor does the loop know of a load sent in the
-gap: if that load succeeds, the next attempt still loads again.
-
 Each attempt is a job of its own, and the profile shows how each one ended.
 Between the attempts the state is the `Failure` of `ifFailed`, and the screen
 shows the error until the next attempt emits `Loading`. With the loop in the
@@ -456,6 +451,11 @@ body, the state stays `Loading` throughout.
 Every failed attempt reaches `onError` too, so the crash reporter hears each
 one. The loop in the body let it hear only the failure that ended the job.
 `done` observes each outcome, so no failure of an attempt goes on to the zone.
+
+The gap itself is the caller's to stop. Until it does, the timer outlives a
+closed profile: a widget test that closes the profile in the gap fails on it,
+where the loop in the body passes. Nor does the loop know of a load sent in the
+gap: if that load succeeds, the next attempt still loads again.
 
 ## Errors in state rules
 

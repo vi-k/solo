@@ -3,16 +3,16 @@
 This guide compares [solo](https://pub.dev/packages/solo) with `Bloc` and
 `Cubit` through eleven controller scenarios. Each section states the required
 behavior, starts from the code that habit or the API's own vocabulary leads to,
-says what that code actually does, and only then shows the implementations that
-meet it — bloc's and solo's — with what the library handles and what remains
-application code.
+and says what that code actually does. Only then does it show the
+implementations that meet it — bloc's and solo's — with what the library
+handles and what remains application code.
 
 That code is the section's first attempt, and the states and traces quoted
 under it are what running it produces. It is written with bloc, like the answer
 under the bloc heading after it: that heading adds the version that meets the
 requirement. Where one attempt does not get close enough to that, a second
 follows under its own heading. Reading the attempts before the answer is the
-point of the section; a reader who already knows the trap can skip to the bloc
+point of the section. A reader who already knows the trap can skip to the bloc
 heading and `### Solo`, or to the line that closes the section, **What solo
 gives**.
 
@@ -80,7 +80,7 @@ The main API correspondences, for a reader who knows bloc:
 `sequential`, `droppable` and `restartable` correspond to `Policy.sequential`,
 `Policy.droppable` and `Policy.restart`, and are not the same thing renamed: a
 transformer rules every event of its registration, a policy the jobs with one
-key, and
+key.
 [Restarting one operation within a shared queue](#restarting-one-operation-within-a-shared-queue),
 [Awaiting a particular request](#awaiting-a-particular-request) and
 [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting)
@@ -141,7 +141,7 @@ RefreshList emits [n0]
 Refresh reads the server on line three, before the upload reaches it on line
 four, and publishes that answer on line six, after the upload has published its
 own. Both requests are in flight at once, and a handler publishes when its
-response arrives, not when the server produced it: the server answers the list
+response arrives, not when the server produced it. The server answers the list
 with what it holds at that moment, and the answer is still on its way back when
 the upload of the new note lands and publishes. This can happen with a long
 list or a slow connection. Nobody can guarantee that responses from the server
@@ -166,7 +166,7 @@ upload was still under way. That variant ends at
 The missing half is one registration for both commands. By itself it is not
 enough either: a registration that names no transformer gets the default one,
 and the default runs its events concurrently. That default is one field,
-`Bloc.transformer`, which a program may assign; each `Bloc` reads it while
+`Bloc.transformer`, which a program may assign. Each `Bloc` reads it while
 being constructed, so an assignment governs the blocs made after it and leaves
 the ones already alive as they were:
 
@@ -303,7 +303,7 @@ There is nothing to remember here about transformers or the order events are
 processed in: there is no transformer to pass and no scheduling to choose. The
 root jobs of a controller run one at a time, and that is the only way they run.
 Ready jobs start in the order they were added. Two things change that order,
-and each happens only where the code asks for it: `first: true` puts a job
+and each happens only where the code asks for it. `first: true` puts a job
 ahead of what is waiting, and a job waiting for an accumulation window can be
 passed by a ready one standing behind it. Both are on the jobs page, in
 [Working the queue directly](jobs.md#working-the-queue-directly). Adding
@@ -322,7 +322,7 @@ Work started without awaiting it can outlive the job; it must not be assumed to
 finish before `close()`. That is how a Dart future works: nothing ties it to
 the code that started it, so neither the job nor the controller knows it
 exists. If such work has to end before the job does, it is started as a child
-with `ctx.run`: the parent waits for its children even when its body does not
+with `ctx.run`. The parent waits for its children even when its body does not
 await them, the queue does not start the next job until then, and `close()`
 waits for them too. The page [Children and chains](children.md) covers them.
 
@@ -424,8 +424,8 @@ observation callback handles its failures and its fallback does not throw.
 exception, hands it to `onError` and rethrows it, so an override there reports
 the failure without preventing it. With `onError` overridden and the observer
 still throwing, the state ends at `Idle` with the meter unarmed, exactly as
-without the guard, and the failure is reported twice: once by `emit`, once by
-the handler it broke.
+without the guard. The failure is reported twice: once by `emit`, once by the
+handler it broke.
 
 ### Solo
 
@@ -476,8 +476,8 @@ already does with uncaught asynchronous errors, and nowhere else. Left
 unhandled there it can still terminate the application: hook isolation keeps
 the operation's control flow, it does not take over the reporting. The
 controller's own hook goes the same way: had `_journal.note` thrown, its error
-would reach the zone too, and the observer would not hear it, because its
-`onError` is for what a job threw, not for what a hook threw.
+would reach the zone too. The observer would not hear it, because its `onError`
+is for what a job threw, not for what a hook threw.
 
 **What solo gives:** an observer that throws changes neither the job's outcome
 nor the queue: the state reaches `Recording`, the meter is armed, and the
@@ -518,7 +518,7 @@ With `sequential()`, `close()` waits for the API call still in flight, and the
 state after it is `ChatState(reply to hi)`: the reply was published into a
 controller that was already closing. The follow-up `add` then throws
 `Bad state: Cannot add new events after calling close`, and that error arrives
-in the zone unhandled while `close()` is still being awaited: neither the code
+in the zone unhandled while `close()` is still being awaited. Neither the code
 that sent the message nor the code that closes the bloc is handed it. No read
 is reported to the server — but only because the `add` that would have reported
 it is the call that threw. Half the requirement holds by the accident that
@@ -561,7 +561,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
 The guard prevents both the reply update and the `MarkReplyRead` event. Closing
 still waits for the API call and handler to return, and for every message
-queued behind them: each is still sent to the API while `close()` runs, and the
+queued behind them. Each is still sent to the API while `close()` runs, and the
 guard turns away only its reply. The separate `MarkReplyRead` registration is
 safe for this example because it does not write shared state; otherwise the
 ordering concern of
@@ -629,7 +629,7 @@ still comes back `Cancelled(closed)` there, because a closing controller takes
 no new root job.
 
 A `ctx` is valid while its job runs, and the unawaited future of the bloc
-heading above has a counterpart here: a body that starts a future and does not
+heading above has a counterpart here. A body that starts a future and does not
 await it returns, and the future then calls `ctx.emit` on a job that is over.
 That call throws `Bad state: Job(send) has already finished, cannot emit`, in
 debug and release alike, and the state stays as it was. Where bloc has an
@@ -747,7 +747,7 @@ job still reports `Failed`.
 The timing differs: bloc's cancel-event handler updates state when it runs,
 while solo's state handler runs after the cancelled job's cleanup. Neither
 example stops the API operation itself. If an independent external state makes
-the solo job invalid, its final state handlers are skipped;
+the solo job invalid, its final state handlers are skipped.
 [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change)
 explains external state, and
 [State after failure or cancellation](state.md#state-after-failure-or-cancellation)
@@ -890,16 +890,18 @@ the trace is `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]`.
 
 Comparing position values is insufficient when the drag repeats a value. Input
 `1, 2, 1` produces `[play, seek 1, seek 1, pause]`. Telling such events apart
-means marking each one as it arrives instead of comparing what it carries — the
-scheme [Removing selected pending work](#removing-selected-pending-work) writes
-out, with the condition it comes with: the events have to be distinct objects.
+means marking each one as it arrives instead of comparing what it carries. That
+is the scheme [Removing selected pending work](#removing-selected-pending-work)
+writes out, with the condition it comes with: the events have to be distinct
+objects.
 
 Three things are the application's to keep right: which position is the newest
-(`_newestSeek`), which token belongs to the `seek` in flight (`_seeking`), and
-the check after the await that keeps a cancelled `seek` from publishing. A
-command that needs a different replacement rule brings its own branch and its
-own bookkeeping into the same handler. And `add` returns nothing, so a skipped
-or interrupted `seek` leaves the caller no outcome to read.
+(`_newestSeek`) and which token belongs to the `seek` in flight (`_seeking`).
+The third is the check after the await that keeps a cancelled `seek` from
+publishing. A command that needs a different replacement rule brings its own
+branch and its own bookkeeping into the same handler. And `add` returns
+nothing, so a skipped or interrupted `seek` leaves the caller no outcome to
+read.
 
 ### Solo
 
@@ -967,9 +969,9 @@ starts, and every `seek` has an outcome to read.
 
 A map exposes `moveTo` and `setZoom`. Callers should invoke them as methods of
 the controller itself, as in `controller.moveTo(point)`, with their own
-arguments and without a class per command, and rapid drag updates should not
-leave the map at an older position. In the scenario below a drag sends position
-1, then, while the map is still moving there, positions 2 and 3, and the user
+arguments and without a class per command. Rapid drag updates should not leave
+the map at an older position. In the scenario below a drag sends position 1,
+then, while the map is still moving there, positions 2 and 3, and the user
 zooms to 4.
 
 ### The first attempt
@@ -1038,7 +1040,7 @@ class CommandMapBloc extends Bloc<MapCommand, MapState> {
 
 The calls now run in order and end at `MapState(3, z4)`. An ordinary event
 class would be just as typed — `add(MoveTo(point))` checks its argument like
-any other constructor — but then the command vocabulary lives beside the
+any other constructor. But then the command vocabulary lives beside the
 controller instead of on it, and every command needs its class. The closure
 removes both, and what it costs is the event's identity: an observer of this
 bloc receives `(Emitter<MapState>) => Future<void>` for each of the four
@@ -1109,8 +1111,8 @@ must still complete before disconnect.
 
 One `sequential()` registration orders all device commands. Its pending events
 cannot be enumerated or removed through the `Bloc` API, so the handler has to
-check whether a read is still relevant, and a leaving flag is the obvious thing
-to check: the screen sets it when it goes and clears it when it comes back.
+check whether a read is still relevant. A leaving flag is the obvious thing to
+check: the screen sets it when it goes and clears it when it comes back.
 
 ```dart
 // The first attempt: a flag that a returning screen clears.
@@ -1148,7 +1150,7 @@ class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 On the way out the flag works:
 `[_leaving = true, connect, rename kitchen, disconnect]`. The trace carries the
 writes to `_leaving` among the device calls, and the write stands ahead of all
-of them: `onEvent` runs inside `add`, while the queue is drained once all four
+of them. `onEvent` runs inside `add`, while the queue is drained once all four
 commands are in it. The flag is already set when the handler reaches the first,
 and the read is skipped.
 
@@ -1273,12 +1275,12 @@ requirement. The removal in `disconnect` names the read, so the rename survives
 it by not being named — which says nothing about code that later sweeps the
 whole queue with `cancelAll()` or `queue.clear()`. A rename the user asked for
 has to reach the device in that case too, so the guarantee belongs to the job
-rather than to a line that removes somebody else: a sweep skips such a job
+rather than to a line that removes somebody else. A sweep skips such a job
 instead of removing it, and `force: true` is what takes it.
 
 `connect` and `disconnect` carry `cancellable: false` too, for what happens
 once they have started. `ctx.join` lets the device call finish even after a
-cancellation, and a body cancelled in the meantime skips the `emit` after it: a
+cancellation, and a body cancelled in the meantime skips the `emit` after it. A
 sweep arriving while `disconnect` runs would leave the device disconnected and
 the state at `Connected`, and one arriving during `connect` the reverse. A
 sweep turns a running `cancellable: false` job down, so the state follows the
@@ -1321,7 +1323,7 @@ sequentially.
 The controller keeps one state. It names the order being charged and carries
 the receipt of the payment that finished last, so two orders paid one after
 another leave only the second receipt in it. A screen can navigate on `Paid`
-through a `BlocListener` once it checks whose receipt arrived; a function
+through a `BlocListener` once it checks whose receipt arrived. A function
 answering a platform request needs the result of its own request, delivered
 whether or not another order followed it.
 
@@ -1377,8 +1379,8 @@ while a handler is running, not what duplicates it.
 ### Bloc
 
 The event carries its completer as above. What the sharing needs is a map of
-the payments in flight, so that a caller of an order already running is given
-the completer of that payment instead of a dropped event of its own:
+the payments in flight. Through it, a caller of an order already running is
+given the completer of that payment instead of a dropped event of its own:
 
 ```dart
 class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
@@ -1532,16 +1534,16 @@ of adding another. Both callers share its receipt, while another order creates
 another job. The three requests again make two API calls.
 
 The charge is a plain `await`. `ctx.abandonable`, `ctx.join` and
-`ctx.uncancellable` are for a job that can be cancelled, and they differ in
-what each does with a cancellation arriving during a call: `abandonable` lets
-go of the call, `join` stays with it until it answers, `uncancellable` holds
-the cancellation back until the step ends. This job cannot be cancelled while
-it runs. It sets no `keepWhile` and accepts the base `CheckoutState`, so no
-state rule can reject it — and that is the width that matters, because a state
-rule cancels even a non-cancellable job: a narrower type would allow
-cancellation after a charge was sent but before it was recorded. Every other
-cancellation is rejectable, and `cancellable: false` rejects it: `Job.cancel`
-from a screen, a closing controller.
+`ctx.uncancellable` are for a job that can be cancelled. They differ in what
+each does with a cancellation arriving during a call: `abandonable` lets go of
+the call, `join` stays with it until it answers, `uncancellable` holds the
+cancellation back until the step ends. This job cannot be cancelled while it
+runs. It sets no `keepWhile` and accepts the base `CheckoutState`, so no state
+rule can reject it. That is the width that matters, because a state rule
+cancels even a non-cancellable job: a narrower type would allow cancellation
+after a charge was sent but before it was recorded. Every other cancellation is
+rejectable, and `cancellable: false` rejects it: `Job.cancel` from a screen, a
+closing controller.
 
 The body publishes `Paid` before completing with the receipt, and `close()`
 waits for that completion. API failures still produce `Failed`; a failure state
@@ -1550,7 +1552,7 @@ charge anyway: this API provides no cancellation mechanism.
 
 The flag also refuses manual cancellation while the payment is queued. A
 payment the user may still withdraw before charging starts is taken out of the
-queue by `withdraw`: `force: true` removes a queued job whatever its flag, and
+queue by `withdraw`. `force: true` removes a queued job whatever its flag, and
 the queue never touches a running job, so a charge already on its way stays and
 `withdraw` returns `false`. `close()` and `queue.clear(force: true)` can still
 discard a queued payment without charging, and a submission after close also
@@ -1558,7 +1560,7 @@ never starts. These cases, `withdraw` among them, explain the platform
 handler's `Cancelled` branch.
 
 Wrapping the whole body in `ctx.uncancellable` instead of the flag would not do
-the same. A section holds a cancellation back rather than refusing it: a cancel
+the same. A section holds a cancellation back rather than refusing it. A cancel
 arriving during the charge lands when the section closes, after `Paid` is
 published, and the job ends `Cancelled`, so the platform handler answers
 `paid: false` for a payment that was made.
@@ -1568,7 +1570,7 @@ Payment retries across process restarts or network failures also require an
 idempotent payment API; neither example provides that.
 
 **What solo gives:** with a key per order and `Policy.droppable`, the callers
-of one order share its job and receipt, another order gets its own job,
+of one order share its job and receipt, and another order gets its own job.
 `cancellable: false` turns down a cancel from a screen, and the platform
 handler reads its own request's outcome.
 

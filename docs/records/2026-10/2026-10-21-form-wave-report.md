@@ -1,5 +1,6 @@
-> **Состояние на 2026-10-21:** волна идёт. Части 1–4 сделаны и закоммичены,
-> часть 5, ревью сделанного и закрытие впереди.
+> **Состояние на 2026-10-22:** волна идёт. Части 1–5 сделаны и закоммичены;
+> переезды разбора из dartdoc на страницы, ревью сделанного и закрытие
+> впереди.
 > **Что это:** отчёт волны формы по плану `2026-10-21-form-wave-plan.md`:
 > что ушло из dartdoc и где это сказано на странице, проверенные решения,
 > строки `///` до и после.
@@ -392,6 +393,203 @@ the branch».
 `check_translations.py`, `check_doc_shape.py`, `check_page_code.py`,
 `build_site_test.py` — зелёные. Линтер `humanizer--ru` по изменённым абзацам
 перевода: 0 `ERROR`.
+
+## Часть 5. Страницы `solo` и `flutter_solo`
+
+Две половины, у каждой свой исполнитель на Opus в своей копии: входы и основной
+путь — `state.md`, `accumulation.md`, `jobs.md`, `errors.md`; длинные фразы
+и «Notes» — `children.md`, `vs-bloc.md`, `camera.md`, `streams.md` и README
+`flutter_solo`. Файлы не пересекаются. Дифф обеих я прочёл целиком: факты новых
+таблиц сверены со страницами, разрезанные фразы по словам — со старыми.
+
+### Входы
+
+- `state.md`: перед `## State and rules` — таблица «Rule | When it is asked |
+  What a refusal does» по строке на `W`, `canStart` и `keepWhile` и абзац под
+  ней: отказ не держит задачу в очереди, её `ifFailed` и `ifCancelled` после
+  него не выполняются, и ссылки на «The rules», «Reading and updating state»
+  и «Handler eligibility and errors». Столбец «когда» — столбец таблицы «The
+  rules», «что делает отказ» — абзац под ней, обработчики — строки таблицы
+  «Handler eligibility and errors».
+- `accumulation.md`: перед `## Recipes` — таблица «The controller needs |
+  Read»: рецепты одной строкой со ссылкой на их таблицу, по строке на три
+  раздела «Reference».
+- `errors.md` и `testing.md` — входы прежние.
+
+Ни один тест входные таблицы не держит.
+
+### Основной путь первым
+
+Абзацы переставлены целиком, без правки слов и без связок; скрипт перестановки
+сверял, что набор абзацев не изменился. Изменены пять разделов:
+
+- `jobs.md`, «Queue and policies»: абзац о `restart` — перед двумя абзацами
+  об ограничениях `droppable`;
+- `state.md`, «externalSetState»: «Use job bodies and their state handlers…» —
+  после «An event being delivered…», перед абзацами о гонке с закрытием;
+- `accumulation.md`, «Start, cancellation and errors»: «Additions to one group
+  share…» и «For the same reason…» — первыми, парой;
+- `errors.md`, «Reporting an error»: «The hook reports and returns…» — перед
+  «It hears each error once…»;
+- `errors.md`, «Retrying from the caller»: «The gap itself…» — в конец.
+
+Остальные разделы, открытые ответом, и подразделы ответов на пяти страницах уже
+идут основным путём и не тронуты; порядок абзацев каждого записан в заметках
+исполнителя. Две оговорки. В «Observing state» `state.md` абзацы основного пути
+«Like `ChangeNotifier`…» и «`SoloListenable` adds…» стоят после четырёх абзацев
+о вложенной записи, но поднять их, не правя слов, нельзя: «that order» держится
+за список прямо над ним. И несколько абзацев несут основной путь и краевой
+случай вместе: развести их — значит резать абзац, а это правка,
+не перестановка.
+
+### Длинные фразы
+
+Фразы длиннее 35 слов, счёт скриптом ниже:
+
+| Страница | До | После |
+| --- | ---: | ---: |
+| `children.md` | 6 | 0 |
+| `vs-bloc.md` | 28 | 0 |
+| `camera.md` | 6 | 0 |
+| `streams.md` | 6 | 0 |
+| README `flutter_solo` | 8 | 0 |
+
+Почти везде двоеточие, точка с запятой или тире между двумя самостоятельными
+частями стали точкой. Новых связок немного: «That page shows», «They show»,
+«The rest covers», «The third is», «Through it,». `vs-bloc.md` не сокращена,
+решение 86. Четыре из восьми случаев README — не фразы, а списки: пункты шли
+со строчной через `;`, и скрипт читал список одной фразой. Пункты теперь
+с заглавной и с точкой, как в списках остальных страниц; слова те же. Две новые
+фразы ровно в 35 слов — `streams.md` «That is why waits belong…» и `vs-bloc.md`
+«They differ in what each does…» — порога не переходят.
+
+Переводы разрезаны в тех же местах. Попутно поправлен перевод `children.md`,
+«Working beside a child»: «каждую запись одной задачи проверяют правила другой»
+при оригинале «each job answers to its own rules for every one of them»;
+расхождение было и до волны.
+
+### «Notes» README `flutter_solo`
+
+Две таблицы, страница одна (решение 76). Первая — «A failure of | Where it
+goes», по строке на маршрут: слушатель контроллера с `SoloListenable` и без
+него — со ссылками на «A base class without Flutter» в `doc/mixins.md` и «Where
+each error goes» на `errors.md` `solo`; слушатель проекции и её селектор — без
+ссылки, их маршрут не говорит ни один раздел. Вторая — прежние пять вопросов;
+«Are equal states filtered?» и «Several controllers on one screen?» получили
+ссылки на «Selecting one value» и «The controller as a `ValueListenable`»,
+остальным трём фактам сослаться некуда. Ни один факт прежних ячеек не выброшен.
+Это отступление от варианта Fable в вердикте L13 — «куда идёт ошибка» и «жизнь
+контроллера», — как и записано в плане.
+
+### Тесты
+
+Ни одно `_says` не снято и не ослаблено. Везде одна причина: держимая фраза
+разрезана, и её кусок начинает свою фразу.
+
+| Тест | Правок |
+| --- | ---: |
+| `children_rakes_test.dart` | 4 |
+| `camera_rakes_test.dart` примера `solo` | 4 |
+| `streams_rakes_test.dart` | 4 |
+| `vs_bloc_rakes_test.dart` | 7 |
+| `tool/doc_snippets.py`, `SAID` | 1 |
+| `readme_rakes_test.dart` `flutter_solo` | 12 фраз; тест маршрутов держит пять строк таблицы вместо двух фраз; `Listenable.merge` — вместе со ссылкой |
+
+### Проверки части 5
+
+`solo`: формат без изменений, анализ чистый, +2063; пример +112.
+`flutter_solo`: формат без изменений, анализ чистый, +241; пример +6. Стенды
+вне репозитория: `bin/v` трёх пакетов без замечаний, все драйверы прошли;
+`check_traces.py` — 3 цитаты `vs-bloc.md`, 13 `accumulation.md`, 6 `mixins.md`,
+ни одной не напечатанной; `flutter_check` +47. Документные — все семь зелёные.
+Линтер `humanizer--ru` по изменённым абзацам переводов: 0 `ERROR`.
+
+### Чего часть 5 не сделала
+
+Правило 4 плана откладывает разбор, который есть только в dartdoc, «в заметки
+части 4 или 5»: переезжать на страницы ему полагалось в этих частях. В задания
+частей 4 и 5 я переезды не включил, и списки «Ждёт страниц частей 4 и 5» выше
+пока не исполнены. Ничего не потеряно — разбор стоит в dartdoc, пока страница
+его не скажет. Переезды идут следующим шагом, отдельным коммитом, до ревью
+волны.
+
+## Счётчик длинных фраз
+
+`prose_len.py`, как его гоняли до и после части 5: `python3 prose_len.py
+packages/solo/doc/children.md packages/solo/doc/vs-bloc.md
+packages/solo/doc/camera.md packages/solo/doc/streams.md
+packages/flutter_solo/README.md`.
+
+```python
+"""Sentence lengths of the prose of Markdown pages.
+
+Usage: python3 prose_len.py FILE...
+
+Code blocks, tables, headings, quotes and HTML are left out. A sentence
+ends at `.`, `!` or `?` followed by a space or the end of a paragraph; a
+dot inside a code span does not end one. Prints, per file: sentences, mean
+words, and how many are longer than 35 words.
+"""
+import re
+import sys
+
+LIMIT = 35
+
+
+def paragraphs(text):
+    fence = False
+    para = []
+    for line in text.split('\n'):
+        if line.lstrip().startswith('```'):
+            fence = not fence
+            if para:
+                yield ' '.join(para)
+                para = []
+            continue
+        if fence:
+            continue
+        s = line.strip()
+        if not s or s.startswith(('#', '|', '>', '<')):
+            if para:
+                yield ' '.join(para)
+                para = []
+            continue
+        s = re.sub(r'^([-*]|\d+\.)\s+', '', s)
+        para.append(s)
+    if para:
+        yield ' '.join(para)
+
+
+def sentences(para):
+    # Code spans and link targets become single words with no dots in them.
+    para = re.sub(r'`[^`]*`', 'CODE', para)
+    para = re.sub(r'\]\([^)]*\)', ']', para)
+    for sentence in re.split(r'(?<=[.!?])\s+(?=[A-Z«"`(\[А-Я])', para):
+        words = sentence.split()
+        if words:
+            yield words
+
+
+def main():
+    for path in sys.argv[1:]:
+        lengths = []
+        long_ones = []
+        for para in paragraphs(open(path).read()):
+            for words in sentences(para):
+                lengths.append(len(words))
+                if len(words) > LIMIT:
+                    long_ones.append(' '.join(words[:8]) + ' ...')
+        n = len(lengths)
+        mean = sum(lengths) / n if n else 0
+        print(f'{path}\tsentences {n}\tmean {mean:.1f}\tover {LIMIT}: '
+              f'{len(long_ones)} ({100 * len(long_ones) / n if n else 0:.1f}%)')
+        if '-v' in sys.argv:
+            for line in long_ones:
+                print('   ', line)
+
+
+main()
+```
 
 ## Счётчик строк `///`
 

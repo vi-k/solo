@@ -3,7 +3,7 @@
 A camera is a controller over hardware: every operation takes time, the device
 can fail on its own, and it has to be closed on purpose. This page builds that
 controller one decision at a time — state rules, queue policies, the cleanup of
-the device — and ends on the code of the runnable [`example/`](../example)
+the device. It ends on the code of the runnable [`example/`](../example)
 package: the last fragment of each method below is its code in
 `example/lib/src/camera_controller.dart`, comments aside.
 
@@ -69,11 +69,11 @@ fail after its delay, `fail` reports a failure from outside any job by calling
 `onError`, the callback the controller sets, and `log` records where each
 operation begins and ends.
 
-The journals below are what the example's observer prints for this code: a job
-`started`, `finished` with its outcome or `dropped` before it started, an
-`error` it reported, a `log` line, every change of `state:`, and `closed` once
-the controller has closed. A job goes by its key, a value of the example's
-`CameraKey` enum, followed by its `describe` text where it has one:
+The journals below are what the example's observer prints for this code. They
+show a job `started`, `finished` with its outcome or `dropped` before it
+started, an `error` it reported, a `log` line, every change of `state:`, and
+`closed` once the controller has closed. A job goes by its key, a value of the
+example's `CameraKey` enum, followed by its `describe` text where it has one:
 `[setZoom: zoom: 2.0]`. A child job's lines begin with `>`.
 
 ## Opening the camera
@@ -284,7 +284,7 @@ state: Broken(Bad state: cable pulled)
 ```
 
 A job its rules cancelled leaves the state as it is, and the handlers are
-disabled at the report itself: a cancellation or a failure of `hw.open` that
+disabled at the report itself. A cancellation or a failure of `hw.open` that
 comes after it reaches neither of them, and the reported failure stays. It is
 the rule that
 [Preserving an incompatible external state](state.md#preserving-an-incompatible-external-state)
@@ -511,7 +511,7 @@ state: Disposed()
 `queue.clear()` drops what has not started, and the shot never reaches the
 hardware. `current?.cancel()` asks the running zoom to stop, and the lens moves
 to 2 all the same: the zoom waits with `join`, which lets the job leave only
-once the operation it started is over — the table at the top of the page
+once the operation it started is over. The table at the top of the page
 [Cancellation](cancellation.md) has each waiting method. What the cancellation
 saves is the rest of the body: the zoom publishes no state for a camera about
 to close, and the disposal starts as soon as the hardware is free.
@@ -559,7 +559,7 @@ state, and a disposal of a disposed camera may run: it only has nothing to do.
 
 The clear is not forced. A disposal that is still in the queue survives it,
 because it is not cancellable, and `Policy.droppable` hands it to the second
-call: two `dispose()` calls in a row get the same job, and both callers see
+call. Two `dispose()` calls in a row get the same job, and both callers see
 `Done`. `queue.clear(force: true)` would drop that job instead, and its caller
 would get `Cancelled(manual)` for a camera that was disposed after all.
 
@@ -582,7 +582,7 @@ closed
 
 `close()` goes by where a job is, not by its flag. It waits for the running
 job, and a job that is not cancellable runs to its end. A job still in the
-queue never starts: `close()` ends it with `Cancelled(closed)`, cancellable or
+queue never starts. `close()` ends it with `Cancelled(closed)`, cancellable or
 not, and whoever awaits it gets that outcome at once, as
 [Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
 on the cancellation page describes. `dispose()` queued its job and `close()`

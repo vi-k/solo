@@ -3,6 +3,20 @@
 `Solo<S>` stores one immutable state of type `S`, and a job declares which
 states it may start in and which it may keep running in.
 
+The rules of a job are asked by the engine, not by its body:
+
+| Rule | When it is asked | What a refusal does |
+| --- | --- | --- |
+| Working type `W` of `run<W, T>` | Before start, on other state updates while the body runs, and at state checkpoints | Cancels the job with `RulesCancelReason`: `started: false` before start, `started: true` while the body runs |
+| `canStart` | Once, when the job is about to start | Cancels the job with `RulesCancelReason` and `started: false`: the body never runs |
+| `keepWhile` | Before start, on other state updates while the body runs, and at state checkpoints | Cancels the job with `RulesCancelReason`: `started: false` before start, `started: true` while the body runs |
+
+A refusal does not keep the job queued until the state suits it, and the job's
+`ifFailed` and `ifCancelled` do not run after it. The rules are in
+[The rules](#the-rules), the checkpoints in
+[Reading and updating state](#reading-and-updating-state), and the handlers in
+[Handler eligibility and errors](#handler-eligibility-and-errors).
+
 ## State and rules
 
 A recording needs free space before it starts, and it has to stop when the
@@ -415,6 +429,12 @@ What to do with a notification depends on what it means:
 An event being delivered by a stream does not by itself justify bypassing the
 queue.
 
+Use job bodies and their state handlers for the controller's own success,
+failure and cancellation. `externalSetState` is an exception for external
+facts, not a general setter for those operations. It works for as long as the
+engine does, a drain included, and throws a `StateError` once closing has
+finished: the state a controller stops at is the state it keeps.
+
 The subscription is cancelled in `onClose`, not when `close` is called. The
 engine calls `onClose` once and later, when every job is over and the state is
 not final yet, whichever mode closed the controller. Stopping the source when
@@ -436,12 +456,6 @@ alive, and the engine may finish while it waits. Such a callback checks
 made earlier can go stale, and the write then throws a `StateError`.
 `isFinished` is false for as long as the engine runs, a drain included, and
 true once the state is final.
-
-Use job bodies and their state handlers for the controller's own success,
-failure and cancellation. `externalSetState` is an exception for external
-facts, not a general setter for those operations. It works for as long as the
-engine does, a drain included, and throws a `StateError` once closing has
-finished: the state a controller stops at is the state it keeps.
 
 ## State after failure or cancellation
 

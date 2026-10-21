@@ -448,8 +448,8 @@ void main() {
           'an hour later: track no outcome, next queued true',
           'the source is done: track Done(null), next Done(null)',
         ]);
-        _says('so an open stream with no events is a child still running; '
-            'and the parent waits for its children with or without an '
+        _says('so an open stream with no events is a child still running. '
+            'The parent waits for its children with or without an '
             'explicit await, so it keeps running too, and holds the queue');
       });
 
@@ -619,8 +619,8 @@ void main() {
         expect(errors, ['Bad state: callback failed']);
         expect(bench.heard, ['Job(each): Bad state: callback failed']);
         expect(bench.unanswered, ['Job(each): Bad state: callback failed']);
-        _says("still holds the parent, but its failure is not the parent's: "
-            'the parent ends `Done`, and the failure goes where a failure '
+        _says("still holds the parent, but its failure is not the parent's. "
+            'The parent ends `Done`, and the failure goes where a failure '
             'nobody read goes, to `onUnanswered` and by default to the zone');
       });
 
@@ -738,7 +738,7 @@ void main() {
               '`childCtx.abandonable` ends with the cancellation the moment it '
               'arrives and leaves the action running alone, while a plain '
               '`await` ends only when its own future does');
-          _says('until the callback returns, the child and the parent are '
+          _says('Until the callback returns, the child and the parent are '
               'still running, the queue is held and `close()` does not come '
               'back');
         });
@@ -1173,8 +1173,8 @@ void main() {
           'that job is over: Screen(signedIn: false), other Done(null)',
           'after onClose: Screen(signedIn: false)',
         ]);
-        _says('made in its constructor and cancelled in `onClose`, and from '
-            'it either queues a short job for each update');
+        _says('made in its constructor and cancelled in `onClose`. For each '
+            'update that subscription brings, it either queues a short job');
       });
 
       test('a subscription of its own that writes with externalSetState', () {

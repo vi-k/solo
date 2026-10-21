@@ -218,8 +218,8 @@ void main() {
         ['a begins', 'a ends', 'b begins', 'b ends', 'c begins', 'c ends'],
       );
       await bench.close();
-      _says('one root job of a controller at a time, so two of them never '
-          'write the same state');
+      _says('One root job of a controller at a time, so two of them never '
+          'write the same state.');
     });
 
     testWidgets('a job is cancelled when its rules stop holding',
@@ -282,9 +282,9 @@ void main() {
       expect('${deaf.outcome}', 'Cancelled(manual)');
 
       await bench.close();
-      _says('a cancellation the caller can ask for: the next checkpoint of '
+      _says('A cancellation the caller can ask for: the next checkpoint of '
           'the context throws it, and a body that never reaches one still '
-          'ends `Cancelled` and writes no state of its own');
+          'ends `Cancelled` and writes no state of its own.');
     });
 
     testWidgets('every job ends with one of three outcomes', (tester) async {
@@ -300,7 +300,7 @@ void main() {
       expect(done.outcome, isA<Done<String>>());
       expect(failed.outcome, isA<Failed>());
       expect(cancelled.outcome, isA<Cancelled>());
-      _says('an outcome for every job, one of `Done`, `Failed` and '
+      _says('An outcome for every job, one of `Done`, `Failed` and '
           '`Cancelled`,');
     });
   });
@@ -444,7 +444,7 @@ void main() {
       _says('The button drops the job that `load` hands back. A failure '
           'nobody reads goes on to the zone even after `ifFailed` has put '
           '`Empty` on the screen, unless `Solo.unansweredHandler` answers for '
-          'it: in an app towards '
+          'it. In an app it goes towards '
           '`PlatformDispatcher.onError`, in a widget test into the test, '
           'which fails.');
     });
@@ -501,7 +501,7 @@ void main() {
 
       await controller.close();
       _says('`ctx.abandonable` awaits like `await`, except that it gives up '
-          'the moment the job is cancelled;');
+          'the moment the job is cancelled.');
       _says('`ctx.join` waits its call out either way, so a save is not cut '
           'in half.');
     });
@@ -565,7 +565,7 @@ void main() {
       expect(state, isA<Loaded>(), reason: 'nothing on the screen says so');
       expect('${reported.single.exception}', 'Bad state: save offline');
       _says('A save that fails leaves the state `Loaded`, and nothing on the '
-          'screen says so: `save` has no `ifFailed`, so its failure goes on '
+          'screen says so. `save` has no `ifFailed`, so its failure goes on '
           'to the zone, with no `Solo.unansweredHandler` set');
     });
 
@@ -633,8 +633,8 @@ void main() {
 
       expect(built, [0, 3]);
       await bench.close();
-      _says('picks count as changed when they are `!=`, unless `changed:` '
-          'answers that question itself;');
+      _says('Picks count as changed when they are `!=`, unless `changed:` '
+          'answers that question itself.');
     });
 
     testWidgets('the selector runs once for every change', (tester) async {
@@ -660,7 +660,7 @@ void main() {
       expect(_texts(tester), ['true']);
 
       await plain.close();
-      _says('the selector runs once for every change of the state');
+      _says('The selector runs once for every change of the state');
       _says('`solo` is any controller, a `ValueListenable` or not.');
     });
 
@@ -832,8 +832,8 @@ void main() {
       expect(endsApartAt, '3');
       _says('`changed:` is handed two picks: the last one the widget '
           'accepted, as `previous`, and the new one.');
-      _says('The builder has usually been given `previous`, but not always: '
-          'when two changes come before a frame and the first is accepted, '
+      _says('The builder has usually been given `previous`, but not always. '
+          'When two changes come before a frame and the first is accepted, '
           'the second is put against it, and the builder has not seen it '
           'yet.');
       _says('So where the screen ends up depends on the changes alone, not on '
@@ -1394,9 +1394,9 @@ void main() {
       bench.set(Loading());
       expect(heard, isEmpty);
       await bench.close();
-      _says('cancelling twice does nothing the second time;');
-      _says('a group that has been cancelled cancels what it is handed '
-          'rather than keeping it;');
+      _says('Cancelling twice does nothing the second time.');
+      _says('A group that has been cancelled cancels what it is handed '
+          'rather than keeping it.');
     });
 
     test('a member that will not let go costs the others nothing', () async {
@@ -1422,7 +1422,7 @@ void main() {
       expect(heard, isEmpty);
       expect(reported, [isA<StateError>(), isA<StateError>()]);
       await bench.close();
-      _says('if one member refuses to let go, the others are cancelled all '
+      _says('If one member refuses to let go, the others are cancelled all '
           'the same, and every failure goes to `FlutterError.reportError`.');
       _says('Cancelling a group never throws');
     });
@@ -2063,11 +2063,18 @@ void main() {
       final (plainFlutter, plainZone) = await route(plain, plain.set);
       expect(plainFlutter, ofSelection);
       expect(plainZone, ofController);
-      _says('With `SoloListenable`, to `FlutterError.reportError`. Without '
-          'it, to the zone, as in `solo`');
-      _says('A selection reports its own listeners through `FlutterError` '
-          'either way, while its selector runs inside a listener of the '
-          "controller and takes the controller's route.");
+      _says('| A listener of a controller with `SoloListenable` | To '
+          '`FlutterError.reportError`,');
+      _says('| A listener of a controller without it | To the zone, as ');
+      _says('but `FlutterError.onError` never hears of a failure of its '
+          'listeners. |');
+      _says('| A listener of a selection | Through `FlutterError`, whether the '
+          'controller has `SoloListenable` or not: a selection reports its '
+          'own listeners. |');
+      _says(
+          "| The selector of a selection | The controller's route, one of the "
+          'two rows above: the selector runs inside a listener of the '
+          'controller. |');
     });
 
     testWidgets('the builders listen to the controller itself', (tester) async {
@@ -2171,7 +2178,8 @@ void main() {
       expect(Plain(), isNot(isA<Listenable>()));
       _says('`Listenable.merge([a, b])` in a `ListenableBuilder` covers the '
           'case where one widget depends on two; it takes controllers with '
-          '`SoloListenable`.');
+          '`SoloListenable`, as [The controller as a '
+          '`ValueListenable`](#the-controller-as-a-valuelistenable) shows.');
     });
 
     test('the mixin gives value no setter', () {

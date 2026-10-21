@@ -1110,7 +1110,7 @@ void main() {
       _says(
         _part(_reported, answer),
         'A job its rules cancelled leaves the state as it is, and the '
-        'handlers are disabled at the report itself: a cancellation or a '
+        'handlers are disabled at the report itself. A cancellation or a '
         'failure of `hw.open` that comes after it reaches neither of them, '
         'and the reported failure stays.',
       );
@@ -1807,7 +1807,7 @@ void main() {
         _part(_disposing, '### Checking in the body'),
         'The clear is not forced. A disposal that is still in the queue '
         'survives it, because it is not cancellable, and `Policy.droppable` '
-        'hands it to the second call: two `dispose()` calls in a row get '
+        'hands it to the second call. Two `dispose()` calls in a row get '
         'the same job, and both callers see `Done`.',
       );
       for (final create in <_Create>[
@@ -1857,7 +1857,7 @@ void main() {
       final attempt = _part(_closing, _first);
       _says(
         attempt,
-        'A job still in the queue never starts: `close()` ends it with '
+        'A job still in the queue never starts. `close()` ends it with '
         '`Cancelled(closed)`, cancellable or not, and whoever awaits it '
         'gets that outcome at once',
       );
@@ -2478,7 +2478,7 @@ void main() {
     test('the cancellation page has its table of waiting methods on top', () {
       _says(
         _part(_disposing, _second),
-        'the table at the top of the page [Cancellation](cancellation.md) '
+        'The table at the top of the page [Cancellation](cancellation.md) '
         'has each waiting method.',
       );
       final top = under('cancellation.md', '# Cancellation');

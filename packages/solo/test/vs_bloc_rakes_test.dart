@@ -549,7 +549,7 @@ void main() {
         'at 10: null [], closed at 100, at 210: Cancelled(closed) []',
       ]);
       _says('If such work has to end before the job does, it is started as '
-          'a child with `ctx.run`: the parent waits for its children even '
+          'a child with `ctx.run`. The parent waits for its children even '
           'when its body does not await them');
       _says('and `close()` waits for them too.');
     });
@@ -631,7 +631,7 @@ void main() {
       expect('${controller.currentState}', 'Recording');
       expect(watcher.seen, ['change to Recording']);
       _says("The controller's own hook goes the same way: had `_journal.note` "
-          'thrown, its error would reach the zone too, and the observer would '
+          'thrown, its error would reach the zone too. The observer would '
           'not hear it');
     });
   });
@@ -1274,7 +1274,7 @@ void main() {
           renamed ? 'Done(null)' : 'Cancelled(manual)',
         );
         expect(ble.trace.contains('rename hall'), renamed);
-        _says('a sweep skips such a job instead of removing it, and '
+        _says('A sweep skips such a job instead of removing it, and '
             '`force: true` is what takes it');
         _says('code that later sweeps the whole queue with `cancelAll()` or '
             '`queue.clear()`');
@@ -1311,7 +1311,7 @@ void main() {
         expect(ble.trace, ['connect', 'disconnect']);
         expect(state, held ? 'Offline' : 'Connected(b:null)');
         expect('$outcome', held ? 'Done(null)' : 'Cancelled(manual)');
-        _says('a sweep arriving while `disconnect` runs would leave the '
+        _says('A sweep arriving while `disconnect` runs would leave the '
             'device disconnected and the state at `Connected`');
         _says('A sweep turns a running `cancellable: false` job down, so the '
             'state follows the device to `Offline` and `Connected`.');
@@ -1406,7 +1406,7 @@ void main() {
       _says('The three requests again make two API calls.');
       _says('**What solo gives:** with a key per order and '
           '`Policy.droppable`, the callers of one order share its job and '
-          'receipt, another order gets its own job, `cancellable: false` '
+          'receipt, and another order gets its own job. `cancellable: false` '
           'turns down a cancel from a screen, and the platform handler reads '
           "its own request's outcome.");
     });
@@ -1461,7 +1461,7 @@ void main() {
       expect(outcomes, ['Done(Receipt(for A))', 'Cancelled(manual)']);
       expect(api.calls, 1);
       _says('A payment the user may still withdraw before charging starts is '
-          'taken out of the queue by `withdraw`: `force: true` removes a '
+          'taken out of the queue by `withdraw`. `force: true` removes a '
           'queued job whatever its flag, and the queue never touches a '
           'running job, so a charge already on its way stays and `withdraw` '
           'returns `false`.');
@@ -1487,7 +1487,7 @@ void main() {
       expect('$outcome', 'Cancelled(manual)');
       _says('Wrapping the whole body in `ctx.uncancellable` instead of the '
           'flag would not do the same.');
-      _says('a cancel arriving during the charge lands when the section '
+      _says('A cancel arriving during the charge lands when the section '
           'closes, after `Paid` is published, and the job ends `Cancelled`, '
           'so the platform handler answers `paid: false` for a payment that '
           'was made.');
