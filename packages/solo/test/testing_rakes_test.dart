@@ -1712,13 +1712,17 @@ final name = await ctx.abandonable(
 
     test('the three sections that await come first, fakeAsync is the fourth',
         () {
+      final sections = _sections();
       final underFakeTime = [
-        for (final section in _sections()) section.contains('fakeAsync(('),
+        for (final section in sections) section.contains('fakeAsync(('),
       ];
 
       expect(underFakeTime.take(4), [false, false, false, true]);
-      _says('The three sections below await; `fakeAsync` starts with the '
-          'fourth.');
+      expect(sections[6], startsWith('## Assertions inside a zone'));
+      expect(underFakeTime[6], isFalse);
+      _says('The first three sections below await; `fakeAsync` starts with '
+          'the fourth, and the seventh, on assertions inside a zone, awaits '
+          'again.');
     });
 
     test('the rules on top name every section, four of each kind of test', () {

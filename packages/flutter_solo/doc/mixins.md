@@ -60,9 +60,9 @@ The combination costs two things. One change has two error routes: a listener's
 failure goes to `FlutterError`, and a failure of a `stream` subscriber goes to
 the zone it subscribed in. And `await close()` waits until every subscriber of
 `stream` has taken its done event, where a controller with `SoloListenable`
-alone waits for none of its listeners. So an `await for` over the `stream`
-holds `close()` while its body is still awaiting. `pending` is a
-`SoloPendingStream` all that time, and
+alone waits for none of its listeners. On a controller with both, an
+`await for` over the `stream` holds `close()` while its body is still awaiting.
+`pending` is a `SoloPendingStream` all that time, and
 [What is holding the controller](https://github.com/vi-k/solo/blob/main/packages/solo/doc/diagnostics.md#what-is-holding-the-controller)
 on the diagnostics page of `solo` shows how to ask for it.
 

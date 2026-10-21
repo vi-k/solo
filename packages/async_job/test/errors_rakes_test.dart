@@ -1204,6 +1204,32 @@ void main() {
       );
     });
 
+    test('the page holds an unawaited abandonable to the zone in the body', () {
+      // The translation is not in the archive: it is read where it is.
+      const said = {
+        'doc/errors.md': [
+          'If the job is cancelled while the body runs, `ctx.abandonable`',
+          "or with the job's cancellation, only while the body runs",
+          'on purpose adds a second, past the answer',
+        ],
+        '../../docs/ru/async_job/errors.md': [
+          'Если задачу отменяют, пока идёт тело, `ctx.abandonable`',
+          'или с отменой задачи, только пока тело идёт',
+          'нарочно кончает задачу `Failed`, добавляет второй, мимо ответа',
+        ],
+      };
+      for (final MapEntry(key: page, value: phrases) in said.entries) {
+        if (!File(page).existsSync()) {
+          continue;
+        }
+        final text =
+            File(page).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+        for (final phrase in phrases) {
+          expect(text, contains(phrase), reason: page);
+        }
+      }
+    });
+
     test('a call the body did not await: the zone the body runs in', () {
       // Created in one zone and started from another: the error goes to
       // the starter's, where the body runs.

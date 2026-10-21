@@ -603,7 +603,7 @@ void main() {
       _says("Each hook's exception is reported to the current Dart zone");
       _says('The telemetry error goes to `Zone.current.handleUncaughtError`');
       _says('and nowhere else');
-      _says('and its error goes to the zone and nowhere else.');
+      _says("and the observer's error goes to the zone and nowhere else.");
     });
 
     test('a throwing hook of the controller leaves the observer alone', () {
@@ -1396,8 +1396,9 @@ void main() {
       _says('The three requests again make two API calls.');
       _says('**What solo gives:** with a key per order and '
           '`Policy.droppable`, the callers of one order share its job and '
-          'receipt, another order gets its own job, and the platform handler '
-          "reads its own request's outcome.");
+          'receipt, another order gets its own job, `cancellable: false` '
+          'turns down a cancel from a screen, and the platform handler reads '
+          "its own request's outcome.");
     });
 
     test('a cancel from a screen is refused, running or queued', () {

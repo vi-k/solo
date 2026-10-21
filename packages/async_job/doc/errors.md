@@ -181,15 +181,16 @@ What the table does not show:
   that nobody awaits. Dart hands that error to the zone the body runs in, with
   an observer or without one; for a job made with `Job.deferred`, that is the
   zone it was started from.
-- If the job is cancelled, `ctx.abandonable` called without `await` throws
-  `Cancelled` into its future, and Dart hands it to that zone like any other
-  error: the job's own cancellation goes there too. It is Dart that sends this
-  cancellation to the zone, not the job.
+- If the job is cancelled while the body runs, `ctx.abandonable` called without
+  `await` throws `Cancelled` into its future, and Dart hands it to the zone the
+  body runs in like any other error: the job's own cancellation goes there too.
+  It is Dart that sends this cancellation to the zone, not the job.
 - If the action of `ctx.abandonable` called without `await` fails after the
   body has ended, the error goes the way of the late error of an action
   `ctx.abandonable` stopped waiting for. `onError` hears it, and then it goes
-  on to the answer: the zone the body runs in gets that error only while the
-  body runs.
+  on to the answer. A call of `ctx.abandonable` without `await` reaches the
+  zone the body runs in, with its error or with the job's cancellation, only
+  while the body runs.
 - If the job has accepted a cancellation, an error that
   `Job.isCancellationError` names goes no further than `onError`. That holds in
   the rows of both tables that end with the answer: those of the body of a
@@ -200,19 +201,20 @@ What the table does not show:
   failure of the body. That failure goes to `onUnanswered` or the zone even
   when the outcome is observed, and so does the failure of a branch of
   `ctx.runAll` whose group threw another error.
-- If somebody calls `ignoreFailure()` on the job whose body failed, such a
-  failure goes no further: `onError` still hears it, but it reaches neither
+- If somebody calls `ignoreFailure()` on the job whose body failed, the failure
+  of its body goes no further: `onError` still hears it, but it reaches neither
   `onUnanswered` nor the zone.
 - If the body of a child failed, the child answers for its failure itself,
   whatever its parent calls: `ignoreFailure()` on the parent lets go of the
   parent's failures alone.
 - If the app reports in both `onError` and its zone, it hears twice an error
-  that reaches both. The tables show one way from the job to the zone: the
-  answer, when nobody answers for the error, or `onUnanswered` sends it on or
-  throws.
-- If somebody observed the outcome, a failure the outcome carries is off that
-  way: it takes the way only if nobody observed the outcome. An observer that
-  answers (`with JobAnswerer`) closes the way itself.
+  that reaches both. The table above shows one way from the job to the zone:
+  the answer, when nobody answers for the error, or `onUnanswered` sends it on
+  or throws. An engine that ends a job `Failed` on purpose adds a second, past
+  the answer: the last row of [Rare routes](#rare-routes).
+- If somebody observed the outcome, a failure the outcome carries is off the
+  way through the answer: it takes that way only if nobody observed the
+  outcome. An observer that answers (`with JobAnswerer`) closes the way itself.
 - If one failure is the outcome of several jobs, it reaches `onError` once on
   each of them. A child of `ctx.run` fails, its parent lets the failure out of
   its body, and the observer the child inherited hears the same object on the

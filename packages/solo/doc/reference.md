@@ -109,10 +109,10 @@ does `ctx.each`.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `ctx.state` | The state as `W`, read at a checkpoint that checks the rules of the job | [Reading and updating state](state.md#reading-and-updating-state) |
+| `ctx.state` | The state as `W`, read at a checkpoint where a state the rules of the job refuse cancels the job | [Reading and updating state](state.md#reading-and-updating-state) |
 | `ctx.stateAs<T>()` | The state narrowed further to `T`, where a mismatch cancels the job | [Reading and updating state](state.md#reading-and-updating-state) |
 | `ctx.emit(next)` | The body's only way to write the state, a synchronous one | [Reading and updating state](state.md#reading-and-updating-state) |
-| `ctx.each(stream, onData)` | Starts a child that hands the events of a stream to `onData` one at a time, with the child's `SoloContext` | [Processing a stream](streams.md#processing-a-stream) |
+| `ctx.each(stream, onData)` | Starts a child that hands the events of a stream to `onData` one at a time, with the child's `SoloContext`, at a checkpoint where a state the rules of the job refuse cancels the job instead | [Processing a stream](streams.md#processing-a-stream) |
 
 ## SoloJob
 
@@ -152,7 +152,7 @@ field: events combine only within one accumulator, even under the same key.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job, which every caller continues only through `shared()` | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
+| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job, one handle for every caller, each of whom continues it through `shared()` because a plain `then` on it throws | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
 
 ## Other types
 

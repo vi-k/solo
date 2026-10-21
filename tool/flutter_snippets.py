@@ -1623,27 +1623,31 @@ void main() {
     );
   });
 
-  testWidgets('one builder over two profiles follows either of them',
-      (tester) async {
-    final left = ProfileController(ProfileApi());
-    final right = ProfileController(ProfileApi());
-    closing(left);
-    closing(right);
-    await tester.pumpWidget(app(mergedBuilder(left, right)));
-    expect(find.text('waiting'), findsOne);
+  for (final leftFirst in [true, false]) {
+    testWidgets(
+        'one builder over two profiles follows either of them, '
+        '${leftFirst ? 'left' : 'right'} loaded first', (tester) async {
+      final left = ProfileController(ProfileApi());
+      final right = ProfileController(ProfileApi());
+      closing(left);
+      closing(right);
+      await tester.pumpWidget(app(mergedBuilder(left, right)));
+      expect(find.text('waiting'), findsOne);
 
-    left.load().ignoreFailure();
-    await tester.pump(const Duration(milliseconds: 20));
-    expect(find.text('waiting'), findsOne, reason: 'one profile is loaded');
+      final (first, second) = leftFirst ? (left, right) : (right, left);
+      first.load().ignoreFailure();
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(find.text('waiting'), findsOne, reason: 'one profile is loaded');
 
-    right.load().ignoreFailure();
-    await tester.pump(const Duration(milliseconds: 20));
-    expect(
-      find.text('both loaded'),
-      findsOne,
-      reason: 'the change of the second profile rebuilt the widget',
-    );
-  });
+      second.load().ignoreFailure();
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(
+        find.text('both loaded'),
+        findsOne,
+        reason: 'the change of the profile loaded last rebuilt the widget',
+      );
+    });
+  }
 
   testWidgets('the screen of Usage takes this controller as well',
       (tester) async {

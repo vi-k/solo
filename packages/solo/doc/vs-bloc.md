@@ -13,7 +13,8 @@ under the bloc heading after it: that heading adds the version that meets the
 requirement. Where one attempt does not get close enough to that, a second
 follows under its own heading. Reading the attempts before the answer is the
 point of the section; a reader who already knows the trap can skip to the bloc
-heading and `### Solo`.
+heading and `### Solo`, or to the line that closes the section, **What solo
+gives**.
 
 The scenarios in order, with what the first attempt tries and what the solo
 version uses:
@@ -479,8 +480,8 @@ would reach the zone too, and the observer would not hear it, because its
 `onError` is for what a job threw, not for what a hook threw.
 
 **What solo gives:** an observer that throws changes neither the job's outcome
-nor the queue: the state reaches `Recording`, the meter is armed, and its error
-goes to the zone and nowhere else.
+nor the queue: the state reaches `Recording`, the meter is armed, and the
+observer's error goes to the zone and nowhere else.
 
 ## Closing and cancelling in-flight work
 
@@ -1567,8 +1568,9 @@ Payment retries across process restarts or network failures also require an
 idempotent payment API; neither example provides that.
 
 **What solo gives:** with a key per order and `Policy.droppable`, the callers
-of one order share its job and receipt, another order gets its own job, and the
-platform handler reads its own request's outcome.
+of one order share its job and receipt, another order gets its own job,
+`cancellable: false` turns down a cancel from a screen, and the platform
+handler reads its own request's outcome.
 
 ## Reacting to an independent external state change
 

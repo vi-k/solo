@@ -230,10 +230,9 @@ Job<Profile> load(String id) => run<Ready, Profile>(
     );
 ```
 
-A key is any object, compared with `==`. So the record `(_Op.load, id)` gives
-the policy the identity of one request rather than of the operation.
-`droppable` drops a second load of the same profile and lets a load of another
-one through.
+A key is any object, compared with `==`: the record `(_Op.load, id)` gives the
+policy the identity of one request rather than of the operation. `droppable`
+drops a second load of the same profile and lets a load of another one through.
 
 The job the second call brought never starts: it ends on the spot with
 `Cancelled(duplicate)`, whose reason is a `DuplicateCancelReason`. `run`

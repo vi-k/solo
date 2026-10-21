@@ -250,8 +250,8 @@ failure of the call. So the application names such errors once, at startup, in
 names reaches `onError` and goes no further: neither `onUnanswered` nor
 `Solo.unansweredHandler` hears it.
 
-[The token](cancellation.md#the-token) on the cancellation page names the stop
-of a player.
+[The token](cancellation.md#the-token) on the cancellation page names in
+`Job.isCancellationError` the error a player throws as it stops.
 [Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#errors-of-a-cancellation)
 on the errors page of `async_job` takes the field apart. A body that catches
 such an error asks the job, not the error:

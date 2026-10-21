@@ -16,6 +16,9 @@ or every event in a list.
 | [One request per log line](#one-request-per-log-line) | Every entry, in at most one request a second | `collect`, `throttle` with `startAtOnce: false` |
 | [Commands where only the last one counts](#commands-where-only-the-last-one-counts) | The last of the commands tapped in a row | `accumulate`, a `merge` that keeps `incoming`, `policy: adjacent` |
 
+Under each version of a controller is what the scenario above it leads to: what
+reaches the server or the device, and what the controller's state ends up as.
+
 `collect` and `accumulate` both take three type arguments, `<W, E, T>`: the
 working type `W`, as in `run`, the event type `E` and the result type `T`, and
 return a `SoloAccumulator<E, T>`. Create it once in your controller, then call
@@ -27,9 +30,6 @@ group. A group accepts events until it is sealed: when its debounce window
 expires, or, under a throttle or with no timing at all, when the queue takes
 the job to run it. The handler receives that input and an ordinary
 `SoloContext<S, W>`; it changes state through `ctx.emit`.
-
-Under each version of a controller is what the scenario above it leads to: what
-reaches the server or the device, and what the controller's state ends up as.
 
 ### A search that fires on every keystroke
 
@@ -709,8 +709,8 @@ is sealed even if another job is running. Later events form a new group; they
 cannot change the sealed input. `collect` takes its snapshot then, and not
 again. Continuous input can keep an open group waiting indefinitely. That wait
 is the point in the search recipe: the request goes out when the typing stops.
-It is also the reason the log collector takes a throttle instead: entries that
-all have to arrive cannot wait on a pause that may never come.
+The same wait is the reason the log collector takes a throttle instead: entries
+that all have to arrive cannot wait on a pause that may never come.
 
 `AccumulationTiming.throttle(duration)` allows the first group to start
 immediately, then waits at least `duration` between actual starts of the same

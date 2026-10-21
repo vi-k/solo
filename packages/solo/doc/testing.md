@@ -84,7 +84,8 @@ outcome is the only signal it needs, and the fake's twenty milliseconds are
 waited out for real. The other has to look between the events — the order two
 calls ended up in, a deadline five seconds away — and can await nothing at all.
 It runs under `package:fake_async`, where the clock moves when the test says
-so. The three sections below await; `fakeAsync` starts with the fourth.
+so. The first three sections below await; `fakeAsync` starts with the fourth,
+and the seventh, on assertions inside a zone, awaits again.
 
 ## Awaiting a job
 

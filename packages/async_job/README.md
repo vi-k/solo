@@ -249,7 +249,7 @@ it does in everyday English:
 
 | Word | What it means | Page |
 | --- | --- | --- |
-| Observe a failure | Read `done` or `value`, forward the failure through `then`, or call `ignoreFailure()`; reading `outcome` or giving the job an observer does not count. | [Outcomes](doc/outcomes.md#telling-the-core-it-is-handled) |
+| Observe a failure | Read `done` or `value`, forward the failure through `then`, or call `ignoreFailure()`, by the microtask after the job ends; reading `outcome` or giving the job an observer does not count. | [Outcomes](doc/outcomes.md#telling-the-core-it-is-handled) |
 | Answer for an error | What happens to a failure nobody observes and to an error no outcome carries: `onUnanswered` of an observer that mixes in `JobAnswerer` takes it, or the zone if the job has no such observer. | [Errors](doc/errors.md#answering-for-errors) |
 | The zone | The zone the job was created in; an error that reaches it is an uncaught error there. | [Errors](doc/errors.md) |
 | Accept a cancellation | The job becomes cancelled: the cancellation passes to its children, its `onCancel` callbacks run, and it ends `Cancelled` whatever the body does next. | [Cancellation](doc/cancellation.md) |
