@@ -362,6 +362,15 @@ CHANGELOG, `docs/records/` и `docs/settled.md` правлю я. Принима�
    разделены две фразы в «Following the cause». При приёмке последний пункт
    о зоне тела открыт связкой «The zone the body runs in depends on how the job
    was made», чтобы он читался продолжением предыдущего.
+4. `cancellation.md` и `time.md` ядра. Длинных фраз 9 и 5, стало 0 и 0, тесты
+   не менялись: регулярка «From then on … throw `Cancelled`» и дословная фраза
+   `time_rakes_test.dart:448` держатся. Что делают члены контекста
+   на отменённой задаче и судьба таймера срока стали списками. «A `Cancelled`
+   that is not the job's» открывается правилом, сценарий миниатюры встал перед
+   кодом. При приёмке над списком о таймере «not the cleanup stack:» стало «not
+   the cleanup stack. How the core runs the timer:»: первый пункт, о старте
+   таймера, двоеточия не продолжал. `whenCancelled` в абзац о самоотмене
+   не добавлен: на странице его не было, и это было бы новое утверждение.
 
 ## Ревью плана
 

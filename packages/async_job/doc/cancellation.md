@@ -41,21 +41,24 @@ A running job accepts the request inside `cancel()` itself, unless an
 `uncancellable` section holds it back or the job was created with
 `cancellable: false`. Accepting it makes the job cancelled: the cancellation
 passes to the children it has started, its `onCancel` callbacks run, and the
-job ends `Cancelled` whatever the body does next. From then on `check`,
-`abandonable`, `join`, `pause`, `uncancellable`, `run`, `start`, `runAll` and
-`each` throw `Cancelled` at their checkpoints. `onCancel` throws too: its
-callbacks have already run, and one registered now never would. `onDispose`,
-`onDiscard`, `disown` and `unattended` remain available so the body can arrange
-cleanup after cancellation.
+job ends `Cancelled` whatever the body does next. What the members of the
+context do on a cancelled job:
 
-A body that cancels itself, by throwing `Cancelled` or by letting out the
-cancellation of a child, accepts the cancellation as it throws, and the job is
-cancelled the same way: the cancellation passes to its children, its `onCancel`
-callbacks run, and it ends `Cancelled`.
+- From then on `check`, `abandonable`, `join`, `pause`, `uncancellable`, `run`,
+  `start`, `runAll` and `each` throw `Cancelled` at their checkpoints.
+- `onCancel` throws too: its callbacks have already run, and one registered now
+  never would.
+- `onDispose`, `onDiscard`, `disown` and `unattended` remain available, so the
+  body can arrange cleanup after cancellation.
+
+A body can cancel itself, by throwing `Cancelled` or by letting out the
+cancellation of a child. It accepts the cancellation as it throws, and the job
+is cancelled the same way: the cancellation passes to its children, its
+`onCancel` callbacks run, and it ends `Cancelled`.
 
 Inside an action passed to the context, a plain `await` is right: the context
-adds no checkpoint between the steps of that action, and a step that needs a
-check of its own takes a context call of its own.
+adds no checkpoint between the steps of that action. A step that needs a check
+of its own takes a context call of its own.
 [A step that must finish](#a-step-that-must-finish) puts two writes in a `join`
 each and then in one `join`, and shows what each form does when the
 cancellation comes during the first write.
@@ -63,10 +66,10 @@ cancellation comes during the first write.
 A pause and a deadline have a page of their own: [Time](time.md) puts
 `ctx.pause` next to a plain delay and gives a job a limit with `timeout`.
 
-The lines under the code are what it prints when it runs. The database says
-what it writes, and `printing`, the observer of every job below, prints what
-reaches it: `log:` for `ctx.log`, `onError:` for an error. `cancel` is the
-moment the user cancels, and `outcome:` is what `job.done` completes with.
+The lines under the code are what it prints when it runs: the database says
+what it writes, `cancel` is the moment the user cancels, and `outcome:` is what
+`job.done` completes with. `printing`, the observer of every job below, prints
+what reaches it: `log:` for `ctx.log`, `onError:` for an error.
 
 ## Stopping the operation
 
@@ -119,8 +122,8 @@ whose result nobody needs any more.
 
 A result arriving that late is dropped, or goes to the `dispose` or `discard`
 passed to `abandonable`. While the body or the job's children still run, that
-callback runs at once and the job awaits it; if the job is already running its
-cleanup stack, the callback joins the stack, and once the job has finished, the
+callback runs at once, and the job awaits it. If the job is already running its
+cleanup stack, the callback joins the stack. Once the job has finished, the
 callback runs on its own.
 [A value that comes late](cleanup.md#a-value-that-comes-late) on the cleanup
 page takes this order apart.
@@ -200,8 +203,8 @@ subject of
 ## A step that must finish
 
 The migration is over, and the last step marks the database ready: it writes
-the schema version and then the ready flag, and a database with the version and
-no flag is neither old nor ready. The two writes are two calls of the database,
+the schema version and then the ready flag. A database with the version and no
+flag is neither old nor ready. The two writes are two calls of the database,
 `writeVersion` and `writeReadyFlag`. The user cancels while the version is
 being written.
 
@@ -301,18 +304,18 @@ returns a value, so whatever has to happen after the step anyway belongs inside
 the same section.
 
 If the step fails and the body lets the error through, the job still ends
-`Cancelled`, and the failure goes where any failure of the body of a cancelled
-job goes: the observer hears it, and then the zone does, unless the observer
+`Cancelled`. The failure goes where any failure of the body of a cancelled job
+goes: the observer hears it, and then the zone does, unless the observer
 catches it in `onUnanswered`. [Where errors go](errors.md#where-errors-go) on
 the errors page has the table.
 
 Always await `ctx.uncancellable`. The section opens when called, even if you do
 not await its future. An unawaited section can outlive the body; if the job
 finishes first, the held cancellation is lost: `cancel()` completes, and the
-outcome is `Done`. If the body goes on without awaiting the section and then
-cancels itself, by throwing `Cancelled` or by letting out the cancellation of a
-child, the job accepts that cancellation at once: a section holds back a
-cancellation request, not a cancellation the body throws itself. `onCancel`
+outcome is `Done`. A section holds back a cancellation request, not a
+cancellation the body throws itself. If the body goes on without awaiting the
+section and then cancels itself, by throwing `Cancelled` or by letting out the
+cancellation of a child, the job accepts that cancellation at once. `onCancel`
 runs while the section is still open, and `abandonable` inside it throws.
 
 ## A job that refuses cancellation
@@ -333,8 +336,8 @@ microtask, so only a cancellation that comes sooner finds it not started. A job
 made with `Job.deferred` waits until someone starts it, by `start()` or by
 `ctx.run` of a parent, and the core cannot tell whether anyone will. Had such a
 job refused the cancellation and then never been started, it would never
-finish: its `done` would not complete, the `cancel()` it refused would wait
-forever, and `cancel()` has no stronger form to drop the job with.
+finish: its `done` would not complete, and the `cancel()` it refused would wait
+forever. `cancel()` has no stronger form to drop the job with.
 
 An engine that holds jobs before their start knows what the core does not: it
 starts them itself. `solo`, built on this core, starts the jobs of its queue,
@@ -429,7 +432,7 @@ line.
 
 The clause pays for this with the failures that come after a cancellation. Once
 the job has accepted one, `ctx.check()` throws it whatever the `catch` took, a
-real failure too: a migration that fails on its own after the user cancelled is
+real failure too. A migration that fails on its own after the user cancelled is
 not logged, and the body ends with the cancellation, so neither `onError` nor
 the zone hears of it. Where such a failure has to be heard, the clause rethrows
 on a cancelled job, `if (ctx.job.isCancelled) rethrow;` in place of
@@ -443,16 +446,17 @@ the outcome is still `Cancelled` even if the body returns a value.
 
 ### A `Cancelled` that is not the job's
 
-A page shows a thumbnail when it renders and goes out without one when it does
-not. A thumbnail that failed goes to the log, and one that was cancelled does
-not. A `Cancelled` caught in the body is not always the job's own. An operation
-throws one when it waits for `value` of a job that was cancelled, and a child
+A `Cancelled` caught in the body is not always the job's own. An operation
+throws one when it waits for `value` of a job that was cancelled. A child
 started with `ctx.run` and cancelled directly, not through its parent, throws
 its `Cancelled` out of `run`. `ctx.check()` passes then, because the job itself
 was not cancelled, and the body goes on and can end `Done`. The clause of
-[Asking the job](#asking-the-job) logs such a `Cancelled` as a failure. Past
-`ctx.check()` a `Cancelled` is not the job's, so a test of its type tells an
-optional child that was cancelled from one that failed:
+[Asking the job](#asking-the-job) logs such a `Cancelled` as a failure.
+
+A page shows a thumbnail when it renders and goes out without one when it does
+not; a thumbnail that failed goes to the log, and one that was cancelled does
+not. Past `ctx.check()` a `Cancelled` is not the job's, so a test of its type
+tells an optional child that was cancelled from one that failed:
 
 ```dart
 final thumbnail = Job.deferred<String>(renderThumbnail);
@@ -498,7 +502,7 @@ The job does not wait for the stop. `abandonable` lets the cancellation out at
 once, the cleanup stack releases the device, and the device stops after that.
 `ctx.unattended` keeps the errors of the stop with the job, and that is all it
 does: they reach the observer, and after it, by default, the zone the job was
-created in;
+created in.
 [Work the job does not wait for](errors.md#work-the-job-does-not-wait-for) on
 the errors page takes it apart.
 

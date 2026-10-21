@@ -5,11 +5,13 @@ A pause and a deadline are the two places where cancellation meets time:
 cancels the job once its limit runs out. The rest of cancellation is on
 [Cancellation](cancellation.md).
 
-The code works with the database of the cancellation page. `database.readAll`
-reads the rows in 10 ms. The migration takes three steps of 10 ms and reads a
-`CancelToken` before each, the database client's stop signal and not a type of
-this package; finding it cancelled, it stops by throwing `DatabaseStopped`. The
-app names that stop once, in `main`, as
+The code works with the database of
+[Stopping the operation](cancellation.md#stopping-the-operation) on the
+cancellation page: `database.readAll` reads the rows in 10 ms, and the
+migration takes three steps of 10 ms. Before each step the migration reads a
+`CancelToken`, the database client's stop signal and not a type of this
+package, and stops by throwing `DatabaseStopped` once the token is cancelled.
+The app names that stop once, in `main`, as
 [A token through `onCancel`](cancellation.md#a-token-through-oncancel) shows,
 and every job on this page runs with that line.
 
@@ -52,7 +54,7 @@ await ctx.abandonable(
 
 Now the delay is behind a checkpoint, and the job ends the moment it is
 cancelled. But `abandonable` ends the waiting, not the work, and the work here
-is a timer: a `Future.delayed` cannot be cancelled, so its timer runs for the
+is a timer. A `Future.delayed` cannot be cancelled, so its timer runs for the
 510 ms that are left, with nothing waiting for it. A program that has nothing
 else to do does not exit until it fires, and a test that looks for pending
 timers finds one.
@@ -137,7 +139,7 @@ job.done.whenComplete(timer.cancel);
 
 No timer is left behind now, but reading `job.done` observes the outcome. The
 failure on the bad schema still reaches the observer as `onError` and no longer
-reaches the zone: without an observer nobody hears it, and the code that
+reaches the zone. Without an observer nobody hears it, and the code that
 cancels the timer has to report it itself.
 
 ### A deadline of the job
@@ -166,31 +168,34 @@ database closed
 outcome: Cancelled(timeout)
 ```
 
-`timeout` gives the job a deadline of its own. The core starts the timer when
-the body starts, so the time before the start is not counted, such as the wait
-of a `Job.deferred` for its `start()` or for the `ctx.run` of a parent. When
-the deadline runs out, the job is cancelled with `TimeoutCancelReason`, whose
-`timeout` is the limit, and the outcome says so: `Cancelled(timeout)`, where
-the timer of the first attempt left `Cancelled(manual)`, the same as the
-user's.
+`timeout` gives the job a deadline of its own. When the deadline runs out, the
+job is cancelled with `TimeoutCancelReason`, whose `timeout` is the limit. The
+outcome says so: `Cancelled(timeout)`, where the timer of the first attempt
+left `Cancelled(manual)`, the same as the user's.
 
 The deadline is a cancellation like that of `cancel()`, not the
 `TimeoutException` of `Future.timeout`:
 
-- the body stops at its next checkpoint;
-- an `uncancellable` section holds the request until it closes;
-- a job cancelled already keeps its own reason;
-- the children hear the deadline as the cause of their `ParentCancelReason`.
-
-If the body and the children it waits for are over while the section still
-holds the request, the request goes with the timer, and the job ends with what
-the body returned.
+- The body stops at its next checkpoint.
+- An `uncancellable` section holds the request until it closes. If the body and
+  the children it waits for are over while the section still holds the request,
+  the request goes with the timer, and the job ends with what the body
+  returned.
+- A job cancelled already keeps its own reason.
+- The children hear the deadline as the cause of their `ParentCancelReason`.
 
 The deadline bounds the body and the children the job waits for after it, not
-the cleanup stack. The core cancels the timer before the stack unwinds: a
-cancellation arriving there would turn a job that did its work into a cancelled
-one and close its value through `discard`. It cancels the timer however else
-the job ends, and observes nothing as it does:
+the cleanup stack. How the core runs the timer:
+
+- The core starts the timer when the body starts, so the time before the start
+  is not counted, such as the wait of a `Job.deferred` for its `start()` or for
+  the `ctx.run` of a parent.
+- The core cancels the timer before the cleanup stack unwinds: a cancellation
+  arriving there would turn a job that did its work into a cancelled one and
+  close its value through `discard`.
+- The core cancels the timer however else the job ends.
+
+The core observes nothing as it cancels the timer:
 
 | How the job gets its limit | Timer left behind | A failure of the job |
 | --- | --- | --- |
@@ -198,11 +203,13 @@ the job ends, and observes nothing as it does:
 | `job.done.whenComplete(timer.cancel)` | none | reaches no zone |
 | `timeout: limit` | none | reaches the zone |
 
-A job still running when a test ends holds its timer like any other: a test
+A job still running when a test ends holds its timer like any other. A test
 under `fakeAsync` or `testWidgets` ends such a job, by cancelling it or waiting
-for it, before the test itself ends. A deadline that is zero or negative throws
-`ArgumentError`, and so does one that comes with `cancellable: false`: the
-deadline is a cancellation the job may refuse, and such a job would refuse it.
+for it, before the test itself ends.
+
+A deadline that is zero or negative throws `ArgumentError`, and so does one
+that comes with `cancellable: false`: the deadline is a cancellation the job
+may refuse, and a job with `cancellable: false` would refuse it.
 
 ### A deadline for one step
 
@@ -233,9 +240,9 @@ outcome: Done(page without a thumbnail after 15 ms)
 The child ends `Cancelled(timeout)`, and `ctx.run` throws that cancellation
 into the body of the parent. The parent itself is not cancelled: the deadline
 ran out for the child. A `catch` clause in Dart filters by type alone, with no
-pattern and no `when`, so the clause takes every `Cancelled`, and the pattern
-goes into an `if` inside it: it matches the reason of the deadline and takes
-its duration. The `else` rethrows what is not the deadline: the job's own
+pattern and no `when`, so the clause takes every `Cancelled`. The pattern goes
+into an `if` inside it: it matches the reason of the deadline and takes its
+duration. The `else` rethrows what is not the deadline: the job's own
 cancellation, and a thumbnail somebody else cancelled. Let out, the child's
 deadline ends the parent
 `Cancelled(handler: Job(thumbnail): Cancelled(timeout))`. The key is there for
