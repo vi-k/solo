@@ -1638,6 +1638,12 @@ answer route».
 
 Вердикт: принято, в формулировке ревьюера.
 
+Итог: сделано коммитом страницы
+`docs(solo): make the error routes of errors.md readable`. Клетка вышла чуть
+иначе: «Nowhere: the hooks hear it and return, and the error goes on along the
+answer route» — глагол «hear», а не «report», ради находки 22. Строку держит
+`_says` в тесте `overriding it moves no error anywhere`.
+
 **19. Medium, верность. Строка Answer (план:768): «At the first of them that is
 there».** Это неточно. Тело `onUnanswered` по умолчанию «есть» всегда,
 а в строке не названы ни переопределение, ни `Solo.unansweredHandler`.
@@ -1650,6 +1656,13 @@ there».** Это неточно. Тело `onUnanswered` по умолчани�
 
 Вердикт: принято, в формулировке ревьюера, с фразой о `value` без обработки.
 
+Итог: сделано тем же коммитом страницы. Клетка ответа — формулировка ревьюера,
+второй столбец — «Whoever observes the outcome, then `onUnanswered` of the
+controller». Фраза о `value` встала в абзац под схемой; держит её новый тест
+`the value of a failed job, taken and not handled` в `errors_rakes_test.dart`,
+в двух вариантах — без обработчика и с ним: хук слышит ошибку, `onUnanswered`
+и обработчик пусты, в зону она уходит один раз.
+
 **20. Low/Medium, нагрузка. «Dart's way, the third row of the scheme»
 (план:804, 861).** Слово «scheme» на странице не введено, а ссылка по номеру
 строки ломается от первой перестановки. Фразу ещё и держит `_says`, так что
@@ -1659,12 +1672,20 @@ there».** Это неточно. Тело `onUnanswered` по умолчани�
 
 Вердикт: принято: «Dart's route in the table above».
 
+Итог: сделано тем же коммитом страницы, `_says` переведён на новую фразу.
+
 **21. Low.** Вводка «the table below names … who answers for it on the second
 route» не подходит строкам Dart, хуков и слушателей. Правка Е заменяет
 конкретную фразу отсылкой назад «the first two routes». Как чинить: вернуть
 конкретику и сократить её.
 
 Вердикт: принято: конкретика возвращается короче.
+
+Итог: сделано тем же коммитом страницы: вводка большой таблицы говорит «who
+hears it and who answers for it» без отсылки к путям, а фраза
+о `ctx.unattended` снова конкретна — «`onError` hears them, and `onUnanswered`
+answers for them; with no override and no handler, they end in the creation
+zone».
 
 **22. Medium, согласованность. Две страницы errors описывают один механизм
 разными моделями.** Ядро: «places in order», глагол «keeps». `solo`: «two ways
@@ -1679,6 +1700,15 @@ at once», «routes», «takes».
 и ничего не двигают, как `onError` ядра, — и одна фраза называет зону: та, где
 создан контроллер. Перестраивать страницу `solo` под «места по порядку» ядра
 в этой волне не будем.
+
+Итог: сделано тем же коммитом страницы, кроме зоны. Модель двух путей осталась,
+строка Report говорит о слушании. Фраза «зона, где создан контроллер» неверна:
+и dartdoc `Solo` и `JobBase`, и тесты `errors_rakes_test.dart` говорят о зоне,
+где создана задача, — в тесте
+`with no handler set: the zone the job was created in` зона контроллера ошибки
+не получает. Определение во вступлении страницы, «the zone the job was created
+in», осталось как было, а новая строка ответа на него опирается. Тот же пункт
+«Согласованность терминов» выше читать с этой поправкой.
 
 Сторожа `_says`: план правит 1325, 1299, 1429, 3280 и обновляет тесты, 1688
 сохраняется. Тест таблицы (1516) находит заголовок большой таблицы через

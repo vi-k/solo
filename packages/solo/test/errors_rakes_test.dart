@@ -433,6 +433,11 @@ void main() {
           'It answers for nothing, and overriding it moves no error '
           'anywhere',
         );
+        _says(
+          '| Report | `onError` of the controller and `onError` of a '
+          '`SoloObserver` hear it | Nowhere: the hooks hear it and return, '
+          'and the error goes on along the answer route |',
+        );
         final handled = <String>[];
         final ran = runFaked((async) {
           Solo.unansweredHandler =
@@ -1297,7 +1302,8 @@ void main() {
 
       test('the same with ignoreFailure() on the job', () {
         _says(
-          '`ignoreFailure()` lets that failure go too',
+          '`ignoreFailure()` drops this failure as well: `onError` still '
+          'hears it, and it goes no further',
         );
         final handled = <String>[];
         late Job<String> job;
@@ -1323,9 +1329,10 @@ void main() {
         '`onUnanswered`',
       );
       _says(
-        'The way to the creation zone through `onUnanswered` is the '
-        "application's to close: an override of `onUnanswered` or an "
-        'installed `Solo.unansweredHandler` closes it',
+        '| Answer | Whoever observes the outcome, then `onUnanswered` of the '
+        'controller | At whoever observes the outcome; otherwise at an '
+        'override of `onUnanswered` or at `Solo.unansweredHandler`; with '
+        'neither, in the creation zone |',
       );
       _says(
         'With no handler set, the error goes to the creation zone',
@@ -1427,8 +1434,7 @@ void main() {
 
     test('the value of a cancelled job, taken and not handled', () {
       _says(
-        'Dart has a way of its own to the zone, and the engine does not '
-        'stand on it',
+        "Dart's route in the table above is not the engine's",
       );
       _says(
         'An unhandled error of `job.value` or of `ctx.run(child)` is an '
@@ -1447,6 +1453,37 @@ void main() {
       expect(ran.errors, ['Cancelled(manual)']);
       expect(bench.heard, isEmpty, reason: 'no hook is told');
     });
+
+    for (final handlerSet in [false, true]) {
+      test(
+          'the value of a failed job, taken and not handled, '
+          '${handlerSet ? 'a handler set' : 'no handler'}', () {
+        _says(
+          'Taking `job.value` observes the outcome: when that future goes '
+          "unhandled, its error takes Dart's route to the zone, once, and "
+          '`onUnanswered` never gets it',
+        );
+        final handled = <String>[];
+        late Bench bench;
+        final ran = runFaked((async) {
+          if (handlerSet) {
+            Solo.unansweredHandler =
+                (solo, job, error, stackTrace) => handled.add(text(error));
+          }
+          bench = Bench();
+          final job = bench.run<int, void>(
+            key: 'value',
+            (ctx) async => throw StateError('boom'),
+          );
+          unawaited(job.value.then((_) {}));
+        });
+
+        expect(bench.heard, ['value: boom'], reason: 'the hook hears it');
+        expect(bench.unanswered, isEmpty, reason: 'taking the value observed');
+        expect(handled, isEmpty, reason: 'so the handler is not asked');
+        expect(ran.errors, ['boom'], reason: "Dart's route, once");
+      });
+    }
 
     test('ctx.run(child) not awaited, and the child is cancelled', () {
       late Job<void> job;
@@ -1479,6 +1516,11 @@ void main() {
         'job that nobody needs its failure. A future already taken '
         'from `job.value` stays an ordinary future whose error somebody '
         'has to handle',
+      );
+      _says(
+        "| Dart's | Whoever holds the future of `job.value` or "
+        '`ctx.run(child)` | Where that future is handled; unhandled, in the '
+        'zone, like any future error |',
       );
       final caught = <String>[];
       final ran = runFaked((async) {
@@ -3278,9 +3320,9 @@ void main() {
     group('work with a life of its own:', () {
       test('the send fails once the job is over', () {
         _says(
-          'Its errors stay with the job, even after the job finishes: '
-          '`onError` hears them, `onUnanswered` is asked to answer, and '
-          'with nothing to answer they end in the creation zone',
+          'Its errors stay with the job, even after the job finishes. '
+          '`onError` hears them, and `onUnanswered` answers for them; with '
+          'no override and no handler, they end in the creation zone',
         );
         late page.Camera camera;
         late Job<void> job;

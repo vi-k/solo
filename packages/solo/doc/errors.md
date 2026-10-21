@@ -31,14 +31,23 @@ zone uncaught.
 
 ## Where each error goes
 
-Every error of a job goes two ways: to the hooks that hear it, and to whoever
-answers for it. In the table, `onError` is the hook of the controller and the
-`onError` of a `SoloObserver`. The two hear the same errors. `onUnanswered` is
-the override of the controller or, without one, the default body:
-`Solo.unansweredHandler`, and the creation zone when no handler is set. The
-current zone is the zone the hook is called in. For what happens in a job, that
-is the zone the job was created in; for a change made by `externalSetState`,
-the zone of its caller.
+An error of a job can go two ways at once, and a future the job hands out adds
+a third way, Dart's own:
+
+| Route | Who gets the error, in order | Where it ends |
+| --- | --- | --- |
+| Report | `onError` of the controller and `onError` of a `SoloObserver` hear it | Nowhere: the hooks hear it and return, and the error goes on along the answer route |
+| Answer | Whoever observes the outcome, then `onUnanswered` of the controller | At whoever observes the outcome; otherwise at an override of `onUnanswered` or at `Solo.unansweredHandler`; with neither, in the creation zone |
+| Dart's | Whoever holds the future of `job.value` or `ctx.run(child)` | Where that future is handled; unhandled, in the zone, like any future error |
+
+The table below names, for each kind of error, who hears it and who answers for
+it. `onError` in it stands for both hooks: the two hear the same errors.
+`onUnanswered` stands for the answer route from `onUnanswered` on, and an error
+that no outcome carries enters the route there. Taking `job.value` observes the
+outcome: when that future goes unhandled, its error takes Dart's route to the
+zone, once, and `onUnanswered` never gets it. The current zone is the zone the
+hook is called in. For what happens in a job, that is the zone the job was
+created in; for a change made by `externalSetState`, the zone of its caller.
 
 | The error | Who hears it | Who answers for it |
 | --- | --- | --- |
@@ -59,24 +68,22 @@ the zone of its caller.
 | An error a listener throws while it is notified | `onListenerError` | `onListenerError`; by default the current zone |
 
 An error can reach both `onError` and the zone. An application that reports in
-both places hears it twice. The way to the creation zone through `onUnanswered`
-is the application's to close: an override of `onUnanswered` or an installed
-`Solo.unansweredHandler` closes it, as
-[Answering for an error](#answering-for-an-error) shows. The same section
-explains `Job.isCancellationError`. Observing the outcome keeps a failure off
-that way to begin with, as
-[Handled and unhandled failures](#handled-and-unhandled-failures) shows.
+both places hears it twice.
+[Handled and unhandled failures](#handled-and-unhandled-failures) shows how a
+caller observes the outcome, and
+[Answering for an error](#answering-for-an-error) shows the override, the
+handler and `Job.isCancellationError`.
 
 An error that `onUnanswered` takes can come after the job has completed. It
 does not replace the outcome the job already has.
 
-Dart has a way of its own to the zone, and the engine does not stand on it. An
-unhandled error of `job.value` or of `ctx.run(child)` is an unhandled future
-error under the rules of Dart, even when that error is `Cancelled`. Handle
-those futures like any other: `await` them where the error is caught, or give
-them `onError` or `Future.ignore()`. `job.ignoreFailure()` does not do it for
-them. It tells the job that nobody needs its failure. A future already taken
-from `job.value` stays an ordinary future whose error somebody has to handle.
+Dart's route in the table above is not the engine's. An unhandled error of
+`job.value` or of `ctx.run(child)` is an unhandled future error under the rules
+of Dart, even when that error is `Cancelled`. Handle those futures like any
+other: `await` them where the error is caught, or give them `onError` or
+`Future.ignore()`. `job.ignoreFailure()` does not do it for them. It tells the
+job that nobody needs its failure. A future already taken from `job.value`
+stays an ordinary future whose error somebody has to handle.
 
 ## Reporting an error
 
@@ -182,8 +189,8 @@ catching it.
 
 That caller cannot catch one failure. If the job ends `Cancelled` after the
 load failed, `await job.value` throws the `Cancelled`. The failure goes to
-`onUnanswered`, as the next section shows. `ignoreFailure()` lets that failure
-go too.
+`onUnanswered`, as the next section shows. `ignoreFailure()` drops this failure
+as well: `onError` still hears it, and it goes no further.
 
 ## Answering for an error
 
@@ -233,8 +240,9 @@ at all.
 A handler or an override can throw, say because the reporter is down. The error
 it was asked about is not lost: it goes to the creation zone first. Then what
 the hook threw goes to the current zone. A `Cancelled` the hook throws stays
-out. So does the error itself thrown back, so that error reaches the zone once.
-A hook that reported the error before it threw has it reported twice.
+out. The error itself, thrown back by the hook, stays out too, so that error
+reaches the zone once. A hook that reported the error before it threw has it
+reported twice.
 
 `onUnanswered` and `Solo.unansweredHandler` get one failure at a time. A
 `ParallelWaitError` that `[a, b].wait` throws with several errors in it comes
@@ -537,9 +545,10 @@ ctx.unattended(() => analytics.send('zoom'));
 ```
 
 `ctx.unattended(action)` starts work that the job neither waits for nor
-cancels. Its errors stay with the job, even after the job finishes: `onError`
-hears them, `onUnanswered` is asked to answer, and with nothing to answer they
-end in the creation zone. Use it for work with a lifetime of its own.
+cancels. Its errors stay with the job, even after the job finishes. `onError`
+hears them, and `onUnanswered` answers for them; with no override and no
+handler, they end in the creation zone. Use it for work with a lifetime of its
+own.
 
 Start that work inside the callback. A future made before the call and only
 awaited inside fails past the hooks, into the zone it was made in.
