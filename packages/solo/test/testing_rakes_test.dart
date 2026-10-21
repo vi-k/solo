@@ -582,8 +582,8 @@ void main() {
         expect(traces.single, contains('FakeProfileApi.fetchName'));
         expect(traces.single, contains('package:async_job/'));
         expect(traces.single, isNot(contains('testing_first_attempts.dart')));
-        _says('under a stack trace that names the line of the fake that threw '
-            'and a frame of the engine, and no line of the test');
+        _says('Its stack trace names the line of the fake that threw and a '
+            'frame of the engine, and no line of the test');
       });
 
       test('a test that does not wait at all has passed when the failure comes',
@@ -1719,6 +1719,59 @@ final name = await ctx.abandonable(
       expect(underFakeTime.take(4), [false, false, false, true]);
       _says('The three sections below await; `fakeAsync` starts with the '
           'fourth.');
+    });
+
+    test('the rules on top name every section, four of each kind of test', () {
+      final page = _page();
+      final rules = [
+        for (final match in RegExp(r'^- \[(.*?)\]\(#(.*?)\): ', multiLine: true)
+            .allMatches(page.substring(0, page.indexOf('\n## '))))
+          (heading: match.group(1)!, anchor: match.group(2)!),
+      ];
+      final sections = {
+        for (final section in _sections())
+          section.substring(3, section.indexOf('\n')): section,
+      };
+      String anchor(String heading) => heading
+          .toLowerCase()
+          .replaceAll(RegExp('[^a-z0-9 -]'), '')
+          .replaceAll(' ', '-');
+      List<int> places(Iterable<String> headings) => [
+            for (final heading in headings)
+              sections.keys.toList().indexOf(heading),
+          ];
+      final awaiting = rules.take(4).map((rule) => rule.heading);
+      final underFakeTime = rules.skip(4).map((rule) => rule.heading);
+
+      expect(rules.map((rule) => rule.heading), unorderedEquals(sections.keys));
+      for (final rule in rules) {
+        expect(rule.anchor, anchor(rule.heading));
+      }
+      // Each kind in the order of the page.
+      expect(places(awaiting), orderedEquals([...places(awaiting)]..sort()));
+      expect(
+        places(underFakeTime),
+        orderedEquals([...places(underFakeTime)]..sort()),
+      );
+      for (final heading in awaiting) {
+        expect(sections[heading], isNot(contains('fakeAsync((')));
+        expect(sections[heading], contains('await '), reason: heading);
+      }
+      // The one that runs no clock is the tear-down of the observer the
+      // tests under fakeAsync read the order from.
+      for (final heading in underFakeTime) {
+        expect(
+          sections[heading]!.contains('fakeAsync((') ||
+              sections[heading]!.contains('Solo.observer = null'),
+          isTrue,
+          reason: heading,
+        );
+      }
+      _says('Each of the eight sections below comes down to one rule.');
+      _says("Four are for a test that awaits its job or the controller's "
+          '`close`:');
+      _says('The other four are for a test under `fakeAsync`, which awaits '
+          'nothing:');
     });
 
     test('all but the last section drive the load of the profile', () {

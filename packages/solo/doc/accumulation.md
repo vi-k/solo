@@ -1,18 +1,7 @@
 # Accumulating events before a job starts
 
 Several events can share one queued job. `collect` keeps every event in a list;
-`accumulate` combines each event with a single accumulated value. Both take
-three type arguments, `<W, E, T>`: the working type `W`, as in `run`, the event
-type `E` and the result type `T`, and return a `SoloAccumulator<E, T>`. Create
-it once in your controller, then call its `add(event)` method from the
-controller's public methods.
-
-The accumulator owns the input of a queued job. Adding an event does not run
-the handler or change controller state. The events that share one job are a
-group, and a group accepts events until it is sealed: when its debounce window
-expires, or, under a throttle or with no timing at all, when the queue takes
-the job to run it. The handler receives that input and an ordinary
-`SoloContext<S, W>`; it changes state through `ctx.emit`.
+`accumulate` combines each event with a single accumulated value.
 
 ## Recipes
 
@@ -26,6 +15,18 @@ or every event in a list.
 | [Settings saved on every flip of a switch](#settings-saved-on-every-flip-of-a-switch) | One patch merged from every flip | `accumulate`, a `merge` that combines the patches, `debounce` |
 | [One request per log line](#one-request-per-log-line) | Every entry, in at most one request a second | `collect`, `throttle` with `startAtOnce: false` |
 | [Commands where only the last one counts](#commands-where-only-the-last-one-counts) | The last of the commands tapped in a row | `accumulate`, a `merge` that keeps `incoming`, `policy: adjacent` |
+
+`collect` and `accumulate` both take three type arguments, `<W, E, T>`: the
+working type `W`, as in `run`, the event type `E` and the result type `T`, and
+return a `SoloAccumulator<E, T>`. Create it once in your controller, then call
+its `add(event)` method from the controller's public methods.
+
+The accumulator owns the input of a queued job. Adding an event does not run
+the handler or change controller state. The events that share one job are a
+group. A group accepts events until it is sealed: when its debounce window
+expires, or, under a throttle or with no timing at all, when the queue takes
+the job to run it. The handler receives that input and an ordinary
+`SoloContext<S, W>`; it changes state through `ctx.emit`.
 
 Under each version of a controller is what the scenario above it leads to: what
 reaches the server or the device, and what the controller's state ends up as.
@@ -114,7 +115,7 @@ at 250 ms the screen shows [hits for solo]
 Nothing stale reaches the screen now, and the answer comes sooner because the
 requests overlap instead of queueing. The server was still asked four times:
 cancelling a job does not unsend what it has already sent. `ctx.join` in place
-of `ctx.abandonable` would not unsend them either; it holds the controller's
+of `ctx.abandonable` would not unsend them either. It holds the controller's
 one execution slot until the answer returns, so how many requests go out
 depends on how much faster the server is than the typing.
 
@@ -249,7 +250,7 @@ the screen ends up with notifications: true, theme: dark, language: ru
 ```
 
 The screen is right at the end, and the cost is on the wire: three round trips
-for one visit to the settings, and the first two publish settings the user has
+for one visit to the settings. The first two publish settings the user has
 already moved on from. Another device reading between them finds the light
 theme after its owner has already picked the dark one.
 
@@ -279,10 +280,10 @@ the screen ends up with notifications: false, theme: light, language: ru
 ```
 
 The switch went back off and the theme went back to light. Each job reads the
-state it starts with and writes a whole `Settings`, so a job that replaces
-another does not inherit what that one was going to change — it overwrites it
+state it starts with and writes a whole `Settings`. So a job that replaces
+another does not inherit what that one was going to change: it overwrites it
 from a state where it never happened. The first of the two writes is the one
-restart asked to stop, and it went out all the same: `ctx.join` waits for the
+restart asked to stop, and it went out all the same. `ctx.join` waits for the
 call it made, and `_api.save` has no way to hear the request to stop. Two of
 the user's three changes are gone, from the server and from the screen both,
 and nothing failed.
@@ -371,19 +372,19 @@ automatically include them. This example assumes one writer and an API future
 that completes when the write has actually ended. `ctx.join` keeps the
 execution slot until that future completes, even after cancellation, and that
 is what stops the next write from starting on top of this one. A client timeout
-alone does not establish that a server has stopped writing: a `save` that
+alone does not establish that a server has stopped writing. A `save` that
 completes its future on a timeout hands the slot back while the server is still
-writing, the next group's write goes out over an unfinished one, and which of
-the two the server keeps is no longer the queue's decision — the screen and the
-server can end up disagreeing for good. Cancellation can also prevent the final
-`emit` after the server has accepted the write.
+writing, and the next group's write goes out over an unfinished one. Which of
+the two the server keeps is then no longer the queue's decision, and the screen
+and the server can end up disagreeing for good. Cancellation can also prevent
+the final `emit` after the server has accepted the write.
 
 A deadline given to the accumulator with `timeout` is a cancellation, not a
 client timeout: `ctx.join` keeps the slot until `save` completes, so the next
 write still waits for this one to end. What the deadline costs is the final
 `emit`. A group past its deadline is cancelled while the server is still
 writing, ends `Cancelled(timeout)` once the write is stored, and never reaches
-its `emit`: the state keeps the old settings, and the next group applies its
+its `emit`. The state keeps the old settings, and the next group applies its
 patch to them and writes the old values back over the change.
 
 ### One request per log line
@@ -442,8 +443,8 @@ the counter says 4
 
 Four lines, four requests. The queue is what keeps them in order, and it is
 also what makes them wait: each send starts only when the one before it has
-finished, so a burst of logging turns into a chain of round trips that outlives
-the event that produced it.
+finished. A burst of logging thus turns into a chain of round trips that
+outlives the event that produced it.
 
 #### The accumulator
 
@@ -492,15 +493,17 @@ starts one of its own and waits it out: a line written alone reaches the server
 a second late.
 
 A buffer you keep yourself would batch them too. What `collect` adds is that
-the buffer is the job's input: the entries are sealed into the group the queue
-takes, the caller gets the same `Job` every other addition to that group got,
-and `close()` drops the group instead of leaving a list and a timer behind.
+the buffer is the job's input:
+
+- the entries are sealed into the group the queue takes;
+- the caller gets the same `Job` every other addition to that group got;
+- `close()` drops the group instead of leaving a list and a timer behind.
 
 This controller's state counts entries whose send operation completed and whose
 handler reached `emit`. The working type `int` is that whole state, so the
 handler starts whatever the count is and reads it as `ctx.state`.
 [Choosing where events join](#choosing-where-events-join) explains why `join`
-is the default this example spells out, and
+is the default this example spells out.
 [Choosing when a group is ready](#choosing-when-a-group-is-ready) explains what
 a throttle interval is measured from in each of its two modes, and what each of
 them costs.
@@ -587,9 +590,9 @@ hears. Three round trips to the device, and 300 ms before it settles.
 #### The accumulator
 
 A queue holding `resume` and then `pause` is about to do two things that cancel
-each other out, and a `resume` arriving now makes the whole pair pointless: the
-end of it is what a single `resume` would have reached. `merge` keeps the
-incoming command and drops the one it had:
+each other out. A `resume` arriving now makes the whole pair pointless: the end
+of it is what a single `resume` would have reached. `merge` keeps the incoming
+command and drops the one it had:
 
 ```dart
 final class Player extends Solo<Playback> {
@@ -638,9 +641,9 @@ seconds further on" — are merged by adding them up, not by replacing.
 another kind added between two commands is a boundary and the merging stops
 there. Three taps in a row have no such job between them, and `join`, the
 default, would merge them the same way. The two part when the player has other
-work queued: with a job of another kind between a `resume` and a `pause`,
-`join` folds the `pause` into the group ahead of that job, so the device never
-hears the `resume` and pauses before the job runs. `adjacent` sends the
+work queued. With a job of another kind between a `resume` and a `pause`,
+`join` folds the `pause` into the group ahead of that job. So the device never
+hears the `resume`, and it pauses before the job runs. `adjacent` sends the
 `resume`, lets the job run and then sends the `pause`, in the order of the
 calls, and that is why this recipe names the policy instead of taking the
 default.
@@ -648,7 +651,7 @@ default.
 #### When they are separate jobs after all
 
 Where `resume` and `pause` are genuinely different operations rather than one
-command with a value, they are ordinary jobs with keys of their own, and
+command with a value, they are ordinary jobs with keys of their own.
 `Policy.replace` does not help: it removes jobs with the same key, and these
 two do not share one. The controller's own queue is what removes them:
 
@@ -669,8 +672,8 @@ Removing and adding gives the shape of `AccumulationPolicy.replace`: the
 command ends up at the tail, behind whatever was queued between. What differs
 is the handle — this way a new job has to be built, where the accumulator moves
 the one it already has. The queue can remove a job and it can add one, but it
-cannot change what a queued job will do, so the place `AccumulationPolicy.join`
-keeps is not reachable this way — keeping it means holding the command outside
+cannot change what a queued job will do. So the place `AccumulationPolicy.join`
+keeps is not reachable this way. Keeping it means holding the command outside
 the job, where the job reads it when it starts, and that is what an accumulator
 does for its job.
 
@@ -705,8 +708,8 @@ accepted event in each group. Every addition restarts the timer, even when
 is sealed even if another job is running. Later events form a new group; they
 cannot change the sealed input. `collect` takes its snapshot then, and not
 again. Continuous input can keep an open group waiting indefinitely. That wait
-is the point in the search recipe — the request goes out when the typing
-stops — and the reason the log collector takes a throttle instead: entries that
+is the point in the search recipe: the request goes out when the typing stops.
+It is also the reason the log collector takes a throttle instead: entries that
 all have to arrive cannot wait on a pause that may never come.
 
 `AccumulationTiming.throttle(duration)` allows the first group to start
@@ -794,17 +797,18 @@ ready B can pass A while A waits for timing.
 
 `join` is the default so that a group does not depend on what else is queued.
 An entry written while another job waits in the queue still belongs in the
-batch that is already there; under `adjacent` it would start a second group
-behind that job, and a throttle would hold that group for another interval —
-two requests for entries written moments apart. The same two events would be
-one group or two depending on what else the controller happened to be doing,
-which is a decision no caller made. What `join` gives up is the boundary: the
-batch keeps its place ahead of the job that arrived between.
+batch that is already there. Under `adjacent` it would start a second group
+behind that job, and a throttle would hold that group for another interval: two
+requests for entries written moments apart. The same two events would be one
+group or two depending on what else the controller happened to be doing, which
+is a decision no caller made. What `join` gives up is the boundary: the batch
+keeps its place ahead of the job that arrived between.
 
-Take `adjacent` where that boundary is the point: where `merge` throws away
-what it replaces and a job queued between two events has to run between them,
-as the command recipe does, or where such a job changes what the accumulated
-input means.
+Take `adjacent` where that boundary is the point:
+
+- where `merge` throws away what it replaces and a job queued between two
+  events has to run between them, as the command recipe does;
+- where such a job changes what the accumulated input means.
 
 Policies use the current queue. If B has already run, a waiting A may again be
 at the tail, so a later event can join it with `adjacent`. Already separate

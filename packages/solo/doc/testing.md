@@ -1,8 +1,36 @@
 # Testing
 
 A controller is tested through its jobs: a call queues one and returns it, and
-the state it publishes arrives later. The examples below use `package:test`,
-and all but the last drive the `load` of the controller from
+the state it publishes arrives later. Each of the eight sections below comes
+down to one rule. Four are for a test that awaits its job or the controller's
+`close`:
+
+- [Awaiting a job](#awaiting-a-job): the call only queues the job, so the test
+  awaits its `done` or `value` before it reads the state.
+- [Closing the controller](#closing-the-controller): a plain `close()` cancels
+  the load; a test that holds no job waits with `SoloCloseMode.drain`.
+- [A failure nobody read](#a-failure-nobody-read): a failure nobody reads turns
+  the test red, so a job the test does not await gets `ignoreFailure()`.
+- [Assertions inside a zone](#assertions-inside-a-zone): the job is created
+  inside `runZonedGuarded`, the zone collects its errors, and the test asserts
+  outside it.
+
+The other four are for a test under `fakeAsync`, which awaits nothing:
+
+- [The order of what happened](#the-order-of-what-happened): an observer
+  records the order, and `flushMicrotasks()` between two calls lets the first
+  job start.
+- [Awaiting inside fakeAsync](#awaiting-inside-fakeasync): `async.elapse` moves
+  the clock, the test reads `job.outcome` where it would await `done`, and
+  `ignoreFailure()` marks the job.
+- [What one test leaves for the next](#what-one-test-leaves-for-the-next): the
+  observer is a static, and so are four more; the test that sets one puts it
+  back in `addTearDown`, not on its last line.
+- [Timeouts](#timeouts): `Future.timeout` ends the waiting, not the call; a
+  call that must stop gets the job's `timeout` and `ctx.onCancel`.
+
+The examples below use `package:test`, and all but the last drive the `load` of
+the controller from
 [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
 in the package README:
 
@@ -54,8 +82,8 @@ class FakeProfileApi implements ProfileApi {
 Two kinds of test run through the page. One holds a job and awaits it: the
 outcome is the only signal it needs, and the fake's twenty milliseconds are
 waited out for real. The other has to look between the events — the order two
-calls ended up in, a deadline five seconds away — and can await nothing at all:
-it runs under `package:fake_async`, where the clock moves when the test says
+calls ended up in, a deadline five seconds away — and can await nothing at all.
+It runs under `package:fake_async`, where the clock moves when the test says
 so. The three sections below await; `fakeAsync` starts with the fourth.
 
 ## Awaiting a job
@@ -168,10 +196,10 @@ test('load fills in the name', () async {
 
 `close()` cancels, and the state the expectation sees is `Initial`. The job
 here never leaves the queue: both lines run in the same turn, so `close` drops
-it with `Cancelled(closed)` before the body starts, and the state is still the
-one the controller was built with. A load that had started would end the same
-way, cancelled where it was waiting, and its `ifCancelled` handler would
-publish `Initial` over the `Loading` its body had emitted.
+it with `Cancelled(closed)` before the body starts. The state is still the one
+the controller was built with. A load that had started would end the same way,
+cancelled where it was waiting, and its `ifCancelled` handler would publish
+`Initial` over the `Loading` its body had emitted.
 
 ### Letting the work finish
 
@@ -219,12 +247,12 @@ test('a failed load shows the failure', () async {
 
 The expectation holds and the test is red anyway. Nobody read the job's
 outcome, and no `Solo.unansweredHandler` is set, so the engine reports the
-failure to the zone the job was created in — here the zone of the test — and
-the runner fails the test with `Bad state: no network`, under a stack trace
-that names the line of the fake that threw and a frame of the engine, and no
-line of the test. A test that does not wait for the job at all pays more: the
-failure arrives after the test has ended, and the runner says so —
-`This test failed after it had already completed`, against the name of a test
+failure to the zone the job was created in. Here that is the zone of the test,
+and the runner fails the test with `Bad state: no network`. Its stack trace
+names the line of the fake that threw and a frame of the engine, and no line of
+the test. A test that does not wait for the job at all pays more: the failure
+arrives after the test has ended. The runner says so —
+`This test failed after it had already completed` — against the name of a test
 that has already passed while a later one is running. With no later test still
 running by then, the run is over before the failure arrives: nobody says
 anything, and the run is green.
@@ -248,7 +276,7 @@ test('a failed load shows the failure', () async {
 observed failure is the test's business rather than the zone's. Reading `done`
 or `value` marks it as well, so a test that awaits the outcome, as the first
 section does, needs nothing more. The mark has to come by the microtask after
-the job ends: a failure nobody has asked about is reported on that microtask,
+the job ends. A failure nobody has asked about is reported on that microtask,
 so a test that holds the job, drains the controller and reads `done` afterwards
 is red all the same. Reading `job.outcome` does not mark anything: it is a look
 at a field, and the field is `null` until the job has finished.
@@ -333,7 +361,7 @@ The test is right that a duplicate was dropped and wrong about the case its
 name describes: nothing was running.
 
 That first line is the `onFinish` of the dropped job, and the only line it ever
-gets: its body never ran, so there was no `onStart` for it, and its
+gets. Its body never ran, so there was no `onStart` for it, and its
 `ifCancelled` handler was not called either — which is why no state of its own
 stands next to it. The key in the line is the key the policy matched on, the
 same `load` the other job carries, so it is the outcome that tells the two
@@ -390,7 +418,7 @@ test('load fills in the name', () async {
 ```
 
 The test hangs until the test's own timeout kills it. The callback suspends at
-its first `await` and returns a future; `fakeAsync` hands that future back and
+its first `await` and returns a future. `fakeAsync` hands that future back and
 unwinds, and nobody is left to move the fake clock or even to run its
 microtasks: the load never starts, and no timer inside will ever fire. The
 expectation never runs, and the only sign is a timeout that reads like a
@@ -418,7 +446,7 @@ test('load fills in the name', () {
 ```
 
 The callback stays synchronous and reads `job.outcome` where the test above
-awaited `done` — and `ignoreFailure()` is what stands in for that read: inside
+awaited `done`. `ignoreFailure()` is what stands in for that read: inside
 `fakeAsync` nothing can be awaited, so a failure would reach the zone with no
 one having observed it. The fake's twenty milliseconds are a `Future.delayed`,
 that is a timer, and `elapse` is what gets past it: `flushMicrotasks()` alone
@@ -445,7 +473,7 @@ The job accepts the cancellation inside the call, and the outcome is still a
 few microtasks away: the body has to leave its `abandonable` call, and the
 `ifCancelled` handler has to run. On the line under the call the outcome is
 `null`, and one `flushMicrotasks()` carries it to `Cancelled`. The first
-`flushMicrotasks()` is the one from the section above — it lets the load leave
+`flushMicrotasks()` is the one from the section above. It lets the load leave
 the queue, so what gets cancelled is a load that is running; one still in the
 queue is dropped inside the call, with its outcome there on the next line.
 
@@ -475,8 +503,8 @@ test('a second load while the first one runs is dropped', () {
 
 The reset runs only when the test passes. `expect` reports a failure by
 throwing `TestFailure`, so the first expectation that fails skips every line
-under it, and the journal of a test that is over stays installed for the next
-one — collecting lines nobody reads, and reporting on controllers it has never
+under it. Then the journal of a test that is over stays installed for the next
+one, collecting lines nobody reads and reporting on controllers it has never
 seen.
 
 ### addTearDown
@@ -487,8 +515,8 @@ addTearDown(() => Solo.observer = null);
 ```
 
 `addTearDown` runs whether the test passed or failed. Five statics belong to
-the process rather than to a controller, and each of them outlives a test the
-same way: `Solo.observer`, `Solo.unansweredHandler`, `Solo.debug` with the
+the process rather than to a controller. Each of them outlives a test the same
+way: `Solo.observer`, `Solo.unansweredHandler`, `Solo.debug` with the
 `Job.debug` of the core that is set next to it, and the
 `Job.isCancellationError` of the core. All five start as `null`, and `null` is
 what the tear-down above puts back.
@@ -496,9 +524,9 @@ what the tear-down above puts back.
 ## Assertions inside a zone
 
 That an unread failure reaches the zone when no `Solo.unansweredHandler` is set
-is a promise of the engine, and a test of it needs a zone of its own to catch
-the failure in: left to the zone of the test, the failure is what turns the
-test red.
+is a promise of the engine. A test of it needs a zone of its own to catch the
+failure in: left to the zone of the test, the failure is what turns the test
+red.
 
 ### The first attempt
 
@@ -531,7 +559,7 @@ There it stops being an expectation: `expect` reports a failure by throwing
 `TestFailure`, and a throw from inside the zone belongs to the zone's handler,
 like any other error. With a state other than `Failure` the handler would be
 handed that `TestFailure`, compare it to `StateError`, find no match and report
-that on a line of the handler rather than the line the expectation was on; and
+that on a line of the handler rather than the line the expectation was on. And
 the `await` would never return — the body's error went to the zone instead of
 into its future — so the test would end on a timeout.
 
@@ -619,7 +647,7 @@ alone is enough.
 For a device operation that must stop before the next job, give the job the
 deadline with `timeout` and hand the device's cancellation mechanism to
 `ctx.onCancel`. The example is the controller of a camera rather than of the
-profile: `hw` is the device, `CancelToken` is the token of its API and not a
+profile. `hw` is the device, `CancelToken` is the token of its API and not a
 type of this package, and `Idle` and `Connected` are the states:
 
 ```dart

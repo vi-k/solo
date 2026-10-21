@@ -399,7 +399,7 @@ void main() {
     });
 
     test('a group is sealed when its debounce window expires', () {
-      _says('a group accepts events until it is sealed: when its debounce '
+      _says('A group accepts events until it is sealed: when its debounce '
           'window expires');
       final seen = <String>[];
       _zone((async) {
@@ -595,7 +595,7 @@ void main() {
     });
 
     test('its first two writes land after the user has moved on from them', () {
-      _says('the first two publish settings the user has already moved on '
+      _says('The first two publish settings the user has already moved on '
           'from');
       _says('Another device reading between them finds the light theme '
           'after its owner has already picked the dark one');
@@ -802,7 +802,7 @@ void main() {
     test(
         'a save that gives up on a timeout lets the next write go out over '
         'it', () {
-      _says('a `save` that completes its future on a timeout hands the slot '
+      _says('A `save` that completes its future on a timeout hands the slot '
           'back while the server is still writing');
       final api = FakeSettingsApi(latency: 500, timeout: 100);
       var writing = 0;
@@ -1025,8 +1025,9 @@ void main() {
     });
 
     test('the working type int is the whole state, so any count starts', () {
-      _says('Both take three type arguments, `<W, E, T>`: the working type '
-          '`W`, as in `run`, the event type `E` and the result type `T`');
+      _says('`collect` and `accumulate` both take three type arguments, '
+          '`<W, E, T>`: the working type `W`, as in `run`, the event type `E` '
+          'and the result type `T`');
       _says('The working type `int` is that whole state, so the handler '
           'starts whatever the count is and reads it as `ctx.state`.');
       final api = FakeLogApi();
@@ -1188,9 +1189,10 @@ void main() {
     });
 
     test('under join the resume would be dropped and the pause left alone', () {
-      _says('with a job of another kind between a `resume` and a `pause`, '
-          '`join` folds the `pause` into the group ahead of that job, so the '
-          'device never hears the `resume` and pauses before the job runs');
+      _says('With a job of another kind between a `resume` and a `pause`, '
+          '`join` folds the `pause` into the group ahead of that job. So the '
+          'device never hears the `resume`, and it pauses before the job '
+          'runs.');
       _says('`adjacent` sends the `resume`, lets the job run and then sends '
           'the `pause`, in the order of the calls');
       final device = FakeDevice();
@@ -1220,7 +1222,7 @@ void main() {
       _says('the command ends up at the tail, behind whatever was queued '
           'between');
       _says('this way a new job has to be built');
-      _says('keeping it means holding the command outside the job, where '
+      _says('Keeping it means holding the command outside the job, where '
           'the job reads it when it starts, and that is what an accumulator '
           'does for its job');
       final device = FakeDevice();
@@ -2051,7 +2053,7 @@ void main() {
         'second request an interval later', () {
       _says('`join` is the default so that a group does not depend on what '
           'else is queued');
-      _says('under `adjacent` it would start a second group behind that job, '
+      _says('Under `adjacent` it would start a second group behind that job, '
           'and a throttle would hold that group for another interval');
       List<String> run(AccumulationPolicy policy) {
         final seen = <String>[];
