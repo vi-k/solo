@@ -1,7 +1,7 @@
 # Mixins
 
 `SoloListenable` makes a controller a `ValueListenable`, and so a `Listenable`
-as well: the framework's `ValueListenableBuilder`, `ListenableBuilder` and
+as well. The framework's `ValueListenableBuilder`, `ListenableBuilder` and
 `AnimatedBuilder` take the controller as it is, and the package README shows
 the first of them in
 [The controller as a `ValueListenable`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#the-controller-as-a-valuelistenable).
@@ -10,6 +10,15 @@ controller, with the mixin or without it. This page is about what sits around
 `SoloListenable` — `SoloStream` of `solo` beside it, a screen built on that
 stream, and a base class of controllers in a package without Flutter, where
 `SoloListenable` cannot go.
+
+The short answer for that base class: the base keeps its report of a listener's
+failure in `reportListenerError`, a method no mixin overrides. Between the base
+and the app's controllers, the leaves, the app puts a class of its own,
+`ListenableController`. It mixes `SoloListenable` in and overrides
+`onListenerError` to call that method, and a leaf extends it without mixing
+`SoloListenable` in again.
+[A base class without Flutter](#a-base-class-without-flutter) shows why: where
+a mixin sits decides whose `onListenerError` runs.
 
 The lines under a block of code are what a run of it shows: the text on the
 screen after each step, or where a listener's failure was reported.
@@ -51,9 +60,9 @@ The combination costs two things. One change has two error routes: a listener's
 failure goes to `FlutterError`, and a failure of a `stream` subscriber goes to
 the zone it subscribed in. And `await close()` waits until every subscriber of
 `stream` has taken its done event, where a controller with `SoloListenable`
-alone waits for none of its listeners: an `await for` over the `stream` holds
-`close()` while its body is still awaiting. `pending` is a `SoloPendingStream`
-all that time, and
+alone waits for none of its listeners. So an `await for` over the `stream`
+holds `close()` while its body is still awaiting. `pending` is a
+`SoloPendingStream` all that time, and
 [What is holding the controller](https://github.com/vi-k/solo/blob/main/packages/solo/doc/diagnostics.md#what-is-holding-the-controller)
 on the diagnostics page of `solo` shows how to ask for it.
 
@@ -96,15 +105,15 @@ after Bob signs in: signed in as Bob
 
 A broadcast stream replays nothing. A subscriber hears the changes that come
 after it subscribed, and the state the controller was already in is not one of
-them, so the badge waits for a change to show what was true before it was
+them. So the badge waits for a change to show what was true before it was
 built. The state is there all along: `currentState` holds `SignedIn` in the
 same builder that renders `nothing yet`.
 
 A screen sees this every time it is built anew — its route pushed, a tab
-switched away and back — and the wait is as long as the next change, which for
-a session can be the rest of the day. Closing makes the wait endless: after
-`close()` the stream is done and no event is ever coming, while `currentState`
-still holds the state the badge never showed.
+switched away and back. Each time, the wait is as long as the next change,
+which for a session can be the rest of the day. Closing makes the wait endless:
+after `close()` the stream is done and no event is ever coming, while
+`currentState` still holds the state the badge never showed.
 
 ```text
 mounted over a session signed in as Ada: nothing yet
@@ -174,8 +183,8 @@ handed another session, signed in as Cy: signed in as Cy
 ```
 
 `SoloBuilder` reads `currentState` in `build` and moves to a controller it is
-handed, so the badge shows the state of the session it is given from the first
-frame, and from the frame it is handed another. So does
+handed. The badge therefore shows the state of the session it is given from the
+first frame, and from the frame it is handed another. So does
 `ValueListenableBuilder`, which `Session` fits because it mixes
 `SoloListenable` in: with `valueListenable: session` it shows the same three
 lines. The `stream` is for what is not a widget: a log, a bridge into code that
@@ -184,7 +193,7 @@ takes a `Stream`, a test that wants the whole sequence of changes.
 ## A base class without Flutter
 
 A base class the app's controllers share can live in a package with no Flutter
-in it: the package depends on `solo`, and the leaf, a controller of the app
+in it. That package depends on `solo`, and the leaf, a controller of the app
 that extends the base, mixes `SoloListenable` in. What every controller shares
 goes into the base, and here that is a report of a listener's failure to the
 app's own log, `AppLog`. `Profile` and `Empty` in the code below are the states

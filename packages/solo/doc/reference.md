@@ -1,11 +1,12 @@
 # Reference
 
-Every member of `Solo`, of the context its jobs get, of the jobs it returns, of
-its queue and of its accumulators, and every parameter of the methods that make
-jobs, in one line each, with the section that explains it. What `solo` takes
-from the core is listed where it is explained: the rest of `ctx` in
+One line for every member of `Solo`, of the context its jobs get, of the jobs
+it returns, of its queue and of its accumulators, with the section that
+explains it. One line, too, for every parameter of the methods that make jobs.
+What `solo` takes from the core is listed where it is explained. The rest of
+`ctx` is in
 [The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/README.md#the-context-at-a-glance)
-of the `async_job` README, and `value`, `done` or `cancel()` of a job in
+of the `async_job` README, and `value`, `done` or `cancel()` of a job are in
 [Jobs and results](jobs.md#jobs-and-results) on the jobs page.
 
 ## Solo
@@ -18,15 +19,15 @@ the subclass.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `Solo.observer` | One observer of every controller of the process; it watches and answers for nothing | [Watching every controller](diagnostics.md#watching-every-controller) |
+| `Solo.observer` | One observer of every controller of the process, which watches and answers for nothing | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `Solo.unansweredHandler` | A `SoloUnansweredHandler` that takes the errors nobody answered for, in place of the zone | [Answering for an error](errors.md#answering-for-an-error) |
-| `Solo.debug` | A callback that traces the queue, the state and the closing of every controller; the life of each job is on `Job.debug` | [Logs](diagnostics.md#logs) |
+| `Solo.debug` | A callback that traces the queue, the state and the closing of every controller, while the life of each job goes to `Job.debug` | [Logs](diagnostics.md#logs) |
 
 ### What a caller sees
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `currentState` | The state, for a reader outside a job; no checkpoint | [Observing state](state.md#observing-state) |
+| `currentState` | The state for a reader outside a job, read without a checkpoint | [Observing state](state.md#observing-state) |
 | `addListener(listener)` | Calls back synchronously inside every change of the state | [Observing state](state.md#observing-state) |
 | `removeListener(listener)` | Removes the earliest registration equal to the listener | [Observing state](state.md#observing-state) |
 | `isClosed` | Whether `close()` was called | [Three ways to stop](cancellation.md#three-ways-to-stop) |
@@ -34,7 +35,7 @@ the subclass.
 | `isFinished` | Whether closing has finished and the state can no longer change | [externalSetState](state.md#externalsetstate) |
 | `pending` | What is holding the controller right now, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `cancelAll()` | Clears the queue and cancels the running job; the controller stays open | [Three ways to stop](cancellation.md#three-ways-to-stop) |
-| `close()` | Stops taking work and closes: cancels what is queued and running, or with `mode: SoloCloseMode.drain` runs the queue first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `close()` | Stops taking work and closes, cancelling what is queued and running or, with `mode: SoloCloseMode.drain`, running the queue first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 
 ### What the subclass uses
 
@@ -44,7 +45,7 @@ sees those. Every member here is protected.
 | Member | What it does | Where |
 | --- | --- | --- |
 | `Solo(initialState)` | The constructor a subclass calls as `super(initialState)`, with the first state | [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start) |
-| `run(body)` | Makes a job and queues it: what a method of the controller usually returns | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `run(body)` | Makes and queues the job a method of the controller usually returns | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
 | `job(body)` | Makes a job without queueing it, for `add` or for `ctx.run` as a child | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
 | `add(job)` | Queues a job made by `job` under a `Policy`, at the tail or, with `first: true`, at the head | [Queue and policies](jobs.md#queue-and-policies) |
 | `collect(handler)` | Makes an accumulator that hands one job the list of the events of its group | [One request per log line](accumulation.md#one-request-per-log-line) |
@@ -67,13 +68,13 @@ repeats `@protected`.
 | --- | --- | --- |
 | `onStart(job)` | A job body is about to run | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `onFinish(job)` | A job has an outcome, a job dropped before its start included | [Watching every controller](diagnostics.md#watching-every-controller) |
-| `onError(job, error, stackTrace)` | Hears every error a job runs into; it reports and moves nothing | [Reporting an error](errors.md#reporting-an-error) |
-| `onUnanswered(job, error, stackTrace)` | Answers for an error no outcome carries and a `Failed` nobody observes; by default hands it to `Solo.unansweredHandler` or the zone | [Answering for an error](errors.md#answering-for-an-error) |
+| `onError(job, error, stackTrace)` | Hears every error a job runs into and reports it, moving nothing | [Reporting an error](errors.md#reporting-an-error) |
+| `onUnanswered(job, error, stackTrace)` | Answers for an error no outcome carries and a `Failed` nobody observes, by default through `Solo.unansweredHandler` or the zone | [Answering for an error](errors.md#answering-for-an-error) |
 | `onLog(job, message)` | A job called `ctx.log` | [Logs](diagnostics.md#logs) |
-| `onChange(transition)` | The state changed; the `SoloTransition` says which job changed it | [Watching every controller](diagnostics.md#watching-every-controller) |
-| `onClose()` | The engine is about to finish closing: the place to release what the controller holds beside its jobs | [externalSetState](state.md#externalsetstate) |
-| `onListenerError(error, stackTrace)` | A listener threw; by default the error goes to the zone | [Observing state](state.md#observing-state) |
-| `publish(previous, current)` | Calls the listeners; the seam for a delivery of another kind | [A delivery of your own](state.md#a-delivery-of-your-own) |
+| `onChange(transition)` | The state changed, with a `SoloTransition` that says which job changed it | [Watching every controller](diagnostics.md#watching-every-controller) |
+| `onClose()` | The engine is about to finish closing, which is the place to release what the controller holds beside its jobs | [externalSetState](state.md#externalsetstate) |
+| `onListenerError(error, stackTrace)` | A listener threw an error, which goes to the zone by default | [Observing state](state.md#observing-state) |
+| `publish(previous, current)` | Calls the listeners and is the seam for a delivery of another kind | [A delivery of your own](state.md#a-delivery-of-your-own) |
 
 ## Parameters of a job
 
@@ -84,15 +85,15 @@ parameters after it. The first type argument of each is the working type, in
 
 | Parameter | Taken by | What it does | Where |
 | --- | --- | --- | --- |
-| `key` | `run`, `job`, `collect`, `accumulate` | The key of the job, what a `Policy` matches on; without `describe`, the job prints as `Job(key)` | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `key` | `run`, `job`, `collect`, `accumulate` | The key of the job, what a `Policy` matches on and, without `describe`, what the job prints as: `Job(key)` | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
 | `describe` | `run`, `job`, `collect`, `accumulate` | The label after the key for logs, observers and `toString()`: `Job(key: label)` | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
-| `policy` | `run`, `collect`, `accumulate` | For `run`, a `Policy`: what happens to a job whose key is already queued or running. For an accumulator, an `AccumulationPolicy`: which waiting group an event joins | [Queue and policies](jobs.md#queue-and-policies), [Choosing where events join](accumulation.md#choosing-where-events-join) |
+| `policy` | `run`, `collect`, `accumulate` | A `Policy` for `run`, deciding what happens to a job whose key is already queued or running, or an `AccumulationPolicy` for an accumulator, deciding which waiting group an event joins | [Queue and policies](jobs.md#queue-and-policies), [Choosing where events join](accumulation.md#choosing-where-events-join) |
 | `timing` | `collect`, `accumulate` | When a group may start, an `AccumulationTiming`: `debounce` or `throttle` | [Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready) |
-| `merge` | `accumulate` | Merges an incoming event into the value of the group; required, synchronous and pure | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
-| `canStart` | `run`, `job`, `collect`, `accumulate` | Asked once, when the job is about to start; `false` ends it `Cancelled(rules: canStart)` before the body runs | [The rules](state.md#the-rules) |
-| `keepWhile` | `run`, `job`, `collect`, `accumulate` | Asked before the start, on state updates while the body runs and at state checkpoints; `false` cancels the job `Cancelled(rules: keepWhile)` | [The rules](state.md#the-rules) |
-| `cancellable` | `run`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing; waiting in the queue, the job stays through removals and `cancelAll()` without `force: true`, while `close()` takes it out all the same | [A whole job](cancellation.md#a-whole-job) |
-| `timeout` | `run`, `job`, `collect`, `accumulate` | A deadline counted from the start of the body; when it runs out, the job ends `Cancelled(timeout)` | [A deadline of a job](cancellation.md#a-deadline-of-a-job) |
+| `merge` | `accumulate` | A required, synchronous and pure function that merges an incoming event into the value of the group | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
+| `canStart` | `run`, `job`, `collect`, `accumulate` | Asked once as the job is about to start, ending it `Cancelled(rules: canStart)` on `false` | [The rules](state.md#the-rules) |
+| `keepWhile` | `run`, `job`, `collect`, `accumulate` | Asked before the start, on state updates while the body runs and at state checkpoints, cancelling the job `Cancelled(rules: keepWhile)` on `false` | [The rules](state.md#the-rules) |
+| `cancellable` | `run`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing, and keeps a queued job through removals and `cancelAll()` without `force: true`, though not through `close()` | [A whole job](cancellation.md#a-whole-job) |
+| `timeout` | `run`, `job`, `collect`, `accumulate` | A deadline counted from the start of the body, after which the job ends `Cancelled(timeout)` | [A deadline of a job](cancellation.md#a-deadline-of-a-job) |
 | `ifFailed` | `run`, `job` | The state to write when the job fails, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
 | `ifCancelled` | `run`, `job` | The state to write when the job is cancelled, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
 
@@ -108,10 +109,10 @@ does `ctx.each`.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `ctx.state` | The state as `W`; a checkpoint, and a state the rules of the job refuse cancels it | [Reading and updating state](state.md#reading-and-updating-state) |
-| `ctx.stateAs<T>()` | The state narrowed further, to `T`; a mismatch cancels the job | [Reading and updating state](state.md#reading-and-updating-state) |
-| `ctx.emit(next)` | The body's only way to write the state; synchronous | [Reading and updating state](state.md#reading-and-updating-state) |
-| `ctx.each(stream, onData)` | Starts a child that takes the events of a stream one at a time, and `onData` gets the child's `SoloContext`; a checkpoint, and a state the rules of the job refuse cancels the job instead of starting the child | [Processing a stream](streams.md#processing-a-stream) |
+| `ctx.state` | The state as `W`, read at a checkpoint that checks the rules of the job | [Reading and updating state](state.md#reading-and-updating-state) |
+| `ctx.stateAs<T>()` | The state narrowed further to `T`, where a mismatch cancels the job | [Reading and updating state](state.md#reading-and-updating-state) |
+| `ctx.emit(next)` | The body's only way to write the state, a synchronous one | [Reading and updating state](state.md#reading-and-updating-state) |
+| `ctx.each(stream, onData)` | Starts a child that hands the events of a stream to `onData` one at a time, with the child's `SoloContext` | [Processing a stream](streams.md#processing-a-stream) |
 
 ## SoloJob
 
@@ -140,9 +141,9 @@ the call passes.
 | `queue.length` | How many jobs wait | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `queue.isEmpty` | Whether no job waits | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `queue.isNotEmpty` | Whether any job waits | [Working the queue directly](jobs.md#working-the-queue-directly) |
-| `queue.remove(job)` | Removes one job; returns whether it did | [Working the queue directly](jobs.md#working-the-queue-directly) |
-| `queue.removeWhere(test)` | Removes every job that passes the test; returns how many | [When they are separate jobs after all](accumulation.md#when-they-are-separate-jobs-after-all) |
-| `queue.clear()` | Removes every job; returns how many | [Commands that arrive during a shot](camera.md#commands-that-arrive-during-a-shot) |
+| `queue.remove(job)` | Removes one job and returns whether it did | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `queue.removeWhere(test)` | Removes every job that passes the test and returns how many | [When they are separate jobs after all](accumulation.md#when-they-are-separate-jobs-after-all) |
+| `queue.clear()` | Removes every job and returns how many | [Commands that arrive during a shot](camera.md#commands-that-arrive-during-a-shot) |
 
 ## SoloAccumulator
 
@@ -151,7 +152,7 @@ field: events combine only within one accumulator, even under the same key.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job: everyone who added to it holds the same handle, and each continues it through `shared()`: a plain `then` on it throws | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
+| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job, which every caller continues only through `shared()` | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
 
 ## Other types
 
@@ -159,7 +160,7 @@ field: events combine only within one accumulator, even under the same key.
 | --- | --- | --- |
 | `Policy` | What `add` and `run` do with a job whose key is already queued or running: `sequential`, `droppable`, `replace` or `restart`; a job `droppable` may hand back is continued through `shared()` | [Queue and policies](jobs.md#queue-and-policies) |
 | `SoloCloseMode` | How `close()` stops: `cancel` or `drain` | [Three ways to stop](cancellation.md#three-ways-to-stop) |
-| `SoloObserver` | What `Solo.observer` takes: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate`; `SoloObserver.all` joins several | [Watching every controller](diagnostics.md#watching-every-controller) |
+| `SoloObserver` | What `Solo.observer` takes, one or several joined by `SoloObserver.all`: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate` | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `SoloPhase`, a `SoloPendingQueue` or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `SoloStream` | A mixin that adds a broadcast `stream` of the states | [Observing state](state.md#observing-state) |
