@@ -1174,7 +1174,8 @@ void main() {
           'after onClose: Screen(signedIn: false)',
         ]);
         _says('made in its constructor and cancelled in `onClose`. For each '
-            'update that subscription brings, it either queues a short job');
+            'update that subscription brings, the controller either queues a '
+            'short job');
       });
 
       test('a subscription of its own that writes with externalSetState', () {

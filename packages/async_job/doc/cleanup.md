@@ -386,10 +386,23 @@ The same holds for a value registered by the call itself: `ctx.disown(value)`
 belongs where ownership changes, not on the line after it.
 
 An asynchronous hand-over and its `ctx.disown` go together inside one awaited
-`ctx.uncancellable` section. The step is a bare `await`, not `ctx.join`, and
-nothing between it and `ctx.disown` throws the job's cancellation, no member of
-the context and no `await child.value`, because a section does not hold a
-cancellation the rules of an engine make.
+`ctx.uncancellable` section:
+
+```dart
+final transaction = await ctx.join(
+  Transaction.begin,
+  dispose: (transaction) => transaction.rollback(),
+);
+await ctx.uncancellable(() async {
+  await transaction.commit(); // a bare await, not ctx.join
+  ctx.disown(transaction);
+});
+```
+
+The step is a bare `await`, not `ctx.join`, and nothing between it and
+`ctx.disown` throws the job's cancellation, no member of the context and no
+`await child.value`, because a section does not hold a cancellation the rules
+of an engine make.
 
 ### Registering after a plain `await`
 

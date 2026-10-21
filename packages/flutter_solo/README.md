@@ -328,11 +328,10 @@ rebuilds can hand it a new `SaveButton` with another controller. Without
 `didUpdateWidget` the button would go on taking its permission from the old
 controller while its tap went to the new one. The field and its
 `didUpdateWidget` are what `SoloSelector` spares you: the widget that picks
-needs no `State`, and nothing has to be disposed of.
+needs no `State`.
 
 The source is subscribed to only while the selection has listeners, and there
-is nothing to dispose of. With nobody listening, `value` picks every time and
-keeps nothing it picked. A selection outlives its source harmlessly: `value`
+is nothing to dispose of. A selection outlives its source harmlessly: `value`
 keeps reading the final state of a closed controller.
 
 The constructor takes a `ValueListenable`: here, the controller with
@@ -347,7 +346,8 @@ should only pick: over a controller with `SoloListenable` it must not change
 the state, start a job or close the controller.
 
 While somebody listens, the selection picks once per change, and a listener
-reads the very pick that decided whether to notify. A source that changes its
+reads the very pick that decided whether to notify. With nobody listening,
+`value` picks every time and keeps nothing it picked. A source that changes its
 value in place keeps the object, so a listener the source calls ahead of the
 selection reads the pick from before the change. A `solo` controller with an
 immutable state never meets this.

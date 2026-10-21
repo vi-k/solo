@@ -895,13 +895,12 @@ is the scheme [Removing selected pending work](#removing-selected-pending-work)
 writes out, with the condition it comes with: the events have to be distinct
 objects.
 
-Three things are the application's to keep right: which position is the newest
-(`_newestSeek`) and which token belongs to the `seek` in flight (`_seeking`).
-The third is the check after the await that keeps a cancelled `seek` from
-publishing. A command that needs a different replacement rule brings its own
-branch and its own bookkeeping into the same handler. And `add` returns
-nothing, so a skipped or interrupted `seek` leaves the caller no outcome to
-read.
+The application keeps three things right: which position is the newest
+(`_newestSeek`), which token belongs to the `seek` in flight (`_seeking`), and
+the check after the await that keeps a cancelled `seek` from publishing. A
+command that needs a different replacement rule brings its own branch and its
+own bookkeeping into the same handler. And `add` returns nothing, so a skipped
+or interrupted `seek` leaves the caller no outcome to read.
 
 ### Solo
 

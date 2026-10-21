@@ -14,6 +14,7 @@ final class Stage {
   int migrateTake = 10;
   Exception? migrateError;
   int readTake = 10;
+  int commitTake = 10;
 
   /// Whether the schema of the database is current, as `isCurrent` says.
   bool schemaCurrent = true;
@@ -131,6 +132,25 @@ final class Cursor {
   Future<void> close() async {
     closes += 1;
     stage.trace.add('cursor closed');
+  }
+}
+
+/// A transaction that commits in its own time. A rollback after the commit
+/// would undo what the commit handed over.
+final class Transaction {
+  static Future<Transaction> begin() async {
+    await delay(1);
+    stage.trace.add('transaction begun');
+    return Transaction();
+  }
+
+  Future<void> commit() async {
+    await delay(stage.commitTake);
+    stage.trace.add('transaction committed');
+  }
+
+  Future<void> rollback() async {
+    stage.trace.add('transaction rolled back');
   }
 }
 

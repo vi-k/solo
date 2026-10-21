@@ -101,7 +101,7 @@ its `onUnanswered`, as an error no outcome carries does. A job that must not
 end before its source has closed waits for that itself, the way
 [Waiting for the source to close](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/streams.md#waiting-for-the-source-to-close)
 on the streams page of `async_job` does. The rest of that page holds here as
-well, with `job(...)` where it writes `Job.deferred`. The rest covers what
+well, with `job(...)` where it writes `Job.deferred`. There you find what
 `await for` and a `listen` tied to the job do in a body, how a callback in
 several steps stops for a cancellation, and where the cleanup of one event
 belongs.
@@ -162,8 +162,8 @@ no other job of that controller starts before the session closes its stream,
 and a draining `close` waits for the same. So this job suits a controller that
 does nothing but follow. A controller with other jobs to run holds a
 subscription of its own instead, made in its constructor and cancelled in
-`onClose`. For each update that subscription brings, it either queues a short
-job or, when the update is a fact the running work has to hear at once, writes
-it with `externalSetState`. [External state](state.md#external-state) on the
-state page shows such a subscription and says which of the two an update calls
-for.
+`onClose`. For each update that subscription brings, the controller either
+queues a short job or, when the update is a fact the running work has to hear
+at once, writes it with `externalSetState`.
+[External state](state.md#external-state) on the state page shows such a
+subscription and says which of the two an update calls for.

@@ -301,17 +301,19 @@ abstract class Solo<S extends Object> {
   /// A queued job that turned down `cancel` starts in its turn and runs to its
   /// end, and `await job.cancel()` comes back only then.
   ///
-  /// [ifFailed] and [ifCancelled] compute the state after a failed or
-  /// cancelled body, once its children and cleanup are over, and change
-  /// nothing about the outcome. [ifCancelled] runs at completion: the signal
-  /// to stop the operation belongs in [JobContext.onCancel], which delivers it
-  /// at once. A rule that throws at `ctx.state` or `ctx.check()` reaches the
-  /// body instead, and a `Failed` it leaves is corrected like any other.
+  /// [ifFailed] and [ifCancelled] compute the state after a failed or cancelled
+  /// body, once its children and cleanup are over, and change nothing about the
+  /// outcome. [ifCancelled] runs at completion: the signal to stop the
+  /// operation belongs in [JobContext.onCancel], which delivers it at once. A
+  /// rule that throws while the permission of the handlers is checked
+  /// suppresses the correction, and its error is reported. The same rule
+  /// throwing at `ctx.state` or `ctx.check()` reaches the body instead, and a
+  /// `Failed` it leaves is corrected like any other.
   ///
   /// [timeout] counts from the start of the body, not from [add], and lands as
   /// a cancellation, as that of [Job.new] does: [ifCancelled] gets a
-  /// [TimeoutCancelReason], [ifFailed] is not called, and
-  /// `on TimeoutException` catches nothing.
+  /// [Cancelled] whose reason is a [TimeoutCancelReason], [ifFailed] is not
+  /// called, and `on TimeoutException` catches nothing.
   ///
   /// See [Parameters of a job](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#parameters-of-a-job)
   /// on the reference page, which leads to the section of each parameter.

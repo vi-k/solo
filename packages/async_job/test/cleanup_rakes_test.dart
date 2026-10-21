@@ -657,6 +657,27 @@ void main() {
       });
     });
 
+    test('a hand-over in one section is not rolled back on a cancellation', () {
+      fakeAsync((async) {
+        final job = Job<void>(page.handingOver)..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+        // The section holds the cancellation until `disown` has run.
+        expect(job.outcome, isA<Cancelled>());
+        expect(trace, ['transaction begun', 'transaction committed']);
+      });
+    });
+
+    test('a hand-over in one section is not rolled back on success', () {
+      fakeAsync((async) {
+        final job = Job<void>(page.handingOver)..ignoreFailure();
+        async.flushTimers();
+        expect(job.outcome, isA<Done<void>>());
+        expect(trace, ['transaction begun', 'transaction committed']);
+      });
+    });
+
     fakeAsyncTest('the unregister function is safe twice and after cleanup',
         () async {
       late void Function() removeDisposer;

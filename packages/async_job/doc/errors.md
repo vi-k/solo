@@ -349,7 +349,8 @@ in an error zone of its own, and the boundary holds both ways:
 
 A job started inside the callback is outside the boundary: its body runs in the
 zone the work was started from. It has an outcome and an observer of its own,
-and its unobserved failure lands in that zone too. For work inside the work of
+and its unobserved failure goes to the answer of its own observer, or to that
+zone, rather than to the observer of this job. For work inside the work of
 another job, that is the zone the outer work was started from.
 
 `ctx.abandonable` and `ctx.join` work inside the callback on the body's terms,

@@ -524,14 +524,16 @@ abstract interface class JobContext {
   /// [run], [runAll], `each` and [uncancellable] throw a [StateError] in here:
   /// they act on the whole job, and this work is not the job. [abandonable] and
   /// [join] work, on the body's terms even after the body has ended: on a job
-  /// that has accepted a cancellation the value is released and the call
-  /// throws the cancellation, and on a job that is over a value with a
-  /// `dispose` or `discard` is released and the call throws a [StateError]
-  /// instead of handing it over closed. A job
-  /// created in here is not this work: it has an outcome and an observer of its
-  /// own, and its body runs, and its unobserved failure lands, in the zone this
-  /// work was started from — for work inside the work of another job, the zone
-  /// the outer work was started from.
+  /// that has accepted a cancellation the value is released and the call throws
+  /// the cancellation, and on a job that is over a value with a `dispose` or
+  /// `discard` is released and the call throws a [StateError] instead of
+  /// handing it over closed.
+  ///
+  /// A job created in here is not this work: it has an outcome and an observer
+  /// of its own, and its body runs in the zone this work was started from. Its
+  /// unobserved failure goes to the answer of its own observer, or to that
+  /// zone, rather than to the observer of this job. For work inside the work of
+  /// another job, that zone is the one the outer work was started from.
   ///
   /// See [Work the job does not wait for](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#work-the-job-does-not-wait-for)
   /// on the errors page.

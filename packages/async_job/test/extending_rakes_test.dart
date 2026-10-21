@@ -1385,8 +1385,11 @@ void main() {
   // and the queue of this file is in that table, but for `_stop`, which
   // comes with the rule, and `MyContext` has none, as first shown. Each
   // member a row names is declared in the code under the heading the row
-  // links to. A member moved to another section, renamed or added turns
-  // this red.
+  // links to, and a row of the constructor alone finds the constructor
+  // there. The link is read by its anchor, the way GitHub makes it, so the
+  // two sections called "The first attempt" stay apart, and its text is the
+  // heading of that anchor. A member moved to another section, renamed or
+  // added turns this red.
   test(
       'the table under "### The whole engine" names every member of this '
       'file and the section that declares it', () {
@@ -1408,35 +1411,50 @@ void main() {
     }
 
     final dart = RegExp(r'```dart\n(.*?)\n```', dotAll: true);
+    // The anchor GitHub gives a heading: lower case, no punctuation but `-`
+    // and `_`, a `-` for each space, and `-1`, `-2` on a repeat.
     final code = <String, String>{};
+    final titles = <String, String>{};
     var table = '';
     for (final part in File('doc/extending.md')
         .readAsStringSync()
         .split(RegExp('^(?=#)', multiLine: true))) {
       final heading = part.split('\n').first;
       final name = heading.replaceFirst(RegExp('^#+ '), '');
-      code[name] = [
-        if (code[name] case final before?) before,
+      final base = name
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^\w\- ]'), '')
+          .replaceAll(' ', '-');
+      var anchor = base;
+      for (var n = 1; titles.containsKey(anchor); n++) {
+        anchor = '$base-$n';
+      }
+      titles[anchor] = name;
+      code[anchor] = [
         for (final block in dart.allMatches(part)) block.group(1)!,
       ].join('\n');
       if (heading == '### The whole engine') table = part;
     }
 
     final named = <String, Set<String>>{};
-    final row = RegExp(r'^\| `(\w+)` \| (.*) \| \[(.*)\]\(#.*\) \|$');
+    final row = RegExp(r'^\| `(\w+)` \| (.*) \| \[(.*)\]\(#(.*)\) \|$');
     for (final line in table.split('\n')) {
       final match = row.firstMatch(line);
       if (match == null) continue;
-      final [type!, members!, section!] = match.groups([1, 2, 3]);
+      final [type!, members!, section!, anchor!] = match.groups([1, 2, 3, 4]);
+      expect(titles[anchor], section, reason: line);
       final names = {
         for (final name in RegExp(r'`(\w+)(?:\(\))?`').allMatches(members))
           name.group(1)!,
       };
-      expect(
-        declaredIn(code[section] ?? ''),
-        containsAll(names),
-        reason: section,
-      );
+      expect(declaredIn(code[anchor]!), containsAll(names), reason: line);
+      if (members.contains('the constructor')) {
+        expect(
+          code[anchor],
+          matches(RegExp('^  $type\\(', multiLine: true)),
+          reason: line,
+        );
+      }
       (named[type] ??= {}).addAll(names);
     }
     const file = 'test/extending_rakes_test.dart';

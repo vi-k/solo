@@ -1,6 +1,6 @@
-> **Состояние на 2026-10-22:** волна идёт. Части 1–5 и переезды разбора
-> из dartdoc на страницы сделаны и закоммичены; ревью сделанного и закрытие
-> впереди.
+> **Состояние на 2026-10-22:** волна сделана и смержена в `main`: части 1–5,
+> переезды разбора из dartdoc на страницы, ревью сделанного и его правки
+> (раздел «Ревью сделанного»), закрытие находок в записях ревью.
 > **Что это:** отчёт волны формы по плану `2026-10-21-form-wave-plan.md`:
 > что ушло из dartdoc и где это сказано на странице, проверенные решения,
 > строки `///` до и после.
@@ -573,6 +573,156 @@ change the state», dartdoc `SoloSelection` говорит «must not». Это 
 Документные — все семь зелёные. Линтер `humanizer--ru` по изменённым абзацам
 переводов: 0 `ERROR`.
 
+## Ревью сделанного
+
+Независимое ревью на Opus по копии дерева на `b819bf6c`: одна находка Medium,
+девять Low. Ревьюер проследил 31 убранный факт, воспроизвёл числа отчёта,
+проверил форму всех 19 членов, переводы изменённых абзацев и решения 18, 27,
+29, 38, 59 и 100 — там замечаний нет. Каждую находку я перепроверил по дереву
+сам; все десять подтвердились. Правки — одним коммитом,
+`docs: close the review of the form wave`.
+
+### 1. Medium: блок `commit` + `disown` не дошёл до страниц ядра
+
+Второй блок кода dartdoc `uncancellable` — `transaction.commit()` голым `await`
+и `ctx.disown(transaction)` в одной секции — правило 2 из dartdoc убрало,
+а ни на одной странице `async_job` его не было: он есть только в `resources.md`
+`solo`. Отчёт в «Что ушло и где это сказано» и в таблице переездов называет
+`cleanup.md`, «Unregistering inside the action», но там на `b819bf6c` стоял
+один абзац прозы без блока.
+
+Вердикт: принять. Блок встаёт на страницу под абзац о передаче, его код —
+в `test/support/cleanup_page.dart`, как велит сторож раздела.
+
+Итог: блок стоит в `cleanup.md` под абзацем «An asynchronous hand-over…»
+и в переводе. Функция `handingOver` — в `cleanup_page.dart`, заглушка
+`Transaction` — в `cleanup_stubs.dart`, два теста в `cleanup_rakes_test.dart`
+проверяют, что ни отмена во время `commit`, ни успех переданную транзакцию
+не откатывают. Строки отчёта о `cleanup.md` верны с этого коммита,
+а на `b819bf6c` были ложны.
+
+### 2. Low: невыровненный перенос в dartdoc `unattended`
+
+Строка кончалась на «instead of handing it over closed. A job», хотя следующее
+слово в неё влезало.
+
+Вердикт: принять.
+
+Итог: фразы о задаче, созданной внутри, стали отдельным абзацем dartdoc, оба
+абзаца залиты жадно — вместе с находкой 5.
+
+### 3. Low: висячее «instead» и `TimeoutCancelReason` в dartdoc `Solo.job`
+
+«Instead» противопоставляло фразу случаю, который часть 3 вырезала: правилу,
+бросившему, пока проверяется право обработчиков. «[ifCancelled] gets a
+[TimeoutCancelReason]» неточно: обработчик получает `Cancelled` с такой
+причиной.
+
+Вердикт: принять; вернуть противопоставленный случай фразой.
+
+Итог: перед «The same rule throwing at `ctx.state` or `ctx.check()` reaches the
+body instead» вернулась фраза «A rule that throws while the permission of the
+handlers is checked suppresses the correction, and its error is reported».
+О тайм-ауте: «[ifCancelled] gets a [Cancelled] whose reason is a
+[TimeoutCancelReason]».
+
+### 4. Low: перечень «What comes:» в `JobAnswerer.onUnanswered` неполон
+
+Из перечня пропали ветвь `runAll`, которую группа не бросила, и сбой при
+форматировании описания отмены ребёнка. Оба маршрута живут в «Rare routes»
+`errors.md`.
+
+Вердикт: принять; вернуть оба пункта, как в прежнем тексте.
+
+Итог: оба пункта стоят в перечне после работы `unattended`.
+
+### 5. Low: ответ наблюдателя выпал из фразы о задаче внутри `unattended`
+
+«Its unobserved failure lands … in the zone» верно, только пока у задачи нет
+ответчика, и пропало «rather than to this job's observer», ради которого фраза
+писалась.
+
+Вердикт: принять, в dartdoc и на странице.
+
+Итог: «Its unobserved failure goes to the answer of its own observer, or to
+that zone, rather than to the observer of this job» — в dartdoc, в «Work the
+job does not wait for» `errors.md` и в переводе.
+
+### 6. Low: двусмысленности после резки длинных фраз в части 5
+
+Два «The rest» подряд в `streams.md`; «it» во фразе «For each update that
+subscription brings, it either queues» можно отнести к подписке; «Three
+things…» во `vs-bloc.md` перечисляет после двоеточия две вещи, третья вынесена
+в новую фразу.
+
+Вердикт: принять все три.
+
+Итог: в `streams.md` — «There you find what …» и «the controller either
+queues», сторож `_says` в `streams_rakes_test.dart` поправлен вслед.
+Во `vs-bloc.md` три пункта стоят в одной фразе «The application keeps three
+things right: …». В переводе `streams.md` «Речь в нём о том» стало «Там
+описано»; фраза о подписке не тронута: «он» там по роду относится только
+к контроллеру. Перевод `vs-bloc.md` перечисляет три пункта так же. Длинных фраз
+на трёх страницах по-прежнему ноль.
+
+### 7. Low: повтор и порядок в разделе выборки README `flutter_solo`
+
+«Nothing has to be disposed of» и «there is nothing to dispose of» стояли
+подряд, а краевой случай «With nobody listening» — раньше основного пути «While
+somebody listens».
+
+Вердикт: принять.
+
+Итог: из абзаца о `SoloSelector` вывод снят: он там и неточен, проекция
+в `State` тоже ничего освобождать не требует. «With nobody listening…» стоит
+второй фразой абзаца «While somebody listens…». Перевод так же.
+
+### 8. Low: раздел «The two barriers» открывается прозой, а не таблицей
+
+План велел подраздел, открытый таблицей; раздел открывается вводной фразой
+с двоеточием перед таблицей, и отчёт отклонение не назвал.
+
+Вердикт: принять первое предложение — назвать отклонение. Фраза говорит
+правило, без которого таблица стадий не читается: ни одна ветвь не проходит
+барьер, пока его не достигли все. Раздел по-прежнему открывается ответом, как
+велит решение 71.
+
+Итог: отклонение названо здесь и в итоге M3 записи
+`2026-10-21-async-job-project-review-3.md`.
+
+### 9. Low: тест таблицы «The whole engine» пропускал три поломки
+
+Код разделов ключевался текстом заголовка, и две «The first attempt»
+склеивались; якорь ссылки с её текстом не сверялся; строка `MyContext` без имён
+в бэктиках проходила при любом разделе, даже отсутствующем.
+
+Вердикт: принять; ключевать разделы якорем.
+
+Итог: тест ключует код раздела якорем по правилам GitHub (`the-first-attempt`
+и `the-first-attempt-1` врозь), требует, чтобы текст ссылки был заголовком её
+якоря, и для строки «the constructor alone» ищет конструктор класса в коде
+раздела. Три мутации таблицы — ссылка на вторую «The first attempt», чужой
+якорь при верном тексте, строка `MyContext` со ссылкой на раздел без
+конструктора — тест роняют; файл после каждой восстановлен копией.
+
+### 10. Low: `prose_len.py` падал с `-v`
+
+Скрипт проверял `-v` в `sys.argv`, но шёл по всем аргументам как по путям.
+
+Вердикт: принять.
+
+Итог: цикл по путям пропускает `-v`, Usage флаг называет; текст скрипта
+в «Счётчик длинных фраз» поправлен.
+
+### Проверки правок ревью
+
+`async_job`: формат без изменений, анализ чистый, +1791 — на два теста передачи
+больше. `solo`: формат, анализ, +2063; пример +112. `flutter_solo`: формат,
+анализ, +241; пример +6. Стенды: все драйверы прошли, `check_traces.py` — 3, 13
+и 6 цитат, ни одной не напечатанной; `flutter_check` +47. Документные — все
+семь зелёные. Линтер `humanizer--ru` по изменённым абзацам переводов: 0
+`ERROR`.
+
 ## Счётчик длинных фраз
 
 `prose_len.py`, как его гоняли до и после части 5: `python3 prose_len.py
@@ -583,7 +733,7 @@ packages/flutter_solo/README.md`.
 ```python
 """Sentence lengths of the prose of Markdown pages.
 
-Usage: python3 prose_len.py FILE...
+Usage: python3 prose_len.py [-v] FILE...
 
 Code blocks, tables, headings, quotes and HTML are left out. A sentence
 ends at `.`, `!` or `?` followed by a space or the end of a paragraph; a
@@ -631,7 +781,7 @@ def sentences(para):
 
 
 def main():
-    for path in sys.argv[1:]:
+    for path in [a for a in sys.argv[1:] if a != '-v']:
         lengths = []
         long_ones = []
         for para in paragraphs(open(path).read()):

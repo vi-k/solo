@@ -172,15 +172,17 @@ mixin JobAnswerer on JobObserver {
   ///
   /// What comes: the errors no outcome carries — an action of
   /// [JobContext.abandonable] failing late, a disposer, a callback, work of
-  /// [JobContext.unattended], a failure of the body of a job that ends
-  /// [Cancelled], those an engine brings through [JobBase.finish] — and a
-  /// failure a [Failed] outcome carries when nobody observes that outcome, a
-  /// microtask after the job ends; [Job.ignoreFailure], or reading [Job.done]
-  /// or [Job.value], keeps that one away. A [Failed] made of a cancellation
-  /// goes to the zone past this hook: somebody made that outcome a failure on
-  /// purpose. **An override that throws** does not take the error with it: the
-  /// error goes to the zone the job was created in, and then what the override
-  /// threw goes to the current zone.
+  /// [JobContext.unattended], a branch of [JobContext.runAll] the group did not
+  /// throw, a failure while formatting the description of a child's
+  /// cancellation, a failure of the body of a job that ends [Cancelled], those
+  /// an engine brings through [JobBase.finish] — and a failure a [Failed]
+  /// outcome carries when nobody observes that outcome, a microtask after the
+  /// job ends; [Job.ignoreFailure], or reading [Job.done] or [Job.value], keeps
+  /// that one away. A [Failed] made of a cancellation goes to the zone past
+  /// this hook: somebody made that outcome a failure on purpose. **An override
+  /// that throws** does not take the error with it: the error goes to the zone
+  /// the job was created in, and then what the override threw goes to the
+  /// current zone.
   ///
   /// See [Answering for errors](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#answering-for-errors)
   /// on the errors page, and [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#where-each-error-goes)

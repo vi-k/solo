@@ -381,10 +381,22 @@ outcome: Cancelled(manual)
 меняется владение, а не строкой ниже.
 
 Асинхронная передача и её `ctx.disown` идут вместе внутри одной ожидаемой
-секции `ctx.uncancellable`. Шаг — голый `await`, а не `ctx.join`, и между ним
-и `ctx.disown` не стоит ничего, что бросает отмену задачи: ни члена контекста,
-ни `await child.value`. Ведь отмену, которую создают правила движка, секция
-не придерживает.
+секции `ctx.uncancellable`:
+
+```dart
+final transaction = await ctx.join(
+  Transaction.begin,
+  dispose: (transaction) => transaction.rollback(),
+);
+await ctx.uncancellable(() async {
+  await transaction.commit(); // голый await, а не ctx.join
+  ctx.disown(transaction);
+});
+```
+
+Шаг — голый `await`, а не `ctx.join`, и между ним и `ctx.disown` не стоит
+ничего, что бросает отмену задачи: ни члена контекста, ни `await child.value`.
+Ведь отмену, которую создают правила движка, секция не придерживает.
 
 ### Регистрация после обычного `await`
 

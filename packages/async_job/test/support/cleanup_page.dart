@@ -78,6 +78,17 @@ Future<void> unregisteringInside(JobContext ctx) async {
   });
 }
 
+Future<void> handingOver(JobContext ctx) async {
+  final transaction = await ctx.join(
+    Transaction.begin,
+    dispose: (transaction) => transaction.rollback(),
+  );
+  await ctx.uncancellable(() async {
+    await transaction.commit(); // a bare await, not ctx.join
+    ctx.disown(transaction);
+  });
+}
+
 Job<Database> afterTheReturn() {
   final job = Job<Database>((ctx) async {
     final database = await ctx.join(
