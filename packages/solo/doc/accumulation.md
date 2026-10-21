@@ -902,6 +902,69 @@ contract; accepted cancellation still takes precedence over a later value or
 error. The accumulator does not roll back partial external effects or resend
 failed input automatically.
 
+A group that writes a state of its own while it runs leaves that state behind
+when it fails or is cancelled: once the cancellation is accepted `emit` throws,
+and a `close()` in the middle of an upload leaves `Uploading(3)` for good. The
+state handlers `ifFailed` and `ifCancelled` take it back, as they do for `job`.
+They are not the handler of the group: a group calls one of them at most once,
+however many events it holds, after its handler, its children and its cleanup.
+The table
+[Handler eligibility and errors](state.md#handler-eligibility-and-errors) on
+the state page holds for the group as for any job:
+
+```dart
+sealed class UploadState {
+  const UploadState();
+}
+
+final class Waiting extends UploadState {
+  const Waiting();
+}
+
+final class Uploading extends UploadState {
+  final int photos;
+
+  const Uploading(this.photos);
+}
+
+final class UploadFailed extends UploadState {
+  final Object error;
+
+  const UploadFailed(this.error);
+}
+
+final class PhotoUploader extends Solo<UploadState> {
+  final Future<void> Function(List<String> photos) _send;
+  late final _photos = collect<UploadState, String, void>(
+    (ctx, photos) async {
+      ctx.emit(Uploading(photos.length));
+      await ctx.abandonable(() => _send(photos));
+      ctx.emit(const Waiting());
+    },
+    key: 'upload',
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
+    ifFailed: (state, error, stackTrace) => UploadFailed(error),
+    ifCancelled: (state, cancelled) => const Waiting(),
+  );
+
+  PhotoUploader(this._send) : super(const Waiting());
+
+  Job<void> addPhoto(String path) => _photos.add(path);
+}
+```
+
+```text
+uploading: Uploading(3)
+after close(): Waiting
+a failed upload: UploadFailed(Bad state: offline)
+```
+
+A group that never starts calls neither state handler: one cancelled in its
+window or while it waits in the queue, dropped by `clear`, still waiting when
+the controller closes, or turned down by `canStart`. A group that `canStart`
+has let through has started, even before its handler is called: a cancellation
+in `onStart` calls `ifCancelled`, and the handler never sees the events.
+
 Cancelling a queued debounce group removes its timer. Removing or clearing
 throttle groups preserves an already started interval, so adding another event
 cannot bypass the limit. That timer expires once; it is renewed when a group

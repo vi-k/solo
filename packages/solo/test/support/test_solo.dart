@@ -41,6 +41,8 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     bool cancellable = true,
     Duration? timeout,
     String Function()? describe,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
       super.collect<W, E, T>(
         handler,
@@ -52,6 +54,8 @@ mixin OpenSolo<S extends Object> on Solo<S> {
         cancellable: cancellable,
         timeout: timeout,
         describe: describe,
+        ifFailed: ifFailed,
+        ifCancelled: ifCancelled,
       );
 
   @override
@@ -66,6 +70,8 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     bool cancellable = true,
     Duration? timeout,
     String Function()? describe,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
       super.accumulate<W, E, T>(
         handler,
@@ -78,6 +84,8 @@ mixin OpenSolo<S extends Object> on Solo<S> {
         cancellable: cancellable,
         timeout: timeout,
         describe: describe,
+        ifFailed: ifFailed,
+        ifCancelled: ifCancelled,
       );
 
   @override

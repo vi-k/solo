@@ -55,7 +55,7 @@ created in; for a change made by `externalSetState`, the zone of its caller.
 | An error of a start rule: `canStart` throws instead of answering | `onError` | The same: the job ends `Failed` with it |
 | An error of the body, and the job ends `Cancelled` | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the job |
 | A late error of an operation `abandonable` stopped waiting for | `onError` | `onUnanswered` |
-| An error of a disposer, a `ctx.onCancel` callback, a `whenCancelled` or `whenFinished` listener, or a state handler of `run` | `onError` | `onUnanswered` |
+| An error of a disposer, a `ctx.onCancel` callback, a `whenCancelled` or `whenFinished` listener, or a state handler of a job | `onError` | `onUnanswered` |
 | A `keepWhile` that throws when a change of state re-checks it | `onError` | `onUnanswered` |
 | An error of work handed to `ctx.unattended` | `onError` | `onUnanswered` |
 | An error of a branch of `ctx.runAll` that the group did not throw | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the branch |
@@ -213,7 +213,7 @@ These are the errors that no outcome carries:
 
 - an operation that `abandonable` stopped waiting for, which fails later;
 - what the job calls outside its body: a disposer, a `ctx.onCancel` callback, a
-  `whenCancelled` or `whenFinished` listener, a state handler of `run`;
+  `whenCancelled` or `whenFinished` listener, a state handler of a job;
 - a `keepWhile` that throws when a change of state re-checks it;
 - work handed to `ctx.unattended`;
 - the failure of a branch of `ctx.runAll` that the group did not throw;

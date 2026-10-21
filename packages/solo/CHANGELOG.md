@@ -101,6 +101,9 @@ below.
 - **`job`, `run`, `collect` and `accumulate` take `timeout`.** An override
   passes it on to `super`, or `run(timeout: ...)` loses its deadline without a
   word.
+- **`collect` and `accumulate` take `ifFailed` and `ifCancelled`.** An override
+  passes them on to `super`, or the groups of its accumulators lose their state
+  handlers without a word.
 
 ### Deprecated
 
@@ -176,6 +179,11 @@ write it made itself, where `0.2.0` published that state again as a change.
   `run`, `collect` and `accumulate` take it; when it runs out, the job ends
   `Cancelled(timeout)` with the new `TimeoutCancelReason` of `async_job`. See
   [A deadline of a job](doc/cancellation.md#a-deadline-of-a-job).
+- **`collect` and `accumulate` take the state handlers of `job`, `ifFailed` and
+  `ifCancelled`.** A group that wrote a state of its own while it ran takes it
+  back through them when it fails or is cancelled; it calls one of them at most
+  once, however many events it holds. See
+  [Start, cancellation and errors](doc/accumulation.md#start-cancellation-and-errors).
 - **`Job.isCancellationError` of `async_job` names the errors a cancellation
   causes.** A failure of a cancelled job that it names reaches `onError` and
   goes no further: neither `onUnanswered` nor `Solo.unansweredHandler` hears

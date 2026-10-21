@@ -330,13 +330,13 @@ void main() {
       );
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
-        hasLength(18),
+        hasLength(19),
       );
     });
 
-    test('every fence is dart or text, and twelve of them are quotes', () {
+    test('every fence is dart or text, and thirteen of them are quotes', () {
       expect(strayFences(_doc), isEmpty);
-      expect(_quotes(), hasLength(12));
+      expect(_quotes(), hasLength(13));
       _says('Under each version of a controller is what the scenario above it '
           'leads to');
     });
@@ -2349,6 +2349,45 @@ void main() {
       });
       expect(_printed.join('\n'), _quotes()[11]);
       expect(api.sent, isEmpty);
+    });
+
+    test('state handlers take back the state a group wrote', () {
+      _says('a `close()` in the middle of an upload leaves `Uploading(3)` for '
+          'good');
+      String upload(UploadState state) => switch (state) {
+            Waiting() => 'Waiting',
+            Uploading(:final photos) => 'Uploading($photos)',
+            UploadFailed(:final error) => 'UploadFailed($error)',
+          };
+      final stuck = <String>[];
+      final errors = _zone((async) {
+        final uploader = PhotoUploader((_) => Completer<void>().future)
+          ..addPhoto('a.jpg')
+          ..addPhoto('b.jpg')
+          ..addPhoto('c.jpg');
+        async.elapse(ms(200));
+        print('uploading: ${upload(uploader.currentState)}');
+        uploader.close().ignore();
+        async.flushMicrotasks();
+        print('after close(): ${upload(uploader.currentState)}');
+
+        final failing = PhotoUploader((_) async => throw StateError('offline'));
+        failing.addPhoto('d.jpg').ignoreFailure();
+        async.elapse(ms(200));
+        print('a failed upload: ${upload(failing.currentState)}');
+
+        final plain = StuckUploader((_) => Completer<void>().future)
+          ..addPhoto('a.jpg')
+          ..addPhoto('b.jpg')
+          ..addPhoto('c.jpg');
+        async.elapse(ms(200));
+        plain.close().ignore();
+        async.flushMicrotasks();
+        stuck.add(upload(plain.currentState));
+      });
+      expect(errors, isEmpty);
+      expect(_printed.join('\n'), _quotes()[12]);
+      expect(stuck, ['Uploading(3)']);
     });
 
     test('events added from canStart and onStart go to a later group', () {

@@ -294,3 +294,62 @@ Future<void> oneHandle(LogController logs) async {
       print('cancelled: $reason');
   }
 }
+
+/// "Start, cancellation and errors": the uploader with its state handlers.
+sealed class UploadState {
+  const UploadState();
+}
+
+final class Waiting extends UploadState {
+  const Waiting();
+}
+
+final class Uploading extends UploadState {
+  final int photos;
+
+  const Uploading(this.photos);
+}
+
+final class UploadFailed extends UploadState {
+  final Object error;
+
+  const UploadFailed(this.error);
+}
+
+final class PhotoUploader extends Solo<UploadState> {
+  final Future<void> Function(List<String> photos) _send;
+  late final _photos = collect<UploadState, String, void>(
+    (ctx, photos) async {
+      ctx.emit(Uploading(photos.length));
+      await ctx.abandonable(() => _send(photos));
+      ctx.emit(const Waiting());
+    },
+    key: 'upload',
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
+    ifFailed: (state, error, stackTrace) => UploadFailed(error),
+    ifCancelled: (state, cancelled) => const Waiting(),
+  );
+
+  PhotoUploader(this._send) : super(const Waiting());
+
+  Job<void> addPhoto(String path) => _photos.add(path);
+}
+
+/// Not on the page: the same uploader without the state handlers, the one
+/// the prose says leaves `Uploading(3)` behind.
+final class StuckUploader extends Solo<UploadState> {
+  final Future<void> Function(List<String> photos) _send;
+  late final _photos = collect<UploadState, String, void>(
+    (ctx, photos) async {
+      ctx.emit(Uploading(photos.length));
+      await ctx.abandonable(() => _send(photos));
+      ctx.emit(const Waiting());
+    },
+    key: 'upload',
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
+  );
+
+  StuckUploader(this._send) : super(const Waiting());
+
+  Job<void> addPhoto(String path) => _photos.add(path);
+}

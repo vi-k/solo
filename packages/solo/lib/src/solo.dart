@@ -416,6 +416,15 @@ abstract class Solo<S extends Object> {
   /// first event, if [timeout] is zero or negative, or comes with
   /// `cancellable: false`. A `late final` field creates it on its first
   /// read, which is the first `add` when nothing reads it before.
+  ///
+  /// [ifFailed] and [ifCancelled] are the state handlers of [job], and they
+  /// write for the group: each job the accumulator queues calls one of them
+  /// at most once, however many events it holds, after its handler, its
+  /// children and its cleanup. A group that never starts — cancelled or
+  /// dropped while it waits, still waiting when the controller closes, or
+  /// turned down by `canStart` — calls neither. One that `canStart` let
+  /// through has started, so a cancellation in `onStart` calls [ifCancelled]
+  /// though the handler never ran.
   @protected
   SoloAccumulator<E, T> collect<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {
@@ -427,6 +436,8 @@ abstract class Solo<S extends Object> {
     bool cancellable = true,
     Duration? timeout,
     String Function()? describe,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
       _SoloAccumulator<S, W, E, List<E>, T>(
         this,
@@ -442,6 +453,8 @@ abstract class Solo<S extends Object> {
         cancellable: cancellable,
         timeout: timeout,
         describe: describe,
+        ifFailed: ifFailed,
+        ifCancelled: ifCancelled,
       );
 
   /// Creates an accumulator holding one value, combined synchronously by
@@ -451,9 +464,10 @@ abstract class Solo<S extends Object> {
   /// its queue. Errors escape from [SoloAccumulator.add] without changing the
   /// previous value. A recursive add from merge throws [StateError].
   /// Only the latest merged value is retained; no event history is stored.
-  /// The handler, rules, key and policy follow [collect]. No job is created
-  /// until the first event, and no state changes before the handler runs.
-  /// [timing] has the same group readiness behavior as it does for [collect].
+  /// The handler, rules, key, policy and state handlers follow [collect]. No
+  /// job is created until the first event, and no state changes before the
+  /// handler runs. [timing] has the same group readiness behavior as it does
+  /// for [collect].
   ///
   /// [timeout] is a deadline for each job, as for [collect]: counted from
   /// the start of the handler, after the window of [timing], and the
@@ -472,6 +486,8 @@ abstract class Solo<S extends Object> {
     bool cancellable = true,
     Duration? timeout,
     String Function()? describe,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
       _SoloAccumulator<S, W, E, E, T>(
         this,
@@ -487,6 +503,8 @@ abstract class Solo<S extends Object> {
         cancellable: cancellable,
         timeout: timeout,
         describe: describe,
+        ifFailed: ifFailed,
+        ifCancelled: ifCancelled,
       );
 
   /// Queues [job] and returns it, or the existing job found by

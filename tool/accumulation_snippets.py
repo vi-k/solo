@@ -1551,6 +1551,69 @@ void main() {
 }
 ''')
 
+# The uploader of "Start, cancellation and errors", and the same code
+# without its state handlers: the prose says that one leaves `Uploading(3)`
+# behind, and a number in prose is nobody's trace to check, so the driver
+# requires it.
+UPLOADER = snips['reference/PhotoUploader']
+UPLOAD_HANDLERS = (
+    '    ifFailed: (state, error, stackTrace) => UploadFailed(error),\n'
+    '    ifCancelled: (state, cancelled) => const Waiting(),\n')
+assert UPLOADER.count(UPLOAD_HANDLERS) == 1, 'the uploader has to have both'
+STUCK_UPLOADER = UPLOADER[UPLOADER.index('final class PhotoUploader'):] \
+    .replace(UPLOAD_HANDLERS, '') \
+    .replace('PhotoUploader', 'StuckUploader')
+
+FILES['uploads'] = (
+    "import 'dart:async';\n\n" + FAKE_ASYNC + SOLO_IMPORT + '\n\n'
+    + UPLOADER
+    + STUCK_UPLOADER
+    + REQUIRE
+    + '''
+String upload(UploadState state) => switch (state) {
+      Waiting() => 'Waiting',
+      Uploading(:final photos) => 'Uploading($photos)',
+      UploadFailed(:final error) => 'UploadFailed($error)',
+    };
+
+void main() {
+  fakeAsync((clock) {
+    // Three photos in one window, and a close() while they are on their way.
+    final uploader = PhotoUploader((_) => Completer<void>().future)
+      ..addPhoto('a.jpg')
+      ..addPhoto('b.jpg')
+      ..addPhoto('c.jpg');
+    clock.elapse(const Duration(milliseconds: 200));
+    print('uploading: ${upload(uploader.currentState)}');
+    uploader.close().ignore();
+    clock.flushMicrotasks();
+    require(uploader.currentState is Waiting, 'ifCancelled took it back');
+    print('after close(): ${upload(uploader.currentState)}');
+
+    final failing = PhotoUploader((_) async => throw StateError('offline'));
+    final job = failing.addPhoto('d.jpg')..ignoreFailure();
+    clock.elapse(const Duration(milliseconds: 200));
+    require(job.outcome is Failed, 'the failure is still the outcome');
+    print('a failed upload: ${upload(failing.currentState)}');
+    failing.close().ignore();
+
+    // The same uploader without the state handlers.
+    final stuck = StuckUploader((_) => Completer<void>().future)
+      ..addPhoto('a.jpg')
+      ..addPhoto('b.jpg')
+      ..addPhoto('c.jpg');
+    clock.elapse(const Duration(milliseconds: 200));
+    stuck.close().ignore();
+    clock.flushMicrotasks();
+    require(
+      upload(stuck.currentState) == 'Uploading(3)',
+      'without the handlers close() leaves Uploading(3) behind',
+    );
+    clock.flushMicrotasks();
+  });
+}
+''')
+
 unbuilt = snips.unbuilt()
 assert not unbuilt, f'blocks of the document no driver builds: {unbuilt}'
 

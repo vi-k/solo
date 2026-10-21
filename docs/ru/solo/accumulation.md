@@ -912,6 +912,69 @@ cancelled: manual
 ошибкой. Накопитель не откатывает частичные внешние эффекты и не пересылает
 неудачный вход сам.
 
+Группа, которая пишет собственное состояние, пока работает, оставляет его после
+себя, когда падает или её отменяют: после принятой отмены `emit` бросает,
+и `close()` посреди выгрузки оставляет `Uploading(3)` навсегда. Обработчики
+состояния `ifFailed` и `ifCancelled` откатывают его так же, как у `job`. Это
+не обработчик группы: группа вызывает один из них не больше одного раза,
+сколько бы событий в ней ни было, после своего обработчика, своих детей и своей
+уборки. Таблица
+[«Допуск обработчиков и их ошибки»](state.md#допуск-обработчиков-и-их-ошибки)
+страницы о состоянии действует на группу так же, как на любую задачу:
+
+```dart
+sealed class UploadState {
+  const UploadState();
+}
+
+final class Waiting extends UploadState {
+  const Waiting();
+}
+
+final class Uploading extends UploadState {
+  final int photos;
+
+  const Uploading(this.photos);
+}
+
+final class UploadFailed extends UploadState {
+  final Object error;
+
+  const UploadFailed(this.error);
+}
+
+final class PhotoUploader extends Solo<UploadState> {
+  final Future<void> Function(List<String> photos) _send;
+  late final _photos = collect<UploadState, String, void>(
+    (ctx, photos) async {
+      ctx.emit(Uploading(photos.length));
+      await ctx.abandonable(() => _send(photos));
+      ctx.emit(const Waiting());
+    },
+    key: 'upload',
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
+    ifFailed: (state, error, stackTrace) => UploadFailed(error),
+    ifCancelled: (state, cancelled) => const Waiting(),
+  );
+
+  PhotoUploader(this._send) : super(const Waiting());
+
+  Job<void> addPhoto(String path) => _photos.add(path);
+}
+```
+
+```text
+uploading: Uploading(3)
+after close(): Waiting
+a failed upload: UploadFailed(Bad state: offline)
+```
+
+Группа, которая так и не началась, не вызывает ни одного обработчика состояния:
+отменённая в своём окне или пока ждёт в очереди, убранная `clear`, ещё ждущая,
+когда контроллер закрывается, или отклонённая `canStart`. Группа, которую
+`canStart` пропустил, уже начата, даже до вызова её обработчика: отмена
+в `onStart` вызывает `ifCancelled`, а обработчик так и не видит событий.
+
 Отмена ожидающей debounce-группы убирает её таймер. Удаление или очистка
 throttle-групп сохраняет уже начатый интервал, поэтому новое событие не обходит
 ограничение. Таймер истекает один раз; он заводится заново, когда группа

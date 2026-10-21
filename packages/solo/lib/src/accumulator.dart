@@ -59,6 +59,8 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   final bool _cancellable;
   final Duration? _timeout;
   final String Function()? _describe;
+  final S Function(S, Object, StackTrace)? _ifFailed;
+  final S Function(S, Cancelled)? _ifCancelled;
   var _merging = false;
   Timer? _throttleTimer;
 
@@ -76,6 +78,8 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     required bool cancellable,
     required Duration? timeout,
     required String Function()? describe,
+    required S Function(S, Object, StackTrace)? ifFailed,
+    required S Function(S, Cancelled)? ifCancelled,
   })  : _timeout = _checkTimeout(timeout, cancellable: cancellable),
         _seed = seed,
         _merge = merge,
@@ -86,7 +90,9 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
         _canStart = canStart,
         _keepWhile = keepWhile,
         _cancellable = cancellable,
-        _describe = describe;
+        _describe = describe,
+        _ifFailed = ifFailed,
+        _ifCancelled = ifCancelled;
 
   /// The check `JobBase` makes of every job, made once here, when the
   /// accumulator is created: its jobs are built on [add], and a mistake of
@@ -139,6 +145,8 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
         timeout: _timeout,
         describe: _describe,
         observer: _solo._jobObserver,
+        ifFailed: _ifFailed,
+        ifCancelled: _ifCancelled,
       )
         .._accumulation = group
         // Every event of the group gets this job back, so a plain `then`

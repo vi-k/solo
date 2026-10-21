@@ -94,8 +94,8 @@ parameters after it. The first type argument of each is the working type, in
 | `keepWhile` | `run`, `job`, `collect`, `accumulate` | Keeps the job while the state allows it, and on `false` cancels it `Cancelled(rules: keepWhile)` | [The rules](state.md#the-rules) |
 | `cancellable` | `run`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing | [A whole job](cancellation.md#a-whole-job) |
 | `timeout` | `run`, `job`, `collect`, `accumulate` | A deadline counted from the start of the body, after which the job ends `Cancelled(timeout)` | [A deadline of a job](cancellation.md#a-deadline-of-a-job) |
-| `ifFailed` | `run`, `job` | The state to write when the job fails, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
-| `ifCancelled` | `run`, `job` | The state to write when the job is cancelled, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
+| `ifFailed` | `run`, `job`, `collect`, `accumulate` | The state to write when the job fails, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
+| `ifCancelled` | `run`, `job`, `collect`, `accumulate` | The state to write when the job is cancelled, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
 
 ## SoloContext
 

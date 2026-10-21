@@ -15,6 +15,7 @@ final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
   final errors = <Object>[];
   final unanswered = <Object>[];
   void Function(S state)? changed;
+  void Function(Job<Object?> job)? started;
 
   _Controller(super.initialState);
 
@@ -26,6 +27,9 @@ final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
     log.add('state:$current');
     changed?.call(current);
   }
+
+  @override
+  void onStart(Job<Object?> job) => started?.call(job);
 
   @override
   void onFinish(Job<Object?> job) => log.add('finish:${job.key}');
@@ -841,6 +845,325 @@ void main() {
         expect(notified, 1);
         solo.close();
         clock.flushMicrotasks();
+      });
+    });
+  });
+
+  group('an accumulator', () {
+    test('runs ifCancelled once for a cancelled group of three events', () {
+      _run((solo, clock) {
+        final calls = <List<int>>[];
+        final events = solo.collect<String, int, void>(
+          ifFailed: (_, __, ___) => fail('unexpected failure'),
+          ifCancelled: (state, cancelled) => 'cancelled:$state',
+          (ctx, batch) async {
+            calls.add(batch);
+            ctx.emit('sending:${batch.length}');
+            await ctx.abandonable(() => Completer<void>().future);
+          },
+        );
+        final job = events.add(1);
+        events
+          ..add(2)
+          ..add(3);
+        clock.flushMicrotasks();
+        expect(calls, [
+          [1, 2, 3],
+        ]);
+        job.cancel();
+        clock.flushMicrotasks();
+        expect(job.outcome, isA<Cancelled>());
+        expect(solo.currentState, 'cancelled:sending:3');
+        expect(solo.log.where((entry) => entry.startsWith('state:')), [
+          'state:sending:3',
+          'state:cancelled:sending:3',
+        ]);
+      });
+    });
+
+    test('runs ifFailed for a failed group and keeps the failure', () {
+      _run((solo, clock) {
+        final failure = StateError('upload failed');
+        final job = solo
+            .collect<String, int, void>(
+              ifFailed: (state, error, _) {
+                expect(error, same(failure));
+                return 'failed:$state';
+              },
+              ifCancelled: (_, __) => fail('unexpected cancellation'),
+              (ctx, batch) async {
+                ctx.emit('sending:${batch.length}');
+                throw failure;
+              },
+            )
+            .add(1)
+          ..ignoreFailure();
+        clock.flushMicrotasks();
+        expect(solo.currentState, 'failed:sending:1');
+        expect(job.outcome, isA<Failed>());
+        expect(job.value, throwsA(same(failure)));
+        clock.flushMicrotasks();
+      });
+    });
+
+    test('runs ifCancelled when close() cancels a running group', () {
+      _run((solo, clock) {
+        Cancelled? seen;
+        final job = solo.collect<String, int, void>(
+          ifCancelled: (_, cancelled) {
+            seen = cancelled;
+            return 'waiting';
+          },
+          (ctx, batch) async {
+            ctx.emit('-99');
+            await ctx.abandonable(() => Completer<void>().future);
+          },
+        ).add(1);
+        clock.flushMicrotasks();
+        expect(solo.currentState, '-99');
+        solo.close();
+        clock.flushMicrotasks();
+        expect(job.outcome, isA<Cancelled>());
+        expect(seen?.reason, isA<ClosedCancelReason>());
+        expect(solo.currentState, 'waiting');
+      });
+    });
+
+    test('passes a timeout to ifCancelled', () {
+      _run((solo, clock) {
+        Cancelled? seen;
+        final job = solo.collect<String, int, void>(
+          timeout: const Duration(seconds: 1),
+          ifCancelled: (_, cancelled) {
+            seen = cancelled;
+            return 'timed out';
+          },
+          (ctx, batch) => ctx.abandonable(() => Completer<void>().future),
+        ).add(1);
+        clock
+          ..flushMicrotasks()
+          ..elapse(const Duration(seconds: 1));
+        expect(job.outcome, isA<Cancelled>());
+        expect(seen?.reason, isA<TimeoutCancelReason>());
+        expect(solo.currentState, 'timed out');
+      });
+    });
+
+    test('skips both handlers for a group removed before it started', () {
+      _run((solo, clock) {
+        final events = solo.collect<String, int, void>(
+          timing: AccumulationTiming.debounce(
+            const Duration(milliseconds: 200),
+          ),
+          ifFailed: (_, __, ___) => fail('failure callback'),
+          ifCancelled: (_, __) => fail('cancellation callback'),
+          (_, __) async => fail('started'),
+        );
+        final cancelled = events.add(1)..cancel();
+        clock.flushMicrotasks();
+        expect(cancelled.outcome, isA<Cancelled>());
+        final closed = events.add(2);
+        clock.flushMicrotasks();
+        solo.close();
+        clock.flushMicrotasks();
+        expect(closed.outcome, isA<Cancelled>());
+        final late = events.add(3);
+        clock.flushMicrotasks();
+        expect(late.outcome, isA<Cancelled>());
+        expect(solo.currentState, 'initial');
+      });
+    });
+
+    test('skips both handlers for a group keepWhile cancelled', () {
+      _run((solo, clock) {
+        final job = solo
+            .collect<String, int, void>(
+              keepWhile: (state) => state != 'disconnected',
+              ifFailed: (_, __, ___) => fail('failure callback'),
+              ifCancelled: (_, __) => fail('cancellation callback'),
+              (ctx, batch) => ctx.abandonable(() => Completer<void>().future),
+            )
+            .add(1);
+        clock.flushMicrotasks();
+        solo.external('disconnected');
+        clock.flushMicrotasks();
+        expect(job.outcome, isA<Cancelled>());
+        expect(solo.currentState, 'disconnected');
+      });
+    });
+
+    test('runs ifCancelled for a cancellation in onStart', () {
+      _run((solo, clock) {
+        final seen = <String>[];
+        solo.started = (job) => job.cancel();
+        final job = solo.collect<String, int, void>(
+          ifCancelled: (_, cancelled) {
+            seen.add('ifCancelled ${cancelled.reason}');
+            return 'cancelled';
+          },
+          (_, __) async => seen.add('handler'),
+        ).add(1);
+        clock.flushMicrotasks();
+        expect(job.outcome, isA<Cancelled>());
+        expect(seen, ['ifCancelled manual']);
+        expect(solo.currentState, 'cancelled');
+      });
+    });
+
+    test('skips both handlers for a canStart refusal and a cleared queue', () {
+      _run((solo, clock) {
+        final refused = solo
+            .collect<String, int, void>(
+              canStart: (_) => false,
+              ifFailed: (_, __, ___) => fail('failure callback'),
+              ifCancelled: (_, __) => fail('cancellation callback'),
+              (_, __) async => fail('started'),
+            )
+            .add(1);
+        clock.flushMicrotasks();
+        expect(refused.outcome, isA<Cancelled>());
+        final cleared = solo
+            .collect<String, int, void>(
+              timing: AccumulationTiming.debounce(
+                const Duration(milliseconds: 200),
+              ),
+              ifFailed: (_, __, ___) => fail('failure callback'),
+              ifCancelled: (_, __) => fail('cancellation callback'),
+              (_, __) async => fail('started'),
+            )
+            .add(1);
+        clock.flushMicrotasks();
+        solo.queue.clear();
+        clock
+          ..flushMicrotasks()
+          ..elapse(const Duration(milliseconds: 200));
+        expect(cleared.outcome, isA<Cancelled>());
+        expect(solo.currentState, 'initial');
+      });
+    });
+
+    test('runs ifCancelled when a restart of its key replaces the group', () {
+      _run((solo, clock) {
+        Cancelled? seen;
+        final group = solo.collect<String, int, void>(
+          key: 'upload',
+          ifCancelled: (state, cancelled) {
+            seen = cancelled;
+            return state;
+          },
+          (ctx, _) => ctx.abandonable(() => Completer<void>().future),
+        ).add(1);
+        clock.flushMicrotasks();
+        solo.run<String, void>(
+          key: 'upload',
+          policy: Policy.restart,
+          (ctx) async => ctx.emit('restarted'),
+        );
+        clock.flushMicrotasks();
+        expect(group.outcome, isA<Cancelled>());
+        expect(seen?.reason, isA<ReplacedCancelReason>());
+        expect(solo.currentState, 'restarted');
+      });
+    });
+
+    test('runs ifFailed for a group a draining close waits for', () {
+      _run((solo, clock) {
+        final job = solo
+            .collect<String, int, void>(
+              timing: AccumulationTiming.debounce(
+                const Duration(milliseconds: 200),
+              ),
+              ifFailed: (_, error, __) => 'failed:$error',
+              (_, __) async => throw StateError('offline'),
+            )
+            .add(1)
+          ..ignoreFailure();
+        clock.flushMicrotasks();
+        solo.close(mode: SoloCloseMode.drain).ignore();
+        clock.elapse(const Duration(milliseconds: 200));
+        expect(job.outcome, isA<Failed>());
+        expect(solo.currentState, 'failed:Bad state: offline');
+      });
+    });
+
+    test('accumulate passes both handlers on', () {
+      _run((solo, clock) {
+        final values = solo.accumulate<String, int, void>(
+          merge: (accumulated, incoming) => accumulated + incoming,
+          ifFailed: (state, error, _) => 'failed:$error',
+          ifCancelled: (state, _) => 'cancelled',
+          (ctx, sum) async {
+            if (sum > 2) throw StateError('$sum');
+            await ctx.abandonable(() => Completer<void>().future);
+          },
+        );
+        final failed = values.add(1);
+        values.add(2);
+        failed.ignoreFailure();
+        clock.flushMicrotasks();
+        expect(solo.currentState, 'failed:Bad state: 3');
+        final cancelled = values.add(1);
+        clock.flushMicrotasks();
+        cancelled.cancel();
+        clock.flushMicrotasks();
+        expect(solo.currentState, 'cancelled');
+      });
+    });
+
+    test('moves a group under replace without a handler call', () {
+      _run((solo, clock) {
+        final gate = Completer<void>();
+        final seen = <String>[];
+        solo.run<String, void>((_) => gate.future);
+        final events = solo.collect<String, int, void>(
+          policy: AccumulationPolicy.replace,
+          ifFailed: (_, __, ___) => fail('failure callback'),
+          ifCancelled: (_, __) {
+            seen.add('ifCancelled');
+            return 'cancelled';
+          },
+          (ctx, batch) async {
+            seen.add('handler $batch');
+            ctx.emit('sending:${batch.length}');
+            await ctx.abandonable(() => Completer<void>().future);
+          },
+        );
+        final group = events.add(1);
+        solo.run<String, void>((_) async => seen.add('between'));
+        expect(events.add(2), same(group));
+        clock.flushMicrotasks();
+        expect(seen, isEmpty);
+        gate.complete();
+        clock.flushMicrotasks();
+        expect(seen, ['between', 'handler [1, 2]']);
+        group.cancel();
+        clock.flushMicrotasks();
+        expect(seen, ['between', 'handler [1, 2]', 'ifCancelled']);
+        expect(solo.currentState, 'cancelled');
+      });
+    });
+
+    test('calls neither handler for a group that turns cancellation down', () {
+      _run((solo, clock) {
+        final gate = Completer<void>();
+        final job = solo.collect<String, int, void>(
+          cancellable: false,
+          ifFailed: (_, __, ___) => fail('failure callback'),
+          ifCancelled: (_, __) => fail('cancellation callback'),
+          (ctx, _) async {
+            ctx.emit('sending');
+            await gate.future;
+          },
+        ).add(1);
+        clock.flushMicrotasks();
+        job.cancel();
+        solo.close().ignore();
+        clock.flushMicrotasks();
+        expect(job.isFinished, isFalse);
+        gate.complete();
+        clock.flushMicrotasks();
+        expect(job.outcome, isA<Done<void>>());
+        expect(solo.currentState, 'sending');
       });
     });
   });

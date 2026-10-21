@@ -58,7 +58,7 @@
 | Ошибка стартового правила: `canStart` бросил вместо ответа | `onError` | Так же: задача кончается `Failed` с ней |
 | Ошибка тела, а задача кончается `Cancelled` | `onError` | `onUnanswered`, если у задачи не звали `ignoreFailure()` |
 | Поздняя ошибка операции, которую `abandonable` перестал ждать | `onError` | `onUnanswered` |
-| Ошибка уборщика, колбэка `ctx.onCancel`, слушателя `whenCancelled` или `whenFinished` или обработчика состояния у `run` | `onError` | `onUnanswered` |
+| Ошибка уборщика, колбэка `ctx.onCancel`, слушателя `whenCancelled` или `whenFinished` или обработчика состояния задачи | `onError` | `onUnanswered` |
 | `keepWhile`, который бросил, когда его перепроверяло изменение состояния | `onError` | `onUnanswered` |
 | Ошибка работы, отданной `ctx.unattended` | `onError` | `onUnanswered` |
 | Ошибка ветки `ctx.runAll`, которую группа не бросила | `onError` | `onUnanswered`, если у ветки не звали `ignoreFailure()` |
@@ -217,7 +217,7 @@ final class ProfileController extends Solo<ProfileState> {
 
 - операция, которую `abandonable` перестал ждать, если она упала позже;
 - то, что задача зовёт вне своего тела: уборщик, колбэк `ctx.onCancel`,
-  слушатель `whenCancelled` или `whenFinished`, обработчик состояния у `run`;
+  слушатель `whenCancelled` или `whenFinished`, обработчик состояния задачи;
 - `keepWhile`, который бросил, когда его перепроверяло изменение состояния;
 - работа, отданная `ctx.unattended`;
 - провал ветки `ctx.runAll`, который группа не бросила;

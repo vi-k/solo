@@ -540,7 +540,7 @@ void main() {
         _says(
           '- what the job calls outside its body: a disposer, a '
           '`ctx.onCancel` callback, a `whenCancelled` or `whenFinished` '
-          'listener, a state handler of `run`;',
+          'listener, a state handler of a job;',
         );
         _says(
           '- a `keepWhile` that throws when a change of state re-checks it;',
@@ -588,7 +588,7 @@ void main() {
         _row(
           'An error of a disposer, a `ctx.onCancel` callback, a '
               '`whenCancelled` or `whenFinished` listener, or a state handler '
-              'of `run`',
+              'of a job',
           '`onError`',
           '`onUnanswered`',
         );
@@ -1568,7 +1568,7 @@ void main() {
 
       const callbacks = 'An error of a disposer, a `ctx.onCancel` callback, a '
           '`whenCancelled` or `whenFinished` listener, or a state handler of '
-          '`run`';
+          'a job';
       const fromOutside = 'A `Cancelled` from outside the body, such as an '
           "abandoned operation that ended in another job's cancellation";
       expect(rows, [
