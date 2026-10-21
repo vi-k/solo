@@ -506,6 +506,52 @@ void main() {
       expect(trace(), ['shown 21']);
     });
 
+    for (final answerer in [false, true]) {
+      test(
+          'every branch cancelled before loaded fails: loaded answers for '
+          'it, answerer: $answerer', () {
+        // The source is made in one zone and continued in another, so the
+        // zone that gets the failure says who answered for it.
+        final made = <String>[];
+        final continued = <String>[];
+        final answers = _Answers();
+        fakeAsync((async) {
+          late Job<String> loaded;
+          runZonedGuarded(
+            () => loaded = Job<String>(
+              key: 'loaded',
+              observer: answerer ? answers : null,
+              (ctx) => ctx.join(() async {
+                await delay(30);
+                throw StateError('offline');
+              }),
+            ),
+            (error, stackTrace) => made.add('$error'),
+          );
+          late List<Job<Object?>> branches;
+          runZonedGuarded(
+            () => branches = [
+              loaded.shared().then<int>((ctx, text) => int.parse(text)),
+              loaded.shared().then<void>((ctx, text) => stubs.showText(text)),
+            ],
+            (error, stackTrace) => continued.add('$error'),
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          for (final branch in branches) {
+            branch.cancel().ignore();
+          }
+          async.flushTimers();
+          expect('${loaded.outcome}', 'Failed(Bad state: offline)');
+        });
+        expect(continued, isEmpty);
+        expect(made, answerer ? isEmpty : ['Bad state: offline']);
+        expect(
+          answers.answered,
+          answerer ? ['Job(loaded): Bad state: offline'] : isEmpty,
+        );
+      });
+    }
+
     test('two jobs that wait: cancelling one leaves the source and the other',
         () {
       final printed = printedBy(page.twoWaiting);
@@ -763,4 +809,13 @@ final class _Heard extends JobObserver {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       heard.add('$error');
+}
+
+/// Answers for every failure it is asked about and keeps the list.
+final class _Answers extends JobObserver with JobAnswerer {
+  final answered = <String>[];
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      answered.add('$job: $error');
 }

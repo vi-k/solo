@@ -99,13 +99,14 @@ Two things changed, and each repairs one fault.
 
 `ctx.run(child, dispose: ...)` repairs the leak. It registers the value on the
 parent the moment the branch hands it over. From then on, the parent closes the
-value when it ends, whatever it ends with: after the archive is written, when
-the other branch fails or is cancelled, or when the parent is cancelled in
-between. A branch that never returned closes its source through the `discard`
-it opened the source with. This would repair the leak under `Future.wait` too.
-It is the rule of [Registering on arrival](cleanup.md#registering-on-arrival)
-on the cleanup page. The callback is `dispose` rather than `discard`, because
-the parent keeps the sources to itself.
+value when it ends, whatever it ends with. The parent may end after the archive
+is written, when the other branch fails or is cancelled, or when it is
+cancelled in between. A branch that never returned closes its source through
+the `discard` it opened the source with. This would repair the leak under
+`Future.wait` too. It is the rule of
+[Registering on arrival](cleanup.md#registering-on-arrival) on the cleanup
+page. The callback is `dispose` rather than `discard`, because the parent keeps
+the sources to itself.
 
 `.wait` repairs the outcome. It collects every error into one
 `ParallelWaitError`, together with the values of the branches that succeeded.
@@ -146,18 +147,11 @@ What `runAll` throws is decided by the final outcomes: a real failure if there
 is one, otherwise the first cancellation that arrived, other than those the
 group asked for itself. It throws the object that outcome carries, as
 `await ctx.run(child)` would. A failure the group received and did not throw
-goes the way of an error that no outcome carries. When an engine ends a branch
-by hand with a value after the group heard its body fail, the group goes by
-that failure and not by the branch's `Done`; see
-[Not waiting for the checkpoint](extending.md#not-waiting-for-the-checkpoint)
-on the extending page.
-
-The branches of a group wait for one another. A branch whose body has returned
-a value does not unwind until every branch has ended its body and its children,
-or until the body of one has ended without a value. Its `dispose` callbacks
-wait with it. So a branch that waits for a sibling can hang the group;
-[Branches that wait for each other](#branches-that-wait-for-each-other) shows
-how.
+goes the way of an error that no outcome carries. An engine may end a branch by
+hand with a value after the group heard its body fail. The group then goes by
+that failure and not by the branch's `Done`: see
+[Finishing a job by hand](extending.md#finishing-a-job-by-hand) on the
+extending page.
 
 | Form | Waits for | Stops the others | Values of the branches that succeeded |
 | --- | --- | --- | --- |
@@ -170,20 +164,27 @@ Use `[ctx.run(a), ctx.run(b)].wait` when the branches do not depend on each
 other's failure, or when one of them waits for another. Use `ctx.runAll` when a
 result that misses one of its parts is of no use anyway.
 
-On success `ctx.runAll` hands the values over once every branch has run its
-cleanup, and before the branches end. A branch that has run its cleanup waits
-there for the cleanup of the others, and a cleanup it registers in that wait,
-from a timer or an event of its own, runs after the values arrive, under the
-parent, which waits for its children as always. On failure it waits for every
-branch to end, so by the time the error arrives everything the branches took is
-closed.
-
 None of the forms closes what the branches returned: a form only hands the
 values over or drops them. A value is closed by the registration its receiver
 made when it arrived. Under `ctx.run`, that is the `dispose` passed with each
 call. `ctx.runAll` takes no such argument, and
 [The list a group returns](#the-list-a-group-returns) shows how to register
 that list.
+
+The branches of a group wait for one another. A branch whose body has returned
+a value does not unwind until every branch has ended its body and its children,
+or until the body of one has ended without a value. Its `dispose` callbacks
+wait with it. So a branch that waits for a sibling can hang the group;
+[Branches that wait for each other](#branches-that-wait-for-each-other) shows
+how.
+
+On success `ctx.runAll` hands the values over once every branch has run its
+cleanup, and before the branches end. A branch that has run its cleanup waits
+there for the cleanup of the others. A cleanup it registers in that wait, from
+a timer or an event of its own, runs after the values arrive, under the parent,
+which waits for its children as always. On failure `ctx.runAll` waits for every
+branch to end, so by the time the error arrives everything the branches took is
+closed.
 
 ## Branches that wait for each other
 
@@ -281,13 +282,15 @@ Job.deferred<Source>((ctx) async {
 ```
 
 Ownership is the same rule as everywhere else, and a group is where it starts
-to matter. A resource a branch keeps for itself goes to the `dispose` of
-`ctx.abandonable` and `ctx.join`, or to `onDispose`. The end of the branch
-closes it, whatever the outcome. A resource a branch hands out goes to their
-`discard`, or to `onDiscard`. It then lives until the group succeeds in full,
-and reaches the caller open. When the group ends in anything else, the branch
-that accepted the stop closes what it took, before the group returns. By the
-time the parent catches the error, that resource is already closed.
+to matter. The member the branch registers the release with decides who closes
+the resource and when:
+
+| The branch registers the release with | The group succeeds in full | The group ends in anything else |
+| --- | --- | --- |
+| The `dispose` of `ctx.abandonable` and `ctx.join`, or `onDispose`: a resource the branch keeps for itself | The end of the branch closes it | The end of the branch closes it |
+| Their `discard`, or `onDiscard`: a resource the branch hands out | It reaches the caller open | The branch that accepted the stop closes it before the group returns: by the time the parent catches the error, it is closed |
+| The `discard` of `ctx.run(child, discard: ...)`: a resource from a child of the branch | It reaches the caller open | The same as in the row above: the registration is the branch's own |
+| Any `discard`, in a branch created with `cancellable: false` | It reaches the caller open | No registration: the branch refuses the stop and ends `Done`, so the `discard` does not run. The body closes the value through the branch's job, as below |
 
 A branch can also get the resource from a child of its own:
 
@@ -305,11 +308,10 @@ over and ends `Done` inside the branch, before the group has decided anything,
 and a `discard` runs only if its job does not end `Done`. Here the source
 reached the branch. So the branch registers the source again the moment it
 arrives, with the `discard` passed to `ctx.run`. That registration is the
-branch's own: the source lives until the group succeeds in full, and the branch
-closes it if the group ends in anything else. The cleanup page shows the call
-in [Registering on arrival](cleanup.md#registering-on-arrival).
+branch's own, the third row of the table. The cleanup page shows the call in
+[Registering on arrival](cleanup.md#registering-on-arrival).
 
-One thing stays open, and it follows from
+The last row follows from
 [Choosing the callback](cleanup.md#choosing-the-callback) on the cleanup page.
 A branch created with `cancellable: false` refuses the stop and ends `Done`.
 Its value counts as handed over through its own `Job.value`: a `discard` the

@@ -371,6 +371,17 @@ CHANGELOG, `docs/records/` и `docs/settled.md` правлю я. Принима�
    the cleanup stack. How the core runs the timer:»: первый пункт, о старте
    таймера, двоеточия не продолжал. `whenCancelled` в абзац о самоотмене
    не добавлен: на странице его не было, и это было бы новое утверждение.
+5. `groups.md` и `chains.md`. Длинных фраз в `groups.md` 3, стало 0;
+   в `chains.md` их не было. «What a group hands back» — таблица по члену
+   регистрации, четыре строки, код `cancellable: false` под ней. Механика
+   барьеров ушла в конец раздела «When one failure makes the rest pointless»
+   двумя абзацами, ссылка ведёт на `extending.md#finishing-a-job-by-hand`.
+   В `chains.md` сказано, кто отвечает за провал `loaded`, когда обе ветки
+   отменены до него; новый тест в `chains_rakes_test.dart` держит оба случая,
+   мутация «отменена одна ветка из двух» краснеет на обоих (`+0 -2`), прогнана
+   и при приёмке. При приёмке ячейка «Nobody» строки `cancellable: false` стала
+   «No registration: … The body closes the value through the branch's job, as
+   below»: «никто» спорило с кодом под таблицей, где значение закрывает тело.
 
 ## Ревью плана
 

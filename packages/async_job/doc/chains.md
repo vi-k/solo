@@ -121,8 +121,15 @@ reach it. `parsed` asks its source to cancel, and its source is the handle: the
 handle ends at once and leaves `loaded` be. Each call makes another handle, so
 each branch has a source of its own. A cancellation that `loaded` accepts still
 reaches every handle, and each ends `Cancelled(chain)` without waiting for the
-cleanup of `loaded`. A failure of `loaded` reaches every handle still there,
-and it is answered for once however many of them carry it.
+cleanup of `loaded`.
+
+A failure of `loaded` reaches every handle still there, and it is answered for
+once however many of them carry it. If `parsed` and `shown` were both cancelled
+before `loaded` failed, no handle is left to carry the failure. `loaded` then
+answers for it itself, unless something observes it, as the source does in the
+second row of [When a link fails](#when-a-link-fails). It answers in
+`onUnanswered` of its observer if the observer mixes in `JobAnswerer`,
+otherwise in the zone `loaded` was made in, not the one `then` was called in.
 
 ### Jobs that wait for the source
 
@@ -263,7 +270,12 @@ rows depends on what `opened` does with it:
 | --- | --- |
 | `archived` receives the rows | `archived`, through `ctx.onDispose` |
 | `archived` is cancelled while `opened` opens, and `opened` takes the cancellation | `opened`, through its `discard`, when the rows arrive |
-| The same, and `opened` refuses it: `cancellable: false`, or it has finished by the time the request arrives | The caller, through the handle: `(await opened.value).close()`, as for [a branch that refuses a group's stop](groups.md#what-a-group-hands-back) |
+| The same, and `opened` refuses it: it was made with `cancellable: false` | The caller, through the handle: `(await opened.value).close()` |
+| The same, and `opened` has finished by the time the request arrives | The caller, through the handle, the same way |
+
+The caller closes the rows through the handle the way the body of a group
+closes the value of
+[a branch that refuses the group's stop](groups.md#what-a-group-hands-back).
 
 ## A continuation of a child
 
