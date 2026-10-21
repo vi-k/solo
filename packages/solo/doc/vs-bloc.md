@@ -325,6 +325,10 @@ with `ctx.run`: the parent waits for its children even when its body does not
 await them, the queue does not start the next job until then, and `close()`
 waits for them too. The page [Children and chains](children.md) covers them.
 
+**What solo gives:** after upload and refresh the state is
+`NotesState([n0, n1], uploading: false)`, because the root jobs of a controller
+run one at a time and there is no transformer to pass.
+
 ## An observer fails during a state update
 
 A recorder starts its native recording, publishes `Recording`, then arms a
@@ -473,6 +477,10 @@ the operation's control flow, it does not take over the reporting. The
 controller's own hook goes the same way: had `_journal.note` thrown, its error
 would reach the zone too, and the observer would not hear it, because its
 `onError` is for what a job threw, not for what a hook threw.
+
+**What solo gives:** an observer that throws changes neither the job's outcome
+nor the queue: the state reaches `Recording`, the meter is armed, and its error
+goes to the zone and nowhere else.
 
 ## Closing and cancelling in-flight work
 
@@ -626,6 +634,10 @@ That call throws `Bad state: Job(send) has already finished, cannot emit`, in
 debug and release alike, and the state stays as it was. Where bloc has an
 assertion that disappears in release, this is an ordinary error that does not.
 
+**What solo gives:** `close()` cancels the running job at `ctx.abandonable`,
+before the reply update and `markReplyRead()`, and a queued message or a call
+after `close()` ends `Cancelled(closed)` with no `isClosed` guard.
+
 ## Leaving a loading state when the work is cancelled
 
 Cancellation can also happen while the controller remains open. A refresh
@@ -739,6 +751,10 @@ the solo job invalid, its final state handlers are skipped;
 explains external state, and
 [State after failure or cancellation](state.md#state-after-failure-or-cancellation)
 on the state page gives the rules of these handlers.
+
+**What solo gives:** `ifCancelled` returns the indicator to `Initial` after the
+cancelled job's cleanup, `ifFailed` resets it on failure, and `cancelRefresh()`
+finds the refresh to cancel by its key.
 
 ## Restarting one operation within a shared queue
 
@@ -942,6 +958,10 @@ their default sequential policy. The token is local to the `seek` body, and
 callers can inspect the outcome of each `seek`, including `Cancelled(replaced)`
 for a replaced request.
 
+**What solo gives:** with `Policy.restart` on `seek` only, the device gets
+`[play, seek 3, pause]`, a `seek` in flight stops before its replacement
+starts, and every `seek` has an outcome to read.
+
 ## Typed methods with queued execution
 
 A map exposes `moveTo` and `setZoom`. Callers should invoke them as methods of
@@ -1073,6 +1093,10 @@ operation, or omit waiting. The returned job itself is not a `Future`; what
 becomes of the failure of a job nobody waits for is in
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page.
+
+**What solo gives:** typed methods return a `Job`, and under `Policy.restart`
+the first move stops before the latest begins, the middle one never starts and
+the map ends at `MapState(3, z4)`.
 
 ## Removing selected pending work
 
@@ -1280,6 +1304,11 @@ Here `run<Connected, void>` is checked when the job starts, so the same read
 ends as `Cancelled(rules: is not Connected)` and the call is never made. In
 bloc the same guard is written by hand: one more `if` in the `switch`, for
 every command that needs it.
+
+**What solo gives:** `queue.removeWhere` takes the pending read out at the call
+to `disconnect`, `cancellable: false` makes a sweep skip the rename, and a read
+queued behind the disconnect ends `Cancelled(rules: is not Connected)` and
+never reaches the device.
 
 ## Awaiting a particular request
 
@@ -1537,6 +1566,10 @@ Sharing an in-memory job only deduplicates concurrent calls to this controller.
 Payment retries across process restarts or network failures also require an
 idempotent payment API; neither example provides that.
 
+**What solo gives:** with a key per order and `Policy.droppable`, the callers
+of one order share its job and receipt, another order gets its own job, and the
+platform handler reads its own request's outcome.
+
 ## Reacting to an independent external state change
 
 A controller builds a report from data already on the device. The session is
@@ -1687,6 +1720,10 @@ additionally be reached through `ctx.onCancel`, as in
 Final `ifFailed` and `ifCancelled` state handlers, if supplied, are disabled by
 an incompatible external update, so they do not overwrite `SignedOut` during
 cleanup.
+
+**What solo gives:** `externalSetState` publishes `SignedOut` at once instead
+of queueing it behind the build, and the rule of `run<SignedIn, void>` cancels
+the build with `Cancelled(rules: is not SignedIn)`.
 
 ## Finishing an in-flight write before restarting
 
@@ -1846,6 +1883,10 @@ those children and their cleanup. Work intentionally allowed to outlive the job
 can use `ctx.unattended`, whose errors are reported through the job's hooks; it
 does not keep the queue occupied.
 
+**What solo gives:** `ctx.join` around each write is the one checkpoint: a
+replaced upload ends `Cancelled(replaced)` after its current write, no two
+writes overlap, and a `Broken` state stops the upload the same way.
+
 ## Releasing a resource returned after cancellation
 
 An audio editor opens a native PCM buffer to draw a waveform. The user selects
@@ -1960,3 +2001,7 @@ Late disposal can happen after the controller closes. In solo, `close()`
 finishes before the obsolete buffer arrives; it is released when decoding
 finally returns it. Use `join` when both the operation and its resource release
 must finish before the queue or controller proceeds.
+
+**What solo gives:** `dispose` on `ctx.abandonable` releases every buffer, the
+late one included, while the replacement starts without waiting for the
+obsolete decode.

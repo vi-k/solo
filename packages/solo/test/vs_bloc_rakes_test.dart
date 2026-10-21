@@ -218,6 +218,31 @@ void main() {
       );
     });
 
+    test('each section ends with one line of what solo gives', () {
+      for (final MapEntry(key: number, value: text) in _sections().entries) {
+        // The Solo heading is the last of a section, so the last paragraph
+        // stands under it.
+        expect(
+          text.trimRight().split('\n\n').last,
+          startsWith('**What solo gives:** '),
+          reason: 'section $number',
+        );
+        expect(
+          '**What solo gives:**'.allMatches(text),
+          hasLength(1),
+          reason: 'section $number',
+        );
+      }
+      // The translation carries the same line under each of its sections.
+      final translation =
+          File('../../docs/ru/solo/vs-bloc.md').readAsStringSync();
+      expect(
+        RegExp(r'^\*\*Что даёт solo:\*\* ', multiLine: true)
+            .allMatches(translation),
+        hasLength(_sections().length),
+      );
+    });
+
     test('the prose writes a dash as a dash', () {
       expect(_prose().contains(' -- '), isFalse);
     });
@@ -298,6 +323,8 @@ void main() {
             .split('\n'),
       );
       _says('with job keys where that run has event types');
+      _says('**What solo gives:** after upload and refresh the state is '
+          '`NotesState([n0, n1], uploading: false)`');
     });
 
     test('under join a cancelled upload holds the queue for the server', () {
@@ -391,6 +418,8 @@ void main() {
       _says('The root jobs of a controller run one at a time, and that is '
           'the only way they run. Ready jobs start in the order they were '
           'added.');
+      _says('because the root jobs of a controller run one at a time and '
+          'there is no transformer to pass.');
     });
 
     test('two things change that order, and the code asks for each', () {
@@ -548,6 +577,9 @@ void main() {
           "neither the job's outcome nor the queue.");
       _says('The observer, installed as `Solo.observer`, and the '
           "controller's own hooks are invoked independently.");
+      _says('**What solo gives:** an observer that throws changes neither '
+          "the job's outcome nor the queue: the state reaches `Recording`, the "
+          'meter is armed');
     });
 
     test('the error of a hook goes to the zone and nowhere else', () {
@@ -571,6 +603,7 @@ void main() {
       _says("Each hook's exception is reported to the current Dart zone");
       _says('The telemetry error goes to `Zone.current.handleUncaughtError`');
       _says('and nowhere else');
+      _says('and its error goes to the zone and nowhere else.');
     });
 
     test('a throwing hook of the controller leaves the observer alone', () {
@@ -626,6 +659,9 @@ void main() {
           'cancels the job.');
       _says('A message still queued behind the running one never reaches '
           'the API: it ends `Cancelled(closed)` without starting');
+      _says('**What solo gives:** `close()` cancels the running job at '
+          '`ctx.abandonable`, before the reply update and `markReplyRead()`, '
+          'and a queued message');
     });
 
     test('a call after close comes back already Cancelled(closed)', () {
@@ -638,6 +674,8 @@ void main() {
       expect('$atOnce', 'Cancelled(closed)');
       _says('Calls made after closure return jobs already completed with '
           '`Cancelled(closed)`, so the call site needs no `isClosed` guard.');
+      _says('or a call after `close()` ends `Cancelled(closed)` with no '
+          '`isClosed` guard.');
     });
 
     test('markReplyRead is a root job of its own, not a child of send', () {
@@ -790,6 +828,7 @@ void main() {
           'cancels it');
       _says('It hands back the job it is cancelling rather than a future');
       _says("solo's state handler runs after the cancelled job's cleanup");
+      _says('and `cancelRefresh()` finds the refresh to cancel by its key.');
     });
 
     test('with nothing to cancel it answers null', () {
@@ -847,6 +886,8 @@ void main() {
       ]);
       _says('`ctx.abandonable` ends the wait for the API, and `ifCancelled` '
           'returns `Initial` before the queue proceeds.');
+      _says('**What solo gives:** `ifCancelled` returns the indicator to '
+          "`Initial` after the cancelled job's cleanup");
     });
 
     test('a refresh that succeeds or fails leaves Initial as well', () {
@@ -881,6 +922,7 @@ void main() {
       _says('A successful refresh publishes `Initial` from the body; '
           '`ifFailed` resets the indicator on failure while the job still '
           'reports `Failed`.');
+      _says('`ifFailed` resets it on failure');
     });
 
     test('an external state that breaks the job skips its handlers', () {
@@ -960,6 +1002,9 @@ void main() {
           'sequential policy.');
       _says('callers can inspect the outcome of each `seek`, including '
           '`Cancelled(replaced)` for a replaced request');
+      _says('**What solo gives:** with `Policy.restart` on `seek` only, the '
+          'device gets `[play, seek 3, pause]`');
+      _says('and every `seek` has an outcome to read.');
     });
 
     test('a seek in flight is stopped before its replacement starts', () {
@@ -998,6 +1043,7 @@ void main() {
           'immediately.');
       _says('`ctx.join` waits for the operation to return before the '
           'current job can finish and the replacement can start.');
+      _says('a `seek` in flight stops before its replacement starts');
     });
 
     for (final named in [false, true]) {
@@ -1085,6 +1131,9 @@ void main() {
           'not start.');
       _says('Both the map and `MapState(3, z4)` reflect the latest request.');
       _says('The returned job itself is not a `Future`');
+      _says('**What solo gives:** typed methods return a `Job`, and under '
+          '`Policy.restart` the first move stops before the latest begins, the '
+          'middle one never starts and the map ends at `MapState(3, z4)`.');
     });
 
     test('onMapDrag is a finished statement that waits for nothing', () {
@@ -1142,6 +1191,8 @@ void main() {
       _says('the removal happens when `disconnect` is called');
       _says('The removed read job completes with `Cancelled(manual)`');
       _says('Rename stays queued, and disconnect runs after it.');
+      _says('**What solo gives:** `queue.removeWhere` takes the pending read '
+          'out at the call to `disconnect`');
     });
 
     test('a read that has already started is not removed', () {
@@ -1217,6 +1268,7 @@ void main() {
             '`force: true` is what takes it');
         _says('code that later sweeps the whole queue with `cancelAll()` or '
             '`queue.clear()`');
+        _says('`cancellable: false` makes a sweep skip the rename');
       });
     }
 
@@ -1302,6 +1354,8 @@ void main() {
       _says('Here `run<Connected, void>` is checked when the job starts, so '
           'the same read ends as `Cancelled(rules: is not Connected)` and '
           'the call is never made.');
+      _says('and a read queued behind the disconnect ends `Cancelled(rules: '
+          'is not Connected)` and never reaches the device.');
     });
   });
 
@@ -1340,6 +1394,10 @@ void main() {
           'one order, and `Policy.droppable` returns the job already queued or '
           'running under it instead of adding another.');
       _says('The three requests again make two API calls.');
+      _says('**What solo gives:** with a key per order and '
+          '`Policy.droppable`, the callers of one order share its job and '
+          'receipt, another order gets its own job, and the platform handler '
+          "reads its own request's outcome.");
     });
 
     test('a cancel from a screen is refused, running or queued', () {
@@ -1627,6 +1685,10 @@ void main() {
       _says('the revocation cancels it with `Cancelled(rules: is not '
           'SignedIn)`');
       _says('The build already in progress still finishes in both examples.');
+      _says('**What solo gives:** `externalSetState` publishes `SignedOut` '
+          'at once');
+      _says('and the rule of `run<SignedIn, void>` cancels the build with '
+          '`Cancelled(rules: is not SignedIn)`.');
     });
 
     test('join holds the queue for the build', () {
@@ -1669,6 +1731,7 @@ void main() {
       );
       _says('Published by an ordinary job, `SignedOut` would queue behind '
           'the build and wait for the very work it makes worthless.');
+      _says('instead of queueing it behind the build');
     });
 
     test('the job may end by emitting Ready, and no further', () {
@@ -1830,6 +1893,9 @@ void main() {
       _says('`join` waits for the current write and throws `Cancelled` once '
           'it returns, before the next iteration; the replaced upload ends '
           'at `Cancelled(replaced)`.');
+      _says('**What solo gives:** `ctx.join` around each write is the one '
+          'checkpoint: a replaced upload ends `Cancelled(replaced)` after its '
+          'current write, no two writes overlap');
     });
 
     test('a Broken state from outside stops the upload after its write', () {
@@ -1854,6 +1920,7 @@ void main() {
           'NotBroken)`.');
       _says('The one checkpoint in `join` covers both replacement and state '
           'invalidation.');
+      _says('and a `Broken` state stops the upload the same way.');
     });
 
     test('a parent waits for its children and their cleanup', () {
@@ -1953,6 +2020,9 @@ void main() {
           'end at `Preview(2)`.');
       _says('In solo, `close()` finishes before the obsolete buffer '
           'arrives; it is released when decoding finally returns it.');
+      _says('**What solo gives:** `dispose` on `ctx.abandonable` releases '
+          'every buffer, the late one included, while the replacement starts '
+          'without waiting for the obsolete decode.');
     });
 
     test('with discard the buffer of a successful job is not released', () {

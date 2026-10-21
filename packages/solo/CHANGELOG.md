@@ -240,6 +240,8 @@ write it made itself, where `0.2.0` published that state again as a change.
   cancelled half way.
 - The camera example no longer publishes `Ready` over a failure the hardware
   reports while the camera opens.
+- Each scenario of [solo and bloc, side by side](doc/vs-bloc.md) ends with a
+  line of what solo gives.
 
 ## 0.2.0
 
