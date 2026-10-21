@@ -1554,10 +1554,19 @@ P4 — пункты 88–90 `docs/settled.md`. Сейчас — волна до�
 `2026-10-21-solo-project-review.md`. Остаток L7 — длинные фразы
 `cancellation.md` `solo` (7 → 7); вне волны остались страницы ядра на 6–7:
 `cleanup.md`, `extending.md`, `outcomes.md`, `cancellation.md`, `time.md`,
-`groups.md`, `chains.md`. Их предложить владельцу. Задание `flutter` CI было
-красным с `7d681243` (2026-10-20): стенд `tool/flutter_snippets.py` отказывал
-на двух блоках README `flutter_solo`, которые не брал ни один драйвер, — импорт
-`listenable.dart` в «Install» и `Listenable.merge`; теперь их берёт драйвер
+`groups.md`, `chains.md`. Владелец 2026-10-21 ответил «давай дальше»: вторая
+волна — эти семь страниц и остаток `cancellation.md` `solo`, план
+`2026-10-21-core-readability-wave-plan.md` (в дереве, не закоммичен) прошёл
+ревью на Opus — две High: ложное правило над таблицей поздних значений
+`cleanup.md` и неверное «провал источника уходит в зону» для `chains.md`;
+переписан, вердикты в его конце. Шесть исполнителей на Opus работают
+параллельно, копии `$CLAUDE_JOB_DIR/tmp/wave2/c1`…`c6` на `58c2d334`, задания
+`brief-c1.md`…`brief-c6.md` там же, отчёты — `wave2/out/`. Дальше — приёмка
+по одному коммиту, проверки ссылок и переводов на `main` после каждого, ревью
+волны двумя ревьюерами. Задание `flutter` CI было красным с `7d681243`
+(2026-10-20): стенд `tool/flutter_snippets.py` отказывал на двух блоках README
+`flutter_solo`, которые не брал ни один драйвер, — импорт `listenable.dart`
+в «Install» и `Listenable.merge`; теперь их берёт драйвер
 `readme_listenable_test` с тестом на два контроллера, стенд зелёный, коммит
 `6d7c79e2`. Остальное принято и исправлено, итоги — в вердиктах: в `solo` хуки
 `@protected`, `AccumulationTiming` сравнивается и печатается, рецепт `ctx.join`
