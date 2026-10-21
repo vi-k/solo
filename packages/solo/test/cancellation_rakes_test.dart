@@ -2370,7 +2370,7 @@ void main() {
       expect(
         _prose(),
         contains(
-          'a seek dragged past gets back the `state` it was given, and the '
+          'A seek dragged past gets back the `state` it was given, and the '
           'same object publishes nothing.',
         ),
       );

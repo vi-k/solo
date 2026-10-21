@@ -21,12 +21,13 @@ continue after the job has finished and the next job has started. `join` suits
 work that must finish before the queue proceeds, such as a device command or
 opening a device.
 
-And a job of a controller is cancelled in two ways. A request — `cancel()`, the
-cancellation of a parent, `close()`, a deadline given with `timeout` — is the
-ordinary cancellation of the table: an `uncancellable` section holds it back,
-and a job created with `cancellable: false` refuses it. The other kind comes
-from the job's own state rules, and neither a section nor `cancellable: false`
-stops it. Both are taken apart below.
+And a job of a controller is cancelled in two ways. The first is a request:
+`cancel()`, the cancellation of a parent, `close()`, a deadline given with
+`timeout`. A request is the ordinary cancellation of the table: an
+`uncancellable` section holds it back, and a job created with
+`cancellable: false` refuses it. The other kind comes from the job's own state
+rules, and neither a section nor `cancellable: false` stops it. Both are taken
+apart below.
 
 ## Stopping the underlying operation
 
@@ -128,7 +129,7 @@ on the cancellation page of `async_job` has that `catch`.
 
 ## Protecting a step or a whole job
 
-A payment, its receipt on the screen and its journal entry go together: once
+A payment, its receipt on the screen and its journal entry go together. Once
 the payment has gone through, the receipt has to be shown and the entry
 written, whatever the job is asked in the meantime.
 
@@ -186,9 +187,9 @@ Job<void> commit(String entry) => run<Ready, void>((ctx) async {
 
 Manual cancellation, parent cancellation and closing are held while an
 `uncancellable` action runs. The job does not accept those requests yet, so a
-checkpoint inside the section does not throw on them — the receipt reaches the
-state — and its cancellation callbacks and child cancellation cascade are
-delayed as well.
+checkpoint inside the section does not throw on them, and the receipt reaches
+the state. The job's cancellation callbacks and its child cancellation cascade
+are delayed as well.
 
 When the outermost section finishes, the job accepts the request it held. The
 next checkpoint throws `Cancelled`; ordinary code immediately after the call
@@ -214,12 +215,12 @@ waits in the queue, `queue.remove`, `queue.removeWhere`, `queue.clear` and
 `close()` drops it from the queue too, and waits for it once it is running.
 
 Neither a section nor `cancellable: false` holds back the state rules of a job.
-Its working type — the first type argument of `run`, `Ready` on this page — and
-its `keepWhile` cancel it when the state stops fitting them, inside a section
-too: if the state leaves `Ready` while `commit` above waits for the payment,
-the next line of the section throws, and neither the receipt nor the entry
-follows. A job that must go on in every state takes the whole state type of the
-controller as its working type, and no `keepWhile`.
+The working type of a job is the first type argument of `run`, `Ready` on this
+page. That type and the job's `keepWhile` cancel the job when the state stops
+fitting them, inside a section too. If the state leaves `Ready` while `commit`
+above waits for the payment, the next line of the section throws, and neither
+the receipt nor the entry follows. A job that must go on in every state takes
+the whole state type of the controller as its working type, and no `keepWhile`.
 [State and rules](state.md#state-and-rules) on the state page is about both.
 
 ## Ordinary await and context lifetime
@@ -269,7 +270,7 @@ Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
     });
 ```
 
-The loop now waits with `join`, and every write is a checkpoint: `close()`
+The loop now waits with `join`, and every write is a checkpoint. `close()`
 during the second of four chunks waits for that chunk, `join` throws
 `Cancelled` in place of its result, and the third and the fourth are never
 written. The cleanup waits with a plain `await`, and the buffer is flushed
@@ -386,9 +387,9 @@ Job<void> seek(Duration position) => run<Ready, void>(
     );
 ```
 
-`timeout` gives the job a deadline of its own, and when it runs out the job is
-cancelled the way `restart` cancels it: the token stops the seek, `join` waits
-for the device, and the job ends `Cancelled(timeout)`. The deadline is a
+`timeout` gives the job a deadline of its own. When the deadline runs out, the
+job is cancelled the way `restart` cancels it: the token stops the seek, `join`
+waits for the device, and the job ends `Cancelled(timeout)`. The deadline is a
 cancellation of `async_job` with a `TimeoutCancelReason`, and
 [A deadline](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/time.md#a-deadline)
 on the time page of `async_job` takes it apart.
@@ -398,20 +399,20 @@ With `.timeout(...)` on the call of `_player.seek` the exception is thrown into
 the body, the job ends `Failed`, and it is the `ifFailed:` of `run` that maps
 the state. The `timeout:` of `run` ends the job `Cancelled`, so `ifCancelled:`
 maps the state and `ifFailed:` is not called. `ifCancelled:` takes every
-cancellation, and a handler that is to tell the deadline from a seek dragged
-past branches on the reason, as the one above does: a seek dragged past gets
-back the `state` it was given, and the same object publishes nothing. `value`
-of such a job throws that `Cancelled`, and a clause `on TimeoutException`
-around it catches nothing.
+cancellation. To tell the deadline from a seek dragged past, a handler branches
+on the reason, as the one above does. A seek dragged past gets back the `state`
+it was given, and the same object publishes nothing. `value` of such a job
+throws that `Cancelled`, and a clause `on TimeoutException` around it catches
+nothing.
 
 The deadline is counted from the start of the body, not from the call: the time
 a job waits in the queue does not count. With `collect` and `accumulate` the
 `timeout` is a deadline for each job they queue, counted the same way, from the
-start of the handler: the window a group waits out before it does not count
-either. A deadline cancels its own job alone: the jobs queued behind it stay,
-and the next one starts once this one has cleaned up. A call with
-`Policy.droppable` that finds a live job with its key returns that job, and the
-`timeout` of the call is lost with the rest of the call.
+start of the handler. The window a group waits out before the handler starts
+does not count either. A deadline cancels its own job alone: the jobs queued
+behind it stay, and the next one starts once this one has cleaned up. A call
+with `Policy.droppable` that finds a live job with its key returns that job,
+and the `timeout` of the call is lost with the rest of the call.
 
 ## Cancelling and closing a controller
 
@@ -466,24 +467,26 @@ submissions return already cancelled jobs rather than throwing, so callers do
 not need an `isClosed` check before submitting.
 
 `SoloCloseMode.drain` closes by running the queue instead of dropping it, and
-that is the whole fix the first attempt needs: the three batches go out in
-order, each ends `Done`, and the future `close()` returned completes after the
-third. No new root job is taken from the call onwards, and the ones already in
-the queue run by the usual rules: in order, with their children, their cleanup,
-and an accumulation window waited out where there is one. `isDraining` stays
-true until that queue has emptied. A plain `close()` over a running drain stops
-it, and the future `close(mode: SoloCloseMode.drain)` returned completes after
-that. Running the queue is not a promise of delivery: a drained job can still
-fail or be turned down by its rules, and a buffer that keeps events until the
-sending is confirmed is built on top of this, not inside it.
+that is the whole fix the first attempt needs. With it, the three batches go
+out in order, each ends `Done`, and the future `close()` returned completes
+after the third. No new root job is taken from the call onwards. The jobs
+already in the queue run by the usual rules: in order, with their children,
+their cleanup, and an accumulation window waited out where there is one.
+`isDraining` stays true until that queue has emptied. A plain `close()` over a
+running drain stops it, and the future `close(mode: SoloCloseMode.drain)`
+returned completes after that. Running the queue is not a promise of delivery:
+a drained job can still fail or be turned down by its rules. A buffer that
+keeps events until the sending is confirmed is built on top of draining, not
+inside it.
 
 Closing publishes no state of its own: the controller stays on the state
 published last, and once closing has finished that state can no longer change.
 Resources owned by your application are not released either. Put the teardown
 and the state the screen ends on in a controller method and await it before
-`close()`, as in [Awaiting the disposal](camera.md#awaiting-the-disposal) of
-the camera example, where `dispose()` closes the hardware and emits `Disposed`.
-A state handler of the cancelled job may still update state while closing.
+`close()`. [Awaiting the disposal](camera.md#awaiting-the-disposal) of the
+camera example does that: its `dispose()` closes the hardware and emits
+`Disposed`. A state handler of the cancelled job may still update state while
+closing.
 
 ### Closing from a job
 
@@ -538,7 +541,7 @@ Future<void> logout() async {
 ```
 
 Draining waits for the job the same way, and the door is shut from the `close`
-line onwards: a job submitted while the call is in flight comes back
+line onwards. A job submitted while the call is in flight comes back
 `Cancelled(closed)` without reaching the API at all. Whatever stood in the
 queue before runs in either version — the logout job goes to the end of it, and
 the method waits its turn.

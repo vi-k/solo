@@ -382,6 +382,12 @@ CHANGELOG, `docs/records/` и `docs/settled.md` правлю я. Принима�
    и при приёмке. При приёмке ячейка «Nobody» строки `cancellable: false` стала
    «No registration: … The body closes the value through the branch's job, as
    below»: «никто» спорило с кодом под таблицей, где значение закрывает тело.
+6. `cancellation.md` `solo`. Длинных фраз 14, стало 1, и та — склейка пунктов
+   списка `whenCancelled` у `metrics.py`, а не фраза. Делились только фразы,
+   абзацев столько же. В `cancellation_rakes_test.dart` у цитаты о проскоченной
+   перемотке заглавная буква: фраза стала отдельной, факт тот же (решение 95);
+   мутация «вернуть „does: a seek dragged past“» краснеет. Правок при приёмке
+   нет.
 
 ## Ревью плана
 
