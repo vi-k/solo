@@ -136,6 +136,7 @@ final class MyQueue {
 
   void add(MyJob<Object?> job) {
     if (job._queue != null) throw StateError('$job is in a queue already');
+    if (job.isRunning) throw StateError('$job runs already');
     _waiting.add(job);
     if (!job.isFinished) job._queue = this;
   }
@@ -677,6 +678,20 @@ void main() {
       expect(() => MyQueue().add(job), throwsStateError);
       expect(() => queue.add(job), throwsStateError);
       await queue.run();
+      expect(job.outcome, isA<Done<void>>());
+    });
+
+    test('a job a parent has started is refused by the queue', () async {
+      final gate = Completer<void>();
+      final job = MyJob<void>((ctx) async {
+        await gate.future;
+      });
+      final parent = Job<void>((ctx) => ctx.run(job));
+      await Future<void>.delayed(Duration.zero);
+      expect(job.isRunning, isTrue);
+      expect(() => MyQueue().add(job), throwsStateError);
+      gate.complete();
+      await parent.done;
       expect(job.outcome, isA<Done<void>>());
     });
 

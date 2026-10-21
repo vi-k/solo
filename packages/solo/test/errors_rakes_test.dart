@@ -435,8 +435,8 @@ void main() {
         );
         _says(
           '| Report | `onError` of the controller and `onError` of a '
-          '`SoloObserver` hear it | Nowhere: the hooks hear it and return, '
-          'and the error goes on along the answer route |',
+          '`SoloObserver` hear it | It does not end there: the hooks hear it '
+          'and return, and the error goes on along the answer route |',
         );
         final handled = <String>[];
         final ran = runFaked((async) {

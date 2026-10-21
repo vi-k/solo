@@ -243,6 +243,7 @@ The queue tells each job whose it is, unless the job is over by then:
 ```dart
   void add(MyJob<Object?> job) {
     if (job._queue != null) throw StateError('$job is in a queue already');
+    if (job.isRunning) throw StateError('$job runs already');
     _waiting.add(job);
     if (!job.isFinished) job._queue = this;
   }
@@ -335,7 +336,8 @@ Started by a parent, it would be started again by the queue, and the error of
 that second start would end the loop and leave the jobs behind it waiting for
 good. A second queue would start it again the same way, and so would its own
 queue holding it twice: the first line of `add` refuses a job that is in a
-queue already.
+queue already. Started by a parent first and added after, it would be started
+again by the queue too: the second line of `add` refuses a job that runs.
 
 ### The whole engine
 
@@ -399,6 +401,7 @@ final class MyQueue {
 
   void add(MyJob<Object?> job) {
     if (job._queue != null) throw StateError('$job is in a queue already');
+    if (job.isRunning) throw StateError('$job runs already');
     _waiting.add(job);
     if (!job.isFinished) job._queue = this;
   }
@@ -615,8 +618,8 @@ The two ways the engine stops a job at a sign-out:
 
 | | The rule in `check()` | `_stop` from `onSignOut` |
 | --- | --- | --- |
-| The job accepts the cancellation | as the body lets it out of a call that asked the rule | inside the sign-out |
-| `onCancel` callbacks run | then | inside the sign-out, and `abandonable` throws at once |
+| The job accepts the cancellation | when it leaves the body | inside the sign-out |
+| `onCancel` callbacks run | when it leaves the body | inside the sign-out, and `abandonable` throws at once |
 | A body that catches it and goes on | is not cancelled | ends `Cancelled` all the same |
 | `cancellable: false` | does not refuse it | does not refuse it: `rejectable: false` |
 | `ctx.uncancellable` | does not hold it | does not hold it |

@@ -36,17 +36,17 @@ a third way, Dart's own:
 
 | Route | Who gets the error, in order | Where it ends |
 | --- | --- | --- |
-| Report | `onError` of the controller and `onError` of a `SoloObserver` hear it | Nowhere: the hooks hear it and return, and the error goes on along the answer route |
+| Report | `onError` of the controller and `onError` of a `SoloObserver` hear it | It does not end there: the hooks hear it and return, and the error goes on along the answer route |
 | Answer | Whoever observes the outcome, then `onUnanswered` of the controller | At whoever observes the outcome; otherwise at an override of `onUnanswered` or at `Solo.unansweredHandler`; with neither, in the creation zone |
 | Dart's | Whoever holds the future of `job.value` or `ctx.run(child)` | Where that future is handled; unhandled, in the zone, like any future error |
 
 The table below names, for each kind of error, who hears it and who answers for
-it. `onError` in it stands for both hooks: the two hear the same errors.
-`onUnanswered` stands for the answer route from `onUnanswered` on, and an error
-that no outcome carries enters the route there. Taking `job.value` observes the
-outcome: when that future goes unhandled, its error takes Dart's route to the
-zone, once, and `onUnanswered` never gets it. The current zone is the zone the
-hook is called in. For what happens in a job, that is the zone the job was
+it. `onError` in it stands for both hooks: the two hear the same errors. An
+error that no outcome carries enters the answer route at `onUnanswered` and
+goes on from there as the Answer row above says. Taking `job.value` observes
+the outcome: when that future goes unhandled, its error takes Dart's route to
+the zone, once, and `onUnanswered` never gets it. The current zone is the zone
+the hook is called in. For what happens in a job, that is the zone the job was
 created in; for a change made by `externalSetState`, the zone of its caller.
 
 | The error | Who hears it | Who answers for it |

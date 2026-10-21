@@ -251,6 +251,7 @@ second: Cancelled(manual)
 ```dart
   void add(MyJob<Object?> job) {
     if (job._queue != null) throw StateError('$job is in a queue already');
+    if (job.isRunning) throw StateError('$job runs already');
     _waiting.add(job);
     if (!job.isFinished) job._queue = this;
   }
@@ -345,7 +346,9 @@ future каждому следующему вызову.
 этого второго старта кончила бы цикл и оставила задачи за ней ждать навсегда.
 Так же запустила бы её ещё раз вторая очередь, и так же — её собственная
 очередь, если держит её дважды: первая строка `add` отказывает задаче, которая
-уже стоит в очереди.
+уже стоит в очереди. Сначала запущенную родителем и добавленную потом, её тоже
+запустила бы ещё раз очередь: вторая строка `add` отказывает задаче, которая
+идёт.
 
 ### Движок целиком
 
@@ -409,6 +412,7 @@ final class MyQueue {
 
   void add(MyJob<Object?> job) {
     if (job._queue != null) throw StateError('$job is in a queue already');
+    if (job.isRunning) throw StateError('$job runs already');
     _waiting.add(job);
     if (!job.isFinished) job._queue = this;
   }
@@ -631,8 +635,8 @@ outcome: Cancelled(signed out)
 
 | | Правило в `check()` | `_stop` из `onSignOut` |
 | --- | --- | --- |
-| Задача принимает отмену | когда тело выпускает её из вызова, который спросил правило | внутри выхода |
-| Колбэки `onCancel` вызываются | тогда же | внутри выхода, а `abandonable` бросает сразу |
+| Задача принимает отмену | когда она выходит из тела | внутри выхода |
+| Колбэки `onCancel` вызываются | когда она выходит из тела | внутри выхода, а `abandonable` бросает сразу |
 | Тело, которое её поймало и пошло дальше | не отменено | всё равно кончается `Cancelled` |
 | `cancellable: false` | её не отклоняет | её не отклоняет: `rejectable: false` |
 | `ctx.uncancellable` | её не придерживает | её не придерживает |

@@ -16,6 +16,9 @@ with it, as the last row of [Rare routes](#rare-routes) shows.
 | The zone | the zone the job was created in gets the error as an uncaught error there | [Where errors go](#where-errors-go) |
 
 A job without an observer that answers has the zone for its answer.
+`ignoreFailure()` on a job keeps the failure of its body right after `onError`,
+even when the job ends `Cancelled`, as
+[Where each error goes](#where-each-error-goes) shows.
 
 An app that only wants every error reported once starts from
 [Reporting each error once](#reporting-each-error-once), at the end of the
