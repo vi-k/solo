@@ -85,37 +85,46 @@ would never hear of the failure and would wait for good, and the queue with it.
 For a job made inside `ctx.unattended`, `creationZone` is the zone that work
 was started from, the one `start` itself moves to when called inside the work.
 
-Override `started()` and `finished()` to follow the lifecycle. `started()` runs
-as the body is about to start, with the job already running. `finished()` runs
-once the job has its outcome. It runs for a job dropped before its body ran
-too, with no `started()` before it. An error either of them throws goes to
-`onError` and then to the zone, unless the observer catches it in
-`onUnanswered`, as [Where each error goes](errors.md#where-each-error-goes) on
-the errors page describes for an error no outcome carries, and the job goes on
-as it would have. Your own bookkeeping is what is left half-done, so keep both
-short and unconditional. `MyJob` drops its body in `finished()`: kept, it would
-hold everything it captured for as long as anyone holds the job.
+Override `started()` and `finished()` to follow the lifecycle:
 
-For the engine to answer for such errors itself, put an observer of your own on
-every job, mix `JobAnswerer` into it and override its `onUnanswered`, the way
-`solo` does. A child adopted without an observer takes its parent's, so the
-answer reaches the children as well, except a child that came with an observer
-of its own: that one answers through its own. A continuation made by `then` is
-no job of your engine: it belongs to whoever called `then`, with the observer
-passed to `then` and no other. A failure it takes over from your job reaches
-that observer as the continuation's own. What goes wrong in the continuation's
-own code is for its caller to answer, in the caller's zone, so do not hand it
-your observer.
+- `started()` runs as the body is about to start, with the job already running.
+- `finished()` runs once the job has its outcome. It runs for a job dropped
+  before its body ran too, with no `started()` before it.
+- An error `started()` or `finished()` throws goes to `onError` and then to the
+  zone, unless the observer catches it in `onUnanswered`. That is the way of an
+  error no outcome carries, as
+  [Where each error goes](errors.md#where-each-error-goes) on the errors page
+  describes. The job goes on as it would have, and what is left half-done is
+  your own bookkeeping, so keep both hooks short and unconditional.
 
-When that `onUnanswered` has nobody to hand an error to,
-`super.onUnanswered(job, error, stackTrace)` sends it to the zone the job was
-created in and keeps a `Cancelled` out of the zone. It does so whichever job
-the error came from: a child adopted without an observer may be no job of your
-engine. `reportToZone` does the same for an engine whose answer lives outside
-the observer. It is protected, so the engine reaches it through a wrapper, as
-it reaches `start`, and only on jobs of its own. A context method that must not
-be called from the work of `ctx.unattended` calls `throwIfUnattended` first;
-that work is the subject of
+`MyJob` drops its body in `finished()`: kept, it would hold everything it
+captured for as long as anyone holds the job.
+
+For the engine to answer itself for an error that would otherwise go to the
+zone, do what `solo` does. Put an observer of your own on every job, mix
+`JobAnswerer` into it and override its `onUnanswered`. Where that answer
+reaches and where it does not:
+
+- A child adopted without an observer takes its parent's, so the engine's
+  answer reaches the children as well.
+- A child that came with an observer of its own answers through its own.
+- A continuation made by `then` is no job of your engine. It belongs to whoever
+  called `then`, with the observer passed to `then` and no other. A failure the
+  continuation takes over from your job reaches that observer as the
+  continuation's own.
+- What goes wrong in the continuation's own code is for the caller of `then` to
+  answer, in the caller's zone, so do not hand the continuation your observer.
+
+When the `onUnanswered` of the engine's observer has nobody to hand an error
+to, `super.onUnanswered(job, error, stackTrace)` sends it to the zone the job
+was created in and keeps a `Cancelled` out of the zone. It does so whichever
+job the error came from: a child adopted without an observer may be no job of
+your engine. `reportToZone` does the same for an engine whose answer lives
+outside the observer. It is protected, so the engine reaches it through a
+wrapper, as it reaches `start`, and only on jobs of its own.
+
+A context method that must not be called from the work of `ctx.unattended`
+calls `throwIfUnattended` first. That work is the subject of
 [Work the job does not wait for](errors.md#work-the-job-does-not-wait-for) on
 the errors page.
 
@@ -546,11 +555,10 @@ around `cancelOwnJob` of the context does the same: it passes `false` itself.
 
 ## Deferred start
 
-A regular `Job` schedules its own start on the next microtask. If the caller
-needs to choose when work begins, use `Job.deferred(body)` instead. It returns
-a `DeferredJob<T>` with a public `start()` method. You can call it yourself,
-let a queue start the job, or pass it to a parent with `ctx.run(child)`, as in
-[Running a child](children.md#running-a-child) on the children page.
+Where a plain `Job` starts on the next microtask, `Job.deferred(body)` returns
+a `DeferredJob<T>` that waits for its public `start()` or for the `ctx.run` of
+a parent, as [Running a child](children.md#running-a-child) on the children
+page shows.
 
 ```dart
 final job = Job.deferred<void>((ctx) => ctx.abandonable(work));
@@ -559,9 +567,14 @@ job.start();
 ```
 
 `start()` runs the body in the zone it is called from. A queue that calls it
-later, from a zone of its own, should keep the zone the job was made in,
-`final zone = Zone.current;` next to `Job.deferred`, and start the job there,
-with `zone.run(job.start)`: [A job of your own](#a-job-of-your-own) says why.
+later, from a zone of its own, should keep the zone the job was made in and
+start the job there: `final zone = Zone.current;` next to `Job.deferred`, then
+`zone.run(job.start)`. [A job of your own](#a-job-of-your-own) says why.
+
+This recipe is for a `Job.deferred`, not for a job of your engine. The queue
+cannot reach the `creationZone` of a `Job.deferred`, since that member is
+protected; a job of your engine starts with `creationZone.run(start)`, the way
+`_launch` does.
 
 ## Finishing a job by hand
 
@@ -575,35 +588,36 @@ does.
 | Runs the `onCancel` callbacks | runs none |
 | Unwinds the cleanup stack, `dispose` and `discard` included | unwinds nothing: what the body opened stays open |
 
-Only the debug channel, switched on with `Job.debug = print;`, says how many
-cleanups were left behind. A job that has accepted a cancellation ends
-`Cancelled` whatever `finish` is handed: a `Done` or a `Failed` gives way to
-the cancellation the job accepted, a value handed in goes nowhere, and only
-another `Cancelled` handed in stands. An engine that finishes a running job by
-hand anyway releases what the job holds first.
+Since `finish` unwinds nothing, an engine that finishes a running job by hand
+releases what the job holds first.
 
-When an engine finishes a running job by hand, a failure of the body, thrown
-before `finish` or after, is in no outcome unless it is the very one handed in:
-`onError` hears it, and it goes on to `onUnanswered` or the zone, as the
-failure of the body of a cancelled job does. `ignoreFailure()` on the job stops
-it at `onError`.
-
-A `Done` handed to a branch of `runAll` after its group heard that the body
-failed comes too late for the group. The group hears of the failure right after
-`onError` does, or, for a body that is not `async` and threw while `runAll` was
-starting the branches, once all of them have started. The group then goes by
-the failure, as if the branch had ended with it, and throws it, or sends it
-where any failure of a branch it did not throw goes, which `ignoreFailure()` on
-the branch silences. The value stays in the outcome of the branch alone.
-
-A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the way
-`onSignOut` in
-[Not waiting for the checkpoint](#not-waiting-for-the-checkpoint) builds one at
-every call. A parent finds the child behind a cancellation by the instance:
-with one instance for two of its children, its outcome names the child that
-ended last, not the one its body waited for, and a `const` one is one instance
-for the whole program. With asserts on, the second child of one parent to end
-with the instance sends an `AssertionError` to the zone it was created in, and
-ends the way it does without them. A `Cancelled` that a body throws, or a rule
-from `check()`, is not bound by this: the job ends with one the core builds
-from it.
+- Only the debug channel, switched on with `Job.debug = print;`, says how many
+  cleanups `finish` left behind.
+- A job that has accepted a cancellation ends `Cancelled` whatever `finish` is
+  handed. A `Done` or a `Failed` gives way to the cancellation the job
+  accepted, and a value handed in goes nowhere. Only another `Cancelled` handed
+  in stands.
+- When an engine finishes a running job by hand, a failure of the body, thrown
+  before `finish` or after, is in no outcome unless it is the very one handed
+  in. `onError` hears that failure, and it goes on to `onUnanswered` or the
+  zone, as the failure of the body of a cancelled job does. `ignoreFailure()`
+  on the job stops it at `onError`.
+- A `Done` handed to a branch of `runAll` after its group heard that the
+  branch's body failed comes too late for the group. The group hears of the
+  failure right after `onError` does. For a body that is not `async` and threw
+  while `runAll` was starting the branches, the group hears once all of them
+  have started. The group then goes by the failure, as if the branch had ended
+  with it. It throws the failure, or sends it where any failure of a branch it
+  did not throw goes, and there `ignoreFailure()` on the branch silences it.
+  The value stays in the outcome of the branch alone.
+- A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the
+  way `onSignOut` in
+  [Not waiting for the checkpoint](#not-waiting-for-the-checkpoint) builds one
+  at every call. A parent finds the child behind a cancellation by the
+  instance. With one instance for two of its children, the parent's outcome
+  names the child that ended last, not the one its body waited for. A `const`
+  `Cancelled` is one instance for the whole program. With asserts on, the
+  second child of one parent to end with the instance sends an `AssertionError`
+  to the zone it was created in, and ends the way it does without them. A
+  `Cancelled` that a body throws, or a rule from `check()`, is not bound by
+  this: the job ends with one the core builds from it.

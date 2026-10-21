@@ -348,6 +348,13 @@ CHANGELOG, `docs/records/` и `docs/settled.md` правлю я. Принима�
    plain `await` is no checkpoint»: прежняя фраза читалась как «другая
    контрольная точка». Правило под таблицей «A value that comes late» — по H2:
    освобождение, начатое до конца задачи, держит её конец.
+2. `extending.md`. Длинных фраз 6, стало 0, тестов прозы у страницы нет. Хуки,
+   ответ движка и хвосты `finish` стали списками. В «Deferred start» добавлен
+   абзац о том, почему рецепт с `Zone.current` — для `Job.deferred`: его
+   `creationZone` очереди недоступен. При приёмке правило под таблицей
+   «`finish` is no cancellation: … anyway releases» переписано в «Since
+   `finish` unwinds nothing, an engine … releases what the job holds first»:
+   «anyway» без прежнего контекста повисало.
 
 ## Ревью плана
 
