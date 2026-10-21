@@ -100,10 +100,10 @@ Two things changed, and each repairs one fault.
 `ctx.run(child, dispose: ...)` repairs the leak. It registers the value on the
 parent the moment the branch hands it over. From then on, the parent closes the
 value when it ends, whatever it ends with. The parent may end after the archive
-is written, when the other branch fails or is cancelled, or when it is
-cancelled in between. A branch that never returned closes its source through
-the `discard` it opened the source with. This would repair the leak under
-`Future.wait` too. It is the rule of
+is written, when the other branch fails or is cancelled, or when the parent
+itself is cancelled in between. A branch that never returned closes its source
+through the `discard` it opened the source with. This would repair the leak
+under `Future.wait` too. It is the rule of
 [Registering on arrival](cleanup.md#registering-on-arrival) on the cleanup
 page. The callback is `dispose` rather than `discard`, because the parent keeps
 the sources to itself.
@@ -161,8 +161,9 @@ extending page.
 | `ctx.runAll` | on success, the cleanup of every branch, except one a branch registers after running it; on failure, every branch to its end | yes, with `SiblingCancelReason` | returned in order when every branch succeeds |
 
 Use `[ctx.run(a), ctx.run(b)].wait` when the branches do not depend on each
-other's failure, or when one of them waits for another. Use `ctx.runAll` when a
-result that misses one of its parts is of no use anyway.
+other's failure, or when one of them waits for another, as in
+[Branches that wait for each other](#branches-that-wait-for-each-other). Use
+`ctx.runAll` when a result that misses one of its parts is of no use anyway.
 
 None of the forms closes what the branches returned: a form only hands the
 values over or drops them. A value is closed by the registration its receiver
@@ -288,9 +289,9 @@ the resource and when:
 | The branch registers the release with | The group succeeds in full | The group ends in anything else |
 | --- | --- | --- |
 | The `dispose` of `ctx.abandonable` and `ctx.join`, or `onDispose`: a resource the branch keeps for itself | The end of the branch closes it | The end of the branch closes it |
-| Their `discard`, or `onDiscard`: a resource the branch hands out | It reaches the caller open | The branch that accepted the stop closes it before the group returns: by the time the parent catches the error, it is closed |
+| The `discard` of `ctx.abandonable` and `ctx.join`, or `onDiscard`: a resource the branch hands out | It reaches the caller open | The branch that accepted the stop closes it before the group returns: by the time the parent catches the error, it is closed |
 | The `discard` of `ctx.run(child, discard: ...)`: a resource from a child of the branch | It reaches the caller open | The same as in the row above: the registration is the branch's own |
-| Any `discard`, in a branch created with `cancellable: false` | It reaches the caller open | No registration: the branch refuses the stop and ends `Done`, so the `discard` does not run. The body closes the value through the branch's job, as below |
+| Any `discard`, in a branch created with `cancellable: false` | It reaches the caller open | No registration closes it: the branch refuses the stop and ends `Done`, so the `discard` does not run. The parent's body closes the value through the branch's job, as below |
 
 A branch can also get the resource from a child of its own:
 

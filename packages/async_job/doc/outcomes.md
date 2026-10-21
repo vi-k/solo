@@ -402,7 +402,7 @@ What becomes of a listener's error:
   zone, unless the observer catches it in `onUnanswered`, as
   [Where errors go](errors.md#where-errors-go) on the errors page shows.
   Without an observer, it goes straight to the job's creation zone.
-- A `Cancelled` a listener throws is never forwarded to the zone.
+- A `Cancelled` a synchronous listener throws is never forwarded to the zone.
 - Listener errors do not change cancellation or prevent other listeners from
   running.
 - `whenCancelled` is made for a synchronous callback, though Dart lets an

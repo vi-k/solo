@@ -555,10 +555,12 @@ around `cancelOwnJob` of the context does the same: it passes `false` itself.
 
 ## Deferred start
 
-Where a plain `Job` starts on the next microtask, `Job.deferred(body)` returns
-a `DeferredJob<T>` that waits for its public `start()` or for the `ctx.run` of
-a parent, as [Running a child](children.md#running-a-child) on the children
-page shows.
+A plain `Job` starts on the next microtask. If the caller needs to choose when
+work begins, use `Job.deferred(body)` instead: it returns a `DeferredJob<T>`
+that waits until something starts it. You can call its public `start()`
+yourself, let a queue start the job, or pass it to a parent with
+`ctx.run(child)`, as in [Running a child](children.md#running-a-child) on the
+children page.
 
 ```dart
 final job = Job.deferred<void>((ctx) => ctx.abandonable(work));

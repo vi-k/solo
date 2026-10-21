@@ -270,11 +270,11 @@ rows depends on what `opened` does with it:
 | --- | --- |
 | `archived` receives the rows | `archived`, through `ctx.onDispose` |
 | `archived` is cancelled while `opened` opens, and `opened` takes the cancellation | `opened`, through its `discard`, when the rows arrive |
-| The same, and `opened` refuses it: it was made with `cancellable: false` | The caller, through the handle: `(await opened.value).close()` |
-| The same, and `opened` has finished by the time the request arrives | The caller, through the handle, the same way |
+| The same, and `opened` refuses it: it was made with `cancellable: false` | The caller, through `opened`: `(await opened.value).close()` |
+| The same, and `opened` has finished by the time the request arrives | The caller, through `opened`, the same way |
 
-The caller closes the rows through the handle the way the body of a group
-closes the value of
+The caller closes the rows through `opened` the way the body of a group closes
+the value of
 [a branch that refuses the group's stop](groups.md#what-a-group-hands-back).
 
 ## A continuation of a child

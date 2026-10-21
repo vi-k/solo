@@ -384,8 +384,8 @@ belongs where ownership changes, not on the line after it.
 
 ### Registering after a plain `await`
 
-Registration works after a plain `await` as well. Unlike the checkpoint in
-[The second attempt](#the-second-attempt), a plain `await` is no checkpoint:
+Registration works after a plain `await` as well. A plain `await` is no
+checkpoint, unlike the `ctx.run` of [The second attempt](#the-second-attempt):
 nothing can throw between the call and the line under it. The user cancels
 while the database opens:
 
@@ -501,10 +501,10 @@ on when the value arrives:
 | While the job runs its cleanup stack | on the stack, after the callback that is running |
 | After the job has ended | at once, late and alone, with nobody waiting for it |
 
-The callback does not wait for the unwinding, and a release that begins before
-the job ends keeps the job from ending until the release is over. A child the
-job is still waiting for may want the same lock or slot of a pool, and a value
-held for the unwinding would keep it from that child for good.
+The callback does not wait for the unwinding. A child the job is still waiting
+for may want the same lock or slot of a pool, and a value held for the
+unwinding would keep it from that child for good. A release that begins before
+the job ends keeps the job from ending until the release is over.
 
 In the first row of the table the release runs alongside the rest of the job:
 the body, the children and the release of another such value. Of the cleanup
@@ -517,7 +517,7 @@ runs only once the release is over.
 A branch of `ctx.runAll` waits for its group twice: before its cleanup stack
 and after it, until every branch has run its own. A value that comes before the
 stack is released as above. One that comes after it is released at once too.
-The stack has run by then, the callback that closes the pool included, and only
-the end of the branch waits for the release. Kept for the second pass, the
+But the stack has run by then, the callback that closes the pool included, and
+only the end of the branch waits for the release. Kept for the second pass, the
 value would keep the slot from the cleanup of another branch the group waits
 for, and the group would wait for good.

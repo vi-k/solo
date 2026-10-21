@@ -5,13 +5,11 @@ A pause and a deadline are the two places where cancellation meets time:
 cancels the job once its limit runs out. The rest of cancellation is on
 [Cancellation](cancellation.md).
 
-The code works with the database of
-[Stopping the operation](cancellation.md#stopping-the-operation) on the
-cancellation page: `database.readAll` reads the rows in 10 ms, and the
-migration takes three steps of 10 ms. Before each step the migration reads a
-`CancelToken`, the database client's stop signal and not a type of this
-package, and stops by throwing `DatabaseStopped` once the token is cancelled.
-The app names that stop once, in `main`, as
+The code works with the database of the cancellation page: `database.readAll`
+reads the rows in 10 ms, and the migration takes three steps of 10 ms. Before
+each step the migration reads a `CancelToken`, the database client's stop
+signal and not a type of this package; finding it cancelled, it stops by
+throwing `DatabaseStopped`. The app names that stop once, in `main`, as
 [A token through `onCancel`](cancellation.md#a-token-through-oncancel) shows,
 and every job on this page runs with that line.
 
@@ -195,7 +193,8 @@ the cleanup stack. How the core runs the timer:
   close its value through `discard`.
 - The core cancels the timer however else the job ends.
 
-The core observes nothing as it cancels the timer:
+The core observes nothing as it cancels the timer, so with `timeout` a failure
+of the job still reaches the zone:
 
 | How the job gets its limit | Timer left behind | A failure of the job |
 | --- | --- | --- |
