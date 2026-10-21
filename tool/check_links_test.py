@@ -287,5 +287,119 @@ class ThePackageAbove(LinkCase):
         self.assertEqual(self.problems(page), [])
 
 
+class Dartdoc(LinkCase):
+    # Dartdoc is read on the API page of pub.dev, where a relative address
+    # leads to a 404: a link into this repository is its address on main.
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(check_links, 'REPO', self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for name, dependencies in (('core', ''), ('middle', '  core: any\n')):
+            self.write(
+                f'packages/{name}/pubspec.yaml',
+                f'name: {name}\n\ndependencies:\n{dependencies}\n',
+            )
+        self.write('packages/core/doc/groups.md', '# Groups\n\n## The stop\n')
+        self.write('packages/middle/doc/state.md', '# State\n\n## Rules\n')
+
+    def write(self, name, text):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return path
+
+    def member(self, *doc):
+        lines = ''.join(f'  /// {line}'.rstrip() + '\n' for line in doc)
+        return self.write(
+            'packages/core/lib/src/job.dart',
+            f'class Job {{\n{lines}  void run() {{}}\n}}\n',
+        )
+
+    def problems(self, path):
+        return list(check_links.dartdoc_offenders(path))
+
+    def test_a_section_that_is_there(self):
+        path = self.member(
+            'Stops the rest.',
+            '',
+            f'See [the stop]({check_links.BLOB}packages/core/doc/groups.md'
+            '#the-stop).',
+        )
+        self.assertEqual(self.problems(path), [])
+
+    def test_a_section_that_was_reworded(self):
+        target = f'{check_links.BLOB}packages/core/doc/groups.md#stopping'
+        path = self.member('Stops the rest.', f'See [it]({target}).')
+        self.assertEqual(self.problems(path), [(3, f'no such section: {target}')])
+
+    def test_link_text_wrapped_to_the_next_line(self):
+        # A line read alone has `[the stop of` and no address, and the next
+        # line has `a group](...)` and no opening bracket. The link is
+        # reported on the line it opens on.
+        target = f'{check_links.BLOB}packages/core/doc/gone.md'
+        path = self.member(
+            'Stops the rest. See [the stop of', f'a group]({target}).'
+        )
+        self.assertEqual(self.problems(path), [(2, f'no such file: {target}')])
+
+    def test_a_relative_address(self):
+        path = self.member('See [the stop](../../doc/groups.md#the-stop).')
+        self.assertEqual(
+            self.problems(path),
+            [(2, 'not absolute, a 404 on pub.dev: ../../doc/groups.md#the-stop')],
+        )
+
+    def test_an_anchor_of_the_page_itself(self):
+        path = self.member('See [below](#the-stop).')
+        self.assertEqual(
+            self.problems(path), [(2, 'not absolute, a 404 on pub.dev: #the-stop')]
+        )
+
+    def test_this_repository_off_main(self):
+        target = (f'{check_links.REPOSITORY}tree/main/packages/core/doc/'
+                  'groups.md')
+        path = self.member(f'See [the page]({target}).')
+        self.assertEqual(
+            self.problems(path), [(2, f'not an address on main: {target}')]
+        )
+
+    def test_leading_up(self):
+        target = f'{check_links.BLOB}packages/middle/doc/state.md#rules'
+        path = self.member(f'See [the rules]({target}).')
+        self.assertEqual(
+            self.problems(path),
+            [(2, f'dartdoc of core leads up to middle: {target}')],
+        )
+
+    def test_a_link_inside_a_fenced_sample(self):
+        path = self.member(
+            'Stops the rest.', '', '```dart', '// [x](gone.md)', '```'
+        )
+        self.assertEqual(self.problems(path), [])
+        # The three backticks of a fence read as a code span too, so the
+        # file alone would pass without the fence rule: the rule is pinned
+        # on its own.
+        self.assertEqual(
+            list(check_links.unfenced(['a', '```dart', '[x](y)', '```', 'b'])),
+            ['a', '', '', '', 'b'],
+        )
+
+    def test_a_link_inside_a_code_span(self):
+        path = self.member('Written as `[text](gone.md)` in Markdown.')
+        self.assertEqual(self.problems(path), [])
+
+    def test_an_external_link(self):
+        path = self.member('See [pub](https://pub.dev/packages/core).')
+        self.assertEqual(self.problems(path), [])
+
+    def test_a_plain_comment_is_not_dartdoc(self):
+        path = self.write(
+            'packages/core/lib/src/job.dart',
+            '// See [it](gone.md).\nvoid run() {}\n',
+        )
+        self.assertEqual(self.problems(path), [])
+
+
 if __name__ == '__main__':
     unittest.main()

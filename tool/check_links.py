@@ -48,6 +48,16 @@ every pubspec, so a new package needs no edit here.
 
 `docs/records/` is not checked: a record is history, written on its day and
 kept as it was, and a link that pointed somewhere then is not a defect now.
+
+The dartdoc of `packages/*/lib/` is checked as well, by stricter rules. It
+is read on pub.dev, on the API page of a member, where a relative address
+and an `#anchor` of the page lead to a 404: so a link of dartdoc into this
+repository is its GitHub address on `main`, and anything else into the
+repository is reported. A `///` block is read whole, with its `/// `
+taken off, before links and fences are looked for: a link's text wraps to
+the next line as any phrase does, and a line read alone would miss it.
+Dartdoc does not lead up either: `async_job` explaining `runAll` has no
+business sending its reader to a page of `solo`.
 """
 
 import json
@@ -162,8 +172,83 @@ def offenders(path):
                 yield number, f'no such section: {target}'
 
 
+DOC_LINE = re.compile(r'^\s*/// ?(.*)$')
+FENCE = re.compile(r'^\s*```')
+REPOSITORY = BLOB[:-len('blob/main/')]
+
+
+def doc_blocks(path):
+    """(first line number, text) of every `///` block, fences left out.
+
+    The text keeps a line break for every line of the block, so a number
+    is counted from the start of the block to the link.
+    """
+    block = []
+    start = 0
+    for number, line in enumerate(path.read_text().split('\n'), start=1):
+        match = DOC_LINE.match(line)
+        if match:
+            if not block:
+                start = number
+            block.append(match.group(1))
+            continue
+        if block:
+            yield start, block
+            block = []
+    if block:
+        yield start, block
+
+
+def unfenced(lines):
+    """The lines of a block, with a fenced sample blanked out."""
+    fenced = False
+    for line in lines:
+        if FENCE.match(line):
+            fenced = not fenced
+            yield ''
+            continue
+        yield '' if fenced else line
+
+
+def dartdoc_offenders(path):
+    """What is wrong with the links of the dartdoc of one Dart file."""
+    parts = path.resolve().relative_to(REPO.resolve()).parts
+    above = built_on().get(parts[1], set())
+    for start, lines in doc_blocks(path):
+        text = '\n'.join(unfenced(lines))
+        text = SPAN.sub(lambda span: re.sub(r'[^\n]', ' ', span.group()), text)
+        for match in LINK.finditer(text):
+            number = start + text.count('\n', 0, match.start())
+            target = match.group(1)
+            if target.startswith(BLOB):
+                file, _, anchor = target[len(BLOB):].partition('#')
+            elif target.startswith(REPOSITORY):
+                yield number, f'not an address on main: {target}'
+                continue
+            elif EXTERNAL.match(target):
+                continue
+            else:
+                yield number, f'not absolute, a 404 on pub.dev: {target}'
+                continue
+            destination = REPO / file
+            upper, _ = place(destination)
+            if upper in above:
+                yield number, f'dartdoc of {parts[1]} leads up to {upper}: {target}'
+            if not destination.exists():
+                yield number, f'no such file: {target}'
+                continue
+            if not destination.is_file():
+                continue
+            if anchor and anchor not in anchors(destination):
+                yield number, f'no such section: {target}'
+
+
 def main():
     found = 0
+    for path in sorted(pathlib.Path('packages').glob('*/lib/**/*.dart')):
+        for number, problem in dartdoc_offenders(path):
+            found += 1
+            print(f'{path}:{number}: {problem}')
     for root in ROOTS:
         for path in sorted(pathlib.Path(root).rglob('*.md')):
             parts = path.parts
