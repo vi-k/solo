@@ -945,7 +945,8 @@ chains»; с переводом и строкой «Guides».
 выпуска в `docs/handoff.md`. Ничего нового.
 
 Итог 2026-10-21: сделано при подготовке выпуска `0.3.0`, как L11
-`2026-10-12-solo-project-review.md`. Подробности — `2026-10-21-release-prep-report.md`.
+`2026-10-12-solo-project-review.md`. Подробности —
+`2026-10-21-release-prep-report.md`.
 
 ### L16. `reference.md` не знает `timeout` и параметров `run` и `job`
 

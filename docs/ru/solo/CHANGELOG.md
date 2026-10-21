@@ -6,7 +6,8 @@
 
 ### Ломающие изменения
 
-Переименования, слева имя в `0.2.0`; у каждого есть своя запись ниже.
+Что писать вместо прежнего, слева имя в `0.2.0`; у каждого есть своя запись
+ниже.
 
 | `0.2.0` | `0.3.0` |
 |---|---|
@@ -19,6 +20,7 @@
 | `SoloObserver.onChange(solo, previous, current)` | `SoloObserver.onChange(solo, transition)` |
 | `SoloQueue.lastWhere` | `Solo.lastJobWhere` |
 | `Job.ignore()` | `Job.ignoreFailure()` |
+| `JobBase.debug` | `Job.debug` |
 
 - **`Solo.onError` стал уведомлением, а за ошибку, которой больше ни у кого
   нет, отвечает новый `Solo.onUnanswered`: за ту, которой не несёт ни один
@@ -32,6 +34,8 @@
   и провал бросившего `canStart`. См.
   [«Ответ за ошибку»](errors.md#ответ-за-ошибку).
 - **`Job.ignore()` переименован в `Job.ignoreFailure()`** в `async_job`.
+- **`JobBase.debug` теперь называется `Job.debug`** в `async_job`, чья главная
+  библиотека больше не экспортирует `JobBase`.
 - **Задача продолжается один раз, одним `then` или ручками `shared()`,**
   в `async_job`: второй `then` на задаче из `run` бросает `StateError`. Задача,
   которую `Policy.droppable` может отдать другому вызывающему, и задача группы

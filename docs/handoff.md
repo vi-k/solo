@@ -1006,8 +1006,8 @@ M6 и M15; на `92c8f016` зелёные `gate` и `site`, коммит с эт
 ## На следующий релиз собрано у всех трёх
 
 Ломающие правки есть в каждом пакете, поэтому все трое идут на `0.3.0`.
-Коротко — в разделах `## Unreleased` их `CHANGELOG.md`, у всех трёх одной
-формы: «Breaking changes», «Changes you will see on upgrade», «Added», «Fixed»,
+Коротко — в разделах `## 0.3.0` их `CHANGELOG.md`, у всех трёх одной формы:
+«Breaking changes», «Changes you will see on upgrade», «Added», «Fixed»,
 «Documentation», запись в одну фразу. Счёт ломающих записей на 2026-10-12:
 у `async_job` четырнадцать, у `solo` двадцать, из них две повторяют
 переименования ядра, у `flutter_solo` десять, из них пять повторяют
@@ -1018,10 +1018,8 @@ M6 и M15; на `92c8f016` зелёные `gate` и `site`, коммит с эт
 
 Порядок связки задан зависимостями: `solo` уже пользуется новым
 `inUncancellableSection`, поэтому в дереве и живут четыре
-`pubspec_overrides.yaml`. Сперва `async_job`, затем `^0.3.0`
-в `packages/solo/pubspec.yaml` и `solo`, затем `^0.3.0`
-в `packages/flutter_solo/pubspec.yaml` и `flutter_solo`. Оверрайды снимаются
-и добавляются в индекс — порядок
+`pubspec_overrides.yaml`. Сперва `async_job`, затем `solo`, затем
+`flutter_solo`. Оверрайды снимаются и добавляются в индекс — порядок
 в `2026-09-11[1]-solo-release-readiness-report.md`.
 
 Подготовка сделана 2026-10-21, `2026-10-21-release-prep-report.md`: версии

@@ -6,7 +6,8 @@ package's too: see
 
 ### Breaking changes
 
-The renames, with the `0.2.0` name on the left; each has its entry below.
+What to write instead, with the `0.2.0` name on the left; each has its entry
+below.
 
 | `0.2.0` | `0.3.0` |
 |---|---|
@@ -19,6 +20,7 @@ The renames, with the `0.2.0` name on the left; each has its entry below.
 | `SoloObserver.onChange(solo, previous, current)` | `SoloObserver.onChange(solo, transition)` |
 | `SoloQueue.lastWhere` | `Solo.lastJobWhere` |
 | `Job.ignore()` | `Job.ignoreFailure()` |
+| `JobBase.debug` | `Job.debug` |
 
 - **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
   error nobody else has: one no outcome carries, and a `Failed` nobody
@@ -31,6 +33,8 @@ The renames, with the `0.2.0` name on the left; each has its entry below.
   zone. So does the failure of a `canStart` that threw. See
   [Answering for an error](doc/errors.md#answering-for-an-error).
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
+- **`JobBase.debug` is `Job.debug`** in `async_job`, which no longer exports
+  `JobBase` from its main library.
 - **A job is continued once, by one `then` or by handles of `shared()`,** in
   `async_job`: a second `then` on a job of `run` throws a `StateError`. A job
   `Policy.droppable` may hand to another caller, and the job of an accumulator
