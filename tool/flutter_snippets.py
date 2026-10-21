@@ -1156,6 +1156,12 @@ _listening_imports, _listening_body = split_imports(
                + '/initState'])
 _second_imports, _second_body = split_imports(
     _fr['methods-from-a-second-import/import-package-flutter_solo-fl'])
+# Install shows the second import on its own, and it is the one that
+# section builds with.
+_install_second, _install_second_rest = split_imports(
+    _fr['install/import-package-flutter_solo-li'])
+assert _install_second_rest.strip() == '', _install_second_rest
+assert set(_install_second) <= set(_second_imports), _install_second
 _life_imports, _life_body = split_imports(
     _fr['the-controller-s-life/_ProfileScreenState'])
 assert _life_imports == ["import 'dart:async';"], _life_imports
@@ -1492,8 +1498,8 @@ void main() {
 # in, and the fragments that need what the mixin gives.
 FILES['readme_listenable_test'] = '\n'.join([
     *sorted(set(
-        _install_imports + _usage_imports + _listening_imports
-        + _second_imports + _life_imports + [
+        _install_imports + _install_second + _usage_imports
+        + _listening_imports + _second_imports + _life_imports + [
             "import 'package:flutter_test/flutter_test.dart';",
         ])),
     '',
@@ -1502,6 +1508,8 @@ FILES['readme_listenable_test'] = '\n'.join([
     wrap('listenableBuilder',
          _fr[_as_listenable + '/valuelistenablebuilder-profile'],
          'ProfileController controller'),
+    wrap('mergedBuilder', _fr[_as_listenable + '/listenablebuilder'],
+         'ProfileController left, ProfileController right'),
     '''
 class SaveButton extends StatefulWidget {
   final ProfileController controller;
@@ -1612,6 +1620,28 @@ void main() {
       controller.value,
       isA<Loaded>(),
       reason: 'the state is the value of the listenable',
+    );
+  });
+
+  testWidgets('one builder over two profiles follows either of them',
+      (tester) async {
+    final left = ProfileController(ProfileApi());
+    final right = ProfileController(ProfileApi());
+    closing(left);
+    closing(right);
+    await tester.pumpWidget(app(mergedBuilder(left, right)));
+    expect(find.text('waiting'), findsOne);
+
+    left.load().ignoreFailure();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(find.text('waiting'), findsOne, reason: 'one profile is loaded');
+
+    right.load().ignoreFailure();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(
+      find.text('both loaded'),
+      findsOne,
+      reason: 'the change of the second profile rebuilt the widget',
     );
   });
 
