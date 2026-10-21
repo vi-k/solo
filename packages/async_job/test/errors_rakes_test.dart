@@ -465,6 +465,7 @@ void main() {
             ..drop(Failed(error, StackTrace.empty)),
           outcomeObserved: false,
         );
+        expect(lines.first, startsWith('onError:'));
         expect(lines, isNot(contains(startsWith('onUnanswered:'))));
         expect(lines.last, 'zone: $error');
       }
@@ -476,13 +477,13 @@ void main() {
         'doc/errors.md': [
           '`onError`, then the answer if nobody observed the outcome',
           'if nobody observes that outcome, it goes on to the answer',
-          'it goes to the zone past the answer',
+          'then the zone past the answer if nobody observed the outcome',
           'is answered for the same way, failure by failure',
         ],
         '../../docs/ru/async_job/errors.md': [
           '`onError`, затем ответ, если исход никто не наблюдал',
           'если этот исход никто не наблюдает, он идёт к ответу',
-          'он идёт в зону мимо ответа',
+          'затем зона мимо ответа, если исход никто не наблюдал',
           'отвечают так же, провал за провалом',
         ],
       };
@@ -1170,7 +1171,7 @@ void main() {
 
     test("a wait left behind, the job's cancellation after the body: nobody",
         () {
-      // The table holds `abandonable` to the zone only until the body ends. A
+      // The page holds `abandonable` to the zone only until the body ends. A
       // body that cancels itself ends as the job accepts its cancellation, and
       // one from outside may arrive while the job waits for a child.
       expect(
