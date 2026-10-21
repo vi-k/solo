@@ -355,6 +355,13 @@ CHANGELOG, `docs/records/` и `docs/settled.md` правлю я. Принима�
    «`finish` is no cancellation: … anyway releases» переписано в «Since
    `finish` unwinds nothing, an engine … releases what the job holds first»:
    «anyway» без прежнего контекста повисало.
+3. `outcomes.md`. Длинных фраз 4, стало 0, тесты не менялись. Хвост раздела
+   «Listening for the cancellation» стал двумя списками: запускается ли
+   слушатель и в каком порядке, что будет с его ошибкой. «Unregistering more
+   than once is safe.» ушла к абзацу о функции снятия над таблицей. Сверх плана
+   разделены две фразы в «Following the cause». При приёмке последний пункт
+   о зоне тела открыт связкой «The zone the body runs in depends on how the job
+   was made», чтобы он читался продолжением предыдущего.
 
 ## Ревью плана
 
