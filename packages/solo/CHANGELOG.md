@@ -1,10 +1,24 @@
-## Unreleased
+## 0.3.0
 
 This package re-exports `async_job` whole, so the changes of the core are this
 package's too: see
 [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 ### Breaking changes
+
+The renames, with the `0.2.0` name on the left; each has its entry below.
+
+| `0.2.0` | `0.3.0` |
+|---|---|
+| `SoloBase<S>` | `Solo<S>` |
+| `Solo<S>`, the class with `stream` | `Solo<S> with SoloStream` |
+| `controller.state` | `controller.currentState` |
+| `onError:` of `run` and `job` | `ifFailed:` |
+| `onCancel:` of `run` and `job` | `ifCancelled:` |
+| `onChange(previous, current)` | `onChange(transition)` |
+| `SoloObserver.onChange(solo, previous, current)` | `SoloObserver.onChange(solo, transition)` |
+| `SoloQueue.lastWhere` | `Solo.lastJobWhere` |
+| `Job.ignore()` | `Job.ignoreFailure()` |
 
 - **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
   error nobody else has: one no outcome carries, and a `Failed` nobody

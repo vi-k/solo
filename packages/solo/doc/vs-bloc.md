@@ -54,7 +54,7 @@ Examples use separate application models: the player's `Ready` is not the
 report's `Ready`. Supporting state classes, event classes and fake APIs are not
 shown here: they live with the code that extracts these examples from the
 document, `tool/doc_snippets.py` in the repository. The examples were checked
-with bloc 9.2.1, bloc_concurrency 0.3.0 and the local solo 0.2.0 source. Traces
+with bloc 9.2.1, bloc_concurrency 0.3.0 and the local solo 0.3.0 source. Traces
 describe those runs, not timing guarantees for arbitrary devices.
 
 ## Correspondences

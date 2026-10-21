@@ -1,10 +1,24 @@
-## Не выпущено
+## 0.3.0
 
 Этот пакет реэкспортирует `async_job` целиком, поэтому изменения ядра
 принадлежат и этому пакету: см.
 [список изменений `async_job`](../async_job/CHANGELOG.md).
 
 ### Ломающие изменения
+
+Переименования, слева имя в `0.2.0`; у каждого есть своя запись ниже.
+
+| `0.2.0` | `0.3.0` |
+|---|---|
+| `SoloBase<S>` | `Solo<S>` |
+| `Solo<S>`, класс со `stream` | `Solo<S> with SoloStream` |
+| `controller.state` | `controller.currentState` |
+| `onError:` у `run` и `job` | `ifFailed:` |
+| `onCancel:` у `run` и `job` | `ifCancelled:` |
+| `onChange(previous, current)` | `onChange(transition)` |
+| `SoloObserver.onChange(solo, previous, current)` | `SoloObserver.onChange(solo, transition)` |
+| `SoloQueue.lastWhere` | `Solo.lastJobWhere` |
+| `Job.ignore()` | `Job.ignoreFailure()` |
 
 - **`Solo.onError` стал уведомлением, а за ошибку, которой больше ни у кого
   нет, отвечает новый `Solo.onUnanswered`: за ту, которой не несёт ни один
