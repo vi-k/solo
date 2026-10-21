@@ -72,7 +72,19 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late final controller = ProfileController(widget.api);
+  late ProfileController controller = ProfileController(widget.api);
+
+  @override
+  void didUpdateWidget(ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A State outlives its widget, and a field is built once: a screen
+    // handed another api keeps the controller over the old one unless it
+    // builds a new one here. Closing the old one cancels its load.
+    if (!identical(widget.api, oldWidget.api)) {
+      unawaited(controller.close());
+      controller = ProfileController(widget.api);
+    }
+  }
 
   @override
   void dispose() {

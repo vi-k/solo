@@ -12,6 +12,22 @@ Future<ProfileApi> _open(WidgetTester tester) async {
   return api;
 }
 
+/// A service that answers with [name] and counts the calls.
+class _NamedApi extends ProfileApi {
+  final String name;
+  int requests = 0;
+
+  _NamedApi(this.name);
+
+  @override
+  Future<String> fetchName() async {
+    requests++;
+    await Future<void>.delayed(_fetch);
+
+    return name;
+  }
+}
+
 /// Taps [finder] and lets the fetch it starts answer.
 Future<void> _loadWith(WidgetTester tester, Finder finder) async {
   await tester.tap(finder);
@@ -76,5 +92,45 @@ void main() {
 
     expect(api.calls, 1, reason: 'one fetch for the two taps');
     expect(find.text('hello Ada Lovelace'), findsOneWidget);
+  });
+
+  testWidgets('a screen handed another api loads from it', (tester) async {
+    final first = _NamedApi('Alice');
+    final second = _NamedApi('Bob');
+    await tester.pumpWidget(MaterialApp(home: ProfileScreen(api: first)));
+    await _loadWith(tester, find.text('Load'));
+    expect(find.text('Alice'), findsOneWidget);
+
+    await tester.pumpWidget(MaterialApp(home: ProfileScreen(api: second)));
+    // The new controller starts from its own state.
+    await _loadWith(tester, find.text('Load'));
+
+    expect(find.text('Bob'), findsOneWidget);
+    expect(first.requests, 1);
+    expect(second.requests, 1);
+  });
+
+  testWidgets('a screen handed another api mid-load drops the old load', (
+    tester,
+  ) async {
+    final first = _NamedApi('Alice');
+    final second = _NamedApi('Bob');
+    await tester.pumpWidget(MaterialApp(home: ProfileScreen(api: first)));
+    await tester.tap(find.text('Load'));
+    await tester.pump();
+
+    await tester.pumpWidget(MaterialApp(home: ProfileScreen(api: second)));
+    await tester.pump(_fetch);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice'), findsNothing);
+    expect(find.text('Load'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing,
+        reason: 'the closed controller cancelled its load');
+
+    await _loadWith(tester, find.text('Load'));
+    expect(find.text('Bob'), findsOneWidget);
+    expect(first.requests, 1);
+    expect(second.requests, 1);
   });
 }
