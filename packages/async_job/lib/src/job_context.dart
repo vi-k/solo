@@ -44,49 +44,11 @@ abstract interface class JobContext {
   ///
   /// Throws [Cancelled] up front if the job is already cancelled or its rules
   /// no longer hold. If a cancellation arrives while [action] is in flight, the
-  /// wait ends there with that [Cancelled] — and [action] runs on, its result
-  /// discarded, an error of its own going to `onError` and on to the job's
-  /// answer. It ends the waiting, not the work.
-  ///
-  /// For anything that must actually stop — a device, a download, a write —
-  /// hand the cancellation to it through [onCancel] and wait for it to finish
-  /// with [join], instead of walking away from it. Left deliberately unawaited,
-  /// write the type out — `unawaited(ctx.abandonable<Db>(...))`: without it `T`
-  /// is inferred from `unawaited`, which takes a `Future<void>`, and [dispose]
-  /// then has to be a `void Function(void)`, which is not what the call site
-  /// says and not what the analyzer explains. What such a call throws while the
-  /// body runs, its [Cancelled] included, goes to the zone, as from any future
-  /// nobody awaits. For a step that must not be interrupted at all, see
-  /// [uncancellable].
-  ///
-  /// [dispose] and [discard] say how the value is cleaned up, and the rule is
-  /// one: **a value that did not reach the body is cleaned up without a
-  /// condition; a value that did goes on the cleanup stack.** So a connection
-  /// or a file opened by an action the cancellation abandoned still gets
-  /// closed, and at once, alongside whatever the job is still doing: a child
-  /// the job waits for may want the same slot of a pool, and held for the
-  /// unwinding the value would keep it from that child for good. The job ends
-  /// only after that release all the same, so the closing of an engine waits
-  /// for it too. A value arriving while the job runs its cleanup stack joins
-  /// the stack instead, and one arriving once the job is over is released on
-  /// the spot — late and alone. A value that comes to a call the body walked
-  /// away from without a cancellation still goes to whoever holds its future,
-  /// and waits for the unwinding on the stack. A late error goes to `onError`
-  /// and on to the job's answer as always, and so does an error of the disposer
-  /// itself.
-  ///
-  /// On the stack the two differ: [dispose] runs whatever the outcome,
-  /// [discard] unless the job ends [Done]. So [discard] is for what the
-  /// body returns or hands outside, and a lock, a temporary file or a
-  /// subscription takes [dispose] — or it leaks on the successful path,
-  /// where no test on cancellation will see it. [discard] does not look at
-  /// the value the job returns: a body that ends [Done] without returning
-  /// this value disposes of it itself. Passing both is an [ArgumentError].
-  ///
-  /// The core catches a late value from the moment it learns the body
-  /// has ended, not from its `return`: a call the body walked away from
-  /// with `unawaited` may hand its value over before that. A call that
-  /// gives out a resource is not one to walk away from.
+  /// wait ends there with that [Cancelled], and [action] runs on: its result is
+  /// dropped, and an error of its own goes to `onError` and on to the job's
+  /// answer. **It ends the waiting, not the work:** for anything that must
+  /// actually stop — a device, a download, a write — hand the cancellation to
+  /// it through [onCancel] and wait for it to finish with [join].
   ///
   /// ```dart
   /// final db = await ctx.abandonable(
@@ -94,6 +56,25 @@ abstract interface class JobContext {
   ///   discard: (db) => db.close(),
   /// );
   /// ```
+  ///
+  /// [dispose] runs whatever the outcome, [discard] unless the job ends
+  /// [Done], and passing both is an [ArgumentError]. A value that did not reach
+  /// the body is released without a condition, at once. A value that comes to
+  /// a call the body walked away from without a cancellation still goes to
+  /// whoever holds its future, and waits for the unwinding on the stack. The
+  /// core catches a late value from the moment it learns the body has ended,
+  /// not from its `return`, so a call that gives out a resource is not one to
+  /// walk away from.
+  ///
+  /// Left unawaited on purpose, write the type out —
+  /// `unawaited(ctx.abandonable<Db>(...))`: without it `T` is inferred from
+  /// `unawaited` as `void`, and [dispose] has to take `void`. While the body
+  /// runs, what such a call throws, its [Cancelled] included, goes to the zone.
+  ///
+  /// See [Stopping the operation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#stopping-the-operation)
+  /// on the cancellation page and
+  /// [A value that comes late](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#a-value-that-comes-late)
+  /// on the cleanup page.
   Future<T> abandonable<T>(
     FutureOr<T> Function() action, {
     FutureOr<void> Function(T value)? dispose,
@@ -113,57 +94,31 @@ abstract interface class JobContext {
 
   /// Runs [action], waits for all of it, and gives up only afterwards.
   ///
-  /// The counterpart of [abandonable] for a call that must not be left in
-  /// flight: a device command, a write already on the wire. A cancellation
-  /// arriving while [action] runs is accepted at once — and an engine waiting
-  /// for the job waits too, because the body is still inside this call — but
-  /// the waiting is not cut short. When [action] comes back, this throws that
-  /// [Cancelled]; if none arrived, it returns [action]'s value.
+  /// For a call that must not be left in flight: a device command, a write
+  /// already on the wire. A cancellation arriving while [action] runs is
+  /// accepted at once, but the waiting is not cut short: when [action] comes
+  /// back, this throws that [Cancelled], and if none arrived, it returns
+  /// [action]'s value. Throws [Cancelled] up front if the job is already
+  /// cancelled or its rules no longer hold. An error from [action] is thrown
+  /// as it is, cancelled or not — **so await this call:** a body that walked
+  /// on lets that error reach a future nobody awaits, and Dart hands it to the
+  /// zone, past the job's observer.
   ///
   /// ```dart
   /// await ctx.join(() => device.write(chunk));
   /// ```
   ///
-  /// [abandonable] lets go of the action, `join` stays with it, so the next job
-  /// never starts against a device still finishing this one, and a body
-  /// written this way cannot walk past a cancellation by forgetting a
-  /// line.
+  /// The value is dropped when the job gives up, unless [dispose] or [discard]
+  /// takes it. A value that did not reach the body is released on the spot,
+  /// and here that is awaited before the [Cancelled] is thrown, so the next job
+  /// starts with the resource gone; one that did goes on the cleanup stack, as
+  /// in [abandonable]. Passing both is an [ArgumentError]. The checkpoint after
+  /// [action] releases the value whatever it throws, a rule of a domain that
+  /// throws included. An error from the disposer goes to `onError` and on to
+  /// the job's answer, and the [Cancelled] is thrown all the same.
   ///
-  /// The value is dropped when the job gives up: the throw happens inside this
-  /// call, and the body is never reached. For an [action] that hands something
-  /// over to own — a connection, a file, a subscription — pass [dispose] or
-  /// [discard], and the value goes there instead. The rule is the same as in
-  /// [abandonable]: a value that did not reach the body is cleaned up on the
-  /// spot — and here that is awaited before the [Cancelled] is thrown, so an
-  /// engine waiting for the job waits for the disposal too and the next job
-  /// starts with the resource gone; a value that did reach the body goes on the
-  /// cleanup stack, [dispose] to run whatever the outcome and [discard] unless
-  /// the job ends [Done], as in [abandonable]. Passing both is an
-  /// [ArgumentError]. Only a value is handed over: an [action] that threw has
-  /// nothing to dispose of.
-  ///
-  /// ```dart
-  /// final db = await ctx.join(
-  ///   Database.open,
-  ///   discard: (db) => db.close(),
-  /// );
-  /// ```
-  ///
-  /// An error from [action] is thrown as it is, cancelled or not, and the body
-  /// can catch it like any other — **so await this call.** A body that walked
-  /// on can end while [action] is still in flight, and the error then reaches a
-  /// future nobody awaits: Dart hands that to the zone, where [abandonable]
-  /// would have handed it to `onError` and on to the job's answer. The value
-  /// half of the same case is taken care of — it goes quietly to [dispose] or
-  /// [discard]. An error from the disposer goes to `onError` and on to the
-  /// job's answer, and the [Cancelled] is thrown all the same. Throws
-  /// [Cancelled] up front if the job is already cancelled or its rules no
-  /// longer hold, the same as [abandonable] and [uncancellable].
-  ///
-  /// The checkpoint after [action] releases the value whatever it throws,
-  /// not only for a [Cancelled]: a rule of a domain that throws instead of
-  /// answering ends the job with that error, and the resource goes to
-  /// [dispose] or [discard] on the way out.
+  /// See [A token through `onCancel`](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-token-through-oncancel)
+  /// on the cancellation page.
   Future<T> join<T>(
     FutureOr<T> Function() action, {
     FutureOr<void> Function(T value)? dispose,
@@ -172,83 +127,38 @@ abstract interface class JobContext {
 
   /// Runs [action] with the cancellation held back, and waits for it.
   ///
-  /// The counterpart of [abandonable], for a step that cannot be taken back: a
-  /// payment on its way to the server, a write already on the wire. While
-  /// [action] runs the job accepts no cancellation it may refuse, so
-  /// [Job.cancel], a cancelled parent and whatever an engine adds — a queue, a
-  /// closing — reach neither an [onCancel] callback nor a child, and the core
-  /// waits for the body instead of interrupting it.
+  /// For a step that cannot be taken back: a payment on its way to the server,
+  /// a write already on the wire. While [action] runs the job accepts no
+  /// cancellation it may refuse, so neither an [onCancel] callback nor a child
+  /// hears one, and the core waits for the body. Throws [Cancelled] up front
+  /// if the job is already cancelled. **Held, not refused:** the job accepts
+  /// the cancellation as the section closes and still ends cancelled, so what
+  /// has to happen after the step anyway belongs inside the section, and
+  /// `return ctx.uncancellable(...)` carries no value out — the outcome is
+  /// [Cancelled], and the registrations of [onDiscard] run. [heldCancellation]
+  /// tells the step whether a cancellation is held, so it can keep what it
+  /// made.
   ///
   /// ```dart
   /// final receipt = await ctx.uncancellable(() => api.pay(order));
   /// ```
   ///
-  /// Held, not refused: the cancellation lands the moment the section
-  /// closes, and the next member of the context throws it. Plainly: while
-  /// the body is inside, the callbacks of [onCancel] are not called at all
-  /// — they are called the moment the section closes, before the body goes
-  /// on, and the body itself learns of the cancellation after that. So the
-  /// step is protected, and the job still ends up cancelled — anything
-  /// after the step that has to happen anyway belongs inside the same
-  /// section. Returning the section is no way out: the job takes the held
-  /// cancellation before `return ctx.uncancellable(...)` returns, the value
-  /// of the section reaches neither the outcome nor [Job.value], and the
-  /// registrations of [onDiscard] run. [heldCancellation] tells the step
-  /// whether a cancellation is held, so it can keep what it made. A job that
-  /// must survive a cancellation altogether is created with
-  /// `cancellable: false`. That refusal is final and is what a section leaves
-  /// alone. Sections nest — only the outermost lets a held cancellation
-  /// through — and it is let through even if [action] throws.
+  /// Sections nest, and only the outermost lets a held cancellation through,
+  /// even if [action] throws. A cancellation the job cannot refuse, such as a
+  /// rule an engine adds, is not held: the job ends with its reason, and the
+  /// held one never lands. Always await this call: the section belongs to the
+  /// job, not to the future, and one still open after the body lands its
+  /// cancellation late — dropped on a job that is over, or made the outcome
+  /// over the body's value while a child still runs.
   ///
-  /// When [action] throws while a cancellation is held, the section closes, the
-  /// cancellation lands, and the body receives the error. A body that lets it
-  /// out ends [Cancelled], and the error goes on as any failure of the body of
-  /// a cancelled job does: to [JobObserver.onError], then to the answer — see
-  /// [Failed].
+  /// A section also keeps an asynchronous hand-over together with its
+  /// [disown]: the step is a bare `await`, not [join], and between it and the
+  /// `disown` stands nothing that throws this job's cancellation — no member
+  /// of this context, no `await child.value` — because a cancellation the
+  /// rules of a domain make is not held.
   ///
-  /// **Always await this call.** The section belongs to the job, not to the
-  /// future returned here: it opens on the call and holds a cancellation
-  /// whether the body waits for it or not. A body that walked on can end while
-  /// the section is still open, and then the held cancellation lands on a job
-  /// that is already over and is dropped — [Job.cancel] returns on a job whose
-  /// outcome is [Done], and nothing says otherwise. What [action] throws has
-  /// nowhere to go either: nobody awaits this future, so its error reaches the
-  /// zone instead of the observer. And if the job is not over yet — its body
-  /// ended but a child of it is still running — the held cancellation lands on
-  /// a job that is very much alive: it becomes the outcome over the value the
-  /// body returned, and the registrations of [JobContext.onDiscard] run. A body
-  /// that walked on and then cancels itself accepts a cancellation no section
-  /// holds: the [onCancel] callbacks run while the section is still open, and a
-  /// call of [abandonable] inside it throws.
-  ///
-  /// This is what separates it from [join], which accepts the cancellation as
-  /// it arrives and only keeps waiting: there the job accepts it at once, and a
-  /// token handed to [onCancel] stops the very call being waited for.
-  ///
-  /// The rules an engine adds are not covered: `solo`, for example, cancels a
-  /// job whose state left its working type whatever this does, and the body
-  /// learns about it at its next read as always. A cancellation the section
-  /// held until then gives way: the job ends with the reason of the rule, and
-  /// the held one never lands.
-  ///
-  /// Throws [Cancelled] if the job is already cancelled, the same as
-  /// [abandonable]: a step that cannot be taken back must not begin for a job
-  /// that is already over.
-  ///
-  /// A section is also how an asynchronous hand-over stays together with
-  /// its [disown]: inside it, between the step and the `disown`, there
-  /// must be nothing that throws this job's cancellation — no member of
-  /// this context, no `await child.value` of its child. A cancellation
-  /// the rules of a domain make cannot be held, and any of those would
-  /// throw after the step, leaving the value handed over and its cleanup
-  /// still registered.
-  ///
-  /// ```dart
-  /// await ctx.uncancellable(() async {
-  ///   await transaction.commit(); // a bare await, not ctx.join
-  ///   ctx.disown(transaction);
-  /// });
-  /// ```
+  /// See [Holding the cancellation back](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#holding-the-cancellation-back)
+  /// on the cancellation page.
   Future<T> uncancellable<T>(FutureOr<T> Function() action);
 
   /// Waits for [duration], or until the job is cancelled.
@@ -398,61 +308,42 @@ abstract interface class JobContext {
   /// engine would have put it through.
   ///
   /// Starts synchronously, then returns a future with the child's value after
-  /// the child, its children and its cleanup finish. Keep [child] itself when
-  /// its handle is needed. A child error or cancellation reaches the future
-  /// with its original stack trace.
+  /// the child, its children and its cleanup finish; a child's error or
+  /// cancellation reaches the future with its original stack trace. The parent
+  /// finishes only after all its children, and its cancellation cascades onto
+  /// them. When the child succeeds while the parent's body is still active,
+  /// the future checks the parent, for a cancellation and for the rules of its
+  /// domain, and a check that throws takes the value with it. So a value the
+  /// child hands over is registered on the call, with [dispose] or [discard],
+  /// and not on the line after it: that line is never reached, and the child,
+  /// having ended [Done], has already dropped its own registration.
   ///
-  /// The parent finishes only after all its children. Its cancellation
-  /// cascades onto them, and a child created with `cancellable: false` refuses
-  /// that cascade. The future still waits for a child that refuses or holds
-  /// cancellation. If that child succeeds while the parent's body is still
-  /// active, the future checks the parent and throws its accepted [Cancelled]
-  /// instead of returning the value. If the body ended without awaiting the
-  /// future, a later success returns its value without checking the closed
-  /// context.
+  /// ```dart
+  /// final db = await ctx.run(connect, discard: (db) => db.close());
+  /// ```
   ///
-  /// Once the child starts, this method observes its [Job.value]. Handle the
-  /// future returned here even when [Job.ignoreFailure] was called on [child]:
-  /// that ignores the job's own reporting, not an error carried by this future.
-  /// A failure of the body of a child that ends [Cancelled] does not come
-  /// through the future: the future throws the [Cancelled], and the child
-  /// answers for the failure through [JobAnswerer.onUnanswered] of its
-  /// observer, otherwise in the zone, unless [Job.ignoreFailure] was called on
-  /// [child] or [Job.isCancellationError] names the failure.
+  /// [dispose] and [discard] work as in [abandonable], and passing both is an
+  /// [ArgumentError] thrown before the child starts. When the check throws, the
+  /// disposer runs on the spot and is awaited before the [Cancelled] is thrown;
+  /// when it passes, the registration goes on the cleanup stack. If the body
+  /// ended without awaiting the future, a later success returns its value
+  /// without checking the closed context.
   ///
-  /// A child is a [ChildJob]: one from [Job.deferred], or a job of an engine
-  /// that declares it. A job from `Job(body)`, [Job.then] or [Job.each] starts
-  /// itself and is none, so the compiler turns it away before anything runs.
-  ///
-  /// Admission errors are synchronous: throws [ArgumentError] for a handle that
-  /// is not a job of this core or one an engine does not own; [StateError] for
-  /// a job that has already been started or has finished — one cancelled before
-  /// its start included — and for a call made after this job's body has ended —
-  /// from its cleanup, say — or from [unattended] work; and the parent's own
+  /// Admission errors are synchronous: an [ArgumentError] for a handle that is
+  /// not a job of this core or one an engine does not own; a [StateError] for a
+  /// job already started or finished, and for a call made after this job's
+  /// body has ended or from [unattended] work; and the parent's own
   /// [Cancelled], with the child cancelled before its start, if the parent is
   /// already cancelled. An [ArgumentError] or a [StateError] leaves [child]
   /// untouched, with the code that made it: a job of [Job.deferred] refused
   /// that way stays unstarted, and its [Job.done] waits until that code starts
   /// or cancels it.
   ///
-  /// [dispose] and [discard] say how the child's value is cleaned up, and they
-  /// work as they do in [abandonable]: [dispose] runs whatever the outcome,
-  /// [discard] unless the parent ends [Done], and passing both is an
-  /// [ArgumentError] thrown before the child starts. They are how a value that
-  /// travels is registered again on arrival, and they take the value the
-  /// moment it comes back, because the checkpoint above is what would take
-  /// it away: when that checkpoint throws, the disposer runs on the spot and
-  /// is awaited before the [Cancelled] is thrown; when it passes, the
-  /// registration goes on the cleanup stack.
-  ///
-  /// ```dart
-  /// final db = await ctx.run(connect, discard: (db) => db.close());
-  /// ```
-  ///
-  /// Written on the next line instead, the registration is never reached
-  /// when the parent is cancelled or a rule of its domain refuses right
-  /// there — and the child, having ended [Done], has already dropped its
-  /// own. Nothing would close the database at all.
+  /// See [Running a child](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#running-a-child)
+  /// and [When `ctx.run` refuses a child](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#when-ctxrun-refuses-a-child)
+  /// on the children page, and
+  /// [Registering on arrival](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#registering-on-arrival)
+  /// on the cleanup page.
   Future<T> run<T>(
     ChildJob<T> child, {
     FutureOr<void> Function(T value)? dispose,
@@ -487,122 +378,47 @@ abstract interface class JobContext {
   /// ```
   void start(ChildJob<Object?> child);
 
-  /// Runs [children] side by side and stops the rest as soon as one of
-  /// them goes wrong.
+  /// Runs [children] side by side and stops the rest as soon as one of them
+  /// goes wrong.
   ///
   /// Starts every child synchronously, in the order of the list, and returns
-  /// their values in that same order — not in the order they finished. The list
-  /// is read once, by copy, before the first start: an `Iterable` promises
-  /// neither repeatability nor stability, and the bodies start soon enough to
-  /// change the list it was built from. The same handle twice is refused with
-  /// an [ArgumentError] before anything starts.
+  /// their values in that same order. As soon as the body of a branch ends in
+  /// anything but a value, the other branches are asked to stop with
+  /// [SiblingCancelReason], and what comes out is decided by the final
+  /// outcomes: a real failure if there is one, otherwise the first cancellation
+  /// that arrived, thrown as `await ctx.run(child)` would throw it. **A branch
+  /// must not wait for another branch of the same group** — for its [Job.value]
+  /// or [Job.done], or for a lock or a slot of a pool it releases in its
+  /// cleanup. No branch unwinds before the group has decided, so the group
+  /// hangs, with no timer and no error. Take such a lock in a child of the
+  /// branch, which releases it when the child ends, still inside the body, or
+  /// use `[a, b].wait`, under which every branch unwinds on its own.
   ///
-  /// As soon as the body of any branch ends in anything but a value, the other
-  /// branches are asked to stop with [SiblingCancelReason] — the branch the
-  /// trouble came from is not, or its own error would turn into a cancellation
-  /// and be lost. What comes out is decided by the final outcomes, not by that
-  /// early word: a real failure if there is one, otherwise the first
-  /// cancellation that arrived. The object thrown is the one the outcome
-  /// carries — exactly what `await ctx.run(child)` would have thrown — so a
-  /// cancellation arrives as a cancellation and there is no envelope to take
-  /// apart. One case goes by the early word: a branch an engine ends by hand
-  /// with a value after the group heard its body fail counts as ending with
-  /// that failure. The value comes too late for the group and stays in the
-  /// outcome of the branch alone: see [JobBase.finish]. A failure the group
-  /// received and did not throw is not lost either: it goes the way an error
-  /// nobody answered for goes, once. Nor is a failure of the body of a branch
-  /// that ends [Cancelled]: the outcome carries the cancellation, and the
-  /// branch answers for the failure the same way. [Job.ignoreFailure] on a
-  /// branch silences both: [JobObserver.onError] hears them, and nobody answers
-  /// for them.
+  /// The list is read once, by copy, before the first start. A failure the
+  /// group received and did not throw goes the way an error nobody answered for
+  /// goes, and so does the failure of the body of a branch that ends
+  /// [Cancelled]; [Job.ignoreFailure] on the branch silences both. A branch an
+  /// engine ends by hand with a value after the group heard its body fail
+  /// counts as ending with that failure: see [JobBase.finish]. What a child
+  /// that holds the lock opens for the caller, the branch registers on arrival,
+  /// `run(child, discard: ...)`, and that `discard` runs without the lock.
   ///
-  /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait for
-  /// every branch and stop none, so a branch whose sibling has already failed
-  /// runs to its end and settles its own registrations on the way. They differ
-  /// in what comes out: `.wait` throws a `ParallelWaitError` holding the values
-  /// and the errors of every branch at once, and [Future.wait] throws the first
-  /// error to reach it and lets the rest go. Take either when the branches do
-  /// not depend on each other's failure, or when one of them waits for another.
-  /// Take this one when a result missing one of its parts is of no use anyway:
-  /// it asks the rest to stop, holds every branch until the decision is made,
-  /// and throws the outcome itself. `eagerError: true` is not the middle ground
-  /// it looks like: it wakes the body on the first error and asks nobody to
-  /// stop, so the job still ends with its last child.
+  /// Admission errors are those of [run], and the same handle twice is an
+  /// [ArgumentError]. Everything that needs no adoption is asked of every
+  /// handle before the first one starts, so such a refusal starts none of them,
+  /// the sound ones included: each stays with the code that made it, and its
+  /// `done` waits until that code starts or cancels it. A refusal only the
+  /// adoption can give — an engine turning the parent down, a rule of its
+  /// domain that throws — may arrive after some branches have started: it stops
+  /// them and waits for them, and the handles after the refused one are never
+  /// started. Under a cancelled parent every branch is turned away, and so is
+  /// the rest of the list when a branch cancels the parent before its first
+  /// `await`. An empty group returns an empty list after the checks [run]
+  /// makes; a body that ended without awaiting the future gets the values
+  /// unchecked, as from [run].
   ///
-  /// **The stop is cooperative.** A branch that waits through [abandonable]
-  /// ends, and the operation behind it plays on and writes its result; to stop
-  /// the work itself, hand the cancellation to it through [onCancel] and wait
-  /// for it with [join]. A branch created with `cancellable: false` refuses the
-  /// stop, and the group waits for it. The descendants of the branch that
-  /// failed are not cancelled — a failure never cascades — so the group waits
-  /// for them too.
-  ///
-  /// **No branch ends before the group has decided.** A branch stands twice:
-  /// once when its body and its children are over and before it unwinds, once
-  /// between the two passes of its unwinding. That is what keeps a resource a
-  /// branch took for the caller — one registered through `discard` — alive
-  /// until the group is sure the caller will get it, and closed by the branch
-  /// itself when it will not. While a branch is held, its outcome is not final:
-  /// a body that returned a value may still end [Cancelled]. The hold has a
-  /// price, and the next two paragraphs name it: a branch that waits for
-  /// another branch can hang the group.
-  ///
-  /// **A branch must not wait for another branch of the same group.** Awaiting
-  /// a sibling's [Job.value] or [Job.done] hangs the group: the sibling is held
-  /// until the group decides, and the group decides only once every branch is
-  /// held, or once the body of one of them has ended in anything but a value.
-  /// Nothing here catches that. A cancellation unties it on the same terms as
-  /// the lock below: a branch awaiting the sibling through [abandonable] ends,
-  /// unless it was created with `cancellable: false` or waits inside
-  /// [uncancellable]; one in a bare `await` does not. For branches that depend
-  /// on each other use `[a, b].wait` instead, which waits for all of them and
-  /// stops none.
-  ///
-  /// **Nor for what another branch releases in its cleanup.** A branch starts
-  /// unwinding only when every branch has ended its body and its children, or
-  /// when the body of one of them has ended in anything but a value; until then
-  /// its `dispose` and [onDispose] callbacks wait too. A lock the branches
-  /// share, or a slot of a pool with fewer free slots than the branches that
-  /// want one, taken with `dispose`, stays with the branch that got it. The
-  /// branch waiting for it keeps every branch from unwinding, and the group
-  /// hangs with no timer and no error until the body of another branch ends in
-  /// anything but a value. A cancellation, of the parent or of a branch, unties
-  /// it only by ending something a branch still waits for before it unwinds,
-  /// its body or a child of it: one waiting through [abandonable], or on an
-  /// operation that hears [onCancel]. It does not end one stuck in [join] on an
-  /// operation deaf to it, in a bare `await`, inside [uncancellable], or in a
-  /// job created with `cancellable: false`, and cancelling the branch that
-  /// holds the lock does nothing: its body is over. Take such a lock in a child
-  /// of the branch, which releases it when the child ends, still inside the
-  /// body. If that child also opens what the branch hands out, the branch
-  /// registers it on arrival, `run(child, discard: ...)`, and that `discard`
-  /// runs without the lock. Or use `[a, b].wait`, under which every branch
-  /// unwinds on its own.
-  ///
-  /// On success the group does not wait for its branches to finish: the
-  /// values are handed over the moment the decision is made, and whatever
-  /// a branch still has to unwind plays out under the parent, which waits
-  /// for its children as always. On failure it is the other way round —
-  /// every branch is stopped and waited for, so that by the time the error
-  /// arrives everything the branches took is closed. If the body ended
-  /// without awaiting the future, the group hands the values over without
-  /// checking the parent, as [run] does.
-  ///
-  /// An empty group starts nothing and returns an empty list, after making the
-  /// same checks [run] would make, the checkpoint of the parent included.
-  /// Admission errors are those of [run]. Everything that needs no adoption is
-  /// asked of every handle before the first one starts, so such a refusal
-  /// leaves nothing running and every handle untouched, the way [run] leaves a
-  /// child it refuses with an [ArgumentError] or a [StateError]. The group
-  /// starts none of them, the sound ones included: each stays with the code
-  /// that made it, and its `done` waits until that code starts or cancels it.
-  /// Under a parent that is already cancelled every branch is turned away the
-  /// way [run] turns away its child, and so is the rest of the list when a
-  /// branch cancels the parent before its first `await`, while the list starts.
-  /// A refusal only the adoption can give — an engine turning the parent down,
-  /// a rule of its domain that throws — may arrive after some branches have
-  /// started: it stops them and waits for them before it comes out, and the
-  /// handles after the refused one are left as they were, never started.
+  /// How this differs from `.wait` and [Future.wait] is in [When one failure makes the rest pointless](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/groups.md#when-one-failure-makes-the-rest-pointless)
+  /// on the groups page, and the hang in [Branches that wait for each other](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/groups.md#branches-that-wait-for-each-other).
   Future<List<T>> runAll<T>(Iterable<ChildJob<T>> children);
 
   /// Starts a child job that processes [stream] one event at a time.
@@ -674,91 +490,51 @@ abstract interface class JobContext {
 
   /// Runs [action] as work this job does not wait for.
   ///
-  /// The fourth member of the waiting family, and the one that does not wait:
-  /// [abandonable] waits for the call but not the work, [join] waits for all of
-  /// it, [uncancellable] waits with the cancellation held back, and this one
-  /// hands the work to the core and comes back at once. Whatever [action]
-  /// leaves uncaught — now, or long after the job is over — belongs to the job:
-  /// its observer hears it through `onError`, and one that is a [JobAnswerer]
-  /// answers for it; by default, and without such an observer, it goes to the
-  /// zone the job was created in. Written any other way, such a failure belongs
-  /// to nobody and lands in whatever zone it happens to fail in.
+  /// Comes back at once and hands the work to the core: the job neither waits
+  /// for it nor cancels it, and whatever [action] leaves uncaught — now, or
+  /// long after the job is over — belongs to the job. Its observer hears it
+  /// through `onError`, one that is a [JobAnswerer] answers for it, and by
+  /// default it goes to the zone the job was created in; it never reaches the
+  /// body, because background work must not decide the outcome of the job that
+  /// started it. The job's own cancellation left uncaught is not reported.
+  /// Legal on a job that has accepted a cancellation and while the core unwinds
+  /// the cleanup stack; once the job has finished it throws a [StateError].
+  /// **Start the work in here and take nothing out of it:** the work runs in an
+  /// error zone of its own, so a future made outside and awaited in here never
+  /// comes back if it fails, and one born in here and awaited outside hangs
+  /// whoever waits for it if it fails. The `void` return does not stop a
+  /// closure carrying one out.
   ///
   /// ```dart
   /// ctx.unattended(() => analytics.report(event));
-  /// ```
-  ///
-  /// The job does not wait for the work, does not cancel it and does not stop
-  /// it outliving the job. The job's own cancellation is not reported when the
-  /// work leaves it uncaught: a cancellation is a decision, not a failure, and
-  /// whoever listens has heard it on the outcome already. That covers what
-  /// comes out of [action]; a call of [abandonable] or [join] made in here
-  /// keeps its own rules, and an action *it* was left holding still reports its
-  /// late failure — a [Cancelled] included — the way it does anywhere else. A
-  /// throw of [action] goes the same way as one from a future it started — to
-  /// `onError` and on to the job's answer, never into the body: background work
-  /// must not decide the outcome of the job that started it.
-  ///
-  /// **Start the work in here and take nothing out of it.** The work runs
-  /// in an error zone of its own, and that boundary holds both ways. A
-  /// future made outside and awaited in here never comes back if it
-  /// fails, and its error goes to whoever made it — the process, in an
-  /// ordinary program. A future born in here and awaited outside hangs
-  /// whoever waits for it **if it fails** — a body that changed its mind,
-  /// a disposer, a memoized cache first filled from the background — and
-  /// a failure is exactly the case nobody plans for. The `void` return
-  /// does not stop a closure carrying one out, and nothing will warn you.
-  ///
-  /// [run], [runAll], `each` and [uncancellable] throw a [StateError] when
-  /// called from inside [action]: they act on the whole job, and this work is
-  /// not the job. A child started here, by [run], [runAll] or `each`, would
-  /// hang on that boundary with the parent waiting for it forever, and a
-  /// section opened here would hold back the cancellation of a body that stands
-  /// in no section at all. [abandonable] and [join] are fine — they register on
-  /// the job and behave. The work waits for their value, so it gets it on the
-  /// body's terms even after the body has ended: on a job that has accepted a
-  /// cancellation the value is released and the call throws the cancellation,
-  /// and on a job that is over a value with a `dispose` or `discard` is
-  /// released and the call throws a [StateError] instead of handing it over
-  /// closed.
-  ///
-  /// **How the work stops.** Not by polling [check]: on a job nobody
-  /// cancelled it throws a [StateError] while the core unwinds the cleanup
-  /// stack, and once that job has ended [Done] it does not throw at all, so
-  /// a loop waiting for it waits forever and holds the job while it waits.
-  /// Ask `job.isFinished`, or wait for `job.done`. Work that must end with
-  /// the job puts its own stop on the cleanup stack —
-  /// `ctx.onDispose(timer.cancel)` — or takes the cancellation through
-  /// [onCancel], which is also the natural place to hand out an
-  /// asynchronous stop whose failure should be heard:
-  ///
-  /// ```dart
-  /// ctx.onCancel(() => ctx.unattended(device.stop));
   /// ```
   ///
   /// **Unfinished work holds the job**, its outcome and the body's closure with
   /// everything it captured — and whatever an engine hangs on the job: in
   /// `solo`, for example, the controller itself, with its state and its
   /// listeners, after `close()` too. A periodic timer left running in here
-  /// leaks all of that.
+  /// leaks all of that. Work that must end with the job puts its own stop on
+  /// the cleanup stack, `ctx.onDispose(timer.cancel)`, or takes the
+  /// cancellation through [onCancel]. Polling [check] is no stop: on a job
+  /// nobody cancelled it throws a [StateError] while the core unwinds the
+  /// cleanup stack, and once the job has ended [Done] it does not throw at all,
+  /// so a loop waiting for it holds the job forever. Ask `job.isFinished`, or
+  /// wait for `job.done`.
   ///
-  /// A job created in here is not this work: it has an outcome and an observer
-  /// of its own. Its unobserved failure goes to the answer of its own observer,
-  /// or to the zone this work was started from, rather than to this job's
-  /// observer, and a job that starts itself runs its body there. So does a job
-  /// started in here by hand, wherever it was made: it starts in that zone,
-  /// past any zone forked inside the work. When the work of one job runs inside
-  /// the work of another, that zone is the one the outer work was started from.
-  /// Quench it with [Job.ignoreFailure].
+  /// [run], [runAll], `each` and [uncancellable] throw a [StateError] in here:
+  /// they act on the whole job, and this work is not the job. [abandonable] and
+  /// [join] work, on the body's terms even after the body has ended: on a job
+  /// that has accepted a cancellation the value is released and the call
+  /// throws the cancellation, and on a job that is over a value with a
+  /// `dispose` or `discard` is released and the call throws a [StateError]
+  /// instead of handing it over closed. A job
+  /// created in here is not this work: it has an outcome and an observer of its
+  /// own, and its body runs, and its unobserved failure lands, in the zone this
+  /// work was started from — for work inside the work of another job, the zone
+  /// the outer work was started from.
   ///
-  /// Legal on a job that has already accepted a cancellation, and legal while
-  /// the core unwinds the cleanup stack — a disposer starting work nobody waits
-  /// for is the case this member was made for. Once the job has finished it
-  /// throws a [StateError].
-  ///
-  /// A bare `unawaited(work())` is not covered: it belongs to no member of
-  /// this context, its failure goes to the zone as it always has, and this
-  /// member is what to write instead of it.
+  /// See [Work the job does not wait for](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#work-the-job-does-not-wait-for)
+  /// on the errors page.
   void unattended(FutureOr<void> Function() action);
 
   /// The job this context belongs to.

@@ -85,58 +85,37 @@ abstract mixin class JobObserver {
   /// A job has an outcome, including jobs dropped before start.
   void onFinish(Job<Object?> job) {}
 
-  /// Something the job did threw. Every error the job catches comes here,
-  /// except a [Cancelled] the job ends with. The hook only hears it:
-  /// overriding it moves the error nowhere.
+  /// Something the job did threw.
   ///
-  /// The job's failure — its body's, or one an engine ended it with by hand —
-  /// or one of the errors with no outcome to carry them: an action abandoned by
-  /// [JobContext.abandonable] failing later, a disposer, a cancellation
-  /// callback, work handed over with [JobContext.unattended], a failure while
-  /// formatting a child's cancellation description, or a failure an engine
-  /// handed to a job already over. Each is told here once per job, and one
-  /// error at a time: when the error is a `ParallelWaitError`, each failure
-  /// and each cancellation inside it comes in a call of its own, with its own
-  /// stack trace, as [Job.visitErrors] walks it. The outcome keeps the error
-  /// as it was thrown.
+  /// Every error the job catches comes here, except a [Cancelled] the job ends
+  /// with, and the hook only hears it: overriding it moves the error nowhere.
+  /// That is the job's failure — its body's, or one an engine ended it with by
+  /// hand — or an error with no outcome to carry it: an action
+  /// [JobContext.abandonable] stopped waiting for failing later, a disposer, a
+  /// cancellation callback, work handed over with [JobContext.unattended], the
+  /// name of a child failing to format, a failure an engine handed to a job
+  /// already over. A [Cancelled] comes here only when it is thrown where no
+  /// outcome carries it, such as from a disposer or a callback, and never as
+  /// the job giving up. Each error is told once per job, and one at a time:
+  /// each failure and each cancellation inside a `ParallelWaitError` comes in a
+  /// call of its own, with its own stack trace, as [Job.visitErrors] walks it.
   ///
-  /// A failure can be the outcome of several jobs, and then it comes here
-  /// once on each of them. A child of [JobContext.run] fails, its parent lets
-  /// the failure out of its body, and an observer the child inherited hears
-  /// the same object on the child and then on the parent. A branch of
-  /// [JobContext.runAll] and its parent do the same, and so do a source and
-  /// its continuation of [Job.then] given one observer. An observer that
-  /// counts failures tells the second call from a new error by [identical],
-  /// and an [Expando] remembers the errors it has heard without keeping them
-  /// alive. An error thrown as a constant is the same object at every throw,
-  /// and two such failures count as one. An [Expando] takes no string,
-  /// number, boolean or record and throws when given one: such a value has
-  /// no identity of its own to tell two calls apart, and the observer counts
-  /// it at every call.
+  /// A failure can be the outcome of several jobs, and then it comes here once
+  /// on each of them. A child of [JobContext.run] fails, its parent lets the
+  /// failure out of its body, and an observer the child inherited hears the
+  /// same object on the child and then on the parent. A branch of
+  /// [JobContext.runAll] and its parent do the same, and so do a source and its
+  /// continuation of [Job.then] given one observer. An observer that counts
+  /// failures tells the second call from a new error by [identical], and an
+  /// [Expando] remembers the errors it has heard without keeping them alive. An
+  /// error thrown as a constant is the same object at every throw, and two such
+  /// failures count as one. An [Expando] takes no string, number, boolean or
+  /// record and throws when given one: such a value has no identity of its own
+  /// to tell two calls apart, and the observer counts it at every call.
   ///
-  /// The errors with no outcome go on to [JobAnswerer.onUnanswered] of an
-  /// observer that answers, and so do three failures of the body: that of a
-  /// branch of [JobContext.runAll] the group did not throw, that of a job that
-  /// ends [Cancelled], and that of a job an engine ended by hand with an
-  /// outcome of its own. [Job.ignoreFailure] on the job stops these three here.
-  /// The last goes to the group instead when the job is a branch whose group
-  /// heard of the failure before an engine handed in a value, and the group
-  /// throws it or answers for it as for a failure it did not throw (see
-  /// [JobBase.finish]). Any other failure of the job is carried by the outcome,
-  /// and one nobody observes goes on to [JobAnswerer.onUnanswered] as well.
-  /// Once the job has accepted a cancellation, a failure
-  /// [Job.isCancellationError] names stops here too: an operation stopping at
-  /// the job's token throws such an error, and only this hook hears it.
-  ///
-  /// A [Cancelled] reaches this hook whenever one is thrown where there is no
-  /// outcome to carry it — never the job giving up, which is not an error and
-  /// never comes here. A disposer or a callback of [JobContext.onCancel],
-  /// [Job.whenCancelled] or [Job.whenFinished] that throws one;
-  /// `throw Cancelled(...)` inside unattended work, where there is nobody left
-  /// to cancel and the object is new; a fresh `Cancelled` built by the rules of
-  /// a domain for a context that outlived its job; a child's cancellation taken
-  /// through `child.value` from one of those places rather than from the body,
-  /// where it becomes the outcome instead and never comes here.
+  /// Where each error goes from here, and what keeps it out of the answer, is
+  /// in [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#where-each-error-goes)
+  /// on the errors page.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 
   /// A job called [JobContext.log], with what it passed.
@@ -178,55 +157,34 @@ abstract mixin class JobObserver {
 /// `ParallelWaitError` on its own, with its own stack trace. About an
 /// uncaught [Cancelled], alone or inside one, it does not ask.
 mixin JobAnswerer on JobObserver {
-  /// Nobody answered for this error, and this observer is the last one
-  /// holding it. What this hook does is the answer: the default hands the
-  /// error to the zone the job was created in, and an override that returns
-  /// without calling `super` keeps it from the zone.
+  /// Answers for an error nobody else has answered for.
   ///
-  /// The errors no outcome carries: an action abandoned by
-  /// [JobContext.abandonable] failing later, a disposer, a callback of
-  /// [JobContext.onCancel], [Job.whenCancelled] or [Job.whenFinished], work
-  /// handed over with [JobContext.unattended], a failure while formatting a
-  /// child's cancellation description, the failure of a branch of
-  /// [JobContext.runAll] that the group did not throw, a failure of the body of
-  /// a job that ends [Cancelled] — the outcome carries the cancellation,
-  /// whoever reads it — a failure of the body of a job an engine ended by hand
-  /// with an outcome of its own, unless that job is a branch whose group took
-  /// that failure in place of a value (see [JobBase.finish]), and a failure an
-  /// engine hands to a job already over. [Job.ignoreFailure] keeps the last
-  /// four from coming here, and [Job.isCancellationError] keeps away the
-  /// failures it names of a job that has accepted a cancellation.
+  /// The default hands the error to the zone the job was created in, the way a
+  /// job without a [JobAnswerer] does; an override that returns without calling
+  /// `super` keeps it from the zone, and
+  /// `super.onUnanswered(job, error, stackTrace)` sends it on as well. Every
+  /// error that comes here has been through [onError] already. The job asks
+  /// about one failure at a time: it walks a `ParallelWaitError` the way
+  /// [Job.visitErrors] does and makes a call for each failure inside it, with
+  /// that failure's stack trace. A cancellation never comes here — a
+  /// [Cancelled], alone or inside a `ParallelWaitError`: it is a decision
+  /// somebody made, not a failure.
   ///
-  /// A failure a [Failed] outcome carries comes here when nobody observes
-  /// that outcome: a microtask after the job ends, the grace Dart gives an
-  /// unhandled `Future` error. [Job.ignoreFailure], or reading [Job.done] or
-  /// [Job.value], keeps it away. A [Failed] made of a cancellation — a
-  /// [Cancelled], or a `ParallelWaitError` of nothing but cancellations — goes
-  /// to the zone the job was created in past this hook: somebody made that
-  /// outcome a failure on purpose. Every error that comes here has been
-  /// through [onError] already.
+  /// What comes: the errors no outcome carries — an action of
+  /// [JobContext.abandonable] failing late, a disposer, a callback, work of
+  /// [JobContext.unattended], a failure of the body of a job that ends
+  /// [Cancelled], those an engine brings through [JobBase.finish] — and a
+  /// failure a [Failed] outcome carries when nobody observes that outcome, a
+  /// microtask after the job ends; [Job.ignoreFailure], or reading [Job.done]
+  /// or [Job.value], keeps that one away. A [Failed] made of a cancellation
+  /// goes to the zone past this hook: somebody made that outcome a failure on
+  /// purpose. **An override that throws** does not take the error with it: the
+  /// error goes to the zone the job was created in, and then what the override
+  /// threw goes to the current zone.
   ///
-  /// **One failure at a time.** The job walks a `ParallelWaitError` the way
-  /// [Job.visitErrors] does and asks about each failure inside it in a call
-  /// of its own, with the stack trace of that failure. A cancellation does
-  /// not come here — a [Cancelled], alone or inside a `ParallelWaitError`:
-  /// it is a decision somebody made, not a failure.
-  ///
-  /// **What the default body does.** It hands the error to the zone the job was
-  /// created in — where the error goes when the job has no observer, or one
-  /// that does not answer.
-  ///
-  /// **Override it to answer here instead** — an observer that reports to
-  /// its own system and stops there. An override that says nothing keeps
-  /// these errors out of the zone. Call
-  /// `super.onUnanswered(job, error, stackTrace)` to keep the zone as well.
-  ///
-  /// **An override that throws** does not take the error with it: the error
-  /// goes to the zone the job was created in, and then what the override
-  /// threw goes to the current zone, as from any hook. A [Cancelled] it
-  /// throws stays out of the zone, and so does the error itself thrown back:
-  /// the error goes there alone. An override that answered before it threw
-  /// has the error answered twice.
+  /// See [Answering for errors](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#answering-for-errors)
+  /// on the errors page, and [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#where-each-error-goes)
+  /// for which error comes by which route.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     if (job is JobBase<Object?> && (JobBase._builtOnCore[job] ?? false)) {
       job._toZone(error, stackTrace);
