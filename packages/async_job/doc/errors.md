@@ -1,15 +1,21 @@
 # Errors
 
 A `JobObserver` hears the errors that no outcome carries, as
-[Observing](observing.md) shows. Such an error, unless it is a cancellation,
-goes on to the answer, and so does a failure whose outcome nobody observes. Two
-words name where they go:
+[Observing](observing.md) shows. This page follows an error from the job to
+whoever answers for it. An error the job catches passes these places in order
+and goes no further than the first one that keeps it. A cancellation the job
+catches goes no further than `onError`, unless an engine ends the job `Failed`
+with it, as the last row of [Rare routes](#rare-routes) shows.
 
-- the zone is the zone the job was created in, and an error that reaches it is
-  an uncaught error there;
-- the answer is `onUnanswered` of an observer that mixes in `JobAnswerer`, as
-  [Answering for errors](#answering-for-errors) shows, and the zone if the job
-  has no such observer.
+| Place | What it does with the error | Section |
+| --- | --- | --- |
+| `onError` | an observer hears it and moves it nowhere | [An observer](#an-observer) |
+| The outcome | keeps a failure that a `Failed` carries, once somebody observes that outcome | [An observer](#an-observer) |
+| The filter | keeps an error that `Job.isCancellationError` names, once the job has accepted a cancellation | [Errors of a cancellation](#errors-of-a-cancellation) |
+| The answer | `onUnanswered` of an observer that mixes in `JobAnswerer` keeps the error, or sends it on to the zone | [Answering for errors](#answering-for-errors) |
+| The zone | the zone the job was created in gets the error as an uncaught error there | [Where errors go](#where-errors-go) |
+
+A job without an observer that answers has the zone for its answer.
 
 An app that only wants every error reported once starts from
 [Reporting each error once](#reporting-each-error-once), at the end of the
@@ -90,12 +96,11 @@ outcome: Cancelled(manual)
 
 The job stays as it was. `Job.isCancellationError` is asked about each failure
 of a job that has accepted a cancellation. It is asked when the job is about to
-send the failure to the answer, and only then. An error it names still reaches
-`onError` and goes no further: neither `onUnanswered` nor the zone hears it.
-The filter changes no outcome either. A failure of a job that nobody cancelled
-is not asked about: a body that throws `DatabaseStopped` while its own job goes
-on ends `Failed` with it, and if nobody observes that outcome, it goes on to
-the answer. Somebody else cancelled the token then, and the job has to say so.
+send the failure to the answer, and only then. An error it names stops at
+`onError` and changes no outcome. A failure of a job that nobody cancelled is
+not asked about: a body that throws `DatabaseStopped` while its own job goes on
+ends `Failed` with it, and if nobody observes that outcome, it goes on to the
+answer. Somebody else cancelled the token then, and the job has to say so.
 
 The filter is called synchronously, with one failure at a time and never with a
 `Cancelled`, so keep it to a type test. The job walks a `ParallelWaitError` and
@@ -149,12 +154,12 @@ cancellation. It only hears them: overriding `onError` moves no error anywhere.
 The failed open still reaches the zone, as it would without the observer: the
 job ends `Cancelled`, and the filter above does not name a `StateError`.
 
-A failure the outcome carries goes on to the answer only if nobody observes the
-outcome, a microtask after the job ends, and an observer that answers gets it
-in `onUnanswered`. The outcome counts as observed when somebody reads `done` or
-`value`, calls `ignoreFailure()`, or forwards the failure through `then`: a
-continuation cancelled before its source failed forwards nothing, and the
-failure stays unobserved. See
+A failure the outcome carries goes on to the answer a microtask after the job
+ends, unless somebody has observed the outcome by then, and an observer that
+answers gets it in `onUnanswered`. The outcome counts as observed when somebody
+reads `done` or `value`, calls `ignoreFailure()`, or forwards the failure
+through `then`: a continuation cancelled before its source failed forwards
+nothing, and the failure stays unobserved. See
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
 outcomes page. The observer's hooks do not observe the outcome, even a hook
 that reads `job.outcome`, as the `onFinish` of `Log` in
@@ -162,9 +167,9 @@ that reads `job.outcome`, as the `onFinish` of `Log` in
 
 ### Where each error goes
 
-The table shows where each error goes, with an observer and without one. The
-zone and the answer are as the introduction defines them. Rarer ways, such as
-those of `ctx.runAll` and of engines, are in [Rare routes](#rare-routes) below.
+The table shows which places of the introduction each error passes, with an
+observer and without one. Rarer ways, such as those of `ctx.runAll` and of
+engines, are in [Rare routes](#rare-routes) below.
 
 | The error | With an observer | Without one |
 | --- | --- | --- |
@@ -175,52 +180,54 @@ those of `ctx.runAll` and of engines, are in [Rare routes](#rare-routes) below.
 | An error of a callback of `ctx.onCancel`, `job.whenCancelled` or `job.whenFinished` | `onError`, then the answer | The zone |
 | An error of work of `ctx.unattended` | `onError`, then the answer | The zone |
 
-What the table does not show:
+**What keeps an error out of the answer.**
 
-- If the body calls the context without `await`, the call throws into a future
-  that nobody awaits. Dart hands that error to the zone the body runs in, with
-  an observer or without one; for a job made with `Job.deferred`, that is the
-  zone it was started from.
-- If the job is cancelled while the body runs, `ctx.abandonable` called without
-  `await` throws `Cancelled` into its future, and Dart hands it to the zone the
-  body runs in like any other error: the job's own cancellation goes there too.
-  It is Dart that sends this cancellation to the zone, not the job.
-- If the action of `ctx.abandonable` called without `await` fails after the
-  body has ended, the error goes the way of the late error of an action
-  `ctx.abandonable` stopped waiting for. `onError` hears it, and then it goes
-  on to the answer. A call of `ctx.abandonable` without `await` reaches the
+- `ignoreFailure()` on a job stops the failure of its body at `onError`. It
+  lets go of that job's failures alone: a child whose body failed answers for
+  its failure itself, whatever its parent calls.
+- `Job.isCancellationError`, once the job has accepted a cancellation, stops an
+  error it names at `onError` wherever the error came from: the body, a step of
+  `ctx.uncancellable`, a child the job waited for, cleanup. That holds in the
+  rows of both tables that end with the answer: those of the body of a
+  cancelled job and those from outside the body.
+- The outcome keeps only the failure it carries. When the job ends `Cancelled`,
+  its outcome carries the cancellation, so the failure of its body goes to
+  `onUnanswered` or the zone even when somebody reads `done` or `value`, and so
+  does the failure of a branch of `ctx.runAll` whose group threw another error.
+
+**What Dart hands to the zone past the job.** A context call the body does not
+await throws into a future that nobody awaits. Dart, not the job, hands that
+error to the zone the body runs in.
+
+- The error of such a call goes there with an observer or without one. For a
+  job made with `Job.deferred`, the zone the body runs in is the zone it was
+  started from.
+- While the body runs, a cancellation of the job makes a `ctx.abandonable`
+  called without `await` throw `Cancelled` into its future, and Dart hands the
+  job's own cancellation to that zone like any other error.
+- `ctx.abandonable` is the one exception once the body has ended: an action
+  that fails then takes the way of the late error in the table, to `onError`
+  and on to the answer. A call of `ctx.abandonable` without `await` reaches the
   zone the body runs in, with its error or with the job's cancellation, only
   while the body runs.
-- If the job has accepted a cancellation, an error that
-  `Job.isCancellationError` names goes no further than `onError`. That holds in
-  the rows of both tables that end with the answer: those of the body of a
-  cancelled job and those from outside the body. It does so wherever the error
-  came from: the body, a step of `ctx.uncancellable`, a child the job waited
-  for, cleanup.
-- If the job ends `Cancelled`, the outcome carries the cancellation and not the
-  failure of the body. That failure goes to `onUnanswered` or the zone even
-  when the outcome is observed, and so does the failure of a branch of
-  `ctx.runAll` whose group threw another error.
-- If somebody calls `ignoreFailure()` on the job whose body failed, the failure
-  of its body goes no further: `onError` still hears it, but it reaches neither
-  `onUnanswered` nor the zone.
-- If the body of a child failed, the child answers for its failure itself,
-  whatever its parent calls: `ignoreFailure()` on the parent lets go of the
-  parent's failures alone.
-- If the app reports in both `onError` and its zone, it hears twice an error
-  that reaches both. The table above shows one way from the job to the zone:
-  the answer, when nobody answers for the error, or `onUnanswered` sends it on
-  or throws. An engine that ends a job `Failed` on purpose adds a second, past
-  the answer: the last row of [Rare routes](#rare-routes).
-- If somebody observed the outcome, a failure the outcome carries is off the
-  way through the answer: it takes that way only if nobody observed the
-  outcome. An observer that answers (`with JobAnswerer`) closes the way itself.
-- If one failure is the outcome of several jobs, it reaches `onError` once on
+
+The filter sees none of the errors Dart hands to the zone, and the error of an
+`async` callback of `ctx.onCancel` is one of them, as
+[A stop that takes time](cancellation.md#a-stop-that-takes-time) shows.
+
+**One error, several calls.**
+
+- An app that reports in both `onError` and its zone hears twice an error that
+  reaches both. The table shows one way from the job to the zone: the answer,
+  when nobody answers for the error, or `onUnanswered` sends it on or throws.
+  An engine that ends a job `Failed` on purpose adds a second, past the answer:
+  the last row of [Rare routes](#rare-routes).
+- One failure that is the outcome of several jobs reaches `onError` once on
   each of them. A child of `ctx.run` fails, its parent lets the failure out of
   its body, and the observer the child inherited hears the same object on the
   child and then on the parent. A branch of `ctx.runAll` and its parent do the
   same, and so do a source and its continuation of `then` given one observer.
-- If an observer counts failures, it tells the second call from a new error by
+- An observer that counts failures tells the second call from a new error by
   `identical`, and an `Expando` remembers the errors it has heard without
   keeping them alive. An error thrown as a constant, such as
   `throw const SignedOut()`, is the same object at every throw, and two such
@@ -295,19 +302,11 @@ Job.isCancellationError =
   nobody cancelled that ends `Failed` with such an error is a failure like any
   other. The group throws it in place of a cancellation of another branch, and
   the body of the parent gets that error, not `Cancelled`.
-- The filter does not see an error that Dart hands to the zone itself, past the
-  job. One is the error of a context call the body did not await, such as
-  `unawaited(ctx.join(() => database.migrate(stop)))`; another is that of an
-  `async` callback of `ctx.onCancel`.
-  [Where each error goes](#where-each-error-goes) and
-  [A stop that takes time](cancellation.md#a-stop-that-takes-time) take these
-  apart.
 
 ### Rare routes
 
 These are the ways of a branch of `ctx.runAll`, of the name of a child, of a
-`Cancelled` and of an engine. The columns are those of
-[Where each error goes](#where-each-error-goes).
+`Cancelled` and of an engine.
 
 | The error | With an observer | Without one |
 | --- | --- | --- |
@@ -374,10 +373,9 @@ zone the work was started from.
 
 The errors that no outcome carries go on from `onError` to an answer, and so do
 the failures whose outcome nobody observes. An observer written only to watch,
-like `Reporter`, gives no answer, so these errors go where they would go
-without an observer: to the zone. Watching alone does not change where an error
-goes. An observer that answers for these errors itself mixes in `JobAnswerer`
-and overrides `onUnanswered`:
+like `Reporter`, gives no answer, so these errors go to the zone. An observer
+that answers for them itself mixes in `JobAnswerer` and overrides
+`onUnanswered`:
 
 ```dart
 final class Answering extends JobObserver with JobAnswerer {
@@ -445,11 +443,10 @@ zone: Bad state: analytics offline
 `ParallelWaitError` and asks about each failure inside it, with that failure's
 stack trace. So the observer answers for the database error, and the zone hears
 the analytics error on its own. A `Failed` with such an error that nobody
-observes is answered for the same way, failure by failure. An uncaught
-`Cancelled` is not a failure, and nobody is asked about it, whether it comes
-alone or inside a `ParallelWaitError`. Nor is anybody asked about an error that
-the app named in [Errors of a cancellation](#errors-of-a-cancellation), once
-the job has accepted a cancellation.
+observes is answered for the same way, failure by failure. Nobody is asked
+about an uncaught `Cancelled`, alone or inside a `ParallelWaitError`: a
+cancellation is no failure. Nor is anybody asked, once the job has accepted a
+cancellation, about an error `Job.isCancellationError` names.
 
 `onError` also hears them one at a time, and hears a `Cancelled` inside a
 `ParallelWaitError` in a call of its own. The outcome keeps the error as it was

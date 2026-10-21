@@ -577,6 +577,37 @@ void main() {
       );
     });
 
+    test('reading done or value leaves the failure of the body to the answer',
+        () {
+      // The outcome carries the cancellation, so neither read takes the
+      // failure of the body on, unlike `ignoreFailure()`.
+      final reads = <String, void Function(Job<void> job)>{
+        'done': (job) => job.done.ignore(),
+        'value': (job) => job.value.ignore(),
+      };
+      for (final MapEntry(key: way, value: read) in reads.entries) {
+        expect(
+          quotable(
+            play(
+              () {
+                final job = failingBeforeCancel(observer: Answerer());
+                read(job);
+                return job;
+              },
+              cancelAt: 20,
+              outcomeObserved: false,
+            ),
+          ),
+          [
+            'onError: Bad state: disk full',
+            'cancel',
+            'onUnanswered: Bad state: disk full',
+          ],
+          reason: way,
+        );
+      }
+    });
+
     Job<void> failingBeforeCleanup({JobObserver? observer}) => Job<void>(
           observer: observer,
           (ctx) async {
@@ -1208,12 +1239,12 @@ void main() {
       // The translation is not in the archive: it is read where it is.
       const said = {
         'doc/errors.md': [
-          'If the job is cancelled while the body runs, `ctx.abandonable`',
+          'a cancellation of the job makes a `ctx.abandonable` called without',
           "or with the job's cancellation, only while the body runs",
           'on purpose adds a second, past the answer',
         ],
         '../../docs/ru/async_job/errors.md': [
-          'Если задачу отменяют, пока идёт тело, `ctx.abandonable`',
+          'отмена задачи заставляет `ctx.abandonable`, вызванный без `await`',
           'или с отменой задачи, только пока тело идёт',
           'нарочно кончает задачу `Failed`, добавляет второй, мимо ответа',
         ],

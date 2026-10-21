@@ -1495,6 +1495,11 @@ cancellation the job catches goes no further than `onError`», и называе
 исключение — движок, который сам кончает задачу `Failed` с `Cancelled`,
 со ссылкой на «Rare routes».
 
+Итог: сделано коммитом страницы
+`docs(async_job): lay out the places of an error in errors.md`, во вступлении:
+«A cancellation the job catches goes no further than `onError`, unless an
+engine ends the job `Failed` with it, as the last row of Rare routes shows».
+
 **5. Medium, верность. Вводка второй группы: «`onError`, the filter and the
 answer never see it» (план:160–163).** Для `ctx.run`, `ctx.runAll` и детей это
 ложь. Зонд: непрождённый `ctx.run` упавшего ребёнка даёт
@@ -1507,6 +1512,15 @@ answer never see it» (план:160–163).** Для `ctx.run`, `ctx.runAll` и 
 Вердикт: принято. Придаточное убирается: следующие пункты и так говорят, куда
 идёт ошибка.
 
+Итог: сделано тем же коммитом страницы. Вводка второй группы кончается фразой
+«Dart, not the job, hands that error to the zone the body runs in». Сверх
+предложенного переписан абзац под группой: без придаточного «The filter does
+not see … either» повисало, а утверждение, что фильтр не видит отданного Dart,
+план переносил сюда из «Limits of the filter». Теперь: «The filter sees none of
+the errors Dart hands to the zone, and the error of an `async` callback of
+`ctx.onCancel` is one of them»; держит его прежний тест
+`the filter does not see what Dart hands to the zone itself`.
+
 **6. Low, верность. `ignoreFailure` и «even when the outcome is observed».**
 Пункт 1 первой группы говорит, что `ignoreFailure` останавливает ошибку тела
 отменённой задачи (зонд подтверждает). Пункт 3 той же группы говорит, что эта
@@ -1518,10 +1532,18 @@ answer never see it» (план:160–163).** Для `ctx.run`, `ctx.runAll` и 
 
 Вердикт: принято: «even when somebody reads `done` or `value`».
 
+Итог: сделано тем же коммитом страницы. Держит фразу новый тест
+`reading done or value leaves the failure of the body to the answer`
+в `errors_rakes_test.dart`: у отменённой задачи с упавшим телом и чтение
+`done`, и чтение `value` дают `onError`, `cancel`, `onUnanswered`.
+
 **7. Low, нагрузка. Правка 2: «stays as it was» дважды в одном абзаце.** Как
 чинить: второй раз заменить или слить предложения.
 
 Вердикт: принято.
+
+Итог: сделано тем же коммитом страницы: «An error it names stops at `onError`
+and changes no outcome».
 
 **8. Low/Medium, нагрузка. Правка 7.** Склейка «Nobody is asked … nor, once …,
 about …» читается тяжелее двух прежних предложений. Правка заодно убирает
@@ -1535,6 +1557,11 @@ answer» без определения.
 Вердикт: принято. Два предложения, короткое определение у якоря «Answering for
 errors» остаётся.
 
+Итог: сделано тем же коммитом страницы. В «Answering for errors» осталось
+определение у якоря, вторая фраза сокращена, «Watching alone…» убрана.
+В «Several failures» два предложения, а вместо ссылки на раздел названо поле
+`Job.isCancellationError`.
+
 **9. Low, нагрузка. Правка 8 повторяет строку таблицы «Reporting each error
 once» в рецепте.** На странице уже есть строка «A failure whose outcome
 somebody observed | nobody: the code that observed it has it»
@@ -1544,6 +1571,8 @@ somebody observed | nobody: the code that observed it has it»
 
 Вердикт: принято. Фраза в рецепт не идёт: строка таблицы «Reporting each error
 once» уже говорит это.
+
+Итог: фразы в рецепте нет, правка 8 не делалась.
 
 Сторожа `_says` плана для этой страницы сверены
 с `packages/async_job/test/errors_rakes_test.dart`:
