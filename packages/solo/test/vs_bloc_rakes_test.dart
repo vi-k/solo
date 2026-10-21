@@ -233,15 +233,25 @@ void main() {
           reason: 'section $number',
         );
       }
-      // The translation carries the same line under each of its sections.
-      final translation =
-          File('../../docs/ru/solo/vs-bloc.md').readAsStringSync();
-      expect(
-        RegExp(r'^\*\*Что даёт solo:\*\* ', multiLine: true)
-            .allMatches(translation),
-        hasLength(_sections().length),
-      );
     });
+
+    // The translation lives beside the package, and the archive
+    // `dart pub publish` uploads has none of it: run from that archive,
+    // this check is skipped.
+    final translation = File('../../docs/ru/solo/vs-bloc.md');
+    test(
+      'the translation ends each section with the same line',
+      skip: translation.existsSync()
+          ? null
+          : 'the translation is not in the archive of the package',
+      () {
+        expect(
+          RegExp(r'^\*\*Что даёт solo:\*\* ', multiLine: true)
+              .allMatches(translation.readAsStringSync()),
+          hasLength(_sections().length),
+        );
+      },
+    );
 
     test('the prose writes a dash as a dash', () {
       expect(_prose().contains(' -- '), isFalse);
