@@ -6,12 +6,12 @@ A job that fails ends `Failed`. Three parts of the code deal with its error:
 - `onError`, a hook of the controller, hears the error, to report it;
 - whoever observes the outcome answers for the error.
 
-When nobody observes the outcome, `onUnanswered` answers for the error, and by
+When nobody observes the outcome, `onUnanswered` answers for the error. By
 default it sends the error to the creation zone, the zone the job was created
 in. There it is an uncaught error, and in the root zone an uncaught error can
 end the application. Some errors have no outcome to ride on, and `onUnanswered`
-answers for those as well. [Where each error goes](#where-each-error-goes)
-lists every kind.
+answers for those as well. The first section,
+[Where each error goes](#where-each-error-goes), lists every kind.
 
 The sections of the page, by what the application needs:
 
@@ -28,6 +28,55 @@ The sections of the page, by what the application needs:
 The lines under some blocks are what the code prints. `report:` is an error
 handed to the crash reporter, and `zone:` is an error that reached the creation
 zone uncaught.
+
+## Where each error goes
+
+Every error of a job goes two ways: to the hooks that hear it, and to whoever
+answers for it. In the table, `onError` is the hook of the controller and the
+`onError` of a `SoloObserver`. The two hear the same errors. `onUnanswered` is
+the override of the controller or, without one, the default body:
+`Solo.unansweredHandler`, and the creation zone when no handler is set. The
+current zone is the zone the hook is called in. For what happens in a job, that
+is the zone the job was created in; for a change made by `externalSetState`,
+the zone of its caller.
+
+| The error | Who hears it | Who answers for it |
+| --- | --- | --- |
+| An error of the body, and the job ends `Failed` with it | `onError` | Whoever observes the outcome; `onUnanswered` if nobody does |
+| An error of a start rule: `canStart` throws instead of answering | `onError` | The same: the job ends `Failed` with it |
+| An error of the body, and the job ends `Cancelled` | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the job |
+| A late error of an operation `abandonable` stopped waiting for | `onError` | `onUnanswered` |
+| An error of a disposer, a `ctx.onCancel` callback, a `whenCancelled` or `whenFinished` listener, or a state handler of `run` | `onError` | `onUnanswered` |
+| A `keepWhile` that throws when a change of state re-checks it | `onError` | `onUnanswered` |
+| An error of work handed to `ctx.unattended` | `onError` | `onUnanswered` |
+| An error of a branch of `ctx.runAll` that the group did not throw | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the branch |
+| An error that `Job.isCancellationError` names, on a cancelled job | `onError` | Nobody |
+| A `Cancelled` from outside the body, such as an abandoned operation that ended in another job's cancellation | `onError` | Nobody |
+| A `Cancelled` the body lets out, such as that of a cancelled child | Nobody | Nobody: the job ends `Cancelled` with it |
+| The job's own cancellation, thrown back by an abandoned operation | Nobody | Nobody |
+| An error of a future the body did not await | Nobody | The zone the body runs in |
+| An error a hook throws | Nobody | The current zone |
+| An error a listener throws while it is notified | `onListenerError` | `onListenerError`; by default the current zone |
+
+An error can reach both `onError` and the zone. An application that reports in
+both places hears it twice. The way to the creation zone through `onUnanswered`
+is the application's to close: an override of `onUnanswered` or an installed
+`Solo.unansweredHandler` closes it, as
+[Answering for an error](#answering-for-an-error) shows. The same section
+explains `Job.isCancellationError`. Observing the outcome keeps a failure off
+that way to begin with, as
+[Handled and unhandled failures](#handled-and-unhandled-failures) shows.
+
+An error that `onUnanswered` takes can come after the job has completed. It
+does not replace the outcome the job already has.
+
+Dart has a way of its own to the zone, and the engine does not stand on it. An
+unhandled error of `job.value` or of `ctx.run(child)` is an unhandled future
+error under the rules of Dart, even when that error is `Cancelled`. Handle
+those futures like any other: `await` them where the error is caught, or give
+them `onError` or `Future.ignore()`. `job.ignoreFailure()` does not do it for
+them. It tells the job that nobody needs its failure. A future already taken
+from `job.value` stays an ordinary future whose error somebody has to handle.
 
 ## Reporting an error
 
@@ -50,7 +99,9 @@ final class ProfileController extends Solo<ProfileState> {
 A controller has a hook for each thing that happens to it and its jobs:
 `onStart`, `onFinish`, `onError`, `onUnanswered`, `onLog`, `onChange` and
 `onClose`, and `onListenerError` for a listener that throws while it is
-notified. `onError` hears the errors the jobs of the controller run into:
+notified.
+
+`onError` hears the errors the jobs of the controller run into:
 
 - the failure of a body;
 - an error of cleanup, or of an operation that `abandonable` stopped waiting
@@ -58,11 +109,11 @@ notified. `onError` hears the errors the jobs of the controller run into:
 - a rule that threw instead of answering.
 
 It hears each error once for each job. An error that a child throws and its
-parent lets through is a failure of both, so the hook hears it twice, and the
-`job` it is given tells the two calls apart. A crash reporter fed from here can
-get one error three times: from the child, from the parent and, when nobody
-observes the parent's outcome, from `onUnanswered`, which by default hands it
-to `Solo.unansweredHandler` or the creation zone.
+parent lets through is a failure of both, so the hook hears it twice. The `job`
+it is given tells the two calls apart. A crash reporter fed from here can get
+one error three times: from the child, from the parent and, when nobody
+observes the parent's outcome, from `onUnanswered`. By default `onUnanswered`
+hands it to `Solo.unansweredHandler` or the creation zone.
 
 The hook reports and returns. It answers for nothing, and overriding it moves
 no error anywhere.
@@ -130,16 +181,16 @@ the result takes it with `await job.value` and answers for the error by
 catching it.
 
 That caller cannot catch one failure. If the job ends `Cancelled` after the
-load failed, `await job.value` throws the `Cancelled`, and the failure goes to
+load failed, `await job.value` throws the `Cancelled`. The failure goes to
 `onUnanswered`, as the next section shows. `ignoreFailure()` lets that failure
 go too.
 
 ## Answering for an error
 
 Most errors ride on an outcome: a failed body becomes `Failed`, and whoever
-observes it answers for it. When nobody does, and for the errors that have no
-outcome to ride on, the controller whose job it was answers in `onUnanswered`.
-Here the profile keeps them in a list:
+observes it answers for it. When nobody does, the controller whose job it was
+answers in `onUnanswered`. It answers there as well for the errors that have no
+outcome to ride on. Here the profile keeps them in a list:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -162,9 +213,8 @@ These are the errors that no outcome carries:
 - the failure of the body of a job that ends `Cancelled`: whoever reads that
   outcome gets the cancellation.
 
-The override above answers for them, and for a `Failed` nobody observes, and
-they reach nothing else. This controller owns what its jobs failed at and says
-so.
+The override above answers for them and for a `Failed` nobody observes. They
+reach nothing else. This controller owns what its jobs failed at and says so.
 
 A controller without such an override keeps the default body. It hands the
 error to `Solo.unansweredHandler`, one handler for the whole application, set
@@ -181,11 +231,10 @@ each controller decides whether the handler of the application hears its errors
 at all.
 
 A handler or an override can throw, say because the reporter is down. The error
-it was asked about is not lost: it goes to the creation zone first, and then
-what the hook threw goes to the current zone. A `Cancelled` the hook throws
-stays out, and so does the error itself thrown back, so that error reaches the
-zone once. A hook that reported the error before it threw has it reported
-twice.
+it was asked about is not lost: it goes to the creation zone first. Then what
+the hook threw goes to the current zone. A `Cancelled` the hook throws stays
+out. So does the error itself thrown back, so that error reaches the zone once.
+A hook that reported the error before it threw has it reported twice.
 
 `onUnanswered` and `Solo.unansweredHandler` get one failure at a time. A
 `ParallelWaitError` that `[a, b].wait` throws with several errors in it comes
@@ -199,8 +248,10 @@ cancelled, and throws as it stops. The engine cannot tell that error from a
 failure of the call. So the application names such errors once, at startup, in
 `Job.isCancellationError` of the core. A failure of a cancelled job that it
 names reaches `onError` and goes no further: neither `onUnanswered` nor
-`Solo.unansweredHandler` hears it. [The token](cancellation.md#the-token) on
-the cancellation page names the stop of a player, and
+`Solo.unansweredHandler` hears it.
+
+[The token](cancellation.md#the-token) on the cancellation page names the stop
+of a player.
 [Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#errors-of-a-cancellation)
 on the errors page of `async_job` takes the field apart. A body that catches
 such an error asks the job, not the error:
@@ -208,52 +259,6 @@ such an error asks the job, not the error:
 
 Answering for an error is a duty somebody takes on. Switching on a log does not
 take it, and neither does setting a `SoloObserver`: watching is not answering.
-
-## Where each error goes
-
-Every error of a job goes two ways: to the hooks that hear it, and to whoever
-answers for it. In the table, `onError` is the hook of the controller and the
-`onError` of a `SoloObserver`, which hear the same errors. `onUnanswered` is
-the override of the controller, or the default body: `Solo.unansweredHandler`,
-and the creation zone when no handler is set. The current zone is the zone the
-hook is called in. For what happens in a job, that is the zone the job was
-created in; for a change made by `externalSetState`, the zone of its caller.
-
-| The error | Who hears it | Who answers for it |
-| --- | --- | --- |
-| An error of the body, and the job ends `Failed` with it | `onError` | Whoever observes the outcome; `onUnanswered` if nobody does |
-| An error of a start rule: `canStart` throws instead of answering | `onError` | The same: the job ends `Failed` with it |
-| An error of the body, and the job ends `Cancelled` | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the job |
-| A late error of an operation `abandonable` stopped waiting for | `onError` | `onUnanswered` |
-| An error of a disposer, a `ctx.onCancel` callback, a `whenCancelled` or `whenFinished` listener, or a state handler of `run` | `onError` | `onUnanswered` |
-| A `keepWhile` that throws when a change of state re-checks it | `onError` | `onUnanswered` |
-| An error of work handed to `ctx.unattended` | `onError` | `onUnanswered` |
-| An error of a branch of `ctx.runAll` that the group did not throw | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the branch |
-| An error that `Job.isCancellationError` names, on a cancelled job | `onError` | Nobody |
-| A `Cancelled` from outside the body, such as an abandoned operation that ended in another job's cancellation | `onError` | Nobody |
-| A `Cancelled` the body lets out, such as that of a cancelled child | Nobody | Nobody: the job ends `Cancelled` with it |
-| The job's own cancellation, thrown back by an abandoned operation | Nobody | Nobody |
-| An error of a future the body did not await | Nobody | The zone the body runs in |
-| An error a hook throws | Nobody | The current zone |
-| An error a listener throws while it is notified | `onListenerError` | `onListenerError`; by default the current zone |
-
-An error can reach both `onError` and the zone, and an application that reports
-in both places hears it twice. The way to the creation zone through
-`onUnanswered` is the application's to close: an override of `onUnanswered` or
-an installed `Solo.unansweredHandler` closes it. Observing the outcome keeps a
-failure off that way to begin with.
-
-An error that `onUnanswered` takes can come after the job has completed. It
-does not replace the outcome the job already has.
-
-Dart has a way of its own to the zone, and the engine does not stand on it. An
-unhandled error of `job.value` or of `ctx.run(child)` is an unhandled future
-error under the rules of Dart, even when that error is `Cancelled`. Handle
-those futures like any other: `await` them where the error is caught, or give
-them `onError` or `Future.ignore()`. `job.ignoreFailure()` does not do it for
-them. It tells the job that nobody needs its failure, and a future already
-taken from `job.value` stays an ordinary future whose error somebody has to
-handle.
 
 ## Catching errors inside a body
 
@@ -283,7 +288,7 @@ the camera is reset. This is what happens:
    result.
 2. `Cancelled` implements `Exception`, so the broad `catch` takes it and reads
    it as a failure of the camera. It resets a camera that opened and took its
-   zoom, and whoever cancelled the job waits for the reset as well.
+   zoom. Whoever cancelled the job waits for the reset as well.
 3. `ctx.emit` on a cancelled job throws `Cancelled` in turn. `Broken` never
    reaches the screen, and the `rethrow` under it never runs.
 4. The outcome is the same `Cancelled` that `rethrow` would have given.
@@ -311,10 +316,10 @@ failures of a job that nobody cancelled.
 
 A clause for the error does less. Take `on Cancelled { rethrow; }` in front of
 the broad clause, or `if (error is Cancelled) rethrow;` as its first line. It
-holds while every call in the `try` runs to its end, as these two do. A call
-told to stop through a token that `ctx.onCancel` cancels, the way
-[The token](cancellation.md#the-token) on the cancellation page wires one, may
-stop by throwing. Then the catch gets an error of the call in place of the
+holds while every call in the `try` runs to its end, as these two do.
+[The token](cancellation.md#the-token) on the cancellation page wires a token
+that `ctx.onCancel` cancels. A call told to stop through such a token may stop
+by throwing. Then the catch gets an error of the call in place of the
 `Cancelled`, because `join` throws an error of its call as it is. The clause
 lets that error by, and the camera is reset for a cancellation again.
 [Catching errors of the operation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#catching-errors-of-the-operation)
@@ -405,8 +410,8 @@ nothing for the cancellation.
 A pause in the body still belongs to the job. Root jobs run one at a time, so
 the next job of the profile waits through every attempt and every pause between
 them. Where other jobs should run between the attempts, the caller retries
-instead of the body. The job is `load()` of the quick start, which tries once,
-on the profile of [Reporting an error](#reporting-an-error).
+instead of the body. The job is `load()` of the quick start on the profile of
+[Reporting an error](#reporting-an-error), and it tries once.
 
 ```dart
 Future<Outcome<String>> loadWithRetries(ProfileController profile) async {
@@ -438,10 +443,11 @@ gap: if that load succeeds, the next attempt still loads again.
 Each attempt is a job of its own, and the profile shows how each one ended.
 Between the attempts the state is the `Failure` of `ifFailed`, and the screen
 shows the error until the next attempt emits `Loading`. With the loop in the
-body, the state stays `Loading` throughout. Every failed attempt reaches
-`onError` too, so the crash reporter hears each one; the loop in the body let
-it hear only the failure that ended the job. `done` observes each outcome, so
-no failure of an attempt goes on to the zone.
+body, the state stays `Loading` throughout.
+
+Every failed attempt reaches `onError` too, so the crash reporter hears each
+one. The loop in the body let it hear only the failure that ended the job.
+`done` observes each outcome, so no failure of an attempt goes on to the zone.
 
 ## Errors in state rules
 
@@ -497,7 +503,7 @@ Where a rule throws anyway decides what becomes of the error:
 | Re-evaluation after a state update | Reported; it does not itself cancel the running body. |
 | The same re-evaluation, on a job with a state handler | Reported, and the handler is disabled. |
 
-A job with a state handler is re-evaluated after its body has ended as well;
+A job with a state handler is re-evaluated after its body has ended as well.
 [Handler eligibility and errors](state.md#handler-eligibility-and-errors) on
 the state page is about that. An error of a re-evaluation takes the way the
 table of [Where each error goes](#where-each-error-goes) gives a `keepWhile`:
@@ -544,7 +550,7 @@ Unattended work is not the job, and the context refuses there whatever acts on
 the job. `ctx.run`, `ctx.runAll`, `ctx.each` and `ctx.uncancellable` all throw
 a `StateError` that names the call: `cannot run a child inside unattended work`
 for `ctx.run`. That throw is an error of the work it happened in, so it takes
-the way above, to the hooks, and the job itself still ends `Done`.
+the way above, to the hooks. The job itself still ends `Done`.
 
 A captured context still belongs to the original job. `emit` works while that
 job is active and is rejected after a cancellation or after the job completes.

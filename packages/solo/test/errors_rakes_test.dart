@@ -340,8 +340,8 @@ void main() {
     test('an error a child throws and its parent lets through', () {
       _says(
         'An error that a child throws and its parent lets through is a '
-        'failure of both, so the hook hears it twice, and the `job` it '
-        'is given tells the two calls apart',
+        'failure of both, so the hook hears it twice. The `job` it is '
+        'given tells the two calls apart',
       );
       late Bench bench;
       late Job<void> job;
@@ -395,8 +395,9 @@ void main() {
         _says(
           'A crash reporter fed from here can get one error three times: '
           'from the child, from the parent and, when nobody observes the '
-          "parent's outcome, from `onUnanswered`, which by default hands it "
-          'to `Solo.unansweredHandler` or the creation zone',
+          "parent's outcome, from `onUnanswered`. By default "
+          '`onUnanswered` hands it to `Solo.unansweredHandler` or the '
+          'creation zone',
         );
         final handled = <String>[];
         late Bench bench;
@@ -451,8 +452,8 @@ void main() {
   group('Answering for an error', () {
     test('the override of the page answers, and the error stops there', () {
       _says(
-        'The override above answers for them, and for a `Failed` nobody '
-        'observes, and they reach nothing else',
+        'The override above answers for them and for a `Failed` nobody '
+        'observes. They reach nothing else',
       );
       final handled = <String>[];
       late answering.ProfileController profile;
@@ -485,7 +486,7 @@ void main() {
       );
       _says(
         'When nobody observes the outcome, `onUnanswered` answers for the '
-        'error, and by default it sends the error to the creation zone, the '
+        'error. By default it sends the error to the creation zone, the '
         'zone the job was created in',
       );
       final handled = <String>[];
@@ -549,9 +550,9 @@ void main() {
           'reads that outcome gets the cancellation.',
         );
         _says(
-          'When nobody does, and for the errors that have no outcome to '
-          'ride on, the controller whose job it was answers in '
-          '`onUnanswered`',
+          'When nobody does, the controller whose job it was answers in '
+          '`onUnanswered`. It answers there as well for the errors that '
+          'have no outcome to ride on',
         );
       });
 
@@ -1270,7 +1271,7 @@ void main() {
         _says(
           'That caller cannot catch one failure. If the job ends '
           '`Cancelled` after the load failed, `await job.value` throws '
-          'the `Cancelled`, and the failure goes to `onUnanswered`',
+          'the `Cancelled`. The failure goes to `onUnanswered`',
         );
         final handled = <String>[];
         Object? thrown;
@@ -1475,7 +1476,7 @@ void main() {
         'Handle those futures like any other: `await` them where the '
         'error is caught, or give them `onError` or `Future.ignore()`. '
         '`job.ignoreFailure()` does not do it for them. It tells the '
-        'job that nobody needs its failure, and a future already taken '
+        'job that nobody needs its failure. A future already taken '
         'from `job.value` stays an ordinary future whose error somebody '
         'has to handle',
       );
@@ -1814,7 +1815,7 @@ void main() {
             () {
           if (!asks) {
             _says(
-              'whoever cancelled the job waits for the reset as well',
+              'Whoever cancelled the job waits for the reset as well',
             );
           }
           var backAfterTheCall = false;
@@ -2403,8 +2404,8 @@ void main() {
         'throughout',
       );
       _says(
-        'the loop in the body let it hear only the failure that ended '
-        'the job',
+        'so the crash reporter hears each one. The loop in the body let '
+        'it hear only the failure that ended the job',
       );
       final states = <String>[];
       late page.RetryingProfile profile;
@@ -3462,8 +3463,7 @@ void main() {
       test('a refusal nobody catches inside the work', () {
         _says(
           'That throw is an error of the work it happened in, so it takes '
-          'the way above, to the hooks, and the job itself still ends '
-          '`Done`',
+          'the way above, to the hooks. The job itself still ends `Done`',
         );
         late Bench bench;
         late Job<void> job;
@@ -3538,6 +3538,17 @@ void main() {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
         hasLength(5),
+      );
+    });
+
+    test('opens with the table of where each error goes', () {
+      _says(
+        'The first section, [Where each error goes](#where-each-error-goes), '
+        'lists every kind',
+      );
+      expect(
+        RegExp(r'^## (.*)$', multiLine: true).firstMatch(_page())?.group(1),
+        'Where each error goes',
       );
     });
 
