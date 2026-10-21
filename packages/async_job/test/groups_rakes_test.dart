@@ -393,6 +393,36 @@ void main() {
       });
     });
 
+    // The table of stages: a `discard` is set aside at the cleanup, and on
+    // success it never runs, neither on the stack nor after the hand-over.
+    test('on success no discard of a branch ever runs', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        ChildJob<int> branch(String name, int value) =>
+            Job.deferred<int>((ctx) async {
+              ctx
+                ..onDispose(() => trace.add('$name dispose'))
+                ..onDiscard(() => trace.add('$name onDiscard'));
+              await ctx.abandonable(
+                () => delay(value * 10),
+                discard: (_) => trace.add('$name discard'),
+              );
+              return value;
+            });
+        final a = branch('a', 1);
+        final b = branch('b', 2);
+        final parent = Job<void>((ctx) async {
+          final values = await ctx.runAll([a, b]);
+          trace.add('values $values');
+        });
+        async.flushTimers();
+        expect(trace, ['a dispose', 'b dispose', 'values [1, 2]']);
+        expect(a.outcome, isA<Done<int>>());
+        expect(b.outcome, isA<Done<int>>());
+        expect(parent.outcome, isA<Done<void>>());
+      });
+    });
+
     test('a cleanup a branch registers before its own has run comes first', () {
       fakeAsync((async) {
         final trace = <String>[];

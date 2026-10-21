@@ -1,9 +1,17 @@
 # Groups
 
 A group is several children of one job that run at the same time, and the job
-waits for all of them. `.wait` over the futures of `ctx.run` lets every branch
-run to its end, and `ctx.runAll` cancels the branches still running as soon as
-one ends without a value.
+waits for all of them.
+
+Where to start, by what the branches need:
+
+| When | Read |
+| --- | --- |
+| Every branch runs to its end, whatever the others do: `[ctx.run(a), ctx.run(b)].wait` | [Waiting for several children](#waiting-for-several-children) |
+| A result is of no use without every part: `ctx.runAll` cancels the branches still running as soon as one ends without a value | [When one failure makes the rest pointless](#when-one-failure-makes-the-rest-pointless) |
+| Branches share a lock or a pool, or one waits for another | [Branches that wait for each other](#branches-that-wait-for-each-other) |
+| A branch returns a resource for the caller | [What a group hands back](#what-a-group-hands-back) |
+| The body has to close the list `ctx.runAll` returned | [The list a group returns](#the-list-a-group-returns) |
 
 The lines under the code are what the code reports:
 
@@ -156,17 +164,21 @@ that failure and not by the branch's `Done`: see
 [Finishing a job by hand](extending.md#finishing-a-job-by-hand) on the
 extending page.
 
-| Form | Waits for | Stops the others | Values of the branches that succeeded |
-| --- | --- | --- | --- |
-| `Future.wait` | every branch | no | dropped before the body sees them |
-| `Future.wait(eagerError: true)` | the first error, then the job waits anyway | only when the first error is a branch's `Cancelled`: the job cancels itself, with `ParentCancelReason` | dropped |
-| `[...].wait` | every branch | no | in `ParallelWaitError.values` |
-| `ctx.runAll` | on success, the cleanup of every branch, except one a branch registers after running it; on failure, every branch to its end | yes, with `SiblingCancelReason` | returned in order when every branch succeeds |
+When every branch succeeds, every form hands the body the values in the order
+of the branches. The forms differ when a branch fails:
 
-Use `[ctx.run(a), ctx.run(b)].wait` when the branches do not depend on each
-other's failure, or when one of them waits for another, as in
-[Branches that wait for each other](#branches-that-wait-for-each-other). Use
-`ctx.runAll` when a result that misses one of its parts is of no use anyway.
+| Form | Stops the others | The body wakes | Values of the branches that succeeded |
+| --- | --- | --- | --- |
+| `Future.wait` | no | after the last branch ends | dropped before the body sees them |
+| `Future.wait(eagerError: true)` | no, unless the first error is a branch's `Cancelled` | at the first error | dropped |
+| `[...].wait` | no | after the last branch ends | in `ParallelWaitError.values` |
+| `ctx.runAll` | yes, with `SiblingCancelReason` | after the last branch ends | never reach the body: the group cancels their branches |
+
+Under `eagerError: true` the job still waits for its children, and a
+`Cancelled` that comes first cancels the job itself, as above. A branch of
+`ctx.runAll` created with `cancellable: false` refuses the stop and ends `Done`
+with its value; [What a group hands back](#what-a-group-hands-back) shows who
+closes it.
 
 None of the forms closes what the branches returned: a form only hands the
 values over or drops them. A value is closed by the registration its receiver
@@ -175,20 +187,29 @@ call. `ctx.runAll` takes no such argument, and
 [The list a group returns](#the-list-a-group-returns) shows how to register
 that list.
 
-The branches of a group wait for one another. A branch whose body has returned
-a value does not unwind until every branch has ended its body and its children,
-or until the body of one has ended without a value. Its `dispose` callbacks
-wait with it. So a branch that waits for a sibling can hang the group;
-[Branches that wait for each other](#branches-that-wait-for-each-other) shows
-how.
+A successful `ctx.runAll` holds its branches at two barriers, and no branch
+passes a barrier until every branch has reached it:
 
-On success `ctx.runAll` hands the values over once every branch has run its
-cleanup, and before the branches end. A branch that has run its cleanup waits
-there for the cleanup of the others. A cleanup it registers in that wait, from
-a timer or an event of its own, runs after the values arrive, under the parent,
-which waits for its children as always. On failure `ctx.runAll` waits for every
-branch to end, so by the time the error arrives everything the branches took is
-closed.
+| Stage | What each branch does |
+| --- | --- |
+| Body | returns a value and waits for its children |
+| First barrier | waits for the bodies and children of the others |
+| Cleanup | runs its cleanup stack; a `discard` is set aside, and on success it never runs |
+| Second barrier | waits for the cleanup of the others |
+| Hand-over | `runAll` returns the values; then the branch ends `Done` |
+
+The body of the parent gets the values before the branches end. A cleanup a
+branch registers while it waits at the second barrier, from a timer or an event
+of its own, runs after that, under the parent, which waits for its children as
+always.
+
+The first barrier holds the `dispose` callbacks of a branch too. So a branch
+that waits for a sibling, or for what a sibling releases in its cleanup, hangs
+the group;
+[Branches that wait for each other](#branches-that-wait-for-each-other) shows
+how. A body that ends without a value ends the wait instead: the group cancels
+the other branches, and `ctx.runAll` waits for every branch to end. By the time
+the error arrives, everything the branches took is closed.
 
 ## Branches that wait for each other
 
@@ -291,10 +312,10 @@ the resource and when:
 
 | The branch registers the release with | The group succeeds in full | The group ends in anything else |
 | --- | --- | --- |
-| The `dispose` of `ctx.abandonable` and `ctx.join`, or `onDispose`: a resource the branch keeps for itself | The end of the branch closes it | The end of the branch closes it |
-| The `discard` of `ctx.abandonable` and `ctx.join`, or `onDiscard`: a resource the branch hands out | It reaches the caller open | The branch that accepted the stop closes it before the group returns: by the time the parent catches the error, it is closed |
-| The `discard` of `ctx.run(child, discard: ...)`: a resource from a child of the branch | It reaches the caller open | The same as in the row above: the registration is the branch's own |
-| Any `discard`, in a branch created with `cancellable: false` | It reaches the caller open | No registration closes it: the branch refuses the stop and ends `Done`, so the `discard` does not run. The parent's body closes the value through the branch's job, as below |
+| `dispose` of `ctx.abandonable` and `ctx.join`, or `onDispose`: the branch keeps the resource | closed when the branch ends | closed when the branch ends |
+| `discard` of `ctx.abandonable` and `ctx.join`, or `onDiscard`: the branch hands it out | reaches the caller open | closed by the branch, which accepts the stop, before the group returns |
+| `discard` of `ctx.run(child, discard: ...)`: from a child of the branch | reaches the caller open | closed by the branch, as in the row above |
+| any `discard`, in a branch created with `cancellable: false` | reaches the caller open | open: the branch refuses the stop and ends `Done` |
 
 A branch can also get the resource from a child of its own:
 
@@ -451,9 +472,19 @@ Three things one might expect do not happen:
 
 | What one might expect | What happens |
 | --- | --- |
-| A branch the group stops stops its work | Only its waiting stops. A branch that waits through `ctx.abandonable` ends, and the operation behind it plays on. To stop the work itself, hand the cancellation to it with `ctx.onCancel` and wait for it with `ctx.join`. A branch created with `cancellable: false` refuses the stop, and the group waits for it |
-| The children of the branch that failed are cancelled | They play out. A failure never passes down to children, and the group waits for them as for everything else |
-| A branch whose body returned a value has its outcome | Its `outcome` is `null` and its `isCancelled` is `false` until the group decides. It can still end `Cancelled`: when another branch ends without a value, the group cancels it with `SiblingCancelReason`, and `isCancelled` becomes `true` |
+| A branch the group stops stops its work | Only its waiting stops |
+| The children of the branch that failed are cancelled | They play out: a failure never passes down to children, and the group waits for them |
+| A branch whose body returned a value has its outcome | Not until the group decides: until then its `outcome` is `null` |
+
+A stopped branch that waits through `ctx.abandonable` ends, and the operation
+behind it plays on. To stop the work itself, hand the cancellation to it with
+`ctx.onCancel` and wait for it with `ctx.join`. A branch created with
+`cancellable: false` refuses the stop, and the group waits for it.
+
+Until the group decides, a branch whose body returned a value has `isCancelled`
+at `false`, and it can still end `Cancelled`: when another branch ends without
+a value, the group cancels it with `SiblingCancelReason`, and `isCancelled`
+becomes `true`.
 
 Once the group has handed the list over, the decision is final. Every branch
 ends `Done` with the value it gave. A cancellation that reaches a branch while
