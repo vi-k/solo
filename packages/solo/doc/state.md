@@ -475,7 +475,10 @@ run<ProfileState, String>(
 The `ifFailed` and `ifCancelled` parameters of `run` and `job` let a controller
 leave a temporary state such as `Loading` when an operation fails or is
 cancelled. They receive the current state of type `S`, plus the error and stack
-trace or the `Cancelled` outcome, and return the next state synchronously.
+trace or the `Cancelled` outcome, and return the next state synchronously. A
+handler that hands back the state it was given, the same object, leaves the
+state as it is, and nothing is published. An equal state that is another object
+is published, as an `emit` of it would be.
 
 The matching handler runs before the next queued job and before the `onFinish`
 hook. Changing state does not turn `Failed` or `Cancelled` into `Done`, and

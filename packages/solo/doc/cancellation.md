@@ -394,9 +394,10 @@ the body, the job ends `Failed`, and it is the `ifFailed:` of `run` that maps
 the state. The `timeout:` of `run` ends the job `Cancelled`, so `ifCancelled:`
 maps the state and `ifFailed:` is not called. `ifCancelled:` takes every
 cancellation, and a handler that is to tell the deadline from a seek dragged
-past branches on the reason, as the one above does. `value` of such a job
-throws that `Cancelled`, and a clause `on TimeoutException` around it catches
-nothing.
+past branches on the reason, as the one above does: a seek dragged past gets
+back the `state` it was given, and the same object publishes nothing. `value`
+of such a job throws that `Cancelled`, and a clause `on TimeoutException`
+around it catches nothing.
 
 The deadline is counted from the start of the body, not from the call: the time
 a job waits in the queue does not count. With `collect` and `accumulate` the

@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
+import 'package:meta/meta.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -487,7 +488,7 @@ void main() {
         key: 'parent',
         ifCancelled: (_, __) {
           solo.log.add('parent:correction');
-          return 'initial';
+          return 'cancelled';
         },
         (ctx) async {
           child = ctx.each<void>(stream.stream, (ctx, _) async {
@@ -513,7 +514,7 @@ void main() {
         'child:disposed',
         'finish:null',
         'parent:correction',
-        'state:initial',
+        'state:cancelled',
         'finish:parent',
       ]);
       stream.close();
@@ -693,4 +694,79 @@ void main() {
       expect(parent.outcome, isA<Done<void>>());
     });
   });
+
+  group('a handler that returns the state it was given', () {
+    test('publishes nothing after a cancellation or a failure', () {
+      _run((solo, clock) {
+        var notified = 0;
+        solo.addListener(() => notified++);
+        final cancelled = solo.run<String, void>(
+          ifCancelled: (state, _) => state,
+          (ctx) => ctx.abandonable(() => Completer<void>().future),
+        );
+        clock.flushMicrotasks();
+        cancelled.cancel();
+        clock.flushMicrotasks();
+        solo
+            .run<String, void>(
+              (_) async => throw StateError('body'),
+              ifFailed: (state, _, __) => state,
+            )
+            .ignoreFailure();
+        clock.flushMicrotasks();
+        expect(solo.currentState, 'initial');
+        expect(notified, 0, reason: 'listeners hear no change');
+        expect(solo.log.where((line) => line.startsWith('state:')), isEmpty);
+      });
+    });
+
+    test('leaves a write made from inside it in place', () {
+      _run((solo, clock) {
+        solo.run<String, void>(
+          (_) async => throw StateError('body'),
+          ifFailed: (state, _, __) {
+            solo.external('offline');
+            return state;
+          },
+        ).ignoreFailure();
+        clock.flushMicrotasks();
+        expect(
+          solo.currentState,
+          'offline',
+          reason: 'the state it was given is not written back over it',
+        );
+      });
+    });
+
+    test('and an equal state that is another object is published', () {
+      fakeAsync((clock) {
+        final solo = _Controller<_Box>(const _Box(1));
+        var notified = 0;
+        solo.addListener(() => notified++);
+        solo
+            .run<_Box, void>(
+              (_) async => throw StateError('body'),
+              ifFailed: (state, _, __) => _Box(state.value),
+            )
+            .ignoreFailure();
+        clock.flushMicrotasks();
+        expect(notified, 1);
+        solo.close();
+        clock.flushMicrotasks();
+      });
+    });
+  });
+}
+
+@immutable
+final class _Box {
+  final int value;
+
+  const _Box(this.value);
+
+  @override
+  bool operator ==(Object other) => other is _Box && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
 }

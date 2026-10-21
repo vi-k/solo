@@ -327,11 +327,14 @@ abstract class Solo<S extends Object> {
   ///
   /// Handlers receive `S`, which may differ from the body's working `W`,
   /// and should only compute the next state: the value they return is
-  /// their write. A write made from inside one — [externalSetState], or a
-  /// source that calls it synchronously — does not combine with that
-  /// value: if the job's rules accept it, the handler's result lands on
-  /// top of it, computed from the state before it; if they refuse it,
-  /// the handler's result is dropped. Cleanup belongs in
+  /// their write. The state they were given, handed back as the same object,
+  /// is no write: the state stays as it is and nothing is published. An equal
+  /// state that is another object is published, as an `emit` of it would be.
+  /// A write made from inside one — [externalSetState], or a source that
+  /// calls it synchronously — does not combine with the value: if the job's
+  /// rules accept it, any other result of the handler lands on top of it,
+  /// computed from the state before it; if they refuse it, the handler's
+  /// result is dropped. Cleanup belongs in
   /// [JobContext.onDispose] or [JobContext.onDiscard]. [ifCancelled] runs at
   /// completion; the signal to the operation being stopped belongs in
   /// [JobContext.onCancel], which delivers it immediately.

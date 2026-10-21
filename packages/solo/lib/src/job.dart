@@ -246,22 +246,27 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   void _correctState() {
     if (!_bodyEntered || !_mayCorrectState) return;
+    final state = _solo._state;
     final S next;
     switch (outcome) {
       case Failed(:final error, :final stackTrace):
         final handler = _ifFailed;
         if (handler == null) return;
-        next = handler(_solo._state, error, stackTrace);
+        next = handler(state, error, stackTrace);
       case final Cancelled cancelled:
         final handler = _ifCancelled;
         if (handler == null) return;
-        next = handler(_solo._state, cancelled);
+        next = handler(state, cancelled);
       default:
         return;
     }
     // A handler can synchronously notify an external state source. Such
     // a transition may revoke permission before the result is applied.
     if (!_mayCorrectState) return;
+    // The very state it was given is the answer "as it was", not a write:
+    // nothing is published, and a write made from inside the handler, if
+    // the rules took it, stays.
+    if (identical(next, state)) return;
     _solo._setState(next, emitter: this);
   }
 

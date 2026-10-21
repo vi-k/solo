@@ -112,8 +112,9 @@ not succeed:
 The state handlers run after the body and its cleanup. In this example, the
 state becomes `Loaded` on success, `Failure` on error, or `Initial` on
 cancellation. Without a handler, the state stays where the body left it: an
-error or a cancellation here would leave `Loading`. The job's outcome stays
-`Failed` or `Cancelled` even when a handler updates the state.
+error or a cancellation here would leave `Loading`. A handler that hands back
+the state it was given, the same object, publishes nothing. The job's outcome
+stays `Failed` or `Cancelled` even when a handler updates the state.
 
 A `Failed` that nobody observes goes on to the zone the job was created in,
 even when `ifFailed` has published a state, unless `Solo.unansweredHandler`

@@ -23,7 +23,8 @@ final class SoloTransition<S extends Object> {
   ///
   /// Usually the job whose `emit` made the change. A state returned by the
   /// job's `ifFailed` or `ifCancelled` handler is its change as well, although
-  /// by then its body has ended and emitted nothing itself.
+  /// by then its body has ended and emitted nothing itself. A handler that
+  /// hands back the state it was given makes no change at all.
   final Job<Object?>? job;
 
   /// How many changes this controller has made, this one included.

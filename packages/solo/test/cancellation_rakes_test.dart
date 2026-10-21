@@ -2352,6 +2352,8 @@ void main() {
     test('a seek dragged past leaves the state as it is', () {
       fakeAsync((async) {
         final player = page.DeadlinePlayer();
+        var notified = 0;
+        player.addListener(() => notified++);
         final one = player.seek(_s(1));
         async.flushMicrotasks();
         final two = player.seek(_s(2));
@@ -2359,10 +2361,19 @@ void main() {
 
         expect('${one.outcome}', 'Cancelled(replaced)');
         expect('${player.currentState}', 'Ready(0 s, null)');
+        expect(notified, 0, reason: 'the state handed back publishes nothing');
         _end(async, 'seek 2');
         expect('${two.outcome}', 'Done(null)');
         expect('${player.currentState}', 'Ready(2 s, null)');
+        expect(notified, 1);
       });
+      expect(
+        _prose(),
+        contains(
+          'a seek dragged past gets back the `state` it was given, and the '
+          'same object publishes nothing.',
+        ),
+      );
     });
 
     test('value throws the Cancelled, and on TimeoutException catches nothing',
