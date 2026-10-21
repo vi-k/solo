@@ -348,14 +348,19 @@ an equality key. Propagation between jobs retains the original cancellation in
 the reason's `cause`.
 
 `job.whenCancelled(callback)` registers a synchronous listener and returns a
-function to unregister it. The listener is called when a running job accepts
-cancellation, from outside or from a body that throws `Cancelled`, or when a
-job is dropped before starting. Registered on a job that is cancelled already,
-it is called immediately; registered while the cancellation is still passing to
-the children, it is called in its turn, after the listeners registered before
-it. Successful and failed jobs release these listeners without calling them.
-What a listener throws goes the way an error of cleanup goes, to the `onError`
-hook and on to `Solo.unansweredHandler` or the zone, and so does what a
+function to unregister it. The listener is called:
+
+- when a running job accepts cancellation, from outside or from a body that
+  throws `Cancelled`;
+- when a job is dropped before starting;
+- immediately, when it is registered on a job that is cancelled already;
+- in its turn, after the listeners registered before it, when it is registered
+  while the cancellation is still passing to the children.
+
+Successful and failed jobs release these listeners without calling them.
+
+What a listener throws goes the way an error of cleanup goes: to the `onError`
+hook, and on to `Solo.unansweredHandler` or the zone. So does what a
 `ctx.onCancel` callback throws. An `async` listener is not awaited, and an
 error of its future goes straight to the zone, past the hook.
 

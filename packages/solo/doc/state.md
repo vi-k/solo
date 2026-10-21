@@ -295,12 +295,35 @@ class Logged<S extends Object> extends Solo<S> {
 
 What such an override owes, and what the engine owes it back:
 
-| What is owed | Why |
-| --- | --- |
-| `super.publish` comes first | It is what calls the listeners, so a delivery of your own runs after the engine's rather than instead of it. `@mustCallSuper` says so and the analyzer holds you to it. |
-| `@protected` is repeated | Dart does not carry the annotation over to an override. Without it `publish` is a public member of the controller. Code that holds the controller can then publish a state nobody wrote: the listeners are called and the delivery runs, while `currentState` stays what it was. The annotation is in `package:meta`. |
-| A failure should stay in `publish` | An error let out of here goes back the way the write came. A write through `ctx.emit` throws the error into the body that called `ctx.emit`. A write through `externalSetState` throws it to the caller of `externalSetState`. When that caller is a hook of the engine, the error goes on to `Zone.current.handleUncaughtError` from `dart:async`, where a failing hook's error goes anyway. A write by a state handler hands the error to the controller's `onError` and `onUnanswered`. The write has gone through by then: the state has changed, and the rules of the running jobs have been asked about it. Whoever wrote the state hears of a failed delivery as if the write had failed. |
-| The changes behind it are published all the same | The failed change is gone: it left the publication queue before the call, and nothing publishes a change twice. Yet the ones queued behind it are the state the controller now holds, and they go out before the failure leaves. Of several failures only the first is thrown; the rest go to the zone. |
+- **`super.publish` comes first.** It is what calls the listeners, so a
+  delivery of your own runs after the engine's rather than instead of it.
+  `@mustCallSuper` says so and the analyzer holds you to it.
+- **`@protected` is repeated.** Dart does not carry the annotation over to an
+  override. Without it `publish` is a public member of the controller. Code
+  that holds the controller can then publish a state nobody wrote: the
+  listeners are called and the delivery runs, while `currentState` stays what
+  it was. The annotation is in `package:meta`.
+- **A failure should stay in `publish`.** By the time a delivery fails, the
+  write has gone through: the state has changed, and the rules of the running
+  jobs have been asked about it. Whoever wrote the state hears of a failed
+  delivery as if the write had failed.
+- **The changes queued behind a failed one are published all the same.** The
+  failed change is gone: it left the publication queue before the call, and
+  nothing publishes a change twice. Yet the ones queued behind it are the state
+  the controller now holds, and they go out before the failure leaves. Of
+  several failures only the first is thrown; the rest go to the zone.
+
+An error let out of `publish` goes back the way the write came:
+
+- a write through `ctx.emit` throws it into the body that called `ctx.emit`;
+- a write through `externalSetState` throws it to the caller of
+  `externalSetState`;
+- a write by a state handler hands it to the controller's `onError` and
+  `onUnanswered`.
+
+When the caller of `externalSetState` is a hook of the engine, the error goes
+on to `Zone.current.handleUncaughtError` from `dart:async`, where a failing
+hook's error goes anyway.
 
 `SoloStream` is this override with a broadcast `StreamController` behind it,
 and `SoloListenable` is the engine's listeners plus Flutter's
@@ -571,7 +594,7 @@ Keep these functions limited to computing state: the value they return is their
 write. A state write made from inside one, through `externalSetState` or a
 source that calls it synchronously, does not combine with that value. If the
 job's rules accept the write, any other result of the handler lands on top of
-it, computed from the state before it, and the fact is lost; the state it was
+it, computed from the state before it, and the fact is lost. The state it was
 given, handed back, leaves the write in place. If they refuse it, the handler's
 result is dropped. Resource release belongs in the cleanup API, on the page
 [Resources and cleanup](resources.md).

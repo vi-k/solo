@@ -47,15 +47,17 @@ queued job or a state the job's rules do not accept can all end work
 Every failure reaches the `onError` hook of the controller and of
 `Solo.observer`. A failed job whose outcome nobody has accessed through `done`,
 `value` or `ignoreFailure()` by the microtask after it ends is also answered
-for: the controller's `onUnanswered` hands the error to
+for. The controller's `onUnanswered` hands the error to
 `Solo.unansweredHandler` when one is set, and otherwise reports it as unhandled
-to the Dart zone in which the job was created. The job decides this once, on
-that microtask: `done` read later still returns the `Failed`, but the error has
-been answered for by then. Use `ignoreFailure()` when error reporting elsewhere
-is sufficient: leaving a job unawaited does not by itself mark the error as
-handled, and neither does reading `outcome`. See
+to the Dart zone in which the job was created. Use `ignoreFailure()` when error
+reporting elsewhere is sufficient: leaving a job unawaited does not by itself
+mark the error as handled, and neither does reading `outcome`. See
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page.
+
+The job decides once whether to answer for its failure, on the microtask after
+it ends: `done` read later still returns the `Failed`, but the error has been
+answered for by then.
 
 ### Creating and scheduling jobs
 
@@ -104,10 +106,10 @@ job: `run`, or `job` for `saving` above, and not `add`. What woke the queue
 does not change the zone: a job queued just before it from another zone, the
 end of the job before, or the timer of an accumulation window. The body's
 timers and zone values, the job's deadline, the `onStart` hooks and the errors
-of futures the body does not await all stay in that zone, which is also where
-the job's failure goes when nobody reads its outcome and nothing else answers
-for it. Inside `ctx.unattended` the zone is the one that work was started from,
-as in the core. A child is not the queue's to start: it runs where `ctx.run`
+of futures the body does not await all stay in that zone. It is also where the
+job's failure goes when nobody reads its outcome and nothing else answers for
+it. Inside `ctx.unattended` the zone is the one that work was started from, as
+in the core. A child is not the queue's to start: it runs where `ctx.run`
 starts it, like any `Job.deferred`.
 
 ## Queue and policies
@@ -169,7 +171,7 @@ running job is the existing one for as long as it has not been cancelled. One
 that has already accepted a cancellation is on its way out and will not do the
 work, so a call that finds it queues a job of its own.
 
-Every caller of a `droppable` key may get the same job back, so a plain `then`
+Every caller of a `droppable` key may get the same job back. So a plain `then`
 on that job throws `StateError`, on the first call as well: a `then` of one
 caller would leave the next one nothing to continue with. Each caller continues
 it through `shared()` instead, `load('ada').shared().then(...)`: what
@@ -186,7 +188,7 @@ is left with `done` and `value`. Give `droppable` a key of its own.
 to the tail of the queue like any other, behind what was queued before it, and
 it still waits for the current job to finish: their bodies do not overlap. A
 job that refuses cancellation, one created with `cancellable: false`, can
-therefore delay its replacement — and so can one that has nothing to hand the
+therefore delay its replacement. So can one that has nothing to hand the
 request to: a `join` around a call the request cannot reach waits that call out
 to the end, and the outcome is `Cancelled` all the same. The token above is the
 way in; `ctx.abandonable` is the other, for an operation that can be left to
@@ -228,8 +230,8 @@ Job<Profile> load(String id) => run<Ready, Profile>(
     );
 ```
 
-A key is any object, compared with `==`, so the record `(_Op.load, id)` gives
-the policy the identity of one request rather than of the operation:
+A key is any object, compared with `==`. So the record `(_Op.load, id)` gives
+the policy the identity of one request rather than of the operation.
 `droppable` drops a second load of the same profile and lets a load of another
 one through.
 
@@ -261,11 +263,11 @@ returns `mine` instead tells the second caller that its call was dropped: that
 caller gets `Cancelled(duplicate)`, not the result of the first call.
 
 Use a distinct key for each operation and result type. A `Job<int>` handed to
-`droppable` under a key a `Job<String>` already holds throws `ArgumentError`,
-and it throws before the job is taken: nothing was queued and nothing was
+`droppable` under a key a `Job<String>` already holds throws `ArgumentError`.
+It throws before the job is taken: nothing was queued and nothing was
 cancelled, so the same handle can still be added — under `Policy.sequential`,
 or later, once that key is free. A key is fixed when the job is made, so the
-collision itself is settled where the two jobs are built; an enum with one
+collision itself is settled where the two jobs are built. An enum with one
 member per method, alone or inside a record, is a convenient way not to have
 it. A non-sequential policy with a null key throws `ArgumentError` too, and
 both checks work in release builds.
@@ -303,7 +305,7 @@ only — the running job is not theirs to touch — and they preserve jobs with
 `Cancelled(manual)`, or with the `reason:` the caller passes; `cancelAll`,
 which clears the queue and cancels the running job as well, takes one too.
 
-The order in `jobs` is not the order jobs will run in: a job waiting for an
+The order in `jobs` is not the order jobs will run in. A job waiting for an
 accumulation window can be passed by a ready one standing behind it, so the
 head of the queue is not always what starts next. See
 [Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready)
@@ -316,7 +318,7 @@ is told to go on, and what was asked for meanwhile runs then, in the order it
 was asked for. The queue has no pause of its own, and a job that waits on a
 `Completer` holds it as well as any work does. That job, the gate, works in
 `CameraState`, the whole state type of the controller, where the other jobs
-here work in `Ready`: a job ends `Cancelled` when the state leaves its working
+here work in `Ready`. A job ends `Cancelled` when the state leaves its working
 type, and a pause is not the business of one state.
 
 #### The first attempt
@@ -375,8 +377,9 @@ with what is submitted later. And `ctx.onCancel` clears the field when the gate
 is cancelled, as long as the gate is running by then. The body registers that
 callback, and the body has not run while the gate waits its turn behind the
 running job. A `queue.clear()`, a `cancelAll()` or a `close()` in that window
-takes the gate off the queue before it has started: no callback, the field
-still set, and `isPaused` back to saying `true` over a queue that runs.
+takes the gate off the queue before it has started. There is no callback, the
+field is still set, and `isPaused` is back to saying `true` over a queue that
+runs.
 
 #### The handle of the gate
 
