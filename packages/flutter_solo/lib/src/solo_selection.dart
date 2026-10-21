@@ -98,10 +98,13 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// a `const Object()` of the caller's is one object with every other.
   static const _none = _Unpicked();
 
-  /// The one callback the source is given. Two tear-offs of a method are
-  /// equal but need not be identical, and a source that takes listeners off
-  /// by identity would not find the one it was given.
-  late final VoidCallback _sourceListener = _onSourceChanged;
+  /// The callback the source holds for the current subscription, null while
+  /// nobody listens. Every subscription gives the source a closure of its
+  /// own: one is taken off by the very object it was given, whether the
+  /// source compares by `==` or by identity, and a subscription started from
+  /// inside the source's `addListener` or `removeListener` can tell its
+  /// callback from the one of the subscription it replaced.
+  VoidCallback? _subscription;
 
   /// Picks [selector] out of [source]; [changed] answers whether the pick
   /// changed, `!=` when it is omitted.
@@ -167,6 +170,9 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     final first = _listeners.isEmpty;
     _listeners.add(listener);
     if (first) {
+      late final VoidCallback subscription;
+      subscription = () => _onSourceChanged(subscription);
+      _subscription = subscription;
       // Before the subscription, not after: a source may publish while it
       // is being subscribed to, and that change is found by comparing
       // against the pick it had before.
@@ -177,7 +183,16 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
         _subscribing = true;
         _heardWhileSubscribing = false;
         subscriptionAttempted = true;
-        _source.addListener(_sourceListener);
+        _source.addListener(subscription);
+        if (!identical(_subscription, subscription)) {
+          // The source's `addListener` is foreign code, and the last listener
+          // left from inside it, maybe for one that subscribed afresh. What
+          // is here belongs to whoever came after; all left to this attempt
+          // is its own callback, which the source may have taken after the
+          // listener left.
+          _release(subscription, 'a subscription its listeners left');
+          return;
+        }
         _subscribing = false;
 
         // Picked again only when the source moved while it was being
@@ -199,24 +214,18 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
         // from inside it too, and none of them has a source to hear from.
         // Taken back before the source is asked to let go, which is foreign
         // code that may throw as well: whatever it does, nothing here is
-        // left listening to a subscription that failed.
-        _subscribing = false;
-        _listeners.clear();
-        _epoch++;
-        _forget();
+        // left listening to a subscription that failed. Unless the listeners
+        // left from in there and a subscription after this one is live:
+        // that one is left alone, and only this callback is taken back.
+        if (identical(_subscription, subscription)) {
+          _subscribing = false;
+          _listeners.clear();
+          _epoch++;
+          _forget();
+          _subscription = null;
+        }
         if (subscriptionAttempted) {
-          try {
-            _source.removeListener(_sourceListener);
-          } on Object catch (error, stackTrace) {
-            // The failure to subscribe is the caller's answer; this one is
-            // a second fault of the same source, reported like a listener's.
-            _reportIn(
-              error,
-              stackTrace,
-              'unsubscribing ${describeIdentity(this)} from its source '
-              'after a failed subscription',
-            );
-          }
+          _release(subscription, 'a failed subscription');
         }
         rethrow;
       }
@@ -233,9 +242,30 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     // Idle before the source hears of it: its `removeListener` is foreign
     // code, and a listener added from in there starts a subscription of its
     // own, which must not have its state wiped on the way back.
+    final subscription = _subscription;
+    _subscription = null;
+    _subscribing = false;
     _epoch++;
     _forget();
-    _source.removeListener(_sourceListener);
+    if (subscription != null) {
+      _source.removeListener(subscription);
+    }
+  }
+
+  /// Takes [subscription] back from the source after [what], reporting a
+  /// source that throws on it: the caller's answer is the failure to
+  /// subscribe, or no failure at all, and this is a second fault of the same
+  /// source, reported like a listener's.
+  void _release(VoidCallback subscription, String what) {
+    try {
+      _source.removeListener(subscription);
+    } on Object catch (error, stackTrace) {
+      _reportIn(
+        error,
+        stackTrace,
+        'unsubscribing ${describeIdentity(this)} from its source after $what',
+      );
+    }
   }
 
   /// Lets go of what the selection kept for its listeners: an idle one
@@ -276,10 +306,11 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     }
   }
 
-  void _onSourceChanged() {
+  void _onSourceChanged(VoidCallback subscription) {
     // A source that walks a copy of its listeners may still call this one
-    // after the last listener here has left, and nothing is kept by then.
-    if (_listeners.isEmpty) {
+    // after the last listener here has left, and nothing is kept by then —
+    // or after a later subscription has taken its place.
+    if (!identical(_subscription, subscription)) {
       return;
     }
     if (_subscribing) {

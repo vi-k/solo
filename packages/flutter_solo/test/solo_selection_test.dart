@@ -777,6 +777,120 @@ void main() {
     source.publish();
     expect(calls, 0);
   });
+
+  test('the last listener removed while subscribing is let go quietly', () {
+    final source = _ArmedSource();
+    addTearDown(source.dispose);
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    void listener() {}
+    source
+      ..addListener(() => selection.removeListener(listener))
+      ..publishNext = true;
+
+    expect(() => selection.addListener(listener), returnsNormally);
+    expect(selection.value, 1);
+
+    final heard = <int>[];
+    void another() => heard.add(selection.value);
+    selection.addListener(another);
+    addTearDown(() => selection.removeListener(another));
+    source.value = 2;
+    expect(heard, [2], reason: 'a later subscription follows the source');
+  });
+
+  test('a listener put in while subscribing hears no change of the one before',
+      () async {
+    final source = _ArmedSource();
+    addTearDown(source.dispose);
+    final selection = SoloSelection<int, int>(
+      source,
+      (value) => value,
+      changed: (previous, current) => true,
+    );
+    final heard = <int>[];
+    void first() {}
+    void second() => heard.add(selection.value);
+    void replace() => selection
+      ..removeListener(first)
+      ..addListener(second);
+    source
+      ..addListener(_once(replace))
+      ..publishNext = true;
+
+    selection.addListener(first);
+    addTearDown(() => selection.removeListener(second));
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      heard,
+      isEmpty,
+      reason: 'the source has not changed since the second subscription',
+    );
+
+    source.value = 2;
+    expect(heard, [2]);
+  });
+
+  test('a failed subscription leaves the one made inside it alone', () {
+    final source = _ArmedSource();
+    addTearDown(source.dispose);
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    final heard = <int>[];
+    void first() {}
+    void second() => heard.add(selection.value);
+    void replace() => selection
+      ..removeListener(first)
+      ..addListener(second);
+    source
+      ..addListener(_once(replace))
+      ..publishNext = true
+      ..failNext = true;
+
+    expect(() => selection.addListener(first), throwsStateError);
+    addTearDown(() => selection.removeListener(second));
+    source.value = 2;
+    expect(heard, [2]);
+  });
+
+  test('a subscription replaced before the source took it is let go', () {
+    final source = _HookFirstSource();
+    final selection = SoloSelection<int, int>(
+      source,
+      (value) => value,
+      changed: (previous, current) => true,
+    );
+    final heard = <int>[];
+    void first() {}
+    void second() => heard.add(selection.value);
+    source.beforeAdd = () {
+      selection
+        ..removeListener(first)
+        ..addListener(second);
+    };
+
+    selection.addListener(first);
+    expect(
+      source.listeners,
+      hasLength(1),
+      reason: 'only the second subscription is left with the source',
+    );
+    source.set(1);
+    expect(heard, [1]);
+
+    selection.removeListener(second);
+    expect(source.listeners, isEmpty);
+  });
+}
+
+/// [body] on its first call only.
+VoidCallback _once(VoidCallback body) {
+  var called = false;
+  return () {
+    if (called) {
+      return;
+    }
+    called = true;
+    body();
+  };
 }
 
 /// A selection that picked a payload while subscribed and then lost its
@@ -862,6 +976,57 @@ class EagerSource extends ValueNotifier<int> {
   void addListener(VoidCallback listener) {
     super.addListener(listener);
     value = 1;
+  }
+}
+
+/// Moves its value on from inside the next `addListener` once armed, after
+/// taking the listener, and fails that `addListener` if told to.
+final class _ArmedSource extends ValueNotifier<int> {
+  _ArmedSource() : super(0);
+
+  bool publishNext = false;
+  bool failNext = false;
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    if (!publishNext) {
+      return;
+    }
+    publishNext = false;
+    value++;
+    if (failNext) {
+      failNext = false;
+      throw StateError('subscribe');
+    }
+  }
+}
+
+/// Calls [beforeAdd] from inside `addListener`, before it takes the
+/// listener.
+final class _HookFirstSource implements ValueListenable<int> {
+  final listeners = <VoidCallback>[];
+  VoidCallback? beforeAdd;
+
+  @override
+  int value = 0;
+
+  @override
+  void addListener(VoidCallback listener) {
+    final hook = beforeAdd;
+    beforeAdd = null;
+    hook?.call();
+    listeners.add(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) => listeners.remove(listener);
+
+  void set(int next) {
+    value = next;
+    for (final listener in listeners.toList()) {
+      listener();
+    }
   }
 }
 
