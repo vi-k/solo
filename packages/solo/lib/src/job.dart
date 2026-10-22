@@ -85,7 +85,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
       throw ArgumentError.value(
         '$this',
         'child',
-        _notCreatedHere,
+        'runs as a child only in a body of the Solo that made it',
       );
     }
     if (_solo._queue._jobs.contains(this)) {

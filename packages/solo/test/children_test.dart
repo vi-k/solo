@@ -565,7 +565,12 @@ void main() {
         }
       }).launch();
       async.flushTimers();
-      expect(thrown, isA<ArgumentError>());
+      // The job was made by job(...) of the controller: the parent is what
+      // is wrong, and the message says so rather than how to make a job.
+      expect(
+        (thrown! as ArgumentError).message,
+        'runs as a child only in a body of the Solo that made it',
+      );
       expect(child.outcome, isNull, reason: 'never started, never dropped');
     });
   });

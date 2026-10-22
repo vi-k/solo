@@ -20,7 +20,8 @@ part 'job_context.dart';
 part 'queue.dart';
 
 /// What a controller says of a job it did not make, the fix included: the
-/// types let a job of the core or of another controller through.
+/// types let a job of the core or of another controller through. A job it
+/// did make, run by a parent of the core, is refused in `adoptedBy`.
 const _notCreatedHere =
     'was not created by this Solo (make it with job(...) of this controller)';
 
