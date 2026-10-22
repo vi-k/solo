@@ -896,8 +896,12 @@ void main() {
           .split('\n')
           .map((line) => line.isEmpty ? line : '  $line')
           .join('\n');
-      expect(_page(), contains('class _SaveButtonState'));
-      expect(_page(), contains(members));
+      // Inside that class, not merely somewhere on the page.
+      final page = _page();
+      final at = page.indexOf('class _SaveButtonState');
+      expect(at, isNot(-1));
+      final body = page.substring(at, page.indexOf('\n}\n', at));
+      expect(body, contains(members));
     });
 
     test('a State follows a new controller by identity, not by ==', () {
