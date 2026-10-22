@@ -50,6 +50,43 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// ```
   void emit(S next);
 
+  /// Runs [child], made by `job(...)` of this controller, as a child of this
+  /// job and returns its value.
+  ///
+  /// A `Job.deferred` of the core or a job of another controller is refused
+  /// with an [ArgumentError], and a job already in the queue with a
+  /// [StateError]. All other behavior is [JobContext.run]'s.
+  ///
+  /// ```dart
+  /// final name = await ctx.run(job<Idle, String>((child) => api.fetchName()));
+  /// ```
+  @override
+  Future<T> run<T>(
+    ChildJob<T> child, {
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
+  });
+
+  /// Starts [child], made by `job(...)` of this controller, right now as a
+  /// child of this job, and leaves its outcome to whoever holds it.
+  ///
+  /// Refuses the children [run] refuses. All other behavior is
+  /// [JobContext.start]'s.
+  ///
+  /// ```dart
+  /// ctx.start(job<Idle, void>((child) => sendReport(rows)));
+  /// ```
+  @override
+  void start(ChildJob<Object?> child);
+
+  /// Runs [children], each made by `job(...)` of this controller, side by
+  /// side, and stops the rest as soon as one of them goes wrong.
+  ///
+  /// Refuses the children [run] refuses. All other behavior is
+  /// [JobContext.runAll]'s.
+  @override
+  Future<List<T>> runAll<T>(Iterable<ChildJob<T>> children);
+
   /// Starts a stream-processing child with its own [SoloContext].
   ///
   /// The child belongs to this controller and keeps the parent's working
