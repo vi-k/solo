@@ -58,9 +58,9 @@ name: gate
 # the release, and its order is in
 # `docs/records/2026-09-11[1]-solo-release-readiness-report.md`.
 #
-# `AGENTS.md` and the records are not covered either: `check_line_width.py`
-# takes `packages/` and `docs/` and skips `docs/records/` by design, so
-# those two stay a reading job, as the regimen says.
+# The records are not covered either: `check_line_width.py` takes
+# `packages/`, `docs/` and `AGENTS.md`, and skips `docs/records/` by
+# design, so a record stays a reading job, as the regimen says.
 #
 # Every job names its image, `ubuntu-26.04`, rather than `ubuntu-latest`:
 # a label GitHub moves to a new release changes the gate with no commit

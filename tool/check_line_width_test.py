@@ -125,5 +125,9 @@ class TheExitCode(WidthCase):
     def test_a_wide_line_alone_fails(self):
         self.assertEqual(self.run_main('word ' * 20 + '\n'), 1)
 
+    def test_agents_md_is_checked_too(self):
+        (self.root / 'AGENTS.md').write_text('a\n\n\nc\n')
+        self.assertEqual(self.run_main('a\n\nb\n'), 1)
+
 if __name__ == '__main__':
     unittest.main()

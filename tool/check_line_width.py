@@ -13,6 +13,7 @@ wrote an 81-column line that this check called an offence. Until then only
 `http` was forgiven, and the link in that line had none -- it pointed at a
 section of a neighbouring page.
 
+`AGENTS.md` at the root is checked as well, since the filler fills it.
 `docs/records/` is not checked: a record is history, written on its day and
 kept as it was.
 
@@ -29,6 +30,8 @@ import sys
 
 WIDTH = 79
 ROOTS = ('packages', 'docs')
+# The filler takes this one too: see `EXTRA` in `reflow.py`.
+EXTRA = ('AGENTS.md',)
 SKIP = re.compile(r'^\s*(\||#)')
 # One word to the filler, and so one word here: see `reflow.py`, which
 # hides both behind a stand-in of the same width before it wraps.
@@ -74,9 +77,7 @@ def doubled_blanks(path):
         blank = True
 
 
-def main():
-    found = 0
-    doubled = 0
+def files():
     for root in ROOTS:
         for path in sorted(pathlib.Path(root).rglob('*.md')):
             parts = path.parts
@@ -84,13 +85,24 @@ def main():
                 continue
             if '.dart_tool' in parts or 'records' in parts:
                 continue
-            for number, width, line in offenders(path):
-                found += 1
-                print(f'{path}:{number}: {width} columns')
-                print(f'  {line}')
-            for number in doubled_blanks(path):
-                doubled += 1
-                print(f'{path}:{number}: a second blank line in a row')
+            yield path
+    for name in EXTRA:
+        path = pathlib.Path(name)
+        if path.exists():
+            yield path
+
+
+def main():
+    found = 0
+    doubled = 0
+    for path in files():
+        for number, width, line in offenders(path):
+            found += 1
+            print(f'{path}:{number}: {width} columns')
+            print(f'  {line}')
+        for number in doubled_blanks(path):
+            doubled += 1
+            print(f'{path}:{number}: a second blank line in a row')
     if found or doubled:
         if found:
             print(f'\n{found} lines over {WIDTH} columns.')
