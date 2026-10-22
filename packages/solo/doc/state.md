@@ -231,8 +231,27 @@ listeners run synchronously, in registration order, inside the change itself:
 - before the rules of the running jobs are re-evaluated;
 - before the next line of the code that changed the state.
 
-A change made from inside a listener does not get that order. It goes to the
-end of the publication queue rather than ahead of it:
+Like `ChangeNotifier`, `removeListener` matches with `==` rather than identity,
+so a widget can subscribe in `initState` and unsubscribe in `dispose` with a
+method of its own. `hasListeners` is protected, as in `ChangeNotifier`: it
+tells the subclass whether anyone listens. A listener that throws stops neither
+the listeners after it nor the re-evaluation that follows them. Its error goes
+to `onListenerError`, which hands it to the zone unless a subclass says
+otherwise.
+
+The engine drops the listeners for good when closing finishes, the moment
+`isFinished` turns true, and not when `close()` is called. From then on
+`addListener` does nothing: the listener is neither registered nor kept, and
+nothing is thrown. The state stops at the same moment, and from then on
+`externalSetState` throws a `StateError`.
+
+`SoloListenable` adds Flutter's `ValueListenable` on top of `addListener`, and
+reports a listener's error to `FlutterError` instead of the zone. It is a mixin
+on `Solo`, the way `SoloStream` is: a widget rebuilds from `value`, and a
+controller that needs both deliveries mixes in both.
+
+A change made from inside a listener does not get the order of the list above.
+It goes to the end of the publication queue rather than ahead of it:
 
 ```text
 externalSetState(B)
@@ -261,25 +280,6 @@ rule that reads nothing but the state answers it as it answered the first, and
 a job that the first answer cancelled is not asked again. A `keepWhile` that
 also reads a field of the controller sees what those listeners wrote there only
 in the second.
-
-Like `ChangeNotifier`, `removeListener` matches with `==` rather than identity,
-so a widget can subscribe in `initState` and unsubscribe in `dispose` with a
-method of its own. `hasListeners` is protected, as in `ChangeNotifier`: it
-tells the subclass whether anyone listens. A listener that throws stops neither
-the listeners after it nor the re-evaluation that follows them. Its error goes
-to `onListenerError`, which hands it to the zone unless a subclass says
-otherwise.
-
-The engine drops the listeners for good when closing finishes, the moment
-`isFinished` turns true, and not when `close()` is called. From then on
-`addListener` does nothing: the listener is neither registered nor kept, and
-nothing is thrown. The state stops at the same moment, and from then on
-`externalSetState` throws a `StateError`.
-
-`SoloListenable` adds Flutter's `ValueListenable` to that, and reports a
-listener's error to `FlutterError` instead of the zone. It is a mixin on
-`Solo`, the way `SoloStream` is: a widget rebuilds from `value`, and a
-controller that needs both deliveries mixes in both.
 
 ### A delivery of your own
 

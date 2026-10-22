@@ -627,6 +627,38 @@ void main() {
       });
     });
 
+    test('a replaced play publishes nothing between the two', () {
+      fakeAsync((async) {
+        open();
+        player.play('t-1');
+        async.elapse(const Duration(milliseconds: 20));
+        player.play('t-2');
+        async.flushTimers();
+        // `ifCancelled` hands back the state it was given: no `Idle`.
+        expect(states, [
+          'Loading',
+          'Loading',
+          'Buffering(Track(t-2), 50)',
+          'Buffering(Track(t-2), 100)',
+          'Playing(Track(t-2))',
+        ]);
+        close(async);
+      });
+    });
+
+    test('a play cancelled by hand still returns to Idle', () {
+      fakeAsync((async) {
+        open();
+        final job = player.play('t-1');
+        async.elapse(const Duration(milliseconds: 20));
+        job.cancel().ignore();
+        async.flushTimers();
+        expect('${job.outcome}', 'Cancelled(manual)');
+        expect(states, ['Loading', 'Idle']);
+        close(async);
+      });
+    });
+
     test('the track playing now stops before another one loads', () {
       fakeAsync((async) {
         open();

@@ -178,7 +178,12 @@ Opus предлагает два варианта: не звать обрабо�
 `a replaced reload publishes Initial unless its handler asks` держит обе
 трассы: без проверки причины `Loading, Initial, Loading, Loaded`, с ней —
 `Loading, Loading, Loaded`; `emit` того же `Loading` новой задачей публикуется,
-это её собственная запись. Движок не менялся.
+это её собственная запись. Движок не менялся. Позже, 2026-10-22: та же ловушка
+стояла в README, у `Player.play` из «The dozen calls» — `Policy.restart`
+с `ifCancelled → Idle`. Теперь там идиома с `ReplacedCancelReason`, в переводе
+тоже. Тест `a replaced play publishes nothing between the two` держит трассу
+без `Idle`, а `a play cancelled by hand still returns to Idle` — ручную отмену.
+Раздел «После закрытия» `2026-10-21-form-wave-report.md`.
 
 ### M2. У накопителя нет обработчиков состояния, и вернуться из «прогресса» нечем
 
@@ -283,7 +288,10 @@ closing, and keeps a queued job through removals and `cancelAll()` without
 поднять их можно, только переписав слова. Фраз длиннее 35 слов на пяти
 страницах Fable было 54, стало 0. Ревью сделанного нашло после резки три
 двусмысленности на `streams.md` и `vs-bloc.md`, они поправлены. Отчёт —
-`2026-10-21-form-wave-report.md`.
+`2026-10-21-form-wave-report.md`. Позже, 2026-10-22, и это расхождение снято:
+блок о вложенной записи стоит в конце «Observing state», а его первая фраза
+называет порядок прямо — «the order of the list above». Раздел «После закрытия»
+того же отчёта.
 
 ## Low
 

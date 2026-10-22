@@ -29,9 +29,11 @@ final class Player extends Solo<PlayerState> {
         keepWhile: (state) => state is! Disconnected,
         // The state to publish when the job fails or is cancelled. If the
         // job is cancelled by the rule, nothing is published and
-        // `Disconnected` stays.
+        // `Disconnected` stays. A play replaced by a newer one hands back
+        // the state it was given, which publishes nothing.
         ifFailed: (state, error, stackTrace) => const Idle(),
-        ifCancelled: (state, cancelled) => const Idle(),
+        ifCancelled: (state, cancelled) =>
+            cancelled.reason is ReplacedCancelReason ? state : const Idle(),
         (ctx) async {
           // The body's way to change state. There is no setter outside.
           ctx.emit(const Loading());
