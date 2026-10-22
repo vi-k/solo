@@ -1375,12 +1375,11 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// An override calls `super.finish`, or the job never ends. Ending a running
   /// job is not a way to cancel it: this waits for no children and unwinds no
-  /// cleanup stack, so cancel with [cancelWith] instead. On a finished job the
-  /// outcome stays, and a [Failed] handed in goes to [JobObserver.onError] and,
-  /// unless [Job.ignoreFailure] was called, on to the answer. A job that has
-  /// accepted a cancellation keeps it: a [Done] handed in is closed by nobody,
-  /// and the error of a [Failed] goes on to the answer unless
-  /// [Job.isCancellationError] names it.
+  /// cleanup stack; cancel with [cancelWith]. On a finished job the outcome
+  /// stays, and a [Failed] handed in goes to [JobObserver.onError] and, unless
+  /// [Job.ignoreFailure] was called, on to the answer. A job that has accepted
+  /// a cancellation keeps it: a [Done] handed in is closed by nobody, and a
+  /// [Failed] goes on to the answer unless [Job.isCancellationError] names it.
   ///
   /// A [Failed] handed in is announced here, once, before [finished] and
   /// [JobObserver.onFinish], so an `onError` that cancels finds the job
@@ -1394,10 +1393,11 @@ abstract class JobBase<T> implements Job<T> {
   /// all; a value handed in before that is what the group goes by, and the
   /// branch answers for the failure itself.
   ///
-  /// A [Cancelled] handed in here or to [cancelWith] belongs to this job alone:
-  /// with one instance for two children, a `const` one included, the parent
-  /// names the child that ended last, and with asserts on the second of them
-  /// also sends an [AssertionError] to the zone it was created in.
+  /// A [Cancelled] handed in here or to [cancelWith] belongs to this job alone.
+  /// The parent finds the child behind a cancellation by the instance: with
+  /// one for two children, a `const` one included, it names the child that
+  /// ended last, and with asserts on the second of them also sends an
+  /// [AssertionError] to the zone it was created in.
   ///
   /// See [Finishing a job by hand](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/extending.md#finishing-a-job-by-hand)
   /// on the extending page.

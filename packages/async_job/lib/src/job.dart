@@ -321,8 +321,8 @@ abstract interface class Job<T> {
   /// The handle has no body: it ends with the [Done] or [Failed] of this job,
   /// or [Cancelled] with a [ChainCancelReason] as soon as this job accepts a
   /// cancellation, and waits while this job refuses or holds one. It does not
-  /// start a job of [Job.deferred], and on a job that has already finished it
-  /// ends on the next microtask, not inside the call.
+  /// start a job of [Job.deferred]. On a job that has finished or accepted a
+  /// cancellation already it ends on the next microtask, not inside the call.
   ///
   /// The handle is a root job that inherits nothing, with its own optional
   /// [observer], which hears [JobObserver.onFinish] and not

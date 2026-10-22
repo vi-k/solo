@@ -27,10 +27,20 @@ final class _SharedJob<T> extends JobBase<T> {
     super.observer,
   }) : _source = source {
     source._pendingContinuations++;
-    // A source that has finished tells a late listener at once, which would
-    // end the handle inside this call. Its outcome comes through `_done` on
-    // the next microtask instead, as a Done or a Failed does.
-    if (!source.isFinished) {
+    // A source that has told its listeners of a cancellation tells a late
+    // one at once, which would end the handle inside this call. A finished
+    // source hands its outcome through `_done` on the next microtask, as a
+    // Done or a Failed does; one still unwinding hands its cancellation
+    // over on the next microtask too.
+    if (source.isFinished) {
+      // `_done` below.
+    } else if (source._cancelled case final cancelled?) {
+      _zone.run(
+        () => scheduleMicrotask(() {
+          if (_source != null) _sourceCancelled(cancelled);
+        }),
+      );
+    } else {
       _unregisterSource = source.whenCancelled(_sourceCancelled);
     }
     // In the handle's own zone, as a continuation subscribes in its own.

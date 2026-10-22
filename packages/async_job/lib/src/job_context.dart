@@ -402,10 +402,11 @@ abstract interface class JobContext {
   /// long after the job is over — goes to the job's observer and its answer,
   /// never to the body. Legal on a job that has accepted a cancellation and
   /// while the core unwinds the cleanup stack; once the job has finished it
-  /// throws a [StateError], and so do [run], [runAll], `each` and
-  /// [uncancellable] called in here. **Start the work in here and take
-  /// nothing out of it:** the work runs in an error zone of its own, and the
-  /// `void` return does not stop a closure carrying a future out.
+  /// throws a [StateError]. [run], [runAll], `each` and [uncancellable] throw
+  /// a [StateError] in here at any time: this work is not the job. **Start
+  /// the work in here and take nothing out of it:** the work runs in an error
+  /// zone of its own, and the `void` return does not stop a closure carrying
+  /// a future out.
   ///
   /// ```dart
   /// ctx.unattended(() => analytics.report(event));

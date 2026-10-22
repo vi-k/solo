@@ -370,6 +370,37 @@ void main() {
       });
     }
 
+    test(
+        'of a source that took a cancellation and still runs ends on the '
+        'next microtask', () {
+      fakeAsync((async) {
+        final gate = Completer<void>();
+        // A bare await is no checkpoint: the job takes the cancellation and
+        // its body runs on.
+        final unwinding = Job<int>((ctx) async {
+          await gate.future;
+          return 1;
+        })
+          ..ignoreFailure();
+        async.flushMicrotasks();
+        unwinding.cancel().ignore();
+        async.flushMicrotasks();
+        expect(unwinding.isCancelled, isTrue);
+        expect(unwinding.isFinished, isFalse);
+        final answers = Answers();
+        final handle = unwinding.shared(observer: answers);
+        expect(handle.outcome, isNull, reason: 'not inside the call');
+        expect(answers.finished, isEmpty);
+        async.flushMicrotasks();
+        expect('${handle.outcome}', startsWith('Cancelled(chain)'));
+        expect(answers.finished, ['Job(shared)']);
+        expect(unwinding.isFinished, isFalse, reason: 'the source still runs');
+        gate.complete();
+        async.flushMicrotasks();
+        expect(unwinding.outcome, isA<Cancelled>());
+      });
+    });
+
     test('is not a child: run does not take it', () {
       fakeAsync((async) {
         final handle = Job<int>((ctx) async => 1).shared();
