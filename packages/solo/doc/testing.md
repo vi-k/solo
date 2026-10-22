@@ -736,8 +736,8 @@ test('connect gives up after five seconds', () {
 A millisecond before the deadline the job has no outcome, and the device is
 still waiting; at the deadline the token is cancelled, and `refused` counts the
 call the device let go. `connect()` gives `enqueue` no state handlers, so the
-state stays `Idle`. A `enqueue` with `ifCancelled` gets the deadline there, not
-in `ifFailed`. The timer the core keeps for it is gone as soon as the job ends:
-`async.pendingTimers` is empty after the five seconds.
+state stays `Idle`. An `enqueue` with `ifCancelled` gets the deadline there,
+not in `ifFailed`. The timer the core keeps for it is gone as soon as the job
+ends: `async.pendingTimers` is empty after the five seconds.
 [A deadline of a job](cancellation.md#a-deadline-of-a-job) on the cancellation
 page tells a deadline from the other cancellations in that handler.

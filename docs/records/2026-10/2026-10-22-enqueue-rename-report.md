@@ -1,5 +1,6 @@
-> **Состояние на 2026-10-22:** сделано, в `main` одним коммитом с этой
-> записью; не отправлено и не опубликовано.
+> **Состояние на 2026-10-22:** сделано, в `main` двумя коммитами —
+> переименование и правки по ревью сделанного; не отправлено и не
+> опубликовано.
 > **Что это:** отчёт о переименовании `Solo.run` в `enqueue` и `Solo.add`
 > в `enqueueJob` по находке M3 шестого ревью `solo`, после пересмотра решения
 > владельцем.
@@ -73,7 +74,36 @@ changes»; `flutter_solo` — запись со ссылкой на `solo`; пе
 имена поправлены в решениях 46, 50, 51, 102 и в решении о `shared()`.
 `docs/architecture.md` и `docs/conventions.md` называют новые имена.
 
+## Ревью сделанного
+
+Независимое ревью на Opus по копии дерева на `b3f3b1f2`: один High, два Medium,
+три Low. Все подтверждены и поправлены.
+
+- H1. На `children.md` фраза «the future returned by `run`» говорила
+  о `ctx.run`: таблица прямо над ней называет «the future of `ctx.run`».
+  Правило код-спанов переписало её в `enqueue`. Теперь там `ctx.run`,
+  в переводе и в цитате `children_rakes_test.dart` тоже. Правило не знало, чей
+  `run` в прозе, если рядом нет `ctx`; другого такого места ревьюер не нашёл.
+- M1. Решение 100 `docs/settled.md` ещё называло `Solo.add`; теперь
+  `Solo.enqueueJob`.
+- M2. Одиннадцать имён тестов называли `run` и `add`, хотя вызовы внутри уже
+  новые; переписаны. `the onCancel of run` в `cancellation_rakes_test.dart`
+  устарело ещё до этой правки и стало `the ifCancelled of enqueue`.
+- L1. «A `enqueue` with `ifCancelled`» на `testing.md` и в его цитате стало «An
+  `enqueue`».
+- L2. Глагол «added» о постановке: «can still be added» на `jobs.md` стало «can
+  still be enqueued», «A job added to a controller's queue» — «A job in a
+  controller's queue», «a job added after it» в таблице причин
+  `cancellation.md` — «a job enqueued after it». Переводы так же. Таблицу
+  причин цитирует `cancellation_rakes_test.dart`, и цитата поменялась вместе
+  с ней: первый гейт после правок упал на ней одним тестом.
+- L3. Флаг `_enqueued` ставит и `adoptedBy`, когда `ctx.run` берёт ребёнка,
+  а dartdoc флага говорит «Whether the controller has taken this handle
+  already». Флаг назван `_taken`.
+
 ## Проверки
+
+Числа — по полному гейту после правок ревью.
 
 `async_job`: формат, анализ, +1791, без изменений. `solo`: формат, анализ,
 +2065; пример +112. `flutter_solo`: формат, анализ, +241; пример +6. Стенды:

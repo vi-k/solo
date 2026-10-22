@@ -1003,7 +1003,7 @@ void main() {
               .group(1)!,
         );
 
-    test('the first attempt is the body of the handlers of run', () {
+    test('the first attempt is the body of the handlers of enqueue', () {
       final attempt = _part(_reported, _first);
       _says(
         attempt,

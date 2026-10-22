@@ -115,9 +115,9 @@ where `ctx.run` starts it, like any `Job.deferred`.
 
 ## Queue and policies
 
-A job added to a controller's queue is a root job, and only one root job runs
-at a time. When a method is called again while the job of an earlier call is
-still queued or running, the policy decides which of the two survives:
+A job in a controller's queue is a root job, and only one root job runs at a
+time. When a method is called again while the job of an earlier call is still
+queued or running, the policy decides which of the two survives:
 
 ```dart
 // sequential, the default: one after another, in the order asked for.
@@ -265,12 +265,12 @@ caller gets `Cancelled(duplicate)`, not the result of the first call.
 Use a distinct key for each operation and result type. A `Job<int>` handed to
 `droppable` under a key a `Job<String>` already holds throws `ArgumentError`.
 It throws before the job is taken: nothing was queued and nothing was
-cancelled, so the same handle can still be added — under `Policy.sequential`,
-or later, once that key is free. A key is fixed when the job is made, so the
-collision itself is settled where the two jobs are built. An enum with one
-member per method, alone or inside a record, is a convenient way not to have
-it. A non-sequential policy with a null key throws `ArgumentError` too, and
-both checks work in release builds.
+cancelled, so the same handle can still be enqueued — under
+`Policy.sequential`, or later, once that key is free. A key is fixed when the
+job is made, so the collision itself is settled where the two jobs are built.
+An enum with one member per method, alone or inside a record, is a convenient
+way not to have it. A non-sequential policy with a null key throws
+`ArgumentError` too, and both checks work in release builds.
 
 ### Working the queue directly
 

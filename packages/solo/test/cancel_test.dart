@@ -182,7 +182,7 @@ void main() {
     });
   });
 
-  test('cancel before add drops the job and add then throws', () {
+  test('cancel before enqueueJob drops the job and enqueueJob then throws', () {
     runSolo((solo, journal, async) {
       final job = solo.job<TestState, void>(key: 'early', (ctx) async {})
         ..cancel();

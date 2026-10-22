@@ -503,7 +503,7 @@ abstract class Solo<S extends Object> {
     if (policy != Policy.sequential && impl.key == null) {
       throw ArgumentError('Policy.${policy.name} requires a job key');
     }
-    if (impl._enqueued ||
+    if (impl._taken ||
         impl._jobStatus != JobStatus.created ||
         _queue._jobs.contains(impl)) {
       throw StateError('$impl has already been enqueued or run');
@@ -533,7 +533,7 @@ abstract class Solo<S extends Object> {
     }
     // Set before anything can go wrong below: a job dropped by a closed
     // controller has been enqueued too, and one handle is one enqueue.
-    impl._enqueued = true;
+    impl._taken = true;
     // Any job of this call may be handed to the next caller of the key, so
     // every one of them refuses a plain `then` from the start, the first
     // caller's included: otherwise whether a caller throws would depend on

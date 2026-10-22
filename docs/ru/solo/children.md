@@ -136,7 +136,7 @@ Job<String> syncAndAnnounce(int item) => enqueue<Ready, String>(
 
 `ctx.run(child).ignore()` явно игнорирует результат этой future, при этом
 родитель продолжает ждать детей. Одного `child.ignoreFailure()` недостаточно
-для обработки ошибок future, которую вернул `enqueue`. `ctx.start(child)`
+для обработки ошибок future, которую вернул `ctx.run`. `ctx.start(child)`
 запускает ребёнка и не возвращает future: его провал уходит в `onUnanswered`
 контроллера, как любой провал, который никто не наблюдал, а родитель всё так же
 ждёт ребёнка. `ctx.start` берите для ребёнка, за провал которого кто-то всё же

@@ -97,7 +97,7 @@ void main() {
     }
   });
 
-  test('a job made by job and added', () {
+  test('a job made by job and enqueued', () {
     runSolo((solo, journal, async) {
       final job = solo.enqueueJob(
         solo.job<TestState, void>(

@@ -46,7 +46,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// `created` and not queued, and a hook running right then — the error
   /// hook of a rule that threw — would be handed a job that looks brand
   /// new.
-  var _enqueued = false;
+  var _taken = false;
 
   _SoloJob(
     this._solo,
@@ -95,14 +95,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // again while the first adoption is asking that rule. The core lets a
     // `created` job in, and a second adoption would start it with nobody
     // waiting for it.
-    if (_enqueued) {
+    if (_taken) {
       throw StateError('$this has already been enqueued or run');
     }
     // Adoption is the controller taking the handle, the same as `enqueueJob`:
     // from here nothing else may take it, and a rule of the child's own — asked
     // a moment later, while the child is still `created` and in no list — must
     // not be able to put it in the queue.
-    _enqueued = true;
+    _taken = true;
     _parentJob = parent._job;
   }
 

@@ -1341,7 +1341,7 @@ void main() {
               expect(bench.unanswered, isEmpty);
               expect(errors, ['Bad state: child failed']);
               _says('`child.ignoreFailure()` alone does not handle errors of '
-                  'the future returned by `enqueue`.');
+                  'the future returned by `ctx.run`.');
             case 'ctx.run(child).ignore()':
               expect(bench.unanswered, isEmpty);
               expect(errors, isEmpty);

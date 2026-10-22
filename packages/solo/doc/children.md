@@ -138,7 +138,7 @@ where it hands the future on.
 
 `ctx.run(child).ignore()` explicitly ignores that future's result while the
 parent still waits for its children. `child.ignoreFailure()` alone does not
-handle errors of the future returned by `enqueue`. `ctx.start(child)` starts
+handle errors of the future returned by `ctx.run`. `ctx.start(child)` starts
 the child and returns no future: its failure goes to the controller's
 `onUnanswered`, as any failure nobody observed does, and the parent waits for
 the child all the same. Take `ctx.start` for a child whose failure somebody

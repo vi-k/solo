@@ -647,8 +647,9 @@ void main() {
       });
     });
 
-    test('the onCancel of run computes the state once the job has cleaned up',
-        () {
+    test(
+        'the ifCancelled of enqueue computes the state once the job has '
+        'cleaned up', () {
       fakeAsync((async) {
         final bench = Bench();
         final job = bench.enqueue<Ready, void>(
@@ -1853,7 +1854,7 @@ void main() {
 
       test(
           'ClosedCancelReason: close(), for the running job, the queue and '
-          'a job added after it', () {
+          'a job enqueued after it', () {
         fakeAsync((async) {
           final bench = Bench();
           final running = bench.work('running');
@@ -1965,7 +1966,7 @@ void main() {
             '`keepWhile`',
             '`ctx.stateAs`',
           ],
-          'ClosedCancelReason': ['`close()`', 'a job added after it'],
+          'ClosedCancelReason': ['`close()`', 'a job enqueued after it'],
           'DuplicateCancelReason': ['`Policy.droppable`'],
           'ReplacedCancelReason': ['`Policy.replace`', '`Policy.restart`'],
           'TimeoutCancelReason': ['`timeout`'],

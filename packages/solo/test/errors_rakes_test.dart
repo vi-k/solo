@@ -635,7 +635,7 @@ void main() {
         );
       });
 
-      test('a state handler of run', () {
+      test('a state handler of enqueue', () {
         late Bench bench;
         late Job<void> job;
         late Job<void> next;
@@ -2116,7 +2116,7 @@ void main() {
       });
     });
 
-    test('the failure state through the ifFailed parameter of run', () {
+    test('the failure state through the ifFailed parameter of enqueue', () {
       _says(
         'For a final failure state, use the `ifFailed` parameter of '
         '`enqueue` rather than a broad catch',

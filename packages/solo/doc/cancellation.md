@@ -349,7 +349,7 @@ a `Cancelled` with each one prints:
 | `ChainCancelReason` | the cancellation came along a chain of `then` | `Cancelled(chain)` |
 | `SiblingCancelReason` | another branch of `ctx.runAll` failed or was cancelled, or the group itself hit an error, and the group stopped the rest | `Cancelled(sibling)` |
 | `RulesCancelReason` | the state left the working type, `canStart` or `keepWhile` said no, or `ctx.stateAs` found another type | `Cancelled(rules: is not Ready)`, `Cancelled(rules: canStart)`, `Cancelled(rules: keepWhile)` |
-| `ClosedCancelReason` | `close()`, or a job added after it | `Cancelled(closed)` |
+| `ClosedCancelReason` | `close()`, or a job enqueued after it | `Cancelled(closed)` |
 | `DuplicateCancelReason` | `Policy.droppable` found a job with the same key and handed that one back | `Cancelled(duplicate)` |
 | `ReplacedCancelReason` | `Policy.replace` or `Policy.restart` put a newer job with the same key in its place | `Cancelled(replaced)` |
 | `TimeoutCancelReason` | the deadline given with `timeout` ran out | `Cancelled(timeout)` |

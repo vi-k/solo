@@ -350,7 +350,7 @@ switch (job.outcome) {
 | `ChainCancelReason` | отмена пришла по цепочке `then` | `Cancelled(chain)` |
 | `SiblingCancelReason` | другая ветка `ctx.runAll` упала или была отменена либо сбой случился у самой группы, и группа остановила остальные | `Cancelled(sibling)` |
 | `RulesCancelReason` | состояние вышло из рабочего типа, `canStart` или `keepWhile` ответили «нет» либо `ctx.stateAs` нашёл другой тип | `Cancelled(rules: is not Ready)`, `Cancelled(rules: canStart)`, `Cancelled(rules: keepWhile)` |
-| `ClosedCancelReason` | `close()` или `Job`, добавленная после него | `Cancelled(closed)` |
+| `ClosedCancelReason` | `close()` или `Job`, поставленная в очередь после него | `Cancelled(closed)` |
 | `DuplicateCancelReason` | `Policy.droppable` нашёл `Job` с тем же ключом и вернул её | `Cancelled(duplicate)` |
 | `ReplacedCancelReason` | `Policy.replace` или `Policy.restart` поставили на её место более новую `Job` с тем же ключом | `Cancelled(replaced)` |
 | `TimeoutCancelReason` | истёк срок, заданный через `timeout` | `Cancelled(timeout)` |

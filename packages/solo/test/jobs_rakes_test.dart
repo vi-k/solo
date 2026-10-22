@@ -465,7 +465,9 @@ void main() {
       expect(zone, isEmpty);
     });
 
-    test('the zone is the one the job was created in, not the one of add', () {
+    test(
+        'the zone is the one the job was created in, not the one of enqueueJob',
+        () {
       final created = <String>[];
       final added = <String>[];
       fakeAsync((async) {
@@ -514,8 +516,9 @@ void main() {
   });
 
   group('Creating and scheduling jobs', () {
-    test('job assembles, add queues, and the job held on to is the one queued',
-        () {
+    test(
+        'job assembles, enqueueJob queues, and the job held on to is the one '
+        'queued', () {
       fakeAsync((async) {
         final assembling = page.Assembling();
         final first = assembling.saveInTwoSteps();
@@ -539,7 +542,7 @@ void main() {
       });
     });
 
-    test('run does both at once', () {
+    test('enqueue does both at once', () {
       fakeAsync((async) {
         final assembling = page.Assembling();
         final job = assembling.setZoom(2);
@@ -1134,7 +1137,7 @@ void main() {
       });
     });
 
-    test('run returns one handle and does not say whose job it is', () {
+    test('enqueue returns one handle and does not say whose job it is', () {
       fakeAsync((async) {
         final camera = page.CameraController();
         final mine = camera.load('ada');

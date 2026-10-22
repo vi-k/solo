@@ -1711,7 +1711,7 @@ final name = await ctx.abandonable(
             'and the test needs no `ignoreFailure()`');
       });
 
-      test('the deadline reaches ifCancelled of run, not ifFailed', () {
+      test('the deadline reaches ifCancelled of enqueue, not ifFailed', () {
         final seen = <String>[];
         fakeAsync((async) {
           final camera = _HandledCamera(FakeCamera(), seen);
@@ -1724,7 +1724,7 @@ final name = await ctx.abandonable(
         });
 
         expect(seen, ['ifCancelled: timeout']);
-        _says('A `enqueue` with `ifCancelled` gets the deadline there, not in '
+        _says('An `enqueue` with `ifCancelled` gets the deadline there, not in '
             '`ifFailed`');
       });
     });
