@@ -727,7 +727,8 @@ own»: таблица сравнивает две остановки рядом,
 десяти строк, блок не длиннее тридцати. (2026-10-22;
 `2026-10-21-form-wave-plan.md`, `2026-10-21-form-wave-report.md`; M3
 `2026-10-21-async-job-project-review-3.md`, L5
-`2026-10-21-solo-project-review-3.md`.)
+`2026-10-21-solo-project-review-3.md`; сторож —
+`2026-10-22-eighth-review-wave-report.md`.)
 
 ## Не чиним по вердикту ревью
 
