@@ -37,7 +37,12 @@ DECLARATION = re.compile(
 # A sentence ends where a stop is followed by more text. A code span, a
 # link and an abbreviation hold stops that end nothing.
 STOP = re.compile(r'[.!?]\s+\S')
-NOT_A_STOP = re.compile(r'`[^`]*`|\[[^\]]*\](\([^)]*\))?|\b(?:e\.g|i\.e)\.')
+NOT_A_STOP = re.compile(
+    r'`[^`]*`|\[[^\]]*\](\([^)]*\))?|\b(?:e\.g|i\.e|etc)\.'
+)
+# Where the name of a declaration has been given: an unnamed extension or a
+# declaration split over lines has not given it on its first line.
+ENDS_HEAD = re.compile(r'\(|=>|=|;|,|\{')
 
 
 def strip_generics(text):
@@ -54,7 +59,7 @@ def name_of(declaration):
         return 'library'
     named = DECLARATION.match(declaration)
     if named:
-        return named.group(1)
+        return owner_of(named)
     plain = strip_generics(declaration)
     # A function type is a type, not a name: `void Function() onCancel(...)`,
     # `static void Function(String message)? debug;`.
@@ -65,7 +70,18 @@ def name_of(declaration):
         plain = bare
     head = re.split(r'\(|=>| = |;|\{', plain)[0]
     words = re.findall(r'[A-Za-z_][\w.]*', head)
-    return words[-1] if words else ''
+    # A named constructor is named after its last part: `Job.deferred`
+    # documents `deferred`, `Job._` nothing pub.dev shows.
+    return words[-1].split('.')[-1] if words else ''
+
+
+def owner_of(named):
+    """The name a declaration gives its members; `_` for an unnamed
+    extension, which dartdoc does not show."""
+    name = named.group(1)
+    if name == 'on' and named.group(0).lstrip().startswith('extension'):
+        return '_'
+    return name
 
 
 def paragraphs(lines):
@@ -125,7 +141,7 @@ def blocks(source):
             if line and not line[0].isspace():
                 named = DECLARATION.match(line)
                 if named:
-                    owner = named.group(1)
+                    owner = owner_of(named)
                 elif not line.startswith(('}', '//', '@')):
                     owner = ''
             i += 1
@@ -139,10 +155,21 @@ def blocks(source):
         ]
         after = i
         while after < len(lines) and (
-            not lines[after].strip() or lines[after].strip().startswith('@')
+            not lines[after].strip()
+            or lines[after].strip().startswith(('@', '//'))
         ):
             after += 1
         declaration = lines[after].strip() if after < len(lines) else ''
+        more = after + 1
+        while (
+            declaration
+            and not ENDS_HEAD.search(strip_generics(declaration))
+            and not DECLARATION.match(declaration)
+            and more < len(lines)
+            and more < after + 4
+        ):
+            declaration += ' ' + lines[more].strip()
+            more += 1
         name = name_of(declaration)
         if indent == 0:
             public = not name.startswith('_')

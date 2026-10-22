@@ -38,6 +38,10 @@ class FirstParagraph(unittest.TestCase):
         ]
         self.assertEqual(check_dartdoc.problems(block), [])
 
+    def test_etc_ends_nothing(self):
+        block = ['Takes a key, a describe, etc. and names the job.']
+        self.assertEqual(check_dartdoc.problems(block), [])
+
     def test_the_second_paragraph_may_hold_many(self):
         block = ['Runs the body.', '', 'It throws. It waits.']
         self.assertEqual(check_dartdoc.problems(block), [])
@@ -101,6 +105,52 @@ class Public(unittest.TestCase):
             '  /// Ends. Twice.',
             '  void _end() {}',
             '}',
+        ])
+        self.assertEqual(found(source), [])
+
+    def test_values_of_an_enum_and_a_named_constructor(self):
+        source = '\n'.join([
+            'enum Phase {',
+            '  /// Runs. Twice.',
+            '  body,',
+            '',
+            '  /// Ends. Twice.',
+            '  done;',
+            '}',
+            '',
+            'final class Job {',
+            '  /// Makes. Twice.',
+            '  Job.deferred(this.body);',
+            '',
+            '  /// Hides. Twice.',
+            '  Job._();',
+            '}',
+        ])
+        self.assertEqual(
+            [name for name, _ in found(source)],
+            ['Phase.body', 'Phase.done', 'Job.deferred'],
+        )
+
+    def test_a_declaration_over_two_lines_is_named_by_both(self):
+        source = '\n'.join([
+            'final class Job {',
+            '  /// Holds. Twice.',
+            '  static final Map<String, int>',
+            '      _cache = {};',
+            '}',
+        ])
+        self.assertEqual(found(source), [])
+
+    def test_an_unnamed_extension_and_an_ignore_are_skipped(self):
+        source = '\n'.join([
+            'extension on String {',
+            '  /// Sizes. Twice.',
+            '  int get size => length;',
+            '}',
+            '',
+            '/// Hides. Twice.',
+            '// ignore: unused_element',
+            'final class _Hidden {}',
         ])
         self.assertEqual(found(source), [])
 
