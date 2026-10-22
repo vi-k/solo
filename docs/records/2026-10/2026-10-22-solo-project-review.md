@@ -137,7 +137,9 @@ dartdoc библиотеки и три `export`; README, написанный д
 а не на его страницу. Покажет ли вкладка `example.md`, проверит только сама
 вкладка после публикации: `pana` ставит `README.md` первым, а pub.dev его
 пропускал. Шаг — в `docs/handoff.md`. Подробности —
-`2026-10-22-seventh-review-wave-report.md`.
+`2026-10-22-seventh-review-wave-report.md`. Проверено 2026-10-23 после
+публикации 0.3.0: вкладка Example показывает `example/example.md`,
+`2026-10-23-solo-release-report.md`.
 
 ## Low
 
