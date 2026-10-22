@@ -414,6 +414,15 @@ jobs:
       - name: A section starts with code, an attempt with its mark
         run: python3 tool/check_doc_shape.py
 
+      # Each review wave cut the long dartdoc its reviewer named, and the
+      # next review found the next one. This holds the shape of decision
+      # 103: one sentence first, short paragraphs, a short block.
+      - name: Public dartdoc is a hint
+        run: python3 tool/check_dartdoc.py
+
+      - name: The dartdoc check knows a long one
+        run: python3 -m unittest tool/check_dartdoc_test.py
+
       # The rakes tests of four packages hold their pages to one helper,
       # kept in four copies. A fix that reached three of them would leave
       # the fourth checking its pages by the old rule, and green.
