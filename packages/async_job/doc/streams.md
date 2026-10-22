@@ -107,6 +107,13 @@ for: `join` waits the save out and then throws the cancellation in place of its
 value, and the child ends after it. And an error of the stream or of the
 callback ends it `Failed`.
 
+One after another is not a limit on the stream. While a callback runs, the
+child keeps the subscription paused, and a source that does not wait for its
+listener — a broadcast stream does not — goes on sending: the events wait in
+the paused subscription, as many as come. A source steadily faster than the
+saves grows that queue without end. Capping it, merging events or dropping them
+is the application's choice, made on the stream before it reaches `each`.
+
 `saving.value` completes when the stream ends and the last save finishes;
 awaiting it throws the child's failure into the body, and a `Cancelled` it
 throws follows the cancellation path: uncaught, it cancels the parent under the
