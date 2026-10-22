@@ -18,6 +18,7 @@
 | `onCancel:` у `run` и `job` | `ifCancelled:` |
 | `run(body)` | `enqueue(body)` |
 | `add(job)` | `enqueueJob(job)` |
+| `Job<T>` помощника, переданный в `ctx.run` | `SoloJob<T>` |
 | `onChange(previous, current)` | `onChange(transition)` |
 | `SoloObserver.onChange(solo, previous, current)` | `SoloObserver.onChange(solo, transition)` |
 | `SoloQueue.lastWhere` | `Solo.lastJobWhere` |
@@ -84,11 +85,13 @@
   `Solo.onChange(transition)` и `SoloObserver.onChange(solo, transition)`.
 - **Подкласс с членом, названным как новый член `Solo`, перестаёт собираться
   или переопределяет его.** Новые члены экземпляра: `currentState`,
-  `isFinished`, `isDraining`, `pending`, `onClose`, `onUnanswered`,
-  `addListener`, `removeListener`, `hasListeners` и `onListenerError`.
+  `isFinished`, `isDraining`, `pending`, `enqueue`, `enqueueJob`, `onClose`,
+  `onUnanswered`, `addListener`, `removeListener`, `hasListeners`
+  и `onListenerError`.
 - **Класс, который сам реализует `SoloContext`, добавляет `abandonable`,
-  `pause`, `runAll` и `start`,** новые члены `JobContext` в `async_job`, а его
-  `each` принимает `key` и `describe`.
+  `heldCancellation`, `pause`, `runAll` и `start`,** новые члены `JobContext`
+  в `async_job`, его `run` принимает `dispose` и `discard`, а `each` — `key`
+  и `describe`.
 - **`Policy.droppable` отказывает ключу, который держит задача с другим типом
   результата, с `ArgumentError`, и отказывает до того, как примет новую
   задачу.** См. [«Ключ на каждый запрос»](jobs.md#ключ-на-каждый-запрос).
@@ -184,6 +187,9 @@ future падала, а само тело работало под другим `
 и оставляет на месте собственную запись; `0.2.0` публиковала это состояние ещё
 раз как переход.
 
+Строки `Solo.debug` о том, что задача встала в очередь, начинаются с `enqueue`,
+а не с `add`.
+
 ### Добавлено
 
 - **`ctx.start` из `async_job` запускает ребёнка, которого тело не ждёт.**
@@ -195,8 +201,8 @@ future падала, а само тело работало под другим `
   `enqueue`, `collect` и `accumulate`; когда срок выходит, задача заканчивается
   `Cancelled(timeout)` с новой причиной `TimeoutCancelReason` из `async_job`.
   См. [«Срок задачи»](cancellation.md#срок-задачи).
-- **`collect` и `accumulate` принимают обработчики состояния `job`, `ifFailed`
-  и `ifCancelled`.** Группа, которая написала собственное состояние, пока
+- **`collect` и `accumulate` принимают `ifFailed` и `ifCancelled`, обработчики
+  состояния `job`.** Группа, которая написала собственное состояние, пока
   работала, откатывает его через них, когда падает или её отменяют; она
   вызывает один из них не больше одного раза, сколько бы событий в ней ни было.
   См. [«Запуск, отмена и ошибки»](accumulation.md#запуск-отмена-и-ошибки).
@@ -228,6 +234,11 @@ future падала, а само тело работало под другим `
 - `package:solo/listeners.dart`: `Listeners`, список слушателей, по которому
   идёт уведомитель, для пакета, который строит собственную доставку поверх
   `solo`.
+- `Solo.debug` называет идущую задачу в строке задачи, вставшей в очередь, пока
+  та идёт: `while Job(outer) is running: it starts after Job(outer) ends`;
+  так же говорит строка дубликата, который возвращает `Policy.droppable`,
+  а дубликат идущей задачи кончается словами
+  `which is running: if awaited from inside Job(x), it waits for itself`.
 
 ### Исправлено
 

@@ -35,8 +35,8 @@ below.
   `untilFinished`, and `JobContext` gains `abandonable`, `heldCancellation`,
   `pause`, `runAll`, `start` and the `dispose` and `discard` of `run`; `then`,
   `shared` and `each` take `key` and `describe`, in an override too; an
-  extension on `JobContext` named `heldCancellation`, `runAll` or `start` is
-  shadowed without a warning.
+  extension on `Job` or `JobContext` with the name of a new member is shadowed
+  without a warning.
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`, and `JobBase.debug` is `Job.debug`.** See
   [Building on the core](doc/extending.md).
@@ -154,6 +154,8 @@ new wording.
   the job was left running with no body, forever.
 - Jobs equal by `==` are no longer taken for one another: a parent of two such
   children finished while one of them still ran.
+- A key or a `describe` that throws prints as a mark in the job's name instead
+  of replacing the core's error message.
 - A child, a cancel callback or a listener leaves its list without a search:
   thousands of them in one job took time quadratic in their number.
 - A body that throws `Cancelled` accepts that cancellation at once: until the

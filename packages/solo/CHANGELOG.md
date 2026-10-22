@@ -18,6 +18,7 @@ below.
 | `onCancel:` of `run` and `job` | `ifCancelled:` |
 | `run(body)` | `enqueue(body)` |
 | `add(job)` | `enqueueJob(job)` |
+| `Job<T>` of a helper handed to `ctx.run` | `SoloJob<T>` |
 | `onChange(previous, current)` | `onChange(transition)` |
 | `SoloObserver.onChange(solo, previous, current)` | `SoloObserver.onChange(solo, transition)` |
 | `SoloQueue.lastWhere` | `Solo.lastJobWhere` |
@@ -84,11 +85,12 @@ below.
   `Solo.onChange(transition)` and `SoloObserver.onChange(solo, transition)`.
 - **A subclass with a member named like a new member of `Solo` stops compiling,
   or overrides it.** The new instance members are `currentState`, `isFinished`,
-  `isDraining`, `pending`, `onClose`, `onUnanswered`, `addListener`,
-  `removeListener`, `hasListeners` and `onListenerError`.
-- **A class that implements `SoloContext` itself adds `abandonable`, `pause`,
-  `runAll` and `start`,** the new members of `JobContext` in `async_job`, and
-  its `each` takes `key` and `describe`.
+  `isDraining`, `pending`, `enqueue`, `enqueueJob`, `onClose`, `onUnanswered`,
+  `addListener`, `removeListener`, `hasListeners` and `onListenerError`.
+- **A class that implements `SoloContext` itself adds `abandonable`,
+  `heldCancellation`, `pause`, `runAll` and `start`,** the new members of
+  `JobContext` in `async_job`, its `run` takes `dispose` and `discard`, and its
+  `each` takes `key` and `describe`.
 - **`Policy.droppable` refuses a key held by a job of another result type with
   an `ArgumentError`, and refuses before it takes the new job.** See
   [A key for each request](doc/jobs.md#a-key-for-each-request).
@@ -183,6 +185,9 @@ An `ifFailed` or `ifCancelled` handler that hands back the state it was given,
 or a `const` the state already holds, publishes nothing and leaves in place a
 write it made itself, where `0.2.0` published that state again as a change.
 
+The lines of `Solo.debug` about a job being queued begin with `enqueue`, not
+`add`.
+
 ### Added
 
 - **`ctx.start` of `async_job` starts a child the body does not wait for.** The
@@ -193,10 +198,10 @@ write it made itself, where `0.2.0` published that state again as a change.
   `enqueue`, `collect` and `accumulate` take it; when it runs out, the job ends
   `Cancelled(timeout)` with the new `TimeoutCancelReason` of `async_job`. See
   [A deadline of a job](doc/cancellation.md#a-deadline-of-a-job).
-- **`collect` and `accumulate` take the state handlers of `job`, `ifFailed` and
-  `ifCancelled`.** A group that wrote a state of its own while it ran takes it
-  back through them when it fails or is cancelled; it calls one of them at most
-  once, however many events it holds. See
+- **`collect` and `accumulate` take `ifFailed` and `ifCancelled`, the state
+  handlers of `job`.** A group that wrote a state of its own while it ran takes
+  it back through them when it fails or is cancelled; it calls one of them at
+  most once, however many events it holds. See
   [Start, cancellation and errors](doc/accumulation.md#start-cancellation-and-errors).
 - **`Job.isCancellationError` of `async_job` names the errors a cancellation
   causes.** A failure of a cancelled job that it names reaches `onError` and
@@ -224,6 +229,11 @@ write it made itself, where `0.2.0` published that state again as a change.
   kind, the duration and `startAtOnce` in the shape of the constructor.
 - `package:solo/listeners.dart`: `Listeners`, the list of listeners a notifier
   walks, for a package that builds a delivery of its own on top of `solo`.
+- `Solo.debug` names the running job on the line of a job queued while it runs:
+  `while Job(outer) is running: it starts after Job(outer) ends`; the line of a
+  duplicate that `Policy.droppable` hands back says so too, and a duplicate of
+  the running job ends
+  `which is running: if awaited from inside Job(x), it waits for itself`.
 
 ### Fixed
 
