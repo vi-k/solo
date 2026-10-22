@@ -115,7 +115,7 @@ step 3 on a closed database
 2. `discard` closes the database with two steps of the migration still to
    write.
 3. Whatever the migration throws afterwards goes to `onError` and, by default,
-   on to the zone.
+   on to [the zone](errors.md#where-errors-go).
 
 `abandonable` is for an operation the job may walk away from, such as a read
 whose result nobody needs any more.

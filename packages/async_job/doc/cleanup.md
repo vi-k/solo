@@ -464,7 +464,8 @@ A callback must not await its own job: `done`, `value` and `cancel()` all
 complete after the cleanup that would be waiting for them. Keep callbacks
 short, and let them wait for nothing but the release itself: nothing will
 interrupt them. An error from one goes to `onError` and, by default, on to the
-zone, and the remaining callbacks still run; a `Cancelled` stops at `onError`.
+[zone](errors.md#where-errors-go), and the remaining callbacks still run; a
+`Cancelled` stops at `onError`.
 
 ### Cancellation after the body returns
 

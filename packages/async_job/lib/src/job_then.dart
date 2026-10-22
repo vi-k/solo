@@ -47,9 +47,13 @@ final class _ThenJob<T, R> extends JobBase<R> {
   var _waitingForSource = true;
   void Function() _unregisterSource = () {};
 
-  _ThenJob(JobBase<T> source, this._onValue, {super.observer})
-      : _source = source,
-        super(describe: () => 'then') {
+  _ThenJob(
+    JobBase<T> source,
+    this._onValue, {
+    super.key,
+    super.describe,
+    super.observer,
+  }) : _source = source {
     source._pendingContinuations++;
     whenCancelled(_cancelSource);
     _unregisterSource = source.whenCancelled(_cancelFromSource);

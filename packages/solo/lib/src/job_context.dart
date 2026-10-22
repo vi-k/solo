@@ -49,12 +49,16 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// listened.
   ///
   /// Use the context passed to [onData] for [emit], state access and
-  /// cancellation checkpoints. All other behavior is [JobContext.each]'s.
+  /// cancellation checkpoints. [key] and [describe] only name the child: the
+  /// queue policies govern the root jobs of the controller, and the child is
+  /// not one. All other behavior is [JobContext.each]'s.
   @override
   Job<void> each<T>(
     Stream<T> stream,
-    FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData,
-  );
+    FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData, {
+    Object? key,
+    String Function()? describe,
+  });
 }
 
 final class _SoloContext<S extends Object, W extends S, R>
@@ -66,7 +70,11 @@ final class _SoloContext<S extends Object, W extends S, R>
   Solo<S> get _solo => _job._solo;
 
   @override
-  Job<void> createEachJob(Future<void> Function(JobContext ctx) body) {
+  Job<void> createEachJob(
+    Future<void> Function(JobContext ctx) body, {
+    Object? key,
+    String Function()? describe,
+  }) {
     // The child gets the parent's working type and `keepWhile`, so a state
     // they refuse would refuse it at the start, and `each` would hand back
     // a child that is over and never listened -- with nobody to read its
@@ -84,19 +92,24 @@ final class _SoloContext<S extends Object, W extends S, R>
     }
     return _solo.job<W, void>(
       body,
+      key: key,
+      describe: describe,
       keepWhile: _job._keepWhile,
-      describe: () => 'each',
     );
   }
 
   @override
   Job<void> each<T>(
     Stream<T> stream,
-    FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData,
-  ) =>
+    FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData, {
+    Object? key,
+    String Function()? describe,
+  }) =>
       super.each(
         stream,
         (child, event) => onData(child as SoloContext<S, W>, event),
+        key: key,
+        describe: describe,
       );
 
   @override

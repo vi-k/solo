@@ -16,8 +16,12 @@ import 'solo_selection.dart';
 /// be disposed of. Of what it is given the widget compares [solo] alone:
 /// [selector] and [changed] are called as the widget has them at the moment, so
 /// a closure written in place moves no subscription and does not start the
-/// value over. A [ValueListenable] that is not a controller is picked from with
-/// a [SoloSelection] of its own and a `ValueListenableBuilder`.
+/// value over. A pick that changes and comes back before the next frame still
+/// rebuilds once, with the value already shown, as under a
+/// `ValueListenableBuilder`: the widget compares with the pick it last
+/// accepted, not with the one on screen. A [ValueListenable] that is not a
+/// controller is picked from with a [SoloSelection] of its own and a
+/// `ValueListenableBuilder`.
 ///
 /// ```dart
 /// SoloSelector<Profile, bool>(

@@ -2,6 +2,18 @@
 
 ### Ломающие изменения
 
+Что писать вместо прежнего, слева имя в `0.2.0`; у каждого есть своя запись
+ниже.
+
+| `0.2.0` | `0.3.0` |
+|---|---|
+| `Job.ignore()` | `Job.ignoreFailure()` |
+| `JobBase.whenDone` | `JobBase.untilFinished` |
+| `JobBase.debug` | `Job.debug` |
+| `JobBase`, `JobContextBase`, `JobStatus` из `package:async_job/async_job.dart` | из `package:async_job/engine.dart` |
+| `Job<T>`, переданный в `ctx.run` | `ChildJob<T>`, или `DeferredJob<T>` для `start()` |
+| `ctx.wait` | `ctx.abandonable` |
+
 - **`JobObserver.onError` стал уведомлением, а за ошибку, которой больше
   ни у кого нет, отвечает новый `JobAnswerer`: за ту, которой не несёт ни один
   исход, и за `Failed`, который никто не наблюдает.** Наблюдатель из `0.2.0`
@@ -21,9 +33,10 @@
   а подкласс `JobBase` переименовывает свой член, чьё имя теперь занято.**
   У `Job` появились `whenFinished` и `shared`, у `JobBase` — `untilFinished`,
   у `JobContext` — `abandonable`, `heldCancellation`, `pause`, `runAll`,
-  `start` и параметры `dispose` и `discard` у `run`; расширение на `JobContext`
-  с именем `heldCancellation`, `runAll` или `start` затеняется без
-  предупреждения.
+  `start` и параметры `dispose` и `discard` у `run`; `then`, `shared` и `each`
+  принимают `key` и `describe`, и в переопределении тоже; расширение
+  на `JobContext` с именем `heldCancellation`, `runAll` или `start` затеняется
+  без предупреждения.
 - **`JobBase`, `JobContextBase` и `JobStatus` переехали
   в `package:async_job/engine.dart`, а `JobBase.debug` теперь называется
   `Job.debug`.** См. [«Своё поверх ядра»](extending.md).
@@ -33,7 +46,8 @@
   и `beforeChildStart` помечены `@visibleForOverriding`; `cascadeToChildren`
   и сеттер `level` убраны, вместо них `cancelWith`, `cancelOwnJob`
   и `startChild`; `inUncancellableSection`, `heldCancel`, `creationZone`
-  и `requireShared` новые.
+  и `requireShared` новые; `createEachJob` принимает `key` и `describe`
+  от `ctx.each`, и переопределение передаёт их задаче, которую создаёт.
 - **Ядро сообщает о `Failed`, который движок передаёт в `finish`:** движок,
   который вызывал `notifyObserver` перед `finish`, убирает этот вызов, иначе
   наблюдатель услышит ошибку дважды.
@@ -112,6 +126,9 @@
 - **`timeout` даёт задаче собственный срок,** после которого она кончается
   `Cancelled(timeout)` с новой причиной `TimeoutCancelReason`.
 - **`Job.each` создаёт корневую задачу, которая следует за стримом.**
+- **`then`, `shared` и `ctx.each` принимают `key` и `describe`** и называют
+  созданную задачу так же, как называется любая; без `describe` её описание —
+  `then`, `shared` или `each`. См. [«Имя задачи»](observing.md#имя-задачи).
 - **`JobObserver.all` делает из нескольких наблюдателей одного.**
 - **`JobObserver` стал `abstract mixin class`,** чтобы наблюдатель, который
   наследует другой класс, его подмешивал.

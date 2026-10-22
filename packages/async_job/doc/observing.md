@@ -2,8 +2,9 @@
 
 A job's outcome says how the job ended. A `JobObserver` hears the rest: when
 the job starts and ends, what its body logs, and the errors that no outcome
-carries. Where those errors go, and how an observer answers for them, is the
-subject of [Errors](errors.md).
+carries. Where those errors go, and how an observer
+[answers for](errors.md#answering-for-errors) them, is the subject of
+[Errors](errors.md).
 
 ## Observer
 
@@ -51,10 +52,10 @@ The hooks of an observer, and when the job calls them:
 
 The four hooks of `JobObserver` do nothing by default, so an observer overrides
 only the hooks it needs. `onUnanswered` of `JobAnswerer` is not empty by
-default: it hands the failure to the zone, as if no `JobAnswerer` were there. A
-class that already extends another class mixes the observer in with
-`with JobObserver`, or `with JobObserver, JobAnswerer`, and overrides the hooks
-the same way.
+default: it hands the failure to [the zone](errors.md#where-errors-go), as if
+no `JobAnswerer` were there. A class that already extends another class mixes
+the observer in with `with JobObserver`, or `with JobObserver, JobAnswerer`,
+and overrides the hooks the same way.
 
 Whoever runs the job passes the observer when creating it. The children the job
 runs inherit it unless they have their own. A continuation made with `then`
@@ -82,6 +83,12 @@ make the job's string form, the name that the lines of an observer print:
 
 Use `key` to identify the job in logs or in the scheduling rules of a library,
 such as the queue policies of `solo`. `describe` adds details to it.
+
+The jobs the core makes for you take a `key` and a `describe` too: the
+continuation of `then`, the handle of `shared` and the child of `ctx.each`.
+Without a `describe`, each is described by the member that made it, so a
+continuation given only a `key` prints as `Job(load: then)`, and one given
+nothing as `Job(then)`.
 
 A `key` whose `toString` throws, or a `describe` that throws, prints as a mark
 in its place: `Job(load: <describe threw StateError>)`. The core names jobs in

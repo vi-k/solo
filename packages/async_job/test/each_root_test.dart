@@ -12,6 +12,27 @@ import 'support/journal.dart';
 import 'support/probe_job.dart';
 
 void main() {
+  test('with cancellable: false, cancel() comes back when the stream ends', () {
+    fakeAsync((async) {
+      final controller = StreamController<int>();
+      final job = Job.each(controller.stream, cancellable: false, (ctx, _) {});
+      async.flushMicrotasks();
+      var cancelled = false;
+      job.cancel().then((_) => cancelled = true).ignore();
+      async.elapse(const Duration(seconds: 1));
+      expect(
+        cancelled,
+        isFalse,
+        reason: 'the job refuses, and the stream is still open',
+      );
+      expect(job.isRunning, isTrue);
+      controller.close().ignore();
+      async.flushMicrotasks();
+      expect(cancelled, isTrue);
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
   test('a stream followed to its end', () {
     fakeAsync((async) {
       final controller = StreamController<int>();

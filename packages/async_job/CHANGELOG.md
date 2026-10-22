@@ -2,6 +2,18 @@
 
 ### Breaking changes
 
+What to write instead, with the `0.2.0` name on the left; each has its entry
+below.
+
+| `0.2.0` | `0.3.0` |
+|---|---|
+| `Job.ignore()` | `Job.ignoreFailure()` |
+| `JobBase.whenDone` | `JobBase.untilFinished` |
+| `JobBase.debug` | `Job.debug` |
+| `JobBase`, `JobContextBase`, `JobStatus` from `package:async_job/async_job.dart` | from `package:async_job/engine.dart` |
+| `Job<T>` handed to `ctx.run` | `ChildJob<T>`, or `DeferredJob<T>` for `start()` |
+| `ctx.wait` | `ctx.abandonable` |
+
 - **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
   error nobody else has: one no outcome carries, and a `Failed` nobody
   observes.** An observer from `0.2.0` compiles unchanged, and the errors it
@@ -21,7 +33,8 @@
   and a subclass of `JobBase` renames its own member whose name a new one now
   takes.** `Job` gains `whenFinished` and `shared`, `JobBase` gains
   `untilFinished`, and `JobContext` gains `abandonable`, `heldCancellation`,
-  `pause`, `runAll`, `start` and the `dispose` and `discard` of `run`; an
+  `pause`, `runAll`, `start` and the `dispose` and `discard` of `run`; `then`,
+  `shared` and `each` take `key` and `describe`, in an override too; an
   extension on `JobContext` named `heldCancellation`, `runAll` or `start` is
   shadowed without a warning.
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
@@ -33,7 +46,9 @@
   `createEachJob` and `beforeChildStart` are `@visibleForOverriding`;
   `cascadeToChildren` and the `level` setter are gone in favour of
   `cancelWith`, `cancelOwnJob` and `startChild`; `inUncancellableSection`,
-  `heldCancel`, `creationZone` and `requireShared` are new.
+  `heldCancel`, `creationZone` and `requireShared` are new; `createEachJob`
+  takes the `key` and `describe` of `ctx.each`, and an override hands them to
+  the job it makes.
 - **The core announces a `Failed` an engine hands to `finish`:** an engine that
   called `notifyObserver` before `finish` drops that call, or the observer
   hears the error twice.
@@ -112,6 +127,9 @@ new wording.
 - **`timeout` gives a job a deadline of its own,** after which it ends
   `Cancelled(timeout)` with the new `TimeoutCancelReason`.
 - **`Job.each` makes a root job that follows a stream.**
+- **`then`, `shared` and `ctx.each` take `key` and `describe`** and name the
+  job they make as any job is named; without a `describe` it is described
+  `then`, `shared` or `each`. See [A job's name](doc/observing.md#a-jobs-name).
 - **`JobObserver.all` makes one observer of several.**
 - **`JobObserver` is an `abstract mixin class`,** so that an observer that
   extends another class mixes it in.

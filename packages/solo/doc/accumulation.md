@@ -989,6 +989,10 @@ accumulation window out and runs the groups already queued, by the rules in
 [Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
 on the cancellation page. Neither mode takes anything new: an `add` after
 `close()` returns a new job already completed with `Cancelled(closed)`; it does
-not call `merge` or the handler. Once a group completes, its internal input
-storage is released. A handler, result or error that retains the input still
-owns those references.
+not call `merge` or the handler. That holds under a drain for a group still
+waiting for its window: an event is new data, so it does not join the group,
+and the group goes out as it was at the `close`. A `Policy.droppable` call gets
+its queued job back under a drain because it adds no work, and an event would
+add some. Whatever the last batch has to carry is added before `close`. Once a
+group completes, its internal input storage is released. A handler, result or
+error that retains the input still owns those references.

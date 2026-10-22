@@ -57,6 +57,10 @@ A link that refuses stops the cancellation there: cancel a `loaded` made with
 outcomes. The handle of the last row is the subject of
 [Two continuations of one source](#two-continuations-of-one-source).
 
+The links after a source hear of its cancellation through `whenCancelled`: a
+continuation and a handle of `shared` register there when they are made. A
+listener registered on the source before them may find them not yet cancelled.
+
 A continuation starts only when its source has finished, so a running link has
 nothing unfinished behind it. While `parsed` runs, `loaded` is over, and
 `loaded.cancel()` does nothing: `parsed` goes on, and `saved` after it. While
@@ -123,13 +127,15 @@ each branch has a source of its own. A cancellation that `loaded` accepts still
 reaches every handle, and each ends `Cancelled(chain)` without waiting for the
 cleanup of `loaded`.
 
-A failure of `loaded` reaches every handle still there, and it is answered for
-once however many of them carry it. If `parsed` and `shown` were both cancelled
-before `loaded` failed, no handle is left to carry the failure. `loaded` then
-answers for it itself, unless something observes it, as the source does in the
-second row of [When a link fails](#when-a-link-fails). It answers in
-`onUnanswered` of its observer if the observer mixes in `JobAnswerer`,
-otherwise in the zone `loaded` was made in, not the one `then` was called in.
+A failure of `loaded` reaches every handle still there, and it is
+[answered for](errors.md#answering-for-errors) once however many of them carry
+it. If `parsed` and `shown` were both cancelled before `loaded` failed, no
+handle is left to carry the failure. `loaded` then answers for it itself,
+unless something [observes](outcomes.md#a-failure-nobody-waits-for) it, as the
+source does in the second row of [When a link fails](#when-a-link-fails). It
+answers in `onUnanswered` of its observer if the observer mixes in
+`JobAnswerer`, otherwise in the [zone](errors.md#where-errors-go) `loaded` was
+made in, not the one `then` was called in.
 
 ### Jobs that wait for the source
 

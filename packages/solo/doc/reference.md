@@ -33,7 +33,7 @@ the subclass.
 | `isClosed` | Whether `close()` was called | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isDraining` | Whether a `close()` that drains is still running the queue | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isFinished` | Whether closing has finished and the state can no longer change | [externalSetState](state.md#externalsetstate) |
-| `pending` | What is holding the controller right now, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
+| `pending` | What is holding the controller right now, a running job included, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `cancelAll()` | Clears the queue and cancels the running job; the controller stays open | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `close()` | Stops taking work and closes, cancelling what is queued and running or, with `mode: SoloCloseMode.drain`, running the queue first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 
@@ -116,13 +116,14 @@ does `ctx.each`.
 
 ## SoloJob
 
-What `enqueue`, `job`, `enqueueJob` and an accumulator's `add` return: a
-`Job<T>` of the core plus the queue. `value`, `done`, `outcome`, `cancel()` and
-`ignoreFailure()` are the core's, in the table of
-[Jobs and results](jobs.md#jobs-and-results) on the jobs page. A method the
-screen calls declares `Job<T>`, and `SoloJob<T>` only for a caller that reads
-`isQueued`. A method that makes a child for `ctx.run` declares `SoloJob<T>`:
-`ctx.run` takes a `ChildJob<T>`, which `SoloJob<T>` is and `Job<T>` is not.
+What `enqueue`, `job`, `enqueueJob` and an accumulator's `add` return, and what
+`queue.jobs`, `current` and `lastJobWhere` hand out: a `Job<T>` of the core
+plus the queue. `value`, `done`, `outcome`, `cancel()` and `ignoreFailure()`
+are the core's, in the table of [Jobs and results](jobs.md#jobs-and-results) on
+the jobs page. A method the screen calls declares `Job<T>`, and `SoloJob<T>`
+only for a caller that reads `isQueued`. A method that makes a child for
+`ctx.run` declares `SoloJob<T>`: `ctx.run` takes a `ChildJob<T>`, which
+`SoloJob<T>` is and `Job<T>` is not.
 
 | Member | What it does | Where |
 | --- | --- | --- |

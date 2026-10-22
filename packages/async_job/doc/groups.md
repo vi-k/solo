@@ -52,10 +52,10 @@ faults. This is what happens:
    `Cancelled`. If the failure comes first, the parent ends `Failed`. If the
    cancellation comes first, the parent ends `Cancelled(HandlerCancelReason)`,
    and the failure of `rows` is nowhere in the outcome. Only the child's
-   observer hears it then. The core does not hand it to the zone: the body
-   waited for the future of `run`, so the core counts the failure as looked at.
-   Where neither the parent nor its children have an observer, the error is
-   lost.
+   observer hears it then. The core does not hand it to
+   [the zone](errors.md#where-errors-go): the body waited for the future of
+   `run`, so the core counts the failure as looked at. Where neither the parent
+   nor its children have an observer, the error is lost.
 2. A source leaks. Say `rows` fails and `images` succeeds. The branch `images`
    returns its source and ends `Done`, so its `discard` does not run: the value
    reached `ctx.run`. But `Future.wait` completes with the error and drops the

@@ -208,8 +208,16 @@ final class EachContext extends JobContextBase {
   static final made = <ChildJob<void>>[];
 
   @override
-  Job<void> createEachJob(Future<void> Function(JobContext ctx) body) {
-    final child = Job.deferred<void>(body, describe: () => 'a child of mine');
+  Job<void> createEachJob(
+    Future<void> Function(JobContext ctx) body, {
+    Object? key,
+    String Function()? describe,
+  }) {
+    final child = Job.deferred<void>(
+      body,
+      key: key,
+      describe: () => 'a child of mine, ${describe?.call()}',
+    );
     made.add(child);
     return child;
   }
@@ -303,7 +311,7 @@ void main() {
       final controller = StreamController<int>();
       late Job<void> subscription;
       final job = EachJob<void>((ctx) async {
-        subscription = ctx.each(controller.stream, (ctx, event) {
+        subscription = ctx.each(controller.stream, key: 'events', (ctx, event) {
           seen.add(event);
         });
         await ctx.abandonable(() => delay(50));
@@ -318,10 +326,11 @@ void main() {
       unawaited(controller.close());
       async.elapse(const Duration(milliseconds: 60));
       expect(
-        EachContext.made.map((child) => child.describe()).toList(),
-        ['a child of mine'],
+        EachContext.made.map((child) => '$child').toList(),
+        ['Job(events: a child of mine, each)'],
         reason: 'the engine restricts child ownership, and the factory is '
-            'the only way it can',
+            'the only way it can; the name each was given, and the default '
+            'description, reach the factory',
       );
       expect(identical(subscription, EachContext.made.single), isTrue);
       expect(seen, [1]);

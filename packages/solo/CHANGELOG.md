@@ -87,7 +87,8 @@ below.
   `isDraining`, `pending`, `onClose`, `onUnanswered`, `addListener`,
   `removeListener`, `hasListeners` and `onListenerError`.
 - **A class that implements `SoloContext` itself adds `abandonable`, `pause`,
-  `runAll` and `start`,** the new members of `JobContext` in `async_job`.
+  `runAll` and `start`,** the new members of `JobContext` in `async_job`, and
+  its `each` takes `key` and `describe`.
 - **`Policy.droppable` refuses a key held by a job of another result type with
   an `ArgumentError`, and refuses before it takes the new job.** See
   [A key for each request](doc/jobs.md#a-key-for-each-request).
@@ -106,6 +107,11 @@ below.
   looks at the running one as well.
 - **`cancelAll` and `SoloQueue.remove`, `removeWhere` and `clear` take a
   `reason`.**
+- **`SoloQueue.jobs` and `Solo.current` hand out `SoloJob<Object?>`, and the
+  predicates of `SoloQueue.removeWhere` and `Solo.lastJobWhere` take one.** A
+  predicate written for `Job<Object?>` compiles as it did; an override of
+  `current` or `lastJobWhere` and a class that implements `SoloQueue` take the
+  new types.
 - **`job`, `enqueue`, `collect` and `accumulate` take `timeout`.** An override
   passes it on to `super`, or `enqueue(timeout: ...)` loses its deadline
   without a word.
@@ -199,6 +205,9 @@ write it made itself, where `0.2.0` published that state again as a change.
 - **`Job.whenFinished` of `async_job` hears the end of a job without observing
   its outcome.** A listener gets the outcome, and a failure nobody observes is
   still answered for. See [Jobs and results](doc/jobs.md#jobs-and-results).
+- **`ctx.each` of a controller takes the `key` and `describe` of `async_job`**
+  to name its child. The `key` is a name only: queue policies govern root jobs,
+  and the child is not one.
 - **`SoloObserver.all` makes one observer of several** for `Solo.observer`. See
   [A cancellation that never lands](doc/diagnostics.md#a-cancellation-that-never-lands).
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the

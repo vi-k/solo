@@ -35,7 +35,7 @@ prints:
 - `cancel`: the user cancels the parent;
 - `Job(…)`: a message a body logged, or how a job ended, as the `Log` observer
   from [Observer](observing.md#observer) on the observing page prints them;
-- `zone:` an error that reached the zone uncaught.
+- `zone:` an error that reached [the zone](errors.md#where-errors-go) uncaught.
 
 ## Running a child
 
@@ -151,11 +151,13 @@ Job(parent): Done(null)
 
 The future of `ctx.run` is an ordinary Dart future. It throws the child's error
 if the child fails, and the child's `Cancelled` if the child is cancelled.
-`ctx.run` observes the child's outcome to complete it, so the core does not
-answer for the failure: the future carries it. `ignore()` drops the future, and
-the error with it. The observer still hears it in `onError`, and nothing
-answers for it. `cache.ignoreFailure()` would change nothing: it quenches the
-answer for a failure nobody looked at, and `ctx.run` has looked.
+`ctx.run` [observes](outcomes.md#a-failure-nobody-waits-for) the child's
+outcome to complete it, so the core does not
+[answer for](errors.md#answering-for-errors) the failure: the future carries
+it. `ignore()` drops the future, and the error with it. The observer still
+hears it in `onError`, and nothing answers for it. `cache.ignoreFailure()`
+would change nothing: it quenches the answer for a failure nobody looked at,
+and `ctx.run` has looked.
 
 ### Starting without a future
 

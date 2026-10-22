@@ -78,9 +78,10 @@ final class MyContext extends JobContextBase {
 A `@protected` member is for the subclass alone, and an engine reaches a job
 from the side, from its queue. The wrappers are private, so the engine lives in
 the Dart library of `MyJob`, and nobody else who holds the job can start it
-behind the engine's back. `untilFinished` waits for the job without observing
-its outcome, so a failure nobody looked at is still answered for; waiting for
-`done` would count as looking.
+behind the engine's back. `untilFinished` waits for the job without
+[observing](outcomes.md#a-failure-nobody-waits-for) its outcome, so a failure
+nobody looked at is still [answered for](errors.md#answering-for-errors);
+waiting for `done` would count as looking.
 
 A body runs a job of your engine as its child with `ctx.run(job)`, and
 `ctx.run` takes a `ChildJob`: that is why `MyJob` declares
@@ -104,8 +105,8 @@ Override `started()` and `finished()` to follow the lifecycle:
 - `finished()` runs once the job has its outcome. It runs for a job dropped
   before its body ran too, with no `started()` before it.
 - An error `started()` or `finished()` throws goes to `onError` and then to the
-  zone, unless the observer catches it in `onUnanswered`. That is the way of an
-  error no outcome carries, as
+  [zone](errors.md#where-errors-go), unless the observer catches it in
+  `onUnanswered`. That is the way of an error no outcome carries, as
   [Where each error goes](errors.md#where-each-error-goes) on the errors page
   describes. The job goes on as it would have, and what is left half-done is
   your own bookkeeping, so keep both hooks short and unconditional.

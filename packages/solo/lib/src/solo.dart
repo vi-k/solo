@@ -698,14 +698,15 @@ abstract class Solo<S extends Object> {
   /// What is holding the controller right now, or `null` when nothing the
   /// controller knows of is.
   ///
-  /// For a `close` that has not come back, or a `cancel` that is taking
-  /// its time. A running job is a [SoloPendingJob]: it names the job, says
-  /// what it is doing and whether anybody has asked it to stop. A drain
-  /// with no job running is a [SoloPendingQueue]: the queue it has still
-  /// to run, where a group of `collect` or `accumulate` stays until its
-  /// timing lets it go. With `SoloStream`, once the engine has closed, a
+  /// Not `null` while a job runs, whether or not anybody has asked it to
+  /// stop: a running job is a [SoloPendingJob], which names the job, says
+  /// what it is doing and whether it has been asked to stop. A drain with
+  /// no job running is a [SoloPendingQueue]: the queue it has still to run,
+  /// where a group of `collect` or `accumulate` stays until its timing
+  /// lets it go. With `SoloStream`, once the engine has closed, a
   /// subscription left paused holds the stream, and that is a
-  /// [SoloPendingStream].
+  /// [SoloPendingStream]. Read it for a `close` that has not come back, or
+  /// a `cancel` that is taking its time.
   ///
   /// ```dart
   /// unawaited(controller.close().timeout(
@@ -755,7 +756,7 @@ abstract class Solo<S extends Object> {
 
   /// The running root job, or `null` when idle.
   @protected
-  Job<Object?>? get current => _current;
+  SoloJob<Object?>? get current => _current;
 
   /// The last queued job matching [test], else the current job if it
   /// matches, else `null`. A job whose start rules are being asked counts
@@ -770,11 +771,11 @@ abstract class Solo<S extends Object> {
   /// ordinary calls of one frame, and the second must not be answered
   /// with the job the first one has just stopped.
   @protected
-  SoloJob<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) =>
+  SoloJob<Object?>? lastJobWhere(bool Function(SoloJob<Object?> job) test) =>
       _lastJobWhere(test);
 
   _SoloJob<S, S, Object?>? _lastJobWhere(
-    bool Function(Job<Object?> job) test,
+    bool Function(SoloJob<Object?> job) test,
   ) {
     // A snapshot for the same reason as in `removeWhere`: the predicate is
     // the caller's code, and it may touch the queue while it answers. It

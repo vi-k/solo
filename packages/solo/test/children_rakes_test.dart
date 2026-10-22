@@ -1605,8 +1605,8 @@ void main() {
 
       expect(errors, isEmpty);
       expect(own.heard, ['Job(then): Bad state: send failed']);
-      _says('It has its own optional observer, and its name is one `then` '
-          'gives it: `Job(then)`.');
+      _says('It has its own optional observer, and `then` names it '
+          '`Job(then)` unless the call gives it a `key` or a `describe`.');
     });
 
     test('an observer that mixes in JobAnswerer answers for the continuation',

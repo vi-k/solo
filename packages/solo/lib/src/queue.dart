@@ -17,7 +17,7 @@ abstract interface class SoloQueue {
   ///
   /// A job waiting for an accumulation timing window can be bypassed by a
   /// ready job later in this view.
-  Iterable<Job<Object?>> get jobs;
+  Iterable<SoloJob<Object?>> get jobs;
 
   /// The number of queued jobs.
   int get length;
@@ -38,7 +38,7 @@ abstract interface class SoloQueue {
 
   /// Removes every job matching [test]; returns the number removed.
   int removeWhere(
-    bool Function(Job<Object?> job) test, {
+    bool Function(SoloJob<Object?> job) test, {
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
   });
@@ -64,7 +64,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   }
 
   @override
-  Iterable<Job<Object?>> get jobs => UnmodifiableListView(_jobs);
+  Iterable<SoloJob<Object?>> get jobs => UnmodifiableListView(_jobs);
 
   @override
   int get length => _jobs.length;
@@ -101,7 +101,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
 
   @override
   int removeWhere(
-    bool Function(Job<Object?> job) test, {
+    bool Function(SoloJob<Object?> job) test, {
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
   }) {

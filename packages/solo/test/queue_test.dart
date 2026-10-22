@@ -16,6 +16,23 @@ SoloJob<void> slow(TestSolo solo, String key, {bool cancellable = true}) =>
     );
 
 void main() {
+  test('the queue and the current job hand out jobs of the controller', () {
+    runSolo((solo, journal, async) {
+      solo.enqueueJob(slow(solo, 'a'));
+      solo.enqueueJob(slow(solo, 'b'));
+      async.flushMicrotasks();
+      // No cast in sight: `isQueued` belongs to `SoloJob`, not to `Job`, so
+      // each of these reads compiles only on the narrower type.
+      final queued = solo.queue.jobs.single;
+      final running = solo.current;
+      expect(queued.isQueued, isTrue);
+      expect(running?.isQueued, isFalse);
+      expect(solo.lastJobWhere((job) => job.isQueued), same(queued));
+      expect(solo.queue.removeWhere((job) => job.isQueued), 1);
+      async.flushTimers();
+    });
+  });
+
   test('first: true puts the job ahead of the queue', () {
     runSolo((solo, journal, async) {
       solo.enqueueJob(slow(solo, 'a'));

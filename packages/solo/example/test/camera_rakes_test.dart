@@ -2406,8 +2406,8 @@ void main() {
       ]);
     });
 
-    test('the README of the example quotes the head and tail of that run', () {
-      final readme = File('README.md').readAsStringSync();
+    test('the page of the example quotes the head and tail of that run', () {
+      final readme = File('example.md').readAsStringSync();
       final block = RegExp(r'```text\n(.*?)\n```', dotAll: true)
           .firstMatch(readme)!
           .group(1)!

@@ -87,7 +87,8 @@
   `isFinished`, `isDraining`, `pending`, `onClose`, `onUnanswered`,
   `addListener`, `removeListener`, `hasListeners` и `onListenerError`.
 - **Класс, который сам реализует `SoloContext`, добавляет `abandonable`,
-  `pause`, `runAll` и `start`,** новые члены `JobContext` в `async_job`.
+  `pause`, `runAll` и `start`,** новые члены `JobContext` в `async_job`, а его
+  `each` принимает `key` и `describe`.
 - **`Policy.droppable` отказывает ключу, который держит задача с другим типом
   результата, с `ArgumentError`, и отказывает до того, как примет новую
   задачу.** См. [«Ключ на каждый запрос»](jobs.md#ключ-на-каждый-запрос).
@@ -107,6 +108,11 @@
   и смотрит ещё и на идущую.
 - **`cancelAll` и `SoloQueue.remove`, `removeWhere` и `clear` принимают
   `reason`.**
+- **`SoloQueue.jobs` и `Solo.current` отдают `SoloJob<Object?>`, и его же
+  принимают предикаты `SoloQueue.removeWhere` и `Solo.lastJobWhere`.**
+  Предикат, написанный для `Job<Object?>`, собирается как прежде;
+  переопределение `current` или `lastJobWhere` и класс, который реализует
+  `SoloQueue`, берут новые типы.
 - **`job`, `enqueue`, `collect` и `accumulate` принимают `timeout`.**
   Переопределение передаёт его дальше в `super`, иначе `enqueue(timeout: ...)`
   молча остаётся без срока.
@@ -201,6 +207,9 @@ future падала, а само тело работало под другим `
 - **`Job.whenFinished` из `async_job` слышит конец задачи, не наблюдая её
   исход.** Слушатель получает исход, а за провал, который никто не наблюдал,
   всё равно отвечают. См. [«Задачи и результаты»](jobs.md#задачи-и-результаты).
+- **`ctx.each` контроллера принимает `key` и `describe` из `async_job`**, чтобы
+  назвать своего ребёнка. `key` здесь только имя: политики очереди правят
+  корневыми задачами, а ребёнок не корневой.
 - **`SoloObserver.all` делает из нескольких наблюдателей одного** для
   `Solo.observer`. См.
   [«Отмена, которая не доходит»](diagnostics.md#отмена-которая-не-доходит).

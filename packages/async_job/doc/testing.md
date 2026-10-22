@@ -110,12 +110,14 @@ Bad state: database locked
 ```
 
 The `expect` passes, and the test fails with the very error it checks for.
-Reading `outcome` does not observe the failure: nobody read `done` or `value`
-or called `ignoreFailure()`, so the failure goes to the zone the job was made
-in. That is the zone of the test, and `package:test` fails a test whose zone
-hears an error. The errors that no outcome carries, such as those of cleanup or
-of `ctx.unattended`, get there the same way unless an observer answers for
-them: see [Where each error goes](errors.md#where-each-error-goes).
+Reading `outcome` does not [observe](outcomes.md#a-failure-nobody-waits-for)
+the failure: nobody read `done` or `value` or called `ignoreFailure()`, so the
+failure goes to the [zone](errors.md#where-errors-go) the job was made in. That
+is the zone of the test, and `package:test` fails a test whose zone hears an
+error. The errors that no outcome carries, such as those of cleanup or of
+`ctx.unattended`, get there the same way unless an observer
+[answers for](errors.md#answering-for-errors) them: see
+[Where each error goes](errors.md#where-each-error-goes).
 
 ### The failure read by the test
 

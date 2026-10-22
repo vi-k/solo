@@ -68,11 +68,12 @@ cancellation, including during `close()`, cancels the child; a draining
 `close(mode: SoloCloseMode.drain)` cancels nothing and waits for the stream to
 end. The child is cancellable even if the parent is not. It retains the
 parent's working type and `keepWhile` after the parent body returns, but does
-not repeat `canStart`. Observers see it as a separate job, and the name is one
-`ctx.each` gives it: `Job(each)`. Since the child would keep the parent's
-working type and `keepWhile`, `ctx.each` asks them first, as `ctx.state` does.
-After the parent's own `emit` of a state they refuse, it ends the parent
-`Cancelled` and throws, rather than return a child that never listened.
+not repeat `canStart`. Observers see it as a separate job, and `ctx.each` names
+it `Job(each)` unless the call gives it a `key` or a `describe`. Since the
+child would keep the parent's working type and `keepWhile`, `ctx.each` asks
+them first, as `ctx.state` does. After the parent's own `emit` of a state they
+refuse, it ends the parent `Cancelled` and throws, rather than return a child
+that never listened.
 
 Cancelling only the child does not directly cancel the parent. An uncaught
 `Cancelled` from the child's `.value` does cancel the parent through its body.

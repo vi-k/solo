@@ -115,7 +115,10 @@ abstract interface class Job<T> {
   /// The named parameters are those of [Job.new] but `timeout`: a deadline on
   /// following a stream is set from outside. The job is a root wherever it is
   /// made, not a [ChildJob]: a body follows a stream with [JobContext.each].
-  /// With `cancellable: false` nothing outside the job stops it.
+  /// With `cancellable: false` nothing outside the job stops it, and the
+  /// future of [cancel] completes only when the job ends by itself: the
+  /// stream ends or fails, or the callback throws. Do not await it on a
+  /// stream that may never end.
   ///
   /// ```dart
   /// final saving = Job.each<String>(messages, (ctx, message) {
@@ -318,6 +321,9 @@ abstract interface class Job<T> {
   /// own optional [observer], and awaiting it from its source's body or cleanup
   /// deadlocks. A continuation of `void` fails with an [ArgumentError] when its
   /// callback returns a job of [Job.deferred] that nobody has started.
+  /// [key] and [describe] name it as they name any job, see
+  /// [A job's name](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#a-jobs-name);
+  /// without [describe] its description is `then`.
   ///
   /// ```dart
   /// final length = Job<String>((ctx) async => 'hello')
@@ -329,6 +335,8 @@ abstract interface class Job<T> {
   /// for cancelling a chain, a link that fails and what the callback returns.
   Job<R> then<R>(
     FutureOr<R> Function(JobContext ctx, T value) onValue, {
+    Object? key,
+    String Function()? describe,
     JobObserver? observer,
   });
 
@@ -361,7 +369,9 @@ abstract interface class Job<T> {
   /// which hears [JobObserver.onFinish] and not [JobObserver.onStart]. It
   /// inherits nothing and is not a [ChildJob]: [JobContext.run] does not take
   /// it. It is continued like any job, by one [then] or by handles of its
-  /// own.
+  /// own. [key] and [describe] name it as they name any job, see
+  /// [A job's name](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#a-jobs-name);
+  /// without [describe] its description is `shared`.
   ///
   /// ```dart
   /// final text = Job<String>((ctx) async => 'hello');
@@ -370,45 +380,26 @@ abstract interface class Job<T> {
   /// length.cancel(); // text and loud run on
   /// print(await loud.value); // HELLO
   /// ```
-  Job<T> shared({JobObserver? observer});
+  Job<T> shared({
+    Object? key,
+    String Function()? describe,
+    JobObserver? observer,
+  });
 
   /// Registers [callback] for cancellation and returns an unregister function.
   ///
-  /// Calls it synchronously with the [Cancelled] carrying the reason,
-  /// description, start status and stack trace. For a running job this is after
-  /// cancellation has cascaded to its children and [JobContext.onCancel]
-  /// callbacks have run: before the body finishes, or, for a body that cancels
-  /// itself by throwing [Cancelled], as it ends. For a job cancelled before
-  /// start, it is when the job is dropped.
-  ///
-  /// The continuation of [then] is not a child. It registers here when it is
-  /// made, as a handle of [shared] does, and cancelling the source cancels
-  /// both through that registration: a callback registered before them may
-  /// find them not yet cancelled. A continuation that is cancelled cancels
-  /// its source first; a cancelled handle never reaches its source.
-  ///
-  /// If cancellation has already been accepted and its callbacks have run,
-  /// calls [callback] immediately, even if the job has finished. Registering in
-  /// between, while the cancellation cascades onto the children or the job's
-  /// [JobContext.onCancel] callbacks run, puts the callback in that pass
-  /// instead, after the ones registered before it. A refused or held
-  /// cancellation does not trigger it; a held one triggers it when it is
-  /// accepted. A job that ends [Done] or [Failed] without cancellation never
-  /// calls it and releases its registrations on finish. Registering does not
-  /// observe a [Failed] outcome.
-  ///
-  /// Each registration runs once. Pending callbacks run in registration
-  /// order, from a snapshot: unregistering during notification does not remove
-  /// a callback from that pass. Registering during notification calls the new
-  /// callback immediately, ahead of the callbacks still waiting in that pass.
-  /// Unregistering more than once is harmless.
-  ///
-  /// A synchronous error is one no outcome carries: [JobObserver.onError] hears
-  /// it and an observer that is a [JobAnswerer] answers for it; by default, and
-  /// without such an observer, it goes to the job's creation zone, and a thrown
-  /// [Cancelled] is kept out of it. The error changes neither cancellation nor
-  /// other callbacks. The callback is synchronous: an `async` callback's future
-  /// is not awaited and its errors are not caught here.
+  /// Calls it once, synchronously, with the [Cancelled] when the job accepts a
+  /// cancellation: for a running job after the cancellation has cascaded to
+  /// its children and its [JobContext.onCancel] callbacks have run, without
+  /// waiting for the body; for a job cancelled before start, when it is
+  /// dropped. A refused cancellation does not call it, a held one calls it
+  /// when accepted, and a job that ends [Done] or [Failed] releases it
+  /// uncalled; registering once the pass over the callbacks has begun calls
+  /// it at once. Registering does not observe a [Failed] outcome. The
+  /// callback is synchronous: the future of an `async` one is not awaited and
+  /// its errors are not caught here, while a synchronous error goes to
+  /// [JobObserver.onError] and on to the answer, and a [Cancelled] it throws
+  /// never reaches the zone.
   ///
   /// ```dart
   /// final unregister = job.whenCancelled((cancelled) {
@@ -417,6 +408,9 @@ abstract interface class Job<T> {
   /// // When the listener is no longer needed:
   /// unregister();
   /// ```
+  ///
+  /// See [Listening for the cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#listening-for-the-cancellation)
+  /// on the outcomes page.
   void Function() whenCancelled(void Function(Cancelled) callback);
 
   /// Registers [callback] for the end of the job and returns an unregister

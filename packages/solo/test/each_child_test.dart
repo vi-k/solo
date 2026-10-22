@@ -10,6 +10,35 @@ import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
+  test('a child is named by the key and describe given to each', () {
+    runSolo((solo, journal, async) {
+      final names = <String>[];
+      solo.enqueue<NotDisposed, void>((ctx) async {
+        for (final (key, describe) in [
+          (null, null),
+          ('events', null),
+          (null, () => 'by hand'),
+          ('events', () => 'by hand'),
+        ]) {
+          final child = ctx.each(
+            const Stream<int>.empty(),
+            key: key,
+            describe: describe,
+            (child, event) {},
+          );
+          names.add('$child');
+        }
+      });
+      async.flushMicrotasks();
+      expect(names, [
+        'Job(each)',
+        'Job(events: each)',
+        'Job(by hand)',
+        'Job(events: by hand)',
+      ]);
+    });
+  });
+
   test('a child emits after the parent body returned and holds the queue', () {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();

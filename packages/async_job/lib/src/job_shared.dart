@@ -20,9 +20,12 @@ final class _SharedJob<T> extends JobBase<T> {
   /// source runs; [_detach] empties the relay instead.
   late final _relay = _SharedRelay<T>(this);
 
-  _SharedJob(JobBase<T> source, {super.observer})
-      : _source = source,
-        super(describe: () => 'shared') {
+  _SharedJob(
+    JobBase<T> source, {
+    super.key,
+    super.describe,
+    super.observer,
+  }) : _source = source {
     source._pendingContinuations++;
     _unregisterSource = source.whenCancelled(_sourceCancelled);
     // In the handle's own zone, as a continuation subscribes in its own.

@@ -1137,23 +1137,13 @@ void main() {
     // same. The translation says it in words of its own, and its cell is
     // held to them.
     const translated = {
-      'Waits for the action to end, then throws':
-          'Ждёт конца действия, потом бросает',
-      'Throws at once; the action runs on':
-          'Бросает сразу, а действие идёт дальше',
-      'Holds the cancellation until the step ends; the next checkpoint throws':
-          'Держит отмену до конца шага, а бросает следующая контрольная точка',
-      'Ends the pause and throws': 'Прерывает паузу и бросает',
-      'Passes the cancellation to the child, waits for it and throws':
-          'Передаёт отмену ребёнку, ждёт его и бросает',
-      'Passes the cancellation to the children, waits for them and throws':
-          'Передаёт отмену детям, ждёт их и бросает',
-      'Passes the cancellation to the child': 'Передаёт отмену ребёнку',
-      'The work is not cancelled': 'Работа не отменяется',
-      'Starts work the job does not wait for; its errors go to `onError`, '
-              'then are answered for':
-          'Запускает работу, которую задача не ждёт; её ошибки идут '
-              'в `onError`, затем к ответу',
+      'Waits, then throws': 'Ждёт, потом бросает',
+      'Throws at once': 'Бросает сразу',
+      'Holds it until the step ends': 'Держит её до конца шага',
+      'Ends and throws': 'Прерывается и бросает',
+      'Passes it on, waits, throws': 'Передаёт её, ждёт, бросает',
+      'Passes it on': 'Передаёт её',
+      'Not cancelled': 'Не отменяется',
     };
     String cell(String member, {int column = 2}) {
       final original = contextTable('README.md')[member]![column];
@@ -1168,7 +1158,7 @@ void main() {
     }
 
     test('join waits for the action to end, then throws', () {
-      expect(cell('join'), 'Waits for the action to end, then throws');
+      expect(cell('join'), 'Waits, then throws');
       expect(
         cancelledWhile(
           (ctx, say) => ctx.join<void>(() async {
@@ -1185,7 +1175,7 @@ void main() {
     });
 
     test('abandonable throws at once, and the action runs on', () {
-      expect(cell('abandonable'), 'Throws at once; the action runs on');
+      expect(cell('abandonable'), 'Throws at once');
       expect(
         cancelledWhile(
           (ctx, say) => ctx.abandonable<void>(() async {
@@ -1202,11 +1192,7 @@ void main() {
     });
 
     test('uncancellable holds it until the step ends', () {
-      expect(
-        cell('uncancellable'),
-        'Holds the cancellation until the step ends; the next checkpoint '
-        'throws',
-      );
+      expect(cell('uncancellable'), 'Holds it until the step ends');
       expect(
         cancelledWhile(
           (ctx, say) => ctx.uncancellable(() async {
@@ -1225,7 +1211,7 @@ void main() {
     });
 
     test('pause ends and throws', () {
-      expect(cell('pause'), 'Ends the pause and throws');
+      expect(cell('pause'), 'Ends and throws');
       expect(
         cancelledWhile(
           (ctx, say) => ctx.pause(const Duration(milliseconds: 100)),
@@ -1235,10 +1221,7 @@ void main() {
     });
 
     test('run passes the cancellation to the child and waits for it', () {
-      expect(
-        cell('run'),
-        'Passes the cancellation to the child, waits for it and throws',
-      );
+      expect(cell('run'), 'Passes it on, waits, throws');
       expect(
         cancelledWhile((ctx, say) {
           final child = Job.deferred<int>((ctx) async {
@@ -1257,10 +1240,7 @@ void main() {
     });
 
     test('runAll passes it to the children and waits for them', () {
-      expect(
-        cell('runAll'),
-        'Passes the cancellation to the children, waits for them and throws',
-      );
+      expect(cell('runAll'), 'Passes it on, waits, throws');
       expect(
         cancelledWhile((ctx, say) {
           ChildJob<int> child(String name, int ms) {
@@ -1284,7 +1264,7 @@ void main() {
     });
 
     test('each passes it to the child', () {
-      expect(cell('each'), 'Passes the cancellation to the child');
+      expect(cell('each'), 'Passes it on');
       expect(
         cancelledWhile((ctx, say) async {
           final child = ctx.each(StreamController<int>().stream, (ctx, _) {});
@@ -1301,7 +1281,7 @@ void main() {
     });
 
     test('start passes it to the child', () {
-      expect(cell('start'), 'Passes the cancellation to the child');
+      expect(cell('start'), 'Passes it on');
       expect(
         cancelledWhile((ctx, say) async {
           final child = Job.deferred<void>(
@@ -1321,7 +1301,7 @@ void main() {
     });
 
     test('unattended work is not cancelled', () {
-      expect(cell('unattended'), 'The work is not cancelled');
+      expect(cell('unattended'), 'Not cancelled');
       expect(
         cancelledWhile((ctx, say) async {
           ctx.unattended(() async {
@@ -1339,12 +1319,43 @@ void main() {
       );
     });
 
+    test('the notes say what the cells of check and each leave out', () {
+      // The cells name the member; the line under the table says the rest.
+      final said = {
+        'README.md': [
+          '`ctx.check()` is the checkpoint for a place where there is no call '
+              'to wrap.',
+          '`ctx.each` hands the events of the stream to its callback one at a '
+              'time.',
+        ],
+        'README.ru.md': [
+          '`ctx.check()` — контрольная точка для места, где нечего обернуть.',
+          '`ctx.each` отдаёт события стрима колбэку по одному.',
+        ],
+      };
+      for (final page in readmes) {
+        final text = read(page).replaceAll(RegExp(r'\s+'), ' ');
+        for (final line in said[page]!) {
+          expect(text, contains(line), reason: page);
+        }
+      }
+    });
+
     test('the errors of unattended work go to onError, then to the answer', () {
-      expect(
-        cell('unattended', column: 0),
-        'Starts work the job does not wait for; its errors go to `onError`, '
-        'then are answered for',
-      );
+      // Said under the table, in a line of its own on each page.
+      final said = {
+        'README.md': 'The errors of the work of `ctx.unattended` go to '
+            '`onError`, then are answered for.',
+        'README.ru.md':
+            'Ошибки работы `ctx.unattended` идут в `onError`, затем к ответу.',
+      };
+      for (final page in readmes) {
+        expect(
+          read(page).replaceAll(RegExp(r'\s+'), ' '),
+          contains(said[page]),
+          reason: page,
+        );
+      }
       // Who hears the error: the observer, if there is one, and the zone or
       // the answerer, the same as for an error of cleanup.
       List<String> heardOf(

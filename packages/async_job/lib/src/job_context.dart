@@ -423,44 +423,16 @@ abstract interface class JobContext {
 
   /// Starts a child job that processes [stream] one event at a time.
   ///
-  /// Returns the child immediately without observing its outcome. Await its
-  /// [Job.value] to propagate its outcome into the body, or use [Job.done] to
-  /// inspect the outcome. The parent waits for this child even when the body
-  /// does not await it. An open stream therefore keeps the parent alive until
-  /// the stream ends or the child is cancelled. Cancelling the child alone does
-  /// not cancel the parent.
-  ///
-  /// [onData] receives the child's context. Use its checkpoints to react to the
-  /// child's cancellation. An asynchronous callback is awaited before the next
-  /// event is delivered. Stream and callback errors end the child and follow
-  /// the usual [Job] error reporting rules. A callback that returns a job of
-  /// [Job.deferred] nobody has started ends the child [Failed] with an
-  /// [ArgumentError]: nothing here starts it, and the event would count as
-  /// handled.
-  ///
-  /// Cancellation stops delivery and cancels the subscription immediately, then
-  /// waits for an active callback before finishing the child and running its
-  /// cleanup. A plain future inside the callback cannot be interrupted; use the
-  /// child's [abandonable] or [join] as appropriate. Do not await the child's
-  /// own completion or cancellation from its callback.
-  ///
-  /// The child's cleanup stack unwinds when the child ends, not after an event:
-  /// an [onDispose] registered for every event piles up for as long as the
-  /// stream lasts, and so does a `dispose` or a `discard` of [join]. An
-  /// [onCancel] callback piles up the same way unless the callback takes it
-  /// back with the function [onCancel] returns. What one event opens belongs to
-  /// a child started for that event with [run]: its stack unwinds when it ends.
-  ///
-  /// The future returned by the subscription's cancellation is not awaited:
-  /// cleanup owned by the source is the source's to finish. If it fails, the
-  /// error goes to [JobObserver.onError] of the child and to its answer, as
-  /// other errors no outcome carries do. A normal stream ending still depends
-  /// on the source delivering its `onDone` notification.
-  ///
-  /// Throws synchronously if a child cannot be started, as [run] does: a
-  /// [StateError] after the parent's body ended, during cleanup and from
-  /// [unattended] work, and the parent's [Cancelled] after it accepted a
-  /// cancellation.
+  /// Returns the child at once without observing its outcome; the parent waits
+  /// for it even when the body does not, so an open stream keeps the parent
+  /// alive until the stream ends or the child is cancelled. [onData] gets the
+  /// child's context, and an asynchronous callback is awaited before the next
+  /// event. Throws synchronously if a child cannot be started, as [run] does.
+  /// [key] and [describe] name the child as they name any job, see
+  /// [A job's name](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#a-jobs-name);
+  /// without [describe] its description is `each`. The child's cleanup stack
+  /// unwinds when the child ends, not after an event: what the callback
+  /// registers piles up for as long as the stream lasts.
   ///
   /// ```dart
   /// final listening = ctx.each<int>(events, (child, event) {
@@ -468,10 +440,15 @@ abstract interface class JobContext {
   /// });
   /// await listening.cancel();
   /// ```
+  ///
+  /// See [Processing a stream](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/streams.md#processing-a-stream)
+  /// on the streams page.
   Job<void> each<T>(
     Stream<T> stream,
-    FutureOr<void> Function(JobContext ctx, T event) onData,
-  );
+    FutureOr<void> Function(JobContext ctx, T event) onData, {
+    Object? key,
+    String Function()? describe,
+  });
 
   /// Hands [message] to [JobObserver.onLog] as it is.
   ///
@@ -610,26 +587,38 @@ abstract class JobContextBase implements JobContext {
   @override
   Cancelled? get heldCancellation => _owner.heldCancel;
 
-  /// Creates the unstarted child used by [each].
+  /// Creates the unstarted child used by [each], named by [key] and
+  /// [describe].
   ///
   /// A domain that restricts child ownership overrides this factory to
-  /// return its own job with the appropriate context and rules. The result
-  /// must be accepted by [startChild]. This factory must not start the child.
+  /// return its own job with the appropriate context and rules, and hands
+  /// [key] and [describe] to it. They come as the caller of [each] gave them,
+  /// except that [describe] already holds the core's default, `each`, when the
+  /// caller gave none. The result must be accepted by [startChild]. This
+  /// factory must not start the child.
   @visibleForOverriding
-  Job<void> createEachJob(Future<void> Function(JobContext ctx) body) =>
-      Job.deferred<void>(body, describe: () => 'each');
+  Job<void> createEachJob(
+    Future<void> Function(JobContext ctx) body, {
+    Object? key,
+    String Function()? describe,
+  }) =>
+      Job.deferred<void>(body, key: key, describe: describe);
 
   @override
   Job<void> each<T>(
     Stream<T> stream,
-    FutureOr<void> Function(JobContext ctx, T event) onData,
-  ) {
+    FutureOr<void> Function(JobContext ctx, T event) onData, {
+    Object? key,
+    String Function()? describe,
+  }) {
     // Asked here, with its own verb, before `startChild` asks again with
     // one about children: the caller followed a stream, and the message
     // names what they did.
     _checkCanRun('follow a stream');
     final child = createEachJob(
       (child) => child._followStream(stream, (event) => onData(child, event)),
+      key: key,
+      describe: describe ?? () => 'each',
     );
     startChild(child);
     return child;

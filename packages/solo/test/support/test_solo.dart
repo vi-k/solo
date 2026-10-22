@@ -126,10 +126,10 @@ mixin OpenSolo<S extends Object> on Solo<S> {
   SoloQueue get queue => super.queue;
 
   @override
-  Job<Object?>? get current => super.current;
+  SoloJob<Object?>? get current => super.current;
 
   @override
-  SoloJob<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) =>
+  SoloJob<Object?>? lastJobWhere(bool Function(SoloJob<Object?> job) test) =>
       super.lastJobWhere(test);
 
   @override

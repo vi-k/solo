@@ -220,23 +220,45 @@ what a cancellation that comes while it runs does to it:
 
 | Member | What it does | Once the job is cancelled | Cancelled while it runs |
 | --- | --- | --- | --- |
-| `ctx.check()` | A checkpoint where there is no call to wrap | Throws `Cancelled` |  |
-| `ctx.join(action)` | Runs the action and waits for all of it | Throws `Cancelled` | Waits for the action to end, then throws |
-| `ctx.abandonable(action)` | Runs the action and waits for it, but no longer than the job lives | Throws `Cancelled` | Throws at once; the action runs on |
-| `ctx.uncancellable(action)` | Runs a step with the cancellation held back | Throws `Cancelled` | Holds the cancellation until the step ends; the next checkpoint throws |
-| `ctx.pause(duration)` | Lets time pass | Throws `Cancelled` | Ends the pause and throws |
-| `ctx.run(child)` | Starts a `ChildJob`, such as one made with `Job.deferred`, and waits for its value | Throws `Cancelled` | Passes the cancellation to the child, waits for it and throws |
-| `ctx.start(child)` | Starts a `ChildJob` the body does not wait for, and leaves its outcome to whoever holds it | Throws `Cancelled` | Passes the cancellation to the child |
-| `ctx.runAll(children)` | Runs children side by side and stops the rest as soon as one ends without a value | Throws `Cancelled` | Passes the cancellation to the children, waits for them and throws |
-| `ctx.each(stream, onData)` | Starts a child that takes the events of a stream one at a time | Throws `Cancelled` | Passes the cancellation to the child |
-| `ctx.onCancel(callback)` | Calls back the moment the job accepts a cancellation | Throws `Cancelled` |  |
-| `ctx.onDispose(disposer)` | Cleans up when the job ends, whatever the outcome | Works as usual |  |
-| `ctx.onDiscard(disposer)` | Cleans up unless the job ends `Done`; a body that ends `Done` without returning the value disposes of it itself | Works as usual |  |
-| `ctx.disown(value)` | Drops the cleanup registered for a value | Works as usual |  |
-| `ctx.unattended(action)` | Starts work the job does not wait for; its errors go to `onError`, then are answered for | Works as usual | The work is not cancelled |
-| `ctx.log(message)` | Hands a message to the observer; a closure is called by the observer that builds the line | Works as usual |  |
+| `ctx.check()` | A bare checkpoint | Throws `Cancelled` |  |
+| `ctx.join(action)` | Waits for all of the action | Throws `Cancelled` | Waits, then throws |
+| `ctx.abandonable(action)` | Waits while the job lives | Throws `Cancelled` | Throws at once |
+| `ctx.uncancellable(action)` | Holds the cancellation back | Throws `Cancelled` | Holds it until the step ends |
+| `ctx.pause(duration)` | Lets time pass | Throws `Cancelled` | Ends and throws |
+| `ctx.run(child)` | Runs a child and waits | Throws `Cancelled` | Passes it on, waits, throws |
+| `ctx.start(child)` | Starts a child, no waiting | Throws `Cancelled` | Passes it on |
+| `ctx.runAll(children)` | Runs children side by side | Throws `Cancelled` | Passes it on, waits, throws |
+| `ctx.each(stream, onData)` | Follows a stream in a child | Throws `Cancelled` | Passes it on |
+| `ctx.onCancel(callback)` | Calls back on a cancellation | Throws `Cancelled` |  |
+| `ctx.onDispose(disposer)` | Cleans up at the end | Works as usual |  |
+| `ctx.onDiscard(disposer)` | Cleans up unless `Done` | Works as usual |  |
+| `ctx.disown(value)` | Drops a value's cleanup | Works as usual |  |
+| `ctx.unattended(action)` | Starts work nobody waits for | Works as usual | Not cancelled |
+| `ctx.log(message)` | Hands a message to the observer | Works as usual |  |
 | `ctx.job` | The job of this context | Works as usual |  |
-| `ctx.heldCancellation` | The cancellation an open `uncancellable` section holds back, or `null` | Works as usual |  |
+| `ctx.heldCancellation` | The held cancellation, or `null` | Works as usual |  |
+
+What the cells leave out:
+
+- `ctx.check()` is the checkpoint for a place where there is no call to wrap.
+- `ctx.abandonable` stops waiting when the job is cancelled, and the action
+  runs on. `ctx.uncancellable` holds the cancellation until the step ends, and
+  the next checkpoint throws it.
+- `ctx.run`, `ctx.start` and `ctx.runAll` take a `ChildJob`, such as one made
+  with `Job.deferred`, and pass the cancellation to their children. `ctx.start`
+  leaves the outcome of its child to whoever holds the child. `ctx.runAll`
+  stops the rest as soon as one child ends without a value.
+- `ctx.each` hands the events of the stream to its callback one at a time.
+
+- `ctx.onCancel` calls back the moment the job accepts a cancellation.
+  `ctx.onDispose` cleans up whatever the outcome. `ctx.onDiscard` cleans up
+  unless the job ends `Done`, and a body that ends `Done` without returning the
+  value disposes of it itself.
+- The errors of the work of `ctx.unattended` go to `onError`, then are answered
+  for.
+- A closure handed to `ctx.log` is called by the observer that builds the line.
+- `ctx.heldCancellation` is the cancellation an open `uncancellable` section
+  holds back.
 
 The last column holds where the job accepts the cancellation as it comes.
 Inside `ctx.uncancellable`, and in a job created with `cancellable: false`, the

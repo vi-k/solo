@@ -62,10 +62,10 @@ while the first is being saved, and its save starts at once: the two run side
 by side, and nothing says which one finishes first.
 
 And the stream calls the callback, not the body. An error thrown in it goes to
-the zone and past the job: the job stays running and subscribed, its outcome
-knows nothing of the failure, and neither does whoever awaits its `value`. The
-`onError` of `listen` does not change that: it hears the errors of the stream,
-not what the callback throws.
+[the zone](errors.md#where-errors-go) and past the job: the job stays running
+and subscribed, its outcome knows nothing of the failure, and neither does
+whoever awaits its `value`. The `onError` of `listen` does not change that: it
+hears the errors of the stream, not what the callback throws.
 
 ### The third attempt
 
@@ -121,6 +121,12 @@ sees this child as a separate job.
 Like `run`, `each` can only start children while the parent body is active;
 calls from `unattended` or cleanup are rejected. Normal stream completion
 depends on the source sending `onDone`.
+
+A callback that returns a job of `Job.deferred` nobody has started ends the
+child `Failed` with an `ArgumentError`: nothing here starts that job, and the
+event would count as handled. What the child does with the future of the
+subscription's own `cancel` is in
+[Waiting for the source to close](#waiting-for-the-source-to-close).
 
 ## A callback in several steps
 
@@ -300,8 +306,8 @@ Three things are different from the child:
 - **It is a root wherever it is made.** Called in the body of another job, it
   is not a child of that job: the body neither waits for it nor cancels it, and
   it is not a `ChildJob`, so `ctx.run` does not take it. Inside a body, follow
-  the stream with `ctx.each`. A failure nobody reads is answered for, as from
-  any root.
+  the stream with `ctx.each`. A failure nobody reads is
+  [answered for](errors.md#answering-for-errors), as from any root.
 - **With `cancellable: false` nothing outside stops it.** Such a job refuses
   every cancellation, and `cancel()` does not return until the job ends by
   itself: the stream ends or fails, or the callback throws — a `Cancelled`

@@ -718,16 +718,33 @@ abstract class JobBase<T> implements Job<T> {
   @override
   Job<R> then<R>(
     FutureOr<R> Function(JobContext ctx, T value) onValue, {
+    Object? key,
+    String Function()? describe,
     JobObserver? observer,
   }) {
     _continueBy(_Continuation.then);
-    return _ThenJob<T, R>(this, onValue, observer: observer);
+    return _ThenJob<T, R>(
+      this,
+      onValue,
+      key: key,
+      describe: describe ?? () => 'then',
+      observer: observer,
+    );
   }
 
   @override
-  Job<T> shared({JobObserver? observer}) {
+  Job<T> shared({
+    Object? key,
+    String Function()? describe,
+    JobObserver? observer,
+  }) {
     _continueBy(_Continuation.shared);
-    return _SharedJob<T>(this, observer: observer);
+    return _SharedJob<T>(
+      this,
+      key: key,
+      describe: describe ?? () => 'shared',
+      observer: observer,
+    );
   }
 
   /// Refuses [then] on this job from now on, with [reason] in the error:
