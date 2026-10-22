@@ -38,17 +38,15 @@ name: gate
 #
 # What `snippets` proves is narrow and worth stating: that every fragment
 # of those documents still compiles against the tree and still runs to the
-# end, and that a trace quoted in a block is the one the run prints. A
-# number written into the prose is compared with nothing, and can still go
-# stale there without turning this red. Narrow is not nothing: the
-# recorder snippets of section 2 stopped compiling when `onChange` took a
-# `SoloTransition`, and lived on in the document for a release because
-# nothing here built them.
+# end, that a trace quoted in a block is the one the run prints, and that
+# the mechanics of each section hold: the drivers check themselves with
+# `require` and fail the job when they do not. The bench of `vs-bloc.md`
+# holds part of its prose as well, the code spans listed in `QUOTED` and
+# the phrases in `SAID`. Prose neither list names, a number in a sentence
+# included, is compared with nothing and stays the author's job.
 #
-# The wall-clock fakes in those drivers cannot make the job flaky either,
-# for the same reason: a slow runner changes what is printed, not whether
-# the process exits zero. The one driver that does assert, `item3_cancel`,
-# runs under `FakeAsync` and has no wall clock to lose.
+# Every driver runs under `FakeAsync`, the clock elapsed rather than waited
+# for, so a slow runner changes neither what is printed nor what is checked.
 #
 # `dart pub publish --dry-run` is run for the list of files an archive
 # would hold. What it says about the package is printed, and a dry run
