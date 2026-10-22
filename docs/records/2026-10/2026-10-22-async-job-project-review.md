@@ -245,3 +245,7 @@ T12 after close: Done(null)
 2026-10-22: вопрос 2 — «ок, в бэклог»: деление трёх страниц ядра записано
 в `docs/backlog.md` вместе с `accumulation.md` `solo`. Остальные вопросы обеих
 записей владелец разбирает по одному.
+
+2026-10-22: вопрос 1 — «все три»: `key` и `describe` у `then`, `shared`
+и `ctx.each` в 0.3.0, с параметрами защищённой фабрики
+`JobContextBase.createEachJob`; `timeout` у `then` не входит.
