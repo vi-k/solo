@@ -654,8 +654,7 @@ void main() {
       expect(watch(page.holdTheCancellationBack, cancelAt: 5), quoted[6]);
     });
 
-    test('the step keeps the receipt only when the job is about to lose it',
-        () {
+    test('the step keeps the receipt whether the job is cancelled or not', () {
       expect(watch(page.keepTheReceipt, cancelAt: 5), [
         'cancel',
         'order 1 paid',
@@ -664,7 +663,35 @@ void main() {
       ]);
       expect(watch(page.keepTheReceipt), [
         'order 1 paid',
+        'receipt of order 1 saved',
         'outcome: Done(receipt of order 1)',
+      ]);
+    });
+
+    test('a check of heldCancellation misses a cancellation after the read',
+        () {
+      // The page says why the step saves unconditionally: a cancellation
+      // that comes after the payment is held all the same, and a check made
+      // before it saw none.
+      final seen = <String>[];
+      fakeAsync((async) {
+        final job = Job<String>(
+          (ctx) => ctx.uncancellable(() async {
+            final receipt = await api.pay(order);
+            seen.add('held: ${ctx.heldCancellation}');
+            scheduleMicrotask(() => ctx.job.cancel().ignore());
+            await null;
+            seen.add('held: ${ctx.heldCancellation}');
+            return receipt;
+          }),
+        );
+        async.flushTimers();
+        seen.add('outcome: ${job.outcome}');
+      });
+      expect(seen, [
+        'held: null',
+        'held: Cancelled(manual)',
+        'outcome: Cancelled(manual)',
       ]);
     });
 

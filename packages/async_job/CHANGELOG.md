@@ -119,8 +119,7 @@ new wording.
   [When one failure makes the rest pointless](doc/groups.md#when-one-failure-makes-the-rest-pointless).
 - **`ctx.pause` is a delay a cancellation ends.**
 - **`ctx.heldCancellation` names the cancellation an `uncancellable` section
-  holds back,** so the step keeps what it made when the job is about to lose
-  it. See
+  holds back** at the moment it is read. See
   [Holding the cancellation back](doc/cancellation.md#holding-the-cancellation-back).
 - **`ctx.run` takes `dispose` and `discard`,** as `ctx.abandonable` does.
 - **`Job.whenFinished` hears the end of a job without observing its outcome.**
@@ -163,6 +162,9 @@ new wording.
 - A finished job lets go of its body, its parent and the cleanups it never ran,
   and a job made inside work handed to `ctx.unattended` lets go of the job that
   started the work: a kept handle held everything they captured.
+- The remover that `whenCancelled` or `ctx.onCancel` returns lets go of the
+  callback once called or once the job ends: an owner that kept its removers
+  until its own end kept everything the callbacks captured.
 - A job made by `Job(...)` inside work handed to `ctx.unattended` runs in the
   zone the work was started from, so a bare `unawaited` error in it no longer
   reaches the observer of the job that started the work.

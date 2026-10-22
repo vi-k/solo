@@ -305,24 +305,25 @@ the same section.
 
 `return ctx.uncancellable(...)` does not carry the value out either: the job
 takes the cancellation before the body returns, the value reaches neither the
-outcome nor `value`, and the registrations of `onDiscard` run.
-`ctx.heldCancellation` tells the step whether a cancellation is held, so the
-step keeps what it made when the job is about to lose it:
+outcome nor `value`, and the registrations of `onDiscard` run. A step that made
+something worth keeping keeps it inside the section, whether the job is
+cancelled or not:
 
 ```dart
 final receipt = await ctx.uncancellable(() async {
   final receipt = await api.pay(order);
-  if (ctx.heldCancellation != null || ctx.job.isCancelled) {
-    // The job ends Cancelled once the section closes: keep the receipt.
-    await store.save(receipt);
-  }
+  // Kept either way: the job may still end Cancelled.
+  await store.save(receipt);
   return receipt;
 });
 ```
 
-A cancellation the job cannot refuse, such as a rule an engine adds, is not
-held: it marks the job at once, and `ctx.heldCancellation` does not show it.
-`ctx.job.isCancelled` does, hence the second check.
+Saving only when `ctx.heldCancellation` shows a cancellation would lose the
+receipt. The getter says whether a cancellation is held at the moment it is
+read, and one can still come after the read: before the section closes, while
+the job waits for its children, while it cleans up. A cancellation the job
+cannot refuse, such as a rule an engine adds, is not held at all: it marks the
+job at once, and only `ctx.job.isCancelled` shows it.
 
 If the step fails and the body lets the error through, the job still ends
 `Cancelled`. The failure goes where any failure of the body of a cancelled job

@@ -27,7 +27,12 @@ final class _SharedJob<T> extends JobBase<T> {
     super.observer,
   }) : _source = source {
     source._pendingContinuations++;
-    _unregisterSource = source.whenCancelled(_sourceCancelled);
+    // A source that has finished tells a late listener at once, which would
+    // end the handle inside this call. Its outcome comes through `_done` on
+    // the next microtask instead, as a Done or a Failed does.
+    if (!source.isFinished) {
+      _unregisterSource = source.whenCancelled(_sourceCancelled);
+    }
     // In the handle's own zone, as a continuation subscribes in its own.
     _zone.run(() => unawaited(source._done.future.then(_relay.call)));
   }
@@ -82,9 +87,9 @@ final class _SharedJob<T> extends JobBase<T> {
           return;
         }
         finish(failed);
-      // Not reached as things stand: a cancellation the source accepts
-      // comes through [Job.whenCancelled] before its outcome, and detaches
-      // the handle. Kept for the switch, and in case that order changes.
+      // Reached only from a source that had finished when the handle was
+      // made: on a later cancellation the source accepts, it comes through
+      // [Job.whenCancelled] before its outcome, and detaches the handle.
       case final Cancelled cancelled:
         _sourceCancelled(cancelled);
     }

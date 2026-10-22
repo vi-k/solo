@@ -764,7 +764,7 @@ void main() {
       });
     });
 
-    test('the step keeps what it made under a rule of the engine', () {
+    test('the step sees a rule of the engine through isCancelled', () {
       for (final asked in [true, false]) {
         fakeAsync((async) {
           final saved = <int>[];

@@ -153,17 +153,15 @@ Job<void> holdTheCancellationBack() {
   return job;
 }
 
-/// "Holding the cancellation back": the step keeps the receipt it made
-/// when the job is about to lose it.
+/// "Holding the cancellation back": the step keeps the receipt it made,
+/// whether the job is cancelled or not.
 Job<String> keepTheReceipt() {
   final job = Job<String>(observer: printing, (ctx) async {
     // #docregion
     final receipt = await ctx.uncancellable(() async {
       final receipt = await api.pay(order);
-      if (ctx.heldCancellation != null || ctx.job.isCancelled) {
-        // The job ends Cancelled once the section closes: keep the receipt.
-        await store.save(receipt);
-      }
+      // Kept either way: the job may still end Cancelled.
+      await store.save(receipt);
       return receipt;
     });
     // #enddocregion

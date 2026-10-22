@@ -758,7 +758,7 @@ void main() {
       });
     });
 
-    test('lets the step keep what it made', () {
+    test('shows the step a cancellation asked while it ran', () {
       (String, List<int>) pay({required bool cancel}) {
         late final String outcome;
         final saved = <int>[];

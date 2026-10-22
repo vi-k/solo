@@ -38,6 +38,19 @@ WeakReference<Payload> captureInListener(Job<int> job) {
   return WeakReference(payload);
 }
 
+/// Like [captureInListener], through [kind], and the remover comes back with
+/// the capture.
+(void Function(), WeakReference<Payload>) captureWithRemover(
+  Job<int> job,
+  String kind,
+) {
+  final payload = Payload();
+  final remove = kind == 'whenFinished'
+      ? job.whenFinished((_) => payload.bytes.length)
+      : job.whenCancelled((_) => payload.bytes.length);
+  return (remove, WeakReference(payload));
+}
+
 /// Only the child comes back. The value of the parent is then reachable
 /// from it alone, through the link a child keeps to its parent.
 ///
@@ -298,6 +311,27 @@ void main() {
           'as long as anyone keeps the handle',
     );
   });
+
+  for (final kind in ['whenFinished', 'whenCancelled']) {
+    for (final removed in [false, true]) {
+      test(
+          'a kept remover of $kind lets go of the listener '
+          '${removed ? 'once called' : 'once the job ends'}', () async {
+        final job = Job<int>((ctx) async => 1);
+        final (remove, capture) = captureWithRemover(job, kind);
+        if (removed) remove();
+        await job.done;
+        expect(
+          await collected(capture),
+          isTrue,
+          reason: 'an owner that keeps its removers until it is disposed '
+              'would keep what the listeners captured',
+        );
+        // Kept alive through the collection.
+        remove();
+      });
+    }
+  }
 
   test('a finished child lets go of its parent', () async {
     final (child, capture) = valueOfAParent();

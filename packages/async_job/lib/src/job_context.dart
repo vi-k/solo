@@ -135,9 +135,9 @@ abstract interface class JobContext {
   /// the cancellation as the section closes and still ends cancelled, so what
   /// has to happen after the step anyway belongs inside the section, and
   /// `return ctx.uncancellable(...)` carries no value out — the outcome is
-  /// [Cancelled], and the registrations of [onDiscard] run. [heldCancellation]
-  /// tells the step whether a cancellation is held, so it can keep what it
-  /// made.
+  /// [Cancelled], and the registrations of [onDiscard] run. A step keeps what
+  /// it made inside the section, whether a cancellation is held or not:
+  /// [heldCancellation] says only what is held when it is read.
   ///
   /// ```dart
   /// final receipt = await ctx.uncancellable(() => api.pay(order));
@@ -522,33 +522,23 @@ abstract interface class JobContext {
   /// The cancellation an open [uncancellable] section of this job is holding
   /// back, or `null`.
   ///
-  /// The job takes a held cancellation as the section closes, before the
-  /// body returns, so a step that made something worth keeping — a receipt
-  /// of a payment that went through — keeps it inside the section:
-  ///
-  /// ```dart
-  /// final receipt = await ctx.uncancellable(() async {
-  ///   final receipt = await api.pay(order);
-  ///   if (ctx.heldCancellation != null || ctx.job.isCancelled) {
-  ///     // The job ends Cancelled once the section closes: keep the receipt.
-  ///     await store.save(receipt);
-  ///   }
-  ///   return receipt;
-  /// });
-  /// ```
+  /// A snapshot: a cancellation asked after the read is held all the same,
+  /// and one read here may still never land — a section the body did not
+  /// await outlives a job that ends first. So a step that made something
+  /// worth keeping, a receipt of a payment that went through, keeps it
+  /// inside the section whatever this says.
   ///
   /// A cancellation the job cannot refuse is not held: it marks the job at
   /// once, and the one held until then is dropped, so this goes back to
-  /// `null` while [job]'s `isCancelled` turns `true` — hence both checks
-  /// above. A job created with `cancellable: false` refuses a cancellation
-  /// rather than holding it, and this stays `null`.
+  /// `null` while [job]'s `isCancelled` turns `true`. A job created with
+  /// `cancellable: false` refuses a cancellation rather than holding it,
+  /// and this stays `null`. One value for the whole job, not for one
+  /// section: code of the job outside a section, a branch next to it or
+  /// [unattended] work, sees what another section holds. `null` once the
+  /// job is over. Never throws.
   ///
-  /// One value for the whole job, not for one section: code of the job
-  /// outside a section, a branch next to it or [unattended] work, sees what
-  /// another section holds. A snapshot: a cancellation asked after the read
-  /// is held all the same, and one read here may still never land — a
-  /// section the body did not await outlives a job that ends first. `null`
-  /// once the job is over. Never throws.
+  /// See [Holding the cancellation back](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#holding-the-cancellation-back)
+  /// on the cancellation page.
   Cancelled? get heldCancellation;
 }
 

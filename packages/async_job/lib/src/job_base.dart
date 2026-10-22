@@ -52,7 +52,9 @@ final class _Callbacks<F> {
   _Callback<F>? _last;
 
   /// Adds [callback] at the end and returns its remover. A remover called
-  /// again, or after [clear], does nothing.
+  /// again, or after [clear], does nothing. Removed or cleared, the entry
+  /// lets go of the callback: a remover kept by an owner until its own end
+  /// must not keep what the callback captured.
   void Function() add(F callback) {
     final entry = _Callback<F>(callback);
     final last = _last;
@@ -82,6 +84,7 @@ final class _Callbacks<F> {
       next._previous = previous;
     }
     entry
+      ..callback = null
       .._previous = null
       .._next = null;
   }
@@ -90,7 +93,7 @@ final class _Callbacks<F> {
   /// register or remove another while the snapshot is walked.
   List<F> toList() => [
         for (var entry = _first; entry != null; entry = entry._next)
-          entry.callback,
+          entry.callback!,
       ];
 
   void clear() {
@@ -98,6 +101,7 @@ final class _Callbacks<F> {
     while (entry != null) {
       final next = entry._next;
       entry
+        ..callback = null
         .._linked = false
         .._previous = null
         .._next = null;
@@ -109,7 +113,8 @@ final class _Callbacks<F> {
 }
 
 final class _Callback<F> {
-  final F callback;
+  /// Null once the entry is removed or cleared.
+  F? callback;
   bool _linked = true;
   _Callback<F>? _previous;
   _Callback<F>? _next;

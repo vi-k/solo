@@ -344,6 +344,32 @@ void main() {
       });
     });
 
+    for (final (kind, expected) in [
+      ('done', 'Done(42)'),
+      ('failed', 'Failed(Bad state: failed)'),
+      ('cancelled', 'Cancelled(chain)'),
+    ]) {
+      test('of a source already $kind ends on the next microtask', () {
+        fakeAsync((async) {
+          final source = Job<int>((ctx) async {
+            if (kind == 'failed') throw StateError('failed');
+            return 42;
+          })
+            ..ignoreFailure();
+          if (kind == 'cancelled') source.cancel().ignore();
+          async.flushMicrotasks();
+          expect(source.isFinished, isTrue);
+          final answers = Answers();
+          final handle = source.shared(observer: answers);
+          expect(handle.outcome, isNull, reason: 'not inside the call');
+          expect(answers.finished, isEmpty);
+          async.flushMicrotasks();
+          expect('${handle.outcome}', startsWith(expected));
+          expect(answers.finished, ['Job(shared)']);
+        });
+      });
+    }
+
     test('is not a child: run does not take it', () {
       fakeAsync((async) {
         final handle = Job<int>((ctx) async => 1).shared();
