@@ -330,6 +330,74 @@ Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
   return (remove!, WeakReference(payload), WeakReference(branch));
 }
 
+/// A branch ended by hand while it unwinds, with the remover of the
+/// `onDiscard` it put aside kept outside.
+Future<
+    (
+      void Function(),
+      WeakReference<Payload>,
+      WeakReference<ProbeJob<String>>
+    )> keepRemoverOfABranchEndedWhileItUnwinds() async {
+  final payload = Payload();
+  final gate = Completer<String>();
+  void Function()? remove;
+  late final ProbeJob<String> branch;
+  branch = ProbeJob<String>((ctx) async {
+    void release() => payload.bytes.length;
+    remove = ctx.onDiscard(release);
+    // On top of the stack, so it unwinds first: the `onDiscard` under it is
+    // put aside, and the branch reaches the second barrier ended by hand.
+    ctx.onDispose(() => branch.drop(const Cancelled('by hand')));
+    return 'db';
+  });
+  final parent = Job<List<String>>(
+    (ctx) => ctx.runAll([
+      branch,
+      Job.deferred<String>((ctx) => ctx.abandonable(() => gate.future)),
+    ]),
+  )..ignoreFailure();
+  await Future<void>.microtask(() {});
+  gate.complete('other');
+  await parent.done;
+  return (remove!, WeakReference(payload), WeakReference(branch));
+}
+
+/// A branch ended by hand at the second barrier, with the remover of an
+/// `onDispose` registered there kept outside.
+Future<
+    (
+      void Function(),
+      WeakReference<Payload>,
+      WeakReference<ProbeJob<String>>
+    )> keepRemoverOfABranchEndedAtTheBarrier() async {
+  final payload = Payload();
+  final gate = Completer<void>();
+  late JobContext context;
+  final branch = ProbeJob<String>((ctx) async {
+    context = ctx;
+    return 'db';
+  });
+  final parent = Job<List<String>>(
+    (ctx) => ctx.runAll([
+      branch,
+      Job.deferred<String>((ctx) async {
+        // Its first pass waits, so the branch waits at the second barrier.
+        ctx.onDispose(() => gate.future);
+        return 'other';
+      }),
+    ]),
+  )..ignoreFailure();
+  for (var i = 0; i < 20 && !branch.isDisposingNow; i++) {
+    await Future<void>.microtask(() {});
+  }
+  void release() => payload.bytes.length;
+  final remove = context.onDispose(release);
+  branch.drop(const Cancelled('by hand'));
+  gate.complete();
+  await parent.done;
+  return (remove, WeakReference(payload), WeakReference(branch));
+}
+
 /// An observer that holds a payload, the way one made for a screen holds
 /// what the screen needs.
 final class HoldingObserver extends JobObserver {
@@ -444,6 +512,34 @@ void main() {
       await collected(capture),
       isTrue,
       reason: 'the group took every value, and the discard will never run',
+    );
+    expect(await collected(branch), isTrue, reason: 'and the branch');
+    remove();
+  });
+
+  test(
+      'a kept remover lets go of the discard put aside and a branch ended by '
+      'hand while it unwinds', () async {
+    final (remove, capture, branch) =
+        await keepRemoverOfABranchEndedWhileItUnwinds();
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the second pass never runs, and the discard will never run',
+    );
+    expect(await collected(branch), isTrue, reason: 'and the branch');
+    remove();
+  });
+
+  test(
+      'a kept remover lets go of a cleanup and a branch ended by hand at the '
+      'second barrier', () async {
+    final (remove, capture, branch) =
+        await keepRemoverOfABranchEndedAtTheBarrier();
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the stack is never read again, and the cleanup will never run',
     );
     expect(await collected(branch), isTrue, reason: 'and the branch');
     remove();
