@@ -147,18 +147,12 @@ final class SoloSubscriptions {
   /// Cancels every subscription in the group and empties it; calling it
   /// again does nothing.
   ///
-  /// One that cannot let go is no reason to walk away from the ones behind
-  /// it, which are still listening — that is the leak this class exists to
-  /// prevent. So every member is cancelled and every failure goes to
-  /// [FlutterError.reportError], or to the zone when the reporter throws.
-  ///
-  /// This never throws, whatever a member does. The place for the call is
-  /// `State.dispose()`, and an exception out of `dispose()` stops the
-  /// framework unmounting the rest of that frame: the elements queued
-  /// behind this one lose their `dispose()` altogether, and their
-  /// listeners stay registered — the leak again, one widget further along.
-  /// There is nobody to catch a throw from here, and a frame is what it
-  /// costs.
+  /// A member that throws does not stop the walk: every member is
+  /// cancelled, and each failure goes to [FlutterError.reportError], or to
+  /// the zone when the reporter throws. This itself never throws. The place
+  /// for the call is `State.dispose()`, and an exception out of `dispose()`
+  /// would keep the framework from disposing of the widgets queued behind
+  /// this one, whose listeners would then stay registered.
   void cancel() {
     if (_cancelled) {
       return;

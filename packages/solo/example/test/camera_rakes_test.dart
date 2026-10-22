@@ -882,7 +882,7 @@ void main() {
     });
 
     test('the handlers land a failure in Broken', () {
-      final answer = _part(_failing, '### The handlers of run');
+      final answer = _part(_failing, '### The handlers of enqueue');
       _says(
         answer,
         'A failure and a cancellation both land in `Broken`, and `reopen` '
@@ -913,7 +913,7 @@ void main() {
     });
 
     test('the handlers land a cancelled opening in Broken', () {
-      final answer = _part(_failing, '### The handlers of run');
+      final answer = _part(_failing, '### The handlers of enqueue');
       _says(
         answer,
         'The handlers compute the state after the body is over, so a '
@@ -944,7 +944,7 @@ void main() {
 
     test('a job dropped before its start reaches neither handler', () {
       _says(
-        _part(_failing, '### The handlers of run'),
+        _part(_failing, '### The handlers of enqueue'),
         'A job dropped before its start reaches neither handler, so the '
         'second `init()` of the section above still ends in its one '
         '`dropped` line.',
@@ -969,7 +969,7 @@ void main() {
 
     test('reopen has the same two handlers', () {
       _says(
-        _part(_failing, '### The handlers of run'),
+        _part(_failing, '### The handlers of enqueue'),
         '`reopen` has the same two handlers.',
       );
       camera(CameraController.new, (camera, hw, journal, async) {
@@ -1008,10 +1008,10 @@ void main() {
       _says(
         attempt,
         'This is the body of `init` under '
-        '[The handlers of run](#the-handlers-of-run), and the hardware '
+        '[The handlers of enqueue](#the-handlers-of-enqueue), and the hardware '
         'reports a failure while `hw.open` runs:',
       );
-      final handlers = code(_part(_failing, '### The handlers of run'));
+      final handlers = code(_part(_failing, '### The handlers of enqueue'));
 
       expect(handlers, contains(code(attempt)));
       expect(code(attempt), startsWith('(ctx) async {'));
@@ -1147,7 +1147,7 @@ void main() {
           reason: 'failing: $failing',
         );
       }
-      // Under the handlers of run each of the two writes over the report.
+      // Under the handlers of enqueue each of the two writes over the report.
       expect(
         after(HandledInit.new, failing: false),
         'Broken(Cancelled(manual))',
@@ -2755,7 +2755,7 @@ void main() {
         _first: attempts,
         _second: attempts,
         '### A working type wide enough': page,
-        '### The handlers of run': page,
+        '### The handlers of enqueue': page,
         '### keepWhile': 'the example',
         '### Policy.replace': 'the example',
         _shot: 'the example',

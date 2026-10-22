@@ -962,8 +962,9 @@ void main() {
       await bench.close();
       _says('One built inside `build` is a new object on every build. The '
           'builder under it then unsubscribes from the old one and '
-          'subscribes to the new, and the value a selection holds '
-          'notifications back with starts over each time.');
+          'subscribes to the new, and each new selection starts from a pick '
+          'of its own, so the pick a change is compared against starts over '
+          'on every build.');
     });
 
     test('the source is subscribed to only while somebody listens', () async {

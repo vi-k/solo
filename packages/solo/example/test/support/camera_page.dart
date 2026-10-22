@@ -103,7 +103,7 @@ final class WideInit extends Solo<CameraState> with CameraParts {
       );
 }
 
-/// "The handlers of run": the opening before its `keepWhile`.
+/// "The handlers of enqueue": the opening before its `keepWhile`.
 final class HandledInit extends Solo<CameraState> with CameraParts {
   @override
   final FakeCameraHardware hw;

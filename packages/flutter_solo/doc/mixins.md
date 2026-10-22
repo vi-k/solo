@@ -15,14 +15,9 @@ around the mixin:
   `stream`.
 - [A screen built on the stream](#a-screen-built-on-the-stream): a badge over
   `stream` that must show the state from its first frame.
-- [A base class without Flutter](#a-base-class-without-flutter): such a base
-  cannot mix `SoloListenable` in, so the base keeps its report of a listener's
-  failure in `reportListenerError`, a method no mixin overrides. Between the
-  base and the app's controllers, the leaves, the app puts a class of its own,
-  `ListenableController`. It mixes `SoloListenable` in and overrides
-  `onListenerError` to call that method, and a leaf extends it without mixing
-  `SoloListenable` in again. Where a mixin sits decides whose `onListenerError`
-  runs.
+- [A base class without Flutter](#a-base-class-without-flutter): a base the
+  app's controllers share, in a package with no Flutter in it, keeps its report
+  of a listener's failure when the controllers mix `SoloListenable` in.
 
 The lines under a block of code are what a run of it shows: the text on the
 screen after each step, or where a listener's failure was reported.

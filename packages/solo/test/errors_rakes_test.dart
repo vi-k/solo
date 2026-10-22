@@ -183,6 +183,49 @@ final class _Traced extends Solo<int> with OpenSolo<int>, Desk<int> {
       ctx.each(const Stream<int>.empty(), (child, event) {});
 }
 
+/// A controller that notes the zone its hook hears each error in.
+final class _Zoned extends Solo<int> {
+  final List<String> trace;
+
+  _Zoned(this.trace) : super(0);
+
+  SoloJob<void> make(
+    Future<void> Function(SoloContext<int, int> ctx) body, {
+    bool Function(int state)? canStart,
+  }) =>
+      job<int, void>(body, canStart: canStart);
+
+  SoloJob<void> submit(SoloJob<void> job) => enqueueJob(job);
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      trace.add('controller in ${Zone.current[#zone]}: ${text(error)}');
+}
+
+/// Notes the zone it hears each error in, as [_Zoned] does.
+final class _ZonedObserver extends SoloObserver {
+  final List<String> trace;
+
+  _ZonedObserver(this.trace);
+
+  @override
+  void onError(
+    Solo<Object?> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) =>
+      trace.add('observer in ${Zone.current[#zone]}: ${text(error)}');
+}
+
+/// Runs [body] in a zone named [name] that notes what reaches it uncaught.
+void _inZone(String name, List<String> trace, void Function() body) =>
+    runZonedGuarded<void>(
+      body,
+      (error, stackTrace) => trace.add('zone $name: ${text(error)}'),
+      zoneValues: {#zone: name},
+    );
+
 String _page() => errorsPage.source;
 
 void _says(String phrase) => errorsPage.says(phrase);
@@ -434,8 +477,8 @@ void main() {
           'anywhere',
         );
         _says(
-          '| Report | `onError` of the controller and `onError` of a '
-          '`SoloObserver` hear it | It does not end there: the hooks hear it '
+          '| Report | `onError` of a `SoloObserver`, then `onError` of the '
+          'controller, hear it | It does not end there: the hooks hear it '
           'and return, and the error goes on along the answer route |',
         );
         final handled = <String>[];
@@ -1729,9 +1772,8 @@ void main() {
 
     test('a hook of a job throws into the zone the job was created in', () {
       _says(
-        'For what happens in a job, that is the zone the job was created '
-        'in; for a change made by `externalSetState`, the zone of its '
-        'caller',
+        'The body of a root job, and the hooks it leads to, run in the zone '
+        'the job was created in',
       );
       final where = <String, List<String>>{};
       fakeAsync((async) {
@@ -1755,6 +1797,109 @@ void main() {
         'the job started': isEmpty,
         'the job ended': isEmpty,
       });
+    });
+  });
+
+  group('the zone a hook hears an error in:', () {
+    tearDown(() => Solo.observer = null);
+
+    test('an onCancel callback runs in the zone of the cancelling call', () {
+      _says(
+        'A `ctx.onCancel` callback runs in the zone of the call that cancels '
+        'the job',
+      );
+      _says(
+        'an error nobody answers for goes to the creation zone, wherever the '
+        'hooks heard it',
+      );
+      final trace = <String>[];
+      fakeAsync((async) {
+        final controller = _Zoned(trace);
+        Solo.observer = _ZonedObserver(trace);
+        late final Job<void> job;
+        _inZone('created', trace, () {
+          job = controller.submit(
+            controller.make((ctx) async {
+              ctx.onCancel(() => throw StateError('callback'));
+              await ctx.pause(const Duration(seconds: 1));
+            }),
+          );
+        });
+        async.flushMicrotasks();
+        _inZone('cancelling', trace, () => unawaited(job.cancel()));
+        async.flushTimers();
+      });
+      expect(trace, [
+        'observer in cancelling: callback',
+        'controller in cancelling: callback',
+        'zone created: callback',
+      ]);
+    });
+
+    test('a child runs in the zone of the parent that runs it', () {
+      _says(
+        'the body of a child runs in the zone of the parent that runs it',
+      );
+      final trace = <String>[];
+      fakeAsync((async) {
+        final controller = _Zoned(trace);
+        late final SoloJob<void> child;
+        _inZone('child created', trace, () {
+          child = controller.make((ctx) async => throw StateError('child'));
+        });
+        _inZone('parent created', trace, () {
+          controller.submit(
+            controller.make((ctx) async {
+              try {
+                await ctx.run(child);
+              } on Object catch (_) {}
+            }),
+          );
+        });
+        async.flushMicrotasks();
+      });
+      expect(trace, ['controller in parent created: child']);
+    });
+
+    test('a start rule is asked from whatever moves the queue', () {
+      _says(
+        'A start rule is asked from whatever moves the queue: the call that '
+        'queues the job, or the job ahead of it as it ends',
+      );
+      for (final ahead in [false, true]) {
+        final trace = <String>[];
+        fakeAsync((async) {
+          final controller = _Zoned(trace);
+          final gate = Completer<void>();
+          if (ahead) {
+            _inZone('ahead', trace, () {
+              controller.submit(
+                controller.make((ctx) => ctx.join(() => gate.future)),
+              );
+            });
+            async.flushMicrotasks();
+          }
+          late final SoloJob<void> job;
+          _inZone('created', trace, () {
+            job = controller.make(
+              (ctx) async {},
+              canStart: (state) => throw StateError('rule'),
+            );
+          });
+          _inZone('queueing', trace, () => controller.submit(job));
+          async.flushMicrotasks();
+          _inZone('ending', trace, gate.complete);
+          async.flushMicrotasks();
+        });
+        expect(
+          trace,
+          [
+            'controller in ${ahead ? 'ahead' : 'queueing'}: rule',
+            'zone created: rule',
+          ],
+          reason: 'a job ahead: $ahead',
+        );
+      }
     });
   });
 

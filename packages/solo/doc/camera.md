@@ -178,7 +178,7 @@ it is still opening. Neither way of opening the camera starts from `Preparing`:
 [State after failure or cancellation](state.md#state-after-failure-or-cancellation)
 on the state page, with a device behind the spinner.
 
-### The handlers of run
+### The handlers of enqueue
 
 ```dart
 Job<void> init() => enqueue<NotDisposed, void>(
@@ -235,8 +235,9 @@ leave it there: the camera it was opening is broken.
 },
 ```
 
-This is the body of `init` under [The handlers of run](#the-handlers-of-run),
-and the hardware reports a failure while `hw.open` runs:
+This is the body of `init` under
+[The handlers of enqueue](#the-handlers-of-enqueue), and the hardware reports a
+failure while `hw.open` runs:
 
 ```text
 [init] started

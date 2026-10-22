@@ -655,11 +655,9 @@ void main() {
       _says('`ProfileController` here reports to `AppLog` and not through '
           '`FlutterError`');
       _says('in every leaf that extends it');
-      // The last item of the list at the top of the page names the same
-      // class.
-      _says("the base keeps its report of a listener's failure in "
-          '`reportListenerError`, a method no mixin overrides');
-      _says('a leaf extends it without mixing `SoloListenable` in again');
+      // The last item of the list at the top of the page names the task.
+      _says("keeps its report of a listener's failure when the controllers "
+          'mix `SoloListenable` in');
     });
 
     test('a base with Flutter in it keeps its own override', () async {

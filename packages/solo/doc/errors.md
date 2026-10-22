@@ -36,7 +36,7 @@ a third way, Dart's own:
 
 | Route | Who gets the error, in order | Where it ends |
 | --- | --- | --- |
-| Report | `onError` of the controller and `onError` of a `SoloObserver` hear it | It does not end there: the hooks hear it and return, and the error goes on along the answer route |
+| Report | `onError` of a `SoloObserver`, then `onError` of the controller, hear it | It does not end there: the hooks hear it and return, and the error goes on along the answer route |
 | Answer | Whoever observes the outcome, then `onUnanswered` of the controller | At whoever observes the outcome; otherwise at an override of `onUnanswered` or at `Solo.unansweredHandler`; with neither, in the creation zone |
 | Dart's | Whoever holds the future of `job.value` or `ctx.run(child)` | Where that future is handled; unhandled, in the zone, like any future error |
 
@@ -45,9 +45,17 @@ it. `onError` in it stands for both hooks: the two hear the same errors. An
 error that no outcome carries enters the answer route at `onUnanswered` and
 goes on from there as the Answer row above says. Taking `job.value` observes
 the outcome: when that future goes unhandled, its error takes Dart's route to
-the zone, once, and `onUnanswered` never gets it. The current zone is the zone
-the hook is called in. For what happens in a job, that is the zone the job was
-created in; for a change made by `externalSetState`, the zone of its caller.
+the zone, once, and `onUnanswered` never gets it.
+
+The current zone is the zone the hook is called in, the zone of the code that
+met the error. The body of a root job, and the hooks it leads to, run in the
+zone the job was created in, and the body of a child runs in the zone of the
+parent that runs it. A `ctx.onCancel` callback runs in the zone of the call
+that cancels the job. A start rule is asked from whatever moves the queue: the
+call that queues the job, or the job ahead of it as it ends. A change made by
+`externalSetState` runs in the zone of its caller. The answer route keeps to
+its own zone: an error nobody answers for goes to the creation zone, wherever
+the hooks heard it.
 
 | The error | Who hears it | Who answers for it |
 | --- | --- | --- |

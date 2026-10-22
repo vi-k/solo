@@ -319,8 +319,9 @@ class _SaveButtonState extends State<SaveButton> {
 
 Hold the selection in a field, the way `canSave` is held above. One built
 inside `build` is a new object on every build. The builder under it then
-unsubscribes from the old one and subscribes to the new, and the value a
-selection holds notifications back with starts over each time.
+unsubscribes from the old one and subscribes to the new, and each new selection
+starts from a pick of its own, so the pick a change is compared against starts
+over on every build.
 
 The initializer of the field runs once, though, and reads `widget.controller`
 as it is at that moment. The `State` outlives the widget: a parent that
