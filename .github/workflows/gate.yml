@@ -122,11 +122,13 @@ jobs:
           (cd packages/async_job && dart format --output=none --set-exit-if-changed lib test example)
           (cd packages/solo && dart format --output=none --set-exit-if-changed lib test example)
 
+      # `dart analyze` exits 0 on an info, and two of them once passed this
+      # step green. `flutter analyze` fails on one already.
       - name: Analyze
         run: |
           for package in packages/async_job packages/solo packages/solo/example; do
             echo "== $package"
-            (cd "$package" && dart analyze)
+            (cd "$package" && dart analyze --fatal-infos)
           done
 
       - name: Dartdoc
@@ -345,7 +347,7 @@ jobs:
         run: |
           for package in bloc_check solo_check accumulation_check; do
             echo "== $package"
-            (cd "$RUNNER_TEMP/doc-check/$package" && dart analyze bin/v)
+            (cd "$RUNNER_TEMP/doc-check/$package" && dart analyze --fatal-infos bin/v)
           done
 
       # Unsilenced on purpose. These are the traces the documents quote,
