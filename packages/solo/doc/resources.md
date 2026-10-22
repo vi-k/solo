@@ -1,13 +1,15 @@
 # Resources and cleanup
 
 A job that takes something, such as a database handle, a subscription, a lock
-or a temporary file, has to give it back. Cancellation arrives at awaits, not
-between statements. The context is where the release is registered, and the
-member you pick decides who releases the resource and when:
+or a temporary file, has to give it back. Cancellation arrives at awaits and
+from code a statement calls, never from the queue between two statements. The
+context is where the release is registered, and the member you pick decides who
+releases the resource and when:
 
 ```dart
 (ctx) async {
-  // Made here, on the spot: nothing arrives between the two lines.
+  // Made here, on the spot: the release is registered on the next line,
+  // even if `listen` has cancelled the job.
   final sub = device.events.listen(onEvent);
   ctx.onDispose(sub.cancel);
 
@@ -108,7 +110,10 @@ starts with the database already closed. Register each release once: adding
 
 A resource the body makes itself has no such gap, because there is no await
 between making it and registering its release. In the block at the top of this
-page, `ctx.onDispose(sub.cancel)` stands right under `listen`. That
+page, `ctx.onDispose(sub.cancel)` stands right under `listen`. Code that
+`listen` calls, such as the `onListen` of the source, may cancel the job before
+`listen` returns; `onDispose` still takes the registration on a job that is
+cancelled and still running, and the release runs with the rest. That
 registration returns a function you can keep as `removeDisposer` to unregister
 the callback without running it.
 

@@ -7,6 +7,17 @@ part of 'solo.dart';
 /// [stateAs] and [check] throw the job's [Cancelled] once its rules
 /// stopped holding, and so does [each], whose child would keep them. [emit]
 /// throws a [StateError] for a job that has already finished.
+///
+/// A child handed to [run], [start] or [runAll] is made by `job(...)` of the
+/// same controller. A `Job.deferred` of the core, or a job of another
+/// controller, passes the types and is refused with an [ArgumentError]:
+///
+/// ```dart
+/// final name = await ctx.run(job<Idle, String>((child) => api.fetchName()));
+/// ```
+///
+/// See [Children and chains](https://github.com/vi-k/solo/blob/main/packages/solo/doc/children.md)
+/// for the rules a child starts under.
 abstract interface class SoloContext<S extends Object, W extends S>
     implements JobContext {
   /// The current state.

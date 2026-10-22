@@ -19,6 +19,11 @@ part 'job.dart';
 part 'job_context.dart';
 part 'queue.dart';
 
+/// What a controller says of a job it did not make, the fix included: the
+/// types let a job of the core or of another controller through.
+const _notCreatedHere =
+    'was not created by this Solo (make it with job(...) of this controller)';
+
 /// The engine: state, queue, hooks and its own listeners ([addListener]).
 ///
 /// [publish] is the seam for a delivery of another kind; `SoloStream` adds a
@@ -1055,7 +1060,7 @@ abstract class Solo<S extends Object> {
     if (job is _SoloJob<S, S, T> && identical(job._solo, this)) {
       return job;
     }
-    throw ArgumentError.value('$job', 'job', 'was not created by this Solo');
+    throw ArgumentError.value('$job', 'job', _notCreatedHere);
   }
 
   void _setState(S next, {required _SoloJob<S, S, Object?>? emitter}) {

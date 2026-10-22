@@ -216,6 +216,10 @@ final class _Answering extends _Own with JobAnswerer {
       answered.add('$job: $error');
 }
 
+/// How a controller refuses a job it did not make, up to the job.
+const _refused = 'Invalid argument (job): was not created by this Solo '
+    '(make it with job(...) of this controller)';
+
 void main() {
   setUp(() {
     stage = Stage();
@@ -1448,7 +1452,7 @@ void main() {
 
           expect(errors, isEmpty);
           expect(_seen, [
-            'Invalid argument (job): was not created by this Solo: "Job()"',
+            '$_refused: "Job()"',
           ]);
           _says('Where those pages make a child with `Job.deferred`, a '
               'controller makes it with `job(...)`. Its `ctx.run` and '
@@ -1836,7 +1840,7 @@ final class Probe extends Solo<int> {
       expect(_seen, [
         'queued: Bad state: Job(save) is queued and cannot be run as a child',
         'of another controller',
-        'Invalid argument (job): was not created by this Solo: "Job(theirs)"',
+        '$_refused: "Job(theirs)"',
         'made by job(...) and not queued: ran',
       ]);
       _says("Inside a controller's body `ctx.run` takes jobs of that "

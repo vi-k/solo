@@ -101,7 +101,8 @@ void main() {
       async.flushTimers();
       expect(
         '$thrown',
-        'Invalid argument (job): was not created by this Solo: "Job(theirs)"',
+        'Invalid argument (job): was not created by this Solo (make it '
+            'with job(...) of this controller): "Job(theirs)"',
       );
       journal.take();
     });

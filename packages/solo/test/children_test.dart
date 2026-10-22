@@ -12,6 +12,10 @@ import 'support/foreign_job.dart';
 import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
+/// What a controller says of a job it did not make.
+const _notCreatedHere =
+    'was not created by this Solo (make it with job(...) of this controller)';
+
 void main() {
   test('children run inside the parent, nested by level', () {
     runSolo((solo, journal, async) {
@@ -619,8 +623,8 @@ void attempt(SoloJob<void> job) => job.start();
       }).ignoreFailure();
       async.flushTimers();
       expect(refusals, [
-        'was not created by this Solo',
-        'was not created by this Solo',
+        _notCreatedHere,
+        _notCreatedHere,
       ]);
     });
   });
