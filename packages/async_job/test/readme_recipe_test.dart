@@ -1321,13 +1321,12 @@ void main() {
 
     test('the notes say what the cells of check and each leave out', () {
       // The cells name the member; the line under the table says the rest.
+      const check = '`ctx.check()` is the checkpoint for a place where there '
+          'is no call to wrap.';
+      const each = '`ctx.each` hands the events of the stream to its callback '
+          'one at a time.';
       final said = {
-        'README.md': [
-          '`ctx.check()` is the checkpoint for a place where there is no call '
-              'to wrap.',
-          '`ctx.each` hands the events of the stream to its callback one at a '
-              'time.',
-        ],
+        'README.md': [check, each],
         'README.ru.md': [
           '`ctx.check()` — контрольная точка для места, где нечего обернуть.',
           '`ctx.each` отдаёт события стрима колбэку по одному.',
