@@ -294,6 +294,42 @@ Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
   return (remove!, WeakReference(payload), WeakReference(job));
 }
 
+/// A job ended by hand by its engine while the body still waits at [gate],
+/// with the remover of an `onDispose` that never ran kept outside.
+Future<(void Function(), WeakReference<Payload>, WeakReference<ProbeJob<int>>)>
+    keepRemoverOfAJobEndedByHand(Completer<void> gate) async {
+  final payload = Payload();
+  void Function()? remove;
+  final job = ProbeJob<int>((ctx) async {
+    void release() => payload.bytes.length;
+    remove = ctx.onDispose(release);
+    await gate.future;
+    return 1;
+  })
+    ..ignoreFailure()
+    ..launch();
+  await Future<void>.microtask(() {});
+  job.drop(const Done(1));
+  return (remove!, WeakReference(payload), WeakReference(job));
+}
+
+/// A branch whose `onDiscard` the group skipped, having taken every value,
+/// with the remover kept outside.
+Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
+    keepRemoverOfABranch() async {
+  final payload = Payload();
+  void Function()? remove;
+  final branch = Job.deferred<int>((ctx) async {
+    void release() => payload.bytes.length;
+    remove = ctx.onDiscard(release);
+    return 1;
+  });
+  await Job<List<int>>(
+    (ctx) => ctx.runAll([branch, Job.deferred<int>((ctx) async => 2)]),
+  ).done;
+  return (remove!, WeakReference(payload), WeakReference(branch));
+}
+
 /// An observer that holds a payload, the way one made for a screen holds
 /// what the screen needs.
 final class HoldingObserver extends JobObserver {
@@ -385,6 +421,33 @@ void main() {
       remove();
     });
   }
+
+  test('a kept remover lets go of the cleanup and a job ended by hand',
+      () async {
+    final gate = Completer<void>();
+    final (remove, capture, job) = await keepRemoverOfAJobEndedByHand(gate);
+    gate.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the engine ended the job, and the cleanup will never run',
+    );
+    expect(await collected(job), isTrue, reason: 'and the job');
+    remove();
+  });
+
+  test('a kept remover lets go of the cleanup a group skipped and the branch',
+      () async {
+    final (remove, capture, branch) = await keepRemoverOfABranch();
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the group took every value, and the discard will never run',
+    );
+    expect(await collected(branch), isTrue, reason: 'and the branch');
+    remove();
+  });
 
   test('a finished child lets go of its parent', () async {
     final (child, capture) = valueOfAParent();
