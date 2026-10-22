@@ -878,6 +878,28 @@ void main() {
           'holds it in a field:');
     });
 
+    test('the dartdoc of SoloSelection shows members of the State of the page',
+        () {
+      // The example an editor shows is the page's own, which the test above
+      // runs over a new controller: an example of its own once kept the
+      // selection in a `late final` field and followed the old controller.
+      final source = File('lib/src/solo_selection.dart').readAsStringSync();
+      final start = source.indexOf('/// ```dart\n') + '/// ```dart\n'.length;
+      final example = source
+          .substring(start, source.indexOf('/// ```\n', start))
+          .split('\n')
+          .map((line) => line.replaceFirst(RegExp('^/// ?'), ''))
+          .join('\n');
+      expect(example, startsWith('late SoloSelection'));
+      // Members of the page's `State`, as the class indents them.
+      final members = example
+          .split('\n')
+          .map((line) => line.isEmpty ? line : '  $line')
+          .join('\n');
+      expect(_page(), contains('class _SaveButtonState'));
+      expect(_page(), contains(members));
+    });
+
     test('a State follows a new controller by identity, not by ==', () {
       final readme = File('README.md').readAsStringSync();
       expect(

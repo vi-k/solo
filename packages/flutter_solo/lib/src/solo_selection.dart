@@ -19,23 +19,23 @@ import 'solo_selector.dart';
 /// same as an error of a listener.
 ///
 /// ```dart
-/// class _ProfileState extends State<Profile> {
-///   late final canSave =
-///       SoloSelection(widget.controller, (state) => state.canSave);
+/// late SoloSelection<Profile, bool> canSave = _select();
 ///
-///   @override
-///   Widget build(BuildContext context) => ValueListenableBuilder(
-///         valueListenable: canSave,
-///         builder: (context, canSave, _) => ElevatedButton(
-///           onPressed: canSave ? _save : null,
-///           child: const Text('Save'),
-///         ),
-///       );
+/// SoloSelection<Profile, bool> _select() =>
+///     SoloSelection(widget.controller, (state) => state.canSave);
+///
+/// @override
+/// void didUpdateWidget(SaveButton oldWidget) {
+///   super.didUpdateWidget(oldWidget);
+///   if (!identical(widget.controller, oldWidget.controller)) {
+///     canSave = _select();
+///   }
 /// }
 /// ```
 ///
-/// Hold the selection in a field rather than build one in `build`, or take
-/// [SoloSelector], which holds the pick itself; see [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value)
+/// Members of a `State`: the selection is held in a field rather than built in
+/// `build`, and made again when the controller changes, since the initializer
+/// runs once. Or take [SoloSelector], which does both itself; see [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value)
 /// in the package README.
 final class SoloSelection<S, T> implements ValueListenable<T> {
   final ValueListenable<S> _source;
