@@ -49,7 +49,7 @@ point, it must leave no database open.
 
 ```dart
 // The first attempt: a cancellation fits between open and onDispose.
-Job<void> load() => run<Idle, void>(
+Job<void> load() => enqueue<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(Database.open);
@@ -78,7 +78,7 @@ Cancel this job while `Database.open` is in flight. This is what happens:
 ### The release travels with the call
 
 ```dart
-Job<void> load() => run<Idle, void>(
+Job<void> load() => enqueue<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(
@@ -141,7 +141,7 @@ from then on.
 
 ```dart
 // The first attempt: success closes the database it hands out.
-Job<Database> open() => run<Idle, Database>(
+Job<Database> open() => enqueue<Idle, Database>(
       key: 'open',
       (ctx) async {
         final db = await ctx.join(
@@ -171,7 +171,7 @@ database, and only a test that uses the result afterwards sees it.
 ### Discard, for a value that leaves
 
 ```dart
-Job<Database> open() => run<Idle, Database>(
+Job<Database> open() => enqueue<Idle, Database>(
       key: 'open',
       (ctx) async {
         final db = await ctx.join(
@@ -368,7 +368,7 @@ on the cleanup page of `async_job` describes that order and keeps it. A
 controller adds the last row:
 
 1. The outcome is fixed first.
-2. Then the state handler passed to `run` computes the state a failed or
+2. Then the state handler passed to `enqueue` computes the state a failed or
    cancelled job leaves behind, as
    [State after failure or cancellation](state.md#state-after-failure-or-cancellation)
    on the state page describes.

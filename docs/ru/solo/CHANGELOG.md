@@ -16,6 +16,8 @@
 | `controller.state` | `controller.currentState` |
 | `onError:` у `run` и `job` | `ifFailed:` |
 | `onCancel:` у `run` и `job` | `ifCancelled:` |
+| `run(body)` | `enqueue(body)` |
+| `add(job)` | `enqueueJob(job)` |
 | `onChange(previous, current)` | `onChange(transition)` |
 | `SoloObserver.onChange(solo, previous, current)` | `SoloObserver.onChange(solo, transition)` |
 | `SoloQueue.lastWhere` | `Solo.lastJobWhere` |
@@ -37,21 +39,25 @@
 - **`JobBase.debug` теперь называется `Job.debug`** в `async_job`, чья главная
   библиотека больше не экспортирует `JobBase`.
 - **Задача продолжается один раз, одним `then` или ручками `shared()`,**
-  в `async_job`: второй `then` на задаче из `run` бросает `StateError`. Задача,
-  которую `Policy.droppable` может отдать другому вызывающему, и задача группы
-  накопителя отказывают простому `then` с первого вызова: каждый вызывающий
-  продолжает её через ручку `shared()`. См.
+  в `async_job`: второй `then` на задаче из `enqueue` бросает `StateError`.
+  Задача, которую `Policy.droppable` может отдать другому вызывающему, и задача
+  группы накопителя отказывают простому `then` с первого вызова: каждый
+  вызывающий продолжает её через ручку `shared()`. См.
   [«Очередь и политики»](jobs.md#очередь-и-политики)
   и [«Запуск, отмена и ошибки»](accumulation.md#запуск-отмена-и-ошибки).
-- **Обработчики состояния у `run` и `job` переименованы: `onError`
+- **Обработчики состояния у `enqueue` и `job` переименованы: `onError`
   в `ifFailed`, `onCancel` в `ifCancelled`.**
 - **`SoloBase` переименован в `Solo`, а прежний `Solo`, класс, который нёс
   broadcast-стрим, стал миксином `SoloStream`.** Контроллер, у которого читают
   `.stream`, добавляет `with SoloStream`. См.
   [«Наблюдение за состоянием»](state.md#наблюдение-за-состоянием).
-- **`job`, `add`, `run`, `collect` и `accumulate` помечены `@protected`.**
-  Дайте контроллеру метод на каждую операцию, которую вызывают снаружи. См.
-  [«Создание и запуск задач»](jobs.md#создание-и-запуск-задач).
+- **`Solo.run` переименован в `enqueue`, а `Solo.add` — в `enqueueJob`.** `run`
+  контроллера ставил задачу в хвост очереди, а `ctx.run` запускает ребёнка
+  сразу, мимо очереди; `add` делил имя с `add` накопителя, который принимает
+  событие. См. [«Создание и запуск задач»](jobs.md#создание-и-запуск-задач).
+- **`job`, `enqueueJob`, `enqueue`, `collect` и `accumulate` помечены
+  `@protected`.** Дайте контроллеру метод на каждую операцию, которую вызывают
+  снаружи. См. [«Создание и запуск задач»](jobs.md#создание-и-запуск-задач).
 - **`SoloStream.publish` помечен `@protected`.**
 - **Хуки `onStart`, `onFinish`, `onError`, `onUnanswered`, `onLog`, `onChange`
   и `onClose` помечены `@protected`.**
@@ -101,8 +107,8 @@
   и смотрит ещё и на идущую.
 - **`cancelAll` и `SoloQueue.remove`, `removeWhere` и `clear` принимают
   `reason`.**
-- **`job`, `run`, `collect` и `accumulate` принимают `timeout`.**
-  Переопределение передаёт его дальше в `super`, иначе `run(timeout: ...)`
+- **`job`, `enqueue`, `collect` и `accumulate` принимают `timeout`.**
+  Переопределение передаёт его дальше в `super`, иначе `enqueue(timeout: ...)`
   молча остаётся без срока.
 - **`collect` и `accumulate` принимают `ifFailed` и `ifCancelled`.**
   Переопределение передаёт их дальше в `super`, иначе группы его накопителей
@@ -180,7 +186,7 @@ future падала, а само тело работало под другим `
   бросивший `canStart` бросает из `start`. Провал ребёнка уходит
   в `onUnanswered`.
 - **`timeout` даёт задаче контроллера собственный срок.** Его принимают `job`,
-  `run`, `collect` и `accumulate`; когда срок выходит, задача заканчивается
+  `enqueue`, `collect` и `accumulate`; когда срок выходит, задача заканчивается
   `Cancelled(timeout)` с новой причиной `TimeoutCancelReason` из `async_job`.
   См. [«Срок задачи»](cancellation.md#срок-задачи).
 - **`collect` и `accumulate` принимают обработчики состояния `job`, `ifFailed`
@@ -264,7 +270,7 @@ future падала, а само тело работало под другим `
   ушёл в `flutter_solo`.
 - Две страницы для справки: [«Справочник»](reference.md), где у каждого члена
   `Solo`, его контекста, задач, очереди и накопителей и у каждого параметра
-  `run`, `job`, `collect` и `accumulate` указан раздел с его объяснением,
+  `enqueue`, `job`, `collect` и `accumulate` указан раздел с его объяснением,
   и [«Частые ошибки»](mistakes.md), семь ошибок и правильный способ для каждой.
 - Одна рекомендация `0.2.0` заменена: источник внешних состояний останавливают
   в `onClose`, а не до `close`, а колбэк, который может прийти и после этого,

@@ -22,7 +22,7 @@ final class Camera extends Solo<CameraState> {
     _link = device.connection.listen((connected) {
       if (!connected) {
         // The fact goes in like any other work, ahead of everything waiting.
-        add(
+        enqueueJob(
           job<Ready, void>(
             key: 'disconnect',
             (ctx) async => ctx.emit(const Disconnected()),
@@ -33,7 +33,7 @@ final class Camera extends Solo<CameraState> {
     });
   }
 
-  Job<void> record() => run<CameraState, void>(
+  Job<void> record() => enqueue<CameraState, void>(
         key: 'record',
         (ctx) async {
           final state = ctx.state;
@@ -50,7 +50,7 @@ final class Camera extends Solo<CameraState> {
 
   /// Not on the page: a job whose rule requires the connection, waiting for
   /// an answer the device gives only when the test says so.
-  Job<void> waitForAnswer() => run<CameraState, void>(
+  Job<void> waitForAnswer() => enqueue<CameraState, void>(
         key: 'answer',
         keepWhile: (state) {
           ruleAsked++;
@@ -60,7 +60,7 @@ final class Camera extends Solo<CameraState> {
       );
 
   /// Not on the page: work that waits its turn.
-  Job<void> later() => run<CameraState, void>(key: 'later', (ctx) async {});
+  Job<void> later() => enqueue<CameraState, void>(key: 'later', (ctx) async {});
 
   /// Not on the page: the keys of what waits in the queue, in order.
   List<Object?> get queued => [for (final job in queue.jobs) job.key];
@@ -78,7 +78,7 @@ final class ProfileController extends Solo<ProfileState> {
   void reflect(ProfileState state) => externalSetState(state);
 
   /// The first attempt of "State after failure or cancellation".
-  Job<String> loadWithCatch() => run<ProfileState, String>(
+  Job<String> loadWithCatch() => enqueue<ProfileState, String>(
         (ctx) async {
           ctx.emit(const Loading());
           try {
@@ -93,7 +93,7 @@ final class ProfileController extends Solo<ProfileState> {
       );
 
   /// The first attempt of "Preserving an incompatible external state".
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),

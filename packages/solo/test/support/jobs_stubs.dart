@@ -135,8 +135,8 @@ mixin Workbench on Solo<CameraState> {
     }
 
     return inReady
-        ? run<Ready, void>(key: name, body)
-        : run<CameraState, void>(key: name, body);
+        ? enqueue<Ready, void>(key: name, body)
+        : enqueue<CameraState, void>(key: name, body);
   }
 
   /// The keys of what waits in the queue, in order.

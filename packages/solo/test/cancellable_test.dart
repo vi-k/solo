@@ -10,7 +10,7 @@ import 'support/test_state.dart';
 void main() {
   test('an uncancellable step holds the cancel until the step ends', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'pay', (ctx) async {
         await ctx.uncancellable(() => delay(100));
         // The first checkpoint after the step: the held cancellation is
         // thrown here, and the state is never written.
@@ -35,8 +35,8 @@ void main() {
   test('await cancel() of a queued uncancellable job waits for its whole run',
       () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'first', (ctx) => delay(100));
-      final job = solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(key: 'first', (ctx) => delay(100));
+      final job = solo.enqueue<TestState, void>(
         key: 'pay',
         cancellable: false,
         (ctx) => delay(100),
@@ -60,7 +60,7 @@ void main() {
 
   test('cancel works again once the step is over', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'pay', (ctx) async {
         await ctx.uncancellable(() => delay(50));
         await delay(50);
         ctx.emit(const Working());
@@ -78,7 +78,7 @@ void main() {
 
   test('close waits for an uncancellable step and lands after it', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'pay', (ctx) async {
         await ctx.uncancellable(() => delay(100));
         ctx.emit(const Working());
       });
@@ -101,7 +101,7 @@ void main() {
 
   test('the answer in force before the step is restored, not assumed', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'pay',
         cancellable: false,
         (ctx) async {
@@ -121,7 +121,7 @@ void main() {
 
   test('the answer comes back even if the step throws', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'pay', (ctx) async {
         try {
           await ctx.uncancellable(() async {
             await delay(50);
@@ -142,7 +142,7 @@ void main() {
 
   test('rules cancel a job inside an uncancellable step anyway', () {
     runSolo((solo, journal, async) {
-      solo.run<NotDisposed, void>(key: 'pay', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'pay', (ctx) async {
         await ctx.uncancellable(() => delay(100));
         ctx.check();
       });
@@ -160,7 +160,7 @@ void main() {
   test('an already cancelled job does not begin the step', () {
     runSolo((solo, journal, async) {
       var began = false;
-      final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'pay', (ctx) async {
         await delay(100);
         await ctx.uncancellable(() async => began = true);
       });
@@ -174,8 +174,8 @@ void main() {
 
   test('cancel of a queued job that is not cancellable is refused', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'first', (ctx) => pause(ctx, 100));
-      final queued = solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(key: 'first', (ctx) => pause(ctx, 100));
+      final queued = solo.enqueue<TestState, void>(
         key: 'second',
         cancellable: false,
         (ctx) async {},

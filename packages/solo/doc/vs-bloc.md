@@ -29,7 +29,7 @@ version uses:
 | [Typed methods with queued execution](#typed-methods-with-queued-execution) | `Cubit` methods that return futures | Methods that return a `Job`, with `Policy.restart` |
 | [Removing selected pending work](#removing-selected-pending-work) | A leaving flag that the handler checks | `queue.removeWhere`, and `cancellable: false` on what has to run |
 | [Awaiting a particular request](#awaiting-a-particular-request) | A completer on the event, and `droppable()` on the payment | A key per order with `Policy.droppable`, and the job the caller awaits |
-| [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change) | One registration for the build and the revocation | `externalSetState`, and `run<SignedIn, void>` on the build |
+| [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change) | One registration for the build and the revocation | `externalSetState`, and `enqueue<SignedIn, void>` on the build |
 | [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting) | `restartable()` on the upload loop | `Policy.restart`, with `ctx.join` around each write |
 | [Releasing a resource returned after cancellation](#releasing-a-resource-returned-after-cancellation) | A check of `emit.isDone` before the result is used | `dispose` on `ctx.abandonable` |
 
@@ -256,7 +256,7 @@ final class NotesController extends Solo<NotesState> {
 
   NotesController(this._api) : super(const NotesState());
 
-  Job<void> upload(Note note) => run<NotesState, void>(
+  Job<void> upload(Note note) => enqueue<NotesState, void>(
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
@@ -270,7 +270,7 @@ final class NotesController extends Solo<NotesState> {
         },
       );
 
-  Job<void> refresh() => run<NotesState, void>(
+  Job<void> refresh() => enqueue<NotesState, void>(
         key: 'refresh',
         (ctx) async {
           final serverNotes = await ctx.abandonable(_api.list);
@@ -440,7 +440,7 @@ final class RecorderController extends Solo<RecorderState> {
 
   RecorderController(this._recorder, this._journal) : super(const Idle());
 
-  Job<void> start() => run<RecorderState, void>(
+  Job<void> start() => enqueue<RecorderState, void>(
         key: 'start',
         (ctx) async {
           await ctx.join(_recorder.start);
@@ -590,7 +590,7 @@ final class ChatController extends Solo<ChatState> {
 
   ChatController(this._api) : super(const ChatState());
 
-  Job<void> send(String text) => run<ChatState, void>(
+  Job<void> send(String text) => enqueue<ChatState, void>(
         key: 'send',
         (ctx) async {
           final reply = await ctx.abandonable(() => _api.send(text));
@@ -600,7 +600,7 @@ final class ChatController extends Solo<ChatState> {
       );
 
   Job<void> markReplyRead() =>
-      run<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
+      enqueue<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
 }
 
 Future<void> onScreenClosed(ChatController chat) async {
@@ -611,8 +611,8 @@ Future<void> onScreenClosed(ChatController chat) async {
 
 In this body, `ctx.abandonable` throws `Cancelled` when closing cancels the
 job. The reply update and `markReplyRead()` call are not reached. That method
-would submit a separate root job through the controller's `run`; it is not a
-child of `send`.
+would submit a separate root job through the controller's `enqueue`; it is not
+a child of `send`.
 
 With a plain await instead, closing would wait for the API response. The
 `ctx.emit` after it would still throw `Cancelled`, so the reply would not be
@@ -706,7 +706,7 @@ final class RefreshController extends Solo<RefreshState> {
 
   RefreshController(this._api) : super(const Initial());
 
-  Job<void> refresh() => run<RefreshState, void>(
+  Job<void> refresh() => enqueue<RefreshState, void>(
         key: 'refresh',
         policy: Policy.restart,
         ifFailed: (state, error, stackTrace) => const Initial(),
@@ -915,7 +915,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
 
   PlayerController(this._player) : super(Ready());
 
-  Job<void> play() => run<Ready, void>(
+  Job<void> play() => enqueue<Ready, void>(
         key: PlayerKey.play,
         (ctx) async {
           await ctx.join(_player.play);
@@ -923,7 +923,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
         },
       );
 
-  Job<void> pause() => run<Ready, void>(
+  Job<void> pause() => enqueue<Ready, void>(
         key: PlayerKey.pause,
         (ctx) async {
           await ctx.join(_player.pause);
@@ -931,7 +931,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
         },
       );
 
-  Job<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => enqueue<Ready, void>(
         key: PlayerKey.seek,
         policy: Policy.restart,
         (ctx) async {
@@ -1060,7 +1060,7 @@ final class MapController extends Solo<MapState> {
 
   MapController(this._map) : super(const MapState());
 
-  Job<void> moveTo(Point<double> point) => run<MapState, void>(
+  Job<void> moveTo(Point<double> point) => enqueue<MapState, void>(
         key: MapKey.moveTo,
         policy: Policy.restart,
         (ctx) async {
@@ -1071,7 +1071,7 @@ final class MapController extends Solo<MapState> {
         },
       );
 
-  Job<void> setZoom(double value) => run<MapState, void>(
+  Job<void> setZoom(double value) => enqueue<MapState, void>(
         key: MapKey.setZoom,
         policy: Policy.restart,
         (ctx) async {
@@ -1225,7 +1225,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   DeviceController(this._ble) : super(const Offline());
 
-  Job<void> connect() => run<Offline, void>(
+  Job<void> connect() => enqueue<Offline, void>(
         key: DeviceKey.connect,
         cancellable: false,
         (ctx) async {
@@ -1234,7 +1234,7 @@ final class DeviceController extends Solo<DeviceState> {
         },
       );
 
-  Job<void> readBattery() => run<Connected, void>(
+  Job<void> readBattery() => enqueue<Connected, void>(
         key: DeviceKey.readBattery,
         (ctx) async {
           final battery = await ctx.join(_ble.battery);
@@ -1242,7 +1242,7 @@ final class DeviceController extends Solo<DeviceState> {
         },
       );
 
-  Job<void> rename(String name) => run<Connected, void>(
+  Job<void> rename(String name) => enqueue<Connected, void>(
         key: DeviceKey.rename,
         cancellable: false,
         (ctx) => ctx.join(() => _ble.rename(name)),
@@ -1250,7 +1250,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   Job<void> disconnect() {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
-    return run<Connected, void>(
+    return enqueue<Connected, void>(
       key: DeviceKey.disconnect,
       cancellable: false,
       (ctx) async {
@@ -1302,9 +1302,9 @@ bloc reports the error to `onError` and rethrows it, and since nothing awaits
 that handler it lands in the zone as an unhandled
 `Bad state: battery: not connected`.
 
-Here `run<Connected, void>` is checked when the job starts, so the same read
-ends as `Cancelled(rules: is not Connected)` and the call is never made. In
-bloc the same guard is written by hand: one more `if` in the `switch`, for
+Here `enqueue<Connected, void>` is checked when the job starts, so the same
+read ends as `Cancelled(rules: is not Connected)` and the call is never made.
+In bloc the same guard is written by hand: one more `if` in the `switch`, for
 every command that needs it.
 
 **What solo gives:** `queue.removeWhere` takes the pending read out at the call
@@ -1492,7 +1492,7 @@ final class CheckoutController extends Solo<CheckoutState> {
 
   CheckoutController(this._api) : super(const Idle());
 
-  Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
+  Job<Receipt> pay(Order order) => enqueue<CheckoutState, Receipt>(
         key: ('pay', order.id),
         policy: Policy.droppable,
         cancellable: false,
@@ -1546,8 +1546,8 @@ closing controller.
 
 The body publishes `Paid` before completing with the receipt, and `close()`
 waits for that completion. API failures still produce `Failed`; a failure state
-can be supplied with `run(ifFailed: ...)`. No waiting method could retract a
-charge anyway: this API provides no cancellation mechanism.
+can be supplied with `enqueue(ifFailed: ...)`. No waiting method could retract
+a charge anyway: this API provides no cancellation mechanism.
 
 The flag also refuses manual cancellation while the payment is queued. A
 payment the user may still withdraw before charging starts is taken out of the
@@ -1676,7 +1676,7 @@ final class ReportController extends Solo<ReportState> with SoloStream {
     _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
-  Job<void> build(Range range) => run<SignedIn, void>(
+  Job<void> build(Range range) => enqueue<SignedIn, void>(
         key: 'report',
         (ctx) async {
           final report = await ctx.join(() => _reports.build(range));
@@ -1694,8 +1694,8 @@ final class ReportController extends Solo<ReportState> with SoloStream {
 Published by an ordinary job, `SignedOut` would queue behind the build and wait
 for the very work it makes worthless. `externalSetState` updates state
 immediately and checks running bodies against their rules. Here,
-`run<SignedIn, void>` permits the build only while state is `SignedIn`, so the
-revocation cancels it with `Cancelled(rules: is not SignedIn)`.
+`enqueue<SignedIn, void>` permits the build only while state is `SignedIn`, so
+the revocation cancels it with `Cancelled(rules: is not SignedIn)`.
 
 `externalSetState` is for a fact that has already happened: the session is
 gone, and no job waiting in line can change that. A request to do something —
@@ -1725,8 +1725,8 @@ an incompatible external update, so they do not overwrite `SignedOut` during
 cleanup.
 
 **What solo gives:** `externalSetState` publishes `SignedOut` at once instead
-of queueing it behind the build, and the rule of `run<SignedIn, void>` cancels
-the build with `Cancelled(rules: is not SignedIn)`.
+of queueing it behind the build, and the rule of `enqueue<SignedIn, void>`
+cancels the build with `Cancelled(rules: is not SignedIn)`.
 
 ## Finishing an in-flight write before restarting
 
@@ -1855,7 +1855,7 @@ final class FirmwareController extends Solo<FirmwareState> {
 
   FirmwareController(this._ble) : super(const Idle());
 
-  Job<void> flash(List<Chunk> chunks) => run<NotBroken, void>(
+  Job<void> flash(List<Chunk> chunks) => enqueue<NotBroken, void>(
         key: 'flash',
         policy: Policy.restart,
         (ctx) async {
@@ -1973,7 +1973,7 @@ final class PreviewController extends Solo<PreviewState> {
 
   PreviewController(this._decoder) : super(const NoPreview());
 
-  Job<void> open(Clip clip) => run<PreviewState, void>(
+  Job<void> open(Clip clip) => enqueue<PreviewState, void>(
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {

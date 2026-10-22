@@ -486,7 +486,7 @@ final class Transport extends Solo<Playback> {
 
 ''' + snips['recipes/resume'].rstrip('\n') + '''
 
-  SoloJob<void> pause() => run<Playback, void>(
+  SoloJob<void> pause() => enqueue<Playback, void>(
         key: Command.pause,
         (ctx) async {
           await ctx.join(device.pause);
@@ -500,7 +500,7 @@ final class Transport extends Solo<Playback> {
   /// document's.
   bool rang = false;
 
-  SoloJob<void> chime() => run<Playback, void>(
+  SoloJob<void> chime() => enqueue<Playback, void>(
         key: 'chime',
         (ctx) async {
           rang = true;
@@ -513,7 +513,7 @@ final class Transport extends Solo<Playback> {
 '''
 
 # Two ordinary jobs of other kinds for the driver to put between two commands.
-# `run` is protected, so they are operations of a controller: a subclass of
+# `enqueue` is protected, so they are operations of a controller: a subclass of
 # the document's `Player`, allowed because the bench is one library.
 BUSY_PLAYER = '''
 /// [Player] with two ordinary jobs of other kinds, for the driver to put
@@ -525,7 +525,7 @@ final class BusyPlayer extends Player {
 
   /// Holds the queue for 50 ms, long enough for what follows to be queued
   /// together.
-  SoloJob<void> busy() => run<Playback, void>(
+  SoloJob<void> busy() => enqueue<Playback, void>(
         key: 'busy',
         (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
@@ -533,7 +533,7 @@ final class BusyPlayer extends Player {
       );
 
   /// Marks its place in what the device heard.
-  SoloJob<void> chime() => run<Playback, void>(
+  SoloJob<void> chime() => enqueue<Playback, void>(
         key: 'chime',
         (ctx) async => recorder.note('chime'),
       );

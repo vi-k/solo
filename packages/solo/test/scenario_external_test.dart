@@ -223,7 +223,7 @@ void main() {
 
   test('a job sets the state from outside itself and from a microtask', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'extremal', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'extremal', (ctx) async {
         solo.externalSetState(const Working());
         scheduleMicrotask(
           () => solo.externalSetState(const Working(a: 2, b: 2)),

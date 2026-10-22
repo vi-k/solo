@@ -11,7 +11,7 @@ import 'support/run_solo.dart';
 import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
-SoloJob<void> droppable(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> droppable(TestSolo solo, int n) => solo.enqueue<Special, void>(
       key: 'droppable',
       describe: () => '$n',
       policy: Policy.droppable,
@@ -22,7 +22,7 @@ SoloJob<void> droppable(TestSolo solo, int n) => solo.run<Special, void>(
       },
     );
 
-SoloJob<void> restartable(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> restartable(TestSolo solo, int n) => solo.enqueue<Special, void>(
       key: 'restartable',
       describe: () => '$n',
       policy: Policy.restart,
@@ -35,7 +35,7 @@ SoloJob<void> restartable(TestSolo solo, int n) => solo.run<Special, void>(
       },
     );
 
-SoloJob<void> replaceable(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> replaceable(TestSolo solo, int n) => solo.enqueue<Special, void>(
       key: 'replace',
       describe: () => '$n',
       policy: Policy.replace,
@@ -82,7 +82,7 @@ void main() {
     runSolo(initialState: const Special(), (solo, journal, async) {
       final first = droppable(solo, 1);
       final mine = solo.job<Special, void>(key: 'droppable', (ctx) async {});
-      final taken = solo.add(mine, policy: Policy.droppable);
+      final taken = solo.enqueueJob(mine, policy: Policy.droppable);
       expect(identical(taken, first), isTrue);
       expect(
         mine.outcome,
@@ -216,7 +216,7 @@ void main() {
       // let go of only after them: in here it is finished and still
       // current. A retry from a handler is a new request, not this one
       // handed back with its failure already in it.
-      final first = solo.run<Special, void>(
+      final first = solo.enqueue<Special, void>(
         key: 'droppable',
         describe: () => '1',
         policy: Policy.droppable,
@@ -243,7 +243,7 @@ void main() {
 
   test('droppable refuses a key held by another result type', () {
     runSolo((solo, journal, async) {
-      final first = solo.run<TestState, int>(
+      final first = solo.enqueue<TestState, int>(
         key: 'shared',
         policy: Policy.droppable,
         (ctx) async {
@@ -255,7 +255,7 @@ void main() {
       async.flushMicrotasks();
       journal.take();
       expect(
-        () => solo.run<TestState, String>(
+        () => solo.enqueue<TestState, String>(
           key: 'shared',
           policy: Policy.droppable,
           (ctx) async => 'x',
@@ -289,7 +289,7 @@ void main() {
 
   test('droppable refuses a void job for a key held by another type', () {
     runSolo((solo, journal, async) {
-      final first = solo.run<TestState, int>(
+      final first = solo.enqueue<TestState, int>(
         key: 'shared',
         policy: Policy.droppable,
         (ctx) async {
@@ -305,7 +305,7 @@ void main() {
       // never ran. The jobs are compared with each other instead.
       final refused = solo.job<TestState, void>(key: 'shared', (ctx) async {});
       expect(
-        () => solo.add(refused, policy: Policy.droppable),
+        () => solo.enqueueJob(refused, policy: Policy.droppable),
         throwsArgumentError,
       );
       expect(
@@ -316,7 +316,7 @@ void main() {
 
       // And it is untouched: the same handle still goes into the queue.
       expect(refused.outcome, isNull);
-      expect(identical(solo.add(refused), refused), isTrue);
+      expect(identical(solo.enqueueJob(refused), refused), isTrue);
 
       async.flushTimers();
       expect(first.outcome, isA<Done<int>>());
@@ -326,7 +326,7 @@ void main() {
 
   test('droppable refuses a key held by a job of a narrower type', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, String>(
+      solo.enqueue<TestState, String>(
         key: 'shared',
         policy: Policy.droppable,
         (ctx) async {
@@ -340,7 +340,7 @@ void main() {
       // A `Job<String>` is a `SoloJob<Object>`, so handing it back would
       // type-check — and the work of this job would be lost all the same.
       expect(
-        () => solo.run<TestState, Object>(
+        () => solo.enqueue<TestState, Object>(
           key: 'shared',
           policy: Policy.droppable,
           (ctx) async => 1,
@@ -353,7 +353,7 @@ void main() {
 
   test("droppable looks at the two jobs, not at the call's type argument", () {
     runSolo((solo, journal, async) {
-      final held = solo.run<TestState, String>(
+      final held = solo.enqueue<TestState, String>(
         key: 'shared',
         policy: Policy.droppable,
         (ctx) async {
@@ -369,7 +369,8 @@ void main() {
       // nothing.
       final incoming =
           solo.job<TestState, String>(key: 'shared', (ctx) async => 'y');
-      final answer = solo.add<Object>(incoming, policy: Policy.droppable);
+      final answer =
+          solo.enqueueJob<Object>(incoming, policy: Policy.droppable);
 
       expect(identical(answer, held), isTrue);
       async.flushTimers();
@@ -379,7 +380,7 @@ void main() {
 
   test('droppable compares result types, not the whole job', () {
     runSolo((solo, journal, async) {
-      final held = solo.run<TestState, void>(
+      final held = solo.enqueue<TestState, void>(
         key: 'shared',
         policy: Policy.droppable,
         (ctx) async => delay(100),
@@ -388,7 +389,7 @@ void main() {
 
       // A different working state under the same key, and the same result
       // type: one operation, so the second call gets the first job.
-      final answer = solo.run<Initial, void>(
+      final answer = solo.enqueue<Initial, void>(
         key: 'shared',
         policy: Policy.droppable,
         (ctx) async {},
@@ -402,7 +403,7 @@ void main() {
     runSolo((solo, journal, async) {
       for (final policy in [Policy.droppable, Policy.replace, Policy.restart]) {
         expect(
-          () => solo.run<TestState, void>(policy: policy, (ctx) async {}),
+          () => solo.enqueue<TestState, void>(policy: policy, (ctx) async {}),
           throwsArgumentError,
           reason: '$policy',
         );
@@ -426,13 +427,13 @@ void main() {
         key: 'shared',
         (ctx) => pause(ctx, 100),
       );
-      solo.run<TestState, void>(key: 'parent', (ctx) => ctx.run(child));
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) => ctx.run(child));
       async.flushMicrotasks();
       expect(child.isRunning, isTrue);
 
       // The parent holds the queue, so the new root job waits there
       // rather than being handed the child.
-      final root = solo.run<TestState, void>(
+      final root = solo.enqueue<TestState, void>(
         key: 'shared',
         policy: Policy.droppable,
         (ctx) async {},
@@ -457,7 +458,7 @@ void main() {
           describe: () => 'first',
           canStart: (state) {
             lastFromRule = solo.lastJobWhere((job) => job.key == 'k');
-            fromRule = solo.add(
+            fromRule = solo.enqueueJob(
               solo.job<TestState, void>(
                 key: 'k',
                 describe: () => 'second',
@@ -469,7 +470,7 @@ void main() {
           },
           (ctx) async {},
         );
-        solo.add(first, policy: Policy.droppable);
+        solo.enqueueJob(first, policy: Policy.droppable);
         async.flushTimers();
         expect(lastFromRule, same(first));
         expect(fromRule, same(first));
@@ -489,7 +490,7 @@ void main() {
             key: 'k',
             describe: () => 'first',
             canStart: (state) {
-              solo.add(
+              solo.enqueueJob(
                 solo.job<TestState, void>(
                   key: 'k',
                   describe: () => 'second',
@@ -501,7 +502,7 @@ void main() {
             },
             (ctx) async {},
           );
-          solo.add(first, policy: policy);
+          solo.enqueueJob(first, policy: policy);
           async.flushTimers();
           expect(journal.take(), [
             '[k: first] dropped Cancelled(replaced)',
@@ -518,7 +519,7 @@ void main() {
         first = solo.job<TestState, void>(
           key: 'a',
           canStart: (state) {
-            solo.add(
+            solo.enqueueJob(
               solo.job<TestState, void>(key: 'b', (ctx) async {}),
               policy: Policy.replace,
             );
@@ -526,7 +527,7 @@ void main() {
           },
           (ctx) async {},
         );
-        solo.add(first, policy: Policy.replace);
+        solo.enqueueJob(first, policy: Policy.replace);
         async.flushTimers();
         expect(journal.take(), [
           '[a] started',
@@ -546,14 +547,14 @@ void main() {
           key: 'k',
           describe: () => 'first',
           canStart: (state) {
-            queued = solo.add(
+            queued = solo.enqueueJob(
               solo.job<TestState, void>(
                 key: 'k',
                 describe: () => 'queued',
                 (ctx) async {},
               ),
             );
-            fromRule = solo.add(
+            fromRule = solo.enqueueJob(
               solo.job<TestState, void>(
                 key: 'k',
                 describe: () => 'third',
@@ -565,7 +566,7 @@ void main() {
           },
           (ctx) async {},
         );
-        solo.add(first, policy: Policy.droppable);
+        solo.enqueueJob(first, policy: Policy.droppable);
         async.flushTimers();
         // The queue is searched from its tail: the job the rule queued is
         // the last one of the key, and the one being started comes first.
@@ -588,7 +589,7 @@ void main() {
           describe: () => 'first',
           cancellable: false,
           canStart: (state) {
-            solo.add(
+            solo.enqueueJob(
               solo.job<TestState, void>(
                 key: 'k',
                 describe: () => 'second',
@@ -600,7 +601,7 @@ void main() {
           },
           (ctx) async {},
         );
-        solo.add(first, policy: Policy.replace);
+        solo.enqueueJob(first, policy: Policy.replace);
         async.flushTimers();
         expect(journal.take(), [
           '[k: first] started',
@@ -612,9 +613,9 @@ void main() {
     });
   });
 
-  // Cancelling a replaced job runs its code synchronously, inside the `add`
-  // that replaces it, and that code may ask for the same key again. The job
-  // asked for last is the one that has to run last.
+  // Cancelling a replaced job runs its code synchronously, inside the
+  // `enqueueJob` that replaces it, and that code may ask for the same key
+  // again. The job asked for last is the one that has to run last.
   group('a job queued from the code of a job it replaces', () {
     for (final policy in [Policy.replace, Policy.restart]) {
       for (final hook in ['onFinish', 'whenCancelled']) {
@@ -623,9 +624,9 @@ void main() {
           if (policy == Policy.restart) true,
         ]) {
           final where = running ? 'running' : 'queued';
-          // The `onFinish` of a running job comes after `add` has returned,
-          // so that variant never reaches the reentrant path; it holds what
-          // was right before the order changed.
+          // The `onFinish` of a running job comes after `enqueueJob` has
+          // returned, so that variant never reaches the reentrant path; it
+          // holds what was right before the order changed.
           test('${policy.name}, from $hook of a $where job, runs last', () {
             fakeAsync((async) {
               final solo =
@@ -662,7 +663,7 @@ void main() {
         final a = solo.request('A');
         async.flushMicrotasks();
         solo
-            .run<String, void>(key: 'search', (ctx) async => ctx.emit('Q'))
+            .enqueue<String, void>(key: 'search', (ctx) async => ctx.emit('Q'))
             .whenCancelled((_) => solo.queue.clear());
         final b = solo.request('B');
         async.flushTimers();
@@ -694,7 +695,7 @@ final class _Rerequesting extends Solo<String> with OpenSolo<String> {
 
   SoloJob<void> request(String value) {
     requested.add(value);
-    return run<String, void>(
+    return enqueue<String, void>(
       key: 'search',
       policy: policy,
       (ctx) async {

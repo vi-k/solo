@@ -44,7 +44,7 @@ final class RefreshController extends Solo<RefreshState> {
 
   RefreshController(this._api) : super(const Initial());
 
-  Job<void> refresh() => run<RefreshState, void>(
+  Job<void> refresh() => enqueue<RefreshState, void>(
         key: 'refresh',
         policy: Policy.restart,
         ifFailed: (state, error, stackTrace) => const Initial(),
@@ -74,7 +74,7 @@ final class SlowCleanupRefreshController extends Solo<RefreshState> {
   final RefreshApi _api;
   final seen = <String>[];
 
-  Job<void> refresh() => run<RefreshState, void>(
+  Job<void> refresh() => enqueue<RefreshState, void>(
         key: 'refresh',
         ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
@@ -89,12 +89,12 @@ final class SlowCleanupRefreshController extends Solo<RefreshState> {
         },
       );
 
-  Job<void> mark() => run<RefreshState, void>(
+  Job<void> mark() => enqueue<RefreshState, void>(
         key: 'mark',
         (ctx) async => seen.add('the next job starts in ${ctx.state}'),
       );
 
-  Job<void> narrow() => run<Loading, void>(
+  Job<void> narrow() => enqueue<Loading, void>(
         key: 'narrow',
         ifFailed: (state, error, stackTrace) {
           seen.add('ifFailed ran');

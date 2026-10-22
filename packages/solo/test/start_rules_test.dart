@@ -11,9 +11,9 @@ import 'support/test_state.dart';
 
 void addTyped(TestSolo solo) {
   solo
-    ..run<Initial, void>(key: 'test1', (ctx) async {})
-    ..run<Preparing, void>(key: 'test2', (ctx) async {})
-    ..run<Working, void>(key: 'test3', (ctx) async {});
+    ..enqueue<Initial, void>(key: 'test1', (ctx) async {})
+    ..enqueue<Preparing, void>(key: 'test2', (ctx) async {})
+    ..enqueue<Working, void>(key: 'test3', (ctx) async {});
 }
 
 void main() {
@@ -45,7 +45,7 @@ void main() {
 
   test('a job whose W is the base type runs in any state', () {
     runSolo(initialState: const Disposed(), (solo, journal, async) {
-      solo.run<TestState, void>(key: 'any', (ctx) async {});
+      solo.enqueue<TestState, void>(key: 'any', (ctx) async {});
       async.flushMicrotasks();
       expect(journal.take(), ['[any] started', '[any] finished Done(null)']);
     });
@@ -53,7 +53,7 @@ void main() {
 
   test('canStart false drops the job before start', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<Initial, void>(
+      final job = solo.enqueue<Initial, void>(
         key: 'guarded',
         canStart: (state) => false,
         (ctx) async {},
@@ -80,7 +80,7 @@ void main() {
         },
         (ctx) => delay(10),
       );
-      solo.add(job);
+      solo.enqueueJob(job);
       expect(job.isQueued, isTrue, reason: 'queued until the pump runs');
       async.flushTimers();
       expect(queuedInCanStart, isFalse);
@@ -90,7 +90,7 @@ void main() {
   test('keepWhile false at start drops the job before start', () {
     runSolo(initialState: const Preparing(progress: 100),
         (solo, journal, async) {
-      solo.run<Preparing, void>(
+      solo.enqueue<Preparing, void>(
         key: 'kept',
         keepWhile: (state) => state.progress < 100,
         (ctx) async {},
@@ -104,7 +104,7 @@ void main() {
     runSolo((solo, journal, async) {
       var asked = 0;
       var ran = false;
-      solo.run<Initial, void>(
+      solo.enqueue<Initial, void>(
         key: 'moved',
         canStart: (state) {
           asked++;
@@ -113,7 +113,7 @@ void main() {
         },
         (ctx) async => ran = true,
       );
-      solo.run<Preparing, void>(
+      solo.enqueue<Preparing, void>(
         key: 'kept',
         canStart: (state) {
           asked++;
@@ -154,9 +154,9 @@ void main() {
         },
         (ctx) async => ran.add('root'),
       )..ignoreFailure();
-      solo.add(root);
+      solo.enqueueJob(root);
       async.flushTimers();
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<Initial, void>(
           key: 'child',
           keepWhile: (state) {
@@ -189,7 +189,7 @@ void main() {
     runSolo((solo, journal, async) {
       var armed = false;
       var written = 0;
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'restless',
         keepWhile: (state) {
           if (armed) {
@@ -219,7 +219,7 @@ void main() {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
       Object? caught;
       var armed = false;
-      solo.run<Preparing, void>(
+      solo.enqueue<Preparing, void>(
         key: 'reader',
         keepWhile: (state) {
           if (armed) {
@@ -246,7 +246,7 @@ void main() {
   test('the type is checked before canStart', () {
     runSolo((solo, journal, async) {
       var called = false;
-      solo.run<Working, void>(
+      solo.enqueue<Working, void>(
         key: 'typed',
         canStart: (state) {
           called = true;
@@ -265,7 +265,7 @@ void main() {
 
   test('a dropped job is reported to onFinish with no onStart', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<Working, void>(key: 'x', (ctx) async {});
+      final job = solo.enqueue<Working, void>(key: 'x', (ctx) async {});
       Outcome<void>? outcome;
       job.done.then((o) => outcome = o);
       async.flushMicrotasks();
@@ -284,8 +284,8 @@ void main() {
       )..ignoreFailure();
       final next = solo.job<Initial, void>(key: 'next', (ctx) async {});
       solo
-        ..add(first)
-        ..add(next);
+        ..enqueueJob(first)
+        ..enqueueJob(next);
       async.flushTimers();
       expect(first.outcome, isA<Failed>());
       expect(next.outcome, isA<Done<void>>());
@@ -319,7 +319,7 @@ void main() {
           },
           (ctx) async {},
         );
-        solo.add(job);
+        solo.enqueueJob(job);
         async.flushTimers();
         expect(job.outcome, isA<Cancelled>());
         expect(
@@ -348,8 +348,8 @@ void main() {
         (ctx) async => pause(ctx, 100),
       );
       solo
-        ..add(thrower)
-        ..add(other);
+        ..enqueueJob(thrower)
+        ..enqueueJob(other);
       async.elapse(const Duration(milliseconds: 10));
       solo.externalSetState(const Preparing());
       async.flushTimers();
@@ -379,8 +379,8 @@ void main() {
       );
       final next = solo.job<Initial, void>(key: 'next', (ctx) async {});
       solo
-        ..add(held)
-        ..add(next);
+        ..enqueueJob(held)
+        ..enqueueJob(next);
       async.flushTimers();
       expect(held.outcome, isA<Cancelled>());
       expect(
@@ -411,7 +411,7 @@ void main() {
         },
         (ctx) async {},
       );
-      solo.add(stubborn);
+      solo.enqueueJob(stubborn);
       async.flushTimers();
       expect(stubborn.outcome, isA<Done<void>>());
       expect(journal.take(), [
@@ -422,13 +422,13 @@ void main() {
   });
 
   test('a job put back from a hook is refused, and the queue goes on', () {
-    // The first thing anyone writes in a retry hook. The job the hook sees
-    // is out of the queue, not started and not yet finished, and `add`
-    // used to read that state as "never added".
+    // The first thing anyone writes in a retry hook. The job the hook sees is
+    // out of the queue, not started and not yet finished, and `enqueueJob` used
+    // to read that state as "never added".
     Object? refused;
     Solo.observer = _Retrier((solo, job) {
       try {
-        (solo as TestSolo).add(job);
+        (solo as TestSolo).enqueueJob(job);
       } on Object catch (error) {
         refused = error;
       }
@@ -447,8 +447,8 @@ void main() {
       )..ignoreFailure();
       final second = solo.job<Initial, void>(key: 'second', (ctx) async {});
       solo
-        ..add(first)
-        ..add(second);
+        ..enqueueJob(first)
+        ..enqueueJob(second);
       async.flushTimers();
       expect(refused, isA<StateError>());
       expect(first.outcome, isA<Failed>());
@@ -472,7 +472,7 @@ void main() {
         key: 'child',
         canStart: (state) {
           try {
-            solo.add(child);
+            solo.enqueueJob(child);
           } on Object catch (error) {
             refused = error;
           }
@@ -481,7 +481,7 @@ void main() {
         },
         (ctx) async {},
       );
-      solo.run<Initial, void>(key: 'parent', (ctx) async {
+      solo.enqueue<Initial, void>(key: 'parent', (ctx) async {
         ctx.run(child).ignore();
         await pause(ctx, 10);
       });
@@ -503,7 +503,7 @@ void main() {
       var reentered = false;
       final trace = <String>[];
       late SoloJob<void> child;
-      solo.run<Initial, void>(key: 'parent', (ctx) async {
+      solo.enqueue<Initial, void>(key: 'parent', (ctx) async {
         child = solo.job<Initial, void>(
           key: 'child',
           canStart: (state) {
@@ -527,7 +527,7 @@ void main() {
         await ctx.run(child);
         trace.add('parent past the child');
       });
-      solo.run<Initial, void>(
+      solo.enqueue<Initial, void>(
         key: 'next',
         (ctx) async => trace.add('next started'),
       );
@@ -555,7 +555,7 @@ void main() {
         },
         (ctx) async {},
       );
-      solo.add(job);
+      solo.enqueueJob(job);
       async.flushTimers();
       expect(
         job.outcome,
@@ -581,7 +581,7 @@ void main() {
           if (once && job.key == 'old') {
             once = false;
             try {
-              (solo as TestSolo).add(incoming);
+              (solo as TestSolo).enqueueJob(incoming);
             } on Object catch (error) {
               refused = error;
             }
@@ -590,12 +590,12 @@ void main() {
         alsoOnFinish: true,
       );
       solo
-        ..run<Initial, void>(key: 'blocker', (ctx) async => pause(ctx, 50))
-        ..add(
+        ..enqueue<Initial, void>(key: 'blocker', (ctx) async => pause(ctx, 50))
+        ..enqueueJob(
           solo.job<Initial, void>(key: 'old', (ctx) async {}),
         );
       incoming = solo.job<Initial, void>(key: 'old', (ctx) async {});
-      solo.add(incoming, policy: Policy.replace);
+      solo.enqueueJob(incoming, policy: Policy.replace);
       async.flushTimers();
       expect(refused, isA<StateError>());
       expect(solo.queue.length, 0);
@@ -606,7 +606,7 @@ void main() {
   test('a start rule that gives its own job up lets the queue move on', () {
     runSolo((solo, journal, async) {
       late final SoloJob<void> first;
-      first = solo.run<TestState, void>(
+      first = solo.enqueue<TestState, void>(
         key: 'first',
         canStart: (state) {
           first.cancel().ignore();
@@ -614,7 +614,8 @@ void main() {
         },
         (ctx) async {},
       );
-      final second = solo.run<TestState, void>(key: 'second', (ctx) async {});
+      final second =
+          solo.enqueue<TestState, void>(key: 'second', (ctx) async {});
       async.flushTimers();
       expect(first.outcome, isA<Cancelled>());
       expect(second.outcome, isA<Done<void>>(), reason: 'the queue moved on');
@@ -639,7 +640,8 @@ void main() {
           (ctx) async => ran = true,
         );
         Object? caught;
-        final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+        final parent =
+            solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
           try {
             await ctx.run(child);
           } on Object catch (error) {
@@ -667,7 +669,7 @@ void main() {
       var started = 0;
       var armed = false;
       late final SoloJob<void> job;
-      job = solo.run<TestState, void>(
+      job = solo.enqueue<TestState, void>(
         key: 'job',
         keepWhile: (state) {
           if (armed) {

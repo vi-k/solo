@@ -27,7 +27,7 @@ void main() {
         return 7;
       }
 
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         leaked = ctx;
       });
       async.flushTimers();
@@ -45,7 +45,7 @@ void main() {
   test('a cancelled job that finished refuses the same three', () {
     runSolo((solo, journal, async) {
       late SoloContext<TestState, TestState> leaked;
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         leaked = ctx;
         await delay(100);
       });
@@ -68,7 +68,7 @@ void main() {
   test('a finished context still reads the state and logs', () {
     runSolo((solo, journal, async) {
       late SoloContext<TestState, TestState> leaked;
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         leaked = ctx;
       });
       async.flushTimers();

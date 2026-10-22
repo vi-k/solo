@@ -17,7 +17,7 @@ final class RulesCancelReason extends SoloCancelReason {
   String get name => 'rules';
 }
 
-/// [Solo.close], or [Solo.add] after close.
+/// [Solo.close], or [Solo.enqueueJob] after close.
 final class ClosedCancelReason extends SoloCancelReason {
   /// Creates a controller closing reason.
   const ClosedCancelReason();
@@ -26,7 +26,7 @@ final class ClosedCancelReason extends SoloCancelReason {
   String get name => 'closed';
 }
 
-/// [Solo.add] under `Policy.droppable` found a job with the same key,
+/// [Solo.enqueueJob] under `Policy.droppable` found a job with the same key,
 /// handed that one back and dropped this one before its body ran.
 ///
 /// A reason of its own, apart from [ManualCancelReason]: nobody asked for
@@ -40,9 +40,9 @@ final class DuplicateCancelReason extends SoloCancelReason {
   String get name => 'duplicate';
 }
 
-/// [Solo.add] under `Policy.replace` or `Policy.restart` put a newer job
-/// with the same key in this one's place: took it out of the queue, or,
-/// under `restart`, cancelled it while it ran.
+/// [Solo.enqueueJob] under `Policy.replace` or `Policy.restart` put a newer job
+/// with the same key in this one's place: took it out of the queue, or, under
+/// `restart`, cancelled it while it ran.
 ///
 /// A reason of its own, apart from [ManualCancelReason]: nobody asked for
 /// this job to stop, a later call with its key stands in for it.

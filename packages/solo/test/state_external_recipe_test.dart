@@ -41,7 +41,8 @@ final class _TidyCamera extends Solo<camera.CameraState> {
     });
   }
 
-  Job<void> waitForAnswer({bool cancellable = true}) => run<camera.Ready, void>(
+  Job<void> waitForAnswer({bool cancellable = true}) =>
+      enqueue<camera.Ready, void>(
         key: 'answer',
         cancellable: cancellable,
         (ctx) => ctx.abandonable(() => device.answer.future),

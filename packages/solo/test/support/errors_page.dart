@@ -23,7 +23,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   // ...the jobs from the quick start...
   /// Not on the page: the job of the quick start in the README.
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),
@@ -147,7 +147,7 @@ final class Camera extends Solo<CameraState>
   Camera(this.hw) : super(const Closed());
 
   /// Not on the page: the method around the statements.
-  SoloJob<void> open(double zoom) => run<CameraState, void>(
+  SoloJob<void> open(double zoom) => enqueue<CameraState, void>(
         key: 'open',
         (ctx) async {
           try {
@@ -167,7 +167,7 @@ final class Camera extends Solo<CameraState>
     double zoom,
     void Function(JobContext ctx, double zoom) then,
   ) =>
-      run<CameraState, void>(key: 'zoom', (ctx) async => then(ctx, zoom));
+      enqueue<CameraState, void>(key: 'zoom', (ctx) async => then(ctx, zoom));
 
   @override
   void onLog(Job<Object?> job, Object? message) {
@@ -185,7 +185,7 @@ class RetryingProfile extends Solo<ProfileState>
   RetryingProfile(this.api) : super(const Initial());
 
   /// Not on the page: the job around the statements.
-  SoloJob<String> load() => run<ProfileState, String>(
+  SoloJob<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         ifFailed: (state, error, stackTrace) => Failure(error),
         ifCancelled: (state, cancelled) => const Initial(),
@@ -254,7 +254,7 @@ final class Pool extends Solo<Slots> with OpenSolo<Slots>, Desk<Slots> {
   SoloJob<void> take({
     Slots Function(Slots state, Cancelled cancelled)? ifCancelled,
   }) =>
-      run<Slots, void>(
+      enqueue<Slots, void>(
         key: 'take',
         // A rule answers; it does not throw to refuse.
         canStart: (state) => state.free > 0,

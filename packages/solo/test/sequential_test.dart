@@ -12,7 +12,7 @@ import 'support/test_state.dart';
 void main() {
   test('one job emits five states and finishes with Done', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'test', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'test', (ctx) async {
         ctx
           ..emit(const Preparing())
           ..emit(const Preparing(progress: 50))
@@ -43,11 +43,11 @@ void main() {
   test('jobs run one after another in queue order', () {
     runSolo((solo, journal, async) {
       solo
-        ..run<Initial, void>(key: 'first', (ctx) async {
+        ..enqueue<Initial, void>(key: 'first', (ctx) async {
           await delay(100);
           ctx.emit(const Preparing());
         })
-        ..run<Preparing, void>(key: 'second', (ctx) async {
+        ..enqueue<Preparing, void>(key: 'second', (ctx) async {
           await delay(100);
           ctx.emit(const Working());
         });
@@ -73,7 +73,7 @@ void main() {
 
   test('value, done and outcome agree on a returned value', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, int>((ctx) async => 42);
+      final job = solo.enqueue<TestState, int>((ctx) async => 42);
       int? value;
       Outcome<int>? outcome;
       job.value.then((v) => value = v);
@@ -88,7 +88,7 @@ void main() {
 
   test('a throwing body ends with Failed, onError and onFinish', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'bad', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'bad', (ctx) async {
         throw StateError('boom');
       });
       Object? error;
@@ -112,7 +112,7 @@ void main() {
       // body ends the job as `Failed` instead of failing the test.
       TestState? stateAfterEmit;
       List<TestState>? seenAfterEmit;
-      solo.run<TestState, void>((ctx) async {
+      solo.enqueue<TestState, void>((ctx) async {
         ctx.emit(const Preparing());
         stateAfterEmit = solo.currentState;
         seenAfterEmit = [...seen];
@@ -143,7 +143,7 @@ void main() {
   test('a finished root job is no longer current when onFinish runs', () {
     fakeAsync((async) {
       final solo = _CurrentProbe()
-        ..run<TestState, void>(key: 'probe', (ctx) async {});
+        ..enqueue<TestState, void>(key: 'probe', (ctx) async {});
       async.flushMicrotasks();
 
       expect(solo.idleInOnFinish, [true]);

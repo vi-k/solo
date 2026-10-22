@@ -14,7 +14,7 @@ void main() {
     runSolo((solo, journal, async) {
       final errors = <String>[];
       _inZone(errors, () {
-        solo.run<TestState, void>(key: 'bad', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'bad', (ctx) async {
           throw StateError('boom');
         });
       });
@@ -34,7 +34,7 @@ void main() {
       final errors = <String>[];
       Outcome<void>? outcome;
       _inZone(errors, () {
-        final job = solo.run<TestState, void>(key: 'bad', (ctx) async {
+        final job = solo.enqueue<TestState, void>(key: 'bad', (ctx) async {
           await delay(10);
           throw StateError('boom');
         });
@@ -52,7 +52,7 @@ void main() {
       final errors = <String>[];
       Object? caught;
       _inZone(errors, () {
-        final job = solo.run<TestState, void>(key: 'bad', (ctx) async {
+        final job = solo.enqueue<TestState, void>(key: 'bad', (ctx) async {
           throw StateError('boom');
         });
         Future<void> watch() async {
@@ -75,7 +75,7 @@ void main() {
     runSolo((solo, journal, async) {
       final errors = <String>[];
       _inZone(errors, () {
-        solo.run<TestState, void>(key: 'bad', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'bad', (ctx) async {
           throw StateError('boom');
         }).ignoreFailure();
       });
@@ -93,7 +93,7 @@ void main() {
     runSolo((solo, journal, async) {
       final errors = <String>[];
       _inZone(errors, () {
-        solo.run<TestState, void>(key: 'parent', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
           unawaited(
             ctx.run(
               solo.job<TestState, void>(key: 'child', (ctx) async {
@@ -120,7 +120,7 @@ void main() {
       final errors = <String>[];
       Object? caught;
       _inZone(errors, () {
-        solo.run<TestState, void>(key: 'parent', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
           final child = solo.job<TestState, void>(key: 'child', (ctx) async {
             throw StateError('boom');
           });
@@ -148,7 +148,7 @@ void main() {
     runSolo((solo, journal, async) {
       final errors = <String>[];
       _inZone(errors, () {
-        solo.run<TestState, void>(key: 'job', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'job', (ctx) async {
           await delay(100);
           throw StateError('late');
         });
@@ -170,7 +170,7 @@ void main() {
     runSolo((solo, journal, async) {
       final errors = <String>[];
       _inZone(errors, () {
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'job',
           cancellable: false,
           (ctx) async {
@@ -198,7 +198,7 @@ void main() {
       final errors = <String>[];
       late Job<void> job;
       _inZone(errors, () {
-        job = solo.run<TestState, void>(
+        job = solo.enqueue<TestState, void>(
           key: 'job',
           cancellable: false,
           (ctx) async {

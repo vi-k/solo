@@ -52,7 +52,7 @@ void main() {
     final release = Completer<void>();
     var finishedDuringJob = true;
 
-    solo.run<TestState, void>((ctx) async {
+    solo.enqueue<TestState, void>((ctx) async {
       started.complete();
       finishedDuringJob = solo.isFinished;
       await release.future;
@@ -78,7 +78,7 @@ void main() {
 
     final started = Completer<void>();
     final release = Completer<void>();
-    solo.run<TestState, void>((ctx) async {
+    solo.enqueue<TestState, void>((ctx) async {
       started.complete();
       await release.future;
     });
@@ -139,7 +139,7 @@ void main() {
     final started = Completer<void>();
     final release = Completer<void>();
 
-    solo.run<TestState, void>(
+    solo.enqueue<TestState, void>(
       cancellable: false,
       (ctx) async {
         started.complete();
@@ -203,7 +203,7 @@ void main() {
     final started = Completer<void>();
     Object? refused;
 
-    solo.run<TestState, void>((ctx) async {
+    solo.enqueue<TestState, void>((ctx) async {
       ctx.onDispose(() {
         // Cleanup unwinds inside the job, before the engine finishes: a
         // fact arriving here is still a fact about a live controller.

@@ -8,7 +8,7 @@ import 'support/run_solo.dart';
 import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
-SoloJob<void> step(TestSolo solo, String name) => solo.run<TestState, void>(
+SoloJob<void> step(TestSolo solo, String name) => solo.enqueue<TestState, void>(
       key: name,
       (ctx) async {
         await delay(50);
@@ -65,7 +65,7 @@ void main() {
 
   test('a drained job keeps its children and its cleanup', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx.onDispose(() => ctx.log('cleaned'));
         await ctx.run(
           solo.job<TestState, void>(
@@ -285,7 +285,7 @@ void main() {
       () {
     runSolo((solo, journal, async) {
       SoloJob<void> keyed(String key, Policy policy) =>
-          solo.run<TestState, void>(
+          solo.enqueue<TestState, void>(
             key: key,
             policy: policy,
             (ctx) async {
@@ -324,7 +324,7 @@ void main() {
   for (final policy in [Policy.sequential, Policy.replace, Policy.restart]) {
     test('a $policy call during a drain is refused and leaves the queue', () {
       runSolo((solo, journal, async) {
-        SoloJob<void> keyed() => solo.run<TestState, void>(
+        SoloJob<void> keyed() => solo.enqueue<TestState, void>(
               key: 'k',
               policy: policy,
               (ctx) async {

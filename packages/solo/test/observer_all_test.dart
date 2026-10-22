@@ -82,7 +82,7 @@ List<String> heard(SoloObserver Function(List<String> seen) observer) {
       Solo.observer = observer(seen);
       try {
         final solo = PlainSolo<TestState>(const Initial());
-        solo.run<TestState, void>((ctx) async {
+        solo.enqueue<TestState, void>((ctx) async {
           ctx
             ..emit(const Preparing())
             ..log('hello');

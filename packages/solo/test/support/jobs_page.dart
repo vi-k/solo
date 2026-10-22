@@ -38,12 +38,12 @@ final class Assembling extends Solo<CameraState>
       key: _Op.save,
       (ctx) => ctx.join(store.save),
     );
-    add(saving);
+    enqueueJob(saving);
     return saving;
   }
 
   // Or both at once, which is what a controller method normally does.
-  Job<void> setZoom(double zoom) => run<Ready, void>(
+  Job<void> setZoom(double zoom) => enqueue<Ready, void>(
         key: _Op.zoom,
         // Lazy, and only for diagnostics: built when a log asks for it.
         describe: () => 'zoom: $zoom',
@@ -58,24 +58,24 @@ final class CameraController extends Solo<CameraState>
 
   // sequential, the default: one after another, in the order asked for.
   Job<void> save() =>
-      run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
+      enqueue<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
 
   // droppable: a second load of the same profile returns the first job.
-  Job<Profile> load(String id) => run<Ready, Profile>(
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
         key: (_Op.load, id),
         policy: Policy.droppable,
         (ctx) => ctx.abandonable(() => api.load(id)),
       );
 
   // replace: the queued zoom goes, a running one is left alone.
-  Job<void> setZoom(double zoom) => run<Ready, void>(
+  Job<void> setZoom(double zoom) => enqueue<Ready, void>(
         key: _Op.zoom,
         policy: Policy.replace,
         (ctx) => ctx.join(() => camera.zoom(zoom)),
       );
 
   // restart: the same, and the running one is asked to stop as well.
-  Job<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => enqueue<Ready, void>(
         key: _Op.seek,
         policy: Policy.restart,
         (ctx) async {
@@ -88,21 +88,21 @@ final class CameraController extends Solo<CameraState>
 
   /// Not on the page: the seek the page warns about, a `join` around a call
   /// the request cannot reach.
-  Job<void> seekWithoutToken(Duration position) => run<Ready, void>(
+  Job<void> seekWithoutToken(Duration position) => enqueue<Ready, void>(
         key: _Op.seek,
         policy: Policy.restart,
         (ctx) => ctx.join(() => camera.seek(position)),
       );
 
   /// Not on the page: the other way in the page names, `ctx.abandonable`.
-  Job<void> seekLetGo(Duration position) => run<Ready, void>(
+  Job<void> seekLetGo(Duration position) => enqueue<Ready, void>(
         key: _Op.seek,
         policy: Policy.restart,
         (ctx) => ctx.abandonable(() => camera.seek(position)),
       );
 
   /// Not on the page: a seek that refuses to be cancelled.
-  Job<void> seekToTheEnd(Duration position) => run<Ready, void>(
+  Job<void> seekToTheEnd(Duration position) => enqueue<Ready, void>(
         key: _Op.seek,
         cancellable: false,
         (ctx) => ctx.join(() => camera.seek(position)),
@@ -114,7 +114,7 @@ final class CameraController extends Solo<CameraState>
     // Drop what this command makes pointless...
     queue.removeWhere((job) => job.key == _Op.zoom);
     // ...and jump the line with the stop itself.
-    return add(
+    return enqueueJob(
       job<Ready, void>(key: _Op.stop, (ctx) => ctx.join(camera.stop)),
       first: true,
     );
@@ -127,7 +127,7 @@ final class CameraController extends Solo<CameraState>
   void pause() {
     if (_gate != null) return;
     final gate = _gate = Completer<void>();
-    add(
+    enqueueJob(
       job<CameraState, void>(
         key: _Op.pause,
         (ctx) => ctx.abandonable(() => gate.future),
@@ -164,7 +164,7 @@ final class CountingController extends Solo<CameraState>
       key: (_Op.load, id),
       (ctx) => ctx.abandonable(() => api.load(id)),
     );
-    final taken = add(mine, policy: Policy.droppable);
+    final taken = enqueueJob(mine, policy: Policy.droppable);
     if (!identical(taken, mine)) {
       // `mine` was dropped and has already ended with `Cancelled(duplicate)`;
       // `taken` is the load that was there before this call.

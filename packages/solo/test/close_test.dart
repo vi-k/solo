@@ -31,8 +31,8 @@ void main() {
   test('close drops every queued job, cancellable or not', () {
     runSolo((solo, journal, async) {
       solo
-        ..run<TestState, void>(key: 'a', (ctx) async {})
-        ..run<TestState, void>(
+        ..enqueue<TestState, void>(key: 'a', (ctx) async {})
+        ..enqueue<TestState, void>(
           key: 'keep',
           cancellable: false,
           (ctx) async {},
@@ -50,11 +50,11 @@ void main() {
   test('close cancels the current job and waits for its body', () {
     runSolo((solo, journal, async) {
       solo
-        ..run<TestState, void>(key: 'job', (ctx) async {
+        ..enqueue<TestState, void>(key: 'job', (ctx) async {
           await delay(100);
           ctx.check();
         })
-        ..run<TestState, void>(key: 'next', (ctx) async {});
+        ..enqueue<TestState, void>(key: 'next', (ctx) async {});
       async.elapse(const Duration(milliseconds: 50));
       var closed = false;
       solo.close().then((_) => closed = true);
@@ -72,7 +72,7 @@ void main() {
 
   test('close waits for a cancellable: false job without cancelling', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'stubborn',
         cancellable: false,
         (ctx) async {
@@ -92,11 +92,11 @@ void main() {
     });
   });
 
-  test('add after close finishes the job with Cancelled(closed)', () {
+  test('enqueueJob after close finishes the job with Cancelled(closed)', () {
     runSolo((solo, journal, async) {
-      final early = solo.run<TestState, void>(key: 'early', (ctx) async {});
+      final early = solo.enqueue<TestState, void>(key: 'early', (ctx) async {});
       solo.close();
-      final job = solo.run<TestState, void>(key: 'late', (ctx) async {});
+      final job = solo.enqueue<TestState, void>(key: 'late', (ctx) async {});
       expect(job.isFinished, isTrue);
       final dropped = job.outcome! as Cancelled;
       expect(dropped.reason, isA<ClosedCancelReason>());
@@ -118,7 +118,7 @@ void main() {
   test('whenCancelled notifies for a job added after close', () {
     runSolo((solo, journal, async) {
       solo.close();
-      final job = solo.run<TestState, void>(key: 'late', (ctx) async {});
+      final job = solo.enqueue<TestState, void>(key: 'late', (ctx) async {});
       var cancelled = false;
       job.whenCancelled((_) => cancelled = true);
       async.flushMicrotasks();
@@ -130,7 +130,7 @@ void main() {
   test('close re-entered from a hook returns the same future', () {
     fakeAsync((async) {
       final solo = _CloseOnFinish()
-        ..run<TestState, void>(key: 'dropped', (ctx) async {});
+        ..enqueue<TestState, void>(key: 'dropped', (ctx) async {});
       final outer = solo.close();
       expect(solo.reentered, isNotNull, reason: 'the hook ran');
       expect(identical(solo.reentered, outer), isTrue);
@@ -157,7 +157,7 @@ void main() {
       // job body ends the job as `Failed` instead of failing the test.
       TestState? stateAfterEmit;
       try {
-        solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+        solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
           ctx.emit(const Preparing());
           stateAfterEmit = solo.currentState;
         });
@@ -188,7 +188,7 @@ void main() {
         }
       });
       TestState? stateAfterEmit;
-      solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         ctx.emit(const Preparing());
         stateAfterEmit = solo.currentState;
       });
@@ -207,7 +207,7 @@ void main() {
     runSolo((solo, journal, async) {
       final order = <String>[];
       final recorder = _Recorder(order);
-      final job = recorder.run<Initial, void>(key: 'job', (ctx) async {
+      final job = recorder.enqueue<Initial, void>(key: 'job', (ctx) async {
         await delay(100);
         ctx.check();
       });
@@ -222,15 +222,15 @@ void main() {
   test('a job added while a policy hook closed the controller is dropped', () {
     runSolo((solo, journal, async) {
       solo
-        ..run<TestState, void>(key: 'busy', (ctx) => pause(ctx, 50))
-        ..run<TestState, void>(key: 'x', (ctx) async {});
+        ..enqueue<TestState, void>(key: 'busy', (ctx) => pause(ctx, 50))
+        ..enqueue<TestState, void>(key: 'x', (ctx) async {});
       async.flushMicrotasks();
       journal.take();
-      // Closing from the hook that the policy's own removal fires: the
-      // incoming job has passed the check at the top of `add` and is in the
-      // queue already, so the close drops it with the rest.
+      // Closing from the hook that the policy's own removal fires: the incoming
+      // job has passed the check at the top of `enqueueJob` and is in the queue
+      // already, so the close drops it with the rest.
       Solo.observer = _ClosingObserver(solo, key: 'x');
-      final incoming = solo.run<TestState, void>(
+      final incoming = solo.enqueue<TestState, void>(
         key: 'x',
         policy: Policy.replace,
         (ctx) async {},
@@ -250,8 +250,8 @@ void main() {
   test('a job added while a policy hook drained the controller runs', () {
     runSolo((solo, journal, async) {
       solo
-        ..run<TestState, void>(key: 'busy', (ctx) => pause(ctx, 50))
-        ..run<TestState, void>(key: 'x', (ctx) async {});
+        ..enqueue<TestState, void>(key: 'busy', (ctx) => pause(ctx, 50))
+        ..enqueue<TestState, void>(key: 'x', (ctx) async {});
       async.flushMicrotasks();
       journal.take();
       // The incoming job is in the queue before the policy removes the
@@ -262,7 +262,7 @@ void main() {
         key: 'x',
         mode: SoloCloseMode.drain,
       );
-      final incoming = solo.run<TestState, void>(
+      final incoming = solo.enqueue<TestState, void>(
         key: 'x',
         policy: Policy.replace,
         (ctx) async {},

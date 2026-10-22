@@ -205,7 +205,7 @@ void endCall(FakeAsync async, String call) {
 }
 
 /// A job that waits on a call named `op` through `ctx.abandonable`.
-SoloJob<void> waits(Bench bench, String key) => bench.run<int, void>(
+SoloJob<void> waits(Bench bench, String key) => bench.enqueue<int, void>(
       key: key,
       (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
     );

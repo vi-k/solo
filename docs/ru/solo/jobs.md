@@ -69,10 +69,10 @@ final saving = job<Ready, void>(
   key: _Op.save,
   (ctx) => ctx.join(store.save),
 );
-add(saving);
+enqueueJob(saving);
 
 // Либо всё сразу: так обычно и делает метод контроллера.
-Job<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => enqueue<Ready, void>(
       key: _Op.zoom,
       // Лениво и только для диагностики: строится, когда спросит лог.
       describe: () => 'zoom: $zoom',
@@ -81,7 +81,7 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
 ```
 
 Код этого раздела и следующих принадлежит одному контроллеру камеры,
-`Solo<CameraState>`. Два аргумента типа у `job` и `run` задают рабочий тип
+`Solo<CameraState>`. Два аргумента типа у `job` и `enqueue` задают рабочий тип
 и тип результата. Рабочий тип называет состояния, в которых работает тело,
 и здесь это `Ready`, одно из состояний камеры. Без аргументов рабочий тип —
 весь `S`, а тип результата — то, что возвращает тело. О рабочем типе говорит
@@ -92,25 +92,26 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
 для логов, наблюдателей и `toString()`: `Job(key: label)`. Без описания
 используется представление `Job(key)`.
 
-`job`, `add` и `run` возвращают `SoloJob<T>`, который реализует `Job<T>`
-и добавляет `isQueued`. Все три защищённые, как и `collect` с `accumulate`:
-контроллер предоставляет предметные методы вроде `load()` или `setZoom()`,
-и вызывающий код видит их, а не члены, из которых они собраны. Предметный метод
-объявляет `Job<T>`, как `setZoom` выше: вызывающему коду этого хватает, чтобы
-дождаться результата или отменить `Job`. `SoloJob<T>` он объявляет только для
-вызывающего кода, который читает `isQueued`. Приватный метод, который делает
-ребёнка для `ctx.run`, тоже объявляет `SoloJob<T>`: `ctx.run` берёт
-`ChildJob<T>`, а `SoloJob<T>` им является, `Job<T>` — нет.
+`job`, `enqueueJob` и `enqueue` возвращают `SoloJob<T>`, который реализует
+`Job<T>` и добавляет `isQueued`. Все три защищённые, как и `collect`
+с `accumulate`: контроллер предоставляет предметные методы вроде `load()` или
+`setZoom()`, и вызывающий код видит их, а не члены, из которых они собраны.
+Предметный метод объявляет `Job<T>`, как `setZoom` выше: вызывающему коду этого
+хватает, чтобы дождаться результата или отменить `Job`. `SoloJob<T>` он
+объявляет только для вызывающего кода, который читает `isQueued`. Приватный
+метод, который делает ребёнка для `ctx.run`, тоже объявляет `SoloJob<T>`:
+`ctx.run` берёт `ChildJob<T>`, а `SoloJob<T>` им является, `Job<T>` — нет.
 
 `Job`, которую запускает очередь, выполняет тело в зоне Dart того вызова,
-который её создал: `run` или, как у `saving` выше, `job`, но не `add`. Зона
-не зависит от того, что разбудило очередь: `Job`, поставленная прямо перед ней
-из другой зоны, конец предыдущей `Job` или таймер окна накопления. Таймеры тела
-и значения его зоны, срок `Job`, хуки `onStart` и ошибки future, которых тело
-не ждёт, остаются в этой зоне. Туда же уходит и ошибка `Job`, если её исход
-никто не прочитал и за неё больше никто не ответил. Внутри `ctx.unattended` это
-зона, откуда работу запустили, как и в ядре. Ребёнка запускает не очередь: он
-работает там, где его запустил `ctx.run`, как любая `Job.deferred`.
+который её создал: `enqueue` или, как у `saving` выше, `job`,
+но не `enqueueJob`. Зона не зависит от того, что разбудило очередь: `Job`,
+поставленная прямо перед ней из другой зоны, конец предыдущей `Job` или таймер
+окна накопления. Таймеры тела и значения его зоны, срок `Job`, хуки `onStart`
+и ошибки future, которых тело не ждёт, остаются в этой зоне. Туда же уходит
+и ошибка `Job`, если её исход никто не прочитал и за неё больше никто
+не ответил. Внутри `ctx.unattended` это зона, откуда работу запустили, как
+и в ядре. Ребёнка запускает не очередь: он работает там, где его запустил
+`ctx.run`, как любая `Job.deferred`.
 
 ## Очередь и политики
 
@@ -122,24 +123,24 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
 ```dart
 // sequential, по умолчанию: одна за другой, в порядке обращения.
 Job<void> save() =>
-    run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
+    enqueue<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
 
 // droppable: повторная загрузка того же профиля вернёт первую Job.
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
     );
 
 // replace: ожидающий зум уходит, работающий остаётся нетронутым.
-Job<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => enqueue<Ready, void>(
       key: _Op.zoom,
       policy: Policy.replace,
       (ctx) => ctx.join(() => camera.zoom(zoom)),
     );
 
 // restart: то же самое, и работающую просят остановиться.
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: _Op.seek,
       policy: Policy.restart,
       (ctx) async {
@@ -209,7 +210,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 
 ```dart
 // Первая попытка: один ключ на все профили.
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -226,7 +227,7 @@ Job<Profile> load(String id) => run<Ready, Profile>(
 #### Ключ-запись
 
 ```dart
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -239,9 +240,10 @@ Job<Profile> load(String id) => run<Ready, Profile>(
 загрузку другого.
 
 `Job`, которую принёс второй вызов, не стартует: она сразу кончается
-с `Cancelled(duplicate)` и причиной `DuplicateCancelReason`. `run` возвращает
-один хэндл и не говорит, чья это `Job`, поэтому метод, которому нужно это
-знать, сначала собирает `Job`, а потом сравнивает её с тем, что вернул `add`:
+с `Cancelled(duplicate)` и причиной `DuplicateCancelReason`. `enqueue`
+возвращает один хэндл и не говорит, чья это `Job`, поэтому метод, которому
+нужно это знать, сначала собирает `Job`, а потом сравнивает её с тем, что
+вернул `enqueueJob`:
 
 ```dart
 int duplicates = 0;
@@ -251,7 +253,7 @@ Job<Profile> load(String id) {
     key: (_Op.load, id),
     (ctx) => ctx.abandonable(() => api.load(id)),
   );
-  final taken = add(mine, policy: Policy.droppable);
+  final taken = enqueueJob(mine, policy: Policy.droppable);
   if (!identical(taken, mine)) {
     // `mine` отброшена и уже кончилась с `Cancelled(duplicate)`;
     // `taken` это загрузка, которая стояла до этого вызова.
@@ -287,7 +289,7 @@ Job<void> stop() {
   // Убрать то, что эта команда обесценила...
   queue.removeWhere((job) => job.key == _Op.zoom);
   // ...и пропустить саму остановку без очереди.
-  return add(
+  return enqueueJob(
     job<Ready, void>(key: _Op.stop, (ctx) => ctx.join(camera.stop)),
     first: true,
   );
@@ -338,7 +340,7 @@ bool get isPaused => _gate != null;
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();
-  run<CameraState, void>(
+  enqueue<CameraState, void>(
     key: _Op.pause,
     (ctx) => ctx.abandonable(() => gate.future),
   );
@@ -350,10 +352,10 @@ void resume() {
 }
 ```
 
-`run` и есть тот вызов, которым метод обычно ставит задачу, и ворота он ставит
-туда же, куда всё остальное: в хвост. Три задачи, которые уже стояли в очереди,
-идут до начала паузы, а за воротами ждёт только то, что добавили после
-`pause()`.
+`enqueue` и есть тот вызов, которым метод обычно ставит задачу, и ворота он
+ставит туда же, куда всё остальное: в хвост. Три задачи, которые уже стояли
+в очереди, идут до начала паузы, а за воротами ждёт только то, что добавили
+после `pause()`.
 
 Уйти ворота могут и без `resume`: их отменяет `cancelAll`, и `close` тоже. Поле
 сбрасывает один `resume`, поэтому после `cancelAll` `isPaused` продолжает
@@ -367,7 +369,7 @@ void resume() {
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();
-  add(
+  enqueueJob(
     job<CameraState, void>(key: _Op.pause, (ctx) async {
       // Отмена ещё не resume, а отменённые ворота уже не пауза.
       ctx.onCancel(() => _gate = null);
@@ -393,7 +395,7 @@ void pause() {
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();
-  add(
+  enqueueJob(
     job<CameraState, void>(
       key: _Op.pause,
       (ctx) => ctx.abandonable(() => gate.future),
@@ -408,12 +410,13 @@ void pause() {
 }
 ```
 
-`whenCancelled` регистрируется на хэндле, который вернул `add`, а не в теле,
-поэтому слышит отмену и тех ворот, что не стартовали, и тех, что работают.
-На `Job`, которая уже отменена, а именно такую `add` возвращает у закрытого
-контроллера, колбэк вызывается сразу. Колбэк сбрасывает поле, только пока
-в поле стоят эти самые ворота: после `resume()` и нового `pause()` там уже
-следующие, и конец старых ворот не должен их сбросить. Случаи:
+`whenCancelled` регистрируется на хэндле, который вернул `enqueueJob`,
+а не в теле, поэтому слышит отмену и тех ворот, что не стартовали, и тех, что
+работают. На `Job`, которая уже отменена, а именно такую `enqueueJob`
+возвращает у закрытого контроллера, колбэк вызывается сразу. Колбэк сбрасывает
+поле, только пока в поле стоят эти самые ворота: после `resume()` и нового
+`pause()` там уже следующие, и конец старых ворот не должен их сбросить.
+Случаи:
 
 | Что делаешь | Что происходит |
 | --- | --- |
@@ -427,11 +430,12 @@ void pause() {
 | `cancelAll()` | Ворота уезжают вместе со всем остальным, и очередь идёт дальше, хотя их никто не открывал. Поле сброшено, и `pause()` снова работает. |
 | Состояние уходит из `Ready` под паузой | Пауза остаётся: ворота работают в любом состоянии камеры. |
 
-`pause()` не зря ничего не возвращает. Хэндл, который отдаёт `add`, принадлежит
-воротам и завершается тогда, когда пауза кончается, а не когда начинается:
-`Done` на `resume`, `Cancelled(closed)` на `close`. Вернуть его значит позвать
-привычку, которой учат остальные методы страницы, и тогда `await pause()` ждёт
-того самого `resume`, который вызывающий и собирался сделать.
+`pause()` не зря ничего не возвращает. Хэндл, который отдаёт `enqueueJob`,
+принадлежит воротам и завершается тогда, когда пауза кончается, а не когда
+начинается: `Done` на `resume`, `Cancelled(closed)` на `close`. Вернуть его
+значит позвать привычку, которой учат остальные методы страницы, и тогда
+`await pause()` ждёт того самого `resume`, который вызывающий и собирался
+сделать.
 
 Чего движок не знает, так это того, что эта задача служит паузой. Наблюдатель
 видит старт обычной задачи, а `pending` отвечает воротами, а не работой, так

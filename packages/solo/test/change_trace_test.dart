@@ -16,7 +16,7 @@ void _breakTheRule(TestSolo solo) => solo.externalSetState(const Working());
 void main() {
   test('a change that cancels a running job is in its trace', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'job',
         keepWhile: (state) => state is! Working,
         (ctx) => pause(ctx, 100),
@@ -40,7 +40,7 @@ void main() {
   test('a rule broken with no change is traced to the checkpoint', () {
     runSolo((solo, journal, async) {
       var allowed = true;
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'job',
         keepWhile: (state) => allowed,
         (ctx) async {

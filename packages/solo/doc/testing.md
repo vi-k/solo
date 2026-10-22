@@ -52,7 +52,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),
@@ -672,7 +672,7 @@ final class CameraController extends Solo<CameraState> {
 
   CameraController(this.hw) : super(const Idle());
 
-  Job<void> connect() => run<Idle, void>(
+  Job<void> connect() => enqueue<Idle, void>(
         key: 'connect',
         timeout: const Duration(seconds: 5),
         (ctx) async {
@@ -735,9 +735,9 @@ test('connect gives up after five seconds', () {
 
 A millisecond before the deadline the job has no outcome, and the device is
 still waiting; at the deadline the token is cancelled, and `refused` counts the
-call the device let go. `connect()` gives `run` no state handlers, so the state
-stays `Idle`. A `run` with `ifCancelled` gets the deadline there, not in
-`ifFailed`. The timer the core keeps for it is gone as soon as the job ends:
+call the device let go. `connect()` gives `enqueue` no state handlers, so the
+state stays `Idle`. A `enqueue` with `ifCancelled` gets the deadline there, not
+in `ifFailed`. The timer the core keeps for it is gone as soon as the job ends:
 `async.pendingTimers` is empty after the five seconds.
 [A deadline of a job](cancellation.md#a-deadline-of-a-job) on the cancellation
 page tells a deadline from the other cancellations in that handler.

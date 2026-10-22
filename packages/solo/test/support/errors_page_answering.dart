@@ -19,7 +19,7 @@ final class ProfileController extends Solo<ProfileState> {
   /// Not on the page: what the override kept, for the tests to read.
   List<Object> get apiFailures => _apiFailures;
 
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),

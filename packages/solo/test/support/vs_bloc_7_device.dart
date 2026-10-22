@@ -79,7 +79,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   DeviceController(this._ble) : super(const Offline());
 
-  Job<void> connect() => run<Offline, void>(
+  Job<void> connect() => enqueue<Offline, void>(
         key: DeviceKey.connect,
         cancellable: false,
         (ctx) async {
@@ -88,7 +88,7 @@ final class DeviceController extends Solo<DeviceState> {
         },
       );
 
-  Job<void> readBattery() => run<Connected, void>(
+  Job<void> readBattery() => enqueue<Connected, void>(
         key: DeviceKey.readBattery,
         (ctx) async {
           final battery = await ctx.join(_ble.battery);
@@ -96,7 +96,7 @@ final class DeviceController extends Solo<DeviceState> {
         },
       );
 
-  Job<void> rename(String name) => run<Connected, void>(
+  Job<void> rename(String name) => enqueue<Connected, void>(
         key: DeviceKey.rename,
         cancellable: false,
         (ctx) => ctx.join(() => _ble.rename(name)),
@@ -104,7 +104,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   Job<void> disconnect() {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
-    return run<Connected, void>(
+    return enqueue<Connected, void>(
       key: DeviceKey.disconnect,
       cancellable: false,
       (ctx) async {
@@ -131,7 +131,7 @@ final class SweptDeviceController extends Solo<DeviceState> {
 
   final Ble _ble;
 
-  Job<void> connect() => run<Offline, void>(
+  Job<void> connect() => enqueue<Offline, void>(
         key: DeviceKey.connect,
         (ctx) async {
           await ctx.join(_ble.connect);
@@ -139,7 +139,7 @@ final class SweptDeviceController extends Solo<DeviceState> {
         },
       );
 
-  Job<void> disconnect() => run<Connected, void>(
+  Job<void> disconnect() => enqueue<Connected, void>(
         key: DeviceKey.disconnect,
         (ctx) async {
           await ctx.join(_ble.disconnect);

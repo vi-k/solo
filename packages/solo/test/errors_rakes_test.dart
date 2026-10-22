@@ -124,7 +124,7 @@ final class _TokenCamera extends Solo<CameraState>
 
   _TokenCamera() : super(const Closed());
 
-  SoloJob<void> open(String version) => run<CameraState, void>(
+  SoloJob<void> open(String version) => enqueue<CameraState, void>(
         key: version,
         (ctx) async {
           final token = StopToken();
@@ -209,7 +209,7 @@ List<String> _frames(StackTrace? trace) => [
 
 /// A job whose disposer throws.
 SoloJob<void> _dirtyCleanup(OpenSolo<int> controller) =>
-    controller.run<int, void>(key: 'cleanup', (ctx) async {
+    controller.enqueue<int, void>(key: 'cleanup', (ctx) async {
       ctx.onDispose(() async => throw StateError('disposer'));
     });
 
@@ -236,7 +236,7 @@ void main() {
       final ran = runFaked((async) {
         final controller = EveryHook(called)
           ..addListener(() => throw StateError('listener'))
-          ..run<int, void>(key: 'job', (ctx) async {
+          ..enqueue<int, void>(key: 'job', (ctx) async {
             ctx
               ..log('line')
               ..emit(1)
@@ -309,7 +309,7 @@ void main() {
       runFaked((async) {
         bench = Bench();
         bench
-            .run<int, void>(
+            .enqueue<int, void>(
               key: 'body',
               (ctx) async => throw StateError('the body'),
             )
@@ -317,7 +317,7 @@ void main() {
         _dirtyCleanup(bench);
         final abandons = waits(bench, 'abandons')..ignoreFailure();
         bench
-            .run<int, void>(
+            .enqueue<int, void>(
               key: 'rule',
               canStart: (state) => throw StateError('the rule'),
               (ctx) async {},
@@ -347,7 +347,7 @@ void main() {
       late Job<void> job;
       final ran = runFaked((async) {
         bench = Bench();
-        job = bench.run<int, void>(key: 'parent', (ctx) async {
+        job = bench.enqueue<int, void>(key: 'parent', (ctx) async {
           await ctx.run(
             bench.job<int, void>(
               key: 'child',
@@ -369,7 +369,7 @@ void main() {
       late Job<void> job;
       runFaked((async) {
         bench = Bench();
-        job = bench.run<int, void>(key: 'parent', (ctx) async {
+        job = bench.enqueue<int, void>(key: 'parent', (ctx) async {
           try {
             await ctx.run(
               bench.job<int, void>(
@@ -407,7 +407,7 @@ void main() {
                 (solo, job, error, stackTrace) => handled.add(text(error));
           }
           bench = Bench();
-          bench.run<int, void>(key: 'parent', (ctx) async {
+          bench.enqueue<int, void>(key: 'parent', (ctx) async {
             await ctx.run(
               bench.job<int, void>(
                 key: 'child',
@@ -486,7 +486,7 @@ void main() {
         'Whoever observes the outcome; `onUnanswered` if nobody does',
       );
       _says(
-        '`run(ifFailed: ...)` turns the failure into the state the '
+        '`enqueue(ifFailed: ...)` turns the failure into the state the '
         'screen shows',
       );
       _says(
@@ -501,7 +501,7 @@ void main() {
         Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add(text(error));
         bench = Bench();
-        job = bench.run<int, void>(
+        job = bench.enqueue<int, void>(
           key: 'body',
           ifFailed: (state, error, stackTrace) => -1,
           (ctx) async => throw StateError('the body'),
@@ -611,7 +611,7 @@ void main() {
         late Bench bench;
         final ran = runFaked((async) {
           bench = Bench();
-          final job = bench.run<int, void>(key: 'cancelled', (ctx) async {
+          final job = bench.enqueue<int, void>(key: 'cancelled', (ctx) async {
             ctx.onCancel(() => throw StateError('the callback'));
             await ctx.abandonable(() => stage.start<void>('op', null));
           })
@@ -641,13 +641,13 @@ void main() {
         late Job<void> next;
         final ran = runFaked((async) {
           bench = Bench();
-          job = bench.run<int, void>(
+          job = bench.enqueue<int, void>(
             key: 'handled',
             ifFailed: (state, error, stackTrace) =>
                 throw StateError('the handler'),
             (ctx) async => throw StateError('the body'),
           )..ignoreFailure();
-          next = bench.run<int, void>(key: 'next', (ctx) async {});
+          next = bench.enqueue<int, void>(key: 'next', (ctx) async {});
         });
 
         expect(bench.heard, ['handled: the body', 'handled: the handler']);
@@ -668,7 +668,7 @@ void main() {
         var cancelledByIt = true;
         final ran = runFaked((async) {
           bench = Bench();
-          job = bench.run<int, void>(
+          job = bench.enqueue<int, void>(
             key: 'kept',
             keepWhile: (state) =>
                 state == 0 ? true : throw StateError('the rule'),
@@ -698,7 +698,7 @@ void main() {
         late Job<void> job;
         final ran = runFaked((async) {
           bench = Bench();
-          job = bench.run<int, void>(key: 'hands', (ctx) async {
+          job = bench.enqueue<int, void>(key: 'hands', (ctx) async {
             ctx.unattended(() => stage.start<void>('work', null));
           });
           async.flushMicrotasks();
@@ -723,7 +723,7 @@ void main() {
         final caught = <String>[];
         final ran = runFaked((async) {
           bench = Bench();
-          job = bench.run<int, void>(key: 'group', (ctx) async {
+          job = bench.enqueue<int, void>(key: 'group', (ctx) async {
             try {
               await ctx.runAll([
                 bench.job<int, void>(
@@ -788,7 +788,7 @@ void main() {
         Object? thrown;
         final ran = runFaked((async) {
           bench = Bench();
-          job = bench.run<int, void>(key: 'covered', (ctx) async {
+          job = bench.enqueue<int, void>(key: 'covered', (ctx) async {
             ctx
                 .run(
                   bench.job<int, void>(
@@ -820,7 +820,7 @@ void main() {
         Object? thrown;
         final ran = runFaked((async) {
           bench = Bench();
-          job = bench.run<int, void>(key: 'covered', (ctx) async {
+          job = bench.enqueue<int, void>(key: 'covered', (ctx) async {
             ctx.onDispose(() => stage.start<void>('release', null));
             throw StateError('the body');
           });
@@ -874,7 +874,7 @@ void main() {
           Solo.unansweredHandler =
               (solo, job, error, stackTrace) => handled.add(text(error));
           bench = Bench();
-          job = bench.run<int, void>(
+          job = bench.enqueue<int, void>(
             key: 'stopped',
             (ctx) => ctx.join(() => stage.start<void>('op', null)),
           );
@@ -920,7 +920,7 @@ void main() {
         late Bench bench;
         where['the controller was created'] = zoneOf(() => bench = Bench());
         where['the job was created'] = zoneOf(
-          () => bench.run<int, void>(key: 'cleanup', (ctx) async {
+          () => bench.enqueue<int, void>(key: 'cleanup', (ctx) async {
             ctx.onDispose(() async => throw StateError('disposer'));
             await stage.start<void>('op', null);
           }),
@@ -985,7 +985,7 @@ void main() {
     /// beside a cancellation, a wait of nothing but cancellations, and a
     /// `Cancelled` alone.
     void handsWorkOver(Bench bench) =>
-        bench.run<int, void>(key: 'waits', (ctx) async {
+        bench.enqueue<int, void>(key: 'waits', (ctx) async {
           ctx
             ..unattended(
               () => [
@@ -1108,7 +1108,7 @@ void main() {
     test('the lines of the page: a report, then the zone', () {
       final lines = printed(() {
         Solo.observer = first.Failures();
-        Bench().run<int, void>(
+        Bench().enqueue<int, void>(
           key: 'load',
           (ctx) async => throw StateError('no network'),
         );
@@ -1121,7 +1121,7 @@ void main() {
       final lines = printed(() {
         Solo.observer = first.Failures();
         Bench()
-            .run<int, void>(
+            .enqueue<int, void>(
               key: 'load',
               (ctx) async => throw StateError('no network'),
             )
@@ -1149,7 +1149,7 @@ void main() {
         final ran = runFaked((async) {
           Solo.observer = first.Failures();
           bench = Bench()
-            ..run<int, void>(
+            ..enqueue<int, void>(
               key: 'load',
               (ctx) async => throw StateError('no network'),
             );
@@ -1163,7 +1163,8 @@ void main() {
       test('a load that is cancelled, and one that succeeds', () {
         final ran = runFaked((async) {
           Solo.observer = first.Failures();
-          final bench = Bench()..run<int, void>(key: 'fine', (ctx) async {});
+          final bench = Bench()
+            ..enqueue<int, void>(key: 'fine', (ctx) async {});
           final cancelled = waits(bench, 'cancelled')..ignoreFailure();
           async.flushMicrotasks();
           unawaited(cancelled.cancel());
@@ -1202,7 +1203,7 @@ void main() {
         final ran = runFaked((async) {
           Solo.observer = _FailuresOnFinish();
           bench = Bench()
-            ..run<int, void>(
+            ..enqueue<int, void>(
               key: 'load',
               (ctx) async => throw StateError('no network'),
             );
@@ -1244,7 +1245,7 @@ void main() {
         String? read;
         final ran = runFaked((async) {
           final bench = Bench();
-          SoloJob<void> failing(String key) => bench.run<int, void>(
+          SoloJob<void> failing(String key) => bench.enqueue<int, void>(
                 key: key,
                 (ctx) async => throw StateError(key),
               );
@@ -1412,7 +1413,7 @@ void main() {
       final ran = runFaked((async) {
         Solo.observer = watching;
         bench = Bench();
-        job = bench.run<int, void>(
+        job = bench.enqueue<int, void>(
           key: 'abandons',
           (ctx) => ctx.abandonable(() async {
             await stage.start<void>('op', null);
@@ -1471,7 +1472,7 @@ void main() {
                 (solo, job, error, stackTrace) => handled.add(text(error));
           }
           bench = Bench();
-          final job = bench.run<int, void>(
+          final job = bench.enqueue<int, void>(
             key: 'value',
             (ctx) async => throw StateError('boom'),
           );
@@ -1490,7 +1491,7 @@ void main() {
       final ran = runFaked((async) {
         final bench = Bench();
         late SoloJob<void> child;
-        job = bench.run<int, void>(key: 'parent', (ctx) async {
+        job = bench.enqueue<int, void>(key: 'parent', (ctx) async {
           child = bench.job<int, void>(
             key: 'child',
             (c) => c.abandonable(() => stage.start<void>('op', null)),
@@ -1677,7 +1678,7 @@ void main() {
         Solo.observer = watching;
         bench = Bench();
         late SoloJob<void> child;
-        job = bench.run<int, void>(key: 'parent', (ctx) async {
+        job = bench.enqueue<int, void>(key: 'parent', (ctx) async {
           child = bench.job<int, void>(
             key: 'child',
             (c) => c.abandonable(() => stage.start<void>('op', null)),
@@ -1704,7 +1705,7 @@ void main() {
           cancellable: false,
           (child) => child.abandonable(() => stage.start<void>('second', null)),
         )..ignoreFailure();
-        bench.run<int, void>(key: 'group', (ctx) async {
+        bench.enqueue<int, void>(key: 'group', (ctx) async {
           try {
             await ctx.runAll([
               bench.job<int, void>(
@@ -1739,7 +1740,7 @@ void main() {
           () => controller = EveryHook([], throwOn: 'onFinish'),
         );
         where['the job was created'] = zoneOf(
-          () => controller.run<int, void>(
+          () => controller.enqueue<int, void>(
             key: 'job',
             (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
           ),
@@ -1990,7 +1991,7 @@ void main() {
         Object? fromJoin;
         Object? fromEmit;
         var reachedTheRethrow = false;
-        final job = bench.run<int, void>(key: 'broad', (ctx) async {
+        final job = bench.enqueue<int, void>(key: 'broad', (ctx) async {
           try {
             await ctx.join(() => stage.start<void>('op', null));
           } on Object catch (error) {
@@ -2097,7 +2098,7 @@ void main() {
       );
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<int, int>(key: 'swallows', (ctx) async {
+        final job = bench.enqueue<int, int>(key: 'swallows', (ctx) async {
           try {
             await ctx.abandonable(() => stage.start<void>('op', null));
           } on Cancelled {
@@ -2118,10 +2119,10 @@ void main() {
     test('the failure state through the ifFailed parameter of run', () {
       _says(
         'For a final failure state, use the `ifFailed` parameter of '
-        '`run` rather than a broad catch',
+        '`enqueue` rather than a broad catch',
       );
       fakeAsync((async) {
-        SoloJob<void> open(Bench bench) => bench.run<int, void>(
+        SoloJob<void> open(Bench bench) => bench.enqueue<int, void>(
               key: 'open',
               ifFailed: (state, error, stackTrace) => -1,
               (ctx) => ctx.join(() => stage.start<void>('op', null)),
@@ -2168,7 +2169,7 @@ void main() {
       FakeAsync async,
       List<String> events,
     ) =>
-        (profile as OpenSolo<ProfileState>).run<ProfileState, void>(
+        (profile as OpenSolo<ProfileState>).enqueue<ProfileState, void>(
           key: 'next',
           (ctx) async => events.add('next ran at ${async.elapsed.inSeconds} s'),
         );
@@ -2340,7 +2341,7 @@ void main() {
         'job at once. It still needs nothing for the cancellation',
       );
       // Not on the page: the loop of the page with the narrower clause.
-      SoloJob<String> load(Bench bench) => bench.run<int, String>(
+      SoloJob<String> load(Bench bench) => bench.enqueue<int, String>(
             key: 'load',
             (ctx) async {
               for (var attempt = 1;; attempt++) {
@@ -2749,7 +2750,7 @@ void main() {
           'for that outcome unless somebody observes it',
         );
         _says(
-          'The state handler passed as `ifFailed` to that same `run` is '
+          'The state handler passed as `ifFailed` to that same `enqueue` is '
           'not called. A state handler computes the state after a job '
           'that ran, and this one never started',
         );
@@ -2768,7 +2769,7 @@ void main() {
               return const Slots(-1);
             },
           );
-          next = pool.run<Slots, void>(key: 'next', (ctx) async {});
+          next = pool.enqueue<Slots, void>(key: 'next', (ctx) async {});
         });
 
         expect('${job.outcome}', 'Failed(Bad state: no free slot)');
@@ -2826,7 +2827,7 @@ void main() {
               return const Slots(-2);
             },
           );
-          next = pool.run<Slots, void>(key: 'next', (ctx) async {});
+          next = pool.enqueue<Slots, void>(key: 'next', (ctx) async {});
         });
 
         final outcome = job.outcome! as Cancelled;
@@ -2852,7 +2853,7 @@ void main() {
     });
 
     group('the trace of a cancellation by the rules:', () {
-      SoloJob<void> kept(_Traced traced) => traced.run<int, void>(
+      SoloJob<void> kept(_Traced traced) => traced.enqueue<int, void>(
             key: 'kept',
             keepWhile: (state) => state < 5,
             (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
@@ -2890,7 +2891,7 @@ void main() {
       test('keepWhile re-checked on the emit of a child', () {
         fakeAsync((async) {
           final traced = _Traced();
-          final job = traced.run<int, void>(
+          final job = traced.enqueue<int, void>(
             key: 'parent',
             keepWhile: (state) => state < 5,
             (ctx) async {
@@ -2920,7 +2921,7 @@ void main() {
       /// A job that breaks its own rule with an `emit`, goes on, and reaches
       /// a checkpoint of [kind].
       SoloJob<void> breaksItsOwnRule(_Traced traced, String kind) =>
-          traced.run<int, void>(
+          traced.enqueue<int, void>(
             key: 'own',
             keepWhile: (state) => state < 5,
             (ctx) async {
@@ -2978,7 +2979,7 @@ void main() {
         );
         fakeAsync((async) {
           final controller = _Traced()..setsTooBig();
-          final job = controller.run<int, void>(
+          final job = controller.enqueue<int, void>(
             key: 'big',
             canStart: (state) => state < 5,
             (ctx) async {},
@@ -3014,13 +3015,13 @@ void main() {
           runFaked((async) {
             bench = Bench();
             bool throws(int state) => throw StateError('the rule');
-            job = bench.run<int, void>(
+            job = bench.enqueue<int, void>(
               key: 'start',
               canStart: rule == 'canStart' ? throws : null,
               keepWhile: rule == 'keepWhile' ? throws : null,
               (ctx) async {},
             )..ignoreFailure();
-            next = bench.run<int, void>(key: 'next', (ctx) async {});
+            next = bench.enqueue<int, void>(key: 'next', (ctx) async {});
           });
 
           expect('${job.outcome}', 'Failed(Bad state: the rule)');
@@ -3037,7 +3038,7 @@ void main() {
         final ran = runFaked((async) {
           bench = Bench();
           var broken = false;
-          job = bench.run<int, void>(
+          job = bench.enqueue<int, void>(
             key: 'checkpoint',
             keepWhile: (state) => broken ? throw StateError('the rule') : true,
             (ctx) async {
@@ -3066,7 +3067,7 @@ void main() {
         runFaked((async) {
           bench = Bench();
           var broken = false;
-          job = bench.run<int, void>(
+          job = bench.enqueue<int, void>(
             key: 'checkpoint',
             keepWhile: (state) => broken ? throw StateError('the rule') : true,
             (ctx) async {
@@ -3087,7 +3088,7 @@ void main() {
       /// A job whose rule throws once the state has moved on, with a state
       /// handler when [handled], and a body that fails once `op` ends.
       SoloJob<void> reevaluated(Bench bench, {required bool handled}) =>
-          bench.run<int, void>(
+          bench.enqueue<int, void>(
             key: 'reevaluated',
             keepWhile: (state) =>
                 state == 0 ? true : throw StateError('the rule'),
@@ -3151,7 +3152,7 @@ void main() {
         late Bench bench;
         runFaked((async) {
           bench = Bench();
-          bench.run<int, void>(
+          bench.enqueue<int, void>(
             key: 'handled',
             keepWhile: (state) => true,
             ifFailed: (state, error, stackTrace) => 99,
@@ -3177,7 +3178,7 @@ void main() {
         late Bench bench;
         final ran = runFaked((async) {
           bench = Bench();
-          bench.run<int, void>(
+          bench.enqueue<int, void>(
             key: 'ended',
             keepWhile: (state) =>
                 state == 0 ? true : throw StateError('the rule'),
@@ -3202,7 +3203,7 @@ void main() {
         late Bench bench;
         runFaked((async) {
           bench = Bench()
-            ..run<int, void>(
+            ..enqueue<int, void>(
               key: 'ended',
               keepWhile: (state) =>
                   state == 0 ? true : throw StateError('the rule'),
@@ -3294,7 +3295,7 @@ void main() {
           // in the zone it was created in all the same.
           where['the first job was created'] = zoneOf(() {
             camera = first.BroadCamera(Hardware())
-              ..run<CameraState, void>(
+              ..enqueue<CameraState, void>(
                 key: 'first',
                 (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
               );
@@ -3361,7 +3362,7 @@ void main() {
           late page.Camera camera;
           where['the first job was created'] = zoneOf(() {
             camera = page.Camera(Hardware())
-              ..run<CameraState, void>(
+              ..enqueue<CameraState, void>(
                 key: 'first',
                 (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
               );
@@ -3392,7 +3393,7 @@ void main() {
             made = stage.start<void>('send', null);
           });
           where['the job was created'] = zoneOf(() {
-            bench.run<int, void>(
+            bench.enqueue<int, void>(
               key: 'job',
               (ctx) async => ctx.unattended(() => made),
             );
@@ -3426,11 +3427,12 @@ void main() {
         );
         fakeAsync((async) {
           final camera = page.Camera(Hardware());
-          final job = camera.run<CameraState, void>(key: 'zoom', (ctx) async {
+          final job =
+              camera.enqueue<CameraState, void>(key: 'zoom', (ctx) async {
             page.sendZoom(ctx, 2);
             await ctx.abandonable(() => stage.start<void>('op', null));
           })
-            ..ignoreFailure();
+                ..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
           var back = false;
@@ -3457,7 +3459,7 @@ void main() {
         late Bench bench;
         runFaked((async) {
           bench = Bench();
-          bench.run<int, void>(key: 'work', (ctx) async {
+          bench.enqueue<int, void>(key: 'work', (ctx) async {
             ctx.unattended(() async {
               final calls = <String, Future<Object?> Function()>{
                 'ctx.run': () async =>
@@ -3511,7 +3513,7 @@ void main() {
         late Job<void> job;
         final ran = runFaked((async) {
           bench = Bench();
-          job = bench.run<int, void>(key: 'work', (ctx) async {
+          job = bench.enqueue<int, void>(key: 'work', (ctx) async {
             ctx.unattended(() => ctx.run(bench.job<int, void>((c) async {})));
           });
         });
@@ -3543,7 +3545,7 @@ void main() {
             }
           }
 
-          bench.run<int, void>(key: 'active', (ctx) async {
+          bench.enqueue<int, void>(key: 'active', (ctx) async {
             captured = ctx;
             await ctx.abandonable(() => stage.start<void>('op', null));
           });
@@ -3552,11 +3554,12 @@ void main() {
           endCall(async, 'op');
           final afterCompletion = emit(2);
 
-          final cancelled = bench.run<int, void>(key: 'cancelled', (ctx) async {
+          final cancelled =
+              bench.enqueue<int, void>(key: 'cancelled', (ctx) async {
             captured = ctx;
             await stage.start<void>('op', null);
           })
-            ..ignoreFailure();
+                ..ignoreFailure();
           async.flushMicrotasks();
           unawaited(cancelled.cancel());
           async.flushMicrotasks();

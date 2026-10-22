@@ -9,7 +9,7 @@ import 'streams_page.dart' as page;
 /// "Processing a stream", the first attempt.
 final class Listening extends page.Tracker {
   @override
-  Job<void> track() => run<Ready, void>(
+  Job<void> track() => enqueue<Ready, void>(
         key: 'track',
         (ctx) async {
           hw.positions.listen(
@@ -25,7 +25,7 @@ final class ScreenController extends Solo<Screen> {
 
   ScreenController(this.session) : super(const Screen());
 
-  Job<void> follow() => run<Screen, void>(
+  Job<void> follow() => enqueue<Screen, void>(
         key: 'follow',
         (ctx) => ctx.each(session.stream, (childCtx, next) {
           childCtx.emit(childCtx.state.copyWith(signedIn: next.signedIn));

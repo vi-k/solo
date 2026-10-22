@@ -11,7 +11,7 @@ void main() {
   test('a value returned after cancellation goes to the disposer', () {
     runSolo((solo, journal, async) {
       final closed = <String>[];
-      final job = solo.run<TestState, String>(
+      final job = solo.enqueue<TestState, String>(
         key: 'open',
         (ctx) async {
           final resource = await ctx.join(() async {
@@ -47,7 +47,7 @@ void main() {
   test('close waits for the disposer of a cancelled job', () {
     runSolo((solo, journal, async) {
       final closed = <String>[];
-      solo.run<TestState, String>(
+      solo.enqueue<TestState, String>(
         key: 'open',
         (ctx) async {
           final resource = await ctx.join(() async {
@@ -79,7 +79,7 @@ void main() {
 
   test('an error of the disposer goes to onError, the cancel stands', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, String>(
+      final job = solo.enqueue<TestState, String>(
         key: 'open',
         (ctx) async {
           final resource = await ctx.join(() async {

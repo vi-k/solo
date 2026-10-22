@@ -7,7 +7,7 @@ The rules of a job are asked by the engine, not by its body:
 
 | Rule | When it is asked | What a refusal does |
 | --- | --- | --- |
-| Working type `W` of `run<W, T>` | Before start, on other state updates while the body runs, and at state checkpoints | Cancels the job with `RulesCancelReason`: `started: false` before start, `started: true` while the body runs |
+| Working type `W` of `enqueue<W, T>` | Before start, on other state updates while the body runs, and at state checkpoints | Cancels the job with `RulesCancelReason`: `started: false` before start, `started: true` while the body runs |
 | `canStart` | Once, when the job is about to start | Cancels the job with `RulesCancelReason` and `started: false`: the body never runs |
 | `keepWhile` | Before start, on other state updates while the body runs, and at state checkpoints | Cancels the job with `RulesCancelReason`: `started: false` before start, `started: true` while the body runs |
 
@@ -26,7 +26,7 @@ device reports a pause.
 
 ```dart
 // The first attempt: the state is checked once, at the start.
-Job<void> record() => run<CameraState, void>(
+Job<void> record() => enqueue<CameraState, void>(
       key: 'record',
       (ctx) async {
         final state = ctx.state;
@@ -51,7 +51,7 @@ This is what happens:
 ### The rules
 
 ```dart
-Job<void> record() => run<Ready, void>(
+Job<void> record() => enqueue<Ready, void>(
       key: 'record',
       canStart: (state) => state.free > 0,
       keepWhile: (state) => !state.paused,
@@ -66,8 +66,8 @@ working type narrows from `CameraState` to `Ready`, the rules read `state.free`
 and `state.paused` with no check of the type, and the conditions the first
 attempt checked by hand are now `canStart` and `keepWhile`.
 
-The first type argument of `run<W, T>` is the job's working state type,
-`W extends S`. The engine checks it, so `run<Ready, void>` starts only in
+The first type argument of `enqueue<W, T>` is the job's working state type,
+`W extends S`. The engine checks it, so `enqueue<Ready, void>` starts only in
 `Ready`, and for the same reason the body reads `ctx.state` as `W`. Here
 `Ready`, `device` and `store` belong to the application. `ctx.each` processes
 the stream; its full lifecycle is explained in
@@ -105,7 +105,7 @@ A rule answers and does not write: a write from inside `keepWhile` throws a
 ### Reading and updating state
 
 ```dart
-Job<void> zoomIn() => run<Ready, void>(
+Job<void> zoomIn() => enqueue<Ready, void>(
       (ctx) async {
         // A read is a checkpoint: cancellation and the rules are checked.
         final state = ctx.state;
@@ -118,13 +118,13 @@ Job<void> zoomIn() => run<Ready, void>(
 
 `ctx.state`, `ctx.stateAs<T>()` and `ctx.check()` check cancellation and state
 rules. Waiting methods use state checkpoints too. So does `ctx.each`, whose
-child would keep the job's rules. The body above is `run<Ready, void>`, so
+child would keep the job's rules. The body above is `enqueue<Ready, void>`, so
 `ctx.state` is a `Ready` already. `stateAs<T>()` is for a body whose `W` is
 wider than the state it needs at that moment. It requires the state to be `T`
 rather than returning null: a mismatch cancels the job.
 
 ```dart
-Job<void> switchOn(int zoom) => run<CameraState, void>(
+Job<void> switchOn(int zoom) => enqueue<CameraState, void>(
       canStart: (state) => state is Off,
       (ctx) async {
         // W is every state, so after each wait the body names the one
@@ -365,7 +365,7 @@ Camera(this.device) : super(const Ready()) {
   _link = device.connection.listen((connected) {
     if (!connected) {
       // The fact goes in like any other work, ahead of everything waiting.
-      add(
+      enqueueJob(
         job<Ready, void>(
           key: 'disconnect',
           (ctx) async => ctx.emit(const Disconnected()),
@@ -471,7 +471,7 @@ Something has to take the controller out of it when the load does not arrive.
 
 ```dart
 // The first attempt: a cancellation leaves the state at Loading.
-run<ProfileState, String>(
+enqueue<ProfileState, String>(
   (ctx) async {
     ctx.emit(const Loading());
     try {
@@ -498,7 +498,7 @@ This is what happens:
 ### The handlers
 
 ```dart
-run<ProfileState, String>(
+enqueue<ProfileState, String>(
   // Both compute a state and nothing else. They run after the body,
   // children and cleanup, and the outcome is already fixed.
   ifFailed: (state, error, stackTrace) => Failure(error),
@@ -512,7 +512,7 @@ run<ProfileState, String>(
 );
 ```
 
-The `ifFailed` and `ifCancelled` parameters of `run`, `job`, `collect` and
+The `ifFailed` and `ifCancelled` parameters of `enqueue`, `job`, `collect` and
 `accumulate` let a controller leave a temporary state such as `Loading` when an
 operation fails or is cancelled. They receive the current state of type `S`,
 plus the error and stack trace or the `Cancelled` outcome, and return the next
@@ -541,7 +541,7 @@ final class Disconnected extends ProfileState {
   const Disconnected();
 }
 
-Job<String> load() => run<ProfileState, String>(
+Job<String> load() => enqueue<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
       ifFailed: (state, error, stackTrace) => Failure(error),
@@ -568,7 +568,7 @@ The job would still be running work that the disconnection made pointless.
 #### The rules
 
 ```dart
-Job<String> load() => run<ProfileState, String>(
+Job<String> load() => enqueue<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
       keepWhile: (state) => state is! Disconnected,
@@ -628,7 +628,7 @@ replacement from the rest. A handler that hands back the state it was given
 publishes nothing, and listeners hear `Loading`, `Loading`, `Loaded`:
 
 ```dart
-Job<String> reload() => run<ProfileState, String>(
+Job<String> reload() => enqueue<ProfileState, String>(
       key: 'load',
       policy: Policy.restart,
       ifFailed: (state, error, stackTrace) => Failure(error),

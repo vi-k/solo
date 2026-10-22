@@ -10,7 +10,7 @@ import 'support/test_state.dart';
 void main() {
   test('abandonable stops waiting when the job is cancelled', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.abandonable(() => delay(100));
         ctx.emit(const Preparing());
       });
@@ -27,7 +27,7 @@ void main() {
 
   test('abandonable stops waiting when the action cancels the job itself', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.abandonable(() {
           solo.current!.cancel();
           return delay(100);
@@ -45,7 +45,7 @@ void main() {
 
   test('abandonable stops waiting when the action drops the job by a rule', () {
     runSolo((solo, journal, async) {
-      solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         await ctx.abandonable(() {
           solo.externalSetState(const Disposed());
           return delay(100);
@@ -65,7 +65,7 @@ void main() {
   test('abandonable does not start the action when already cancelled', () {
     runSolo((solo, journal, async) {
       var started = false;
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await delay(100);
         await ctx.abandonable(() {
           started = true;
@@ -85,7 +85,7 @@ void main() {
 
   test('a late error of the abandoned future goes to onError', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.abandonable(() async {
           await delay(100);
           throw StateError('late');
@@ -109,7 +109,7 @@ void main() {
   test('a late value of the abandoned future is ignored', () {
     runSolo((solo, journal, async) {
       var resumed = false;
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.abandonable(() async {
           await delay(100);
           return 1;
@@ -129,7 +129,7 @@ void main() {
 
   test('abandonable passes values and errors through', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, int>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, int>(key: 'job', (ctx) async {
         final sync = await ctx.abandonable(() => 1);
         final later = await ctx.abandonable(() async {
           await delay(10);
@@ -137,7 +137,7 @@ void main() {
         });
         return sync + later;
       });
-      solo.run<TestState, void>(key: 'bad', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'bad', (ctx) async {
         await ctx.abandonable(() => throw StateError('boom'));
       }).ignoreFailure();
       async.flushTimers();
@@ -154,7 +154,7 @@ void main() {
 
   test('abandonable checks the rules before starting', () {
     runSolo((solo, journal, async) {
-      solo.run<Initial, void>(key: 'job', (ctx) async {
+      solo.enqueue<Initial, void>(key: 'job', (ctx) async {
         ctx.emit(const Preparing());
         await ctx.abandonable(() => delay(10));
       });
@@ -169,7 +169,7 @@ void main() {
 
   test('a timeout is an abandonable call around Future.timeout', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.abandonable(
           () => delay(100).timeout(const Duration(milliseconds: 10)),
         );
@@ -190,7 +190,7 @@ void main() {
   test('a late value of the abandoned future goes to discard', () {
     runSolo((solo, journal, async) {
       final disposed = <int>[];
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.abandonable(
           () async {
             await delay(100);
@@ -215,7 +215,7 @@ void main() {
   test('discard is not called when the value arrives in time', () {
     runSolo((solo, journal, async) {
       final disposed = <int>[];
-      final job = solo.run<TestState, int>(
+      final job = solo.enqueue<TestState, int>(
         key: 'job',
         (ctx) => ctx.abandonable(
           () async {
@@ -234,7 +234,7 @@ void main() {
   test('a late error does not reach discard', () {
     runSolo((solo, journal, async) {
       final disposed = <int>[];
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.abandonable<int>(
           () async {
             await delay(100);
@@ -258,7 +258,7 @@ void main() {
 
   test('an error from discard goes to onError', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.abandonable(
           () async {
             await delay(100);

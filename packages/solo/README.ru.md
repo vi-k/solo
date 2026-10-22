@@ -79,7 +79,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),
@@ -94,19 +94,19 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-`run<ProfileState, String>` создаёт `Job` и ставит её в очередь. `ProfileState`
-задаёт рабочий тип `W`: состояния, с которыми работает тело `Job`. Это может
-быть и подтип `S`, типа состояния контроллера. `String` задаёт тип результата.
-Оба аргумента можно оставить выводу типов: тогда `W` — весь `S`, а тип
-результата — то, что возвращает тело. Тело получает контекст `ctx` для
-изменения состояния и ожидания с учётом отмены:
+`enqueue<ProfileState, String>` создаёт `Job` и ставит её в очередь.
+`ProfileState` задаёт рабочий тип `W`: состояния, с которыми работает тело
+`Job`. Это может быть и подтип `S`, типа состояния контроллера. `String` задаёт
+тип результата. Оба аргумента можно оставить выводу типов: тогда `W` — весь
+`S`, а тип результата — то, что возвращает тело. Тело получает контекст `ctx`
+для изменения состояния и ожидания с учётом отмены:
 
 - `ctx.emit` обновляет состояние контроллера.
 - `ctx.abandonable` ждёт ответ API или бросает `Cancelled`, если во время
   ожидания `Job` принимает отмену.
 
-Два необязательных параметра `run` задают состояние для публикации, если `Job`
-не завершилась успехом:
+Два необязательных параметра `enqueue` задают состояние для публикации, если
+`Job` не завершилась успехом:
 
 - `ifFailed` возвращает состояние для публикации при ошибке `Job`.
 - `ifCancelled` возвращает состояние для публикации при отмене начатой `Job`.
@@ -221,7 +221,7 @@ final class Player extends Solo<PlayerState> {
   /// Job в очереди контроллера. Корневые Job выполняются по одной, и эта
   /// заканчивается, когда трек начинает играть: дальше его играет само
   /// устройство.
-  Job<Track> play(String id) => run<PlayerState, Track>(
+  Job<Track> play(String id) => enqueue<PlayerState, Track>(
         // Ключом может быть любой объект. Этот ключ называет операцию,
         // а не трек.
         key: _Op.play,
@@ -318,7 +318,7 @@ await player.close(mode: SoloCloseMode.drain);
 загружен:
 
 ```dart
-Job<String> reload() => run<Loaded, String>(
+Job<String> reload() => enqueue<Loaded, String>(
       (ctx) async {
         // Снимок чужого контроллера: обычное чтение, и имя об этом
         // говорит.

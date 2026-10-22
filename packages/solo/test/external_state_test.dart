@@ -10,7 +10,7 @@ import 'support/test_state.dart';
 void main() {
   test('an external state outside W cancels the running job at once', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         await delay(100);
         ctx.check();
       });
@@ -36,7 +36,7 @@ void main() {
 
   test('an external state failing keepWhile cancels the running job', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      solo.run<Preparing, void>(
+      solo.enqueue<Preparing, void>(
         key: 'job',
         keepWhile: (state) => state.progress < 100,
         (ctx) async {
@@ -57,7 +57,7 @@ void main() {
 
   test('an external state still inside W leaves the job running', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      solo.run<Preparing, void>(key: 'job', (ctx) async {
+      solo.enqueue<Preparing, void>(key: 'job', (ctx) async {
         await delay(100);
         ctx.emit(ctx.state.copyWith(progress: ctx.state.progress + 1));
       });
@@ -75,7 +75,7 @@ void main() {
 
   test('own emit is trusted, the next read cancels lazily', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<Initial, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<Initial, void>(key: 'job', (ctx) async {
         ctx
           ..emit(const Preparing())
           ..check();
@@ -92,7 +92,7 @@ void main() {
 
   test('a job that emits outside W and never reads again finishes Done', () {
     runSolo((solo, journal, async) {
-      solo.run<NotDisposed, void>(key: 'close', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'close', (ctx) async {
         ctx.emit(const Disposed());
       });
       async.flushMicrotasks();
@@ -107,11 +107,11 @@ void main() {
   test('stateAs narrows or cancels with rules', () {
     runSolo(initialState: const Preparing(progress: 5), (solo, journal, async) {
       solo
-        ..run<NotDisposed, void>(key: 'ok', (ctx) async {
+        ..enqueue<NotDisposed, void>(key: 'ok', (ctx) async {
           final preparing = ctx.stateAs<Preparing>();
           ctx.emit(preparing.copyWith(progress: 6));
         })
-        ..run<NotDisposed, void>(key: 'bad', (ctx) async {
+        ..enqueue<NotDisposed, void>(key: 'bad', (ctx) async {
           ctx.stateAs<Working>();
         });
       async.flushMicrotasks();
@@ -128,7 +128,7 @@ void main() {
   test('the same Cancelled instance is thrown and stored', () {
     runSolo((solo, journal, async) {
       Object? thrown;
-      final job = solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         await delay(100);
         try {
           ctx.check();
@@ -146,7 +146,7 @@ void main() {
 
   test('the rules stack trace points at externalSetState', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         await delay(100);
         ctx.check();
       });

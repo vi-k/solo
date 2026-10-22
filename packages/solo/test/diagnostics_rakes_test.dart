@@ -98,10 +98,10 @@ Future<void> _delay(int milliseconds) =>
 
 /// A job that waits on a call named `op` with a bare `await`.
 SoloJob<void> _ignores(Bench bench, String key) =>
-    bench.run<int, void>(key: key, (ctx) => stage.start<void>('op', null));
+    bench.enqueue<int, void>(key: key, (ctx) => stage.start<void>('op', null));
 
 /// A job that waits on a call named `op` inside an uncancellable section.
-SoloJob<void> _holds(Bench bench, String key) => bench.run<int, void>(
+SoloJob<void> _holds(Bench bench, String key) => bench.enqueue<int, void>(
       key: key,
       (ctx) => ctx.uncancellable(() => stage.start<void>('op', null)),
     );
@@ -191,7 +191,7 @@ void main() {
         page.traceTheEngine();
         page.traceTheCore();
         final bench = Bench();
-        final job = bench.run<int, void>(key: 'zoom', (ctx) async {
+        final job = bench.enqueue<int, void>(key: 'zoom', (ctx) async {
           ctx
             ..emit(1)
             ..onDispose(() async => throw StateError('disposer'));
@@ -205,7 +205,7 @@ void main() {
       });
 
       expect(ran.printed, [
-        'add Job(zoom)',
+        'enqueue Job(zoom)',
         'Job(zoom) started',
         'Job(zoom) emit: 1',
         'state: 1',
@@ -223,12 +223,12 @@ void main() {
     test('one channel alone: the queue without the jobs, and the reverse', () {
       List<String> printedWith(void Function() install) => runFaked((async) {
             install();
-            Bench().run<int, void>(key: 'zoom', (ctx) async {});
+            Bench().enqueue<int, void>(key: 'zoom', (ctx) async {});
           }).printed;
 
       expect(
         printedWith(page.traceTheEngine),
-        ['add Job(zoom)', 'queue has no ready jobs'],
+        ['enqueue Job(zoom)', 'queue has no ready jobs'],
       );
       Solo.debug = null;
       expect(
@@ -263,7 +263,7 @@ void main() {
       final ran = runFaked((async) {
         page.main();
         final bench = Bench()..reflect(1);
-        bench.run<int, void>(key: 'root', (ctx) async {
+        bench.enqueue<int, void>(key: 'root', (ctx) async {
           await ctx.run(
             bench.job<int, void>(key: 'child', (child) async => child.emit(7)),
           );
@@ -299,7 +299,7 @@ void main() {
         Solo.observer = Saying('observer', order);
         final controller = EveryHook(order)
           ..addListener(() => throw StateError('listener'))
-          ..run<int, void>(key: 'job', (ctx) async {
+          ..enqueue<int, void>(key: 'job', (ctx) async {
             ctx
               ..log('line')
               ..emit(1)
@@ -340,7 +340,7 @@ void main() {
       late _Journal journal;
       runFaked((async) {
         journal = _Journal()..externalSetState(1);
-        journal.run<int, void>(
+        journal.enqueue<int, void>(
           key: 'root',
           ifFailed: (state, error, stackTrace) => -1,
           (ctx) async {
@@ -354,7 +354,7 @@ void main() {
             throw StateError('the body');
           },
         ).ignoreFailure();
-        final cancelled = journal.run<int, void>(
+        final cancelled = journal.enqueue<int, void>(
           key: 'cancelled',
           ifCancelled: (state, cancelled) => -2,
           (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
@@ -414,8 +414,8 @@ void main() {
             order,
             throwOn: thrower == 'controller' ? 'onStart' : null,
           );
-          job = controller.run<int, void>(key: 'job', (ctx) async {});
-          next = controller.run<int, void>(key: 'next', (ctx) async {});
+          job = controller.enqueue<int, void>(key: 'job', (ctx) async {});
+          next = controller.enqueue<int, void>(key: 'next', (ctx) async {});
         });
 
         expect(order, [
@@ -444,7 +444,8 @@ void main() {
       late Job<void> job;
       final ran = runFaked((async) {
         Solo.observer = _GivingUp();
-        job = _GivingUpController().run<int, void>(key: 'job', (ctx) async {});
+        job = _GivingUpController()
+            .enqueue<int, void>(key: 'job', (ctx) async {});
       });
 
       expect('${job.outcome}', 'Done(null)');
@@ -459,7 +460,7 @@ void main() {
           () => controller = EveryHook([], throwOn: 'onChange'),
         );
         where['the job was created'] = zoneOf(
-          () => controller.run<int, void>(
+          () => controller.enqueue<int, void>(
             key: 'job',
             (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
           ),
@@ -486,7 +487,7 @@ void main() {
       final watching = Watching();
       final ran = runFaked((async) {
         Solo.observer = watching;
-        Bench().run<int, void>(
+        Bench().enqueue<int, void>(
           key: 'body',
           (ctx) async => throw StateError('the body'),
         );
@@ -679,7 +680,7 @@ void main() {
         );
         fakeAsync((async) {
           final bench = Bench();
-          final job = bench.run<int, void>(
+          final job = bench.enqueue<int, void>(
             key: 'refuses',
             cancellable: false,
             (ctx) => stage.start<void>('op', null),
@@ -709,7 +710,7 @@ void main() {
       test('a job with two children: its body, the children, the cleanup', () {
         fakeAsync((async) {
           final bench = Bench();
-          bench.run<int, void>(key: 'root', (ctx) async {
+          bench.enqueue<int, void>(key: 'root', (ctx) async {
             ctx.onDispose(() => stage.start<void>('release', null));
             for (final name in ['one', 'two']) {
               ctx
@@ -783,7 +784,7 @@ void main() {
       );
       fakeAsync((async) {
         final journal = _Journal()
-          ..run<int, void>(
+          ..enqueue<int, void>(
             key: 'last',
             cancellable: false,
             (ctx) => stage.start<void>('op', null),
@@ -846,7 +847,7 @@ void main() {
         var timers = -1;
         runFaked((async) {
           Solo.observer = page.Hangs();
-          Bench().run<int, void>(key: 'quick', (ctx) => _delay(300));
+          Bench().enqueue<int, void>(key: 'quick', (ctx) => _delay(300));
           async.elapse(const Duration(seconds: 1));
           timers = async.pendingTimers.length;
           async.elapse(const Duration(seconds: 6));
@@ -865,7 +866,7 @@ void main() {
         runFaked((async) {
           Solo.observer = page.Hangs();
           final bench = Bench();
-          bench.run<int, void>(key: 'root', (ctx) async {
+          bench.enqueue<int, void>(key: 'root', (ctx) async {
             await ctx.run(
               bench.job<int, void>(
                 key: 'child',
@@ -889,7 +890,7 @@ void main() {
           Solo.observer = page.Hangs();
           final bench = Bench();
           waits(bench, 'stuck');
-          bench.run<int, void>(key: 'queued', (ctx) async {});
+          bench.enqueue<int, void>(key: 'queued', (ctx) async {});
           async.elapse(const Duration(seconds: 6));
           endCall(async, 'op');
         });
@@ -905,7 +906,7 @@ void main() {
       test('Hangs only reports, and a deadline stops the job', () {
         _says('`Hangs` only reports: the job it names goes on running');
         _says('A job that must stop at its limit takes the limit itself, '
-            '`run(timeout: ...)`. The limit cancels the job, and the job '
+            '`enqueue(timeout: ...)`. The limit cancels the job, and the job '
             'ends `Cancelled(timeout)` when its body reaches a checkpoint or '
             'returns');
         _says('`ctx.abandonable` around the call ends the wait and leaves '
@@ -922,7 +923,7 @@ void main() {
           runningAtSix = !reported.isFinished;
           endCall(async, 'op');
 
-          limited = bench.run<int, void>(
+          limited = bench.enqueue<int, void>(
             key: 'limited',
             timeout: const Duration(seconds: 3),
             (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
@@ -952,12 +953,12 @@ void main() {
         var closed = false;
         runFaked((async) {
           final bench = Bench();
-          deaf = bench.run<int, void>(
+          deaf = bench.enqueue<int, void>(
             key: 'deaf',
             timeout: const Duration(seconds: 3),
             (ctx) => stage.start<void>('op', null),
           );
-          queued = bench.run<int, void>(key: 'queued', (ctx) async {});
+          queued = bench.enqueue<int, void>(key: 'queued', (ctx) async {});
           unawaited(
             bench.close(mode: SoloCloseMode.drain).then((_) => closed = true),
           );
@@ -1013,7 +1014,7 @@ void main() {
           (ctx) => stage.start<void>('op', null),
           (ctx) => ctx.join(() => stage.start<void>('op', null)),
         ]) {
-          final bench = Bench()..run<int, void>(key: 'slow', body);
+          final bench = Bench()..enqueue<int, void>(key: 'slow', body);
           async.flushMicrotasks();
           snapshots.add('${bench.pending}');
           endCall(async, 'op');
@@ -1030,7 +1031,7 @@ void main() {
       );
       runFaked((async) {
         Solo.observer = page.Hangs();
-        Bench().run<int, void>(key: 'slow', (ctx) async {
+        Bench().enqueue<int, void>(key: 'slow', (ctx) async {
           ctx.onDispose(() => stage.start<void>('release', null));
         });
         async.elapse(const Duration(seconds: 6));
@@ -1057,12 +1058,12 @@ void main() {
         runFaked((async) {
           Solo.observer = first.SlowJobs();
           final bench = Bench();
-          honest = bench.run<int, void>(
+          honest = bench.enqueue<int, void>(
             key: 'honest',
             (ctx) => ctx.abandonable(() => _delay(300)),
           );
           async.elapse(const Duration(seconds: 1));
-          late_ = bench.run<int, void>(key: 'late', (ctx) => _delay(300))
+          late_ = bench.enqueue<int, void>(key: 'late', (ctx) => _delay(300))
             ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(late_.cancel());
@@ -1078,8 +1079,9 @@ void main() {
         runFaked((async) {
           Solo.observer = first.SlowJobs();
           final bench = Bench()
-            ..run<int, void>(key: 'quick', (ctx) => _delay(40));
-          final queued = bench.run<int, void>(key: 'queued', (ctx) async {});
+            ..enqueue<int, void>(key: 'quick', (ctx) => _delay(40));
+          final queued =
+              bench.enqueue<int, void>(key: 'queued', (ctx) async {});
           async.flushMicrotasks();
           unawaited(queued.cancel());
           async.elapse(const Duration(seconds: 1));
@@ -1108,7 +1110,8 @@ void main() {
         );
         runFaked((async) {
           Solo.observer = page.SlowCancellations();
-          final job = Bench().run<int, void>(key: 'bare', (ctx) => _delay(300))
+          final job = Bench()
+              .enqueue<int, void>(key: 'bare', (ctx) => _delay(300))
             ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(job.cancel());
@@ -1135,7 +1138,7 @@ void main() {
             (ctx) => ctx.abandonable(() => _delay(300)),
             (ctx) => ctx.pause(const Duration(milliseconds: 300)),
           ]) {
-            final job = Bench().run<int, void>(key: 'waits', body)
+            final job = Bench().enqueue<int, void>(key: 'waits', body)
               ..ignoreFailure();
             async.elapse(const Duration(milliseconds: 10));
             unawaited(job.cancel());
@@ -1156,7 +1159,7 @@ void main() {
         );
         runFaked((async) {
           Solo.observer = page.SlowCancellations();
-          Bench().run<int, void>(key: 'long', (ctx) => _delay(3000));
+          Bench().enqueue<int, void>(key: 'long', (ctx) => _delay(3000));
           async.elapse(const Duration(seconds: 5));
         });
 
@@ -1176,7 +1179,7 @@ void main() {
           runFaked((async) {
             Solo.observer = page.SlowCancellations();
             final bench = Bench();
-            final job = bench.run<int, void>(
+            final job = bench.enqueue<int, void>(
               key: 'section',
               (ctx) => ctx.uncancellable(() => _delay(100)),
             )..ignoreFailure();
@@ -1206,7 +1209,7 @@ void main() {
         runFaked((async) {
           Solo.observer = page.SlowCancellations();
           final bench = Bench();
-          final job = bench.run<int, void>(key: 'root', (ctx) async {
+          final job = bench.enqueue<int, void>(key: 'root', (ctx) async {
             ctx.onDispose(() => _delay(200));
             ctx
                 .run(
@@ -1243,12 +1246,13 @@ void main() {
             Saying('observer', started),
           ]);
           final bench = Bench()
-            ..run<int, void>(
+            ..enqueue<int, void>(
               key: 'runs',
               (ctx) => ctx.abandonable(() => _delay(9)),
             );
-          queued = bench.run<int, void>(key: 'queued', (ctx) => _delay(300));
-          refused = bench.run<int, void>(
+          queued =
+              bench.enqueue<int, void>(key: 'queued', (ctx) => _delay(300));
+          refused = bench.enqueue<int, void>(
             key: 'refused',
             canStart: (state) => false,
             (ctx) => _delay(300),
@@ -1317,11 +1321,11 @@ void main() {
         final timers = <int>[];
         runFaked((async) {
           Solo.observer = page.StuckCancellations();
-          Bench().run<int, void>(
+          Bench().enqueue<int, void>(
             key: 'never',
             (ctx) => stage.start<void>('never', null),
           );
-          final holds = Bench().run<int, void>(
+          final holds = Bench().enqueue<int, void>(
             key: 'holds',
             (ctx) => ctx.uncancellable(() => stage.start<void>('held', null)),
           )..ignoreFailure();
@@ -1347,7 +1351,7 @@ void main() {
         );
         runFaked((async) {
           Solo.observer = page.StuckCancellations();
-          final holds = Bench().run<int, void>(key: 'holds', (ctx) async {
+          final holds = Bench().enqueue<int, void>(key: 'holds', (ctx) async {
             await ctx.uncancellable(() => stage.start<void>('held', null));
             await stage.start<void>('after', null);
           })
@@ -1376,7 +1380,7 @@ void main() {
         runFaked((async) {
           Solo.observer = page.StuckCancellations();
           final bench = Bench();
-          final job = bench.run<int, void>(key: 'root', (ctx) async {
+          final job = bench.enqueue<int, void>(key: 'root', (ctx) async {
             await ctx.run(
               bench.job<int, void>(
                 key: 'child',
@@ -1408,7 +1412,8 @@ void main() {
         );
         final ran = runFaked((async) {
           page.installAll();
-          final bare = Bench().run<int, void>(key: 'bare', (ctx) => _delay(300))
+          final bare = Bench()
+              .enqueue<int, void>(key: 'bare', (ctx) => _delay(300))
             ..ignoreFailure();
           final stuck = _ignores(Bench(), 'ignores')..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
@@ -1447,7 +1452,7 @@ void main() {
             Saying('second', order),
             Saying('third', order),
           ]);
-          Bench().run<int, void>(key: 'job', (ctx) async {});
+          Bench().enqueue<int, void>(key: 'job', (ctx) async {});
         });
 
         expect(order, [

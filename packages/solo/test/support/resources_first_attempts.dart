@@ -14,7 +14,7 @@ final class LoaderRegisteringUnder extends Solo<AppState>
     with OpenSolo<AppState>, Desk {
   LoaderRegisteringUnder() : super(const Idle());
 
-  Job<void> load() => run<Idle, void>(
+  Job<void> load() => enqueue<Idle, void>(
         key: 'load',
         (ctx) async {
           final db = await ctx.join(Database.open);
@@ -32,7 +32,7 @@ final class OpenerDisposing extends Solo<AppState>
     with OpenSolo<AppState>, Desk {
   OpenerDisposing() : super(const Idle());
 
-  Job<Database> open() => run<Idle, Database>(
+  Job<Database> open() => enqueue<Idle, Database>(
         key: 'open',
         (ctx) async {
           final db = await ctx.join(
@@ -52,7 +52,7 @@ final class HandoverKeeping extends Solo<AppState>
   HandoverKeeping() : super(const Idle());
 
   /// Not on the page: the method around the statements.
-  Job<void> hand() => run<Idle, void>(
+  Job<void> hand() => enqueue<Idle, void>(
         key: 'hand',
         (ctx) async {
           final db = await ctx.join(
@@ -73,7 +73,7 @@ final class HandoverDisowning extends Solo<AppState>
 
   /// Not on the page: the method and the call that opens the database,
   /// which the page shows in the first attempt.
-  Job<void> hand() => run<Idle, void>(
+  Job<void> hand() => enqueue<Idle, void>(
         key: 'hand',
         (ctx) async {
           final db = await ctx.join(
@@ -94,7 +94,7 @@ final class TempAbandoner extends Solo<AppState> with OpenSolo<AppState>, Desk {
   TempAbandoner() : super(const Idle());
 
   /// Not on the page: the method around the statement.
-  Job<void> write() => run<Idle, void>(
+  Job<void> write() => enqueue<Idle, void>(
         key: 'temp',
         (ctx) async {
           // Deleted whatever happens: dispose runs on every outcome.

@@ -15,8 +15,11 @@ and
   entry of
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md).
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
-- **The state handlers of `run` and `job` are renamed in `solo`: `onError` to
-  `ifFailed`, `onCancel` to `ifCancelled`.**
+- **In `solo`, `Solo.run` is renamed to `enqueue`, and `Solo.add` to
+  `enqueueJob`.** See the same entry of
+  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md).
+- **The state handlers of `enqueue` and `job` are renamed in `solo`: `onError`
+  to `ifFailed`, `onCancel` to `ifCancelled`.**
 - **`ctx.run` and `ctx.runAll` take a `ChildJob`** in `async_job`, and `solo`'s
   `SoloJob` is one: a helper that returns `job(...)` for `ctx.run` is declared
   `SoloJob<T>`, not `Job<T>`.

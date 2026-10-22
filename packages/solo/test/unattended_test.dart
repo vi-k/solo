@@ -42,13 +42,13 @@ void main() {
       final host = _Recorder('host', lines);
       final other = _Recorder('other', lines);
       _inZone(zone, () {
-        host.run<TestState, void>(key: 'j', (ctx) async {
+        host.enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() {
             // A job of the other controller, started from the background
             // of this one. Its failure is its own: it goes to the hooks of
             // the controller that made it, unobserved to its answer too —
             // not to the hooks of the job that started the work.
-            other.run<TestState, void>(
+            other.enqueue<TestState, void>(
               key: 'stray',
               (c) async => throw StateError('stray boom'),
             );
@@ -74,7 +74,7 @@ void main() {
     try {
       fakeAsync((async) {
         final solo = _Watched(lines)
-          ..run<TestState, void>(key: 'j', (ctx) async {
+          ..enqueue<TestState, void>(key: 'j', (ctx) async {
             ctx.unattended(() async {
               await delay(30);
               throw StateError('late boom');
@@ -102,7 +102,7 @@ void main() {
     var ticks = 0;
     fakeAsync((async) {
       final solo = TestSolo()
-        ..run<TestState, void>(key: 'j', (ctx) async {
+        ..enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() {
             final timer = Timer.periodic(
               const Duration(milliseconds: 10),
@@ -124,7 +124,7 @@ void main() {
     late final Timer timer;
     fakeAsync((async) {
       final solo = TestSolo()
-        ..run<TestState, void>(key: 'j', (ctx) async {
+        ..enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() {
             timer = Timer.periodic(
               const Duration(milliseconds: 10),
@@ -150,7 +150,7 @@ void main() {
     var started = false;
     fakeAsync((async) {
       final solo = TestSolo();
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'j',
         keepWhile: (state) => state is! Working,
         (ctx) async {
@@ -174,7 +174,7 @@ void main() {
     final lines = <String>[];
     fakeAsync((async) {
       final solo = _Recorder('solo', lines)
-        ..run<TestState, void>(
+        ..enqueue<TestState, void>(
           key: 'j',
           keepWhile: (state) => state is! Working,
           (ctx) async {
@@ -198,7 +198,7 @@ void main() {
     final lines = <String>[];
     fakeAsync((async) {
       final solo = _Recorder('solo', lines)
-        ..run<TestState, void>(
+        ..enqueue<TestState, void>(
           key: 'j',
           keepWhile: (state) => state is! Working,
           (ctx) async {

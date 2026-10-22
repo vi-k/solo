@@ -719,7 +719,7 @@ final class _Reversed extends Solo<SessionState>
   _Reversed(super.initialState);
 
   Job<void> signIn(String name) =>
-      run<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
+      enqueue<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
 }
 
 /// The session of the page without the stream.
@@ -727,7 +727,7 @@ final class _ListenableOnly extends Solo<SessionState> with SoloListenable {
   _ListenableOnly(super.initialState);
 
   Job<void> signIn(String name) =>
-      run<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
+      enqueue<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
 }
 
 /// The second attempt with the key the page names.

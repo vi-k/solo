@@ -279,7 +279,7 @@ final class PlainSession extends Solo<SessionState> with SoloListenable {
   PlainSession(super.initialState);
 
   Job<void> signIn(String name) =>
-      run<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
+      enqueue<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
 }
 
 /// The session of the page with its two mixins the other way round.
@@ -288,7 +288,7 @@ final class Reversed extends Solo<SessionState>
   Reversed(super.initialState);
 
   Job<void> signIn(String name) =>
-      run<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
+      enqueue<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
 }
 ''',
     WRAP,

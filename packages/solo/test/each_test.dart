@@ -16,7 +16,7 @@ void main() {
   test('each returns when the stream is done', () {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx
             .each(
               events.stream,
@@ -49,7 +49,7 @@ void main() {
     runSolo((solo, journal, async) {
       var cancelled = false;
       final events = StreamController<int>(onCancel: () => cancelled = true);
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx
             .each(
               events.stream,
@@ -80,7 +80,7 @@ void main() {
     runSolo((solo, journal, async) {
       var cancelled = false;
       final events = StreamController<int>(onCancel: () => cancelled = true);
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         try {
           await ctx
               .each(
@@ -114,7 +114,7 @@ void main() {
     runSolo((solo, journal, async) {
       var cancelled = false;
       final events = StreamController<int>(onCancel: () => cancelled = true);
-      solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         await ctx
             .each(
               events.stream,
@@ -142,7 +142,7 @@ void main() {
       var cancelled = false;
       final events = StreamController<int>(onCancel: () => cancelled = true);
       // `ignoreFailure`, because an unobserved `Failed` goes to the zone.
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.each(events.stream, (child, p) {
           if (p == 2) {
             throw const FormatException('bad event');
@@ -176,7 +176,7 @@ void main() {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
       var callbackReturned = false;
-      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+      final parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         await ctx.each<int>(events.stream, (child, event) async {
           await child.job.done;
           callbackReturned = true;
@@ -204,7 +204,7 @@ void main() {
     runSolo((solo, journal, async) {
       final never = Completer<void>();
       final events = StreamController<int>(onCancel: () => never.future);
-      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+      final parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         await ctx.each<int>(events.stream, (child, event) {}).value;
       });
       async.flushMicrotasks();
@@ -223,7 +223,7 @@ void main() {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
       final seen = <int>[];
-      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+      final parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         await ctx.each<int>(events.stream, (child, event) async {
           seen.add(event);
           child.job.cancel().ignore();
@@ -246,7 +246,7 @@ void main() {
   test('a plain await in the callback holds the parent until it returns', () {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
-      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+      final parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         await ctx.each<int>(events.stream, (child, event) async {
           await delay(1000);
         }).value;
@@ -272,7 +272,7 @@ void main() {
       () {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
-      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+      final parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         await ctx.each<int>(events.stream, (child, event) async {
           await child.abandonable(() => delay(1000));
         }).value;
@@ -300,7 +300,7 @@ void main() {
       final events = StreamController<int>();
       var past = false;
       try {
-        solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+        solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
           await ctx
               .each(
                 events.stream,
@@ -338,7 +338,7 @@ void main() {
       runSolo((solo, journal, async) {
         final events = StreamController<int>();
         Object? thrown;
-        final job = solo.run<Initial, void>(key: 'job', (ctx) async {
+        final job = solo.enqueue<Initial, void>(key: 'job', (ctx) async {
           ctx.emit(const Preparing());
           try {
             // Not read: a child refused at its start would be heard of by
@@ -365,7 +365,7 @@ void main() {
     test('a keepWhile that refuses it does the same', () {
       runSolo((solo, journal, async) {
         final events = StreamController<int>();
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'job',
           keepWhile: (state) => state is! Working,
           (ctx) async {
@@ -387,7 +387,7 @@ void main() {
     test('ifCancelled does not run, as at any checkpoint of the rules', () {
       runSolo((solo, journal, async) {
         final events = StreamController<int>();
-        solo.run<Initial, void>(
+        solo.enqueue<Initial, void>(
           key: 'job',
           ifCancelled: (state, cancelled) => const Disposed(),
           (ctx) async {
@@ -411,7 +411,7 @@ void main() {
       runSolo((solo, journal, async) {
         final gate = Completer<void>();
         final events = StreamController<int>();
-        final job = solo.run<Initial, void>(
+        final job = solo.enqueue<Initial, void>(
           key: 'job',
           ifCancelled: (state, cancelled) => const Disposed(),
           (ctx) async {
@@ -442,7 +442,7 @@ void main() {
     test('unattended work is refused for being unattended first', () {
       runSolo((solo, journal, async) {
         final events = StreamController<int>();
-        solo.run<Initial, void>(key: 'job', (ctx) async {
+        solo.enqueue<Initial, void>(key: 'job', (ctx) async {
           ctx
             ..emit(const Preparing())
             ..unattended(() => ctx.each(events.stream, (child, p) {}));

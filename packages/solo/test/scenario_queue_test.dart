@@ -10,7 +10,7 @@ import 'support/test_state.dart';
 
 /// A short job that only bumps its counter: the "other events" of the 1.x
 /// scenarios.
-SoloJob<void> noop(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> noop(TestSolo solo, int n) => solo.enqueue<Special, void>(
       key: 'noop',
       describe: () => '$n',
       (ctx) async {
@@ -20,7 +20,7 @@ SoloJob<void> noop(TestSolo solo, int n) => solo.run<Special, void>(
     );
 
 /// A 100 ms job with no policy at all: the queue alone orders it.
-SoloJob<void> sequential(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> sequential(TestSolo solo, int n) => solo.enqueue<Special, void>(
       key: 'sequential',
       describe: () => '$n',
       (ctx) async {
@@ -50,7 +50,7 @@ SoloJob<void> droppableByQueue(TestSolo solo, int n) {
     job.cancel();
     return existing as SoloJob<void>;
   }
-  return solo.add(job);
+  return solo.enqueueJob(job);
 }
 
 /// `Policy.restart` written out by hand: drop the queued namesakes, cancel
@@ -61,7 +61,7 @@ SoloJob<void> restartableByQueue(TestSolo solo, int n) {
   if (current != null && current.key == 'restartable') {
     current.cancel();
   }
-  return solo.add(
+  return solo.enqueueJob(
     solo.job<Special, void>(
       key: 'restartable',
       describe: () => '$n',

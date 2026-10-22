@@ -54,7 +54,7 @@ final class BroadCamera extends Solo<CameraState>
   BroadCamera(this.hw) : super(const Closed());
 
   /// Not on the page: the method around the statements.
-  SoloJob<void> open(double zoom) => run<CameraState, void>(
+  SoloJob<void> open(double zoom) => enqueue<CameraState, void>(
         key: 'open',
         (ctx) async {
           try {
@@ -69,7 +69,7 @@ final class BroadCamera extends Solo<CameraState>
       );
 
   /// Not on the page: a job around [sendZoomUnawaited].
-  SoloJob<void> zoomTo(double zoom) => run<CameraState, void>(
+  SoloJob<void> zoomTo(double zoom) => enqueue<CameraState, void>(
         key: 'zoom',
         (ctx) async => sendZoomUnawaited(),
       );
@@ -84,7 +84,7 @@ final class DelayingProfile extends Solo<ProfileState>
   DelayingProfile(this.api) : super(const Initial());
 
   /// Not on the page: the job around the statements.
-  SoloJob<String> load() => run<ProfileState, String>(
+  SoloJob<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         ifFailed: (state, error, stackTrace) => Failure(error),
         ifCancelled: (state, cancelled) => const Initial(),
@@ -122,7 +122,7 @@ final class ThrowingPool extends Solo<Slots> with OpenSolo<Slots>, Desk<Slots> {
   SoloJob<void> take({
     Slots Function(Slots state, Object error, StackTrace stackTrace)? ifFailed,
   }) =>
-      run<Slots, void>(
+      enqueue<Slots, void>(
         key: 'take',
         canStart: (state) {
           if (state.free == 0) throw StateError('no free slot');

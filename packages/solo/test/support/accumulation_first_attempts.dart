@@ -11,7 +11,7 @@ final class QueuedSearch extends Solo<SearchState> {
 
   QueuedSearch(this.api) : super(const SearchState.idle());
 
-  Job<void> query(String text) => run<SearchState, void>(
+  Job<void> query(String text) => enqueue<SearchState, void>(
         key: 'query',
         (ctx) async {
           final results = await ctx.abandonable(() => api.search(text));
@@ -25,7 +25,7 @@ final class EagerSettingsController extends Solo<Settings> {
 
   EagerSettingsController(this._api, Settings initial) : super(initial);
 
-  Job<void> update(SettingsPatch patch) => run<Settings, void>(
+  Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
         key: 'settings',
         (ctx) async {
           final next = patch.apply(ctx.state);
@@ -40,7 +40,7 @@ final class EagerLogController extends Solo<int> {
 
   EagerLogController(this._api) : super(0);
 
-  Job<void> logEvent(LogEntry entry) => run<int, void>(
+  Job<void> logEvent(LogEntry entry) => enqueue<int, void>(
         key: 'logs',
         (ctx) async {
           await ctx.join(() => _api.send([entry]));
@@ -54,7 +54,7 @@ final class QueuedPlayer extends Solo<Playback> {
 
   QueuedPlayer(this.device) : super(const Paused());
 
-  Job<void> resume() => run<Playback, void>(
+  Job<void> resume() => enqueue<Playback, void>(
         key: Command.resume,
         (ctx) async {
           await ctx.join(device.resume);
@@ -62,7 +62,7 @@ final class QueuedPlayer extends Solo<Playback> {
         },
       );
 
-  Job<void> pause() => run<Playback, void>(
+  Job<void> pause() => enqueue<Playback, void>(
         key: Command.pause,
         (ctx) async {
           await ctx.join(device.pause);

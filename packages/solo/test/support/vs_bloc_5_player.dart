@@ -82,7 +82,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
 
   PlayerController(this._player) : super(Ready());
 
-  Job<void> play() => run<Ready, void>(
+  Job<void> play() => enqueue<Ready, void>(
         key: PlayerKey.play,
         (ctx) async {
           await ctx.join(_player.play);
@@ -90,7 +90,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
         },
       );
 
-  Job<void> pause() => run<Ready, void>(
+  Job<void> pause() => enqueue<Ready, void>(
         key: PlayerKey.pause,
         (ctx) async {
           await ctx.join(_player.pause);
@@ -98,7 +98,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
         },
       );
 
-  Job<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => enqueue<Ready, void>(
         key: PlayerKey.seek,
         policy: Policy.restart,
         (ctx) async {
@@ -125,7 +125,7 @@ final class CatchingPlayerController extends Solo<PlayerState> {
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       heard.add('$error');
 
-  Job<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => enqueue<Ready, void>(
         key: PlayerKey.seek,
         policy: Policy.restart,
         (ctx) async {

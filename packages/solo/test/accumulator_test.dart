@@ -65,7 +65,7 @@ void main() {
                   policy: policy,
                 );
           final first = events.add('1');
-          solo.run<String, void>((ctx) async {
+          solo.enqueue<String, void>((ctx) async {
             calls.add('B:${ctx.state}');
           });
           final second = events.add('2');
@@ -223,7 +223,7 @@ void main() {
             merge: (a, b) {
               switch (mutation) {
                 case 'append':
-                  solo.run<int, void>((ctx) async {});
+                  solo.enqueue<int, void>((ctx) async {});
                 case 'cancel':
                   first.cancel();
                 case 'close':
@@ -541,7 +541,7 @@ void main() {
         policy: AccumulationPolicy.adjacent,
       );
       final first = events.add(1);
-      final separator = solo.run<TestState, void>((ctx) async {});
+      final separator = solo.enqueue<TestState, void>((ctx) async {});
       final next = events.add(2);
       solo.queue.remove(separator);
       expect(identical(next, events.add(3)), isTrue);
@@ -576,13 +576,13 @@ void main() {
           case 'clear':
             solo.queue.clear();
           case 'replace':
-            solo.run<TestState, void>(
+            solo.enqueue<TestState, void>(
               (ctx) async {},
               key: 'events',
               policy: Policy.replace,
             );
           case 'restart':
-            solo.run<TestState, void>(
+            solo.enqueue<TestState, void>(
               (ctx) async {},
               key: 'events',
               policy: Policy.restart,
@@ -609,7 +609,7 @@ void main() {
         key: 'same',
       );
       final group = events.add(3);
-      final dropped = solo.run<TestState, int>(
+      final dropped = solo.enqueue<TestState, int>(
         (ctx) async => 99,
         key: 'same',
         policy: Policy.droppable,
@@ -983,7 +983,7 @@ void main() {
         final solo = TestSolo();
         final gate = Completer<void>();
         final calls = <int>[];
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'busy',
           (ctx) => ctx.join(() => gate.future),
         );
@@ -1022,7 +1022,7 @@ void main() {
         onStart: (job) => journal.add('start ${job.key}'),
         onFinish: (job) => journal.add('finish ${job.key} ${job.outcome}'),
       );
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.join(() => gate.future),
       );
@@ -1058,7 +1058,7 @@ void main() {
       final solo = TestSolo();
       final gate = Completer<void>();
       final calls = <int>[];
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.join(() => gate.future),
       );
@@ -1088,7 +1088,7 @@ void main() {
       final solo = TestSolo();
       final gate = Completer<void>();
       final calls = <String>[];
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.join(() => gate.future),
       );
@@ -1100,7 +1100,7 @@ void main() {
       );
       async.flushMicrotasks();
       final first = events.add(1);
-      final separator = solo.run<TestState, void>(
+      final separator = solo.enqueue<TestState, void>(
         key: 'b',
         (ctx) async => calls.add('b'),
       );
@@ -1127,7 +1127,7 @@ void main() {
       final solo = TestSolo();
       final calls = <String>[];
       final gate = Completer<void>();
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.join(() => gate.future),
       );
@@ -1141,7 +1141,7 @@ void main() {
       events.add(1);
       expect(solo.queue.length, 1);
       final group = events.add(2);
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'shared',
         policy: Policy.restart,
         (ctx) async => calls.add('restart'),
@@ -1161,7 +1161,7 @@ void main() {
       final solo = TestSolo();
       final calls = <String>[];
       final gate = Completer<void>();
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.join(() => gate.future),
       );
@@ -1220,7 +1220,7 @@ void main() {
       final solo = TestSolo();
       final calls = <int>[];
       final gate = Completer<void>();
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.join(() => gate.future),
       );
@@ -1251,7 +1251,7 @@ void main() {
       final solo = TestSolo();
       final calls = <int>[];
       final gate = Completer<void>();
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.join(() => gate.future),
       );
@@ -1280,7 +1280,7 @@ void main() {
         final solo = TestSolo();
         final calls = <int>[];
         final gate = Completer<void>();
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'busy',
           (ctx) => ctx.join(() => gate.future),
         );
@@ -1306,7 +1306,7 @@ void main() {
       final solo = TestSolo();
       final calls = <String>[];
       final gate = Completer<void>();
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.join(() => gate.future),
       );
@@ -1319,7 +1319,7 @@ void main() {
       events
         ..add(1)
         ..add(2);
-      solo.add(
+      solo.enqueueJob(
         solo.job<TestState, void>(
           key: 'ahead',
           (ctx) async => calls.add('ahead'),
@@ -1479,7 +1479,7 @@ List<String> _rulesTrace(
       timing: timing,
     );
     if (busy) {
-      solo.run<int, void>(
+      solo.enqueue<int, void>(
         key: 'busy',
         (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 100)),
@@ -1487,7 +1487,7 @@ List<String> _rulesTrace(
       );
     }
     events.add('a1');
-    solo.run<int, void>(
+    solo.enqueue<int, void>(
       key: 'other',
       (ctx) async => trace.add('other@${now()}'),
     );
@@ -1526,14 +1526,14 @@ List<String> _defaultTrace({
       key: 'a',
       timing: timing,
     );
-    solo.run<int, void>(
+    solo.enqueue<int, void>(
       key: 'busy',
       (ctx) => ctx.abandonable(
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       ),
     );
     handles.add(events.add('a1'));
-    solo.run<int, void>(
+    solo.enqueue<int, void>(
       key: 'other',
       (ctx) async => trace.add('other@${now()}'),
     );

@@ -17,14 +17,14 @@ final class SharedKeyController extends Solo<CameraState>
     with OpenSolo<CameraState>, Workbench {
   SharedKeyController() : super(const Ready());
 
-  Job<Profile> load(String id) => run<Ready, Profile>(
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
         key: _Op.load,
         policy: Policy.droppable,
         (ctx) => ctx.abandonable(() => api.load(id)),
       );
 }
 
-/// The first attempt of "Pausing the queue": the gate goes where `run` puts
+/// The first attempt of "Pausing the queue": the gate goes where `enqueue` puts
 /// it, and `resume` alone clears the field.
 final class TailGateController extends Solo<CameraState>
     with OpenSolo<CameraState>, Workbench {
@@ -37,7 +37,7 @@ final class TailGateController extends Solo<CameraState>
   void pause() {
     if (_gate != null) return;
     final gate = _gate = Completer<void>();
-    run<CameraState, void>(
+    enqueue<CameraState, void>(
       key: _Op.pause,
       (ctx) => ctx.abandonable(() => gate.future),
     );
@@ -62,7 +62,7 @@ final class BodyGateController extends Solo<CameraState>
   void pause() {
     if (_gate != null) return;
     final gate = _gate = Completer<void>();
-    add(
+    enqueueJob(
       job<CameraState, void>(key: _Op.pause, (ctx) async {
         // Cancellation is not a resume, and a cancelled gate is not a pause.
         ctx.onCancel(() => _gate = null);

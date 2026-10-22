@@ -54,7 +54,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),
@@ -672,7 +672,7 @@ final class CameraController extends Solo<CameraState> {
 
   CameraController(this.hw) : super(const Idle());
 
-  Job<void> connect() => run<Idle, void>(
+  Job<void> connect() => enqueue<Idle, void>(
         key: 'connect',
         timeout: const Duration(seconds: 5),
         (ctx) async {
@@ -735,9 +735,9 @@ test('connect gives up after five seconds', () {
 
 За миллисекунду до срока у задачи нет исхода, а устройство ещё ждёт; в срок
 токен отменяется, и `refused` засчитывает вызов, который устройство отпустило.
-`connect()` не даёт `run` обработчиков состояния, поэтому состояние остаётся
-`Idle`. У `run` с `ifCancelled` срок попадает туда, а не в `ifFailed`. Таймер,
-который ядро держит для него, исчезает, как только задача кончилась: после пяти
-секунд `async.pendingTimers` пуст. Как в этом обработчике отличить срок
-от других отмен, показывает раздел [«Срок задачи»](cancellation.md#срок-задачи)
-на странице об отмене.
+`connect()` не даёт `enqueue` обработчиков состояния, поэтому состояние
+остаётся `Idle`. У `enqueue` с `ifCancelled` срок попадает туда,
+а не в `ifFailed`. Таймер, который ядро держит для него, исчезает, как только
+задача кончилась: после пяти секунд `async.pendingTimers` пуст. Как в этом
+обработчике отличить срок от других отмен, показывает раздел
+[«Срок задачи»](cancellation.md#срок-задачи) на странице об отмене.

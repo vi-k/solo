@@ -12,7 +12,7 @@ void main() {
     () {
       fakeAsync((async) {
         final solo = _StreamCloseOnFinish()
-          ..run<TestState, void>(key: 'dropped', (ctx) async {});
+          ..enqueue<TestState, void>(key: 'dropped', (ctx) async {});
         final outer = solo.close();
         expect(solo.reentered, isNotNull, reason: 'the hook ran');
         expect(identical(solo.reentered, outer), isTrue);
@@ -27,11 +27,11 @@ void main() {
     () {
       runSoloStream((solo, journal, async) {
         solo
-          ..run<TestState, void>(
+          ..enqueue<TestState, void>(
             key: 'running',
             (ctx) async => pause(ctx, 50),
           )
-          ..run<TestState, void>(key: 'queued', (ctx) async {});
+          ..enqueue<TestState, void>(key: 'queued', (ctx) async {});
         async.flushMicrotasks();
         final first = solo.close(mode: SoloCloseMode.drain);
         async.elapse(const Duration(milliseconds: 10));
@@ -77,7 +77,7 @@ void main() {
       final SoloStream<int> typed = solo;
       final seen = <int>[];
       typed.stream.listen(seen.add);
-      solo.run<int, void>((ctx) async => ctx.emit(3));
+      solo.enqueue<int, void>((ctx) async => ctx.emit(3));
       async.flushMicrotasks();
       expect(seen, [3]);
     });

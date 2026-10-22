@@ -36,7 +36,7 @@ void addNested(TestSolo solo) {
       ctx.emit(const Working());
     },
   );
-  solo.run<NotDisposed, void>(
+  solo.enqueue<NotDisposed, void>(
     key: 'test1',
     canStart: (state) => state is Initial,
     (ctx) async {
@@ -81,7 +81,7 @@ void addOnEmit(
   TestSolo solo, {
   bool Function(Preparing state)? childKeepWhile,
 }) {
-  solo.run<Preparing, void>(key: 'parent', (ctx) async {
+  solo.enqueue<Preparing, void>(key: 'parent', (ctx) async {
     await pause(ctx, 100);
     final child = solo.job<Preparing, void>(
       key: 'child',
@@ -475,7 +475,7 @@ void main() {
   test('a child whose keepWhile contradicts the parent is dropped at run', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
       var childBodyRan = false;
-      solo.run<Preparing, void>(
+      solo.enqueue<Preparing, void>(
         key: 'parent',
         keepWhile: (state) => state.progress < 50,
         (ctx) async {
@@ -507,7 +507,7 @@ void main() {
       'parent takes the child down', () {
     runSolo(initialState: const Preparing(progress: 10),
         (solo, journal, async) {
-      solo.run<Preparing, void>(
+      solo.enqueue<Preparing, void>(
         key: 'parent',
         keepWhile: (state) => state.progress < 50,
         (ctx) async {

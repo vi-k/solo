@@ -201,11 +201,11 @@ camera may fairly take longer, and the number is the one this application is
 willing to call late.
 
 `Hangs` only reports: the job it names goes on running. A job that must stop at
-its limit takes the limit itself, `run(timeout: ...)`. The limit cancels the
-job, and the job ends `Cancelled(timeout)` when its body reaches a checkpoint
-or returns. A body that awaits a call bare reaches none until the call returns,
-and the queue and `close()` wait for it all that time. Such a call is stopped
-only by its own means, such as the token that
+its limit takes the limit itself, `enqueue(timeout: ...)`. The limit cancels
+the job, and the job ends `Cancelled(timeout)` when its body reaches a
+checkpoint or returns. A body that awaits a call bare reaches none until the
+call returns, and the queue and `close()` wait for it all that time. Such a
+call is stopped only by its own means, such as the token that
 [A deadline of a job](cancellation.md#a-deadline-of-a-job) on the cancellation
 page hands to the seek. `ctx.abandonable` around the call ends the wait and
 leaves the call running.

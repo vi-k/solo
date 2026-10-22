@@ -11,7 +11,7 @@ void main() {
   test('onCancel runs when the job is cancelled', () {
     runSolo((solo, journal, async) {
       final calls = <String>[];
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx.onCancel(() => calls.add('stop'));
         await ctx.abandonable(() => delay(100));
       });
@@ -30,7 +30,7 @@ void main() {
   test('onCancel runs before the body learns about the cancellation', () {
     runSolo((solo, journal, async) {
       final order = <String>[];
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx.onCancel(() => order.add('callback'));
         try {
           await ctx.abandonable(() => delay(100));
@@ -49,7 +49,7 @@ void main() {
   test('onCancel runs when a rule drops the running job', () {
     runSolo((solo, journal, async) {
       final calls = <String>[];
-      solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         ctx.onCancel(() => calls.add('stop'));
         await ctx.abandonable(() => delay(100));
       });
@@ -68,7 +68,7 @@ void main() {
   test('onCancel runs when the controller closes', () {
     runSolo((solo, journal, async) {
       final calls = <String>[];
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx.onCancel(() => calls.add('stop'));
         await ctx.abandonable(() => delay(100));
       });
@@ -82,7 +82,7 @@ void main() {
   test('callbacks run in registration order', () {
     runSolo((solo, journal, async) {
       final calls = <String>[];
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx
           ..onCancel(() => calls.add('first'))
           ..onCancel(() => calls.add('second'));
@@ -98,7 +98,7 @@ void main() {
   test('the returned function unregisters the callback', () {
     runSolo((solo, journal, async) {
       final calls = <String>[];
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         final remove = ctx.onCancel(() => calls.add('stop'));
         await ctx.abandonable(() => delay(10));
         remove();
@@ -114,7 +114,7 @@ void main() {
   test('a throwing callback goes to onError and cancels all the same', () {
     runSolo((solo, journal, async) {
       final calls = <String>[];
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx
           ..onCancel(() => throw StateError('boom'))
           ..onCancel(() => calls.add('second'));
@@ -136,7 +136,7 @@ void main() {
   test('onCancel on an already cancelled job throws Cancelled', () {
     runSolo((solo, journal, async) {
       Object? caught;
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         try {
           await ctx.abandonable(() => delay(100));
         } on Cancelled {
@@ -158,7 +158,7 @@ void main() {
   test('onCancel after the job finished throws StateError', () {
     runSolo((solo, journal, async) {
       late SoloContext<TestState, TestState> escaped;
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         escaped = ctx;
       });
       async.flushMicrotasks();

@@ -59,7 +59,7 @@ final class MapController extends Solo<MapState> {
 
   MapController(this._map) : super(const MapState());
 
-  Job<void> moveTo(Point<double> point) => run<MapState, void>(
+  Job<void> moveTo(Point<double> point) => enqueue<MapState, void>(
         key: MapKey.moveTo,
         policy: Policy.restart,
         (ctx) async {
@@ -70,7 +70,7 @@ final class MapController extends Solo<MapState> {
         },
       );
 
-  Job<void> setZoom(double value) => run<MapState, void>(
+  Job<void> setZoom(double value) => enqueue<MapState, void>(
         key: MapKey.setZoom,
         policy: Policy.restart,
         (ctx) async {
@@ -90,7 +90,7 @@ void onMapDrag(MapController map, Point<double> point) => map.moveTo(point);
 final class FailingMapController extends Solo<MapState> {
   FailingMapController() : super(const MapState());
 
-  Job<void> fail() => run<MapState, void>(
+  Job<void> fail() => enqueue<MapState, void>(
         (ctx) async => throw StateError('the map failed'),
       );
 }

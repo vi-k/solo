@@ -32,7 +32,7 @@ void main() {
       // Read inside the body, asserted outside: a failing `expect` in a job
       // body ends the job as `Failed` instead of failing the test.
       ({int level, bool isChild, bool isRunning})? childAtRun;
-      final test1 = solo.run<NotDisposed, void>(
+      final test1 = solo.enqueue<NotDisposed, void>(
         key: 'test1',
         canStart: (state) => state is Initial,
         (ctx) async {
@@ -80,7 +80,7 @@ void main() {
     runSolo((solo, journal, async) {
       var childBodyRan = false;
       bool? childFinishedAtRun;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<Working, void>(key: 'child', (childCtx) async {
           childBodyRan = true;
         });
@@ -103,7 +103,7 @@ void main() {
 
   test('await run of a child dropped at start reports the child', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<Working, void>(key: 'child', (ctx) async {});
         await ctx.run(child);
       });
@@ -120,7 +120,7 @@ void main() {
 
   test('the parent finishes only after an un-awaited child', () {
     runSolo((solo, journal, async) {
-      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+      final parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           await delay(100);
           ctx.emit(const Preparing());
@@ -141,7 +141,7 @@ void main() {
 
   test('cancelling the parent cascades to children, deepest first', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           final grandchild = solo.job<TestState, void>(
             key: 'grandchild',
@@ -177,7 +177,7 @@ void main() {
       // Registered parent first, deepest child last: the recorded order can
       // only come from the order in which the marks were set.
       final marked = <String>[];
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         ctx.job.whenCancelled((_) => marked.add('parent'));
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           ctx.job.whenCancelled((_) => marked.add('child'));
@@ -215,7 +215,7 @@ void main() {
 
   test('await run propagates the child cancellation as handler', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      solo.run<Preparing, void>(key: 'parent', (ctx) async {
+      solo.enqueue<Preparing, void>(key: 'parent', (ctx) async {
         final child = solo.job<Preparing, void>(
           key: 'child',
           keepWhile: (state) => state.progress < 50,
@@ -244,7 +244,7 @@ void main() {
 
   test('await child.done lets the parent continue after cancellation', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      solo.run<PreparingAndWorking, void>(key: 'parent', (ctx) async {
+      solo.enqueue<PreparingAndWorking, void>(key: 'parent', (ctx) async {
         final child = solo.job<Preparing, void>(
           key: 'child',
           keepWhile: (state) => state.progress < 50,
@@ -273,7 +273,7 @@ void main() {
 
   test('a failed child reports onError and fails the parent via run', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           throw StateError('boom');
         });
@@ -296,7 +296,7 @@ void main() {
 
   test("a child's emit re-evaluates the parent's rules", () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      solo.run<Preparing, void>(
+      solo.enqueue<Preparing, void>(
         key: 'parent',
         keepWhile: (state) => state.progress != 50,
         (ctx) async {
@@ -327,7 +327,7 @@ void main() {
 
   test("a child's emit outside the parent's W cancels the parent", () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      solo.run<Preparing, void>(key: 'parent', (ctx) async {
+      solo.enqueue<Preparing, void>(key: 'parent', (ctx) async {
         final child = solo.job<PreparingAndWorking, void>(
           key: 'child',
           (ctx) async {
@@ -353,7 +353,7 @@ void main() {
 
   test('parallel children each re-evaluate the other', () {
     runSolo(initialState: const Working(), (solo, journal, async) {
-      solo.run<Working, void>(key: 'parent', (ctx) async {
+      solo.enqueue<Working, void>(key: 'parent', (ctx) async {
         final jobA = solo.job<Working, void>(
           key: 'a',
           keepWhile: (state) => state.b == 0,
@@ -385,7 +385,7 @@ void main() {
 
   test('a cancellable: false child finishes and the parent waits', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<TestState, void>(
           key: 'child',
           cancellable: false,
@@ -418,7 +418,7 @@ void main() {
         key: 'child',
         (ctx) async => 7,
       );
-      final parent = solo.run<Initial, void>(key: 'parent', (ctx) async {
+      final parent = solo.enqueue<Initial, void>(key: 'parent', (ctx) async {
         ctx.emit(const Working());
         await ctx.run(child);
         continued = true;
@@ -458,11 +458,11 @@ void main() {
         },
       );
       child.value.then((value) => childValue = value).ignore();
-      final parent = solo.run<Initial, void>(key: 'parent', (ctx) async {
+      final parent = solo.enqueue<Initial, void>(key: 'parent', (ctx) async {
         await ctx.run(child);
         order.add('parent continued');
       });
-      final next = solo.run<TestState, void>(key: 'next', (ctx) async {
+      final next = solo.enqueue<TestState, void>(key: 'next', (ctx) async {
         order.add('next starts');
       });
 
@@ -492,7 +492,7 @@ void main() {
       late SoloContext<TestState, TestState> leaked;
       final used = solo.job<TestState, void>(key: 'used', (ctx) async {});
       Object? secondRunError;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         leaked = ctx;
         ctx.run(used).ignore();
         try {
@@ -509,7 +509,7 @@ void main() {
       );
 
       final orphan = solo.job<TestState, void>(key: 'orphan', (ctx) async {});
-      solo.run<TestState, void>(key: 'cancelled', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'cancelled', (ctx) async {
         await delay(100);
         ctx.run(orphan).ignore();
       });
@@ -527,9 +527,10 @@ void main() {
 
   test('a queued job cannot be run as a child', () {
     runSolo((solo, journal, async) {
-      final queued = solo.run<TestState, void>(key: 'queued', (ctx) async {});
+      final queued =
+          solo.enqueue<TestState, void>(key: 'queued', (ctx) async {});
       Object? thrown;
-      solo.add(
+      solo.enqueueJob(
         solo.job<TestState, void>(
           key: 'parent',
           (ctx) async {
@@ -568,7 +569,7 @@ void main() {
   test('solo refuses a job of the core as a child', () {
     runSolo((solo, journal, async) {
       var foreignRan = false;
-      final parent = solo.run<TestState, void>(
+      final parent = solo.enqueue<TestState, void>(
         key: 'parent',
         (ctx) async {
           ctx.run(ForeignJob<void>((_) async => foreignRan = true)).ignore();
@@ -604,7 +605,7 @@ void attempt(SoloJob<void> job) => job.start();
       // `ctx.run` takes a [ChildJob], and `then` makes none: the compiler
       // turns a continuation away before anything runs.
       expect(tail, isNot(isA<ChildJob<void>>()));
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         for (final job in [
           Job.deferred<void>((_) async {}),
           ForeignJob<void>((_) async {}),
@@ -652,7 +653,7 @@ void attempt(SoloJob<void> job) => job.start();
 
   test('a child without a key still shows in the parent outcome', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      final parent = solo.run<Preparing, void>(
+      final parent = solo.enqueue<Preparing, void>(
         key: 'parent',
         (ctx) async {
           await ctx.run(solo.job<Working, void>((ctx) async {}));
@@ -668,7 +669,7 @@ void attempt(SoloJob<void> job) => job.start();
 
   test('a start rule of a child that throws reaches the observer', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         try {
           ctx
               .run(
@@ -705,7 +706,7 @@ void attempt(SoloJob<void> job) => job.start();
   test('a start rule that ends the child and then throws is heard', () {
     runSolo((solo, journal, async) {
       Object? thrown;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         late SoloJob<void> child;
         child = solo.job<TestState, void>(
           key: 'child',
@@ -739,7 +740,7 @@ void attempt(SoloJob<void> job) => job.start();
       runSolo((solo, journal, async) {
         var reachedTheNextLine = false;
         Object? thrown;
-        solo.run<TestState, void>(key: 'parent', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
           bool boom(TestState state) => throw StateError('$rule boom');
           try {
             ctx
@@ -773,16 +774,16 @@ void attempt(SoloJob<void> job) => job.start();
   test('a job a continuation asks for goes behind what is already queued', () {
     runSolo((solo, journal, async) {
       final order = <String>[];
-      final source = solo.run<TestState, void>(key: 'sync', (ctx) async {
+      final source = solo.enqueue<TestState, void>(key: 'sync', (ctx) async {
         order.add('sync');
         await ctx.abandonable(() => delay(10));
       });
       source.then<void>((ctx, _) async {
         order.add('then');
         // The shape of the page: a job of the controller, queued by
-        // `add` from the callback.
+        // `enqueueJob` from the callback.
         await solo
-            .add(
+            .enqueueJob(
               solo.job<TestState, void>(
                 key: 'record',
                 (recording) async => order.add('record'),
@@ -791,7 +792,10 @@ void attempt(SoloJob<void> job) => job.start();
             .value;
       }).ignoreFailure();
       solo
-          .run<TestState, void>(key: 'save', (ctx) async => order.add('save'))
+          .enqueue<TestState, void>(
+            key: 'save',
+            (ctx) async => order.add('save'),
+          )
           .ignoreFailure();
       async.flushTimers();
       expect(
@@ -805,7 +809,7 @@ void attempt(SoloJob<void> job) => job.start();
   test('the Future of run carries the drop of a child nobody awaits', () {
     runSolo((solo, journal, async) {
       Object? fromTheFuture;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<Working, void>(
           key: 'child',
           (childCtx) async {},
@@ -831,7 +835,7 @@ void attempt(SoloJob<void> job) => job.start();
       final handled = <String>[];
       final a = solo.job<TestState, void>(key: 'a', (ctx) => pause(ctx, 100));
       final b = solo.job<TestState, void>(key: 'b', (ctx) => pause(ctx, 100));
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'parent',
         (ctx) async => [ctx.run(a), ctx.run(b)].wait,
         ifFailed: (state, error, stackTrace) {

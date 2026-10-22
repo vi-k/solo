@@ -66,7 +66,7 @@ void main() {
     _run((solo, clock) {
       final failure = StateError('request failed');
       final trace = StackTrace.current;
-      final job = solo.run<String, String>(
+      final job = solo.enqueue<String, String>(
         (ctx) async {
           ctx.emit('loading');
           Error.throwWithStackTrace(failure, trace);
@@ -93,7 +93,7 @@ void main() {
     _run((solo, clock) {
       final operation = Completer<void>();
       final cleanup = Completer<void>();
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         key: 'first',
         ifCancelled: (state, cancelled) {
           expect(cancelled.reason, isA<ManualCancelReason>());
@@ -116,7 +116,7 @@ void main() {
           }
         },
       )..ignoreFailure();
-      solo.run<String, void>(key: 'next', (ctx) async {
+      solo.enqueue<String, void>(key: 'next', (ctx) async {
         solo.log.add('next:${ctx.state}');
       });
       clock.flushMicrotasks();
@@ -150,7 +150,7 @@ void main() {
 
   test('success never calls either correction handler', () {
     _run((solo, clock) {
-      final job = solo.run<String, int>(
+      final job = solo.enqueue<String, int>(
         (ctx) async {
           ctx.emit('loaded');
           return 42;
@@ -167,7 +167,7 @@ void main() {
   test('droppable skips correction on a duplicate of a running job', () {
     _run((solo, clock) {
       final operation = Completer<void>();
-      SoloJob<void> load() => solo.run<String, void>(
+      SoloJob<void> load() => solo.enqueue<String, void>(
             key: 'load',
             policy: Policy.droppable,
             ifCancelled: (_, __) => 'initial',
@@ -189,18 +189,18 @@ void main() {
 
   test('queued cancellation and rejected start skip both handlers', () {
     _run((solo, clock) {
-      final first = solo.run<String, void>(
+      final first = solo.enqueue<String, void>(
         (_) async => fail('cancelled before start'),
         ifCancelled: (_, __) => fail('queued callback'),
       )..cancel();
       expect(first.outcome, isA<Cancelled>());
-      solo.run<String, void>(
+      solo.enqueue<String, void>(
         (_) async => fail('start rejected'),
         canStart: (_) => false,
         ifCancelled: (_, __) => fail('rejected callback'),
       );
       solo
-          .run<String, void>(
+          .enqueue<String, void>(
             (_) async => fail('start rule threw'),
             canStart: (_) => throw StateError('start rule'),
             ifFailed: (_, __, ___) => fail('start error callback'),
@@ -219,7 +219,7 @@ void main() {
       _run((solo, clock) {
         final operation = Completer<void>();
         final cleanup = Completer<void>();
-        final job = solo.run<String, void>(
+        final job = solo.enqueue<String, void>(
           keepWhile: (state) => state != 'disconnected',
           ifFailed: (_, __, ___) => fail('revoked error handler'),
           ifCancelled: (_, __) => fail('revoked cancel handler'),
@@ -250,7 +250,7 @@ void main() {
   test('a compatible external state is passed to the cancellation handler', () {
     _run((solo, clock) {
       final cleanup = Completer<void>();
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
         ifCancelled: (state, _) => 'cancelled:$state',
         (ctx) async {
@@ -271,7 +271,7 @@ void main() {
   test('a manual cancellation with the reason of the rules keeps correction',
       () {
     _run((solo, clock) {
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         ifCancelled: (_, __) => 'cancelled',
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
@@ -286,7 +286,7 @@ void main() {
     _run((solo, clock) {
       var allowed = true;
       final gate = Completer<void>();
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         keepWhile: (_) => allowed,
         ifCancelled: (_, __) => 'corrected',
         (ctx) async {
@@ -314,7 +314,7 @@ void main() {
     fakeAsync((clock) {
       final solo = _Controller<Object>('initial');
       final gate = Completer<void>();
-      final job = solo.run<Object, void>(
+      final job = solo.enqueue<Object, void>(
         ifCancelled: (_, __) => 'corrected',
         (ctx) async {
           await gate.future;
@@ -341,7 +341,7 @@ void main() {
   test('a forbidden external type suppresses correction', () {
     fakeAsync((clock) {
       final solo = _Controller<Object>('initial');
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         ifCancelled: (_, __) => fail('wrong working type'),
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
@@ -358,7 +358,7 @@ void main() {
   test('returning to a compatible state does not restore correction', () {
     _run((solo, clock) {
       final cleanup = Completer<void>();
-      solo.run<String, void>(
+      solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
         ifCancelled: (_, __) => fail('revoked permission restored'),
         (ctx) async {
@@ -380,7 +380,7 @@ void main() {
   test('an observer cannot hide a forbidden external transition', () {
     _run((solo, clock) {
       final cleanup = Completer<void>();
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
         ifCancelled: (_, __) => fail('transient disconnect lost'),
         (ctx) async {
@@ -405,7 +405,7 @@ void main() {
     fakeAsync((clock) {
       final solo = _Controller<Object>('initial');
       var starts = 0;
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         canStart: (_) => ++starts == 1,
         ifFailed: (state, _, __) {
           expect(state, 42);
@@ -429,7 +429,7 @@ void main() {
     _run((solo, clock) {
       final cleanup = Completer<void>();
       late SoloJob<void> child;
-      solo.run<String, void>(
+      solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
         (ctx) {
           child = solo.job<String, void>(
@@ -456,11 +456,11 @@ void main() {
     _run((solo, clock) {
       final failure = StateError('body');
       final correctionFailure = StateError('correction');
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         (_) async => throw failure,
         ifFailed: (_, __, ___) => throw correctionFailure,
       )..ignoreFailure();
-      solo.run<String, void>((ctx) async => ctx.emit('next'));
+      solo.enqueue<String, void>((ctx) async => ctx.emit('next'));
       clock.flushMicrotasks();
       expect(
         job.outcome,
@@ -478,7 +478,7 @@ void main() {
       solo.changed = (state) {
         if (state == 'failure') job.cancel();
       };
-      job = solo.run<String, void>(
+      job = solo.enqueue<String, void>(
         (_) async => throw StateError('body'),
         ifFailed: (_, __, ___) => 'failure',
         ifCancelled: (_, __) => fail('second correction'),
@@ -491,7 +491,7 @@ void main() {
 
   test('external disconnect inside a handler prevents its returned write', () {
     _run((solo, clock) {
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         (_) async => throw StateError('body'),
         keepWhile: (state) => state != 'disconnected',
         ifFailed: (_, __, ___) {
@@ -508,7 +508,7 @@ void main() {
   test('close waits for cleanup and applies cancellation state', () {
     _run((solo, clock) {
       final cleanup = Completer<void>();
-      solo.run<String, void>(
+      solo.enqueue<String, void>(
         ifCancelled: (_, cancelled) {
           expect(cancelled.reason, isA<ClosedCancelReason>());
           return 'initial';
@@ -535,7 +535,7 @@ void main() {
     _run((solo, clock) {
       final ruleError = StateError('rule');
       var shouldThrow = false;
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         keepWhile: (_) {
           if (shouldThrow) throw ruleError;
           return true;
@@ -558,7 +558,7 @@ void main() {
       final stream = StreamController<void>(sync: true);
       final cleanup = Completer<void>();
       late Job<void> child;
-      final parent = solo.run<String, void>(
+      final parent = solo.enqueue<String, void>(
         key: 'parent',
         ifCancelled: (_, __) {
           solo.log.add('parent:correction');
@@ -600,7 +600,7 @@ void main() {
       () {
     _run((solo, clock) {
       final stream = StreamController<void>();
-      final parent = solo.run<String, void>(
+      final parent = solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
         ifCancelled: (_, __) => fail('finished body lost permission'),
         (ctx) async {
@@ -620,7 +620,7 @@ void main() {
 
   test('parent rule cancellation suppresses a compatible child handler', () {
     _run((solo, clock) {
-      final parent = solo.run<String, void>(
+      final parent = solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
         (ctx) => ctx.run(
           solo.job<String, void>(
@@ -640,7 +640,7 @@ void main() {
   test('an error handler does not observe a failed job for its caller', () {
     _run((solo, clock) {
       final failure = StateError('unobserved');
-      solo.run<String, void>(
+      solo.enqueue<String, void>(
         (_) async => throw failure,
         ifFailed: (_, __, ___) => 'failure',
       );
@@ -655,7 +655,7 @@ void main() {
     _run((solo, clock) {
       var allowed = true;
       solo.changed = (_) => allowed = false;
-      final parent = solo.run<String, void>(
+      final parent = solo.enqueue<String, void>(
         keepWhile: (_) => allowed,
         (ctx) => ctx.run(
           solo.job<String, void>(
@@ -676,7 +676,7 @@ void main() {
     _run((solo, clock) {
       final startGrandchild = Completer<void>();
       var corrections = 0;
-      final parent = solo.run<String, void>(
+      final parent = solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
         (ctx) async {
           unawaited(
@@ -715,7 +715,7 @@ void main() {
 
   test('fresh errors from the same transition produce one diagnostic', () {
     _run((solo, clock) {
-      final job = solo.run<String, void>(
+      final job = solo.enqueue<String, void>(
         keepWhile: (state) {
           if (state == 'changed') throw StateError('rule');
           return true;
@@ -736,7 +736,7 @@ void main() {
       final finishChild = Completer<void>();
       var checks = 0;
       late Job<void> parent;
-      parent = solo.run<String, void>(
+      parent = solo.enqueue<String, void>(
         keepWhile: (state) {
           checks++;
           if (state == 'changed') {
@@ -774,7 +774,7 @@ void main() {
       _run((solo, clock) {
         var notified = 0;
         solo.addListener(() => notified++);
-        final cancelled = solo.run<String, void>(
+        final cancelled = solo.enqueue<String, void>(
           ifCancelled: (state, _) => state,
           (ctx) => ctx.abandonable(() => Completer<void>().future),
         );
@@ -782,7 +782,7 @@ void main() {
         cancelled.cancel();
         clock.flushMicrotasks();
         solo
-            .run<String, void>(
+            .enqueue<String, void>(
               (_) async => throw StateError('body'),
               ifFailed: (state, _, __) => state,
             )
@@ -796,7 +796,7 @@ void main() {
 
     test('leaves a write made from inside it in place', () {
       _run((solo, clock) {
-        solo.run<String, void>(
+        solo.enqueue<String, void>(
           (_) async => throw StateError('body'),
           ifFailed: (state, _, __) {
             solo.external('offline');
@@ -818,7 +818,7 @@ void main() {
         var notified = 0;
         solo.addListener(() => notified++);
         solo
-            .run<_Box, void>(
+            .enqueue<_Box, void>(
               (_) async => throw StateError('body'),
               ifFailed: (_, __, ___) => const _Box(1),
             )
@@ -836,7 +836,7 @@ void main() {
         var notified = 0;
         solo.addListener(() => notified++);
         solo
-            .run<_Box, void>(
+            .enqueue<_Box, void>(
               (_) async => throw StateError('body'),
               ifFailed: (state, _, __) => _Box(state.value),
             )
@@ -1054,7 +1054,7 @@ void main() {
           (ctx, _) => ctx.abandonable(() => Completer<void>().future),
         ).add(1);
         clock.flushMicrotasks();
-        solo.run<String, void>(
+        solo.enqueue<String, void>(
           key: 'upload',
           policy: Policy.restart,
           (ctx) async => ctx.emit('restarted'),
@@ -1114,7 +1114,7 @@ void main() {
       _run((solo, clock) {
         final gate = Completer<void>();
         final seen = <String>[];
-        solo.run<String, void>((_) => gate.future);
+        solo.enqueue<String, void>((_) => gate.future);
         final events = solo.collect<String, int, void>(
           policy: AccumulationPolicy.replace,
           ifFailed: (_, __, ___) => fail('failure callback'),
@@ -1129,7 +1129,7 @@ void main() {
           },
         );
         final group = events.add(1);
-        solo.run<String, void>((_) async => seen.add('between'));
+        solo.enqueue<String, void>((_) async => seen.add('between'));
         expect(events.add(2), same(group));
         clock.flushMicrotasks();
         expect(seen, isEmpty);

@@ -13,7 +13,7 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
 
   ProfileController(this.api) : super(Empty());
 
-  Job<String> load() => run<Profile, String>(
+  Job<String> load() => enqueue<Profile, String>(
         key: 'load',
         policy: Policy.droppable, // a second tap returns the first job
         (ctx) async {
@@ -29,7 +29,7 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
         ifCancelled: (state, cancelled) => Empty(),
       );
 
-  Job<void> save() => run<Loaded, void>(
+  Job<void> save() => enqueue<Loaded, void>(
         key: 'save',
         (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
       );

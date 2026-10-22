@@ -35,7 +35,7 @@ final _classes = <String, Type>{
 
 /// The methods that make jobs, whose parameters the page lists in a table
 /// of their own.
-const _makers = ['run', 'job', 'collect', 'accumulate'];
+const _makers = ['enqueue', 'job', 'collect', 'accumulate'];
 
 /// Each named parameter of the methods of [_makers], with the methods that
 /// take it, as `Solo` declares them.

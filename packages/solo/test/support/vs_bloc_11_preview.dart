@@ -81,7 +81,7 @@ final class PreviewController extends Solo<PreviewState> {
 
   PreviewController(this._decoder) : super(const NoPreview());
 
-  Job<void> open(Clip clip) => run<PreviewState, void>(
+  Job<void> open(Clip clip) => enqueue<PreviewState, void>(
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {
@@ -104,7 +104,7 @@ final class OtherPreviewController extends Solo<PreviewState> {
 
   final Decoder _decoder;
 
-  Job<void> openDiscarding(Clip clip) => run<PreviewState, void>(
+  Job<void> openDiscarding(Clip clip) => enqueue<PreviewState, void>(
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {
@@ -116,7 +116,7 @@ final class OtherPreviewController extends Solo<PreviewState> {
         },
       );
 
-  Job<void> openJoining(Clip clip) => run<PreviewState, void>(
+  Job<void> openJoining(Clip clip) => enqueue<PreviewState, void>(
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {

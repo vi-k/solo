@@ -19,7 +19,7 @@ A controller copies the positions its hardware reports into the state.
 
 ```dart
 // The first attempt: the job ends before the first position.
-Job<void> track() => run<Ready, void>(
+Job<void> track() => enqueue<Ready, void>(
       key: 'track',
       (ctx) async {
         hw.positions.listen(
@@ -46,7 +46,7 @@ cancels the subscription before the first position arrives.
 ### A child that owns the subscription
 
 ```dart
-Job<void> track() => run<Ready, void>(
+Job<void> track() => enqueue<Ready, void>(
       key: 'track',
       (ctx) => ctx.each(hw.positions, (childCtx, p) {
         childCtx.emit(childCtx.state.copyWith(position: p));
@@ -120,7 +120,7 @@ final class ScreenController extends Solo<Screen> {
 
   ScreenController(this.session) : super(const Screen());
 
-  Job<void> follow() => run<Screen, void>(
+  Job<void> follow() => enqueue<Screen, void>(
         key: 'follow',
         (ctx) => ctx.each(session.stream, (childCtx, next) {
           childCtx.emit(childCtx.state.copyWith(signedIn: next.signedIn));
@@ -137,7 +137,7 @@ when `follow()` starts sends nothing, and the screen goes on showing
 ### The state first, then the stream
 
 ```dart
-Job<void> follow() => run<Screen, void>(
+Job<void> follow() => enqueue<Screen, void>(
       key: 'follow',
       (ctx) async {
         void take(SoloContext<Screen, Screen> target, Session next) =>

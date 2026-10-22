@@ -14,7 +14,10 @@
   больше не удерживают такую ошибку от зоны: см. ту же запись
   в [списке изменений `solo`](../solo/CHANGELOG.md).
 - **`Job.ignore()` переименован в `Job.ignoreFailure()`** в `async_job`.
-- **В `solo` обработчики состояния у `run` и `job` переименованы: `onError`
+- **В `solo` `Solo.run` переименован в `enqueue`, а `Solo.add` —
+  в `enqueueJob`.** См. ту же запись
+  в [списке изменений `solo`](../solo/CHANGELOG.md).
+- **В `solo` обработчики состояния у `enqueue` и `job` переименованы: `onError`
   в `ifFailed`, `onCancel` в `ifCancelled`.**
 - **`ctx.run` и `ctx.runAll` принимают `ChildJob`** в `async_job`, а `SoloJob`
   из `solo` — это `ChildJob`: помощник, который возвращает `job(...)` для

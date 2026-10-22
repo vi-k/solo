@@ -38,7 +38,7 @@
 
 ```dart
 // Первая попытка: брошенные перемотки идут на устройстве.
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -62,7 +62,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 
 ```dart
 // Вторая попытка: устаревшая перемотка идёт до конца.
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -83,7 +83,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 ### Токен
 
 ```dart
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -137,7 +137,7 @@ Job.isCancellationError = (error) => error is SeekStopped;
 
 ```dart
 // Первая попытка: платёж проходит, а чек нет.
-Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
       // Каждого вызова дожидаются, что бы ни случилось.
       final receipt = await ctx.join(() => payment.commit());
       ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -157,7 +157,7 @@ Job<void> commit(String entry) => run<Ready, void>((ctx) async {
 
 ```dart
 // Вторая попытка: emit внутри шага бросает.
-Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
       // Дождаться всего шага как одного вызова.
       await ctx.join(() async {
         final receipt = await payment.commit();
@@ -175,7 +175,7 @@ Job<void> commit(String entry) => run<Ready, void>((ctx) async {
 ### Шаг одной секцией
 
 ```dart
-Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
       await ctx.uncancellable(() async {
         final receipt = await payment.commit();
         ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -206,7 +206,7 @@ Job<void> commit(String entry) => run<Ready, void>((ctx) async {
 
 ```dart
 // Job, отклоняющая все запросы, которые ей позволено отклонить.
-Job<void> flush() => run<Ready, void>(
+Job<void> flush() => enqueue<Ready, void>(
       cancellable: false,
       (ctx) => device.flush(),
     );
@@ -219,12 +219,12 @@ Job<void> flush() => run<Ready, void>(
 её из очереди, а работающую дожидается.
 
 Флаг действует, только когда `Job` держит движок: `Job`, которую создал `job`,
-а `add` так и не поставил в очередь, отменяется как любая другая. Очередная
-`Job`, отклонившая `cancel`, стартует в свой черёд и доходит до конца,
-и `await job.cancel()` возвращается только тогда.
+а `enqueueJob` так и не поставил в очередь, отменяется как любая другая.
+Очередная `Job`, отклонившая `cancel`, стартует в свой черёд и доходит
+до конца, и `await job.cancel()` возвращается только тогда.
 
 Правила состояния `Job` не удерживает ни секция, ни `cancellable: false`.
-Рабочий тип `Job` — первый аргумент типа у `run`, на этой странице `Ready`.
+Рабочий тип `Job` — первый аргумент типа у `enqueue`, на этой странице `Ready`.
 Этот тип и `keepWhile` отменяют `Job`, когда состояние перестаёт им подходить,
 в том числе внутри секции. Если состояние уйдёт из `Ready`, пока `commit` выше
 ждёт платёж, следующая строка секции бросит, и ни квитанции, ни записи
@@ -243,7 +243,7 @@ Job<void> flush() => run<Ready, void>(
 
 ```dart
 // Первая попытка: каждая половина ждёт так, как нужно было другой.
-Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // Сброс должен закончиться до продвижения очереди.
         await ctx.join(() => device.flush());
@@ -267,7 +267,7 @@ Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
 ### Каждое ожидание на своём месте
 
 ```dart
-Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // Уборка идёт после тела, где методов ожидания уже нет:
         // здесь работает обычный await.
@@ -383,7 +383,7 @@ switch (job.outcome) {
 проскочил, оставляет состояние как есть.
 
 ```dart
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       timeout: const Duration(seconds: 2),
@@ -407,13 +407,13 @@ Job<void> seek(Duration position) => run<Ready, void>(
 Вышедший срок отличается от `TimeoutException`, который бросает
 `Future.timeout`. С `.timeout(...)` на вызове `_player.seek` исключение
 бросается в тело, задача кончается `Failed`, и состояние отображает `ifFailed:`
-у `run`. `timeout:` у `run` кончает задачу `Cancelled`, поэтому состояние
-отображает `ifCancelled:`, а `ifFailed:` не вызывается. `ifCancelled:` получает
-любую отмену. Чтобы отличить срок от проскоченной перемотки, обработчик
-ветвится по причине, как тот, что выше. Проскоченной перемотке он возвращает
-полученный `state`, а тот же объект ничего не публикует. `value` такой задачи
-бросает этот `Cancelled`, и ветка `on TimeoutException` вокруг него ничего
-не ловит.
+у `enqueue`. `timeout:` у `enqueue` кончает задачу `Cancelled`, поэтому
+состояние отображает `ifCancelled:`, а `ifFailed:` не вызывается.
+`ifCancelled:` получает любую отмену. Чтобы отличить срок от проскоченной
+перемотки, обработчик ветвится по причине, как тот, что выше. Проскоченной
+перемотке он возвращает полученный `state`, а тот же объект ничего
+не публикует. `value` такой задачи бросает этот `Cancelled`, и ветка
+`on TimeoutException` вокруг него ничего не ловит.
 
 Срок считается от старта тела, а не от вызова: время, которое задача ждёт
 в очереди, не считается. У `collect` и `accumulate` `timeout` задаёт срок
@@ -508,7 +508,7 @@ await logs.close(mode: SoloCloseMode.drain);
 
 ```dart
 // Первая попытка: задача ждёт close(), а close() ждёт задачу.
-Job<void> logout() => run<Ready, void>((ctx) async {
+Job<void> logout() => enqueue<Ready, void>((ctx) async {
       await ctx.join(api.logout);
       await close();
     });
@@ -527,7 +527,7 @@ Job<void> logout() => run<Ready, void>((ctx) async {
 ```dart
 // Вторая попытка: контроллер принимает работу до самого close().
 Future<void> logout() async {
-  await run<Ready, void>((ctx) => ctx.join(api.logout)).done;
+  await enqueue<Ready, void>((ctx) => ctx.join(api.logout)).done;
   await close();
 }
 ```
@@ -546,7 +546,7 @@ Future<void> logout() async {
 
 ```dart
 Future<void> logout() async {
-  run<Ready, void>((ctx) => ctx.join(api.logout)).ignoreFailure();
+  enqueue<Ready, void>((ctx) => ctx.join(api.logout)).ignoreFailure();
   await close(mode: SoloCloseMode.drain);
 }
 ```

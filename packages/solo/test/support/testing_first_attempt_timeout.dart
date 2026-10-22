@@ -15,7 +15,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),
@@ -32,7 +32,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   /// A job behind `load` in the queue, for the test of what the queue
   /// waits for.
-  Job<void> next() => run<ProfileState, void>(key: 'next', (ctx) async {});
+  Job<void> next() => enqueue<ProfileState, void>(key: 'next', (ctx) async {});
 }
 
 /// The test of the first attempt. It passes: it shows what the deadline

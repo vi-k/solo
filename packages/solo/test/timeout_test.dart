@@ -1,4 +1,4 @@
-// The deadline of a job of a controller: `timeout` on `job`, `run`,
+// The deadline of a job of a controller: `timeout` on `job`, `enqueue`,
 // `collect` and `accumulate`.
 @Timeout(Duration(seconds: 5))
 library;
@@ -61,7 +61,7 @@ void main() {
           );
           expect(
             argumentErrorOf(
-              () => solo.run<TestState, void>(
+              () => solo.enqueue<TestState, void>(
                 cancellable: cancellable,
                 timeout: timeout,
                 (ctx) async {},
@@ -99,7 +99,7 @@ void main() {
 
   test('a job made by job and added', () {
     runSolo((solo, journal, async) {
-      final job = solo.add(
+      final job = solo.enqueueJob(
         solo.job<TestState, void>(
           key: 'load',
           timeout: ms(10),
@@ -143,8 +143,8 @@ void main() {
 
   test('a job waiting in the queue longer than its deadline', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'first', (ctx) => pause(ctx, 50));
-      final second = solo.run<TestState, int>(
+      solo.enqueue<TestState, void>(key: 'first', (ctx) => pause(ctx, 50));
+      final second = solo.enqueue<TestState, int>(
         key: 'second',
         timeout: ms(20),
         (ctx) async {
@@ -179,7 +179,7 @@ void main() {
   test('a deadline reaching ifCancelled, not ifFailed', () {
     runSolo((solo, journal, async) {
       var errors = 0;
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'load',
         timeout: ms(10),
         ifFailed: (state, error, stackTrace) {
@@ -206,7 +206,7 @@ void main() {
 
   test('a deadline running out while the job waits for its children', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'load',
         timeout: ms(10),
         ifCancelled: (state, cancelled) =>
@@ -233,14 +233,14 @@ void main() {
   test('the queue after a deadline', () {
     runSolo((solo, journal, async) {
       final order = <String>[];
-      solo.run<TestState, void>(key: 'slow', timeout: ms(10), (ctx) async {
+      solo.enqueue<TestState, void>(key: 'slow', timeout: ms(10), (ctx) async {
         ctx.onDispose(() async {
           await delay(20);
           order.add('cleaned up');
         });
         await pause(ctx, 50);
       });
-      final next = solo.run<TestState, int>(key: 'next', (ctx) async {
+      final next = solo.enqueue<TestState, int>(key: 'next', (ctx) async {
         order.add('next started');
         return 1;
       });
@@ -252,7 +252,7 @@ void main() {
 
   test('a droppable call over a live job with a deadline', () {
     runSolo((solo, journal, async) {
-      final first = solo.run<TestState, int>(
+      final first = solo.enqueue<TestState, int>(
         key: 'load',
         policy: Policy.droppable,
         timeout: ms(10),
@@ -262,7 +262,7 @@ void main() {
         },
       );
       async.flushMicrotasks();
-      final second = solo.run<TestState, int>(
+      final second = solo.enqueue<TestState, int>(
         key: 'load',
         policy: Policy.droppable,
         timeout: hour,
@@ -272,7 +272,7 @@ void main() {
       async.elapse(ms(100));
       expect('${first.outcome}', 'Cancelled(timeout)');
       expect(async.pendingTimers, isEmpty, reason: 'the hour went with it');
-      final third = solo.run<TestState, int>(
+      final third = solo.enqueue<TestState, int>(
         key: 'load',
         policy: Policy.droppable,
         timeout: ms(10),
@@ -286,7 +286,7 @@ void main() {
 
   test('a restart over a job its deadline has cancelled', () {
     runSolo((solo, journal, async) {
-      final first = solo.run<TestState, void>(
+      final first = solo.enqueue<TestState, void>(
         key: 'load',
         timeout: ms(10),
         (ctx) => ctx.join(() => delay(50)),
@@ -294,7 +294,7 @@ void main() {
       async.elapse(ms(20));
       expect(first.isCancelled, isTrue);
       expect(first.isFinished, isFalse, reason: 'join plays out');
-      final second = solo.run<TestState, void>(
+      final second = solo.enqueue<TestState, void>(
         key: 'load',
         policy: Policy.restart,
         (ctx) async {},
@@ -307,7 +307,7 @@ void main() {
 
   test('cancelAll after a deadline', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'load',
         timeout: ms(10),
         (ctx) => ctx.join(() => delay(50)),
@@ -321,7 +321,7 @@ void main() {
 
   test('close after a deadline', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'load',
         timeout: ms(10),
         (ctx) => ctx.join(() => delay(50)),
@@ -336,12 +336,12 @@ void main() {
   test('close with jobs with deadlines running and queued', () {
     runSolo((solo, journal, async) {
       final gate = Completer<void>();
-      final running = solo.run<TestState, void>(
+      final running = solo.enqueue<TestState, void>(
         key: 'running',
         timeout: hour,
         (ctx) => ctx.abandonable(() => gate.future),
       );
-      final queued = solo.run<TestState, void>(
+      final queued = solo.enqueue<TestState, void>(
         key: 'queued',
         timeout: hour,
         (ctx) async {},
@@ -358,12 +358,13 @@ void main() {
 
   test('a drain past a job that hangs until its deadline', () {
     runSolo((solo, journal, async) {
-      final hanging = solo.run<TestState, void>(
+      final hanging = solo.enqueue<TestState, void>(
         key: 'hanging',
         timeout: ms(10),
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
-      final after = solo.run<TestState, int>(key: 'after', (ctx) async => 2);
+      final after =
+          solo.enqueue<TestState, int>(key: 'after', (ctx) async => 2);
       async.flushMicrotasks();
       var closed = false;
       solo.close(mode: SoloCloseMode.drain).then((_) => closed = true);
@@ -376,7 +377,7 @@ void main() {
 
   test('pending names a job its deadline has cancelled', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'job',
         timeout: ms(10),
         (ctx) => ctx.join(() => delay(50)),
@@ -394,7 +395,7 @@ void main() {
 
   test('pending names a deadline a section holds', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'job',
         timeout: ms(10),
         (ctx) => ctx.uncancellable(() => delay(50)),

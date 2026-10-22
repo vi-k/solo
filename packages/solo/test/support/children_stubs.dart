@@ -160,7 +160,7 @@ mixin Desk on Solo<AppState> {
 
   /// The `save()` the page speaks of: a job of the queue with a step the
   /// test ends.
-  SoloJob<void> save() => run<Ready, void>(
+  SoloJob<void> save() => enqueue<Ready, void>(
         key: 'save',
         (ctx) => ctx.join(() => stage.start<void>('save', null)),
       );
@@ -210,7 +210,7 @@ final class SessionController extends Solo<Session> with SoloStream<Session> {
   SessionController([super.initialState = const Session()]);
 
   /// Signs the user in or out, as a job of this controller.
-  SoloJob<void> sign({required bool signedIn}) => run<Session, void>(
+  SoloJob<void> sign({required bool signedIn}) => enqueue<Session, void>(
         key: 'sign',
         (ctx) async => ctx.emit(Session(signedIn: signedIn)),
       );

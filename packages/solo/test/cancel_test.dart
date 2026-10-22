@@ -10,8 +10,9 @@ import 'support/test_state.dart';
 void main() {
   test('cancel of a queued job drops it at once', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'first', (ctx) async => delay(100));
-      final second = solo.run<TestState, void>(key: 'second', (ctx) async {});
+      solo.enqueue<TestState, void>(key: 'first', (ctx) async => delay(100));
+      final second =
+          solo.enqueue<TestState, void>(key: 'second', (ctx) async {});
       async.flushMicrotasks();
       var cancelDone = false;
       second.cancel().then((_) => cancelDone = true);
@@ -26,8 +27,9 @@ void main() {
 
   test('whenCancelled notifies for a job dropped from the queue', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'first', (ctx) async => delay(100));
-      final second = solo.run<TestState, void>(key: 'second', (ctx) async {});
+      solo.enqueue<TestState, void>(key: 'first', (ctx) async => delay(100));
+      final second =
+          solo.enqueue<TestState, void>(key: 'second', (ctx) async {});
       async.flushMicrotasks();
       var cancelled = false;
       second
@@ -44,7 +46,7 @@ void main() {
 
   test('cancel of a running job fixes the outcome and waits for the body', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, int>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, int>(key: 'job', (ctx) async {
         await delay(100);
         ctx.check();
         return 1;
@@ -68,7 +70,7 @@ void main() {
 
   test('a value returned after cancellation does not change the outcome', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, int>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, int>(key: 'job', (ctx) async {
         await delay(100);
         return 42;
       });
@@ -85,7 +87,7 @@ void main() {
 
   test('an error thrown after cancellation goes to onError only', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await delay(100);
         throw StateError('late');
       });
@@ -103,7 +105,7 @@ void main() {
 
   test('a body throwing Cancelled cancels itself as handler', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         throw const Cancelled('no photo');
       });
       async.flushMicrotasks();
@@ -119,7 +121,7 @@ void main() {
 
   test('Cancelled thrown after the mark keeps the marked outcome', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await delay(100);
         throw const Cancelled('mine');
       });
@@ -135,7 +137,7 @@ void main() {
 
   test('cancel does not cancel a running cancellable: false job', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'stubborn',
         cancellable: false,
         (ctx) async {
@@ -161,7 +163,7 @@ void main() {
 
   test('rules cancel a cancellable: false job anyway', () {
     runSolo((solo, journal, async) {
-      solo.run<NotDisposed, void>(
+      solo.enqueue<NotDisposed, void>(
         key: 'stubborn',
         cancellable: false,
         (ctx) async {
@@ -185,13 +187,13 @@ void main() {
       final job = solo.job<TestState, void>(key: 'early', (ctx) async {})
         ..cancel();
       expect(journal.take(), ['[early] dropped Cancelled(manual)']);
-      expect(() => solo.add(job), throwsStateError);
+      expect(() => solo.enqueueJob(job), throwsStateError);
     });
   });
 
   test('value throws Cancelled, done does not', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await delay(100);
         ctx.check();
       });
@@ -214,7 +216,7 @@ void main() {
 
   test('a second cancel and a cancel after finish are no-ops', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await delay(100);
         ctx.check();
       });
@@ -236,7 +238,7 @@ void main() {
 
   test('the manual stack trace points at cancel', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await delay(100);
         ctx.check();
       });
@@ -250,11 +252,12 @@ void main() {
 
   test('a mass cancellation carries the reason it is given', () {
     runSolo((solo, journal, async) {
-      final running = solo.run<TestState, void>(
+      final running = solo.enqueue<TestState, void>(
         key: 'running',
         (ctx) => pause(ctx, 100),
       );
-      final queued = solo.run<TestState, void>(key: 'queued', (ctx) async {});
+      final queued =
+          solo.enqueue<TestState, void>(key: 'queued', (ctx) async {});
       async.flushMicrotasks();
       solo.cancelAll(reason: const _Reset());
       async.flushTimers();
@@ -267,10 +270,10 @@ void main() {
 
   test('the queue removes with the reason it is given', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'running', (ctx) => pause(ctx, 100));
+      solo.enqueue<TestState, void>(key: 'running', (ctx) => pause(ctx, 100));
       final removed = [
         for (final key in ['one', 'two', 'three'])
-          solo.run<TestState, void>(key: key, (ctx) async {}),
+          solo.enqueue<TestState, void>(key: key, (ctx) async {}),
       ];
       async.flushMicrotasks();
       solo.queue
@@ -287,7 +290,7 @@ void main() {
 
   test('without a reason the cancellation is manual, as before', () {
     runSolo((solo, journal, async) {
-      final running = solo.run<TestState, void>(
+      final running = solo.enqueue<TestState, void>(
         key: 'running',
         (ctx) => pause(ctx, 100),
       );

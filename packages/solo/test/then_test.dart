@@ -77,7 +77,7 @@ void main() {
   group('a job handed to more than one caller is continued through shared()',
       () {
     SoloJob<int> load(PlainSolo<int> solo, [Policy? policy]) =>
-        solo.run<int, int>(
+        solo.enqueue<int, int>(
           key: 'load',
           policy: policy ?? Policy.droppable,
           (ctx) async => 1,
@@ -126,7 +126,7 @@ void main() {
         final solo = PlainSolo<int>(0);
         final first = load(solo);
         final mine = solo.job<int, int>(key: 'load', (ctx) async => 2);
-        final taken = solo.add(mine, policy: Policy.droppable);
+        final taken = solo.enqueueJob(mine, policy: Policy.droppable);
         expect(identical(taken, first), isTrue);
         expect(mine.isCancelled, isTrue);
         expect(() => _plainThen(mine), _throwing(_droppable));
@@ -140,7 +140,7 @@ void main() {
       fakeAsync((async) {
         final solo = PlainSolo<int>(0);
         final gate = Completer<int>();
-        final first = solo.run<int, int>(
+        final first = solo.enqueue<int, int>(
           key: 'load',
           (ctx) => ctx.abandonable(() => gate.future),
         );
@@ -238,7 +238,8 @@ void main() {
       Object? read;
       runZonedGuarded(
         () {
-          final source = solo.run<int, int>(key: 'source', (ctx) async => 1);
+          final source =
+              solo.enqueue<int, int>(key: 'source', (ctx) async => 1);
           source.shared().then<void>((ctx, _) {
             ctx
               ..log('hello')
@@ -279,7 +280,7 @@ void main() {
       runZonedGuarded(
         () {
           solo = PlainSolo<int>(0);
-          solo.run<int, int>((ctx) async => 1).then<void>((ctx, value) {
+          solo.enqueue<int, int>((ctx) async => 1).then<void>((ctx, value) {
             ctx.onDispose(() => throw error);
           });
         },
@@ -296,8 +297,8 @@ void main() {
     fakeAsync((async) {
       final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
-      solo.run<int, void>((ctx) => ctx.abandonable(() => gate.future));
-      final source = solo.run<int, int>((ctx) async {
+      solo.enqueue<int, void>((ctx) => ctx.abandonable(() => gate.future));
+      final source = solo.enqueue<int, int>((ctx) async {
         fail('queued source must not run');
       });
       final continuation = source.then<int>((ctx, value) {
@@ -321,7 +322,7 @@ void main() {
       final solo = PlainSolo<int>(0);
       final body = Completer<int>();
       final cleanup = Completer<void>();
-      final source = solo.run<int, int>((ctx) {
+      final source = solo.enqueue<int, int>((ctx) {
         ctx.onDispose(() => cleanup.future);
         return ctx.join(() => body.future);
       });
@@ -345,12 +346,12 @@ void main() {
     fakeAsync((async) {
       final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
-      final source = solo.run<int, int>((ctx) async => 1);
+      final source = solo.enqueue<int, int>((ctx) async => 1);
       final continuation = source.then<void>((ctx, value) {
         expect(ctx, isNot(isA<SoloContext<int, int>>()));
         return ctx.abandonable(() => gate.future);
       });
-      final next = solo.run<int, void>((ctx) async => ctx.emit(2));
+      final next = solo.enqueue<int, void>((ctx) async => ctx.emit(2));
       async.flushMicrotasks();
       expect(next.outcome, isA<Done<void>>());
       expect(solo.currentState, 2);

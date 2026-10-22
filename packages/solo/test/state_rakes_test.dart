@@ -66,14 +66,14 @@ final class _Any extends Solo<Object> {
   Job<String> afterLeavingW(
     FutureOr<void> Function(SoloContext<Object, String> ctx) step,
   ) =>
-      run<String, String>((ctx) async {
+      enqueue<String, String>((ctx) async {
         ctx.emit(42);
         await step(ctx);
         return 'went on';
       });
 
   /// Leaves `W` with its last step.
-  Job<String> leavesWLast() => run<String, String>(
+  Job<String> leavesWLast() => enqueue<String, String>(
         canStart: (state) {
           canStartAsked++;
           return true;
@@ -84,10 +84,11 @@ final class _Any extends Solo<Object> {
         },
       );
 
-  Job<int> readsAsInt() => run<Object, int>((ctx) async => ctx.stateAs<int>());
+  Job<int> readsAsInt() =>
+      enqueue<Object, int>((ctx) async => ctx.stateAs<int>());
 
   /// Waits on a plain `await`, where nothing is checked.
-  Job<String> plainAwait(Completer<void> gate) => run<String, String>(
+  Job<String> plainAwait(Completer<void> gate) => enqueue<String, String>(
         keepWhile: _notBlocked,
         (ctx) async {
           await gate.future;
@@ -97,7 +98,7 @@ final class _Any extends Solo<Object> {
       );
 
   /// Comes back from an uncancellable section, then asks.
-  Job<String> section(Completer<void> gate) => run<String, String>(
+  Job<String> section(Completer<void> gate) => enqueue<String, String>(
         keepWhile: _notBlocked,
         (ctx) async {
           await ctx.uncancellable(() => gate.future);
@@ -109,7 +110,7 @@ final class _Any extends Solo<Object> {
       );
 
   /// Publishes `'preparing'`, which [onChange] may correct on the spot.
-  Job<String> initialize() => run<String, String>(
+  Job<String> initialize() => enqueue<String, String>(
         keepWhile: (state) => state != 'working',
         (ctx) async {
           try {
@@ -124,7 +125,7 @@ final class _Any extends Solo<Object> {
 
   /// Ends its body at once and leaves a child and a cleanup behind.
   Job<String> endsEarly(Completer<void> child, Completer<void> cleanup) =>
-      run<String, String>(
+      enqueue<String, String>(
         keepWhile: _notBlocked,
         (ctx) async {
           ctx
@@ -137,7 +138,7 @@ final class _Any extends Solo<Object> {
   /// A parent whose [child] ends its body at once and leaves a cleanup
   /// behind.
   Job<void> parentOfEnded(Completer<void> cleanup, Completer<void> gate) =>
-      run<Object, void>((ctx) async {
+      enqueue<Object, void>((ctx) async {
         final ended = child = job<Object, String>((c) async {
           c.onDispose(() => cleanup.future);
           return 'child body ended';
@@ -147,7 +148,7 @@ final class _Any extends Solo<Object> {
       });
 
   /// Watches the state until [gate] opens.
-  Job<void> watch(Completer<void> gate) => run<String, void>(
+  Job<void> watch(Completer<void> gate) => enqueue<String, void>(
         keepWhile: _notBlocked,
         (ctx) => ctx.abandonable(() => gate.future),
       );
@@ -155,7 +156,7 @@ final class _Any extends Solo<Object> {
   /// A parent whose child writes `'blocked'` while the parent waits on a
   /// plain `await`, where nothing is checked. The child is one of `each`:
   /// `run` would check the parent itself once the child's value arrived.
-  Job<String> parentOfWriter(Completer<void> gate) => run<String, String>(
+  Job<String> parentOfWriter(Completer<void> gate) => enqueue<String, String>(
         keepWhile: _notBlocked,
         (ctx) async {
           ctx.each(Stream.value(1), (child, _) => child.emit('blocked'));
@@ -165,7 +166,7 @@ final class _Any extends Solo<Object> {
       );
 
   /// Writes `'blocked'` itself and goes on without a checkpoint.
-  Job<String> writesItself() => run<String, String>(
+  Job<String> writesItself() => enqueue<String, String>(
         keepWhile: _notBlocked,
         (ctx) async {
           ctx.emit('blocked');
@@ -174,7 +175,7 @@ final class _Any extends Solo<Object> {
       );
 
   /// The `catch` of the first attempt, saying what its `emit` did.
-  Job<void> emitsInCatch(Completer<void> gate) => run<Object, void>(
+  Job<void> emitsInCatch(Completer<void> gate) => enqueue<Object, void>(
         (ctx) async {
           try {
             await ctx.abandonable(() => gate.future);
@@ -191,7 +192,7 @@ final class _Any extends Solo<Object> {
       );
 
   /// Fails with a child still running and a cleanup registered.
-  Job<void> failsLeavingWork() => run<Object, void>(
+  Job<void> failsLeavingWork() => enqueue<Object, void>(
         key: 'first',
         ifFailed: (state, error, stackTrace) {
           trace.add('ifFailed: state $state, $error, ${current?.outcome}');
@@ -211,7 +212,7 @@ final class _Any extends Solo<Object> {
         },
       );
 
-  Job<void> cancelledWithHandler(Completer<void> gate) => run<Object, void>(
+  Job<void> cancelledWithHandler(Completer<void> gate) => enqueue<Object, void>(
         ifCancelled: (state, cancelled) {
           trace.add('ifCancelled: state $state, $cancelled');
           return 'corrected';
@@ -219,7 +220,7 @@ final class _Any extends Solo<Object> {
         (ctx) => ctx.abandonable(() => gate.future),
       );
 
-  Job<void> next() => run<Object, void>(
+  Job<void> next() => enqueue<Object, void>(
         key: 'next',
         (ctx) async => trace.add('the next job in $currentState'),
       );
@@ -295,7 +296,7 @@ final class _Order extends Solo<String> {
 
   void set(String next) => externalSetState(next);
 
-  Job<void> watch() => run<String, void>(
+  Job<void> watch() => enqueue<String, void>(
         keepWhile: (state) {
           final indent = _inNestedWrite ? ' ' * 12 : ' ' * 4;
           trace.add('${indent}rules, against $state');
@@ -315,7 +316,7 @@ final class _LoggedNumbers extends page.Logged<int> {
 
   void set(int value) => externalSetState(value);
 
-  Job<void> watch() => run<int, void>(
+  Job<void> watch() => enqueue<int, void>(
         keepWhile: (state) => state < 5,
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
@@ -365,12 +366,12 @@ final class _Leaky extends Solo<int> {
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
       trace.add('onUnanswered: $error');
 
-  Job<void> watch() => run<int, void>(
+  Job<void> watch() => enqueue<int, void>(
         keepWhile: (state) => state < 5,
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
 
-  Job<String> emitter() => run<int, String>((ctx) async {
+  Job<String> emitter() => enqueue<int, String>((ctx) async {
         try {
           ctx.emit(3);
           return 'emit returned';
@@ -379,7 +380,7 @@ final class _Leaky extends Solo<int> {
         }
       });
 
-  Job<void> corrected(Completer<void> gate) => run<int, void>(
+  Job<void> corrected(Completer<void> gate) => enqueue<int, void>(
         ifCancelled: (state, cancelled) => 4,
         (ctx) => ctx.abandonable(() => gate.future),
       );
@@ -392,7 +393,7 @@ final class _Leaky extends Solo<int> {
   /// rules itself, and so does the end of a child the parent ran, and a job
   /// cancelled there would hide whether the write asked them.
   Job<void> watchWhileChildWrites(List<String> heard, Completer<void> gate) =>
-      run<int, void>(
+      enqueue<int, void>(
         keepWhile: (state) => state < 5,
         (ctx) async {
           ctx.run(
@@ -416,7 +417,7 @@ final class _Leaky extends Solo<int> {
 
   /// A job its rules keep while the state is under 5, that logs once and
   /// waits for [gate] without a checkpoint after the message.
-  Job<void> logWhileUnder5(Completer<void> gate) => run<int, void>(
+  Job<void> logWhileUnder5(Completer<void> gate) => enqueue<int, void>(
         keepWhile: (state) => state < 5,
         (ctx) async {
           ctx.log('hello');
@@ -434,7 +435,7 @@ final class _Leaky extends Solo<int> {
       ifCancelled: (state, cancelled) => 9,
       (ctx) => ctx.abandonable(() => gate.future),
     );
-    final parent = run<int, void>(
+    final parent = enqueue<int, void>(
       keepWhile: (state) => state < 5,
       (ctx) async {
         ctx.run(child).ignore();
@@ -447,7 +448,7 @@ final class _Leaky extends Solo<int> {
   /// A job its rules keep while the state is under 5, over a chain of
   /// [depth] children, each run by the one above it. [bottom] completes
   /// once the last of them has started.
-  Job<void> deep(int depth, Completer<void> bottom) => run<int, void>(
+  Job<void> deep(int depth, Completer<void> bottom) => enqueue<int, void>(
         keepWhile: (state) => state < 5,
         (ctx) => _down(ctx, depth, bottom),
       );
@@ -537,7 +538,7 @@ final class _Eligible extends Solo<String> {
     Completer<void>? child,
     Completer<void>? cleanup,
   }) =>
-      run<String, String>(
+      enqueue<String, String>(
         key: 'guarded',
         keepWhile: _keep,
         ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
@@ -559,7 +560,7 @@ final class _Eligible extends Solo<String> {
 
   /// A parent with a rule; its child has a handler and no rule.
   Job<void> parent(Completer<void> gate, {bool handlers = false}) =>
-      run<String, void>(
+      enqueue<String, void>(
         key: 'parent',
         keepWhile: _keep,
         ifCancelled: handlers ? (state, cancelled) => 'parent corrected' : null,
@@ -577,7 +578,7 @@ final class _Eligible extends Solo<String> {
 
   /// A parent with a rule and a handler, whose child writes a state the
   /// rule turns down.
-  Job<void> parentOfWriter() => run<String, void>(
+  Job<void> parentOfWriter() => enqueue<String, void>(
         key: 'parent',
         keepWhile: _keep,
         ifCancelled: (state, cancelled) => 'parent corrected',
@@ -591,7 +592,7 @@ final class _Eligible extends Solo<String> {
 
   /// A parent that writes a state the rule of its child turns down; the
   /// child has a handler.
-  Job<void> writingParent() => run<String, void>(
+  Job<void> writingParent() => enqueue<String, void>(
         key: 'parent',
         (ctx) async {
           final watcher = _watcher();
@@ -603,7 +604,7 @@ final class _Eligible extends Solo<String> {
       );
 
   /// Two children: one writes a state the rule of the other turns down.
-  Job<void> writingSibling() => run<String, void>(
+  Job<void> writingSibling() => enqueue<String, void>(
         key: 'parent',
         (ctx) async {
           final watching = ctx.run(_watcher())..ignore();
@@ -624,7 +625,7 @@ final class _Eligible extends Solo<String> {
   /// Writes a state its own rule turns down, waits on a plain `await`,
   /// then reads the state if [thenReads] and fails otherwise.
   Job<void> ownEmit(Completer<void> gate, {bool thenReads = false}) =>
-      run<String, void>(
+      enqueue<String, void>(
         key: 'own',
         keepWhile: _keep,
         ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
@@ -639,7 +640,7 @@ final class _Eligible extends Solo<String> {
 
   /// The rule and both handlers of [guarded], with a body that reads the
   /// state once [gate] opens.
-  Job<String> readsAfter(Completer<void> gate) => run<String, String>(
+  Job<String> readsAfter(Completer<void> gate) => enqueue<String, String>(
         key: 'reader',
         keepWhile: _keep,
         ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
@@ -650,7 +651,7 @@ final class _Eligible extends Solo<String> {
         },
       );
 
-  Job<void> stateAsMismatch() => run<String, void>(
+  Job<void> stateAsMismatch() => enqueue<String, void>(
         key: 'stateAs',
         ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
         (ctx) async {
@@ -660,18 +661,18 @@ final class _Eligible extends Solo<String> {
         },
       );
 
-  Job<void> handlerThrows(Completer<void> gate) => run<String, void>(
+  Job<void> handlerThrows(Completer<void> gate) => enqueue<String, void>(
         key: 'thrower',
         ifCancelled: (state, cancelled) => throw StateError('handler boom'),
         (ctx) => ctx.abandonable(() => gate.future),
       );
 
-  Job<void> next() => run<String, void>(
+  Job<void> next() => enqueue<String, void>(
         key: 'next',
         (ctx) async => trace.add('the next job ran in $currentState'),
       );
 
-  Job<String> droppable(Completer<void> gate) => run<String, String>(
+  Job<String> droppable(Completer<void> gate) => enqueue<String, String>(
         key: 'droppable',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
@@ -682,7 +683,7 @@ final class _Eligible extends Solo<String> {
         },
       );
 
-  Job<String> refused() => run<String, String>(
+  Job<String> refused() => enqueue<String, String>(
         key: 'refused',
         canStart: (state) => false,
         ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
@@ -691,7 +692,7 @@ final class _Eligible extends Solo<String> {
 
   /// A handler that writes a fact itself before it returns its result.
   Job<void> writesFromHandler(Completer<void> gate, {required bool rule}) =>
-      run<String, void>(
+      enqueue<String, void>(
         key: 'writer',
         keepWhile: rule ? _keep : null,
         ifCancelled: (state, cancelled) {

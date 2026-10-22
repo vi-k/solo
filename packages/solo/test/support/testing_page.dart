@@ -174,7 +174,7 @@ final class CameraController extends Solo<CameraState> {
 
   CameraController(this.hw) : super(const Idle());
 
-  Job<void> connect() => run<Idle, void>(
+  Job<void> connect() => enqueue<Idle, void>(
         key: 'connect',
         timeout: const Duration(seconds: 5),
         (ctx) async {
@@ -192,7 +192,7 @@ final class QueuedCamera extends CameraController {
   QueuedCamera(super.hw);
 
   /// A job behind `connect` in the queue.
-  Job<void> next() => run<CameraState, void>(key: 'next', (ctx) async {});
+  Job<void> next() => enqueue<CameraState, void>(key: 'next', (ctx) async {});
 }
 
 /// `### A deadline of the job`: the five seconds under fake time, a

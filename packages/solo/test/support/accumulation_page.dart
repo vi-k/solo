@@ -95,7 +95,7 @@ final class SettingsController extends Solo<Settings> {
 
   Job<void> update(SettingsPatch patch) => _updates.add(patch);
 
-  Job<void> reload() => run<Settings, void>(
+  Job<void> reload() => enqueue<Settings, void>(
         key: 'reload',
         (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
@@ -202,14 +202,14 @@ final class BusyPlayer extends Player {
 
   BusyPlayer(super.device, this.note);
 
-  Job<void> busy() => run<Playback, void>(
+  Job<void> busy() => enqueue<Playback, void>(
         key: 'busy',
         (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
         ),
       );
 
-  Job<void> chime() => run<Playback, void>(
+  Job<void> chime() => enqueue<Playback, void>(
         key: 'chime',
         (ctx) async => note('chime'),
       );
@@ -228,14 +228,14 @@ final class Transport extends Solo<Playback> {
       (job) => job.key == Command.resume || job.key == Command.pause,
     );
 
-    return run<Playback, void>(key: Command.resume, (ctx) async {
+    return enqueue<Playback, void>(key: Command.resume, (ctx) async {
       await ctx.join(device.resume);
       ctx.emit(const Playing());
     });
   }
 
   /// Not on the page.
-  Job<void> pause({bool cancellable = true}) => run<Playback, void>(
+  Job<void> pause({bool cancellable = true}) => enqueue<Playback, void>(
         key: Command.pause,
         cancellable: cancellable,
         (ctx) async {
@@ -245,7 +245,7 @@ final class Transport extends Solo<Playback> {
       );
 
   /// Not on the page: a job of another kind, 50 ms long.
-  Job<void> chime() => run<Playback, void>(
+  Job<void> chime() => enqueue<Playback, void>(
         key: 'chime',
         (ctx) => ctx.join(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),

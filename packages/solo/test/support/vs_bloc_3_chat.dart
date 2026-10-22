@@ -50,7 +50,7 @@ final class ChatController extends Solo<ChatState> {
 
   ChatController(this._api) : super(const ChatState());
 
-  Job<void> send(String text) => run<ChatState, void>(
+  Job<void> send(String text) => enqueue<ChatState, void>(
         key: 'send',
         (ctx) async {
           final reply = await ctx.abandonable(() => _api.send(text));
@@ -60,7 +60,7 @@ final class ChatController extends Solo<ChatState> {
       );
 
   Job<void> markReplyRead() =>
-      run<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
+      enqueue<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
 }
 
 Future<void> onScreenClosed(ChatController chat) async {
@@ -80,7 +80,7 @@ final class PlainAwaitChatController extends Solo<ChatState> {
   /// What the body met after its await: the error `ctx.emit` threw.
   Object? afterAwait;
 
-  Job<void> send(String text) => run<ChatState, void>(
+  Job<void> send(String text) => enqueue<ChatState, void>(
         key: 'send',
         (ctx) async {
           final reply = await _api.send(text);
@@ -100,7 +100,7 @@ final class LateChatController extends Solo<ChatState> {
 
   final Api _api;
 
-  Job<void> send(String text) => run<ChatState, void>(
+  Job<void> send(String text) => enqueue<ChatState, void>(
         key: 'send',
         (ctx) async {
           unawaited(

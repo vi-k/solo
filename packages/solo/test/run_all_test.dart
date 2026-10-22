@@ -15,7 +15,7 @@ void main() {
       final bodies = <String>[];
       Object? thrown;
       Outcome<void>? refusedOutcome;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         // The state is `Initial`, so the rule of the second branch turns
         // it away: it ends without ever entering its body, and the other
         // two still start.
@@ -58,7 +58,7 @@ void main() {
     runSolo((solo, journal, async) {
       Object? thrown;
       late SoloJob<void> started;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         started = solo.job<TestState, void>(key: 'a', (ctx) async {
           await pause(ctx, 50);
         });
@@ -103,7 +103,7 @@ void main() {
       final chosen = StateError('chosen');
       final other = StateError('other');
       Object? thrown;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         try {
           await ctx.runAll(<ChildJob<void>>[
             solo.job<TestState, void>(key: 'a', (ctx) async => throw chosen),

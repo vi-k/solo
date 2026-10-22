@@ -95,7 +95,7 @@ final class _Windows extends Solo<CameraState> with OpenSolo<CameraState> {
 
   SoloJob<void> query(String text) => _queries.add(text);
 
-  SoloJob<void> ready() => run<Ready, void>(
+  SoloJob<void> ready() => enqueue<Ready, void>(
         key: 'ready',
         (ctx) async => stage.trace.add('ready runs'),
       );
@@ -437,7 +437,7 @@ void main() {
         camera = page.CameraController();
         final running = camera.work('running');
         final removed = camera.work('removed');
-        final byRule = camera.run<Ready, void>(
+        final byRule = camera.enqueue<Ready, void>(
           key: 'by rule',
           canStart: (state) => false,
           (ctx) async {},
@@ -483,7 +483,7 @@ void main() {
         );
         runZonedGuarded(
           () {
-            camera.add(job);
+            camera.enqueueJob(job);
             async.flushTimers();
           },
           (error, stackTrace) => added.add('$error'),
@@ -555,15 +555,16 @@ void main() {
       });
     });
 
-    test('job, add and run are protected, and so are collect and accumulate',
-        () {
+    test(
+        'job, enqueueJob and enqueue are protected, and so are collect and '
+        'accumulate', () {
       // Only the analyzer sees the annotation: a call from outside the
       // class is reported as `invalid_use_of_protected_member`.
       final engine = _engine();
       for (final member in [
         'SoloJob<T> job<W extends S, T>(',
-        'SoloJob<T> add<T>(',
-        'SoloJob<T> run<W extends S, T>(',
+        'SoloJob<T> enqueueJob<T>(',
+        'SoloJob<T> enqueue<W extends S, T>(',
         'SoloAccumulator<E, T> collect<W extends S, E, T>(',
         'SoloAccumulator<E, T> accumulate<W extends S, E, T>(',
       ]) {
@@ -575,7 +576,7 @@ void main() {
       fakeAsync((async) {
         final assembling = page.Assembling();
         var built = 0;
-        final job = assembling.run<Ready, void>(
+        final job = assembling.enqueue<Ready, void>(
           key: 'lazy',
           describe: () {
             built++;
@@ -613,7 +614,7 @@ void main() {
         final assembling = page.Assembling()..setZoom(2);
         async.flushTimers();
 
-        expect(log, contains('add Job(_Op.zoom: zoom: 2.0)'));
+        expect(log, contains('enqueue Job(_Op.zoom: zoom: 2.0)'));
         expect(watcher.labels, ['_Op.zoom: zoom: 2.0']);
         assembling.close().ignore();
         async.flushTimers();
@@ -739,12 +740,12 @@ void main() {
       fakeAsync((async) {
         final camera = page.CameraController()..work('running');
         async.flushMicrotasks();
-        final removed = camera.run<Ready, void>(key: 'k', (ctx) async {});
+        final removed = camera.enqueue<Ready, void>(key: 'k', (ctx) async {});
         List<String>? seen;
         removed.whenCancelled(
           (_) => seen = [for (final job in camera.queue.jobs) '${job.key}'],
         );
-        camera.run<Ready, void>(
+        camera.enqueue<Ready, void>(
           key: 'k',
           policy: Policy.replace,
           (ctx) async {},
@@ -773,13 +774,13 @@ void main() {
       fakeAsync((async) {
         final camera = page.CameraController()..work('running');
         async.flushMicrotasks();
-        final kept = camera.run<Ready, void>(
+        final kept = camera.enqueue<Ready, void>(
           key: 'k',
           cancellable: false,
           (ctx) async => stage.trace.add('kept runs'),
         );
-        final removed = camera.run<Ready, void>(key: 'k', (ctx) async {});
-        final replacement = camera.run<Ready, void>(
+        final removed = camera.enqueue<Ready, void>(key: 'k', (ctx) async {});
+        final replacement = camera.enqueue<Ready, void>(
           key: 'k',
           policy: Policy.replace,
           (ctx) async => stage.trace.add('replacement runs'),
@@ -843,7 +844,7 @@ void main() {
         () {
       fakeAsync((async) {
         final camera = page.CameraController();
-        final holder = camera.run<Ready, void>(
+        final holder = camera.enqueue<Ready, void>(
           key: 'holder',
           ifFailed: (state, error, stackTrace) {
             stage.trace.add('the state handler runs');
@@ -891,7 +892,7 @@ void main() {
         fakeAsync((async) {
           final camera = page.CameraController();
           late SoloJob<void> child;
-          final parent = camera.run<Ready, void>(key: 'parent', (ctx) {
+          final parent = camera.enqueue<Ready, void>(key: 'parent', (ctx) {
             child = camera.job<Ready, void>(key: 'k', (ctx) async {
               stage.trace.add('the child begins');
               await ctx.pause(const Duration(milliseconds: 100));
@@ -900,7 +901,7 @@ void main() {
             return ctx.run(child);
           });
           async.flushMicrotasks();
-          final root = camera.run<Ready, void>(
+          final root = camera.enqueue<Ready, void>(
             key: 'k',
             policy: policy,
             (ctx) async => stage.trace.add('the root job runs'),
@@ -1108,18 +1109,18 @@ void main() {
     test('a key is any object, compared with ==', () {
       fakeAsync((async) {
         final camera = page.CameraController();
-        final job = camera.run<Ready, void>(
+        final job = camera.enqueue<Ready, void>(
           key: _named('k'),
           policy: Policy.droppable,
           (ctx) async {},
         );
         // An equal key, and not the same object.
-        final again = camera.run<Ready, void>(
+        final again = camera.enqueue<Ready, void>(
           key: _named('k'),
           policy: Policy.droppable,
           (ctx) async {},
         );
-        final other = camera.run<Ready, void>(
+        final other = camera.enqueue<Ready, void>(
           key: _named('another'),
           policy: Policy.droppable,
           (ctx) async {},
@@ -1159,7 +1160,7 @@ void main() {
             key: _named('own'),
             (ctx) async {},
           );
-          camera.add(mine, policy: Policy.droppable);
+          camera.enqueueJob(mine, policy: Policy.droppable);
           return mine;
         }
 
@@ -1179,7 +1180,7 @@ void main() {
         () {
       fakeAsync((async) {
         final camera = page.CameraController();
-        final held = camera.run<Ready, String>(
+        final held = camera.enqueue<Ready, String>(
           key: 'k',
           policy: Policy.droppable,
           (ctx) async => 'held',
@@ -1187,7 +1188,7 @@ void main() {
         final other = camera.job<Ready, int>(key: 'k', (ctx) async => 1);
 
         expect(
-          () => camera.add(other, policy: Policy.droppable),
+          () => camera.enqueueJob(other, policy: Policy.droppable),
           throwsArgumentError,
         );
         expect(camera.waiting, ['k'], reason: 'nothing was queued');
@@ -1195,7 +1196,7 @@ void main() {
         expect(other.outcome, isNull, reason: 'the handle is untouched');
 
         // The same handle, under Policy.sequential.
-        expect(camera.add(other), same(other));
+        expect(camera.enqueueJob(other), same(other));
         async.flushTimers();
         expect('${held.outcome}', 'Done(held)');
         expect('${other.outcome}', 'Done(1)');
@@ -1207,19 +1208,19 @@ void main() {
     test('the refused handle can be added later, once the key is free', () {
       fakeAsync((async) {
         final camera = page.CameraController()
-          ..run<Ready, String>(
+          ..enqueue<Ready, String>(
             key: 'k',
             policy: Policy.droppable,
             (ctx) async => 'held',
           );
         final other = camera.job<Ready, int>(key: 'k', (ctx) async => 1);
         expect(
-          () => camera.add(other, policy: Policy.droppable),
+          () => camera.enqueueJob(other, policy: Policy.droppable),
           throwsArgumentError,
         );
 
         async.flushTimers();
-        expect(camera.add(other, policy: Policy.droppable), same(other));
+        expect(camera.enqueueJob(other, policy: Policy.droppable), same(other));
         async.flushTimers();
         expect('${other.outcome}', 'Done(1)');
         camera.close().ignore();
@@ -1236,10 +1237,14 @@ void main() {
           // An `ArgumentError`, not the `AssertionError` of a check that a
           // release build would drop.
           expect(
-            () => camera.add(keyless, policy: policy),
+            () => camera.enqueueJob(keyless, policy: policy),
             throwsArgumentError,
           );
-          expect(camera.add(keyless), same(keyless), reason: 'sequential');
+          expect(
+            camera.enqueueJob(keyless),
+            same(keyless),
+            reason: 'sequential',
+          );
           async.flushTimers();
           camera.close().ignore();
           async.flushTimers();
@@ -1350,7 +1355,7 @@ void main() {
       fakeAsync((async) {
         final camera = page.CameraController()..work('running');
         async.flushMicrotasks();
-        final kept = camera.run<Ready, void>(
+        final kept = camera.enqueue<Ready, void>(
           key: 'kept',
           cancellable: false,
           (ctx) async {},

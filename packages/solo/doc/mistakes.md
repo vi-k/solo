@@ -142,13 +142,13 @@ The controller runs one root job at a time, and a method of the controller
 queues one more. The examples use two pairs of the controller's methods from
 the children page. `_sync(item)` and `_recordPath(path)` make a job with
 `job(...)` and start nothing. `sync(item)` and `recordPath(path)` are the
-public methods that queue it: `sync(item)` returns `add(_sync(item))`.
+public methods that queue it: `sync(item)` returns `enqueueJob(_sync(item))`.
 
 Don't do this:
 
 ```dart
 // Wrong: sync waits for this job to end; this job waits for sync.
-Job<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await sync(item).value;
@@ -165,7 +165,7 @@ queue.
 Do this:
 
 ```dart
-Job<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await ctx.run(_sync(item));
@@ -278,7 +278,7 @@ Don't do this:
 
 ```dart
 // Wrong: one key for every profile.
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -292,7 +292,7 @@ Put the argument into the key.
 Do this:
 
 ```dart
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),

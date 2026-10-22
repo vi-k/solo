@@ -81,7 +81,7 @@ final class ReportController extends Solo<ReportState> with SoloStream {
     _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
-  Job<void> build(Range range) => run<SignedIn, void>(
+  Job<void> build(Range range) => enqueue<SignedIn, void>(
         key: 'report',
         (ctx) async {
           final report = await ctx.join(() => _reports.build(range));
@@ -104,13 +104,13 @@ final class QueuedRevocationController extends Solo<ReportState>
   QueuedRevocationController(this._reports, Auth auth)
       : super(const SignedIn()) {
     auth.onRevoked = (reason) {
-      run<ReportState, void>((ctx) async => ctx.emit(SignedOut(reason)));
+      enqueue<ReportState, void>((ctx) async => ctx.emit(SignedOut(reason)));
     };
   }
 
   final Reports _reports;
 
-  Job<void> build(Range range) => run<SignedIn, void>(
+  Job<void> build(Range range) => enqueue<SignedIn, void>(
         key: 'report',
         (ctx) async {
           final report = await ctx.join(() => _reports.build(range));
@@ -135,7 +135,7 @@ final class HandledReportController extends Solo<ReportState> {
   final handlers = <String>[];
 
   Job<void> build(Range range, {bool readsAfterEmit = false}) =>
-      run<SignedIn, void>(
+      enqueue<SignedIn, void>(
         key: 'report',
         ifFailed: (state, error, stackTrace) {
           handlers.add('ifFailed');
@@ -155,7 +155,7 @@ final class HandledReportController extends Solo<ReportState> {
       );
 
   /// A job the handlers do stand for: cancelled by hand, nothing external.
-  Job<void> stall() => run<SignedIn, void>(
+  Job<void> stall() => enqueue<SignedIn, void>(
         key: 'stall',
         ifCancelled: (state, cancelled) {
           handlers.add('ifCancelled');
@@ -177,7 +177,7 @@ final class UnguardedReportController extends Solo<ReportState> {
   final Reports _reports;
   final seen = <String>[];
 
-  Job<void> build(Range range) => run<SignedIn, void>(
+  Job<void> build(Range range) => enqueue<SignedIn, void>(
         key: 'report',
         (ctx) async {
           final report = await ctx.join(() => _reports.build(range));
@@ -185,7 +185,7 @@ final class UnguardedReportController extends Solo<ReportState> {
         },
       );
 
-  Job<void> mark() => run<ReportState, void>(
+  Job<void> mark() => enqueue<ReportState, void>(
         key: 'mark',
         (ctx) async =>
             seen.add('the next root job starts with ${_reports.built} built'),

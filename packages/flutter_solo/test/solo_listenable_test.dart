@@ -22,7 +22,7 @@ final class _Counter extends Solo<int> with SoloListenable {
     bool Function(int state)? keepWhile,
     Duration? timeout,
   }) =>
-      run<int, void>(body, keepWhile: keepWhile, timeout: timeout);
+      enqueue<int, void>(body, keepWhile: keepWhile, timeout: timeout);
 }
 
 final class _ObjectController extends Solo<Object> with SoloListenable {

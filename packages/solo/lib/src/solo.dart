@@ -24,9 +24,9 @@ part 'queue.dart';
 /// adds a broadcast stream through it.
 ///
 /// A controller's operations are methods of its own, such as `load()`, built
-/// from [run], or from [job] and [add], and from [collect] and [accumulate]
-/// where several events share one job. The five are protected: a caller sees
-/// the operations, not how they are queued.
+/// from [enqueue], or from [job] and [enqueueJob], and from [collect] and
+/// [accumulate] where several events share one job. The five are protected: a
+/// caller sees the operations, not how they are queued.
 ///
 /// The hooks — [onStart], [onFinish], [onError], [onUnanswered], [onLog],
 /// [onChange], [onClose] and the [observer]'s — are a cross-cutting channel, so
@@ -90,24 +90,23 @@ abstract class Solo<S extends Object> {
   /// and the error goes no further. [Job.debug] hands such an error to the
   /// zone as well.
   ///
-  /// A job queued while another one runs gets a tail on its line,
-  /// `add Job(inner) while Job(outer) is running: it starts after Job(outer)
-  /// ends`. For a job queued from outside that is only when it starts. A
-  /// running job that awaits a job it queued on its own controller, from its
-  /// body, a child or its cleanup, waits for good, and this is the line that
-  /// shows it.
+  /// A job queued while another one runs gets a tail on its line, `enqueue
+  /// Job(inner) while Job(outer) is running: it starts after Job(outer) ends`.
+  /// For a job queued from outside that is only when it starts. A running job
+  /// that awaits a job it queued on its own controller, from its body, a child
+  /// or its cleanup, waits for good, and this is the line that shows it.
   ///
-  /// A droppable duplicate gets a tail too, since [add] hands back the job
-  /// it duplicates. A duplicate of a queued job gets the same tail as above,
-  /// `add Job(load): duplicate of Job(load), which is queued while
+  /// A droppable duplicate gets a tail too, since [enqueueJob] hands back the
+  /// job it duplicates. A duplicate of a queued job gets the same tail as
+  /// above, `enqueue Job(load): duplicate of Job(load), which is queued while
   /// Job(outer) is running: it starts after Job(outer) ends`. A duplicate of
-  /// the running job gets `add Job(x): duplicate of Job(x), which is running:
-  /// if awaited from inside Job(x), it waits for itself`: a wait for the
-  /// running job from its body, a child or its cleanup is a wait for itself,
-  /// cancelling the job does not wake a plain `await`, and not even [close]
-  /// ends it. Who called is not known here, so a duplicate added from
-  /// outside, by a second tap on a button, gets the tail as well, and a wait
-  /// for the job there is no trap.
+  /// the running job gets `enqueue Job(x): duplicate of Job(x), which is
+  /// running: if awaited from inside Job(x), it waits for itself`: a wait for
+  /// the running job from its body, a child or its cleanup is a wait for
+  /// itself, cancelling the job does not wake a plain `await`, and not even
+  /// [close] ends it. Who called is not known here, so a duplicate enqueued
+  /// from outside, by a second tap on a button, gets the tail as well, and a
+  /// wait for the job there is no trap.
   static void Function(String message)? debug;
 
   S _state;
@@ -281,13 +280,14 @@ abstract class Solo<S extends Object> {
     }
   }
 
-  /// Creates a job without queueing it, for [add] or for [JobContext.run].
+  /// Creates a job without queueing it, for [enqueueJob] or for
+  /// [JobContext.run].
   ///
   /// Queued, the job starts in the zone this method is called in, where an
-  /// unread failure of it goes as well, and not in the zone of [add]. Throws
-  /// [ArgumentError] when [timeout] is zero or negative, or comes with
-  /// `cancellable: false`: the deadline is a cancellation, and such a job
-  /// would refuse it.
+  /// unread failure of it goes as well, and not in the zone of [enqueueJob].
+  /// Throws [ArgumentError] when [timeout] is zero or negative, or comes with
+  /// `cancellable: false`: the deadline is a cancellation, and such a job would
+  /// refuse it.
   ///
   /// `canStart` is asked once, at start; `keepWhile` at start, on every state
   /// change while the job runs and on every read through the context. A rule
@@ -297,9 +297,9 @@ abstract class Solo<S extends Object> {
   /// `cancellable: false` turns down `cancel`, `clear` without `force`, parent
   /// cancellation and, once the job runs, `close` — not a state that stops
   /// matching `W` or `keepWhile`. The flag counts only once the engine holds
-  /// the job: one made here that nobody has added is cancelled like any other.
-  /// A queued job that turned down `cancel` starts in its turn and runs to its
-  /// end, and `await job.cancel()` comes back only then.
+  /// the job: one made here that nobody has enqueued is cancelled like any
+  /// other. A queued job that turned down `cancel` starts in its turn and runs
+  /// to its end, and `await job.cancel()` comes back only then.
   ///
   /// [ifFailed] and [ifCancelled] compute the state after a failed or cancelled
   /// body, once its children and cleanup are over, and change nothing about the
@@ -310,8 +310,8 @@ abstract class Solo<S extends Object> {
   /// throwing at `ctx.state` or `ctx.check()` reaches the body instead, and a
   /// `Failed` it leaves is corrected like any other.
   ///
-  /// [timeout] counts from the start of the body, not from [add], and lands as
-  /// a cancellation, as that of [Job.new] does: [ifCancelled] gets a
+  /// [timeout] counts from the start of the body, not from [enqueueJob], and
+  /// lands as a cancellation, as that of [Job.new] does: [ifCancelled] gets a
   /// [Cancelled] whose reason is a [TimeoutCancelReason], [ifFailed] is not
   /// called, and `on TimeoutException` catches nothing.
   ///
@@ -469,10 +469,10 @@ abstract class Solo<S extends Object> {
   ///
   /// [first] puts the job at the head of the queue instead of the tail. It
   /// passes what is waiting and nothing else: the running job is not the
-  /// queue's to touch, so this one starts when that job finishes. A
-  /// replacement queued by [Policy.restart] waits at the tail like any
-  /// other, so a job added `first` after it starts ahead of it — cancelling
-  /// the running job does not reserve the slot after it.
+  /// queue's to touch, so this one starts when that job finishes. A replacement
+  /// queued by [Policy.restart] waits at the tail like any other, so a job
+  /// enqueued `first` after it starts ahead of it — cancelling the running job
+  /// does not reserve the slot after it.
   ///
   /// [Policy.replace] and [Policy.restart] queue [job] before they cancel
   /// the jobs it replaces. Their `onFinish` and cancellation listeners run
@@ -482,20 +482,19 @@ abstract class Solo<S extends Object> {
   /// included, replaces its own jobs one after another and runs out of
   /// stack; such a hook leaves a [ReplacedCancelReason] alone.
   ///
-  /// Throws [StateError] if [job] was already added or run, and
-  /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has
-  /// no key, if [job] was created by another controller, or if
-  /// [Policy.droppable] finds that key on a job of another result type.
-  /// Every [ArgumentError] here is thrown before [job] is taken, so a job
-  /// refused for one of those reasons is untouched and can be added again;
-  /// the [StateError] is about a handle that has been taken once already.
-  /// After `close` the job finishes at once with `Cancelled(closed)`, and a
-  /// key held by another result type is not looked for at all — except by
-  /// [Policy.droppable] during a [SoloCloseMode.drain]: the queue it runs
-  /// still holds jobs that will do their work, and one with the key is
-  /// handed back as before the close.
+  /// Throws [StateError] if [job] was already enqueued or run, and
+  /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has no
+  /// key, if [job] was created by another controller, or if [Policy.droppable]
+  /// finds that key on a job of another result type. Every [ArgumentError] here
+  /// is thrown before [job] is taken, so a job refused for one of those reasons
+  /// is untouched and can be enqueued again; the [StateError] is about a handle
+  /// that has been taken once already. After `close` the job finishes at once
+  /// with `Cancelled(closed)`, and a key held by another result type is not
+  /// looked for at all — except by [Policy.droppable] during a
+  /// [SoloCloseMode.drain]: the queue it runs still holds jobs that will do
+  /// their work, and one with the key is handed back as before the close.
   @protected
-  SoloJob<T> add<T>(
+  SoloJob<T> enqueueJob<T>(
     Job<T> job, {
     bool first = false,
     Policy policy = Policy.sequential,
@@ -504,18 +503,18 @@ abstract class Solo<S extends Object> {
     if (policy != Policy.sequential && impl.key == null) {
       throw ArgumentError('Policy.${policy.name} requires a job key');
     }
-    if (impl._added ||
+    if (impl._enqueued ||
         impl._jobStatus != JobStatus.created ||
         _queue._jobs.contains(impl)) {
-      throw StateError('$impl has already been added or run');
+      throw StateError('$impl has already been enqueued or run');
     }
-    // Looked up before the job is marked as added, and the answer reused
-    // below: a key shared with a job of another result type is the
-    // caller's mistake, and `add` must not bury the job it then refuses to
-    // hand back. Nothing between here and the branch touches the queue. A
-    // closed controller takes no new work, but a `drain` still runs what it
-    // had: a duplicate found there is handed back as before the close, since
-    // its work is going to be done, and only new work gets the closed answer.
+    // Looked up before the job is marked as enqueued, and the answer reused
+    // below: a key shared with a job of another result type is the caller's
+    // mistake, and `enqueueJob` must not bury the job it then refuses to hand
+    // back. Nothing between here and the branch touches the queue. A closed
+    // controller takes no new work, but a `drain` still runs what it had: a
+    // duplicate found there is handed back as before the close, since its work
+    // is going to be done, and only new work gets the closed answer.
     final duplicate = (!isClosed || _draining) && policy == Policy.droppable
         ? _lastJobWhere((other) => other.key == impl.key)
         : null;
@@ -533,15 +532,15 @@ abstract class Solo<S extends Object> {
       );
     }
     // Set before anything can go wrong below: a job dropped by a closed
-    // controller has been added too, and one handle is one add.
-    impl._added = true;
+    // controller has been enqueued too, and one handle is one enqueue.
+    impl._enqueued = true;
     // Any job of this call may be handed to the next caller of the key, so
     // every one of them refuses a plain `then` from the start, the first
     // caller's included: otherwise whether a caller throws would depend on
     // who came first.
     if (policy == Policy.droppable) impl._requireShared(_handedBack);
     if (isClosed && duplicate == null) {
-      _debug(() => 'add $impl: closed');
+      _debug(() => 'enqueue $impl: closed');
       impl._drop(
         Cancelled.by(
           reason: const ClosedCancelReason(),
@@ -559,7 +558,7 @@ abstract class Solo<S extends Object> {
       duplicate._requireShared(_handedBack);
       _debug(() {
         final name = '$duplicate';
-        final line = 'add $impl: duplicate of $name';
+        final line = 'enqueue $impl: duplicate of $name';
         final current = _current;
         // A droppable method called from inside the running job -- its
         // body, a child of it, its cleanup -- hands back that very job,
@@ -586,7 +585,7 @@ abstract class Solo<S extends Object> {
           stackTrace: StackTrace.current,
         ),
       );
-      // The type was checked before the job was marked as added.
+      // The type was checked before the job was marked as enqueued.
       return duplicate as SoloJob<T>;
     }
     // Queued before the others are cancelled, not after: cancelling one
@@ -597,7 +596,7 @@ abstract class Solo<S extends Object> {
     // and the job queued last would not be the one to run last.
     _queue._insert(impl, first: first);
     _debug(() {
-      final line = 'add $impl${first ? ' first' : ''}';
+      final line = 'enqueue $impl${first ? ' first' : ''}';
       final current = _current;
       // A method of the controller called from a running job -- its body,
       // a child of it, its cleanup -- queues a root job, and a job that
@@ -634,22 +633,22 @@ abstract class Solo<S extends Object> {
     return impl;
   }
 
-  /// `add(job(...), policy: policy)` in one call: how a method of a
+  /// `enqueueJob(job(...), policy: policy)` in one call: how a method of a
   /// controller builds its job and queues it.
   ///
-  /// Every parameter but [policy] belongs to [job], which documents them
-  /// all; [policy] belongs to [add]. Returns the queued job; on a closed
-  /// controller it gives back one already finished with
-  /// `Cancelled(closed)` rather than throwing — except that a
-  /// [Policy.droppable] call during a [SoloCloseMode.drain] gets back the
-  /// draining job that holds its key, as from [add]. It does throw what [add]
-  /// throws for a job it cannot take: [ArgumentError] for a policy that
-  /// needs a key without one, and another from [Policy.droppable] when one
-  /// key is shared by jobs with different result types. And it throws what
-  /// [job] throws, before anything is queued.
+  /// Every parameter but [policy] belongs to [job], which documents them all;
+  /// [policy] belongs to [enqueueJob]. Returns the queued job; on a closed
+  /// controller it gives back one already finished with `Cancelled(closed)`
+  /// rather than throwing — except that a [Policy.droppable] call during a
+  /// [SoloCloseMode.drain] gets back the draining job that holds its key, as
+  /// from [enqueueJob]. It does throw what [enqueueJob] throws for a job it
+  /// cannot take: [ArgumentError] for a policy that needs a key without one,
+  /// and another from [Policy.droppable] when one key is shared by jobs with
+  /// different result types. And it throws what [job] throws, before anything
+  /// is queued.
   ///
   /// ```dart
-  /// Job<String> load() => run<Profile, String>(
+  /// Job<String> load() => enqueue<Profile, String>(
   ///       key: 'load',
   ///       policy: Policy.droppable,
   ///       (ctx) async {
@@ -665,7 +664,7 @@ abstract class Solo<S extends Object> {
   /// and [Queue and policies](https://github.com/vi-k/solo/blob/main/packages/solo/doc/jobs.md#queue-and-policies)
   /// on the jobs page.
   @protected
-  SoloJob<T> run<W extends S, T>(
+  SoloJob<T> enqueue<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,
     bool Function(W state)? canStart,
@@ -677,7 +676,7 @@ abstract class Solo<S extends Object> {
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
-      add(
+      enqueueJob(
         job<W, T>(
           body,
           key: key,
@@ -813,7 +812,7 @@ abstract class Solo<S extends Object> {
   /// Reflects state already changed by an external source, such as a device or
   /// socket. Re-evaluates the rules of running bodies and the permission of
   /// finishing jobs to apply their state handlers. Use the state handlers of
-  /// [run] or [job] for an operation's own failure or cancellation.
+  /// [enqueue] or [job] for an operation's own failure or cancellation.
   ///
   /// Accepted for as long as the engine is running, a [close] with
   /// [SoloCloseMode.drain] included. Once closing has finished the state is
@@ -865,9 +864,9 @@ abstract class Solo<S extends Object> {
       return closing.future;
     }
     final completer = _closing = Completer<void>();
-    // Kept for `add` after close: every `Cancelled(closed)` points its stack
-    // trace at the `close` call, whether `close` cancelled the job or `add`
-    // refused it after the close.
+    // Kept for `enqueueJob` after close: every `Cancelled(closed)` points its
+    // stack trace at the `close` call, whether `close` cancelled the job or
+    // `enqueueJob` refused it after the close.
     final stackTrace = _closeStackTrace = StackTrace.current;
     switch (mode) {
       case SoloCloseMode.cancel:
@@ -1016,9 +1015,9 @@ abstract class Solo<S extends Object> {
   /// as well, and one that throws does not take the error with it.
   ///
   /// What comes here: a [Failed] nobody observes, a microtask after the job
-  /// ends — `run(ifFailed: ...)` is no observing — and the errors an outcome
-  /// cannot carry: an action abandoned by [JobContext.abandonable] failing
-  /// later, a disposer, an `onCancel` callback, work handed over with
+  /// ends — `enqueue(ifFailed: ...)` is no observing — and the errors an
+  /// outcome cannot carry: an action abandoned by [JobContext.abandonable]
+  /// failing later, a disposer, an `onCancel` callback, work handed over with
   /// [JobContext.unattended], a `keepWhile` that threw anywhere but at a
   /// checkpoint of the body, a failed branch of [JobContext.runAll] the group
   /// did not throw, and a failed body of a job that ends [Cancelled].

@@ -162,7 +162,7 @@ final class _Plain extends Solo<ProfileState> {
 
   _Plain(this.api, {this.limit}) : super(const Initial());
 
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         (ctx) async {
           ctx.emit(const Loading());
@@ -177,7 +177,7 @@ final class _Plain extends Solo<ProfileState> {
         },
       );
 
-  Job<void> next() => run<ProfileState, void>(key: 'next', (ctx) async {});
+  Job<void> next() => enqueue<ProfileState, void>(key: 'next', (ctx) async {});
 }
 
 /// An API whose call never answers.
@@ -199,14 +199,14 @@ const _passed = nested.State.passed;
 const _tooLate = 'This test failed after it had already completed.';
 
 /// The `connect` of "A deadline of the job" with both state handlers of
-/// `run`, each saying it was called.
+/// `enqueue`, each saying it was called.
 final class _HandledCamera extends Solo<CameraState> {
   final Camera hw;
   final List<String> seen;
 
   _HandledCamera(this.hw, this.seen) : super(const Idle());
 
-  Job<void> connect() => run<Idle, void>(
+  Job<void> connect() => enqueue<Idle, void>(
         key: 'connect',
         timeout: const Duration(seconds: 5),
         ifFailed: (state, error, stackTrace) {
@@ -1724,7 +1724,7 @@ final name = await ctx.abandonable(
         });
 
         expect(seen, ['ifCancelled: timeout']);
-        _says('A `run` with `ifCancelled` gets the deadline there, not in '
+        _says('A `enqueue` with `ifCancelled` gets the deadline there, not in '
             '`ifFailed`');
       });
     });

@@ -124,12 +124,12 @@ BLE-устройство, плеер, синхронизация), где сос
 - **Внешнее состояние** — уведомление об изменении, уже произошедшем во внешнем
   источнике (устройство, сокет). Переоценивает правила тел и право
   завершающихся Job корректировать состояние.
-- **Коррекция состояния** — параметры `ifFailed`/`ifCancelled` у `run`/`job`
-  и у накопителей `collect`/`accumulate`. Синхронно возвращают новое S
-  по ошибке/отмене после детей и уборки, с уже зафиксированным исходом,
-  до освобождения очереди и onFinish. Исход не наблюдают и не изменяют; ошибки
-  обработчиков диагностируются. Отброшенные и не начавшиеся Job обработчики
-  не вызывают.
+- **Коррекция состояния** — параметры `ifFailed`/`ifCancelled`
+  у `enqueue`/`job` и у накопителей `collect`/`accumulate`. Синхронно
+  возвращают новое S по ошибке/отмене после детей и уборки, с уже
+  зафиксированным исходом, до освобождения очереди и onFinish. Исход
+  не наблюдают и не изменяют; ошибки обработчиков диагностируются. Отброшенные
+  и не начавшиеся Job обработчики не вызывают.
 - **Исход** `Outcome<T>` — `Done`, `Cancelled` с причиной, `Failed` с ошибкой.
 - **Наблюдение исхода** — обращение к `Job.done`, к `Job.value` или вызов
   `Job.ignoreFailure()`, а также передача `Failed` продолжению `then`. Успешно
@@ -467,14 +467,14 @@ BLE-устройство, плеер, синхронизация), где сос
 `packages/solo/lib/src/`:
 
 - `solo.dart` — `Solo<S>`: состояние, цикл прокачки очереди, хуки, защищённые
-  `job`, `add`, `run`, `collect`, `accumulate`, `externalSetState` и `publish`,
-  `close`, собственные слушатели (`addListener`, `removeListener`), статические
-  `observer`, `unansweredHandler` и `debug`, адаптер `_SoloJobObserver`
-  к `JobObserver` ядра. Это одна библиотека с частями (`part`): `job.dart`,
-  `job_context.dart`, `queue.dart`, `accumulator.dart`,
-  `accumulation_timing.dart`. Части нужны потому, что наследники ядра
-  (`_SoloJob`, `_SoloContext`) и очередь связаны с движком в обе стороны: он
-  зовёт их приватные члены, а они — его.
+  `job`, `enqueueJob`, `enqueue`, `collect`, `accumulate`, `externalSetState`
+  и `publish`, `close`, собственные слушатели (`addListener`,
+  `removeListener`), статические `observer`, `unansweredHandler` и `debug`,
+  адаптер `_SoloJobObserver` к `JobObserver` ядра. Это одна библиотека
+  с частями (`part`): `job.dart`, `job_context.dart`, `queue.dart`,
+  `accumulator.dart`, `accumulation_timing.dart`. Части нужны потому, что
+  наследники ядра (`_SoloJob`, `_SoloContext`) и очередь связаны с движком
+  в обе стороны: он зовёт их приватные члены, а они — его.
 - `job.dart` — `part`: публичный `SoloJob<T>` (это `ChildJob<T>` плюс
   `isQueued`, без `start()`) и наследник `_SoloJob extends JobBase<T>`:
   контроллер, тело, правила, ветка очереди в отмене, усыновление и приватные

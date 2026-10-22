@@ -7,7 +7,7 @@
 
 | Правило | Когда спрашивается | Что делает отказ |
 | --- | --- | --- |
-| Рабочий тип `W` у `run<W, T>` | Перед стартом, при чужих обновлениях состояния во время тела и в контрольных точках состояния | Отменяет `Job` с `RulesCancelReason`: `started: false` перед стартом, `started: true` во время тела |
+| Рабочий тип `W` у `enqueue<W, T>` | Перед стартом, при чужих обновлениях состояния во время тела и в контрольных точках состояния | Отменяет `Job` с `RulesCancelReason`: `started: false` перед стартом, `started: true` во время тела |
 | `canStart` | Один раз, непосредственно перед стартом `Job` | Отменяет `Job` с `RulesCancelReason` и `started: false`: тело так и не выполняется |
 | `keepWhile` | Перед стартом, при чужих обновлениях состояния во время тела и в контрольных точках состояния | Отменяет `Job` с `RulesCancelReason`: `started: false` перед стартом, `started: true` во время тела |
 
@@ -27,7 +27,7 @@
 
 ```dart
 // Первая попытка: состояние проверяется один раз, на старте.
-Job<void> record() => run<CameraState, void>(
+Job<void> record() => enqueue<CameraState, void>(
       key: 'record',
       (ctx) async {
         final state = ctx.state;
@@ -52,7 +52,7 @@ Job<void> record() => run<CameraState, void>(
 ### Правила
 
 ```dart
-Job<void> record() => run<Ready, void>(
+Job<void> record() => enqueue<Ready, void>(
       key: 'record',
       canStart: (state) => state.free > 0,
       keepWhile: (state) => !state.paused,
@@ -67,8 +67,8 @@ Job<void> record() => run<Ready, void>(
 и `state.paused` без проверки типа, а условия, которые первая попытка проверяла
 руками, стали `canStart` и `keepWhile`.
 
-Первый аргумент типа у `run<W, T>` задаёт рабочий тип состояния `Job`,
-`W extends S`. Его проверяет движок, поэтому `run<Ready, void>` начинается
+Первый аргумент типа у `enqueue<W, T>` задаёт рабочий тип состояния `Job`,
+`W extends S`. Его проверяет движок, поэтому `enqueue<Ready, void>` начинается
 только в `Ready`, а тело по той же причине читает `ctx.state` как `W`. Здесь
 `Ready`, `device` и `store` принадлежат приложению. `ctx.each` обрабатывает
 стрим; его жизненный цикл разобран в разделе
@@ -106,7 +106,7 @@ Job<void> record() => run<Ready, void>(
 ### Чтение и изменение состояния
 
 ```dart
-Job<void> zoomIn() => run<Ready, void>(
+Job<void> zoomIn() => enqueue<Ready, void>(
       (ctx) async {
         // Чтение служит контрольной точкой: проверяются отмена и правила.
         final state = ctx.state;
@@ -120,13 +120,13 @@ Job<void> zoomIn() => run<Ready, void>(
 `ctx.state`, `ctx.stateAs<T>()` и `ctx.check()` проверяют отмену и правила
 состояния. Методы ожидания также используют контрольные точки состояния. Это
 делает и `ctx.each`, потому что его ребёнок сохранил бы правила задачи. Тело
-выше объявлено как `run<Ready, void>`, поэтому `ctx.state` в нём уже `Ready`.
-`stateAs<T>()` нужен телу, у которого `W` шире, чем состояние, требуемое в этот
-момент. Он требует тип `T`, а не возвращает `null`: несовпадение отменяет
-`Job`.
+выше объявлено как `enqueue<Ready, void>`, поэтому `ctx.state` в нём уже
+`Ready`. `stateAs<T>()` нужен телу, у которого `W` шире, чем состояние,
+требуемое в этот момент. Он требует тип `T`, а не возвращает `null`:
+несовпадение отменяет `Job`.
 
 ```dart
-Job<void> switchOn(int zoom) => run<CameraState, void>(
+Job<void> switchOn(int zoom) => enqueue<CameraState, void>(
       canStart: (state) => state is Off,
       (ctx) async {
         // W включает все состояния, поэтому после каждого ожидания тело
@@ -367,7 +367,7 @@ Camera(this.device) : super(const Ready()) {
   _link = device.connection.listen((connected) {
     if (!connected) {
       // Факт отправляется как обычная работа, впереди всех ожидающих.
-      add(
+      enqueueJob(
         job<Ready, void>(
           key: 'disconnect',
           (ctx) async => ctx.emit(const Disconnected()),
@@ -472,7 +472,7 @@ README пакета публикует `Loading` до того, как его з
 
 ```dart
 // Первая попытка: отмена оставляет состояние в Loading.
-run<ProfileState, String>(
+enqueue<ProfileState, String>(
   (ctx) async {
     ctx.emit(const Loading());
     try {
@@ -500,7 +500,7 @@ run<ProfileState, String>(
 ### Обработчики
 
 ```dart
-run<ProfileState, String>(
+enqueue<ProfileState, String>(
   // Оба только вычисляют состояние. Они выполняются после тела, детей
   // и уборки, и исход к этому моменту уже определён.
   ifFailed: (state, error, stackTrace) => Failure(error),
@@ -514,15 +514,15 @@ run<ProfileState, String>(
 );
 ```
 
-Параметры `ifFailed` и `ifCancelled` у `run`, `job`, `collect` и `accumulate`
-позволяют контроллеру покинуть временное состояние вроде `Loading`, когда
-операция завершилась ошибкой или была отменена. Они получают текущее состояние
-типа `S`, плюс ошибку со стеком вызовов или исход `Cancelled`, и синхронно
-возвращают следующее состояние. Если обработчик вернул то самое состояние,
-которое получил, тот же объект, состояние остаётся как есть и ничего
-не публикуется; `const`-значение, которое уже лежит в состоянии, — тот же
-объект. Равное состояние, но другой объект, публикуется, как опубликовал бы его
-`emit`.
+Параметры `ifFailed` и `ifCancelled` у `enqueue`, `job`, `collect`
+и `accumulate` позволяют контроллеру покинуть временное состояние вроде
+`Loading`, когда операция завершилась ошибкой или была отменена. Они получают
+текущее состояние типа `S`, плюс ошибку со стеком вызовов или исход
+`Cancelled`, и синхронно возвращают следующее состояние. Если обработчик вернул
+то самое состояние, которое получил, тот же объект, состояние остаётся как есть
+и ничего не публикуется; `const`-значение, которое уже лежит в состоянии, —
+тот же объект. Равное состояние, но другой объект, публикуется, как
+опубликовал бы его `emit`.
 
 Подходящий обработчик выполняется перед следующей `Job` из очереди и перед
 хуком `onFinish`. Изменение состояния не превращает `Failed` или `Cancelled`
@@ -544,7 +544,7 @@ final class Disconnected extends ProfileState {
   const Disconnected();
 }
 
-Job<String> load() => run<ProfileState, String>(
+Job<String> load() => enqueue<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
       ifFailed: (state, error, stackTrace) => Failure(error),
@@ -571,7 +571,7 @@ Job<String> load() => run<ProfileState, String>(
 #### Правила
 
 ```dart
-Job<String> load() => run<ProfileState, String>(
+Job<String> load() => enqueue<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
       keepWhile: (state) => state is! Disconnected,
@@ -632,7 +632,7 @@ Job<String> load() => run<ProfileState, String>(
 не публикует, и слушатели слышат `Loading`, `Loading`, `Loaded`:
 
 ```dart
-Job<String> reload() => run<ProfileState, String>(
+Job<String> reload() => enqueue<ProfileState, String>(
       key: 'load',
       policy: Policy.restart,
       ifFailed: (state, error, stackTrace) => Failure(error),

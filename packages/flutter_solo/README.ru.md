@@ -109,7 +109,7 @@ final class ProfileController extends Solo<Profile> {
 
   ProfileController(this.api) : super(Empty());
 
-  Job<String> load() => run<Profile, String>(
+  Job<String> load() => enqueue<Profile, String>(
         key: 'load',
         policy: Policy.droppable, // второе нажатие вернёт первую Job
         (ctx) async {
@@ -125,7 +125,7 @@ final class ProfileController extends Solo<Profile> {
         ifCancelled: (state, cancelled) => Empty(),
       );
 
-  Job<void> save() => run<Loaded, void>(
+  Job<void> save() => enqueue<Loaded, void>(
         key: 'save',
         (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
       );
@@ -151,7 +151,7 @@ class ProfileView extends StatelessWidget {
 }
 ```
 
-`run<Profile, String>` говорит, что `Job` работает с состояниями `Profile`
+`enqueue<Profile, String>` говорит, что `Job` работает с состояниями `Profile`
 и возвращает `String`. `save` сужает это до `Loaded`: в другом состоянии такая
 `Job` не стартует, а кончается там `Cancelled`, и её тело читает `Loaded`
 с `name` внутри. Внутри тела:

@@ -17,7 +17,7 @@ final class TokenPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   TokenPlayer() : super(const Ready());
 
-  Job<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => enqueue<Ready, void>(
         key: 'seek',
         policy: Policy.restart,
         (ctx) async {
@@ -44,7 +44,7 @@ final class DeadlinePlayer extends Solo<AppState>
 
   DeadlinePlayer() : super(const Ready());
 
-  Job<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => enqueue<Ready, void>(
         key: 'seek',
         policy: Policy.restart,
         timeout: const Duration(seconds: 2),
@@ -63,7 +63,7 @@ final class DeadlinePlayer extends Solo<AppState>
 final class Till extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Till() : super(const Ready());
 
-  Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+  Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
         await ctx.uncancellable(() async {
           final receipt = await payment.commit();
           ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -73,7 +73,7 @@ final class Till extends Solo<AppState> with OpenSolo<AppState>, Desk {
       });
 
   // A job that turns down every request it is allowed to turn down.
-  Job<void> flush() => run<Ready, void>(
+  Job<void> flush() => enqueue<Ready, void>(
         cancellable: false,
         (ctx) => device.flush(),
       );
@@ -83,7 +83,7 @@ final class Till extends Solo<AppState> with OpenSolo<AppState>, Desk {
 final class Uploader extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Uploader() : super(const Ready());
 
-  Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+  Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
         ctx.onDispose(() async {
           // Cleanup runs after the body, where the waiting methods are
           // gone: a plain await is the wait that works here.
@@ -121,7 +121,7 @@ final class BoundedPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   BoundedPlayer() : super(const Ready());
 
-  Job<void> seek(Duration position) => run<Ready, void>((ctx) async {
+  Job<void> seek(Duration position) => enqueue<Ready, void>((ctx) async {
         if (position > end) {
           // From inside its body:
           throw Cancelled.by(reason: OutOfRange(position));
@@ -165,7 +165,7 @@ final class DrainingSession extends Solo<AppState>
   DrainingSession() : super(const Ready());
 
   Future<void> logout() async {
-    run<Ready, void>((ctx) => ctx.join(api.logout)).ignoreFailure();
+    enqueue<Ready, void>((ctx) => ctx.join(api.logout)).ignoreFailure();
     await close(mode: SoloCloseMode.drain);
   }
 }

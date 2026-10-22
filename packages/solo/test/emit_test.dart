@@ -19,7 +19,7 @@ void main() {
     Solo.debug = lines.add;
     addTearDown(() => Solo.debug = null);
     runSolo((solo, journal, async) {
-      solo.run<Initial, void>(key: 'init', (ctx) async {
+      solo.enqueue<Initial, void>(key: 'init', (ctx) async {
         ctx
           ..emit(const Initial())
           ..emit(const Preparing())
@@ -48,7 +48,7 @@ void main() {
       final solo = _DisposeOnPreparing();
       var past = false;
       try {
-        solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+        solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
           ctx.emit(const Preparing());
           past = true;
         });
@@ -71,7 +71,7 @@ void main() {
   test('a child cancelled by its own emit does not run past it', () {
     runSolo((solo, journal, async) {
       var past = false;
-      solo.run<NotDisposed, void>(key: 'parent', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'parent', (ctx) async {
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           ctx.emit(const Disposed());
           past = true;
@@ -93,7 +93,7 @@ void main() {
 
   test('emit still returns when nothing cancels the job inside it', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx
           ..emit(const Preparing())
           ..emit(const Working());

@@ -45,7 +45,7 @@ final class ProfileController extends Solo<Profile> {
 
   ProfileController(this.api) : super(Empty());
 
-  Job<String> load() => run<Profile, String>(
+  Job<String> load() => enqueue<Profile, String>(
         key: 'load',
         policy: Policy.droppable, // a second tap gets the first job
         (ctx) async {

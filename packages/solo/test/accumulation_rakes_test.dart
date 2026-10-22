@@ -1026,8 +1026,8 @@ void main() {
 
     test('the working type int is the whole state, so any count starts', () {
       _says('`collect` and `accumulate` both take three type arguments, '
-          '`<W, E, T>`: the working type `W`, as in `run`, the event type `E` '
-          'and the result type `T`');
+          '`<W, E, T>`: the working type `W`, as in `enqueue`, the event '
+          'type `E` and the result type `T`');
       _says('The working type `int` is that whole state, so the handler '
           'starts whatever the count is and reads it as `ctx.state`.');
       final api = FakeLogApi();
@@ -2309,7 +2309,7 @@ void main() {
         async.flushMicrotasks();
         final one = bench.collector('one', key: 'k').add('1');
         final two = bench.collector('two', key: 'k').add('1');
-        bench.run<int, void>(
+        bench.enqueue<int, void>(
           key: 'k',
           policy: Policy.restart,
           (ctx) async {},

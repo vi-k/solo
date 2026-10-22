@@ -10,7 +10,7 @@ import 'support/test_state.dart';
 void main() {
   test('join waits for the action after the job is cancelled', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.join(() => delay(100));
         ctx.emit(const Preparing());
       });
@@ -30,7 +30,7 @@ void main() {
 
   test('join returns the value when nothing cancels', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, int>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, int>(key: 'job', (ctx) async {
         final value = await ctx.join(() async {
           await delay(50);
           return 7;
@@ -50,7 +50,7 @@ void main() {
 
   test('join gives up when a rule stopped holding meanwhile', () {
     runSolo((solo, journal, async) {
-      solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         await ctx.join(() => delay(100));
         ctx.emit(const Preparing());
       });
@@ -68,7 +68,7 @@ void main() {
 
   test('close waits for a joined action and the job ends cancelled', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.join(() => delay(100));
         ctx.emit(const Preparing());
       });
@@ -92,7 +92,7 @@ void main() {
   test('an already cancelled job does not begin the action', () {
     runSolo((solo, journal, async) {
       var began = false;
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await delay(100);
         await ctx.join(() async => began = true);
       });
@@ -106,7 +106,7 @@ void main() {
 
   test('an error from the action reaches the body as it is', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         try {
           await ctx.join(() async {
             await delay(50);
@@ -129,7 +129,7 @@ void main() {
 
   test('discard takes the value when the job is cancelled meanwhile', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.join(
           () async {
             await delay(100);
@@ -159,7 +159,7 @@ void main() {
 
   test('discard takes the value when a rule stopped holding', () {
     runSolo((solo, journal, async) {
-      solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+      solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
         await ctx.join(
           () async {
             await delay(100);
@@ -184,7 +184,7 @@ void main() {
   test('discard takes the value when the rule throws after it arrived', () {
     runSolo((solo, journal, async) {
       var explode = false;
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'job',
         keepWhile: (state) {
           if (explode) {
@@ -222,7 +222,7 @@ void main() {
 
   test('discard is not called when the action comes back in time', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, int>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, int>(key: 'job', (ctx) async {
         final value = await ctx.join(
           () async {
             await delay(50);
@@ -243,7 +243,7 @@ void main() {
 
   test('close waits for discard before the job ends', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.join(
           () async {
             await delay(100);
@@ -274,7 +274,7 @@ void main() {
 
   test('an error from discard goes to onError', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.join(
           () async {
             await delay(100);
@@ -298,7 +298,7 @@ void main() {
 
   test('discard is not called when the action fails', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(key: 'job', (ctx) async {
+      final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         await ctx.join<int>(
           () async {
             await delay(100);
@@ -323,7 +323,7 @@ void main() {
   test('a lazy rule is seen by the join that comes after the emit', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
       var reached = false;
-      final job = solo.run<Preparing, void>(
+      final job = solo.enqueue<Preparing, void>(
         key: 'job',
         (ctx) async {
           ctx.emit(const Working());

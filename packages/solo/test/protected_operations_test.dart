@@ -8,7 +8,13 @@ import 'package:test/test.dart';
 void main() {
   test('the five members operations are built from are protected', () {
     final source = File('lib/src/solo.dart').readAsStringSync();
-    for (final name in ['job', 'add', 'run', 'collect', 'accumulate']) {
+    for (final name in [
+      'job',
+      'enqueueJob',
+      'enqueue',
+      'collect',
+      'accumulate',
+    ]) {
       expect(
         source,
         contains(RegExp(r'@protected\s+Solo\w*<[^>]*> ' '$name<')),

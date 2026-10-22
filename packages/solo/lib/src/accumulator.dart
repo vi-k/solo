@@ -158,7 +158,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     if (_merging) {
       throw StateError('Cannot add while this accumulator is merging');
     }
-    if (_solo.isClosed) return _solo.add(_job(null));
+    if (_solo.isClosed) return _solo.enqueueJob(_job(null));
     final previous = _candidate();
     if (previous == null) {
       // Whether this accumulator is idle has to be read before its new job
@@ -167,7 +167,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       // running must not start a second interval under it.
       final idle = _isIdle;
       final group = _AccumulationGroup(this, _seed(event), _snapshot);
-      final job = _solo.add(_job(group));
+      final job = _solo.enqueueJob(_job(group));
       if (job.isQueued && group._open) {
         group._accepted();
         if (idle) _armCooldown();

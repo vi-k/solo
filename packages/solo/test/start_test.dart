@@ -19,7 +19,7 @@ void main() {
     runSolo((solo, journal, async) {
       late SoloJob<void> child;
       var returned = false;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         child = solo.job<Working, void>(key: 'child', (ctx) async {});
         ctx.start(child);
         returned = true;
@@ -40,7 +40,7 @@ void main() {
     runSolo((solo, journal, async) {
       late SoloJob<void> child;
       Object? thrown;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         child = solo.job<TestState, void>(
           key: 'child',
           canStart: (state) => throw StateError('rule broke'),
@@ -65,7 +65,7 @@ void main() {
       'a failure of the child goes to the unanswered handler, and the '
       'parent ends Done', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         ctx.start(
           solo.job<TestState, void>(key: 'child', (ctx) async {
             throw StateError('child failed');
@@ -89,7 +89,7 @@ void main() {
     runSolo((solo, journal, async) {
       final other = TestSolo();
       Object? thrown;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         try {
           ctx.start(other.job<TestState, void>(key: 'theirs', (ctx) async {}));
         } on Object catch (error) {

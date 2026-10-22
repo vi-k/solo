@@ -16,7 +16,7 @@ void main() {
     fakeAsync((async) {
       final solo = TestSolo();
       _inZone(caught, () {
-        solo.run<TestState, void>(key: 'j', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() async {
             await Future<void>.delayed(const Duration(milliseconds: 10));
             throw StateError('abandoned boom');
@@ -36,7 +36,7 @@ void main() {
     fakeAsync((async) {
       final solo = TestSolo();
       _inZone(caught, () {
-        final job = solo.run<TestState, void>(
+        final job = solo.enqueue<TestState, void>(
           key: 'j',
           (ctx) async => throw StateError('body boom'),
         );
@@ -58,7 +58,7 @@ void main() {
       fakeAsync((async) {
         final solo = TestSolo();
         _inZone(caught, () {
-          solo.run<TestState, void>(key: 'j', (ctx) async {
+          solo.enqueue<TestState, void>(key: 'j', (ctx) async {
             ctx.unattended(() async {
               await Future<void>.delayed(const Duration(milliseconds: 10));
               throw StateError('abandoned boom');
@@ -88,7 +88,7 @@ void main() {
       fakeAsync((async) {
         final solo = TestSolo();
         _inZone(caught, () {
-          solo.run<TestState, void>(key: 'j', (ctx) async {
+          solo.enqueue<TestState, void>(key: 'j', (ctx) async {
             ctx.unattended(() async {
               await Future<void>.delayed(const Duration(milliseconds: 10));
               throw StateError('abandoned boom');
@@ -114,7 +114,7 @@ void main() {
       fakeAsync((async) {
         final solo = TestSolo();
         _inZone(caught, () {
-          solo.run<TestState, void>(key: 'j', (ctx) async {
+          solo.enqueue<TestState, void>(key: 'j', (ctx) async {
             ctx.unattended(() async {
               await Future<void>.delayed(const Duration(milliseconds: 10));
               throw StateError('abandoned boom');
@@ -143,7 +143,7 @@ void main() {
       fakeAsync((async) {
         final solo = TestSolo();
         _inZone(caught, () {
-          solo.run<TestState, void>(key: 'j', (ctx) async {
+          solo.enqueue<TestState, void>(key: 'j', (ctx) async {
             ctx.unattended(() async {
               await Future<void>.delayed(const Duration(milliseconds: 10));
               throw StateError('abandoned boom');
@@ -172,7 +172,7 @@ void main() {
         final solo = TestSolo();
         late final Job<void> job;
         _inZone(created, () {
-          job = solo.run<TestState, void>(key: 'j', (ctx) async {
+          job = solo.enqueue<TestState, void>(key: 'j', (ctx) async {
             ctx.onCancel(() => throw StateError('onCancel'));
             await ctx.abandonable(
               () => Future<void>.delayed(const Duration(milliseconds: 100)),
@@ -225,7 +225,7 @@ void main() {
     final solo = _Broken();
     fakeAsync((async) {
       _inZone(caught, () {
-        solo.run<TestState, void>(key: 'j', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() async {
             await Future<void>.delayed(const Duration(milliseconds: 10));
             throw StateError('abandoned boom');
@@ -244,7 +244,7 @@ void main() {
     final solo = _Quiet();
     fakeAsync((async) {
       _inZone(caught, () {
-        solo.run<TestState, void>(key: 'j', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() async {
             await Future<void>.delayed(const Duration(milliseconds: 10));
             throw StateError('abandoned boom');
@@ -264,7 +264,7 @@ void main() {
     final solo = _Noting();
     fakeAsync((async) {
       _inZone(caught, () {
-        solo.run<TestState, void>(key: 'j', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() async {
             await Future<void>.delayed(const Duration(milliseconds: 10));
             throw StateError('abandoned boom');
@@ -288,7 +288,7 @@ void main() {
     final solo = _Loud();
     fakeAsync((async) {
       _inZone(caught, () {
-        solo.run<TestState, void>(key: 'j', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() async {
             await Future<void>.delayed(const Duration(milliseconds: 10));
             throw StateError('abandoned boom');
@@ -308,7 +308,7 @@ void main() {
     fakeAsync((async) {
       final solo = TestSolo();
       _inZone(caught, () {
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'j',
           keepWhile: (state) {
             if (state is Working) {
@@ -338,13 +338,13 @@ void main() {
     fakeAsync((async) {
       _inZone(caught, () {
         solo
-          ..run<TestState, void>(key: 'j', (ctx) async {
+          ..enqueue<TestState, void>(key: 'j', (ctx) async {
             ctx.unattended(() async {
               await Future<void>.delayed(const Duration(milliseconds: 30));
               throw StateError('outer boom');
             });
           })
-          ..run<TestState, void>(
+          ..enqueue<TestState, void>(
             key: 'k',
             keepWhile: (state) {
               if (state is Working) {
@@ -371,7 +371,7 @@ void main() {
     fakeAsync((async) {
       final solo = TestSolo();
       _inZone(caught, () {
-        solo.run<TestState, void>(key: 'j', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.onDispose(() => throw StateError('cleanup boom'));
         });
       });
@@ -390,10 +390,10 @@ void main() {
     fakeAsync((async) {
       _inZone(caught, () {
         solo
-          ..run<TestState, void>(key: 'j', (ctx) async {
+          ..enqueue<TestState, void>(key: 'j', (ctx) async {
             ctx.unattended(() => throw const Cancelled('mine'));
           })
-          ..run<TestState, void>(
+          ..enqueue<TestState, void>(
             key: 'k',
             keepWhile: (state) => state is! Working,
             (ctx) async {
@@ -432,9 +432,9 @@ void main() {
     final b = _StartThrows();
     fakeAsync((async) {
       _inZone(caught, () {
-        a.run<TestState, void>(key: 'a', (ctx) async {
+        a.enqueue<TestState, void>(key: 'a', (ctx) async {
           ctx.unattended(() {
-            b.run<TestState, void>(key: 'b', (ctx) async {
+            b.enqueue<TestState, void>(key: 'b', (ctx) async {
               unawaited(Future<void>.error(StateError('leak')));
             });
           });
@@ -464,7 +464,7 @@ void main() {
         final solo = TestSolo();
         for (final name in ['A', 'B']) {
           runZoned(
-            () => solo.run<TestState, void>(
+            () => solo.enqueue<TestState, void>(
               key: name,
               (ctx) async => seen.add('$name:${Zone.current[#name]}'),
             ),
@@ -484,7 +484,7 @@ void main() {
         final solo = TestSolo();
         final gate = Completer<void>();
         runZoned(
-          () => solo.run<TestState, void>(key: 'A', (ctx) async {
+          () => solo.enqueue<TestState, void>(key: 'A', (ctx) async {
             await gate.future;
             seen.add('A:${Zone.current[#name]}');
           }),
@@ -492,7 +492,7 @@ void main() {
         );
         async.flushMicrotasks();
         runZoned(
-          () => solo.run<TestState, void>(
+          () => solo.enqueue<TestState, void>(
             key: 'B',
             (ctx) async => seen.add('B:${Zone.current[#name]}'),
           ),
@@ -559,7 +559,7 @@ void main() {
           ),
           zoneValues: {#name: 'made'},
         );
-        runZoned(() => solo.add(job), zoneValues: {#name: 'queued'});
+        runZoned(() => solo.enqueueJob(job), zoneValues: {#name: 'queued'});
         async.flushMicrotasks();
         solo.close();
         async.flushMicrotasks();
@@ -579,7 +579,7 @@ void main() {
           (error, stackTrace) => caught['made']!.add('$error'),
         );
         runZonedGuarded(
-          () => solo.add(job),
+          () => solo.enqueueJob(job),
           (error, stackTrace) => caught['queued']!.add('$error'),
         );
         async.flushMicrotasks();
@@ -598,7 +598,7 @@ void main() {
         final solo = _StartNames();
         for (final name in ['A', 'B']) {
           runZonedGuarded(
-            () => solo.run<TestState, void>(key: name, (ctx) async {}),
+            () => solo.enqueue<TestState, void>(key: name, (ctx) async {}),
             (error, stackTrace) => caught[name]!.add('$error'),
           );
         }
@@ -623,14 +623,14 @@ void main() {
         final gate = Completer<void>();
         late final Completer<int> fetch;
         runZonedGuarded(
-          () => solo.run<TestState, void>(key: 'A', (ctx) => gate.future),
+          () => solo.enqueue<TestState, void>(key: 'A', (ctx) => gate.future),
           (error, stackTrace) => caught['A']!.add('$error'),
         );
         runZonedGuarded(
           () {
             fetch = Completer<int>();
             solo
-                .run<TestState, int>(
+                .enqueue<TestState, int>(
                   key: 'B',
                   (ctx) => fetch.future,
                 )
@@ -733,7 +733,8 @@ void main() {
           fakeAsync((async) {
             late final Job<void> parent;
             _inZone(caught, () {
-              parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+              parent =
+                  solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
                 await ctx.run(
                   child = solo.job<Initial, int>(key: 'child', (ctx) async {
                     final stopped = Completer<void>();
@@ -823,7 +824,7 @@ void _coveredRoot(
 }) {
   late final Job<void> root;
   _inZone(caught, () {
-    root = solo.run<TestState, void>(key: 'root', (ctx) async {
+    root = solo.enqueue<TestState, void>(key: 'root', (ctx) async {
       ctx
           .run(
             solo.job<TestState, void>(
@@ -862,7 +863,7 @@ void _coveredEach(
 ) {
   late final Job<void> parent;
   _inZone(caught, () {
-    parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+    parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
       await ctx.each(Stream<int>.fromIterable([1]), (child, event) {
         child
             .run(
@@ -897,7 +898,7 @@ void _coveredChild(
 }) {
   late final Job<void> parent;
   _inZone(caught, () {
-    parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+    parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
       final child = solo.job<TestState, int>(key: 'child', (ctx) async {
         ctx
             .run(
@@ -951,7 +952,7 @@ List<String> _answeredBy(SoloUnansweredHandler handler) {
     fakeAsync((async) {
       final solo = TestSolo();
       _inZone(caught, () {
-        solo.run<TestState, void>(key: 'j', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() async {
             await Future<void>.delayed(const Duration(milliseconds: 10));
             throw StateError('abandoned boom');

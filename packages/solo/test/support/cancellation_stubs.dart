@@ -171,7 +171,7 @@ mixin Desk on Solo<AppState> {
   void reflect(AppState state) => externalSetState(state);
 
   /// Work that waits out a call named [name], in `Ready`.
-  SoloJob<void> work(String name) => run<Ready, void>(
+  SoloJob<void> work(String name) => enqueue<Ready, void>(
         key: name,
         (ctx) => ctx.join(() => stage.start<void>(name, null)),
       );
@@ -196,7 +196,7 @@ final class Logs extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Logs() : super(const Ready());
 
   SoloJob<void> send(String batch) {
-    final job = run<Ready, void>(
+    final job = enqueue<Ready, void>(
       key: batch,
       (ctx) => ctx.join(() => stage.start<void>('send $batch', null)),
     );

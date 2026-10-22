@@ -41,12 +41,12 @@ final class _Windowed extends Solo<AppState> with OpenSolo<AppState>, Desk {
   SoloJob<void> line(String text) => _lines.add(text);
 }
 
-/// The seek of "A deadline of a job" with `Future.timeout` on the call in
-/// place of the `timeout` of `run`.
+/// The seek of "A deadline of a job" with `Future.timeout` on the call in place
+/// of the `timeout` of `enqueue`.
 final class _CallDeadline extends Solo<AppState> with OpenSolo<AppState>, Desk {
   _CallDeadline() : super(const Ready());
 
-  SoloJob<void> seek(Duration position) => run<Ready, void>(
+  SoloJob<void> seek(Duration position) => enqueue<Ready, void>(
         key: 'seek',
         policy: Policy.restart,
         ifFailed: (state, error, stackTrace) => const Offline(),
@@ -226,7 +226,7 @@ void main() {
     test('abandonable throws Cancelled without waiting for the operation', () {
       fakeAsync((async) {
         Object? thrown;
-        final job = Bench().run<Ready, void>((ctx) async {
+        final job = Bench().enqueue<Ready, void>((ctx) async {
           try {
             await ctx.abandonable(() => stage.start<void>('call', null));
           } on Cancelled catch (cancelled) {
@@ -250,7 +250,7 @@ void main() {
       fakeAsync((async) {
         Object? thrown;
         String? value;
-        final job = Bench().run<Ready, void>((ctx) async {
+        final job = Bench().enqueue<Ready, void>((ctx) async {
           try {
             value = await ctx.join(() => stage.start('call', 'value'));
           } on Cancelled catch (cancelled) {
@@ -272,7 +272,7 @@ void main() {
     test('uncancellable returns its result, and the next checkpoint throws',
         () {
       fakeAsync((async) {
-        final job = Bench().run<Ready, String>((ctx) async {
+        final job = Bench().enqueue<Ready, String>((ctx) async {
           final receipt = await ctx.uncancellable(
             () => stage.start('payment', 'receipt'),
           );
@@ -298,7 +298,7 @@ void main() {
 
     test('pause throws Cancelled at once, and cancels its timer', () {
       fakeAsync((async) {
-        final job = Bench().run<Ready, void>((ctx) => ctx.pause(_s(1)));
+        final job = Bench().enqueue<Ready, void>((ctx) => ctx.pause(_s(1)));
         async
           ..flushMicrotasks()
           ..elapse(const Duration(milliseconds: 500));
@@ -313,7 +313,7 @@ void main() {
 
     test('check throws when the job is already cancelled', () {
       fakeAsync((async) {
-        final job = Bench().run<Ready, void>((ctx) async {
+        final job = Bench().enqueue<Ready, void>((ctx) async {
           await stage.start<void>('plain', null);
           stage.trace.add('the body went on');
           ctx.check();
@@ -336,7 +336,7 @@ void main() {
 
     test('check throws when the rules of the job no longer hold', () {
       fakeAsync((async) {
-        final job = Bench().run<Ready, void>((ctx) async {
+        final job = Bench().enqueue<Ready, void>((ctx) async {
           ctx.emit(const Offline());
           stage.trace.add('cancelled by the emit: ${ctx.job.isCancelled}');
           ctx.check();
@@ -369,7 +369,7 @@ void main() {
         'one', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>(
+        final job = bench.enqueue<Ready, void>(
           (ctx) => ctx.abandonable(() => stage.start<void>('request', null)),
         );
         final next = bench.work('next');
@@ -604,7 +604,7 @@ void main() {
       final left = _zone((async) {
         stage.stopsByThrowing = true;
         bench = Bench();
-        job = bench.run<Ready, void>((ctx) async {
+        job = bench.enqueue<Ready, void>((ctx) async {
           final token = CancelToken();
           ctx.onCancel(token.cancel);
           try {
@@ -630,7 +630,7 @@ void main() {
 
     test('the function ctx.onCancel returns unregisters the callback', () {
       fakeAsync((async) {
-        final job = Bench().run<Ready, void>((ctx) async {
+        final job = Bench().enqueue<Ready, void>((ctx) async {
           final unregister = ctx.onCancel(() => stage.trace.add('callback'));
           await stage.start<void>('first', null);
           unregister();
@@ -651,7 +651,7 @@ void main() {
         () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>(
+        final job = bench.enqueue<Ready, void>(
           ifCancelled: (state, cancelled) {
             stage.trace.add('the onCancel of run');
 
@@ -710,7 +710,7 @@ void main() {
     test('a plain await on the calls: the emit between them throws', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>((ctx) async {
+        final job = bench.enqueue<Ready, void>((ctx) async {
           final receipt = await payment.commit();
           ctx.emit(ctx.state.copyWith(receipt: receipt));
           await journal.write('entry');
@@ -732,7 +732,7 @@ void main() {
       fakeAsync((async) {
         final bench = Bench();
         Object? thrown;
-        final job = bench.run<Ready, void>((ctx) async {
+        final job = bench.enqueue<Ready, void>((ctx) async {
           await payment.commit();
           try {
             ctx.emit(const Ready(receipt: 'receipt'));
@@ -815,7 +815,7 @@ void main() {
     test('the cancellation of a parent is held by a section of its child', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>(
+        final job = bench.enqueue<Ready, void>(
           (ctx) => ctx.run(
             bench.job<Ready, void>((child) async {
               child.onCancel(() => stage.trace.add('child ctx.onCancel'));
@@ -840,7 +840,7 @@ void main() {
     test('the callbacks and the cascade wait for the end of the section', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>((ctx) async {
+        final job = bench.enqueue<Ready, void>((ctx) async {
           ctx.onCancel(() => stage.trace.add('ctx.onCancel'));
           ctx.run(
             bench.job<Ready, void>((child) async {
@@ -882,7 +882,7 @@ void main() {
 
     test('sections nest: the outermost one lets the held request through', () {
       fakeAsync((async) {
-        final job = Bench().run<Ready, void>((ctx) async {
+        final job = Bench().enqueue<Ready, void>((ctx) async {
           await ctx.uncancellable(() async {
             await ctx.uncancellable(() => stage.start<void>('inner', null));
             stage.trace.add('inner closed: ${ctx.job.isCancelled}');
@@ -909,7 +909,7 @@ void main() {
 
     test('a section nobody awaits outlives the job and loses the request', () {
       fakeAsync((async) {
-        final job = Bench().run<Ready, String>((ctx) async {
+        final job = Bench().enqueue<Ready, String>((ctx) async {
           unawaited(ctx.uncancellable(() => stage.start<void>('step', null)));
           await stage.start<void>('body', null);
 
@@ -1040,7 +1040,7 @@ void main() {
       fakeAsync((async) {
         final bench = Bench();
         late SoloJob<void> child;
-        final job = bench.run<Ready, void>((ctx) {
+        final job = bench.enqueue<Ready, void>((ctx) {
           child = bench.job<Ready, void>(
             cancellable: false,
             (child) => stage.start<void>('child step', null),
@@ -1082,7 +1082,7 @@ void main() {
     test('keepWhile cancels inside a section as well', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>(
+        final job = bench.enqueue<Ready, void>(
           keepWhile: (state) => state.receipt == null,
           (ctx) => ctx.uncancellable(() async {
             await stage.start<void>('step', null);
@@ -1116,7 +1116,7 @@ void main() {
     test('a job in the whole state type of the controller goes on', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<AppState, void>((ctx) async {
+        final job = bench.enqueue<AppState, void>((ctx) async {
           await ctx.uncancellable(() async {
             final receipt = await payment.commit();
             if (ctx.state case final Ready ready) {
@@ -1280,7 +1280,7 @@ void main() {
 
     test('a join checks before its operation as well as after it', () {
       fakeAsync((async) {
-        final job = Bench().run<Ready, void>((ctx) async {
+        final job = Bench().enqueue<Ready, void>((ctx) async {
           await stage.start<void>('warm up', null);
           await ctx.join(() => stage.start<void>('write', null));
         });
@@ -1303,7 +1303,7 @@ void main() {
       late Map<String, String> came;
       late Job<void> job;
       final left = _zone((async) {
-        job = bench.run<Ready, void>((ctx) async {
+        job = bench.enqueue<Ready, void>((ctx) async {
           ctx.onDispose(() => came = _tryEverything(ctx, bench));
         });
         async.flushMicrotasks();
@@ -1341,7 +1341,7 @@ void main() {
         'waits', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>((ctx) async {
+        final job = bench.enqueue<Ready, void>((ctx) async {
           await Future<void>.delayed(_s(1));
         });
         async
@@ -1366,7 +1366,7 @@ void main() {
         'all', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>((ctx) => ctx.pause(_s(1)));
+        final job = bench.enqueue<Ready, void>((ctx) => ctx.pause(_s(1)));
         async
           ..flushMicrotasks()
           ..elapse(const Duration(milliseconds: 500));
@@ -1385,7 +1385,7 @@ void main() {
       late SoloContext<AppState, Ready> kept;
       late Map<String, String> came;
       _zone((async) {
-        bench.run<Ready, void>((ctx) async {
+        bench.enqueue<Ready, void>((ctx) async {
           kept = ctx;
         });
         async.flushMicrotasks();
@@ -1425,7 +1425,7 @@ void main() {
         late Map<String, String> came;
         late Job<void> job;
         _zone((async) {
-          job = bench.run<Ready, void>((ctx) async {
+          job = bench.enqueue<Ready, void>((ctx) async {
             kept = ctx;
             if (failed) {
               throw StateError('the body failed');
@@ -1449,7 +1449,7 @@ void main() {
       fakeAsync((async) {
         final bench = Bench();
         late SoloContext<AppState, Ready> kept;
-        final job = bench.run<Ready, void>((ctx) async {
+        final job = bench.enqueue<Ready, void>((ctx) async {
           kept = ctx;
           await ctx.abandonable(() => stage.start<void>('call', null));
         });
@@ -1469,7 +1469,7 @@ void main() {
       fakeAsync((async) {
         final bench = Bench();
         late SoloContext<AppState, Ready> kept;
-        final job = bench.run<Ready, void>((ctx) async {
+        final job = bench.enqueue<Ready, void>((ctx) async {
           kept = ctx;
         });
         async.flushMicrotasks();
@@ -1566,7 +1566,7 @@ void main() {
     test('Cancelled carries a description and the stack trace', () {
       fakeAsync((async) {
         final bench = Bench();
-        final gaveUp = bench.run<Ready, void>(
+        final gaveUp = bench.enqueue<Ready, void>(
           (ctx) async => throw const Cancelled('why'),
         );
         final asked = bench.work('work');
@@ -1623,7 +1623,7 @@ void main() {
         fakeAsync((async) {
           final bench = Bench();
           late SoloJob<void> child;
-          final job = bench.run<Ready, void>((ctx) {
+          final job = bench.enqueue<Ready, void>((ctx) {
             child = bench.job<Ready, void>(
               (child) =>
                   child.abandonable(() => stage.start<void>('child', null)),
@@ -1653,7 +1653,7 @@ void main() {
 
       test('HandlerCancelReason: a body that throws Cancelled', () {
         fakeAsync((async) {
-          final job = Bench().run<Ready, void>(
+          final job = Bench().enqueue<Ready, void>(
             (ctx) async => throw const Cancelled('why'),
           );
           async.flushMicrotasks();
@@ -1676,7 +1676,7 @@ void main() {
         fakeAsync((async) {
           final bench = Bench();
           late SoloJob<void> child;
-          final job = bench.run<Ready, void>((ctx) {
+          final job = bench.enqueue<Ready, void>((ctx) {
             child = bench.job<Ready, void>(
               (child) =>
                   child.abandonable(() => stage.start<void>('child', null)),
@@ -1703,7 +1703,7 @@ void main() {
       test('HandlerCancelReason: prints the child and how it ended', () {
         fakeAsync((async) {
           final bench = Bench();
-          final job = bench.run<Ready, void>(
+          final job = bench.enqueue<Ready, void>(
             (ctx) => ctx.run(
               bench.job<Ready, void>(
                 key: _Op.upload,
@@ -1761,7 +1761,7 @@ void main() {
         final error = StateError('a branch failed');
         _zone((async) {
           final bench = Bench();
-          group = bench.run<Ready, void>((ctx) {
+          group = bench.enqueue<Ready, void>((ctx) {
             slow = bench.job<Ready, void>(
               (child) =>
                   child.abandonable(() => stage.start<void>('slow', null)),
@@ -1814,11 +1814,11 @@ void main() {
       test('RulesCancelReason: canStart, keepWhile and stateAs', () {
         fakeAsync((async) {
           final bench = Bench();
-          final refused = bench.run<Ready, void>(
+          final refused = bench.enqueue<Ready, void>(
             canStart: (state) => false,
             (ctx) async {},
           );
-          final kept = bench.run<Ready, void>(
+          final kept = bench.enqueue<Ready, void>(
             keepWhile: (state) => state.position == Duration.zero,
             (ctx) => ctx.join(() => stage.start<void>('kept', null)),
           );
@@ -1826,7 +1826,7 @@ void main() {
           bench.reflect(Ready(position: _s(1)));
           _end(async, 'kept');
           bench.reflect(const Offline());
-          final read = bench.run<AppState, void>(
+          final read = bench.enqueue<AppState, void>(
             (ctx) async => ctx.stateAs<Ready>(),
           );
           async.flushMicrotasks();
@@ -1878,7 +1878,7 @@ void main() {
           final bench = Bench();
           final running = bench.work('load');
           final mine = bench.job<Ready, void>(key: 'load', (ctx) async {});
-          final taken = bench.add(mine, policy: Policy.droppable);
+          final taken = bench.enqueueJob(mine, policy: Policy.droppable);
 
           expect(taken, same(running));
           expect(_reason(mine), isA<DuplicateCancelReason>());
@@ -1898,17 +1898,17 @@ void main() {
           final bench = Bench();
           final running = bench.work('load');
           async.flushMicrotasks();
-          final queued = bench.add(
+          final queued = bench.enqueueJob(
             bench.job<Ready, void>(key: 'load', (ctx) async {}),
           );
-          final replacing = bench.add(
+          final replacing = bench.enqueueJob(
             bench.job<Ready, void>(key: 'load', (ctx) async {}),
             policy: Policy.replace,
           );
 
           expect(_reason(queued), isA<ReplacedCancelReason>());
           expect(running.outcome, isNull, reason: 'replace leaves it running');
-          bench.add(
+          bench.enqueueJob(
             bench.job<Ready, void>(key: 'load', (ctx) async {}),
             policy: Policy.restart,
           );
@@ -1927,7 +1927,7 @@ void main() {
 
       test('TimeoutCancelReason: the deadline given with timeout', () {
         fakeAsync((async) {
-          final job = Bench().run<Ready, void>(
+          final job = Bench().enqueue<Ready, void>(
             timeout: _s(2),
             (ctx) => ctx.abandonable(() => stage.start<void>('slow', null)),
           );
@@ -2022,7 +2022,7 @@ void main() {
         fakeAsync((async) {
           final heard = <String>[];
           final bench = Bench();
-          final job = bench.run<Ready, void>((ctx) async {
+          final job = bench.enqueue<Ready, void>((ctx) async {
             ctx
                 .run(
                   bench.job<Ready, void>(
@@ -2082,7 +2082,7 @@ void main() {
             final bench = Bench()..work('load');
             final mine = bench.job<Ready, void>(key: 'load', (ctx) async {})
               ..whenCancelled((cancelled) => heard.add('$cancelled'));
-            bench.add(mine, policy: Policy.droppable);
+            bench.enqueueJob(mine, policy: Policy.droppable);
 
             expect(heard, ['Cancelled(duplicate)']);
             async.flushMicrotasks();
@@ -2094,7 +2094,7 @@ void main() {
           fakeAsync((async) {
             final heard = <String>[];
             Bench()
-                .run<Ready, void>(
+                .enqueue<Ready, void>(
                   canStart: (state) => state.receipt != null,
                   (ctx) async {},
                 )
@@ -2136,7 +2136,7 @@ void main() {
         fakeAsync((async) {
           final heard = <String>[];
           final bench = Bench();
-          final job = bench.run<Ready, void>(
+          final job = bench.enqueue<Ready, void>(
             (ctx) => ctx.run(
               bench.job<Ready, void>((child) async {
                 child.onCancel(
@@ -2164,7 +2164,7 @@ void main() {
         _zone((async) {
           final bench = Bench();
           done = bench.work('work')..whenCancelled((_) => heard.add('done'));
-          failed = bench.run<Ready, void>(
+          failed = bench.enqueue<Ready, void>(
             (ctx) async => throw StateError('failed'),
           )
             ..whenCancelled((_) => heard.add('failed'))
@@ -2242,7 +2242,7 @@ void main() {
               };
             }
             bench = Bench();
-            final job = bench.run<Ready, void>((ctx) async {
+            final job = bench.enqueue<Ready, void>((ctx) async {
               ctx.onCancel(() => throw StateError('the callback failed'));
               await ctx.join(() => stage.start<void>('call', null));
             });
@@ -2320,8 +2320,8 @@ void main() {
       expect(
         _prose(),
         contains(
-          'The `timeout:` of `run` ends the job `Cancelled`, so `ifCancelled:` '
-          'maps the state and `ifFailed:` is not called.',
+          'The `timeout:` of `enqueue` ends the job `Cancelled`, so '
+          '`ifCancelled:` maps the state and `ifFailed:` is not called.',
         ),
       );
     });
@@ -2343,7 +2343,7 @@ void main() {
           'A deadline that runs out is not the `TimeoutException` of '
           '`Future.timeout`. With `.timeout(...)` on the call of '
           '`_player.seek` the exception is thrown into the body, the job '
-          'ends `Failed`, and it is the `ifFailed:` of `run` that maps the '
+          'ends `Failed`, and it is the `ifFailed:` of `enqueue` that maps the '
           'state.',
         ),
       );
@@ -2433,7 +2433,7 @@ void main() {
         final player = page.DeadlinePlayer();
         final seek = player.seek(_s(1));
         // In the whole state type: the deadline leaves the player offline.
-        final next = player.run<AppState, void>(
+        final next = player.enqueue<AppState, void>(
           (ctx) => ctx.join(() => stage.start<void>('next', null)),
         );
         async.elapse(_s(2));
@@ -2462,7 +2462,7 @@ void main() {
         final player = page.DeadlinePlayer();
         final live = player.seek(_s(1));
         async.flushMicrotasks();
-        final taken = player.run<Ready, void>(
+        final taken = player.enqueue<Ready, void>(
           key: 'seek',
           policy: Policy.droppable,
           timeout: const Duration(milliseconds: 500),
@@ -2542,7 +2542,7 @@ void main() {
         fakeAsync((async) {
           final logs = Logs();
           _sendThree(logs);
-          final refusing = logs.run<Ready, void>(
+          final refusing = logs.enqueue<Ready, void>(
             cancellable: false,
             (ctx) => ctx.join(() => stage.start<void>('refusing', null)),
           );
@@ -2590,7 +2590,7 @@ void main() {
           'the running one to refuse', () {
         fakeAsync((async) {
           final logs = Logs();
-          Job<void> refusing(String name) => logs.run<Ready, void>(
+          Job<void> refusing(String name) => logs.enqueue<Ready, void>(
                 cancellable: false,
                 (ctx) => ctx.join(() => stage.start<void>(name, null)),
               );
@@ -2615,7 +2615,7 @@ void main() {
       test('stops accepting work and cancels every queued job', () {
         fakeAsync((async) {
           final logs = Logs()..send('first');
-          final refusing = logs.run<Ready, void>(
+          final refusing = logs.enqueue<Ready, void>(
             cancellable: false,
             (ctx) async {},
           );
@@ -2639,7 +2639,7 @@ void main() {
           () {
         fakeAsync((async) {
           final bench = Bench();
-          bench.run<Ready, void>(key: 'send', (ctx) async {
+          bench.enqueue<Ready, void>(key: 'send', (ctx) async {
             ctx
               ..onDispose(() => stage.start<void>('cleanup', null))
               ..run(
@@ -2681,7 +2681,7 @@ void main() {
       test('waits for a running job that refuses the cancellation', () {
         fakeAsync((async) {
           final logs = Logs();
-          final job = logs.run<Ready, void>(
+          final job = logs.enqueue<Ready, void>(
             cancellable: false,
             (ctx) => ctx.join(() => stage.start<void>('refusing', null)),
           );
@@ -2732,7 +2732,7 @@ void main() {
       test('a state handler of the cancelled job still updates the state', () {
         fakeAsync((async) {
           final bench = Bench()
-            ..run<Ready, void>(
+            ..enqueue<Ready, void>(
               ifCancelled: (state, cancelled) =>
                   const Ready(receipt: 'corrected'),
               (ctx) => ctx.join(() => stage.start<void>('call', null)),
@@ -2795,7 +2795,7 @@ void main() {
       test('children, cleanup and an accumulation window are waited out', () {
         fakeAsync((async) {
           final windowed = _Windowed();
-          windowed.run<Ready, void>((ctx) async {
+          windowed.enqueue<Ready, void>((ctx) async {
             ctx
               ..onDispose(() => stage.start<void>('cleanup', null))
               ..run(
@@ -2831,10 +2831,10 @@ void main() {
         late Bench bench;
         _zone((async) {
           bench = Bench()..work('running');
-          failing = bench.run<Ready, void>(
+          failing = bench.enqueue<Ready, void>(
             (ctx) async => throw StateError('the send failed'),
           )..ignoreFailure();
-          ruled = bench.run<Ready, void>(
+          ruled = bench.enqueue<Ready, void>(
             canStart: (state) => state.receipt != null,
             (ctx) async {},
           );
@@ -2901,7 +2901,7 @@ void main() {
     test('cancelAll() awaited from the body waits the same way', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>((ctx) async {
+        final job = bench.enqueue<Ready, void>((ctx) async {
           await ctx.join(api.logout);
           await bench.cancelAll();
         });
@@ -2918,7 +2918,7 @@ void main() {
       test('$call awaited from the cleanup of the job waits the same way', () {
         fakeAsync((async) {
           final bench = Bench();
-          final job = bench.run<Ready, void>((ctx) async {
+          final job = bench.enqueue<Ready, void>((ctx) async {
             ctx.onDispose(call == 'close()' ? bench.close : bench.cancelAll);
             await ctx.join(api.logout);
           });
@@ -2936,7 +2936,7 @@ void main() {
       fakeAsync((async) {
         final bench = Bench();
         late SoloJob<void> child;
-        final job = bench.run<Ready, void>((ctx) async {
+        final job = bench.enqueue<Ready, void>((ctx) async {
           ctx.onCancel(() => stage.trace.add('ctx.onCancel'));
           child = bench.job<Ready, void>((child) async {
             child.onCancel(() => stage.trace.add('child ctx.onCancel'));
@@ -3108,7 +3108,7 @@ void main() {
           () {
         late Bench bench;
         final left = _zone((async) {
-          bench = Bench()..run<Ready, void>((ctx) => ctx.join(api.logout));
+          bench = Bench()..enqueue<Ready, void>((ctx) => ctx.join(api.logout));
           unawaited(bench.close(mode: SoloCloseMode.drain));
           async.flushMicrotasks();
           _fail(async, 'logout', StateError('no network'));

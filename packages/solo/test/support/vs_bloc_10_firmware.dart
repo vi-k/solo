@@ -71,7 +71,7 @@ final class FirmwareController extends Solo<FirmwareState> {
 
   FirmwareController(this._ble) : super(const Idle());
 
-  Job<void> flash(List<Chunk> chunks) => run<NotBroken, void>(
+  Job<void> flash(List<Chunk> chunks) => enqueue<NotBroken, void>(
         key: 'flash',
         policy: Policy.restart,
         (ctx) async {
@@ -97,7 +97,7 @@ final class ParentController extends Solo<FirmwareState> {
 
   final seen = <String>[];
 
-  Job<void> withChild() => run<FirmwareState, void>(
+  Job<void> withChild() => enqueue<FirmwareState, void>(
         key: 'parent',
         (ctx) async {
           final child = job<FirmwareState, void>((childCtx) async {
@@ -113,7 +113,7 @@ final class ParentController extends Solo<FirmwareState> {
         },
       );
 
-  Job<void> withUnattended() => run<FirmwareState, void>(
+  Job<void> withUnattended() => enqueue<FirmwareState, void>(
         key: 'upload',
         (ctx) async {
           ctx.unattended(() async {
@@ -124,7 +124,7 @@ final class ParentController extends Solo<FirmwareState> {
         },
       );
 
-  Job<void> mark() => run<FirmwareState, void>(
+  Job<void> mark() => enqueue<FirmwareState, void>(
         key: 'mark',
         (ctx) async => seen.add('the next job started'),
       );

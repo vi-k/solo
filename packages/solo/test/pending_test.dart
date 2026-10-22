@@ -20,7 +20,7 @@ void main() {
 
   test('a running body says so, and nobody has asked it to stop', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) => pause(ctx, 100));
+      solo.enqueue<TestState, void>(key: 'job', (ctx) => pause(ctx, 100));
       async.flushMicrotasks();
       final pending = solo.pending! as SoloPendingJob;
       expect(pending.phase, SoloPhase.body);
@@ -36,7 +36,7 @@ void main() {
 
   test('a job that turns cancellation down is nothing pending', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'job',
         cancellable: false,
         (ctx) => pause(ctx, 100),
@@ -63,7 +63,7 @@ void main() {
 
   test('a held cancellation is named without being a guess', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'job',
         (ctx) => ctx.uncancellable(() => delay(100)),
       );
@@ -88,7 +88,7 @@ void main() {
 
   test('a rule drops the cancellation a section holds', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<Initial, void>(
+      final job = solo.enqueue<Initial, void>(
         key: 'job',
         (ctx) => ctx.uncancellable(() => delay(100)),
       );
@@ -115,7 +115,7 @@ void main() {
   test('the body sees the cancellation its section holds, as pending does', () {
     runSolo((solo, journal, async) {
       final seen = <String>[];
-      solo.run<Initial, void>(
+      solo.enqueue<Initial, void>(
         key: 'job',
         (ctx) => ctx.uncancellable(() async {
           await delay(10);
@@ -139,7 +139,7 @@ void main() {
 
   test('an open section nobody asked to leave is only an open section', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'job',
         (ctx) => ctx.uncancellable(() => delay(100)),
       );
@@ -162,7 +162,7 @@ void main() {
 
   test('a body that ended with children waiting says how many', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx
           ..each<int>(
             Stream<int>.periodic(const Duration(milliseconds: 20), (i) => i),
@@ -185,7 +185,7 @@ void main() {
 
   test('a cleanup that takes its time is named', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx.onDispose(() => delay(100));
       });
       async.flushMicrotasks();
@@ -199,7 +199,7 @@ void main() {
   test('a job past its body and children reads as its cleanup', () {
     runSolo((solo, journal, async) {
       final phases = <SoloPhase?>[];
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'job',
         (ctx) async => throw StateError('gone'),
         ifFailed: (state, error, stackTrace) {
@@ -214,7 +214,7 @@ void main() {
 
   test('a body on a bare await is in its body, and no more is said', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'job', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         // A bare await, past every checkpoint: the engine knows the body
         // is still out and nothing about what holds it.
         await delay(100);
@@ -227,10 +227,10 @@ void main() {
 
   test('a body awaiting a job of its own controller names it', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'outer', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'outer', (ctx) async {
         // The inner job waits for the slot the outer body holds, and the
         // body waits for the inner job: neither moves until a close.
-        await solo.run<TestState, void>(key: 'inner', (ctx) async {}).done;
+        await solo.enqueue<TestState, void>(key: 'inner', (ctx) async {}).done;
       });
       async.flushMicrotasks();
       final pending = solo.pending! as SoloPendingJob;
@@ -312,7 +312,7 @@ void main() {
     test('read at once, a drain names the ready job with the group', () {
       runSolo((solo, journal, async) {
         final gate = Completer<void>();
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'ready',
           describe: () => 'gate',
           (ctx) => ctx.abandonable(() => gate.future),
@@ -355,7 +355,7 @@ void main() {
     test('a rule that drains the controller finds its own job first', () {
       runSolo((solo, journal, async) {
         final seen = <String>[];
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'ruled',
           canStart: (state) {
             solo.close(mode: SoloCloseMode.drain);
@@ -364,7 +364,7 @@ void main() {
           },
           (ctx) async {},
         );
-        solo.run<TestState, void>(key: 'behind', (ctx) async {});
+        solo.enqueue<TestState, void>(key: 'behind', (ctx) async {});
         async.flushMicrotasks();
 
         expect(seen, ['SoloPending(draining, 2 queued: [ruled], [behind])']);
@@ -422,7 +422,7 @@ void main() {
         // Recorded and checked outside: an `expect` failing inside a hook
         // would go to the zone and not fail the test.
         last.finished = (job) => seen.add('${last.pending} $lastReturned');
-        last.run<TestState, void>(key: 'last', (ctx) async {});
+        last.enqueue<TestState, void>(key: 'last', (ctx) async {});
         last.close(mode: SoloCloseMode.drain).then((_) => lastReturned = true);
         async.flushMicrotasks();
         expect(
@@ -440,7 +440,7 @@ void main() {
         final seen = <String>[];
         rejected.finished = (job) => seen.add('${rejected.pending}');
         rejected
-            .run<TestState, void>(
+            .enqueue<TestState, void>(
               key: 'rejected',
               canStart: (state) => false,
               (ctx) async {},
@@ -451,7 +451,7 @@ void main() {
 
         final cancelled = _Hooked();
         late final SoloJob<void> self;
-        self = cancelled.run<TestState, void>(
+        self = cancelled.enqueue<TestState, void>(
           key: 'self',
           canStart: (state) {
             self.cancel();

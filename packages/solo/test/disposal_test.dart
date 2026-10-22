@@ -13,7 +13,7 @@ void main() {
   test('reading the state from a disposer is a StateError, not a flip', () {
     runSolo((solo, journal, async) {
       final errors = <Object>[];
-      final job = solo.run<Initial, int>(
+      final job = solo.enqueue<Initial, int>(
         key: 'load',
         (ctx) async {
           ctx.onDispose(() {
@@ -40,7 +40,7 @@ void main() {
 
   test('emit from a disposer is a StateError the observer sees', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<Initial, int>(
+      final job = solo.enqueue<Initial, int>(
         key: 'load',
         (ctx) async {
           ctx.onDispose(() => ctx.emit(const Working(a: 1)));
@@ -63,7 +63,7 @@ void main() {
     fakeAsync((async) {
       final solo = _ReentrantSolo();
       final closed = <String>[];
-      final job = solo.run<Initial, void>(
+      final job = solo.enqueue<Initial, void>(
         key: 'load',
         (ctx) async {
           final db = await ctx.join(() async => 'db', discard: closed.add);
@@ -86,7 +86,7 @@ void main() {
   test('join inside an uncancellable section breaks the pair', () {
     runSolo((solo, journal, async) {
       final rolled = <String>[];
-      final job = solo.run<Initial, void>(
+      final job = solo.enqueue<Initial, void>(
         key: 'load',
         (ctx) async {
           final tx = await ctx.join(() async => 'tx', dispose: rolled.add);
@@ -110,7 +110,7 @@ void main() {
   test('a state change during the cleanup no longer cancels by rules', () {
     runSolo((solo, journal, async) {
       final closed = <String>[];
-      final job = solo.run<Initial, int>(
+      final job = solo.enqueue<Initial, int>(
         key: 'load',
         (ctx) async {
           final db = await ctx.join(() async => 'db', discard: closed.add);
@@ -136,7 +136,7 @@ void main() {
   test('restart waits for the cleanup of the job it replaces', () {
     runSolo((solo, journal, async) {
       final order = <String>[];
-      solo.run<Initial, void>(
+      solo.enqueue<Initial, void>(
         key: 'load',
         policy: Policy.restart,
         (ctx) async {
@@ -152,7 +152,7 @@ void main() {
       // The next job of the same queue starts only after `finish`, and
       // that waits for the cleanup.
       solo
-          .run<Initial, void>(
+          .enqueue<Initial, void>(
             key: 'load',
             policy: Policy.restart,
             (ctx) async => order.add('second starts'),
@@ -167,7 +167,7 @@ void main() {
     runSolo((solo, journal, async) {
       late SoloContext<TestState, Initial> leaked;
       solo
-          .run<Initial, void>(
+          .enqueue<Initial, void>(
             key: 'load',
             (ctx) async => leaked = ctx,
           )

@@ -138,7 +138,7 @@ final class _Order extends Solo<int> {
 
   SoloJob<void> grouped(String value) => _group.add(value);
 
-  SoloJob<void> plain(String key, {bool first = false}) => add(
+  SoloJob<void> plain(String key, {bool first = false}) => enqueueJob(
         job<int, void>(key: key, (ctx) async => started.add(key)),
         first: first,
       );
@@ -714,7 +714,7 @@ void main() {
       expect(api.reads, 1);
       expect('${controller.currentState}', 'ChatState(reply to hi)');
       _says('That method would submit a separate root job through the '
-          "controller's `run`; it is not a child of `send`.");
+          "controller's `enqueue`; it is not a child of `send`.");
     });
 
     test('with a plain await closing waits for the API, and emit throws', () {
@@ -1361,7 +1361,8 @@ void main() {
       expect(errors, isEmpty);
       expect(ble.trace, ['connect', 'disconnect']);
       expect('$late_', 'Cancelled(rules: is not Connected)');
-      _says('Here `run<Connected, void>` is checked when the job starts, so '
+      _says(
+          'Here `enqueue<Connected, void>` is checked when the job starts, so '
           'the same read ends as `Cancelled(rules: is not Connected)` and '
           'the call is never made.');
       _says('and a read queued behind the disconnect ends `Cancelled(rules: '
@@ -1573,7 +1574,7 @@ void main() {
       // No `onError` was supplied, so the state stays where the body left it.
       expect('${controller.currentState}', 'Paying(A)');
       _says('API failures still produce `Failed`; a failure state can be '
-          'supplied with `run(ifFailed: ...)`.');
+          'supplied with `enqueue(ifFailed: ...)`.');
     });
 
     test('a narrower type lets a state rule cancel a charge that was sent', () {
@@ -1698,7 +1699,7 @@ void main() {
       _says('The build already in progress still finishes in both examples.');
       _says('**What solo gives:** `externalSetState` publishes `SignedOut` '
           'at once');
-      _says('and the rule of `run<SignedIn, void>` cancels the build with '
+      _says('and the rule of `enqueue<SignedIn, void>` cancels the build with '
           '`Cancelled(rules: is not SignedIn)`.');
     });
 

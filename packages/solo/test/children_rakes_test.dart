@@ -50,7 +50,7 @@ final class _Retrying extends Solo<AppState> {
 
   _Retrying() : super(const Ready());
 
-  Job<void> sync(int item) => run<Ready, void>(
+  Job<void> sync(int item) => enqueue<Ready, void>(
         key: _Op.sync,
         policy: Policy.droppable,
         (ctx) async {
@@ -149,7 +149,7 @@ Bench _coveredFailure(
   String silence = 'none',
 }) {
   final bench = Bench();
-  final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+  final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
     final child = bench.job<Ready, void>(key: 'child', (childCtx) async {
       if (window == 'a child of its own') {
         final grandchild = bench.job<Ready, void>(
@@ -249,11 +249,11 @@ void main() {
       _says('`job(...)` makes a job and starts nothing.');
     });
 
-    test('add gives that very job a place in the queue', () {
+    test('enqueueJob gives that very job a place in the queue', () {
       final errors = _zone((async) {
         final solo = page.Syncer();
         final made = solo.made(1);
-        final added = solo.add(made);
+        final added = solo.enqueueJob(made);
         _see('the same handle ${identical(added, made)}, '
             'queued ${made.isQueued}');
         async.flushMicrotasks();
@@ -265,7 +265,7 @@ void main() {
         'the same handle true, queued true',
         'running true, current Job(_Op.sync)',
       ]);
-      _says('`add` gives it a place in the queue');
+      _says('`enqueueJob` gives it a place in the queue');
     });
 
     test('both children start at once, past a job that waits in the queue', () {
@@ -453,7 +453,7 @@ void main() {
       test('$clause and a cancellation of the job', () {
         final errors = _zone((async) {
           final bench = Bench();
-          final parent = bench.run<Ready, bool>(key: 'parent', (ctx) async {
+          final parent = bench.enqueue<Ready, bool>(key: 'parent', (ctx) async {
             final child = bench.job<Ready, String>(
               key: 'child',
               (childCtx) => childCtx.join(() => api.push(7)),
@@ -532,7 +532,8 @@ void main() {
           () {
         final errors = _zone((async) {
           final bench = Bench();
-          final parent = bench.run<Ready, String>(key: 'parent', (ctx) async {
+          final parent =
+              bench.enqueue<Ready, String>(key: 'parent', (ctx) async {
             final child = bench.job<Ready, String>(
               key: 'child',
               (childCtx) => childCtx.join(() => api.push(7)),
@@ -544,7 +545,7 @@ void main() {
             await ctx.join(() => analytics.send('started 7'));
             return uploading;
           })
-            ..ignoreFailure();
+                ..ignoreFailure();
           async.flushMicrotasks();
           _fail(async, 'push 7', const ApiException());
           _see('the upload failed: ${_how(parent)}');
@@ -617,7 +618,8 @@ void main() {
           ),
         ),
       );
-      _says('`handler:` in that line is not a state handler of `run`. It is '
+      _says(
+          '`handler:` in that line is not a state handler of `enqueue`. It is '
           '`HandlerCancelReason`, the reason the core gives a body that lets '
           'the cancellation of its child out, and after it come the child '
           'and the cancellation it ended with.');
@@ -645,7 +647,7 @@ void main() {
         final errors = _zone((async) {
           Solo.observer = _Watch();
           final bench = Bench(const Ready(paused: true));
-          bench.run<Ready, void>(key: 'parent', (ctx) async {
+          bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
             child = switch (rule) {
               'canStart' => bench.job<Ready, void>(
                   key: 'child',
@@ -701,7 +703,7 @@ void main() {
     test('child.done of a child turned away holds the cancellation', () {
       final errors = _zone((async) {
         final bench = Bench(const Ready(paused: true));
-        bench.run<Ready, void>(key: 'parent', (ctx) async {
+        bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           final child = bench.job<Ready, void>(
             key: 'child',
             canStart: (state) => !state.paused,
@@ -723,7 +725,7 @@ void main() {
         'carries the drop', () {
       final errors = _zone((async) {
         final bench = Bench(const Ready(paused: true));
-        final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+        final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           final child = bench.job<Ready, void>(
             key: 'child',
             canStart: (state) => !state.paused,
@@ -756,7 +758,7 @@ void main() {
         late Bench bench;
         final errors = _zone((async) {
           bench = Bench();
-          bench.run<Ready, void>(key: 'parent', (ctx) async {
+          bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
             bool thrower(Ready state) => throw StateError('$rule threw');
             child = bench.job<Ready, void>(
               key: 'child',
@@ -791,7 +793,7 @@ void main() {
     test('ctx.run waits for the child, its children and its cleanup', () {
       final errors = _zone((async) {
         final bench = Bench();
-        bench.run<Ready, void>(key: 'parent', (ctx) async {
+        bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           final child = bench.job<Ready, int>(key: 'child', (childCtx) async {
             childCtx.onDispose(() => stage.start<void>('cleanup', null));
             final grandchild = bench.job<Ready, void>(
@@ -825,7 +827,7 @@ void main() {
       late SoloJob<int> child;
       final errors = _zone((async) {
         final bench = Bench();
-        final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+        final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           child = bench.job<Ready, int>(
             key: 'child',
             cancellable: false,
@@ -863,7 +865,7 @@ void main() {
     test('a value registered on the call is released when ctx.run throws', () {
       final errors = _zone((async) {
         final bench = Bench();
-        final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+        final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           final child = bench.job<Ready, String>(
             key: 'child',
             cancellable: false,
@@ -892,7 +894,7 @@ void main() {
         () {
       final errors = _zone((async) {
         final bench = Bench();
-        final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+        final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           // The job that wrote a state is not asked about it at once.
           ctx.emit(const Off());
           final child = bench.job<AppState, int>(
@@ -921,7 +923,7 @@ void main() {
       late Bench bench;
       final errors = _zone((async) {
         bench = Bench();
-        final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+        final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           final child = bench.job<Ready, int>(
             key: 'child',
             (childCtx) async => _throwFromChild(),
@@ -952,7 +954,7 @@ void main() {
       final errors = _zone((async) {
         final bench = Bench();
         late SoloJob<void> child;
-        parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+        parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           child = bench.job<Ready, void>(
             key: 'child',
             (childCtx) =>
@@ -987,7 +989,7 @@ void main() {
       final errors = _zone((async) {
         Solo.observer = _Watch();
         final bench = Bench();
-        bench.run<Ready, void>(key: 'parent', (ctx) async {
+        bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           final child = bench.job<Ready, void>(key: 'child', (childCtx) async {
             childCtx.emit(childCtx.state.copyWith(sent: 1));
             await childCtx.join(() => stage.start<void>('child step', null));
@@ -1025,7 +1027,7 @@ void main() {
         final errors = _zone((async) {
           final bench = Bench();
           late SoloJob<void> child;
-          final parent = bench.run<Ready, void>(
+          final parent = bench.enqueue<Ready, void>(
             key: 'parent',
             keepWhile: (state) => !state.paused,
             (ctx) async {
@@ -1064,7 +1066,8 @@ void main() {
       final errors = _zone((async) {
         final bench = Bench();
         late SoloJob<void> child;
-        final parent = bench.run<AppState, void>(key: 'parent', (ctx) async {
+        final parent =
+            bench.enqueue<AppState, void>(key: 'parent', (ctx) async {
           child = bench.job<Ready, void>(
             key: 'child',
             (childCtx) =>
@@ -1213,7 +1216,7 @@ void main() {
         late Bench bench;
         final errors = _zone((async) {
           bench = Bench();
-          final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+          final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
             try {
               await ctx.run(
                 bench.job<Ready, void>(key: 'child', (childCtx) async {
@@ -1255,7 +1258,7 @@ void main() {
         final errors = _zone((async) {
           final bench = Bench();
           late SoloJob<void> child;
-          final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+          final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
             child = bench.job<Ready, void>(
               key: 'child',
               (childCtx) =>
@@ -1278,7 +1281,7 @@ void main() {
         final errors = _zone((async) {
           final bench = Bench();
           late SoloJob<void> child;
-          final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+          final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
             child = bench.job<Ready, void>(
               key: 'child',
               (childCtx) =>
@@ -1312,7 +1315,7 @@ void main() {
           late Bench bench;
           final errors = _zone((async) {
             bench = Bench();
-            bench.run<Ready, void>(key: 'parent', (ctx) async {
+            bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
               final child = bench.job<Ready, void>(
                 key: 'child',
                 (childCtx) =>
@@ -1338,7 +1341,7 @@ void main() {
               expect(bench.unanswered, isEmpty);
               expect(errors, ['Bad state: child failed']);
               _says('`child.ignoreFailure()` alone does not handle errors of '
-                  'the future returned by `run`.');
+                  'the future returned by `enqueue`.');
             case 'ctx.run(child).ignore()':
               expect(bench.unanswered, isEmpty);
               expect(errors, isEmpty);
@@ -1360,7 +1363,7 @@ void main() {
       test('ctx.runAll takes jobs made by job(...)', () {
         final errors = _zone((async) {
           final bench = Bench();
-          final parent = bench.run<Ready, List<int>>(
+          final parent = bench.enqueue<Ready, List<int>>(
             key: 'parent',
             (ctx) => ctx.runAll([
               bench.job<Ready, int>(key: 'a', (childCtx) async {
@@ -1391,7 +1394,7 @@ void main() {
         final errors = _zone((async) {
           Solo.observer = _Watch();
           final bench = Bench(const Ready(paused: true));
-          bench.run<Ready, List<int>>(
+          bench.enqueue<Ready, List<int>>(
             key: 'parent',
             (ctx) => ctx.runAll([
               bench.job<Ready, int>(key: 'a', (childCtx) async {
@@ -1428,7 +1431,7 @@ void main() {
       for (final call in ['ctx.run', 'ctx.runAll']) {
         test('$call takes no Job.deferred', () {
           final errors = _zone((async) {
-            Bench().run<Ready, void>(key: 'parent', (ctx) async {
+            Bench().enqueue<Ready, void>(key: 'parent', (ctx) async {
               final deferred = Job.deferred<int>((ctx) async => 1);
               try {
                 if (call == 'ctx.run') {
@@ -1778,7 +1781,7 @@ import 'package:solo/solo.dart';
 final class Probe extends Solo<int> {
   Probe() : super(0);
 
-  void attempt() => run<int, void>((ctx) async {
+  void attempt() => enqueue<int, void>((ctx) async {
         final tail = job<int, int>((c) async => 1).then<void>((c, v) {});
         await ctx.run(tail);
       });
@@ -1792,7 +1795,7 @@ final class Probe extends Solo<int> {
 
     test('ctx.run refuses a job of the core in the words the page quotes', () {
       final errors = _zone((async) {
-        Bench().run<Ready, void>(key: 'parent', (ctx) async {
+        Bench().enqueue<Ready, void>(key: 'parent', (ctx) async {
           try {
             await ctx.run(Job.deferred<int>((ctx) async => 1));
           } on Object catch (error) {
@@ -1812,7 +1815,7 @@ final class Probe extends Solo<int> {
       final errors = _zone((async) {
         final bench = Bench();
         final other = Bench();
-        bench.run<Ready, void>(key: 'parent', (ctx) async {
+        bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
           try {
             await ctx.run(bench.save());
           } on Object catch (error) {
@@ -2000,9 +2003,9 @@ final class Probe extends Solo<int> {
         final errors = _zone((async) {
           Solo.observer = _Watch();
           final bench = Bench();
-          bench.run<Ready, void>(key: 'caller', (ctx) async {
+          bench.enqueue<Ready, void>(key: 'caller', (ctx) async {
             bench
-                .run<Ready, void>(key: 'called', (ctx) async {})
+                .enqueue<Ready, void>(key: 'called', (ctx) async {})
                 .ignoreFailure();
           });
           bench.save();

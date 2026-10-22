@@ -24,7 +24,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
     });
   }
 
-  Job<void> record() => run<Ready, void>(
+  Job<void> record() => enqueue<Ready, void>(
         key: 'record',
         canStart: (state) => state.free > 0,
         keepWhile: (state) => !state.paused,
@@ -33,7 +33,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
         }).value,
       );
 
-  Job<void> zoomIn() => run<Ready, void>(
+  Job<void> zoomIn() => enqueue<Ready, void>(
         (ctx) async {
           // A read is a checkpoint: cancellation and the rules are checked.
           final state = ctx.state;
@@ -43,7 +43,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
         },
       );
 
-  Job<void> switchOn(int zoom) => run<CameraState, void>(
+  Job<void> switchOn(int zoom) => enqueue<CameraState, void>(
         canStart: (state) => state is Off,
         (ctx) async {
           // W is every state, so after each wait the body names the one
@@ -63,7 +63,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
   void reflect(CameraState state) => externalSetState(state);
 
   /// Not on the page: the pause written as a job of the queue.
-  Job<void> pauseAsJob() => run<Ready, void>(
+  Job<void> pauseAsJob() => enqueue<Ready, void>(
         key: 'pause',
         (ctx) async => ctx.emit(ctx.state.copyWith(paused: true)),
       );
@@ -71,7 +71,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
   /// Not on the page: a job whose rules require the connection, waiting for
   /// an answer the device gives only when the test says so.
   Job<void> waitForAnswer({bool cancellable = true, bool joined = false}) =>
-      run<Ready, void>(
+      enqueue<Ready, void>(
         key: 'answer',
         cancellable: cancellable,
         (ctx) async {
@@ -87,7 +87,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
       );
 
   /// Not on the page: the next root job of the queue.
-  Job<void> next() => run<CameraState, void>(
+  Job<void> next() => enqueue<CameraState, void>(
         key: 'next',
         (ctx) async => stage.trace.add('the next job started'),
       );

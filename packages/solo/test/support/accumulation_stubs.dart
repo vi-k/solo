@@ -190,12 +190,12 @@ final class JoiningPlayer extends Solo<Playback> {
 
   SoloJob<void> pause() => _transport.add(Command.pause);
 
-  SoloJob<void> busy() => run<Playback, void>(
+  SoloJob<void> busy() => enqueue<Playback, void>(
         key: 'busy',
         (ctx) => ctx.abandonable(() => Future<void>.delayed(ms(50))),
       );
 
-  SoloJob<void> chime() => run<Playback, void>(
+  SoloJob<void> chime() => enqueue<Playback, void>(
         key: 'chime',
         (ctx) async => device.note('chime'),
       );
@@ -213,7 +213,7 @@ final class KeyedPlayer extends Solo<Playback> {
   KeyedPlayer(this.device, this.policy, {required this.oneKey})
       : super(const Paused());
 
-  SoloJob<void> resume() => run<Playback, void>(
+  SoloJob<void> resume() => enqueue<Playback, void>(
         key: oneKey ? 'transport' : Command.resume,
         policy: policy,
         (ctx) async {
@@ -222,7 +222,7 @@ final class KeyedPlayer extends Solo<Playback> {
         },
       );
 
-  SoloJob<void> pause() => run<Playback, void>(
+  SoloJob<void> pause() => enqueue<Playback, void>(
         key: oneKey ? 'transport' : Command.pause,
         policy: policy,
         (ctx) async {
@@ -266,7 +266,8 @@ final class Bench extends Solo<int> with OpenSolo<int> {
       );
 
   /// An ordinary job that takes [work] ms.
-  SoloJob<void> busy(String name, int work, {Object? key}) => run<int, void>(
+  SoloJob<void> busy(String name, int work, {Object? key}) =>
+      enqueue<int, void>(
         key: key ?? name,
         (ctx) async {
           ran.add('$name at ${now()} ms');
@@ -295,7 +296,7 @@ final class Defaults extends Solo<int> {
     key: 'A',
   );
 
-  SoloJob<void> busy(String name, int work) => run<int, void>(
+  SoloJob<void> busy(String name, int work) => enqueue<int, void>(
         key: name,
         (ctx) => ctx.join(() => Future<void>.delayed(ms(work))),
       );
@@ -387,7 +388,7 @@ final class Typed extends Solo<Screen> {
   );
 
   SoloJob<void> turnOn() =>
-      run<Screen, void>((ctx) async => ctx.emit(const On(0)));
+      enqueue<Screen, void>((ctx) async => ctx.emit(const On(0)));
 }
 
 /// Hears every start and finish.

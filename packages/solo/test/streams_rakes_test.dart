@@ -117,12 +117,12 @@ final class _Queueing extends Solo<Screen> {
     _link = session.stream.listen(_take);
   }
 
-  void _take(Session next) => run<Screen, void>(
+  void _take(Session next) => enqueue<Screen, void>(
         key: 'take',
         (ctx) async => ctx.emit(ctx.state.copyWith(signedIn: next.signedIn)),
       );
 
-  Job<void> other() => run<Screen, void>(
+  Job<void> other() => enqueue<Screen, void>(
         key: 'other',
         (ctx) => ctx.join(() => stage.start<void>('other', null)),
       );
@@ -146,7 +146,7 @@ final class _Reflecting extends Solo<Screen> {
     );
   }
 
-  Job<void> other() => run<Screen, void>(
+  Job<void> other() => enqueue<Screen, void>(
         key: 'other',
         (ctx) => ctx.join(() => stage.start<void>('other', null)),
       );
@@ -174,7 +174,7 @@ void main() {
         final errors = _zone((async) {
           final solo = first.Listening();
           final job = solo.track();
-          final next = solo.run<Ready, void>(key: 'next', (ctx) async {});
+          final next = solo.enqueue<Ready, void>(key: 'next', (ctx) async {});
           async.flushMicrotasks();
           _see('track ${_how(job)}, next ${_how(next)}, '
               'listening ${stage.positions.hasListener}');
@@ -229,7 +229,7 @@ void main() {
     test('onDispose(sub.cancel) ends the subscription with the body', () {
       final errors = _zone((async) {
         final bench = Bench();
-        final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+        final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
           final sub = hw.positions.listen(
             (p) => ctx.emit(ctx.state.copyWith(position: p)),
           );
@@ -279,7 +279,7 @@ void main() {
 
       test('the callback gets a SoloContext, and the child is a SoloJob', () {
         final errors = _zone((async) {
-          Bench().run<Ready, void>(key: 'track', (ctx) async {
+          Bench().enqueue<Ready, void>(key: 'track', (ctx) async {
             final child = ctx.each(hw.positions, (childCtx, p) {
               // `state` is a member of `SoloContext` alone.
               _see('the job of that context is ${childCtx.job}; '
@@ -348,7 +348,7 @@ void main() {
       test('value brings a callback error into the parent body', () {
         final errors = _zone((async) {
           final bench = Bench();
-          final job = bench.run<Ready, void>(
+          final job = bench.enqueue<Ready, void>(
             key: 'track',
             (ctx) => ctx.each(hw.positions, (childCtx, p) {
               if (p == 2) {
@@ -378,7 +378,7 @@ void main() {
         final errors = _zone((async) {
           final bench = Bench();
           late Job<void> following;
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             following = ctx.each(hw.positions, (childCtx, p) {});
             _see('done gave ${await following.done}, the parent is cancelled '
                 '${ctx.job.isCancelled}');
@@ -410,7 +410,7 @@ void main() {
         final errors = _zone((async) {
           final bench = Bench();
           late Job<void> following;
-          job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             following = ctx.each(hw.positions, (childCtx, p) {});
             await following.value;
           });
@@ -431,10 +431,10 @@ void main() {
       test('an open stream with no events holds the parent and the queue', () {
         final errors = _zone((async) {
           final bench = Bench();
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             ctx.each(hw.positions, (childCtx, p) {});
           });
-          final next = bench.run<Ready, void>(key: 'next', (ctx) async {});
+          final next = bench.enqueue<Ready, void>(key: 'next', (ctx) async {});
           async.elapse(const Duration(hours: 1));
           _see('an hour later: track ${_how(job)}, next queued '
               '${next.isQueued}');
@@ -457,7 +457,7 @@ void main() {
         final errors = _zone((async) {
           Solo.observer = _Watch();
           final bench = Bench()
-            ..run<Ready, void>(key: 'track', (ctx) async {
+            ..enqueue<Ready, void>(key: 'track', (ctx) async {
               ctx.each(hw.positions, (childCtx, p) {});
             });
           async.flushMicrotasks();
@@ -482,7 +482,7 @@ void main() {
           () {
         final errors = _zone((async) {
           final bench = Bench();
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             ctx.each(hw.positions, (childCtx, p) {});
           });
           async.flushMicrotasks();
@@ -511,7 +511,7 @@ void main() {
         final errors = _zone((async) {
           final bench = Bench();
           late Job<void> following;
-          final job = bench.run<Ready, void>(
+          final job = bench.enqueue<Ready, void>(
             key: 'track',
             cancellable: false,
             (ctx) async {
@@ -544,7 +544,7 @@ void main() {
           final bench = Bench();
           var asked = 0;
           late Job<void> following;
-          final job = bench.run<Ready, void>(
+          final job = bench.enqueue<Ready, void>(
             key: 'track',
             canStart: (state) {
               asked++;
@@ -578,7 +578,7 @@ void main() {
         final errors = _zone((async) {
           final bench = Bench();
           late Job<void> following;
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             following = ctx.each(hw.positions, (childCtx, p) {});
           });
           async.flushMicrotasks();
@@ -599,7 +599,7 @@ void main() {
         late Bench bench;
         final errors = _zone((async) {
           bench = Bench();
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             ctx.each(
               hw.positions,
               (childCtx, p) => throw StateError('callback failed'),
@@ -647,7 +647,7 @@ void main() {
         late Bench bench;
         final errors = _zone((async) {
           bench = Bench()
-            ..run<Ready, void>(key: 'track', (ctx) async {
+            ..enqueue<Ready, void>(key: 'track', (ctx) async {
               ctx.each(hw.positions, (childCtx, p) {
                 throw StateError('callback failed');
               }).ignoreFailure();
@@ -665,7 +665,7 @@ void main() {
 
       test('events are delivered one at a time', () {
         final errors = _zone((async) {
-          Bench().run<Ready, void>(
+          Bench().enqueue<Ready, void>(
             key: 'track',
             (ctx) => ctx.each(hw.positions, (childCtx, p) async {
               await childCtx.join(() => stage.start<void>('handle $p', null));
@@ -696,7 +696,7 @@ void main() {
             final bench = Bench();
             String? returned;
             String? closed;
-            final job = bench.run<Ready, void>(
+            final job = bench.enqueue<Ready, void>(
               key: 'track',
               (ctx) => ctx.each(hw.positions, (childCtx, p) async {
                 try {
@@ -710,7 +710,8 @@ void main() {
                 }
               }).value,
             );
-            final next = bench.run<Ready, void>(key: 'next', (ctx) async {});
+            final next =
+                bench.enqueue<Ready, void>(key: 'next', (ctx) async {});
             async.flushMicrotasks();
             stage.positions.add(1);
             async.elapse(const Duration(milliseconds: 50));
@@ -751,7 +752,7 @@ void main() {
             final bench = Bench();
             late Job<void> following;
             var returned = false;
-            final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+            final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
               following = ctx.each(hw.positions, (childCtx, p) async {
                 switch (awaited) {
                   case 'done':
@@ -790,7 +791,7 @@ void main() {
         final errors = _zone((async) {
           final bench = Bench();
           late Job<void> following;
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             following = ctx.each(hw.positions, (childCtx, p) {
               _see('position $p');
               following.cancel().ignore();
@@ -819,7 +820,7 @@ void main() {
           final source = StreamController<int>(
             onCancel: () => Completer<void>().future,
           );
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             ctx.each(source.stream, (childCtx, p) {});
           });
           async.flushMicrotasks();
@@ -843,7 +844,7 @@ void main() {
           final source = StreamController<int>(
             onCancel: () => Future<void>.error(StateError('cleanup failed')),
           );
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             ctx.each(source.stream, (childCtx, p) {});
           });
           async.flushMicrotasks();
@@ -867,7 +868,7 @@ void main() {
           'after it', () {
         final errors = _zone((async) {
           final bench = Bench();
-          final job = bench.run<Ready, void>(key: 'track', (ctx) async {
+          final job = bench.enqueue<Ready, void>(key: 'track', (ctx) async {
             ctx.onDispose(() => stage.start<void>('close the source', null));
             await ctx.each(hw.positions, (childCtx, p) {}).value;
           });
@@ -898,7 +899,7 @@ void main() {
                 eventCtx.onDispose(() => stage.trace.add('close $p'));
                 stage.trace.add('open $p');
               });
-          bench.run<Ready, void>(
+          bench.enqueue<Ready, void>(
             key: 'track',
             (ctx) => ctx
                 .each(hw.positions, (childCtx, p) => childCtx.run(forEvent(p)))
@@ -921,7 +922,7 @@ void main() {
           () {
         final errors = _zone((async) {
           final bench = Bench();
-          final job = bench.run<Ready, void>(
+          final job = bench.enqueue<Ready, void>(
             key: 'track',
             (ctx) => ctx.each(hw.positions, (childCtx, p) async {
               await childCtx.join(() => stage.start<void>('first step', null));

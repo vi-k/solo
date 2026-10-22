@@ -39,7 +39,7 @@ the position the user lands on must not wait for the ones dragged past.
 
 ```dart
 // The first attempt: the seeks it let go of still run on the device.
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -62,7 +62,7 @@ the user asked for, whatever the device actually did.
 
 ```dart
 // The second attempt: an obsolete seek runs to its end.
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -82,7 +82,7 @@ waiting the call out does not make its result count.
 ### The token
 
 ```dart
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -137,7 +137,7 @@ written, whatever the job is asked in the meantime.
 
 ```dart
 // The first attempt: the payment goes through, the receipt does not.
-Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
       // Each call waited out, whatever happens.
       final receipt = await ctx.join(() => payment.commit());
       ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -157,7 +157,7 @@ checkpoint, and on the cancelled job it throws.
 
 ```dart
 // The second attempt: the emit inside the step throws.
-Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
       // The whole step waited out as one call.
       await ctx.join(() async {
         final receipt = await payment.commit();
@@ -175,7 +175,7 @@ throws, and the entry is lost once more.
 ### One section for the step
 
 ```dart
-Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
       await ctx.uncancellable(() async {
         final receipt = await payment.commit();
         ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -206,7 +206,7 @@ one `Solo.pending` shows, and the core's page tells
 
 ```dart
 // A job that turns down every request it is allowed to turn down.
-Job<void> flush() => run<Ready, void>(
+Job<void> flush() => enqueue<Ready, void>(
       cancellable: false,
       (ctx) => device.flush(),
     );
@@ -219,18 +219,19 @@ waits in the queue, `queue.remove`, `queue.removeWhere`, `queue.clear` and
 `close()` drops it from the queue too, and waits for it once it is running.
 
 The flag counts only once the engine holds the job: a job that `job` made and
-`add` never queued is cancelled like any other. A queued job that turned down
-`cancel` starts in its turn and runs to its end, and `await job.cancel()` comes
-back only then.
+`enqueueJob` never queued is cancelled like any other. A queued job that turned
+down `cancel` starts in its turn and runs to its end, and `await job.cancel()`
+comes back only then.
 
 Neither a section nor `cancellable: false` holds back the state rules of a job.
-The working type of a job is the first type argument of `run`, `Ready` on this
-page. That type and the job's `keepWhile` cancel the job when the state stops
-fitting them, inside a section too. If the state leaves `Ready` while `commit`
-above waits for the payment, the next line of the section throws, and neither
-the receipt nor the entry follows. A job that must go on in every state takes
-the whole state type of the controller as its working type, and no `keepWhile`.
-[State and rules](state.md#state-and-rules) on the state page is about both.
+The working type of a job is the first type argument of `enqueue`, `Ready` on
+this page. That type and the job's `keepWhile` cancel the job when the state
+stops fitting them, inside a section too. If the state leaves `Ready` while
+`commit` above waits for the payment, the next line of the section throws, and
+neither the receipt nor the entry follows. A job that must go on in every state
+takes the whole state type of the controller as its working type, and no
+`keepWhile`. [State and rules](state.md#state-and-rules) on the state page is
+about both.
 
 ## Ordinary await and context lifetime
 
@@ -241,7 +242,7 @@ chunk in flight, and however it ends, the device buffer has to be flushed.
 
 ```dart
 // The first attempt: each half waits the way the other one needed.
-Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // The flush must finish before the queue moves on.
         await ctx.join(() => device.flush());
@@ -266,7 +267,7 @@ has the whole route.
 ### Each wait in its place
 
 ```dart
-Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // Cleanup runs after the body, where the waiting methods are
         // gone: a plain await is the wait that works here.
@@ -381,7 +382,7 @@ should show the player offline. A seek the user dragged past leaves the state
 as it is.
 
 ```dart
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       timeout: const Duration(seconds: 2),
@@ -405,14 +406,14 @@ on the time page of `async_job` takes it apart.
 
 A deadline that runs out is not the `TimeoutException` of `Future.timeout`.
 With `.timeout(...)` on the call of `_player.seek` the exception is thrown into
-the body, the job ends `Failed`, and it is the `ifFailed:` of `run` that maps
-the state. The `timeout:` of `run` ends the job `Cancelled`, so `ifCancelled:`
-maps the state and `ifFailed:` is not called. `ifCancelled:` takes every
-cancellation. To tell the deadline from a seek dragged past, a handler branches
-on the reason, as the one above does. A seek dragged past gets back the `state`
-it was given, and the same object publishes nothing. `value` of such a job
-throws that `Cancelled`, and a clause `on TimeoutException` around it catches
-nothing.
+the body, the job ends `Failed`, and it is the `ifFailed:` of `enqueue` that
+maps the state. The `timeout:` of `enqueue` ends the job `Cancelled`, so
+`ifCancelled:` maps the state and `ifFailed:` is not called. `ifCancelled:`
+takes every cancellation. To tell the deadline from a seek dragged past, a
+handler branches on the reason, as the one above does. A seek dragged past gets
+back the `state` it was given, and the same object publishes nothing. `value`
+of such a job throws that `Cancelled`, and a clause `on TimeoutException`
+around it catches nothing.
 
 The deadline is counted from the start of the body, not from the call: the time
 a job waits in the queue does not count. With `collect` and `accumulate` the
@@ -507,7 +508,7 @@ closes.
 
 ```dart
 // The first attempt: the job waits for close(), and close() for the job.
-Job<void> logout() => run<Ready, void>((ctx) async {
+Job<void> logout() => enqueue<Ready, void>((ctx) async {
       await ctx.join(api.logout);
       await close();
     });
@@ -526,7 +527,7 @@ children, and its `ctx.onCancel` callbacks run.
 ```dart
 // The second attempt: the controller takes work until close().
 Future<void> logout() async {
-  await run<Ready, void>((ctx) => ctx.join(api.logout)).done;
+  await enqueue<Ready, void>((ctx) => ctx.join(api.logout)).done;
   await close();
 }
 ```
@@ -545,7 +546,7 @@ very line.
 
 ```dart
 Future<void> logout() async {
-  run<Ready, void>((ctx) => ctx.join(api.logout)).ignoreFailure();
+  enqueue<Ready, void>((ctx) => ctx.join(api.logout)).ignoreFailure();
   await close(mode: SoloCloseMode.drain);
 }
 ```

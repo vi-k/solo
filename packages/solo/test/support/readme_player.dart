@@ -19,7 +19,7 @@ final class Player extends Solo<PlayerState> {
 
   /// A job on the controller's queue. Root jobs run one at a time, and
   /// this one ends when the track starts: the device plays it on its own.
-  Job<Track> play(String id) => run<PlayerState, Track>(
+  Job<Track> play(String id) => enqueue<PlayerState, Track>(
         // Any object is a key. This one keys the operation, not a track.
         key: _Op.play,
         // A new play cancels the one running under the same key.

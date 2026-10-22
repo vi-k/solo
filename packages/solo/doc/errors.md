@@ -2,7 +2,7 @@
 
 A job that fails ends `Failed`. Three parts of the code deal with its error:
 
-- `run(ifFailed: ...)` turns the failure into the state the screen shows;
+- `enqueue(ifFailed: ...)` turns the failure into the state the screen shows;
 - `onError`, a hook of the controller, hears the error, to report it;
 - whoever observes the outcome answers for the error.
 
@@ -340,7 +340,7 @@ the failure. On a cancelled job the catch only lets the cancellation out.
 
 Once a job has accepted a cancellation, its outcome stays `Cancelled` even if
 the body catches it. For a final failure state, use the `ifFailed` parameter of
-`run` rather than a broad catch.
+`enqueue` rather than a broad catch.
 
 ## Retrying a failed call
 
@@ -480,8 +480,8 @@ A throw reads like a refusal, and it is a failure. This is what happens:
 1. The error goes to `onError`: a crash report for an ordinary "not now".
 2. The job ends `Failed`, and `onUnanswered` answers for that outcome unless
    somebody observes it.
-3. The state handler passed as `ifFailed` to that same `run` is not called. A
-   state handler computes the state after a job that ran, and this one never
+3. The state handler passed as `ifFailed` to that same `enqueue` is not called.
+   A state handler computes the state after a job that ran, and this one never
    started.
 4. The queue goes on to the next job.
 

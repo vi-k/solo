@@ -16,6 +16,8 @@ below.
 | `controller.state` | `controller.currentState` |
 | `onError:` of `run` and `job` | `ifFailed:` |
 | `onCancel:` of `run` and `job` | `ifCancelled:` |
+| `run(body)` | `enqueue(body)` |
+| `add(job)` | `enqueueJob(job)` |
 | `onChange(previous, current)` | `onChange(transition)` |
 | `SoloObserver.onChange(solo, previous, current)` | `SoloObserver.onChange(solo, transition)` |
 | `SoloQueue.lastWhere` | `Solo.lastJobWhere` |
@@ -36,20 +38,26 @@ below.
 - **`JobBase.debug` is `Job.debug`** in `async_job`, which no longer exports
   `JobBase` from its main library.
 - **A job is continued once, by one `then` or by handles of `shared()`,** in
-  `async_job`: a second `then` on a job of `run` throws a `StateError`. A job
-  `Policy.droppable` may hand to another caller, and the job of an accumulator
-  group, refuse a plain `then` from the first call: every caller continues it
-  through a handle of `shared()`. See
+  `async_job`: a second `then` on a job of `enqueue` throws a `StateError`. A
+  job `Policy.droppable` may hand to another caller, and the job of an
+  accumulator group, refuse a plain `then` from the first call: every caller
+  continues it through a handle of `shared()`. See
   [Queue and policies](doc/jobs.md#queue-and-policies) and
   [Start, cancellation and errors](doc/accumulation.md#start-cancellation-and-errors).
-- **The state handlers of `run` and `job` are renamed: `onError` to `ifFailed`,
-  `onCancel` to `ifCancelled`.**
+- **The state handlers of `enqueue` and `job` are renamed: `onError` to
+  `ifFailed`, `onCancel` to `ifCancelled`.**
 - **`SoloBase` is renamed to `Solo`, and the former `Solo` — the class that
   carried the broadcast stream — becomes the mixin `SoloStream`.** A controller
   whose `.stream` is read adds `with SoloStream`. See
   [Observing state](doc/state.md#observing-state).
-- **`job`, `add`, `run`, `collect` and `accumulate` are `@protected`.** Give
-  the controller a method for each operation called from outside. See
+- **`Solo.run` is renamed to `enqueue`, and `Solo.add` to `enqueueJob`.** `run`
+  of the controller put a job at the tail of the queue, while `ctx.run` starts
+  a child at once, past the queue; `add` shared its name with the `add` of an
+  accumulator, which takes an event. See
+  [Creating and scheduling jobs](doc/jobs.md#creating-and-scheduling-jobs).
+- **`job`, `enqueueJob`, `enqueue`, `collect` and `accumulate` are
+  `@protected`.** Give the controller a method for each operation called from
+  outside. See
   [Creating and scheduling jobs](doc/jobs.md#creating-and-scheduling-jobs).
 - **`SoloStream.publish` is `@protected`.**
 - **The hooks `onStart`, `onFinish`, `onError`, `onUnanswered`, `onLog`,
@@ -98,9 +106,9 @@ below.
   looks at the running one as well.
 - **`cancelAll` and `SoloQueue.remove`, `removeWhere` and `clear` take a
   `reason`.**
-- **`job`, `run`, `collect` and `accumulate` take `timeout`.** An override
-  passes it on to `super`, or `run(timeout: ...)` loses its deadline without a
-  word.
+- **`job`, `enqueue`, `collect` and `accumulate` take `timeout`.** An override
+  passes it on to `super`, or `enqueue(timeout: ...)` loses its deadline
+  without a word.
 - **`collect` and `accumulate` take `ifFailed` and `ifCancelled`.** An override
   passes them on to `super`, or the groups of its accumulators lose their state
   handlers without a word.
@@ -176,7 +184,7 @@ write it made itself, where `0.2.0` published that state again as a change.
   away ends `Cancelled(rules)`, and `start` returns as usual; a `canStart` that
   throws throws from `start`. A failure of the child goes to `onUnanswered`.
 - **`timeout` gives a job of the controller a deadline of its own.** `job`,
-  `run`, `collect` and `accumulate` take it; when it runs out, the job ends
+  `enqueue`, `collect` and `accumulate` take it; when it runs out, the job ends
   `Cancelled(timeout)` with the new `TimeoutCancelReason` of `async_job`. See
   [A deadline of a job](doc/cancellation.md#a-deadline-of-a-job).
 - **`collect` and `accumulate` take the state handlers of `job`, `ifFailed` and
@@ -256,9 +264,9 @@ write it made itself, where `0.2.0` published that state again as a change.
   section went to `flutter_solo`.
 - Two pages to look things up: [Reference](doc/reference.md), every member of
   `Solo`, its context, jobs, queue and accumulators and every parameter of
-  `run`, `job`, `collect` and `accumulate` with the section that explains it,
-  and [Common mistakes](doc/mistakes.md), seven mistakes and the right way for
-  each.
+  `enqueue`, `job`, `collect` and `accumulate` with the section that explains
+  it, and [Common mistakes](doc/mistakes.md), seven mistakes and the right way
+  for each.
 - One recommendation of `0.2.0` is replaced: a source of external states is
   stopped in `onClose`, not before `close`, and a callback that can still
   arrive after that guards its write with `isFinished`.

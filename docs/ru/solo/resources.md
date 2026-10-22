@@ -49,7 +49,7 @@
 
 ```dart
 // Первая попытка: отмена влезает между открытием и onDispose.
-Job<void> load() => run<Idle, void>(
+Job<void> load() => enqueue<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(Database.open);
@@ -77,7 +77,7 @@ Job<void> load() => run<Idle, void>(
 ### Освобождение едет на вызове
 
 ```dart
-Job<void> load() => run<Idle, void>(
+Job<void> load() => enqueue<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(
@@ -141,7 +141,7 @@ final sub = await ctx.join(
 
 ```dart
 // Первая попытка: при успехе база закрывается раньше, чем её отдают.
-Job<Database> open() => run<Idle, Database>(
+Job<Database> open() => enqueue<Idle, Database>(
       key: 'open',
       (ctx) async {
         final db = await ctx.join(
@@ -168,7 +168,7 @@ Job<Database> open() => run<Idle, Database>(
 ### `discard` для значения, которое уходит
 
 ```dart
-Job<Database> open() => run<Idle, Database>(
+Job<Database> open() => enqueue<Idle, Database>(
       key: 'open',
       (ctx) async {
         final db = await ctx.join(
@@ -363,8 +363,9 @@ await ctx.join(openTemp, dispose: (file) => file.delete());
 страницы об уборке пакета `async_job`. Контроллер добавляет последнюю строку:
 
 1. Сначала фиксируется исход.
-2. Затем обработчик состояния, переданный в `run`, вычисляет состояние, которое
-   оставляет после себя упавшая или отменённая `Job`, как описано в разделе
+2. Затем обработчик состояния, переданный в `enqueue`, вычисляет состояние,
+   которое оставляет после себя упавшая или отменённая `Job`, как описано
+   в разделе
    [«Состояние после ошибки или отмены»](state.md#состояние-после-ошибки-или-отмены)
    страницы о состоянии.
 3. Затем очередь запускает следующую `Job`.

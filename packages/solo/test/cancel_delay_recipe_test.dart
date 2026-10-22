@@ -58,7 +58,7 @@ void main() {
     runSolo((solo, journal, async) {
       Solo.observer = observer;
       // No checkpoint: nothing here notices the cancellation.
-      solo.run<TestState, void>(key: 'bare', (ctx) async => delay(300));
+      solo.enqueue<TestState, void>(key: 'bare', (ctx) async => delay(300));
       async.elapse(const Duration(milliseconds: 10));
       solo.cancelAll();
       async.flushTimers();
@@ -72,7 +72,7 @@ void main() {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {
       Solo.observer = observer;
-      solo.run<TestState, void>(key: 'guarded', (ctx) => pause(ctx, 300));
+      solo.enqueue<TestState, void>(key: 'guarded', (ctx) => pause(ctx, 300));
       async.elapse(const Duration(milliseconds: 10));
       solo.cancelAll();
       async.flushTimers();
@@ -87,7 +87,7 @@ void main() {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {
       Solo.observer = observer;
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'paused',
         (ctx) => ctx.pause(const Duration(milliseconds: 300)),
       );
@@ -106,7 +106,7 @@ void main() {
     var asked = 0;
     final log = <String>[];
     runSolo((solo, journal, async) {
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         keepWhile: (state) {
           asked++;
           return allowed;
@@ -131,8 +131,8 @@ void main() {
     runSolo((solo, journal, async) {
       Solo.observer = observer;
       solo
-        ..run<TestState, void>(key: 'running', (ctx) => pause(ctx, 100))
-        ..run<TestState, void>(key: 'queued', (ctx) => pause(ctx, 100));
+        ..enqueue<TestState, void>(key: 'running', (ctx) => pause(ctx, 100))
+        ..enqueue<TestState, void>(key: 'queued', (ctx) => pause(ctx, 100));
       async.flushMicrotasks();
       // Drops the queued job before it starts and cancels the running one.
       solo.cancelAll();
@@ -148,7 +148,7 @@ void main() {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {
       Solo.observer = observer;
-      solo.run<TestState, void>(key: 'held', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'held', (ctx) async {
         await ctx.uncancellable(() => delay(100));
         await delay(50);
       });
@@ -168,7 +168,7 @@ void main() {
     runSolo((solo, journal, async) {
       Solo.observer = observer;
       final job =
-          solo.run<TestState, void>(key: 'bare', (ctx) async => delay(300));
+          solo.enqueue<TestState, void>(key: 'bare', (ctx) async => delay(300));
       async.elapse(const Duration(milliseconds: 10));
       final calledAt = clock.now();
       job.cancel().then((_) => waited = clock.now().difference(calledAt));
@@ -187,7 +187,7 @@ void main() {
       Duration? waited;
       runSolo((solo, journal, async) {
         Solo.observer = observer;
-        final job = solo.run<TestState, void>(
+        final job = solo.enqueue<TestState, void>(
           key: 'section',
           (ctx) => ctx.uncancellable(() => delay(100)),
         );

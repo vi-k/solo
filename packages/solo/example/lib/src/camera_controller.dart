@@ -69,7 +69,7 @@ final class CameraController extends Solo<CameraState> {
   /// well, so the working type lets it by. `keepWhile` does not: the report
   /// cancels the opening, and a job its rules cancelled leaves the reported
   /// [Broken] alone.
-  Job<void> init() => run<NotDisposed, void>(
+  Job<void> init() => enqueue<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
@@ -96,7 +96,7 @@ final class CameraController extends Solo<CameraState> {
   /// the job's own and asks none of its rules.
   Job<void> reopen() {
     var opening = false;
-    return run<NotDisposed, void>(
+    return enqueue<NotDisposed, void>(
       key: CameraKey.reopen,
       policy: Policy.droppable,
       canStart: (state) => state is Ready || state is Broken,
@@ -127,7 +127,7 @@ final class CameraController extends Solo<CameraState> {
       );
 
   /// Pauses the preview; a paused camera takes no commands.
-  Job<void> pause() => run<Ready, void>(
+  Job<void> pause() => enqueue<Ready, void>(
         key: CameraKey.pause,
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
@@ -135,7 +135,7 @@ final class CameraController extends Solo<CameraState> {
       );
 
   /// Resumes the preview.
-  Job<void> resume() => run<Ready, void>(
+  Job<void> resume() => enqueue<Ready, void>(
         key: CameraKey.resume,
         policy: Policy.droppable,
         canStart: (state) => state.paused,
@@ -143,7 +143,7 @@ final class CameraController extends Solo<CameraState> {
       );
 
   /// Only the last requested zoom matters: `replace` drops queued ones.
-  Job<void> setZoom(double zoom) => run<Ready, void>(
+  Job<void> setZoom(double zoom) => enqueue<Ready, void>(
         key: CameraKey.setZoom,
         policy: Policy.replace,
         describe: () => 'zoom: $zoom',
@@ -160,7 +160,7 @@ final class CameraController extends Solo<CameraState> {
     queue.removeWhere(
       (job) => job.key is CameraKey && (job.key! as CameraKey).touchesFocus,
     );
-    return run<Ready, void>(
+    return enqueue<Ready, void>(
       key: CameraKey.setFocusPoint,
       describe: () => '$point',
       canStart: (state) => !state.paused,
@@ -176,7 +176,7 @@ final class CameraController extends Solo<CameraState> {
     queue.removeWhere(
       (job) => job.key is CameraKey && (job.key! as CameraKey).touchesFocus,
     );
-    return run<Ready, void>(
+    return enqueue<Ready, void>(
       key: CameraKey.resetFocusPoint,
       canStart: (state) => !state.paused,
       (ctx) async {
@@ -187,7 +187,7 @@ final class CameraController extends Solo<CameraState> {
   }
 
   /// One shot at a time; requests queued during the shot are dropped.
-  Job<Photo> takePhoto() => run<Ready, Photo>(
+  Job<Photo> takePhoto() => enqueue<Ready, Photo>(
         key: CameraKey.takePhoto,
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
@@ -214,7 +214,7 @@ final class CameraController extends Solo<CameraState> {
     // while this one did the disposing.
     queue.clear();
     current?.cancel();
-    return run<CameraState, void>(
+    return enqueue<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
       cancellable: false,

@@ -18,7 +18,7 @@ final class NarrowInit extends Solo<CameraState> with CameraParts {
   NarrowInit(this.hw) : super(const Initial());
 
   @override
-  Job<void> init() => run<Initial, void>(
+  Job<void> init() => enqueue<Initial, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         (ctx) async {
@@ -39,7 +39,7 @@ final class CatchingInit extends Solo<CameraState> with CameraParts {
   CatchingInit(this.hw) : super(const Initial());
 
   @override
-  Job<void> init() => run<NotDisposed, void>(
+  Job<void> init() => enqueue<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
@@ -69,7 +69,7 @@ final class UncheckedOpening extends Solo<CameraState> with CameraParts {
   }
 
   @override
-  Job<void> init() => run<NotDisposed, void>(
+  Job<void> init() => enqueue<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
@@ -83,7 +83,7 @@ final class UncheckedOpening extends Solo<CameraState> with CameraParts {
       );
 
   @override
-  Job<void> reopen() => run<NotDisposed, void>(
+  Job<void> reopen() => enqueue<NotDisposed, void>(
         key: CameraKey.reopen,
         policy: Policy.droppable,
         canStart: (state) => state is Ready || state is Broken,
@@ -117,7 +117,7 @@ final class QueuedZoom extends Solo<CameraState> with CameraParts {
   QueuedZoom(this.hw) : super(const Initial());
 
   @override
-  Job<void> setZoom(double zoom) => run<Ready, void>(
+  Job<void> setZoom(double zoom) => enqueue<Ready, void>(
         key: CameraKey.setZoom,
         describe: () => 'zoom: $zoom',
         (ctx) async {
@@ -135,7 +135,7 @@ base class QueuedDisposal extends Solo<CameraState> with CameraParts {
 
   QueuedDisposal(this.hw) : super(const Initial());
 
-  Job<void> dispose() => run<CameraState, void>(
+  Job<void> dispose() => enqueue<CameraState, void>(
         key: CameraKey.dispose,
         policy: Policy.droppable,
         cancellable: false,
@@ -164,7 +164,7 @@ final class ClearingDisposal extends QueuedDisposal {
   Job<void> dispose() {
     queue.clear();
     current?.cancel();
-    return run<CameraState, void>(
+    return enqueue<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
       cancellable: false,

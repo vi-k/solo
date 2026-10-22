@@ -143,7 +143,7 @@ SoloJob<void> _take(
   FutureOr<void> Function(Database db)? dispose,
   FutureOr<void> Function(Database db)? discard,
 }) =>
-    bench.run<Idle, void>(key: 'take', (ctx) async {
+    bench.enqueue<Idle, void>(key: 'take', (ctx) async {
       switch (call) {
         case 'ctx.abandonable':
           await ctx.abandonable(
@@ -162,7 +162,7 @@ SoloJob<void> _take(
 /// A job that registers the release of a database through `ctx.onDispose` or
 /// `ctx.onDiscard`, and then waits out a step named `step`.
 SoloJob<void> _register(Bench bench, String member) =>
-    bench.run<Idle, void>(key: 'register', (ctx) async {
+    bench.enqueue<Idle, void>(key: 'register', (ctx) async {
       final db = await Database.open();
       if (member == 'ctx.onDispose') {
         ctx.onDispose(db.close);
@@ -389,7 +389,7 @@ void main() {
         fakeAsync((async) {
           final found = <bool>[];
           final bench = Bench();
-          final job = bench.run<Idle, void>((ctx) async {
+          final job = bench.enqueue<Idle, void>((ctx) async {
             FutureOr<void> close(Database db) => db.close();
             final db = switch (call) {
               'ctx.abandonable' =>
@@ -619,7 +619,7 @@ void main() {
     test('a release registered twice closes the same database twice', () {
       _says('would close the same database twice');
       fakeAsync((async) {
-        final job = Bench().run<Idle, void>(
+        final job = Bench().enqueue<Idle, void>(
           key: 'load',
           (ctx) async {
             final db = await ctx.join(
@@ -661,7 +661,7 @@ void main() {
     test('the function onDispose returned unregisters without running', () {
       _says('to unregister the callback without running it');
       fakeAsync((async) {
-        final job = Bench().run<Idle, void>((ctx) async {
+        final job = Bench().enqueue<Idle, void>((ctx) async {
           final removeDisposer = ctx.onDispose(
             () => stage.trace.add('the release it unregistered'),
           );
@@ -678,7 +678,7 @@ void main() {
     group('under a cancellation an uncancellable section let through', () {
       /// The pair of the opening block, after a step a cancellation waits
       /// out.
-      SoloJob<void> pair(Bench bench) => bench.run<Idle, void>((ctx) async {
+      SoloJob<void> pair(Bench bench) => bench.enqueue<Idle, void>((ctx) async {
             await ctx.uncancellable(() => stage.start<void>('step', null));
             final sub = device.events.listen(onEvent);
             ctx.onDispose(sub.cancel);
@@ -742,7 +742,7 @@ void main() {
         'abandonable takes an action that returns without waiting just as well',
         () {
       fakeAsync((async) {
-        final job = Bench().run<Idle, void>((ctx) async {
+        final job = Bench().enqueue<Idle, void>((ctx) async {
           await ctx.abandonable(
             () => device.events.listen(onEvent),
             dispose: (sub) => sub.cancel(),
@@ -906,7 +906,7 @@ void main() {
         fakeAsync((async) {
           Object? thrown;
           final bench = Bench();
-          final job = bench.run<Idle, void>((ctx) async {
+          final job = bench.enqueue<Idle, void>((ctx) async {
             FutureOr<void> close(Database db) => db.close();
             try {
               switch (call) {
@@ -941,7 +941,7 @@ void main() {
     group('a parent that takes the database from a child', () {
       /// The registration on the line under `ctx.run`.
       SoloJob<void> under(Bench bench, SoloJob<Database> child) =>
-          bench.run<Idle, void>(key: 'take', (ctx) async {
+          bench.enqueue<Idle, void>(key: 'take', (ctx) async {
             final db = await ctx.run(child);
             ctx.onDiscard(db.close);
             await ctx.join(() => stage.start<void>('step', null));
@@ -949,7 +949,7 @@ void main() {
 
       /// The registration on the call.
       SoloJob<void> onTheCall(Bench bench, SoloJob<Database> child) =>
-          bench.run<Idle, void>(key: 'take', (ctx) async {
+          bench.enqueue<Idle, void>(key: 'take', (ctx) async {
             await ctx.run(child, discard: (db) => db.close());
             await ctx.join(() => stage.start<void>('step', null));
           });
@@ -993,7 +993,7 @@ void main() {
         fakeAsync((async) {
           var holds = true;
           final bench = Bench();
-          final job = bench.run<Idle, void>(
+          final job = bench.enqueue<Idle, void>(
             key: 'take',
             keepWhile: (state) => holds,
             (ctx) async {
@@ -1202,7 +1202,7 @@ void main() {
               unawaited(job.cancel());
             }
           });
-          job = bench.run<Idle, void>((ctx) async {
+          job = bench.enqueue<Idle, void>((ctx) async {
             final db = await ctx.join(
               Database.open,
               dispose: (db) => db.close(),
@@ -1230,7 +1230,7 @@ void main() {
         fakeAsync((async) {
           bool? found;
           final bench = Bench();
-          final job = bench.run<Idle, void>((ctx) async {
+          final job = bench.enqueue<Idle, void>((ctx) async {
             final db = await Database.open();
             ctx
               ..onDispose(db.close)
@@ -1251,7 +1251,7 @@ void main() {
       test('is dropped by the function onDispose returned', () {
         fakeAsync((async) {
           final bench = Bench();
-          final job = bench.run<Idle, void>((ctx) async {
+          final job = bench.enqueue<Idle, void>((ctx) async {
             final db = await Database.open();
             final removeDisposer = ctx.onDispose(db.close);
             ctx.check();
@@ -1302,7 +1302,7 @@ void main() {
           _end(async, 'migrate');
 
           // What `dispose()` of such a controller would queue.
-          final dispose = handover.run<Ready, void>((ctx) async {
+          final dispose = handover.enqueue<Ready, void>((ctx) async {
             await ctx.join(ctx.state.db.close);
             ctx.emit(const Idle());
           });
@@ -1386,7 +1386,8 @@ void main() {
       });
 
       group('written without the section', () {
-        SoloJob<void> split(Bench bench) => bench.run<Idle, void>((ctx) async {
+        SoloJob<void> split(Bench bench) =>
+            bench.enqueue<Idle, void>((ctx) async {
               final file = await ctx.join(
                 openTemp,
                 dispose: (file) => file.delete(),
@@ -1625,7 +1626,7 @@ void main() {
 
     /// A job with a child that outlives its body, two disposers and a
     /// discard registered last.
-    SoloJob<Database> steps(Bench bench) => bench.run<Idle, Database>(
+    SoloJob<Database> steps(Bench bench) => bench.enqueue<Idle, Database>(
           key: 'steps',
           ifCancelled: (state, cancelled) {
             stage.trace.add('state handler');
@@ -1726,7 +1727,7 @@ void main() {
           Outcome<void>? seen;
           final bench = Bench();
           late final SoloJob<void> job;
-          job = bench.run<Idle, void>(
+          job = bench.enqueue<Idle, void>(
             ifFailed: (state, error, stackTrace) {
               seen = job.outcome;
               stage.trace.add('state handler');
@@ -1756,7 +1757,7 @@ void main() {
         _says('Code that awaits `done` or `value` resumes after that start');
         fakeAsync((async) {
           final bench = Bench();
-          final job = bench.run<Idle, int>((ctx) async => 1);
+          final job = bench.enqueue<Idle, int>((ctx) async => 1);
           bench.next();
           Future<void> awaitValue() async {
             await job.value;
@@ -1786,7 +1787,7 @@ void main() {
     group('try/finally', () {
       /// A lock held for one step, released before the body goes on.
       SoloJob<void> stepUnderLock(Bench bench) =>
-          bench.run<Idle, void>((ctx) async {
+          bench.enqueue<Idle, void>((ctx) async {
             ctx.onDispose(() async => stage.trace.add('registered cleanup'));
             stage.trace.add('lock taken');
             try {
@@ -1840,7 +1841,7 @@ void main() {
       /// One temporary per turn of a loop, released by `finally` or
       /// registered.
       SoloJob<void> turns(Bench bench, {required bool registered}) =>
-          bench.run<Idle, void>((ctx) async {
+          bench.enqueue<Idle, void>((ctx) async {
             for (var turn = 1; turn <= 3; turn++) {
               if (registered) {
                 ctx.onDispose(() async => stage.trace.add('$turn released'));
@@ -1911,7 +1912,7 @@ void main() {
         );
         fakeAsync((async) {
           final bench = Bench();
-          final job = bench.run<Idle, void>((ctx) async {
+          final job = bench.enqueue<Idle, void>((ctx) async {
             ctx.onDispose(() async => stage.trace.add('registered release'));
             try {
               final child = bench.job<Idle, void>(
@@ -1939,7 +1940,7 @@ void main() {
 
     group('an error thrown by cleanup', () {
       SoloJob<void> cleanupThrows(Bench bench, Object error) =>
-          bench.run<Idle, void>((ctx) async {
+          bench.enqueue<Idle, void>((ctx) async {
             // ignore: only_throw_errors
             ctx.onDispose(() async => throw error);
           });
@@ -2030,7 +2031,7 @@ void main() {
       ) {
         late final SoloJob<void> self;
 
-        return self = bench.run<Idle, void>(
+        return self = bench.enqueue<Idle, void>(
           key: 'stuck',
           (ctx) async {
             ctx.onDispose(() async {

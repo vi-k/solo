@@ -30,9 +30,9 @@
 доходит до сервера или устройства и каким остаётся состояние контроллера.
 
 У `collect` и `accumulate` три аргумента типа, `<W, E, T>`: рабочий тип `W`,
-как у `run`, тип события `E` и тип результата `T`, а возвращают обе накопитель,
-`SoloAccumulator<E, T>`. Создайте его один раз в контроллере, затем вызывайте
-`add(event)` из публичных методов контроллера.
+как у `enqueue`, тип события `E` и тип результата `T`, а возвращают обе
+накопитель, `SoloAccumulator<E, T>`. Создайте его один раз в контроллере, затем
+вызывайте `add(event)` из публичных методов контроллера.
 
 Накопитель владеет входными данными ожидающей задачи. Добавление события
 не запускает обработчик и не меняет состояние контроллера. События, которые
@@ -65,7 +65,8 @@ abstract interface class SearchApi {
 
 #### Первая попытка
 
-Словарь контроллера говорит `run`, значит, на каждое нажатие заводится задача:
+Словарь контроллера говорит `enqueue`, значит, на каждое нажатие заводится
+задача:
 
 ```dart
 // Первая попытка: каждое нажатие ждёт предыдущего.
@@ -74,7 +75,7 @@ final class QueuedSearch extends Solo<SearchState> {
 
   QueuedSearch(this.api) : super(const SearchState.idle());
 
-  Job<void> query(String text) => run<SearchState, void>(
+  Job<void> query(String text) => enqueue<SearchState, void>(
         key: 'query',
         (ctx) async {
           final results = await ctx.abandonable(() => api.search(text));
@@ -108,7 +109,7 @@ at 400 ms the screen shows [hits for solo]
 
 ```dart
 // Вторая попытка: к серверу всё равно четыре запроса.
-Job<void> query(String text) => run<SearchState, void>(
+Job<void> query(String text) => enqueue<SearchState, void>(
       key: 'query',
       policy: Policy.restart,
       (ctx) async {
@@ -237,7 +238,7 @@ final class EagerSettingsController extends Solo<Settings> {
 
   EagerSettingsController(this._api, Settings initial) : super(initial);
 
-  Job<void> update(SettingsPatch patch) => run<Settings, void>(
+  Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
         key: 'settings',
         (ctx) async {
           final next = patch.apply(ctx.state);
@@ -271,7 +272,7 @@ the screen ends up with notifications: true, theme: dark, language: ru
 
 ```dart
 // Вторая попытка: перезапуск затирает изменение, которое заменил.
-Job<void> update(SettingsPatch patch) => run<Settings, void>(
+Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
       key: 'settings',
       policy: Policy.restart,
       (ctx) async {
@@ -318,7 +319,7 @@ final class SettingsController extends Solo<Settings> {
 
   Job<void> update(SettingsPatch patch) => _updates.add(patch);
 
-  Job<void> reload() => run<Settings, void>(
+  Job<void> reload() => enqueue<Settings, void>(
         key: 'reload',
         (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
@@ -429,7 +430,7 @@ final class EagerLogController extends Solo<int> {
 
   EagerLogController(this._api) : super(0);
 
-  Job<void> logEvent(LogEntry entry) => run<int, void>(
+  Job<void> logEvent(LogEntry entry) => enqueue<int, void>(
         key: 'logs',
         (ctx) async {
           await ctx.join(() => _api.send([entry]));
@@ -568,7 +569,7 @@ final class QueuedPlayer extends Solo<Playback> {
 
   QueuedPlayer(this.device) : super(const Paused());
 
-  Job<void> resume() => run<Playback, void>(
+  Job<void> resume() => enqueue<Playback, void>(
         key: Command.resume,
         (ctx) async {
           await ctx.join(device.resume);
@@ -576,7 +577,7 @@ final class QueuedPlayer extends Solo<Playback> {
         },
       );
 
-  Job<void> pause() => run<Playback, void>(
+  Job<void> pause() => enqueue<Playback, void>(
         key: Command.pause,
         (ctx) async {
           await ctx.join(device.pause);
@@ -678,7 +679,7 @@ Job<void> resume() {
     (job) => job.key == Command.resume || job.key == Command.pause,
   );
 
-  return run<Playback, void>(key: Command.resume, (ctx) async {
+  return enqueue<Playback, void>(key: Command.resume, (ctx) async {
     await ctx.join(device.resume);
     ctx.emit(const Playing());
   });

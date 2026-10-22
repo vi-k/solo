@@ -63,7 +63,7 @@ final class _Unhandled extends Solo<quick.ProfileState> {
 
   _Unhandled(this.api) : super(const quick.Initial());
 
-  Job<String> load() => run<quick.ProfileState, String>(
+  Job<String> load() => enqueue<quick.ProfileState, String>(
         (ctx) async {
           ctx.emit(const quick.Loading());
           final name = await ctx.abandonable(api.fetchName);
@@ -80,7 +80,7 @@ final class _Ordered extends Solo<int> {
 
   _Ordered() : super(0);
 
-  Job<void> first() => run<int, void>(
+  Job<void> first() => enqueue<int, void>(
         ifFailed: (state, error, stackTrace) {
           trace.add('state handler');
           return state;
@@ -99,7 +99,8 @@ final class _Ordered extends Solo<int> {
         },
       );
 
-  Job<void> second() => run<int, void>((ctx) async => trace.add('next job'));
+  Job<void> second() =>
+      enqueue<int, void>((ctx) async => trace.add('next job'));
 }
 
 /// Two jobs with the rule of `play`: in one the body publishes the state the
@@ -107,7 +108,7 @@ final class _Ordered extends Solo<int> {
 final class _OwnRule extends Solo<stubs.PlayerState> {
   _OwnRule() : super(const stubs.Idle());
 
-  Job<String> body() => run<stubs.PlayerState, String>(
+  Job<String> body() => enqueue<stubs.PlayerState, String>(
         keepWhile: (state) => state is! stubs.Disconnected,
         (ctx) async {
           ctx.emit(const stubs.Disconnected());
@@ -115,7 +116,7 @@ final class _OwnRule extends Solo<stubs.PlayerState> {
         },
       );
 
-  Job<String> child() => run<stubs.PlayerState, String>(
+  Job<String> child() => enqueue<stubs.PlayerState, String>(
         keepWhile: (state) => state is! stubs.Disconnected,
         (ctx) async {
           await ctx.each(Stream.value(1), (childCtx, _) {
@@ -326,7 +327,7 @@ void main() {
       expect(
         _page().replaceAll(RegExp(r'\s+'), ' '),
         allOf(
-          contains('Two optional parameters of `run`'),
+          contains('Two optional parameters of `enqueue`'),
           contains('Without a handler, the state stays where the body left it: '
               'an error or a cancellation here would leave `Loading`.'),
         ),

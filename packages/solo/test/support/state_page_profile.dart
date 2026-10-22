@@ -1,8 +1,8 @@
 // The code of `doc/state.md` about the profile, verbatim, less the first
 // attempts: the handlers and the load with its rule. Every piece of those
-// blocks is a run of lines of this file, and `state_rakes_test.dart` runs
-// it. The page shows the handlers as a bare call of `run`; here the call
-// stands in a method.
+// blocks is a run of lines of this file, and `state_rakes_test.dart` runs it.
+// The page shows the handlers as a bare call of `enqueue`; here the call stands
+// in a method.
 import 'package:solo/solo.dart';
 
 import 'state_profile_stubs.dart';
@@ -16,7 +16,7 @@ final class ProfileController extends Solo<ProfileState> {
   void reflect(ProfileState state) => externalSetState(state);
 
   /// The block under "The handlers".
-  Job<String> loadWithHandlers() => run<ProfileState, String>(
+  Job<String> loadWithHandlers() => enqueue<ProfileState, String>(
         // Both compute a state and nothing else. They run after the body,
         // children and cleanup, and the outcome is already fixed.
         ifFailed: (state, error, stackTrace) => Failure(error),
@@ -31,7 +31,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   /// The block under "The rules" of "Preserving an incompatible external
   /// state".
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         keepWhile: (state) => state is! Disconnected,
@@ -47,7 +47,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   /// The block under "Handler eligibility and errors": a reload that a
   /// newer one replaces.
-  Job<String> reload() => run<ProfileState, String>(
+  Job<String> reload() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.restart,
         ifFailed: (state, error, stackTrace) => Failure(error),
@@ -64,7 +64,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   /// Not on the page: the same reload with a handler that does not ask the
   /// reason.
-  Job<String> reloadAskingNothing() => run<ProfileState, String>(
+  Job<String> reloadAskingNothing() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.restart,
         ifFailed: (state, error, stackTrace) => Failure(error),

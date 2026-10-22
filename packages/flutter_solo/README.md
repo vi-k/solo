@@ -109,7 +109,7 @@ final class ProfileController extends Solo<Profile> {
 
   ProfileController(this.api) : super(Empty());
 
-  Job<String> load() => run<Profile, String>(
+  Job<String> load() => enqueue<Profile, String>(
         key: 'load',
         policy: Policy.droppable, // a second tap returns the first job
         (ctx) async {
@@ -125,7 +125,7 @@ final class ProfileController extends Solo<Profile> {
         ifCancelled: (state, cancelled) => Empty(),
       );
 
-  Job<void> save() => run<Loaded, void>(
+  Job<void> save() => enqueue<Loaded, void>(
         key: 'save',
         (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
       );
@@ -151,8 +151,8 @@ class ProfileView extends StatelessWidget {
 }
 ```
 
-`run<Profile, String>` says the job works with `Profile` states and returns a
-`String`. `save` narrows that to `Loaded`: it does not start in any other
+`enqueue<Profile, String>` says the job works with `Profile` states and returns
+a `String`. `save` narrows that to `Loaded`: it does not start in any other
 state, it ends `Cancelled` there, and its body reads a `Loaded` with a `name`
 in it. Inside a body:
 

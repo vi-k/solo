@@ -63,7 +63,7 @@ final class NotesController extends Solo<NotesState> {
 
   NotesController(this._api) : super(const NotesState());
 
-  Job<void> upload(Note note) => run<NotesState, void>(
+  Job<void> upload(Note note) => enqueue<NotesState, void>(
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
@@ -77,7 +77,7 @@ final class NotesController extends Solo<NotesState> {
         },
       );
 
-  Job<void> refresh() => run<NotesState, void>(
+  Job<void> refresh() => enqueue<NotesState, void>(
         key: 'refresh',
         (ctx) async {
           final serverNotes = await ctx.abandonable(_api.list);
@@ -114,7 +114,7 @@ final class AbandoningNotesController extends Solo<NotesState> {
 
   final Api _api;
 
-  Job<void> upload(Note note) => run<NotesState, void>(
+  Job<void> upload(Note note) => enqueue<NotesState, void>(
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
@@ -128,7 +128,7 @@ final class AbandoningNotesController extends Solo<NotesState> {
         },
       );
 
-  Job<void> refresh() => run<NotesState, void>(
+  Job<void> refresh() => enqueue<NotesState, void>(
         key: 'refresh',
         (ctx) async {
           final serverNotes = await ctx.abandonable(_api.list);
@@ -148,7 +148,7 @@ final class PlainNotesController extends Solo<NotesState> {
   /// What each body went through, in order.
   final met = <String>[];
 
-  Job<void> upload(Note note) => run<NotesState, void>(
+  Job<void> upload(Note note) => enqueue<NotesState, void>(
         key: 'upload',
         (ctx) async {
           await _api.upload(note);
@@ -163,19 +163,19 @@ final class PlainNotesController extends Solo<NotesState> {
         },
       );
 
-  Job<void> mark(String name) => run<NotesState, void>(
+  Job<void> mark(String name) => enqueue<NotesState, void>(
         key: name,
         (ctx) async => met.add('$name started'),
       );
 
-  Job<void> detached() => run<NotesState, void>(
+  Job<void> detached() => enqueue<NotesState, void>(
         key: 'detached',
         (ctx) async {
           unawaited(tick(100).then((_) => met.add('detached work ended')));
         },
       );
 
-  Job<void> withChild() => run<NotesState, void>(
+  Job<void> withChild() => enqueue<NotesState, void>(
         key: 'withChild',
         (ctx) async {
           final child = job<NotesState, void>(

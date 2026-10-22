@@ -2,10 +2,11 @@ part of 'solo.dart';
 
 /// A job of a controller: [Job] plus the queue.
 ///
-/// Returned by [Solo.job], [Solo.add] and [Solo.run]. The queue belongs to the
-/// controller, so [isQueued] lives here and not on the handle every job has. It
-/// is a [ChildJob], so a body runs one as its child with `ctx.run`, and it has
-/// no `start` of its own: the queue or the parent starts it.
+/// Returned by [Solo.job], [Solo.enqueueJob] and [Solo.enqueue]. The queue
+/// belongs to the controller, so [isQueued] lives here and not on the handle
+/// every job has. It is a [ChildJob], so a body runs one as its child with
+/// `ctx.run`, and it has no `start` of its own: the queue or the parent starts
+/// it.
 abstract interface class SoloJob<T> implements ChildJob<T> {
   /// Whether the job waits in the controller's queue.
   bool get isQueued;
@@ -45,7 +46,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// `created` and not queued, and a hook running right then — the error
   /// hook of a rule that threw — would be handed a job that looks brand
   /// new.
-  var _added = false;
+  var _enqueued = false;
 
   _SoloJob(
     this._solo,
@@ -94,14 +95,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // again while the first adoption is asking that rule. The core lets a
     // `created` job in, and a second adoption would start it with nobody
     // waiting for it.
-    if (_added) {
-      throw StateError('$this has already been added or run');
+    if (_enqueued) {
+      throw StateError('$this has already been enqueued or run');
     }
-    // Adoption is the controller taking the handle, the same as `add`: from
-    // here nothing else may take it, and a rule of the child's own — asked
-    // a moment later, while the child is still `created` and in no list —
-    // must not be able to put it in the queue.
-    _added = true;
+    // Adoption is the controller taking the handle, the same as `enqueueJob`:
+    // from here nothing else may take it, and a rule of the child's own — asked
+    // a moment later, while the child is still `created` and in no list — must
+    // not be able to put it in the queue.
+    _enqueued = true;
     _parentJob = parent._job;
   }
 

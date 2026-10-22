@@ -880,7 +880,7 @@ Future<void> main() async {
   }
   await started.close();
 
-  // `run<Offline, void>` is what makes connect a connect. The rule is
+  // `enqueue<Offline, void>` is what makes connect a connect. The rule is
   // checked when the job starts and not when it is made, so a connect
   // queued behind a disconnect still runs.
   final second = DeviceController(Ble());
@@ -1926,7 +1926,7 @@ final class LateChatController extends Solo<ChatState> {
 
   final Api _api;
 
-  Job<void> send(String text) => run<ChatState, void>(
+  Job<void> send(String text) => enqueue<ChatState, void>(
         key: 'send',
         (ctx) async {
           unawaited(

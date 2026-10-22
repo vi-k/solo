@@ -15,7 +15,7 @@ mixin CameraParts on Solo<CameraState> {
   /// The hardware the controller drives.
   FakeCameraHardware get hw;
 
-  Job<void> init() => run<NotDisposed, void>(
+  Job<void> init() => enqueue<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
@@ -31,7 +31,7 @@ mixin CameraParts on Solo<CameraState> {
 
   Job<void> reopen() {
     var opening = false;
-    return run<NotDisposed, void>(
+    return enqueue<NotDisposed, void>(
       key: CameraKey.reopen,
       policy: Policy.droppable,
       canStart: (state) => state is Ready || state is Broken,
@@ -53,7 +53,7 @@ mixin CameraParts on Solo<CameraState> {
     );
   }
 
-  Job<void> setZoom(double zoom) => run<Ready, void>(
+  Job<void> setZoom(double zoom) => enqueue<Ready, void>(
         key: CameraKey.setZoom,
         policy: Policy.replace,
         describe: () => 'zoom: $zoom',
@@ -64,7 +64,7 @@ mixin CameraParts on Solo<CameraState> {
         },
       );
 
-  Job<Photo> takePhoto() => run<Ready, Photo>(
+  Job<Photo> takePhoto() => enqueue<Ready, Photo>(
         key: CameraKey.takePhoto,
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
@@ -91,7 +91,7 @@ final class WideInit extends Solo<CameraState> with CameraParts {
   WideInit(this.hw) : super(const Initial());
 
   @override
-  Job<void> init() => run<NotDisposed, void>(
+  Job<void> init() => enqueue<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
@@ -111,7 +111,7 @@ final class HandledInit extends Solo<CameraState> with CameraParts {
   HandledInit(this.hw) : super(const Initial());
 
   @override
-  Job<void> init() => run<NotDisposed, void>(
+  Job<void> init() => enqueue<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
@@ -130,7 +130,7 @@ mixin CheckedDisposal on CameraParts {
   Job<void> dispose() {
     queue.clear();
     current?.cancel();
-    return run<CameraState, void>(
+    return enqueue<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
       cancellable: false,

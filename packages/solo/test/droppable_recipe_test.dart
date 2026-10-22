@@ -8,9 +8,9 @@ import 'package:test/test.dart';
 import 'support/jobs_page.dart';
 import 'support/jobs_stubs.dart';
 
-/// The recipe of `doc/jobs.md` for a method that has to know whether its
-/// own job was taken: it assembles the job first and compares it with what
-/// `add` gives back.
+/// The recipe of `doc/jobs.md` for a method that has to know whether its own
+/// job was taken: it assembles the job first and compares it with what
+/// `enqueueJob` gives back.
 ///
 /// The code is the page's own, verbatim in `support/jobs_page.dart`. What
 /// the page says about it is pinned here, so a change to the policy cannot

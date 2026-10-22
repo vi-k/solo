@@ -10,16 +10,16 @@ import 'support/test_state.dart';
 void main() {
   test('a replacement cancelled by the old job never occupies its key', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>((ctx) => pause(ctx, 50));
+      solo.enqueue<TestState, void>((ctx) => pause(ctx, 50));
       async.flushMicrotasks();
-      final old = solo.run<TestState, void>(key: 'same', (ctx) async {});
+      final old = solo.enqueue<TestState, void>(key: 'same', (ctx) async {});
       final incoming = solo.job<TestState, void>(key: 'same', (ctx) async {});
       old.whenCancelled((_) => incoming.cancel().ignore());
-      solo.add(incoming, policy: Policy.replace);
+      solo.enqueueJob(incoming, policy: Policy.replace);
       expect(incoming.isFinished, isTrue);
       expect(incoming.isQueued, isFalse);
       var ran = false;
-      final retry = solo.run<TestState, void>(
+      final retry = solo.enqueue<TestState, void>(
         key: 'same',
         policy: Policy.droppable,
         (ctx) async => ran = true,
@@ -33,7 +33,7 @@ void main() {
   test('a listener receives the domain reason of a rule cancellation', () {
     runSolo((solo, journal, async) {
       final seen = <Cancelled>[];
-      final job = solo.run<NotDisposed, void>(
+      final job = solo.enqueue<NotDisposed, void>(
         (ctx) => ctx.abandonable(() => delay(50)),
       )..whenCancelled(seen.add);
       async.flushMicrotasks();
@@ -49,9 +49,9 @@ void main() {
   test('closing delivers the drop reason before close returns', () {
     runSolo((solo, journal, async) {
       final seen = <Cancelled>[];
-      solo.run<TestState, void>((ctx) => pause(ctx, 50));
+      solo.enqueue<TestState, void>((ctx) => pause(ctx, 50));
       async.flushMicrotasks();
-      final queued = solo.run<TestState, void>((ctx) async {})
+      final queued = solo.enqueue<TestState, void>((ctx) async {})
         ..whenCancelled(seen.add);
       solo.close().ignore();
       expect(seen.single.reason, isA<ClosedCancelReason>());

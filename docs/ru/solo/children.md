@@ -27,12 +27,12 @@ SoloJob<String> _sync(int item) => job<Ready, String>(
       },
     );
 
-Job<String> sync(int item) => add(_sync(item));
+Job<String> sync(int item) => enqueueJob(_sync(item));
 ```
 
-`job(...)` создаёт задачу и ничего не запускает. `add` даёт ей место в очереди,
-а `ctx.run` внутри тела делает её ребёнком; `_sync` написан один раз и дальше
-на этой странице идёт обоими путями.
+`job(...)` создаёт задачу и ничего не запускает. `enqueueJob` даёт ей место
+в очереди, а `ctx.run` внутри тела делает её ребёнком; `_sync` написан один раз
+и дальше на этой странице идёт обоими путями.
 
 Ребёнок запускается сразу, минуя очередь, с проверкой собственных стартовых
 правил: рабочего типа, `canStart` и `keepWhile`, тех самых, что описывает
@@ -67,7 +67,7 @@ future от `ctx.run`. Несколько детей бок о бок соста
 
 ```dart
 // Родитель сам отвечает за упавшую загрузку.
-Job<bool> trySync(int item) => run<Ready, bool>(
+Job<bool> trySync(int item) => enqueue<Ready, bool>(
       key: _Op.trySync,
       (ctx) async {
         try {
@@ -101,7 +101,7 @@ Job<bool> trySync(int item) => run<Ready, bool>(
 ## Работа рядом с ребёнком
 
 ```dart
-Job<String> syncAndAnnounce(int item) => run<Ready, String>(
+Job<String> syncAndAnnounce(int item) => enqueue<Ready, String>(
       key: _Op.syncAndAnnounce,
       (ctx) async {
         // Сохранена, но не ожидается: загрузка идёт, пока родитель работает.
@@ -136,10 +136,10 @@ Job<String> syncAndAnnounce(int item) => run<Ready, String>(
 
 `ctx.run(child).ignore()` явно игнорирует результат этой future, при этом
 родитель продолжает ждать детей. Одного `child.ignoreFailure()` недостаточно
-для обработки ошибок future, которую вернул `run`. `ctx.start(child)` запускает
-ребёнка и не возвращает future: его провал уходит в `onUnanswered` контроллера,
-как любой провал, который никто не наблюдал, а родитель всё так же ждёт
-ребёнка. `ctx.start` берите для ребёнка, за провал которого кто-то всё же
+для обработки ошибок future, которую вернул `enqueue`. `ctx.start(child)`
+запускает ребёнка и не возвращает future: его провал уходит в `onUnanswered`
+контроллера, как любой провал, который никто не наблюдал, а родитель всё так же
+ждёт ребёнка. `ctx.start` берите для ребёнка, за провал которого кто-то всё же
 должен ответить, а `ctx.run(child).ignore()` — только для того, чей провал
 никому не нужен: `onError` контроллера его слышит, и никто за него не отвечает.
 
@@ -156,7 +156,7 @@ Job<String> syncAndAnnounce(int item) => run<Ready, String>(
 ## Ребёнок, которого отвернули правила
 
 ```dart
-Job<String> resend(int item) => run<Ready, String>(
+Job<String> resend(int item) => enqueue<Ready, String>(
       key: _Op.resend,
       (ctx) {
         // Ребёнок со своим правилом: на паузе загрузки нет.
@@ -184,7 +184,7 @@ Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))
 поэтому родитель никого не ждёт; но future от `ctx.run` эту отмену всё равно
 несёт, и именно она кончает `resend` выше.
 
-`handler:` в этой строке — не обработчик состояния из `run`. Это
+`handler:` в этой строке — не обработчик состояния из `enqueue`. Это
 `HandlerCancelReason`, причина, которую ядро даёт телу, выпустившему наружу
 отмену своего ребёнка, а после неё идут ребёнок и отмена, которой он кончился.
 В разделе [«Сведения об отмене»](cancellation.md#сведения-об-отмене) есть все
@@ -260,7 +260,7 @@ SoloJob<void> _recordPath(String path) => job<Ready, void>(
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
     );
 
-Job<void> recordPath(String path) => add(_recordPath(path));
+Job<void> recordPath(String path) => enqueueJob(_recordPath(path));
 ```
 
 ### Первая попытка
@@ -286,7 +286,7 @@ Job<void> syncAndRecord(int item) =>
 
 ```dart
 // Вторая попытка: sync ждёт конца этой задачи, а задача ждёт sync.
-Job<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await sync(item).value;
@@ -307,7 +307,7 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
 задачу ставят в очередь:
 
 ```text
-add Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_Op.syncAndRecord) ends
+enqueue Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_Op.syncAndRecord) ends
 ```
 
 Метод с `droppable`, вызванный изнутри своей же задачи, заводит в ловушку,
@@ -319,7 +319,7 @@ add Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_
 это в строке дубликата:
 
 ```text
-add Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited from inside Job(_Op.sync), it waits for itself
+enqueue Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited from inside Job(_Op.sync), it waits for itself
 ```
 
 ### Два ребёнка подряд
@@ -328,7 +328,7 @@ add Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited from
 // Снова `_sync` и `_recordPath`, теперь детьми. Родитель держит очередь,
 // пока не закончат дети, поэтому `save()`, поставленная тем временем,
 // ждёт обоих шагов.
-Job<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await ctx.run(_sync(item));
@@ -337,7 +337,7 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
     );
 ```
 
-У шага, написанного через `job(...)`, открыты оба пути: `add` даёт ему
+У шага, написанного через `job(...)`, открыты оба пути: `enqueueJob` даёт ему
 собственное место в очереди, `ctx.run` делает его ребёнком задачи, у которой
 это место уже есть. Используйте детей одного родителя, если вся
 последовательность должна удерживать очередь без запуска другой корневой `Job`

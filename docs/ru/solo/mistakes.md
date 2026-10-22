@@ -144,13 +144,13 @@ try {
 со страницы о детях. `_sync(item)` и `_recordPath(path)` создают задачу через
 `job(...)` и ничего не запускают. `sync(item)` и `recordPath(path)` — публичные
 методы, которые ставят её в очередь: `sync(item)` возвращает
-`add(_sync(item))`.
+`enqueueJob(_sync(item))`.
 
 Так не делайте:
 
 ```dart
 // Неверно: sync ждёт конца этой задачи, а задача ждёт sync.
-Job<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await sync(item).value;
@@ -166,7 +166,7 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
 Делайте так:
 
 ```dart
-Job<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await ctx.run(_sync(item));
@@ -280,7 +280,7 @@ test('load fills in the name', () {
 
 ```dart
 // Неверно: один ключ на все профили.
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -294,7 +294,7 @@ Job<Profile> load(String id) => run<Ready, Profile>(
 Делайте так:
 
 ```dart
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),

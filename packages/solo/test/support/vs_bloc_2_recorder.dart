@@ -57,7 +57,7 @@ final class RecorderController extends Solo<RecorderState> {
 
   RecorderController(this._recorder, this._journal) : super(const Idle());
 
-  Job<void> start() => run<RecorderState, void>(
+  Job<void> start() => enqueue<RecorderState, void>(
         key: 'start',
         (ctx) async {
           await ctx.join(_recorder.start);
@@ -87,7 +87,7 @@ final class TelemetryObserver extends SoloObserver {
 final class ThrowingHookController extends Solo<RecorderState> {
   ThrowingHookController() : super(const Idle());
 
-  Job<void> start() => run<RecorderState, void>(
+  Job<void> start() => enqueue<RecorderState, void>(
         (ctx) async => ctx.emit(const Recording()),
       );
 

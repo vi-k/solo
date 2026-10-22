@@ -69,10 +69,10 @@ final saving = job<Ready, void>(
   key: _Op.save,
   (ctx) => ctx.join(store.save),
 );
-add(saving);
+enqueueJob(saving);
 
 // Or both at once, which is what a controller method normally does.
-Job<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => enqueue<Ready, void>(
       key: _Op.zoom,
       // Lazy, and only for diagnostics: built when a log asks for it.
       describe: () => 'zoom: $zoom',
@@ -81,8 +81,8 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
 ```
 
 The code of this section and of the ones below belongs to one controller of a
-camera, a `Solo<CameraState>`. The two type arguments of `job` and `run` are
-the working type — the states the body works in, here `Ready`, one of the
+camera, a `Solo<CameraState>`. The two type arguments of `job` and `enqueue`
+are the working type — the states the body works in, here `Ready`, one of the
 states of the camera — and the type of the result. Left out, the working type
 is the whole of `S`, and the result type is what the body returns.
 [State and rules](state.md#state-and-rules) on the state page is about the
@@ -92,26 +92,26 @@ A `key` is what queue policies match on, and `describe` supplies the label used
 by logs, observers and `toString()`: `Job(key: label)`. Without a description
 the representation is `Job(key)`.
 
-`job`, `add` and `run` all return `SoloJob<T>`, which implements `Job<T>` and
-adds `isQueued`. All three are protected, as are `collect` and `accumulate`: a
-controller exposes domain methods such as `load()` or `setZoom()`, and callers
-see those, not the members they are built from. A domain method declares
-`Job<T>`, as `setZoom` above does: that is all its caller needs to await the
-result or cancel the job. It declares `SoloJob<T>` only for a caller that reads
-`isQueued`. A private method that makes a child for `ctx.run` declares
-`SoloJob<T>` as well: `ctx.run` takes a `ChildJob<T>`, which `SoloJob<T>` is
-and `Job<T>` is not.
+`job`, `enqueueJob` and `enqueue` all return `SoloJob<T>`, which implements
+`Job<T>` and adds `isQueued`. All three are protected, as are `collect` and
+`accumulate`: a controller exposes domain methods such as `load()` or
+`setZoom()`, and callers see those, not the members they are built from. A
+domain method declares `Job<T>`, as `setZoom` above does: that is all its
+caller needs to await the result or cancel the job. It declares `SoloJob<T>`
+only for a caller that reads `isQueued`. A private method that makes a child
+for `ctx.run` declares `SoloJob<T>` as well: `ctx.run` takes a `ChildJob<T>`,
+which `SoloJob<T>` is and `Job<T>` is not.
 
 A job the queue starts runs its body in the Dart zone of the call that made the
-job: `run`, or `job` for `saving` above, and not `add`. What woke the queue
-does not change the zone: a job queued just before it from another zone, the
-end of the job before, or the timer of an accumulation window. The body's
-timers and zone values, the job's deadline, the `onStart` hooks and the errors
-of futures the body does not await all stay in that zone. It is also where the
-job's failure goes when nobody reads its outcome and nothing else answers for
-it. Inside `ctx.unattended` the zone is the one that work was started from, as
-in the core. A child is not the queue's to start: it runs where `ctx.run`
-starts it, like any `Job.deferred`.
+job: `enqueue`, or `job` for `saving` above, and not `enqueueJob`. What woke
+the queue does not change the zone: a job queued just before it from another
+zone, the end of the job before, or the timer of an accumulation window. The
+body's timers and zone values, the job's deadline, the `onStart` hooks and the
+errors of futures the body does not await all stay in that zone. It is also
+where the job's failure goes when nobody reads its outcome and nothing else
+answers for it. Inside `ctx.unattended` the zone is the one that work was
+started from, as in the core. A child is not the queue's to start: it runs
+where `ctx.run` starts it, like any `Job.deferred`.
 
 ## Queue and policies
 
@@ -122,24 +122,24 @@ still queued or running, the policy decides which of the two survives:
 ```dart
 // sequential, the default: one after another, in the order asked for.
 Job<void> save() =>
-    run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
+    enqueue<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
 
 // droppable: a second load of the same profile returns the first job.
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
     );
 
 // replace: the queued zoom goes, a running one is left alone.
-Job<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => enqueue<Ready, void>(
       key: _Op.zoom,
       policy: Policy.replace,
       (ctx) => ctx.join(() => camera.zoom(zoom)),
     );
 
 // restart: the same, and the running one is asked to stop as well.
-Job<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => enqueue<Ready, void>(
       key: _Op.seek,
       policy: Policy.restart,
       (ctx) async {
@@ -207,7 +207,7 @@ profile should get that one.
 
 ```dart
 // The first attempt: one key for every profile.
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -224,7 +224,7 @@ profile, and no request for Grace's is made.
 #### The record key
 
 ```dart
-Job<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -236,9 +236,9 @@ policy the identity of one request rather than of the operation. `droppable`
 drops a second load of the same profile and lets a load of another one through.
 
 The job the second call brought never starts: it ends on the spot with
-`Cancelled(duplicate)`, whose reason is a `DuplicateCancelReason`. `run`
+`Cancelled(duplicate)`, whose reason is a `DuplicateCancelReason`. `enqueue`
 returns one handle and does not say whose job it is, so a method that has to
-know assembles the job first and compares it with what `add` gives back:
+know assembles the job first and compares it with what `enqueueJob` gives back:
 
 ```dart
 int duplicates = 0;
@@ -248,7 +248,7 @@ Job<Profile> load(String id) {
     key: (_Op.load, id),
     (ctx) => ctx.abandonable(() => api.load(id)),
   );
-  final taken = add(mine, policy: Policy.droppable);
+  final taken = enqueueJob(mine, policy: Policy.droppable);
   if (!identical(taken, mine)) {
     // `mine` was dropped and has already ended with `Cancelled(duplicate)`;
     // `taken` is the load that was there before this call.
@@ -283,7 +283,7 @@ Job<void> stop() {
   // Drop what this command makes pointless...
   queue.removeWhere((job) => job.key == _Op.zoom);
   // ...and jump the line with the stop itself.
-  return add(
+  return enqueueJob(
     job<Ready, void>(key: _Op.stop, (ctx) => ctx.join(camera.stop)),
     first: true,
   );
@@ -332,7 +332,7 @@ bool get isPaused => _gate != null;
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();
-  run<CameraState, void>(
+  enqueue<CameraState, void>(
     key: _Op.pause,
     (ctx) => ctx.abandonable(() => gate.future),
   );
@@ -344,9 +344,10 @@ void resume() {
 }
 ```
 
-`run` is the call a method normally makes, and it puts the gate where it puts
-every job: at the tail. Three jobs that were already waiting run before the
-pause begins, and only what is submitted after `pause()` waits behind the gate.
+`enqueue` is the call a method normally makes, and it puts the gate where it
+puts every job: at the tail. Three jobs that were already waiting run before
+the pause begins, and only what is submitted after `pause()` waits behind the
+gate.
 
 A gate can also leave without a `resume`: `cancelAll` cancels it, and so does
 `close`. `resume` is the only thing that clears the field, so after a
@@ -360,7 +361,7 @@ A gate can also leave without a `resume`: `cancelAll` cancels it, and so does
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();
-  add(
+  enqueueJob(
     job<CameraState, void>(key: _Op.pause, (ctx) async {
       // Cancellation is not a resume, and a cancelled gate is not a pause.
       ctx.onCancel(() => _gate = null);
@@ -387,7 +388,7 @@ runs.
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();
-  add(
+  enqueueJob(
     job<CameraState, void>(
       key: _Op.pause,
       (ctx) => ctx.abandonable(() => gate.future),
@@ -402,13 +403,13 @@ void pause() {
 }
 ```
 
-`whenCancelled` is registered on the handle `add` gives back, not by the body,
-so it hears the cancellation of a gate that never started as well as of one
-that runs. On a job that is already cancelled — what `add` hands back on a
-closed controller — it is called on the spot. The callback clears the field
-only while the field still holds this gate: after a `resume()` and another
-`pause()` it holds the newer one, and the end of the old gate must not clear
-that. The cases:
+`whenCancelled` is registered on the handle `enqueueJob` gives back, not by the
+body, so it hears the cancellation of a gate that never started as well as of
+one that runs. On a job that is already cancelled — what `enqueueJob` hands
+back on a closed controller — it is called on the spot. The callback clears the
+field only while the field still holds this gate: after a `resume()` and
+another `pause()` it holds the newer one, and the end of the old gate must not
+clear that. The cases:
 
 | What you do | What happens |
 | --- | --- |
@@ -422,11 +423,11 @@ that. The cases:
 | `cancelAll()` | The gate goes with everything else and the queue moves on, with nobody having opened it; the field is clear, so `pause()` works again. |
 | The state leaves `Ready` while paused | The pause stands: the gate works in every state of the camera. |
 
-`pause()` returns nothing on purpose. The handle `add` gives back belongs to
-the gate, and it ends when the pause ends rather than when it begins — `Done`
-on a `resume`, `Cancelled(closed)` on a `close`. Returning it invites the habit
-every other method on this page teaches, and an awaited `pause()` waits for the
-`resume` its caller was about to make.
+`pause()` returns nothing on purpose. The handle `enqueueJob` gives back
+belongs to the gate, and it ends when the pause ends rather than when it
+begins — `Done` on a `resume`, `Cancelled(closed)` on a `close`. Returning it
+invites the habit every other method on this page teaches, and an awaited
+`pause()` waits for the `resume` its caller was about to make.
 
 What the engine does not know is that this job is a pause. The observer sees an
 ordinary job start, and `pending` answers with the gate rather than with work,

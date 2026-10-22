@@ -416,7 +416,7 @@ void main() {
       async.flushMicrotasks();
       final jobs = [
         for (final name in ['a', 'b'])
-          camera.run<Ready, void>(
+          camera.enqueue<Ready, void>(
             key: name,
             canStart: (state) => false,
             (ctx) async => stage.trace.add('$name runs'),

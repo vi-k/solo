@@ -31,7 +31,7 @@ final class _Controller extends Solo<_Screen> with SoloListenable {
     Future<void> Function(SoloContext<_Screen, _Screen> ctx) body, {
     bool Function(_Screen state)? keepWhile,
   }) =>
-      run<_Screen, void>(body, keepWhile: keepWhile);
+      enqueue<_Screen, void>(body, keepWhile: keepWhile);
 }
 
 final class _PlainController extends Solo<_Screen> {

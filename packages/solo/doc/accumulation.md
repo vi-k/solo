@@ -29,9 +29,9 @@ Under each version of a controller is what the scenario above it leads to: what
 reaches the server or the device, and what the controller's state ends up as.
 
 `collect` and `accumulate` both take three type arguments, `<W, E, T>`: the
-working type `W`, as in `run`, the event type `E` and the result type `T`, and
-return a `SoloAccumulator<E, T>`. Create it once in your controller, then call
-its `add(event)` method from the controller's public methods.
+working type `W`, as in `enqueue`, the event type `E` and the result type `T`,
+and return a `SoloAccumulator<E, T>`. Create it once in your controller, then
+call its `add(event)` method from the controller's public methods.
 
 The accumulator owns the input of a queued job. Adding an event does not run
 the handler or change controller state. The events that share one job are a
@@ -63,7 +63,7 @@ abstract interface class SearchApi {
 
 #### The first attempt
 
-The controller's vocabulary says `run`, so every keystroke gets a job:
+The controller's vocabulary says `enqueue`, so every keystroke gets a job:
 
 ```dart
 // The first attempt: every keystroke waits for the one before.
@@ -72,7 +72,7 @@ final class QueuedSearch extends Solo<SearchState> {
 
   QueuedSearch(this.api) : super(const SearchState.idle());
 
-  Job<void> query(String text) => run<SearchState, void>(
+  Job<void> query(String text) => enqueue<SearchState, void>(
         key: 'query',
         (ctx) async {
           final results = await ctx.abandonable(() => api.search(text));
@@ -106,7 +106,7 @@ the jobs page. Only the method changes:
 
 ```dart
 // The second attempt: the server is still asked four times.
-Job<void> query(String text) => run<SearchState, void>(
+Job<void> query(String text) => enqueue<SearchState, void>(
       key: 'query',
       policy: Policy.restart,
       (ctx) async {
@@ -236,7 +236,7 @@ final class EagerSettingsController extends Solo<Settings> {
 
   EagerSettingsController(this._api, Settings initial) : super(initial);
 
-  Job<void> update(SettingsPatch patch) => run<Settings, void>(
+  Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
         key: 'settings',
         (ctx) async {
           final next = patch.apply(ctx.state);
@@ -270,7 +270,7 @@ one to stop. Only the method changes:
 
 ```dart
 // The second attempt: a restart overwrites the change it replaced.
-Job<void> update(SettingsPatch patch) => run<Settings, void>(
+Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
       key: 'settings',
       policy: Policy.restart,
       (ctx) async {
@@ -317,7 +317,7 @@ final class SettingsController extends Solo<Settings> {
 
   Job<void> update(SettingsPatch patch) => _updates.add(patch);
 
-  Job<void> reload() => run<Settings, void>(
+  Job<void> reload() => enqueue<Settings, void>(
         key: 'reload',
         (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
@@ -426,7 +426,7 @@ final class EagerLogController extends Solo<int> {
 
   EagerLogController(this._api) : super(0);
 
-  Job<void> logEvent(LogEntry entry) => run<int, void>(
+  Job<void> logEvent(LogEntry entry) => enqueue<int, void>(
         key: 'logs',
         (ctx) async {
           await ctx.join(() => _api.send([entry]));
@@ -562,7 +562,7 @@ final class QueuedPlayer extends Solo<Playback> {
 
   QueuedPlayer(this.device) : super(const Paused());
 
-  Job<void> resume() => run<Playback, void>(
+  Job<void> resume() => enqueue<Playback, void>(
         key: Command.resume,
         (ctx) async {
           await ctx.join(device.resume);
@@ -570,7 +570,7 @@ final class QueuedPlayer extends Solo<Playback> {
         },
       );
 
-  Job<void> pause() => run<Playback, void>(
+  Job<void> pause() => enqueue<Playback, void>(
         key: Command.pause,
         (ctx) async {
           await ctx.join(device.pause);
@@ -670,7 +670,7 @@ Job<void> resume() {
     (job) => job.key == Command.resume || job.key == Command.pause,
   );
 
-  return run<Playback, void>(key: Command.resume, (ctx) async {
+  return enqueue<Playback, void>(key: Command.resume, (ctx) async {
     await ctx.join(device.resume);
     ctx.emit(const Playing());
   });

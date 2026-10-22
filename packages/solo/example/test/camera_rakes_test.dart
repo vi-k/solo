@@ -43,7 +43,7 @@ final class Variants extends Solo<CameraState>
   Variants(this.hw) : super(const Initial());
 
   /// "A working type wide enough" without its `canStart`.
-  Job<void> initWithoutCanStart() => run<NotDisposed, void>(
+  Job<void> initWithoutCanStart() => enqueue<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         (ctx) async {
@@ -54,7 +54,7 @@ final class Variants extends Solo<CameraState>
       );
 
   /// The catch of "An opening that fails", telling what its `emit` did.
-  Job<void> initWatchingTheCatch() => run<NotDisposed, void>(
+  Job<void> initWatchingTheCatch() => enqueue<NotDisposed, void>(
         key: CameraKey.init,
         (ctx) async {
           ctx.emit(const Preparing());
@@ -74,7 +74,7 @@ final class Variants extends Solo<CameraState>
       );
 
   /// The shot without its clear.
-  Job<Photo> takePhotoKeepingQueue() => run<Ready, Photo>(
+  Job<Photo> takePhotoKeepingQueue() => enqueue<Ready, Photo>(
         key: CameraKey.takePhoto,
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
@@ -92,7 +92,7 @@ final class Variants extends Solo<CameraState>
   }
 
   /// A job like the disposal, to stand in the queue.
-  Job<void> queueLikeADisposal() => run<CameraState, void>(
+  Job<void> queueLikeADisposal() => enqueue<CameraState, void>(
         key: CameraKey.dispose,
         cancellable: false,
         (ctx) async {},

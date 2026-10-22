@@ -11,7 +11,7 @@ final class ProfileController extends Solo<ProfileState> with SoloStream {
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),

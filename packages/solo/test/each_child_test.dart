@@ -14,7 +14,7 @@ void main() {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();
       late Job<void> listening;
-      final parent = solo.run<NotDisposed, void>((ctx) async {
+      final parent = solo.enqueue<NotDisposed, void>((ctx) async {
         listening = ctx.each(source.stream, (child, event) {
           final state = child.state;
           expect(state, isA<NotDisposed>());
@@ -23,7 +23,7 @@ void main() {
         });
       });
       var nextStarted = false;
-      final next = solo.run<TestState, void>((ctx) async {
+      final next = solo.enqueue<TestState, void>((ctx) async {
         nextStarted = true;
       });
       async.flushMicrotasks();
@@ -46,7 +46,7 @@ void main() {
   test('a stream with no events at all still holds the parent', () {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();
-      final parent = solo.run<NotDisposed, void>(
+      final parent = solo.enqueue<NotDisposed, void>(
         key: 'parent',
         (ctx) async {
           ctx.each(source.stream, (child, event) {});
@@ -68,7 +68,7 @@ void main() {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();
       late Job<void> listening;
-      final parent = solo.run<NotDisposed, void>((ctx) async {
+      final parent = solo.enqueue<NotDisposed, void>((ctx) async {
         listening = ctx.each(source.stream, (child, event) {});
       });
       async.flushMicrotasks();
@@ -89,7 +89,7 @@ void main() {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();
       late Job<void> listening;
-      final parent = solo.run<TestState, void>(
+      final parent = solo.enqueue<TestState, void>(
         keepWhile: (state) => state is! Working,
         (ctx) async {
           listening = ctx.each(source.stream, (child, event) {});
@@ -111,7 +111,7 @@ void main() {
       final source = StreamController<int>();
       var checks = 0;
       late Job<void> listening;
-      final parent = solo.run<TestState, void>(
+      final parent = solo.enqueue<TestState, void>(
         canStart: (_) => ++checks == 1,
         (ctx) async {
           listening = ctx.each(source.stream, (child, event) {});
@@ -131,7 +131,7 @@ void main() {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();
       late Job<void> listening;
-      final parent = solo.run<TestState, void>(
+      final parent = solo.enqueue<TestState, void>(
         cancellable: false,
         (ctx) async {
           listening = ctx.each(source.stream, (child, event) {});
@@ -154,7 +154,7 @@ void main() {
       () {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();
-      final parent = solo.run<NotDisposed, void>((ctx) async {
+      final parent = solo.enqueue<NotDisposed, void>((ctx) async {
         final JobContext core = ctx;
         await core.each(source.stream, (child, event) {
           expect(child, isA<SoloContext<TestState, NotDisposed>>());
@@ -177,7 +177,7 @@ void main() {
       final active = Completer<void>();
       final source = StreamController<int>();
       final log = <String>[];
-      solo.run<TestState, void>((ctx) async {
+      solo.enqueue<TestState, void>((ctx) async {
         ctx
           ..onDispose(() => log.add('dispose'))
           ..each(source.stream, (child, event) async {

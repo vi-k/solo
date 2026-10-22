@@ -194,7 +194,7 @@ mixin Desk on Solo<AppState> {
   void reflect(AppState state) => externalSetState(state);
 
   /// Work that only says that it started, in any state.
-  SoloJob<void> next() => run<AppState, void>(
+  SoloJob<void> next() => enqueue<AppState, void>(
         key: 'next',
         (ctx) async => stage.trace.add('next job started'),
       );

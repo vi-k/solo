@@ -18,9 +18,9 @@ SoloJob<void> slow(TestSolo solo, String key, {bool cancellable = true}) =>
 void main() {
   test('first: true puts the job ahead of the queue', () {
     runSolo((solo, journal, async) {
-      solo.add(slow(solo, 'a'));
-      solo.add(slow(solo, 'b'));
-      solo.add(slow(solo, 'c'), first: true);
+      solo.enqueueJob(slow(solo, 'a'));
+      solo.enqueueJob(slow(solo, 'b'));
+      solo.enqueueJob(slow(solo, 'c'), first: true);
       expect(solo.queue.jobs.map((j) => j.key), ['c', 'a', 'b']);
       async.flushTimers();
       expect(journal.take(), [
@@ -36,8 +36,8 @@ void main() {
 
   test('remove drops a queued job and reports the result', () {
     runSolo((solo, journal, async) {
-      final a = solo.add(slow(solo, 'a'));
-      final b = solo.add(slow(solo, 'b'));
+      final a = solo.enqueueJob(slow(solo, 'a'));
+      final b = solo.enqueueJob(slow(solo, 'b'));
       expect(solo.queue.remove(b), isTrue);
       expect(solo.queue.remove(b), isFalse, reason: 'no longer queued');
       expect(solo.queue.length, 1);
@@ -52,9 +52,9 @@ void main() {
       // The predicate is the caller's code, and this one takes a job out
       // while it answers about another: the walk used to be over the very
       // list it was changing.
-      solo.add(slow(solo, 'a'));
-      solo.add(slow(solo, 'b'));
-      final c = solo.add(slow(solo, 'c'));
+      solo.enqueueJob(slow(solo, 'a'));
+      solo.enqueueJob(slow(solo, 'b'));
+      final c = solo.enqueueJob(slow(solo, 'c'));
       final removed = solo.queue.removeWhere((job) {
         if (job.key == 'a') {
           solo.queue.remove(c);
@@ -71,8 +71,8 @@ void main() {
   test('lastJobWhere survives a predicate that touches the queue', () {
     runSolo((solo, journal, async) {
       // The same walk with the same caller's code in it, one method over.
-      solo.add(slow(solo, 'a'));
-      final b = solo.add(slow(solo, 'b'));
+      solo.enqueueJob(slow(solo, 'a'));
+      final b = solo.enqueueJob(slow(solo, 'b'));
       final found = solo.lastJobWhere((job) {
         if (job.key == 'b') {
           solo.queue.remove(b);
@@ -87,10 +87,10 @@ void main() {
 
   test('lastJobWhere does not answer with a job its predicate cancelled', () {
     runSolo((solo, journal, async) {
-      final a = solo.add(slow(solo, 'a'));
+      final a = solo.enqueueJob(slow(solo, 'a'));
       async.flushMicrotasks();
-      final b1 = solo.add(slow(solo, 'b'));
-      final b2 = solo.add(slow(solo, 'b'));
+      final b1 = solo.enqueueJob(slow(solo, 'b'));
+      final b2 = solo.enqueueJob(slow(solo, 'b'));
       SoloJob<Object?>? cancelling(SoloJob<Object?> target) =>
           solo.lastJobWhere((job) {
             if (identical(job, target)) {
@@ -110,8 +110,9 @@ void main() {
 
   test('remove skips a cancellable: false job unless forced', () {
     runSolo((solo, journal, async) {
-      solo.add(slow(solo, 'a'));
-      final stubborn = solo.add(slow(solo, 'stubborn', cancellable: false));
+      solo.enqueueJob(slow(solo, 'a'));
+      final stubborn =
+          solo.enqueueJob(slow(solo, 'stubborn', cancellable: false));
       expect(solo.queue.remove(stubborn), isFalse);
       expect(solo.queue.isNotEmpty, isTrue);
       expect(solo.queue.remove(stubborn, force: true), isTrue);
@@ -122,10 +123,10 @@ void main() {
 
   test('removeWhere and clear count what they removed', () {
     runSolo((solo, journal, async) {
-      solo.add(slow(solo, 'a1'));
-      solo.add(slow(solo, 'b'));
-      solo.add(slow(solo, 'a2'));
-      solo.add(slow(solo, 'keep', cancellable: false));
+      solo.enqueueJob(slow(solo, 'a1'));
+      solo.enqueueJob(slow(solo, 'b'));
+      solo.enqueueJob(slow(solo, 'a2'));
+      solo.enqueueJob(slow(solo, 'keep', cancellable: false));
       expect(
         solo.queue.removeWhere((j) => (j.key! as String).startsWith('a')),
         2,
@@ -171,8 +172,8 @@ void main() {
           (ctx) async => ran = true,
         );
         solo
-          ..add(b)
-          ..add(slow(solo, 'c'));
+          ..enqueueJob(b)
+          ..enqueueJob(slow(solo, 'c'));
         async.flushTimers();
         expect(listed, isFalse, reason: 'the view is the queue itself');
         expect(removed, count);
@@ -209,7 +210,7 @@ void main() {
         },
         (ctx) async {},
       );
-      solo.add(b);
+      solo.enqueueJob(b);
       async.flushTimers();
       expect(answers, [false, true]);
       expect(journal.take(), ['[b] dropped Cancelled(manual)']);
@@ -218,10 +219,10 @@ void main() {
 
   test('lastJobWhere searches the queue from the end, then current', () {
     runSolo((solo, journal, async) {
-      solo.add(slow(solo, 'a'));
+      solo.enqueueJob(slow(solo, 'a'));
       async.flushMicrotasks();
-      final b1 = solo.add(slow(solo, 'b'));
-      final b2 = solo.add(slow(solo, 'b'));
+      final b1 = solo.enqueueJob(slow(solo, 'b'));
+      final b2 = solo.enqueueJob(slow(solo, 'b'));
       expect(identical(solo.lastJobWhere((j) => j.key == 'b'), b2), isTrue);
       expect(solo.lastJobWhere((j) => j.key == 'a')?.key, 'a');
       expect(solo.lastJobWhere((j) => j.key == 'z'), isNull);
@@ -233,11 +234,11 @@ void main() {
   test('adding a job twice or after finish throws StateError', () {
     runSolo((solo, journal, async) {
       final job = slow(solo, 'a');
-      solo.add(job);
-      expect(() => solo.add(job), throwsStateError);
+      solo.enqueueJob(job);
+      expect(() => solo.enqueueJob(job), throwsStateError);
       async.flushTimers();
       expect(job.isFinished, isTrue);
-      expect(() => solo.add(job), throwsStateError);
+      expect(() => solo.enqueueJob(job), throwsStateError);
     });
   });
 
@@ -245,7 +246,7 @@ void main() {
     runSolo((solo, journal, async) {
       final other = TestSolo();
       final foreign = other.job<TestState, void>((ctx) async {});
-      expect(() => solo.add(foreign), throwsArgumentError);
+      expect(() => solo.enqueueJob(foreign), throwsArgumentError);
       other.close();
       async.flushMicrotasks();
     });
@@ -253,12 +254,12 @@ void main() {
 
   test('cancelAll clears the queue and cancels the current job', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'a', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'a', (ctx) async {
         await delay(100);
         ctx.check();
       });
-      solo.add(slow(solo, 'b'));
-      solo.add(slow(solo, 'keep', cancellable: false));
+      solo.enqueueJob(slow(solo, 'b'));
+      solo.enqueueJob(slow(solo, 'keep', cancellable: false));
       async.elapse(const Duration(milliseconds: 50));
       var done = false;
       solo.cancelAll().then((_) => done = true);
@@ -279,10 +280,10 @@ void main() {
     });
   });
 
-  test('add from inside a body runs after the current job', () {
+  test('enqueueJob from inside a body runs after the current job', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'outer', (ctx) async {
-        solo.add(slow(solo, 'later'), first: true);
+      solo.enqueue<TestState, void>(key: 'outer', (ctx) async {
+        solo.enqueueJob(slow(solo, 'later'), first: true);
         await delay(10);
         ctx.check();
       });

@@ -28,7 +28,7 @@
 | [Типизированные методы с выполнением через очередь](#типизированные-методы-с-выполнением-через-очередь) | Методы `Cubit`, которые возвращают future | Методы, которые возвращают `Job`, с `Policy.restart` |
 | [Удаление выбранной ожидающей работы](#удаление-выбранной-ожидающей-работы) | Флаг ухода, который проверяет обработчик | `queue.removeWhere` и `cancellable: false` у того, что должно выполниться |
 | [Ожидание конкретного запроса](#ожидание-конкретного-запроса) | Completer на событии и `droppable()` у оплаты | Ключ на заказ с `Policy.droppable` и `Job`, которую ждёт вызывающий |
-| [Реакция на независимое внешнее изменение состояния](#реакция-на-независимое-внешнее-изменение-состояния) | Одна регистрация на сборку и отзыв сессии | `externalSetState` и `run<SignedIn, void>` у сборки |
+| [Реакция на независимое внешнее изменение состояния](#реакция-на-независимое-внешнее-изменение-состояния) | Одна регистрация на сборку и отзыв сессии | `externalSetState` и `enqueue<SignedIn, void>` у сборки |
 | [Завершение начатой записи перед перезапуском](#завершение-начатой-записи-перед-перезапуском) | `restartable()` у цикла загрузки | `Policy.restart` и `ctx.join` вокруг каждой записи |
 | [Освобождение ресурса, полученного после отмены](#освобождение-ресурса-полученного-после-отмены) | Проверка `emit.isDone` перед использованием результата | `dispose` у `ctx.abandonable` |
 
@@ -257,7 +257,7 @@ final class NotesController extends Solo<NotesState> {
 
   NotesController(this._api) : super(const NotesState());
 
-  Job<void> upload(Note note) => run<NotesState, void>(
+  Job<void> upload(Note note) => enqueue<NotesState, void>(
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
@@ -271,7 +271,7 @@ final class NotesController extends Solo<NotesState> {
         },
       );
 
-  Job<void> refresh() => run<NotesState, void>(
+  Job<void> refresh() => enqueue<NotesState, void>(
         key: 'refresh',
         (ctx) async {
           final serverNotes = await ctx.abandonable(_api.list);
@@ -441,7 +441,7 @@ final class RecorderController extends Solo<RecorderState> {
 
   RecorderController(this._recorder, this._journal) : super(const Idle());
 
-  Job<void> start() => run<RecorderState, void>(
+  Job<void> start() => enqueue<RecorderState, void>(
         key: 'start',
         (ctx) async {
           await ctx.join(_recorder.start);
@@ -593,7 +593,7 @@ final class ChatController extends Solo<ChatState> {
 
   ChatController(this._api) : super(const ChatState());
 
-  Job<void> send(String text) => run<ChatState, void>(
+  Job<void> send(String text) => enqueue<ChatState, void>(
         key: 'send',
         (ctx) async {
           final reply = await ctx.abandonable(() => _api.send(text));
@@ -603,7 +603,7 @@ final class ChatController extends Solo<ChatState> {
       );
 
   Job<void> markReplyRead() =>
-      run<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
+      enqueue<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
 }
 
 Future<void> onScreenClosed(ChatController chat) async {
@@ -614,8 +614,8 @@ Future<void> onScreenClosed(ChatController chat) async {
 
 В этом теле `ctx.abandonable` бросает `Cancelled`, когда закрытие отменяет
 `Job`. Обновление ответа и вызов `markReplyRead()` не выполняются. Этот метод
-поставил бы отдельную корневую `Job` через `run` контроллера; ребёнком `send`
-она не становится.
+поставил бы отдельную корневую `Job` через `enqueue` контроллера; ребёнком
+`send` она не становится.
 
 С обычным `await` закрытие ждало бы ответа API. `ctx.emit` после него всё равно
 бросил бы `Cancelled`, и ответ опубликован бы не был. Вызовы после закрытия
@@ -711,7 +711,7 @@ final class RefreshController extends Solo<RefreshState> {
 
   RefreshController(this._api) : super(const Initial());
 
-  Job<void> refresh() => run<RefreshState, void>(
+  Job<void> refresh() => enqueue<RefreshState, void>(
         key: 'refresh',
         policy: Policy.restart,
         ifFailed: (state, error, stackTrace) => const Initial(),
@@ -924,7 +924,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
 
   PlayerController(this._player) : super(Ready());
 
-  Job<void> play() => run<Ready, void>(
+  Job<void> play() => enqueue<Ready, void>(
         key: PlayerKey.play,
         (ctx) async {
           await ctx.join(_player.play);
@@ -932,7 +932,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
         },
       );
 
-  Job<void> pause() => run<Ready, void>(
+  Job<void> pause() => enqueue<Ready, void>(
         key: PlayerKey.pause,
         (ctx) async {
           await ctx.join(_player.pause);
@@ -940,7 +940,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
         },
       );
 
-  Job<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => enqueue<Ready, void>(
         key: PlayerKey.seek,
         policy: Policy.restart,
         (ctx) async {
@@ -1072,7 +1072,7 @@ final class MapController extends Solo<MapState> {
 
   MapController(this._map) : super(const MapState());
 
-  Job<void> moveTo(Point<double> point) => run<MapState, void>(
+  Job<void> moveTo(Point<double> point) => enqueue<MapState, void>(
         key: MapKey.moveTo,
         policy: Policy.restart,
         (ctx) async {
@@ -1083,7 +1083,7 @@ final class MapController extends Solo<MapState> {
         },
       );
 
-  Job<void> setZoom(double value) => run<MapState, void>(
+  Job<void> setZoom(double value) => enqueue<MapState, void>(
         key: MapKey.setZoom,
         policy: Policy.restart,
         (ctx) async {
@@ -1238,7 +1238,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   DeviceController(this._ble) : super(const Offline());
 
-  Job<void> connect() => run<Offline, void>(
+  Job<void> connect() => enqueue<Offline, void>(
         key: DeviceKey.connect,
         cancellable: false,
         (ctx) async {
@@ -1247,7 +1247,7 @@ final class DeviceController extends Solo<DeviceState> {
         },
       );
 
-  Job<void> readBattery() => run<Connected, void>(
+  Job<void> readBattery() => enqueue<Connected, void>(
         key: DeviceKey.readBattery,
         (ctx) async {
           final battery = await ctx.join(_ble.battery);
@@ -1255,7 +1255,7 @@ final class DeviceController extends Solo<DeviceState> {
         },
       );
 
-  Job<void> rename(String name) => run<Connected, void>(
+  Job<void> rename(String name) => enqueue<Connected, void>(
         key: DeviceKey.rename,
         cancellable: false,
         (ctx) => ctx.join(() => _ble.rename(name)),
@@ -1263,7 +1263,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   Job<void> disconnect() {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
-    return run<Connected, void>(
+    return enqueue<Connected, void>(
       key: DeviceKey.disconnect,
       cancellable: false,
       (ctx) async {
@@ -1316,10 +1316,10 @@ final class DeviceController extends Solo<DeviceState> {
 дальше, а так как обработчика никто не ждёт, она приходит в зону
 неперехваченной: `Bad state: battery: not connected`.
 
-Здесь `run<Connected, void>` проверяется на старте `Job`, поэтому то же чтение
-заканчивается на `Cancelled(rules: is not Connected)`, и вызова не происходит.
-В bloc тот же запрет пишется руками: ещё один `if` в `switch`, на каждую
-команду, которой он нужен.
+Здесь `enqueue<Connected, void>` проверяется на старте `Job`, поэтому то же
+чтение заканчивается на `Cancelled(rules: is not Connected)`, и вызова
+не происходит. В bloc тот же запрет пишется руками: ещё один `if` в `switch`,
+на каждую команду, которой он нужен.
 
 **Что даёт solo:** `queue.removeWhere` убирает ждущее чтение в момент вызова
 `disconnect`, `cancellable: false` заставляет чистку пропустить переименование,
@@ -1505,7 +1505,7 @@ final class CheckoutController extends Solo<CheckoutState> {
 
   CheckoutController(this._api) : super(const Idle());
 
-  Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
+  Job<Receipt> pay(Order order) => enqueue<CheckoutState, Receipt>(
         key: ('pay', order.id),
         policy: Policy.droppable,
         cancellable: false,
@@ -1559,7 +1559,7 @@ Future<Map<String, Object?>> handlePayRequest(
 
 Тело публикует `Paid` до завершения с квитанцией, а `close()` ждёт этого
 завершения. Ошибки API по-прежнему дают `Failed`; состояние ошибки можно задать
-через `run(ifFailed: ...)`. Отозвать списание всё равно не смог бы ни один
+через `enqueue(ifFailed: ...)`. Отозвать списание всё равно не смог бы ни один
 метод ожидания: это API не предоставляет механизма отмены.
 
 Флаг также отклоняет ручную отмену, пока оплата стоит в очереди. Оплату,
@@ -1687,7 +1687,7 @@ final class ReportController extends Solo<ReportState> with SoloStream {
     _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
-  Job<void> build(Range range) => run<SignedIn, void>(
+  Job<void> build(Range range) => enqueue<SignedIn, void>(
         key: 'report',
         (ctx) async {
           final report = await ctx.join(() => _reports.build(range));
@@ -1705,7 +1705,7 @@ final class ReportController extends Solo<ReportState> with SoloStream {
 Если `SignedOut` опубликовать обычной `Job`, она встанет в очередь за сборкой
 и будет ждать работу, которую сама обесценивает. `externalSetState` сразу
 обновляет состояние и проверяет работающие тела по их правилам. Здесь
-`run<SignedIn, void>` разрешает сборку только при `SignedIn`, поэтому отзыв
+`enqueue<SignedIn, void>` разрешает сборку только при `SignedIn`, поэтому отзыв
 отменяет её с `Cancelled(rules: is not SignedIn)`.
 
 `externalSetState` нужен для факта, который уже произошёл: сессии больше нет,
@@ -1736,7 +1736,7 @@ final class ReportController extends Solo<ReportState> with SoloStream {
 `SignedOut` при уборке.
 
 **Что даёт solo:** `externalSetState` публикует `SignedOut` сразу, а не ставит
-его в очередь за сборкой, и правило `run<SignedIn, void>` отменяет сборку
+его в очередь за сборкой, и правило `enqueue<SignedIn, void>` отменяет сборку
 с `Cancelled(rules: is not SignedIn)`.
 
 ## Завершение начатой записи перед перезапуском
@@ -1866,7 +1866,7 @@ final class FirmwareController extends Solo<FirmwareState> {
 
   FirmwareController(this._ble) : super(const Idle());
 
-  Job<void> flash(List<Chunk> chunks) => run<NotBroken, void>(
+  Job<void> flash(List<Chunk> chunks) => enqueue<NotBroken, void>(
         key: 'flash',
         policy: Policy.restart,
         (ctx) async {
@@ -1985,7 +1985,7 @@ final class PreviewController extends Solo<PreviewState> {
 
   PreviewController(this._decoder) : super(const NoPreview());
 
-  Job<void> open(Clip clip) => run<PreviewState, void>(
+  Job<void> open(Clip clip) => enqueue<PreviewState, void>(
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {

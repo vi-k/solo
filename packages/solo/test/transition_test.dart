@@ -25,7 +25,7 @@ void main() {
       final seen = <SoloTransition<TestState>>[];
       final watcher = _TransitionObserver(seen);
       Solo.observer = watcher;
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'job',
         (ctx) async => ctx.emit(const Preparing()),
       );
@@ -48,7 +48,7 @@ void main() {
       final seen = <SoloTransition<TestState>>[];
       Solo.observer = _TransitionObserver(seen);
       late final Job<void> child;
-      final root = solo.run<TestState, void>(
+      final root = solo.enqueue<TestState, void>(
         key: 'root',
         (ctx) async {
           child = ctx.each<int>(
@@ -70,7 +70,7 @@ void main() {
     runSolo((solo, journal, async) {
       final seen = <SoloTransition<TestState>>[];
       Solo.observer = _TransitionObserver(seen);
-      final job = solo.run<TestState, void>(
+      final job = solo.enqueue<TestState, void>(
         key: 'job',
         ifCancelled: (state, cancelled) => const Disposed(),
         (ctx) async => pause(ctx, 100),

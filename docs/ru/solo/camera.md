@@ -87,7 +87,7 @@ final class Disposed extends CameraState {
 
 ```dart
 // Первая попытка: первый emit выводит из рабочего типа.
-Job<void> init() => run<Initial, void>(
+Job<void> init() => enqueue<Initial, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       (ctx) async {
@@ -105,16 +105,16 @@ state: Preparing()
 ```
 
 Рабочий тип задаёт состояние, которого правила задачи требуют, пока она идёт,
-и `run<Initial, void>` требует `Initial`. Первый же `emit` тела из него уходит,
-и задача кончается `Cancelled` раньше, чем `hw.open` вообще вызван: журнал
-устройства остаётся пустым. Контроллер остаётся в `Preparing`, и следующая
-`init()` отбрасывается на старте по той же причине: открыть камеру больше
-нельзя вовсе.
+и `enqueue<Initial, void>` требует `Initial`. Первый же `emit` тела из него
+уходит, и задача кончается `Cancelled` раньше, чем `hw.open` вообще вызван:
+журнал устройства остаётся пустым. Контроллер остаётся в `Preparing`,
+и следующая `init()` отбрасывается на старте по той же причине: открыть камеру
+больше нельзя вовсе.
 
 ### Рабочий тип пошире
 
 ```dart
-Job<void> init() => run<NotDisposed, void>(
+Job<void> init() => enqueue<NotDisposed, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       canStart: (state) => state is Initial,
@@ -183,7 +183,7 @@ state: Preparing()
 ### Обработчики run
 
 ```dart
-Job<void> init() => run<NotDisposed, void>(
+Job<void> init() => enqueue<NotDisposed, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       canStart: (state) => state is Initial,
@@ -258,7 +258,7 @@ state: Ready(zoom: 1.0, focusPoint: null, paused: false)
 ### keepWhile
 
 ```dart
-Job<void> init() => run<NotDisposed, void>(
+Job<void> init() => enqueue<NotDisposed, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       canStart: (state) => state is Initial,
@@ -302,7 +302,7 @@ state: Broken(Bad state: cable pulled)
 ```dart
 Job<void> reopen() {
   var opening = false;
-  return run<NotDisposed, void>(
+  return enqueue<NotDisposed, void>(
     key: CameraKey.reopen,
     policy: Policy.droppable,
     canStart: (state) => state is Ready || state is Broken,
@@ -339,7 +339,7 @@ Job<void> reopen() {
 
 ```dart
 // Первая попытка: каждый зум доходит до объектива.
-Job<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => enqueue<Ready, void>(
       key: CameraKey.setZoom,
       describe: () => 'zoom: $zoom',
       (ctx) async {
@@ -366,7 +366,7 @@ zoom 4.0: end
 ### Policy.replace
 
 ```dart
-Job<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => enqueue<Ready, void>(
       key: CameraKey.setZoom,
       policy: Policy.replace,
       describe: () => 'zoom: $zoom',
@@ -397,7 +397,7 @@ state: Ready(zoom: 4.0, focusPoint: null, paused: false)
 ## Команды, пришедшие во время снимка
 
 ```dart
-Job<Photo> takePhoto() => run<Ready, Photo>(
+Job<Photo> takePhoto() => enqueue<Ready, Photo>(
       key: CameraKey.takePhoto,
       policy: Policy.droppable,
       canStart: (state) => !state.paused,
@@ -437,7 +437,7 @@ Job<Photo> takePhoto() => run<Ready, Photo>(
 
 ```dart
 // Первая попытка: освобождение ждёт в конце очереди.
-Job<void> dispose() => run<CameraState, void>(
+Job<void> dispose() => enqueue<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
       cancellable: false,
@@ -486,7 +486,7 @@ state: Disposed()
 Job<void> dispose() {
   queue.clear();
   current?.cancel();
-  return run<CameraState, void>(
+  return enqueue<CameraState, void>(
     key: CameraKey.dispose,
     policy: Policy.droppable,
     cancellable: false,
@@ -535,7 +535,7 @@ state: Disposed()
 Job<void> dispose() {
   queue.clear();
   current?.cancel();
-  return run<CameraState, void>(
+  return enqueue<CameraState, void>(
     key: CameraKey.dispose,
     policy: Policy.droppable,
     cancellable: false,
@@ -714,7 +714,7 @@ Job<void> dispose() {
   hw.onError = null;
   queue.clear();
   current?.cancel();
-  return run<CameraState, void>(
+  return enqueue<CameraState, void>(
     key: CameraKey.dispose,
     policy: Policy.droppable,
     cancellable: false,

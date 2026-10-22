@@ -89,15 +89,15 @@ mixin OpenSolo<S extends Object> on Solo<S> {
       );
 
   @override
-  SoloJob<T> add<T>(
+  SoloJob<T> enqueueJob<T>(
     Job<T> job, {
     bool first = false,
     Policy policy = Policy.sequential,
   }) =>
-      super.add<T>(job, first: first, policy: policy);
+      super.enqueueJob<T>(job, first: first, policy: policy);
 
   @override
-  SoloJob<T> run<W extends S, T>(
+  SoloJob<T> enqueue<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,
     bool Function(W state)? canStart,
@@ -109,7 +109,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
-      super.run<W, T>(
+      super.enqueue<W, T>(
         body,
         key: key,
         canStart: canStart,

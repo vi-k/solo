@@ -24,7 +24,7 @@ final class TimedLoad extends Solo<Profile> with SoloListenable {
 
   TimedLoad(this.api) : super(Empty());
 
-  Job<String> load() => run<Profile, String>(
+  Job<String> load() => enqueue<Profile, String>(
         key: 'load',
         timeout: const Duration(seconds: 5),
         (ctx) async {

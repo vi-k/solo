@@ -85,7 +85,7 @@ start only from `Initial`.
 
 ```dart
 // The first attempt: the first emit leaves the working type.
-Job<void> init() => run<Initial, void>(
+Job<void> init() => enqueue<Initial, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       (ctx) async {
@@ -103,16 +103,16 @@ state: Preparing()
 ```
 
 The working type is the state the job's rules require for as long as it runs,
-and `run<Initial, void>` requires `Initial`. The body's first `emit` leaves it,
-and the job ends `Cancelled` before `hw.open` is ever called: the hardware log
-stays empty. The controller is left in `Preparing`, and the next `init()` is
-dropped at its start for the same reason — the camera can no longer be opened
-at all.
+and `enqueue<Initial, void>` requires `Initial`. The body's first `emit` leaves
+it, and the job ends `Cancelled` before `hw.open` is ever called: the hardware
+log stays empty. The controller is left in `Preparing`, and the next `init()`
+is dropped at its start for the same reason — the camera can no longer be
+opened at all.
 
 ### A working type wide enough
 
 ```dart
-Job<void> init() => run<NotDisposed, void>(
+Job<void> init() => enqueue<NotDisposed, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       canStart: (state) => state is Initial,
@@ -181,7 +181,7 @@ on the state page, with a device behind the spinner.
 ### The handlers of run
 
 ```dart
-Job<void> init() => run<NotDisposed, void>(
+Job<void> init() => enqueue<NotDisposed, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       canStart: (state) => state is Initial,
@@ -255,7 +255,7 @@ it opens the hardware or restores the zoom.
 ### keepWhile
 
 ```dart
-Job<void> init() => run<NotDisposed, void>(
+Job<void> init() => enqueue<NotDisposed, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       canStart: (state) => state is Initial,
@@ -299,7 +299,7 @@ delivered is refused as well:
 ```dart
 Job<void> reopen() {
   var opening = false;
-  return run<NotDisposed, void>(
+  return enqueue<NotDisposed, void>(
     key: CameraKey.reopen,
     policy: Policy.droppable,
     canStart: (state) => state is Ready || state is Broken,
@@ -335,7 +335,7 @@ A pinch asks for a zoom on every frame, and only the last request matters.
 
 ```dart
 // The first attempt: every zoom reaches the lens.
-Job<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => enqueue<Ready, void>(
       key: CameraKey.setZoom,
       describe: () => 'zoom: $zoom',
       (ctx) async {
@@ -362,7 +362,7 @@ zoom 4.0: end
 ### Policy.replace
 
 ```dart
-Job<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => enqueue<Ready, void>(
       key: CameraKey.setZoom,
       policy: Policy.replace,
       describe: () => 'zoom: $zoom',
@@ -393,7 +393,7 @@ camera from taking the command at all.
 ## Commands that arrive during a shot
 
 ```dart
-Job<Photo> takePhoto() => run<Ready, Photo>(
+Job<Photo> takePhoto() => enqueue<Ready, Photo>(
       key: CameraKey.takePhoto,
       policy: Policy.droppable,
       canStart: (state) => !state.paused,
@@ -433,7 +433,7 @@ was doing when it was called.
 
 ```dart
 // The first attempt: the disposal waits at the end of the queue.
-Job<void> dispose() => run<CameraState, void>(
+Job<void> dispose() => enqueue<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
       cancellable: false,
@@ -482,7 +482,7 @@ the device is never left half closed.
 Job<void> dispose() {
   queue.clear();
   current?.cancel();
-  return run<CameraState, void>(
+  return enqueue<CameraState, void>(
     key: CameraKey.dispose,
     policy: Policy.droppable,
     cancellable: false,
@@ -531,7 +531,7 @@ The camera is disposed, and its caller is told the disposal was cancelled.
 Job<void> dispose() {
   queue.clear();
   current?.cancel();
-  return run<CameraState, void>(
+  return enqueue<CameraState, void>(
     key: CameraKey.dispose,
     policy: Policy.droppable,
     cancellable: false,
@@ -707,7 +707,7 @@ Job<void> dispose() {
   hw.onError = null;
   queue.clear();
   current?.cancel();
-  return run<CameraState, void>(
+  return enqueue<CameraState, void>(
     key: CameraKey.dispose,
     policy: Policy.droppable,
     cancellable: false,

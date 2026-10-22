@@ -35,7 +35,7 @@ final class Bench extends Solo<Profile> with SoloListenable {
     bool Function(W state)? keepWhile,
     bool cancellable = true,
   }) =>
-      run<W, T>(body, keepWhile: keepWhile, cancellable: cancellable);
+      enqueue<W, T>(body, keepWhile: keepWhile, cancellable: cancellable);
 
   @override
   void addListener(void Function() listener) {
@@ -135,7 +135,7 @@ final class Handlerless extends Solo<Profile> with SoloListenable {
   Handlerless(this.api) : super(Empty());
 
   /// Loads the profile and leaves the state where the body left it.
-  Job<String> load() => run<Profile, String>(
+  Job<String> load() => enqueue<Profile, String>(
         (ctx) async {
           ctx.emit(Loading());
           final name = await ctx.abandonable(api.fetchName);
@@ -158,7 +158,7 @@ final class Background extends Solo<Profile> with SoloListenable {
   Background({this.answers = false}) : super(Empty());
 
   /// A job that ends `Done` and leaves work behind that fails.
-  Job<void> ping() => run<Profile, void>((ctx) async {
+  Job<void> ping() => enqueue<Profile, void>((ctx) async {
         ctx.unattended(() async {
           await Future<void>.delayed(const Duration(milliseconds: 5));
           throw StateError('the ping failed');

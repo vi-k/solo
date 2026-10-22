@@ -48,7 +48,7 @@ base class Syncer extends Solo<AppState> with OpenSolo<AppState>, Desk {
         },
       );
 
-  Job<String> sync(int item) => add(_sync(item));
+  Job<String> sync(int item) => enqueueJob(_sync(item));
 
   /// Not on the page: `_sync` made and handed out, started by nobody.
   Job<String> made(int item) => _sync(item);
@@ -63,13 +63,13 @@ base class Syncer extends Solo<AppState> with OpenSolo<AppState>, Desk {
         (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
       );
 
-  Job<void> recordPath(String path) => add(_recordPath(path));
+  Job<void> recordPath(String path) => enqueueJob(_recordPath(path));
 }
 
 /// "The future of `ctx.run`".
 final class Trying extends Syncer {
   // The parent answers for a failed upload itself.
-  Job<bool> trySync(int item) => run<Ready, bool>(
+  Job<bool> trySync(int item) => enqueue<Ready, bool>(
         key: _Op.trySync,
         (ctx) async {
           try {
@@ -85,7 +85,7 @@ final class Trying extends Syncer {
 
 /// "Working beside a child".
 final class Announcing extends Syncer {
-  Job<String> syncAndAnnounce(int item) => run<Ready, String>(
+  Job<String> syncAndAnnounce(int item) => enqueue<Ready, String>(
         key: _Op.syncAndAnnounce,
         (ctx) async {
           // Kept, not awaited: the upload runs while the parent goes on.
@@ -102,7 +102,7 @@ final class Announcing extends Syncer {
 final class Resending extends Syncer {
   Resending([super.initialState]);
 
-  Job<String> resend(int item) => run<Ready, String>(
+  Job<String> resend(int item) => enqueue<Ready, String>(
         key: _Op.resend,
         (ctx) {
           // A child with a rule of its own: no upload while paused.
@@ -121,7 +121,7 @@ final class Together extends Syncer {
   // `_sync` and `_recordPath` again, now children. The parent holds the
   // queue until its children are done, so a `save()` queued meanwhile
   // waits for both steps.
-  Job<void> syncAndRecord(int item) => run<Ready, void>(
+  Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
         key: _Op.syncAndRecord,
         (ctx) async {
           final path = await ctx.run(_sync(item));

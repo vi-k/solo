@@ -39,7 +39,7 @@ final class Counter extends Solo<int> with OpenSolo<int> {
 (SoloJob<int>, WeakReference<Payload>) captureInBody(Counter solo) {
   final payload = Payload();
   return (
-    solo.run<int, int>((ctx) async => payload.bytes.length),
+    solo.enqueue<int, int>((ctx) async => payload.bytes.length),
     WeakReference(payload),
   );
 }
@@ -48,7 +48,7 @@ final class Counter extends Solo<int> with OpenSolo<int> {
 (SoloJob<void>, WeakReference<Payload>) captureInHandlers(Counter solo) {
   final payload = Payload();
   return (
-    solo.run<int, void>(
+    solo.enqueue<int, void>(
       (ctx) => ctx.abandonable(() => Future<void>.delayed(Duration.zero)),
       ifCancelled: (state, cancelled) => payload.bytes.length,
     ),
@@ -66,7 +66,7 @@ final class Counter extends Solo<int> with OpenSolo<int> {
 (SoloJob<int>, WeakReference<Payload>) valueOfAParent(Counter solo) {
   final payload = Payload();
   final child = solo.job<int, int>((ctx) async => 1);
-  solo.run<int, Object?>((ctx) async {
+  solo.enqueue<int, Object?>((ctx) async {
     await ctx.run(child);
 
     return payload;
@@ -86,7 +86,7 @@ Future<(SoloJob<T>, WeakReference<Payload>)> madeInUnattendedWork<T>(
 ) async {
   final payload = Payload();
   final made = Completer<SoloJob<T>>();
-  final starter = solo.run<int, Object?>((ctx) async {
+  final starter = solo.enqueue<int, Object?>((ctx) async {
     ctx.unattended(() => made.complete(make()));
 
     return payload;
@@ -153,7 +153,7 @@ void main() {
     final solo = Counter();
     final (made, capture) = await madeInUnattendedWork(
       solo,
-      () => solo.run<int, int>((_) async => 1),
+      () => solo.enqueue<int, int>((_) async => 1),
     );
     await made.done;
 
@@ -178,10 +178,10 @@ void main() {
     final solo = Counter();
     final other = Counter();
     final gate = Completer<void>();
-    final ahead = other.run<int, void>((_) => gate.future);
+    final ahead = other.enqueue<int, void>((_) => gate.future);
     final (made, capture) = await madeInUnattendedWork(
       solo,
-      () => other.run<int, int>((_) async => 1),
+      () => other.enqueue<int, int>((_) async => 1),
     );
 
     expect(made.isQueued, isTrue);
@@ -210,7 +210,7 @@ void main() {
     final gate = Completer<void>();
     final (made, capture) = await madeInUnattendedWork(
       solo,
-      () => other.run<int, void>((_) => gate.future),
+      () => other.enqueue<int, void>((_) => gate.future),
     );
 
     expect(made.isRunning, isTrue);
@@ -241,7 +241,7 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'a job made by `job` may wait for `add` as long as anyone '
+      reason: 'a job made by `job` may wait for `enqueueJob` as long as anyone '
           'keeps the handle, and nothing lets go of what it holds until it '
           'is over',
     );
@@ -256,7 +256,7 @@ void main() {
     final solo = Counter();
     final kept = <String>[];
     late final SoloContext<int, int> leaked;
-    final job = solo.run<int, void>(
+    final job = solo.enqueue<int, void>(
       keepWhile: (state) => state < 5,
       (ctx) async => leaked = ctx,
     );

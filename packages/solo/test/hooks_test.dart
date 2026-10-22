@@ -16,7 +16,7 @@ import 'support/test_state.dart';
 void main() {
   test('log lines carry the job level', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
+      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         ctx.log('hello');
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           ctx.log(42);
@@ -41,7 +41,7 @@ void main() {
       Solo.observer = journal;
       final solo = _Hooked(journal.lines);
       try {
-        solo.run<TestState, void>(key: 'job', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'job', (ctx) async {
           ctx
             ..emit(const Preparing())
             ..log('x');
@@ -82,7 +82,7 @@ void main() {
           final solo = _ThrowingFinish();
           try {
             solo
-                .run<TestState, void>(key: 'job', (ctx) async {})
+                .enqueue<TestState, void>(key: 'job', (ctx) async {})
                 .done
                 .then((value) => outcome = value);
             async.flushMicrotasks();
@@ -133,7 +133,7 @@ void main() {
       Solo.observer = journal;
       final solo = _Closing(journal.lines);
       try {
-        solo.run<TestState, void>(key: 'job', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'job', (ctx) async {
           await ctx.abandonable(
             () => Future<void>.delayed(const Duration(seconds: 1)),
           );
@@ -221,8 +221,8 @@ void main() {
           final solo = _ThrowingFinish();
           try {
             solo
-              ..run<TestState, void>(key: 'first', (ctx) async {})
-              ..run<TestState, void>(key: 'second', (ctx) async {});
+              ..enqueue<TestState, void>(key: 'first', (ctx) async {})
+              ..enqueue<TestState, void>(key: 'second', (ctx) async {});
             async.flushTimers();
           } finally {
             solo.close();
@@ -258,7 +258,7 @@ void main() {
             // queue and are dropped by the drain, one hook throw each.
             for (final key in ['a', 'b', 'c']) {
               solo
-                  .run<TestState, void>(key: key, (ctx) async {})
+                  .enqueue<TestState, void>(key: key, (ctx) async {})
                   .done
                   .then(outcomes.add);
             }
@@ -293,7 +293,7 @@ void main() {
           final solo = _ThrowingStart();
           try {
             solo
-                .run<TestState, void>(key: 'parent', (ctx) async {
+                .enqueue<TestState, void>(key: 'parent', (ctx) async {
                   final child = solo.job<TestState, void>(
                     key: 'child',
                     (childCtx) async {},
@@ -335,7 +335,7 @@ void main() {
           try {
             solo.stream.listen(seen.add);
             solo
-                .run<Initial, void>(key: 'job', (ctx) async {
+                .enqueue<Initial, void>(key: 'job', (ctx) async {
                   await pause(ctx, 100);
                 })
                 .done
@@ -369,7 +369,7 @@ void main() {
           Solo.observer = _ThrowingObserver();
           final solo = _Hooked(lines);
           try {
-            solo.run<TestState, void>(key: 'job', (ctx) async {});
+            solo.enqueue<TestState, void>(key: 'job', (ctx) async {});
             async.flushTimers();
           } finally {
             solo.close();
@@ -395,7 +395,7 @@ void main() {
       () {
         fakeAsync((async) {
           final solo = _LazyLog(lines);
-          job = solo.run<TestState, void>(key: 'job', (ctx) async {
+          job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
             await delay(100);
             // The line is built where the hook reads it, and the job has
             // been cancelled by then: reading the state throws.
@@ -422,7 +422,7 @@ void main() {
         () {
           fakeAsync((async) {
             final solo = _ThrowingAtStart(thrown)
-              ..run<TestState, void>(key: 'job', (ctx) async {});
+              ..enqueue<TestState, void>(key: 'job', (ctx) async {});
             async.flushTimers();
             solo.close();
             async.flushTimers();
@@ -463,7 +463,7 @@ void main() {
 
   test('the observer sees start, log, error and finish in order', () {
     runSolo((solo, journal, async) {
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'job',
         (ctx) async {
           ctx.log('hello');
@@ -487,7 +487,7 @@ void main() {
     Job.debug = jobs.add;
     try {
       runSolo((solo, journal, async) {
-        solo.run<TestState, void>(key: 'job', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'job', (ctx) async {
           ctx.emit(const Preparing());
         });
         async.flushMicrotasks();
@@ -497,13 +497,13 @@ void main() {
       Job.debug = null;
     }
     // The queue, the state and the closing belong to the controller.
-    expect(engine, contains('add Job(job)'));
+    expect(engine, contains('enqueue Job(job)'));
     expect(engine, contains('state: Preparing(progress: 0)'));
     expect(engine, isNot(contains('Job(job) started')));
     // The life of a job belongs to the core.
     expect(jobs, contains('Job(job) started'));
     expect(jobs, contains('Job(job) finished: Done(null)'));
-    expect(jobs, isNot(contains('add Job(job)')));
+    expect(jobs, isNot(contains('enqueue Job(job)')));
   });
 
   test('a job added while another runs says when it starts', () {
@@ -511,11 +511,11 @@ void main() {
     Solo.debug = engine.add;
     try {
       runSolo((solo, journal, async) {
-        solo.run<TestState, void>(key: 'outer', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'outer', (ctx) async {
           // Not awaited: awaited, it would wait for good.
-          solo.run<TestState, void>(key: 'inner', (ctx) async {});
+          solo.enqueue<TestState, void>(key: 'inner', (ctx) async {});
           ctx.onDispose(() {
-            solo.run<TestState, void>(key: 'cleanup', (ctx) async {});
+            solo.enqueue<TestState, void>(key: 'cleanup', (ctx) async {});
           });
         });
         async.flushMicrotasks();
@@ -523,18 +523,18 @@ void main() {
     } finally {
       Solo.debug = null;
     }
-    expect(engine, contains('add Job(outer)'));
+    expect(engine, contains('enqueue Job(outer)'));
     expect(
       engine,
       contains(
-        'add Job(inner) while Job(outer) is running: '
+        'enqueue Job(inner) while Job(outer) is running: '
         'it starts after Job(outer) ends',
       ),
     );
     expect(
       engine,
       contains(
-        'add Job(cleanup) while Job(outer) is running: '
+        'enqueue Job(cleanup) while Job(outer) is running: '
         'it starts after Job(outer) ends',
       ),
       reason: 'past the body, the job still holds the queue',
@@ -546,10 +546,10 @@ void main() {
     Solo.debug = engine.add;
     try {
       runSolo((solo, journal, async) {
-        solo.run<TestState, void>(key: 'root', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'root', (ctx) async {
           await ctx.run(
             solo.job<TestState, void>(key: 'child', (child) async {
-              solo.run<TestState, void>(key: 'fromChild', (ctx) async {});
+              solo.enqueue<TestState, void>(key: 'fromChild', (ctx) async {});
             }),
           );
         });
@@ -563,7 +563,7 @@ void main() {
     expect(
       engine,
       contains(
-        'add Job(fromChild) while Job(root) is running: '
+        'enqueue Job(fromChild) while Job(root) is running: '
         'it starts after Job(root) ends',
       ),
     );
@@ -575,7 +575,7 @@ void main() {
     try {
       runSolo((solo, journal, async) {
         SoloJob<void> refresh(void Function() inside) =>
-            solo.run<TestState, void>(
+            solo.enqueue<TestState, void>(
               key: 'refresh',
               policy: Policy.droppable,
               (ctx) async => inside(),
@@ -594,7 +594,7 @@ void main() {
     expect(
       engine,
       contains(
-        'add Job(refresh): duplicate of Job(refresh), which is running: '
+        'enqueue Job(refresh): duplicate of Job(refresh), which is running: '
         'if awaited from inside Job(refresh), it waits for itself',
       ),
     );
@@ -609,7 +609,7 @@ void main() {
         SoloJob<void> sync(
           Future<void> Function(SoloContext<TestState, TestState> ctx) body,
         ) =>
-            solo.run<TestState, void>(
+            solo.enqueue<TestState, void>(
               key: 'sync',
               policy: Policy.droppable,
               describe: () => 'call ${++describes}',
@@ -637,7 +637,8 @@ void main() {
     final names = [
       for (final line in engine)
         if (RegExp(
-          r'^add Job\(sync: call \d+\): duplicate of (Job\(sync: call \d+\)), '
+          r'^enqueue Job\(sync: call \d+\): '
+          r'duplicate of (Job\(sync: call \d+\)), '
           r'which is running: if awaited from inside (Job\(sync: call \d+\)), '
           r'it waits for itself$',
         ).firstMatch(line)
@@ -655,12 +656,12 @@ void main() {
     Solo.debug = engine.add;
     try {
       runSolo((solo, journal, async) {
-        SoloJob<void> load() => solo.run<TestState, void>(
+        SoloJob<void> load() => solo.enqueue<TestState, void>(
               key: 'load',
               policy: Policy.droppable,
               (ctx) async {},
             );
-        solo.run<TestState, void>(key: 'outer', (ctx) async {
+        solo.enqueue<TestState, void>(key: 'outer', (ctx) async {
           // Not awaited: awaited, it would wait for good.
           load();
         });
@@ -672,11 +673,11 @@ void main() {
     } finally {
       Solo.debug = null;
     }
-    expect(engine, contains('add Job(load): duplicate of Job(load)'));
+    expect(engine, contains('enqueue Job(load): duplicate of Job(load)'));
     expect(
       engine,
       contains(
-        'add Job(load): duplicate of Job(load), which is queued while '
+        'enqueue Job(load): duplicate of Job(load), which is queued while '
         'Job(outer) is running: it starts after Job(outer) ends',
       ),
     );
@@ -689,7 +690,7 @@ void main() {
       try {
         runSolo((solo, journal, async) {
           final gate = Completer<void>();
-          SoloJob<void> restart() => solo.run<TestState, void>(
+          SoloJob<void> restart() => solo.enqueue<TestState, void>(
                 key: 'k',
                 policy: Policy.restart,
                 cancellable: cancellable,
@@ -728,7 +729,7 @@ void main() {
     try {
       runZonedGuarded(
         () => fakeAsync((async) {
-          PlainSolo<TestState>(const Initial()).run<TestState, void>(
+          PlainSolo<TestState>(const Initial()).enqueue<TestState, void>(
             key: 'job',
             describe: () => throw StateError('describe'),
             (ctx) async {},
@@ -740,7 +741,7 @@ void main() {
     } finally {
       Solo.debug = null;
     }
-    expect(engine, contains('add Job(job: <describe threw StateError>)'));
+    expect(engine, contains('enqueue Job(job: <describe threw StateError>)'));
     expect(zone, isEmpty);
   });
 }

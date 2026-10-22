@@ -11,7 +11,7 @@ import 'test_solo.dart';
 base class Tracker extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Tracker([super.initialState = const Ready()]);
 
-  Job<void> track() => run<Ready, void>(
+  Job<void> track() => enqueue<Ready, void>(
         key: 'track',
         (ctx) => ctx.each(hw.positions, (childCtx, p) {
           childCtx.emit(childCtx.state.copyWith(position: p));
@@ -27,7 +27,7 @@ final class ScreenController extends Solo<Screen> {
 
   ScreenController(this.session) : super(const Screen());
 
-  Job<void> follow() => run<Screen, void>(
+  Job<void> follow() => enqueue<Screen, void>(
         key: 'follow',
         (ctx) async {
           void take(SoloContext<Screen, Screen> target, Session next) =>
@@ -40,7 +40,7 @@ final class ScreenController extends Solo<Screen> {
       );
 
   /// Not on the page: another job of the same controller.
-  Job<void> other() => run<Screen, void>(
+  Job<void> other() => enqueue<Screen, void>(
         key: 'other',
         (ctx) async => stage.trace.add('other ran'),
       );

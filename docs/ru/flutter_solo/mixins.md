@@ -50,7 +50,7 @@ final class Session extends Solo<SessionState> with SoloStream, SoloListenable {
   Session(super.initialState);
 
   Job<void> signIn(String name) =>
-      run<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
+      enqueue<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
 }
 ```
 

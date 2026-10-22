@@ -16,7 +16,7 @@ final class ProfileController extends Solo<ProfileState> {
   /// A fact from outside, the way a source of the application reports one.
   void reflect(ProfileState state) => externalSetState(state);
 
-  Job<String> reload() => run<Loaded, String>(
+  Job<String> reload() => enqueue<Loaded, String>(
         (ctx) async {
           // Another controller's snapshot: a plain read, and the name says
           // as much.

@@ -91,7 +91,7 @@ final class CheckoutController extends Solo<CheckoutState> {
 
   CheckoutController(this._api) : super(const Idle());
 
-  Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
+  Job<Receipt> pay(Order order) => enqueue<CheckoutState, Receipt>(
         key: ('pay', order.id),
         policy: Policy.droppable,
         cancellable: false,
@@ -140,7 +140,7 @@ final class NarrowCheckoutController extends Solo<CheckoutState> {
 
   final Api _api;
 
-  Job<Receipt> pay(Order order) => run<Open, Receipt>(
+  Job<Receipt> pay(Order order) => enqueue<Open, Receipt>(
         key: ('pay', order.id),
         policy: Policy.droppable,
         cancellable: false,
@@ -166,7 +166,7 @@ final class WaitingCheckoutController extends Solo<CheckoutState> {
   final met = <String>[];
 
   Job<void> viaAbandonable(Order order) =>
-      run<CheckoutState, void>((ctx) async {
+      enqueue<CheckoutState, void>((ctx) async {
         try {
           met.add(
             'abandonable got ${await ctx.abandonable(() => _api.pay(order))}',
@@ -177,7 +177,7 @@ final class WaitingCheckoutController extends Solo<CheckoutState> {
         }
       });
 
-  Job<void> viaJoin(Order order) => run<CheckoutState, void>((ctx) async {
+  Job<void> viaJoin(Order order) => enqueue<CheckoutState, void>((ctx) async {
         try {
           met.add('join got ${await ctx.join(() => _api.pay(order))}');
         } on Cancelled {
@@ -187,7 +187,7 @@ final class WaitingCheckoutController extends Solo<CheckoutState> {
       });
 
   Job<void> viaUncancellable(Order order) =>
-      run<CheckoutState, void>((ctx) async {
+      enqueue<CheckoutState, void>((ctx) async {
         final receipt = await ctx.uncancellable(() => _api.pay(order));
         met.add('uncancellable got $receipt');
         try {
@@ -208,7 +208,7 @@ final class SectionedCheckoutController extends Solo<CheckoutState> {
 
   final Api _api;
 
-  Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
+  Job<Receipt> pay(Order order) => enqueue<CheckoutState, Receipt>(
         key: ('pay', order.id),
         policy: Policy.droppable,
         (ctx) => ctx.uncancellable(() async {

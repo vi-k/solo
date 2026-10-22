@@ -31,7 +31,7 @@ void main() {
       // ignore: cascade_invocations
       async.elapse(const Duration(milliseconds: 60));
       events.add(3);
-      solo.run<int, void>((ctx) async => calls.add('B'));
+      solo.enqueue<int, void>((ctx) async => calls.add('B'));
       async.flushMicrotasks();
 
       expect(calls, ['B']);
@@ -138,7 +138,7 @@ void main() {
       final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
       final calls = <String>[];
-      solo.run<int, void>((ctx) => ctx.join(() => gate.future));
+      solo.enqueue<int, void>((ctx) => ctx.join(() => gate.future));
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
         timing: AccumulationTiming.debounce(
@@ -188,7 +188,7 @@ void main() {
       events.add(2);
       async.elapse(const Duration(milliseconds: 60));
       events.add(3);
-      solo.run<int, void>(
+      solo.enqueue<int, void>(
         (ctx) async => calls.add('${async.elapsed}:B'),
       );
       async.flushMicrotasks();
@@ -233,7 +233,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 60));
       events.add(2);
       async.elapse(const Duration(milliseconds: 90));
-      solo.run<int, void>((ctx) async {
+      solo.enqueue<int, void>((ctx) async {
         calls.add('${async.elapsed}:B');
         await ctx.join(() => gate.future);
       });
@@ -386,7 +386,7 @@ void main() {
       final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
       final calls = <String>[];
-      solo.run<int, void>((ctx) => ctx.join(() => gate.future));
+      solo.enqueue<int, void>((ctx) => ctx.join(() => gate.future));
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
         timing: AccumulationTiming.throttle(
@@ -571,7 +571,7 @@ void main() {
         // The ordinary job deliberately separates these accumulation calls.
         // ignore: cascade_invocations
         events.add(1);
-        solo.run<int, void>((ctx) async => calls.add('B'));
+        solo.enqueue<int, void>((ctx) async => calls.add('B'));
         events.add(2);
         async.flushMicrotasks();
         expect(calls, ['A[1]', 'B', 'A[2]']);

@@ -11,7 +11,7 @@ import 'test_state.dart';
 /// where `incrementA` survives `close`.
 void addLifecycle(TestSolo solo, {bool cancellableA = true}) {
   solo
-    ..run<NotDisposed, void>(
+    ..enqueue<NotDisposed, void>(
       key: 'init',
       canStart: (state) => state is Initial,
       (ctx) async {
@@ -26,7 +26,7 @@ void addLifecycle(TestSolo solo, {bool cancellableA = true}) {
           ..emit(const Working());
       },
     )
-    ..run<Working, void>(
+    ..enqueue<Working, void>(
       key: 'incrementA',
       cancellable: cancellableA,
       (ctx) async {
@@ -34,11 +34,11 @@ void addLifecycle(TestSolo solo, {bool cancellableA = true}) {
         ctx.emit(ctx.state.copyWith(a: ctx.state.a + 1));
       },
     )
-    ..run<Working, void>(key: 'incrementB', (ctx) async {
+    ..enqueue<Working, void>(key: 'incrementB', (ctx) async {
       await delay(100);
       ctx.emit(ctx.state.copyWith(b: ctx.state.b + 1));
     })
-    ..run<NotDisposed, void>(key: 'finish', (ctx) async {
+    ..enqueue<NotDisposed, void>(key: 'finish', (ctx) async {
       await delay(100);
       ctx.emit(const Disposed());
     });

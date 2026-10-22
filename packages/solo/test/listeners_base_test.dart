@@ -48,7 +48,7 @@ void main() {
           ..addListener(() => throw StateError('first listener failed'))
           ..addListener(() => secondCalled = true);
 
-        final job = solo.run<Preparing, void>(
+        final job = solo.enqueue<Preparing, void>(
           (ctx) async {
             await delay(100);
             ctx.check();
@@ -94,7 +94,7 @@ void main() {
       final started = Completer<void>();
       final parked = Completer<void>();
 
-      final job = solo.run<Preparing, void>(
+      final job = solo.enqueue<Preparing, void>(
         (ctx) async {
           started.complete();
           await parked.future;
@@ -160,7 +160,7 @@ void main() {
     final started = Completer<void>();
     final parked = Completer<void>();
 
-    solo.run<int, void>(
+    solo.enqueue<int, void>(
       (ctx) async {
         ctx.onCancel(() => log.add('cancelled'));
         started.complete();
@@ -206,7 +206,7 @@ void main() {
     'during close drain mode notifications continue and subscription works',
     () {
       runSolo((solo, journal, async) {
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           (ctx) async {
             await delay(100);
             solo.externalSetState(const Working(a: 1));

@@ -78,7 +78,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => run<ProfileState, String>(
+  Job<String> load() => enqueue<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         ifFailed: (state, error, stackTrace) => Failure(error),
@@ -93,7 +93,7 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-`run<ProfileState, String>` creates and queues a job. `ProfileState` is the
+`enqueue<ProfileState, String>` creates and queues a job. `ProfileState` is the
 job's working type `W`: the states its body works with, which may be narrower
 than the controller's state type `S`. `String` is the job's result type. Both
 can be left to inference: `W` is then the whole of `S`, and the result type is
@@ -104,8 +104,8 @@ updates and cancellation-aware waiting:
 - `ctx.abandonable` waits for the API response, or throws `Cancelled` if the
   job accepts cancellation while waiting.
 
-Two optional parameters of `run` give the state to publish when the job does
-not succeed:
+Two optional parameters of `enqueue` give the state to publish when the job
+does not succeed:
 
 - `ifFailed` returns the state to publish if the job fails.
 - `ifCancelled` returns the state to publish if a started job is cancelled.
@@ -213,7 +213,7 @@ final class Player extends Solo<PlayerState> {
 
   /// A job on the controller's queue. Root jobs run one at a time, and
   /// this one ends when the track starts: the device plays it on its own.
-  Job<Track> play(String id) => run<PlayerState, Track>(
+  Job<Track> play(String id) => enqueue<PlayerState, Track>(
         // Any object is a key. This one keys the operation, not a track.
         key: _Op.play,
         // A new play cancels the one running under the same key.
@@ -305,7 +305,7 @@ the field `session`. The profile API now takes the user: `fetchName(user)`. A
 method that reloads a loaded profile:
 
 ```dart
-Job<String> reload() => run<Loaded, String>(
+Job<String> reload() => enqueue<Loaded, String>(
       (ctx) async {
         // Another controller's snapshot: a plain read, and the name says
         // as much.

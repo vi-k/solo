@@ -27,12 +27,12 @@ SoloJob<String> _sync(int item) => job<Ready, String>(
       },
     );
 
-Job<String> sync(int item) => add(_sync(item));
+Job<String> sync(int item) => enqueueJob(_sync(item));
 ```
 
-`job(...)` makes a job and starts nothing. `add` gives it a place in the queue,
-and `ctx.run` inside a body makes it a child; `_sync` is written once and goes
-both ways later on this page.
+`job(...)` makes a job and starts nothing. `enqueueJob` gives it a place in the
+queue, and `ctx.run` inside a body makes it a child; `_sync` is written once
+and goes both ways later on this page.
 
 A child starts immediately, bypassing the queue, subject to its own start
 rules: its working type, `canStart` and `keepWhile`, the ones
@@ -69,7 +69,7 @@ and `paused`.
 
 ```dart
 // The parent answers for a failed upload itself.
-Job<bool> trySync(int item) => run<Ready, bool>(
+Job<bool> trySync(int item) => enqueue<Ready, bool>(
       key: _Op.trySync,
       (ctx) async {
         try {
@@ -103,7 +103,7 @@ errors page shows what that costs and what a broad clause has to do first.
 ## Working beside a child
 
 ```dart
-Job<String> syncAndAnnounce(int item) => run<Ready, String>(
+Job<String> syncAndAnnounce(int item) => enqueue<Ready, String>(
       key: _Op.syncAndAnnounce,
       (ctx) async {
         // Kept, not awaited: the upload runs while the parent goes on.
@@ -138,8 +138,8 @@ where it hands the future on.
 
 `ctx.run(child).ignore()` explicitly ignores that future's result while the
 parent still waits for its children. `child.ignoreFailure()` alone does not
-handle errors of the future returned by `run`. `ctx.start(child)` starts the
-child and returns no future: its failure goes to the controller's
+handle errors of the future returned by `enqueue`. `ctx.start(child)` starts
+the child and returns no future: its failure goes to the controller's
 `onUnanswered`, as any failure nobody observed does, and the parent waits for
 the child all the same. Take `ctx.start` for a child whose failure somebody
 still has to answer for, and `ctx.run(child).ignore()` only for one whose
@@ -160,7 +160,7 @@ cancellation page.
 ## A child the rules turn away
 
 ```dart
-Job<String> resend(int item) => run<Ready, String>(
+Job<String> resend(int item) => enqueue<Ready, String>(
       key: _Op.resend,
       (ctx) {
         // A child with a rule of its own: no upload while paused.
@@ -188,7 +188,7 @@ cancellation. It joins no waiting list, so the parent waits for nothing; the
 future of `ctx.run` carries that cancellation all the same, and it is what ends
 `resend` above.
 
-`handler:` in that line is not a state handler of `run`. It is
+`handler:` in that line is not a state handler of `enqueue`. It is
 `HandlerCancelReason`, the reason the core gives a body that lets the
 cancellation of its child out, and after it come the child and the cancellation
 it ended with. [Cancellation details](cancellation.md#cancellation-details) has
@@ -264,7 +264,7 @@ SoloJob<void> _recordPath(String path) => job<Ready, void>(
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
     );
 
-Job<void> recordPath(String path) => add(_recordPath(path));
+Job<void> recordPath(String path) => enqueueJob(_recordPath(path));
 ```
 
 ### The first attempt
@@ -290,7 +290,7 @@ path is never recorded, and the continuation ends `Cancelled(closed)`.
 
 ```dart
 // The second attempt: sync waits for this job to end; this job waits for sync.
-Job<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await sync(item).value;
@@ -310,7 +310,7 @@ The hang itself shows nothing, but `Solo.debug` warns of it when the job is
 queued:
 
 ```text
-add Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_Op.syncAndRecord) ends
+enqueue Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_Op.syncAndRecord) ends
 ```
 
 A droppable method called from inside its own job sets a trap that not even
@@ -321,7 +321,7 @@ and the value comes only when the body ends, so `close()` waits for good as
 well. `Solo.debug` shows it on the line of the duplicate:
 
 ```text
-add Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited from inside Job(_Op.sync), it waits for itself
+enqueue Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited from inside Job(_Op.sync), it waits for itself
 ```
 
 ### Two children in a row
@@ -330,7 +330,7 @@ add Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited from
 // `_sync` and `_recordPath` again, now children. The parent holds the
 // queue until its children are done, so a `save()` queued meanwhile
 // waits for both steps.
-Job<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await ctx.run(_sync(item));
@@ -339,7 +339,7 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
     );
 ```
 
-A step written as `job(...)` has both ways open: `add` gives it a queue slot of
-its own, `ctx.run` makes it a child of a job that already holds one. Use
-children within one parent when the whole sequence must occupy the queue
+A step written as `job(...)` has both ways open: `enqueueJob` gives it a queue
+slot of its own, `ctx.run` makes it a child of a job that already holds one.
+Use children within one parent when the whole sequence must occupy the queue
 without another root job running between its steps.

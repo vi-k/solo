@@ -49,7 +49,7 @@ void main() {
               }
 
               final first = events.add(1);
-              final separator = solo.run<TestState, void>(
+              final separator = solo.enqueue<TestState, void>(
                 (ctx) async => calls.add('B'),
               );
               final second = events.add(2);
@@ -136,7 +136,7 @@ void main() {
         }
 
         final first = events.add(1);
-        solo.run<TestState, void>((ctx) async => calls.add('B'));
+        solo.enqueue<TestState, void>((ctx) async => calls.add('B'));
         async.flushMicrotasks();
         expect(calls, ['B']);
         expect(solo.queue.jobs, [first]);
@@ -167,7 +167,7 @@ void main() {
         final solo = TestSolo();
         final blocker = Completer<void>();
         final calls = <List<int>>[];
-        solo.run<TestState, void>((ctx) => ctx.join(() => blocker.future));
+        solo.enqueue<TestState, void>((ctx) => ctx.join(() => blocker.future));
         final events = solo.collect<TestState, int, void>(
           (ctx, values) async => calls.add(values),
           policy: policy,
@@ -315,7 +315,7 @@ void main() {
       fakeAsync((async) {
         final solo = TestSolo();
         final gate = Completer<void>();
-        final blocker = solo.run<TestState, void>(
+        final blocker = solo.enqueue<TestState, void>(
           (ctx) => ctx.join(() => gate.future),
           cancellable: false,
         );
@@ -568,11 +568,11 @@ void main() {
       // Ordinary jobs below deliberately separate the adjacent groups.
       // ignore: cascade_invocations
       events.add(1);
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         (ctx) async => calls.add('${async.elapsed}:B'),
       );
       events.add(2);
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         (ctx) async => calls.add('${async.elapsed}:C'),
       );
       events.add(3);
@@ -749,7 +749,7 @@ void main() {
             startAtOnce: startAtOnce,
           ),
         );
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'busy',
           (ctx) => ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 1500)),
@@ -783,7 +783,7 @@ void main() {
             startAtOnce: startAtOnce,
           ),
         );
-        solo.run<TestState, void>(
+        solo.enqueue<TestState, void>(
           key: 'busy',
           (ctx) => ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 1500)),
@@ -822,7 +822,7 @@ void main() {
           startAtOnce: false,
         ),
       );
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'busy',
         (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 1500)),
@@ -830,7 +830,7 @@ void main() {
       );
       events.add(1);
       async.elapse(const Duration(milliseconds: 100));
-      solo.run<TestState, void>(
+      solo.enqueue<TestState, void>(
         key: 'other',
         (ctx) async => calls.add('${async.elapsed}:other'),
       );
