@@ -23,9 +23,14 @@ typedef _Void = void;
 /// [value] is set for registrations made by `abandonable`, `join` and `run`,
 /// and it is what `disown` looks up.
 final class _Cleanup {
-  final FutureOr<void> Function() run;
+  /// Null, with [owner] and [value], once the registration has left the
+  /// stack for good — run, dropped or taken back: see [release].
+  FutureOr<void> Function()? run;
   final bool always;
-  final Object? value;
+  Object? value;
+
+  /// The job whose stack holds this registration; its remover needs it.
+  JobBase<Object?>? owner;
 
   /// Where this registration stands in the order they were made.
   ///
@@ -35,7 +40,34 @@ final class _Cleanup {
   /// one, and the top one is the newest, wherever it is being kept.
   final int order;
 
-  _Cleanup(this.run, {required this.always, required this.order, this.value});
+  _Cleanup(
+    this.run, {
+    required this.always,
+    required this.order,
+    required this.owner,
+    this.value,
+  });
+
+  /// Lets go of the disposer, the value and the job.
+  ///
+  /// The function [JobContext.onDispose] returned holds this registration,
+  /// and an owner may keep it until its own end, long after the job: held
+  /// on, the registration would keep what the disposer captured and the
+  /// job with its outcome.
+  void release() {
+    run = null;
+    value = null;
+    owner = null;
+  }
+
+  /// Empties [list] of registrations that will never run, letting go of
+  /// each.
+  static void dropAll(List<_Cleanup> list) {
+    for (final cleanup in list) {
+      cleanup.release();
+    }
+    list.clear();
+  }
 }
 
 /// Callbacks of one kind a job keeps, in the order they were registered.
@@ -1514,7 +1546,7 @@ abstract class JobBase<T> implements Job<T> {
     // over. Inside the unwinding the routine that runs the stack is still
     // alive; it reads what is left and lets go of it itself, and the
     // registrations put aside exist only in there.
-    if (!_disposing) _cleanups.clear();
+    if (!_disposing) _Cleanup.dropAll(_cleanups);
     _done.complete(decided);
     // Notify only after the domain has detached this job and delivered its
     // finish hooks: a synchronous subscriber may immediately add more work.
@@ -2066,7 +2098,7 @@ abstract class JobBase<T> implements Job<T> {
         // over, and the list is a field now, not a local that dies with the
         // call.
         final sayDropped = _droppedCleanupsTrace(_pendingCancel ?? outcome);
-        _skipped.clear();
+        _Cleanup.dropAll(_skipped);
         _disposing = false;
         final decided = _pendingCancel ?? outcome;
         // An engine may have ended the job by hand while the stack unwound --
@@ -2135,8 +2167,8 @@ abstract class JobBase<T> implements Job<T> {
           _traceDroppedCleanups();
           // Ended by hand at the barrier: neither pass runs again, and what
           // is left would be held for as long as the handle is.
-          _skipped.clear();
-          _cleanups.clear();
+          _Cleanup.dropAll(_skipped);
+          _Cleanup.dropAll(_cleanups);
           _disposing = false;
           _answerForHandFinished(outcome, announcedBefore: announcedBefore);
           return;
@@ -2347,8 +2379,10 @@ abstract class JobBase<T> implements Job<T> {
   /// Runs one registration; its error goes to [notifyError], and the stack
   /// unwinds on.
   Future<void> _runCleanup(_Cleanup cleanup) async {
+    final run = cleanup.run!;
+    cleanup.release();
     try {
-      await cleanup.run();
+      await run();
     } on Object catch (error, stackTrace) {
       notifyError(error, stackTrace);
     }

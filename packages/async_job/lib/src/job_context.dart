@@ -412,9 +412,10 @@ abstract interface class JobContext {
   /// ctx.unattended(() => analytics.report(event));
   /// ```
   ///
-  /// **Unfinished work holds the job**, its outcome and the body's closure with
-  /// everything it captured — and whatever an engine hangs on the job: in
-  /// `solo`, for example, the controller itself, after `close()` too. A
+  /// **Unfinished work holds the job**, its outcome, everything the work
+  /// captured — and whatever an engine hangs on the job: in `solo`, for
+  /// example, the controller itself, after `close()` too. The body of a
+  /// finished job is let go of; what the work captured from it is not. A
   /// periodic timer left running in here leaks all of that. Work that must end
   /// with the job puts its own stop on the cleanup stack,
   /// `ctx.onDispose(timer.cancel)`, or takes the cancellation through
@@ -910,15 +911,25 @@ abstract class JobContextBase implements JobContext {
       disposer,
       always: always,
       order: _owner._cleanupOrder++,
+      owner: _owner,
       value: value,
     );
     _owner._cleanups.add(cleanup);
-    // Both lists: the unwinding moves a registration it decided to put off
-    // out of the stack, and a disposer running below it may still take
-    // that one back.
+    // Held in a variable and reached through the registration, not through
+    // this context: the caller may keep the remover until its own end, and
+    // it must not keep the disposer or the job — see [_Cleanup.release].
+    _Cleanup? held = cleanup;
     return () {
-      _owner._cleanups.remove(cleanup);
-      _owner._skipped.remove(cleanup);
+      final cleanup = held;
+      held = null;
+      // Null once the registration has run or been dropped.
+      final owner = cleanup?.owner;
+      if (cleanup == null || owner == null) return;
+      // Both lists: the unwinding moves a registration it decided to put off
+      // out of the stack, and a disposer running below it may still take
+      // that one back.
+      owner._cleanups.remove(cleanup);
+      owner._skipped.remove(cleanup);
     };
   }
 
@@ -955,7 +966,7 @@ abstract class JobContextBase implements JobContext {
     look(_owner._cleanups);
     look(_owner._skipped);
     if (found case final list?) {
-      list.removeAt(at);
+      list.removeAt(at).release();
       return true;
     }
     return false;

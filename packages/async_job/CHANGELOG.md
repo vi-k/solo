@@ -165,6 +165,10 @@ new wording.
 - The remover that `whenCancelled` or `ctx.onCancel` returns lets go of the
   callback once called or once the job ends: an owner that kept its removers
   until its own end kept everything the callbacks captured.
+- The remover that `ctx.onDispose` or `ctx.onDiscard` returns lets go of the
+  cleanup and of the job once called, once the cleanup has run and once the job
+  has ended without running it: an owner that kept its removers until its own
+  end kept the job and everything the disposers captured.
 - A job made by `Job(...)` inside work handed to `ctx.unattended` runs in the
   zone the work was started from, so a bare `unawaited` error in it no longer
   reaches the observer of the job that started the work.

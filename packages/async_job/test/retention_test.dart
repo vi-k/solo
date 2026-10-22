@@ -268,6 +268,32 @@ WeakReference<Payload> holdInACleanup(
   return WeakReference(payload);
 }
 
+/// A registration through [kind] by a job that has finished: only the
+/// remover comes back, with the capture and the job. [removed] calls it in
+/// the body; [failing] ends the body with an error, so that `onDiscard`
+/// runs.
+Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
+    keepCleanupRemover(
+  String kind, {
+  required bool removed,
+  required bool failing,
+}) async {
+  final payload = Payload();
+  void Function()? remove;
+  final job = Job<int>((ctx) async {
+    void release() => payload.bytes.length;
+    final kept =
+        kind == 'onDispose' ? ctx.onDispose(release) : ctx.onDiscard(release);
+    remove = kept;
+    if (removed) kept();
+    if (failing) throw StateError('fails');
+    return 1;
+  })
+    ..ignoreFailure();
+  await job.done;
+  return (remove!, WeakReference(payload), WeakReference(job));
+}
+
 /// An observer that holds a payload, the way one made for a screen holds
 /// what the screen needs.
 final class HoldingObserver extends JobObserver {
@@ -331,6 +357,33 @@ void main() {
         remove();
       });
     }
+  }
+
+  for (final (kind, removed, failing, what) in [
+    ('onDispose', true, false, 'once called'),
+    ('onDispose', false, false, 'once the disposer ran'),
+    ('onDiscard', true, false, 'once called'),
+    ('onDiscard', false, true, 'once the disposer ran'),
+    ('onDiscard', false, false, 'skipped on success'),
+  ]) {
+    test('a kept remover of $kind lets go of the cleanup and the job $what',
+        () async {
+      final (remove, capture, job) =
+          await keepCleanupRemover(kind, removed: removed, failing: failing);
+      expect(
+        await collected(capture),
+        isTrue,
+        reason: 'an owner that keeps its removers until it is disposed '
+            'would keep what the disposers captured',
+      );
+      expect(
+        await collected(job),
+        isTrue,
+        reason: 'and the job, with its outcome',
+      );
+      // Kept alive through the collection, and harmless when called late.
+      remove();
+    });
   }
 
   test('a finished child lets go of its parent', () async {

@@ -598,7 +598,7 @@ final class _RunAllGroup<T> {
       if (trace != null) {
         traces.add(trace);
       }
-      branch.job._skipped.clear();
+      _Cleanup.dropAll(branch.job._skipped);
     }
     for (final branch in _branches) {
       // Step five: released with the verdict, and the list goes back. The
