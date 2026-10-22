@@ -21,7 +21,8 @@ final class Opening extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Job<TempFile> start() {
     final bodies = <Future<TempFile> Function(SoloContext<AppState, Idle> ctx)>[
       (ctx) async {
-        // Made here, on the spot: nothing arrives between the two lines.
+        // Made here, on the spot: the release is registered on the next line,
+        // even if `listen` has cancelled the job.
         final sub = device.events.listen(onEvent);
         ctx.onDispose(sub.cancel);
 
