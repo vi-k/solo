@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-23:** связка выпуска `async_job` 0.3.0 выполняется
-> этим коммитом; итог публикации дописывается следующим коммитом.
+> **Состояние на 2026-10-23:** `async_job` 0.3.0 опубликован на pub.dev;
+> релизный коммит `1d147b72` и аннотированный тег отправлены в origin.
 > **Что это:** выполнение разрешённой владельцем связки выпуска `async_job`.
 > **Связанные записи:** `2026-10-22-release-check-report.md`,
 > `2026-10-21-release-prep-report.md`,
@@ -25,9 +25,24 @@
 - дерево чистое, оверрайдов у ядра нет;
 - `dart pub publish --dry-run`: 0 предупреждений, архив 408 KB — README,
   `doc/`, `example/`, `lib/` и `test/`, русский README исключён;
-- CI на `b24077b2` — `gate` и `site`.
+- CI на `b24077b2` зелёный, `gate` и `site`.
 
 ## Связка
 
-Релизный коммит `Release async_job 0.3.0`, аннотированный тег
-`async_job-v0.3.0`, push `main` с тегом, `dart pub publish --force`.
+Связка выполнена подряд:
+
+- `1d147b72` — Release async_job 0.3.0;
+- аннотированный тег `async_job-v0.3.0` указывает на `1d147b72`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/async_job-v0.3.0^{}` дают `1d147b72`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/async_job version 0.3.0»;
+- API pub.dev вернул `latest: 0.3.0`.
+
+Пакет: https://pub.dev/packages/async_job/versions/0.3.0
+
+Выпуск завершён. `solo` и `flutter_solo` не публиковались, их оверрайды
+на дерево остались. Следующий шаг — подготовка `solo`: снять
+`pubspec_overrides.yaml` у пакета и его примера, `git add` удаление, прогнать
+проверки и dry-run против опубликованного `async_job` 0.3.0. Связка `solo` —
+по отдельному запросу владельца.
