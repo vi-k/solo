@@ -16,24 +16,19 @@ part of 'job_base.dart';
 abstract interface class Job<T> {
   /// Creates a job and starts it on the next microtask.
   ///
-  /// Not inside the constructor: the caller puts the handle in a variable
-  /// first, listens to [done] if it wants to, and may cancel before the body
-  /// ever runs — a job cancelled by then ends as `Cancelled(manual)` with
-  /// `started: false`, and the body is never called. The job is a root and
-  /// stays one, so [JobContext.run] does not take it: a child is made with
-  /// [deferred]. A job a body returns is not waited for, and a body of
-  /// `Job<void>` that returns a job of [deferred] nobody has started ends the
-  /// job [Failed] with an [ArgumentError]: `void` lets the analyzer take the
-  /// handle, and nothing here starts it. A body of a wider type keeps such a
-  /// job as its value.
+  /// Not inside the constructor: the caller may listen to [done] or cancel
+  /// first, and a job cancelled by then ends `Cancelled(manual)` with
+  /// `started: false`, its body never called. The job is a root, so
+  /// [JobContext.run] does not take it: a child is made with [deferred]. A job
+  /// a body returns is not waited for: a body of `Job<void>` that returns a
+  /// job of [deferred] nobody has started ends the job [Failed] with an
+  /// [ArgumentError], and a body of a wider type keeps such a job as its value.
   ///
   /// [observer] receives the hooks of this job, and a child inherits it unless
-  /// given one of its own. [timeout] gives the job a deadline of its own,
-  /// counted from the start of the body; when it runs out first, the job is
-  /// cancelled with a [TimeoutCancelReason] and ends `Cancelled(timeout)`, with
-  /// no `TimeoutException`. Throws [ArgumentError] when [timeout] is zero or
-  /// negative, and when it comes with `cancellable: false`: the deadline is a
-  /// cancellation the job may refuse, and such a job would refuse it.
+  /// given one of its own. [timeout] is a deadline counted from the start of
+  /// the body: when it runs out first, the job ends `Cancelled(timeout)`.
+  /// Throws [ArgumentError] when [timeout] is zero or negative, or comes with
+  /// `cancellable: false`.
   ///
   /// ```dart
   /// final job = Job<Database>((ctx) async {
@@ -48,8 +43,7 @@ abstract interface class Job<T> {
   /// ```
   ///
   /// See [A deadline of the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/time.md#a-deadline-of-the-job)
-  /// on the time page for what the deadline bounds and how it meets a section
-  /// of [JobContext.uncancellable].
+  /// on the time page for what the deadline bounds.
   factory Job(
     Future<T> Function(JobContext ctx) body, {
     Object? key,
@@ -99,26 +93,20 @@ abstract interface class Job<T> {
 
   /// Creates a root job that follows [stream], one event at a time.
   ///
-  /// The job is running when this returns: it subscribes inside the call, so an
-  /// event a broadcast stream sends right afterwards is not lost, and
+  /// The job is running when this returns: it subscribes inside the call, so
   /// [JobObserver.onStart] and even [onData] may be called before the caller
   /// has the handle. [onData] receives the context of the job itself, and an
   /// asynchronous callback is awaited before the next event is delivered. The
   /// job ends [Done] when the stream ends, and [Failed] on an error of the
-  /// stream or of the callback, or with an [ArgumentError] when the callback
-  /// returns a job of [Job.deferred] nobody has started: nothing here starts
-  /// it. A cancellation cancels the subscription at once and waits for the
-  /// callback that is running, so the callback must not await the job's own
-  /// completion or cancellation. The rest is what [JobContext.each] says of its
-  /// child.
+  /// stream or of the callback. A cancellation cancels the subscription at
+  /// once and waits for the callback that is running, so the callback must not
+  /// await the job's own completion or cancellation. The rest is what
+  /// [JobContext.each] says of its child.
   ///
   /// The named parameters are those of [Job.new] but `timeout`: a deadline on
-  /// following a stream is set from outside. The job is a root wherever it is
-  /// made, not a [ChildJob]: a body follows a stream with [JobContext.each].
-  /// With `cancellable: false` nothing outside the job stops it, and the
-  /// future of [cancel] completes only when the job ends by itself: the
-  /// stream ends or fails, or the callback throws. Do not await it on a
-  /// stream that may never end.
+  /// following a stream is set from outside. With `cancellable: false` the
+  /// future of [cancel] completes only when the job ends by itself; do not
+  /// await it on a stream that may never end.
   ///
   /// ```dart
   /// final saving = Job.each<String>(messages, (ctx, message) {
@@ -189,14 +177,13 @@ abstract interface class Job<T> {
   /// Walks [error] and hands each failure in it to [onFailure] and each
   /// cancellation to [onCancelled], one at a time.
   ///
-  /// An outcome keeps an error as it was thrown, and so does a `catch`. That
-  /// error can be a `ParallelWaitError` of `[a, b].wait`, holding failures and
-  /// cancellations side by side: a check for `error is Cancelled` lets a
-  /// cancellation inside it through, and a report of the whole error names none
-  /// of its failures. The hooks of an observer need no such walk: the job walks
-  /// the error this way itself, and no call to [onFailure] is how a job decides
-  /// to drop an error as a cancellation and keep it out of the zone. A callback
-  /// that throws ends the walk, and the error reaches the caller.
+  /// An outcome and a `catch` keep an error as it was thrown, and that can be
+  /// a `ParallelWaitError` of `[a, b].wait`, holding failures and cancellations
+  /// side by side: a check for `error is Cancelled` lets a cancellation inside
+  /// it through. The hooks of an observer need no such walk: the job walks the
+  /// error this way itself. A callback that throws ends the walk, and the error
+  /// reaches the caller; when the caller is a hook of an observer, the job
+  /// catches it and the zone gets it, except a [Cancelled], which is dropped.
   ///
   /// ```dart
   /// if (outcome case Failed(:final error, :final stackTrace)) {
@@ -204,28 +191,16 @@ abstract interface class Job<T> {
   /// }
   /// ```
   ///
-  /// The rules:
+  /// Nothing is lost: what the walk cannot read goes to [onFailure] whole, with
+  /// the stack trace of the error around it — a `ParallelWaitError` of a record
+  /// longer than nine or of a shape it does not know, one whose list throws
+  /// when read, one already being walked further up, and a branch that is not
+  /// an [AsyncError]. The readable branches of a partly readable list are
+  /// walked all the same. Each `ParallelWaitError` is walked at most once, by
+  /// identity.
   ///
-  /// * A [Cancelled] goes to [onCancelled] and any other error that is not a
-  ///   `ParallelWaitError` to [onFailure], with [stackTrace].
-  /// * A `ParallelWaitError` is walked depth first, its branches in order. A
-  ///   `null` branch succeeded and is skipped; an [AsyncError] branch goes by
-  ///   these rules, with the branch's stack trace.
-  /// * Nothing is lost. What the walk cannot read goes to [onFailure] whole,
-  ///   with the stack trace of the error around it: a `ParallelWaitError` of a
-  ///   record longer than nine or of a shape it does not know, one whose list
-  ///   throws when read, one already being walked further up, and a branch that
-  ///   is not an [AsyncError]. The readable branches of a partly readable list
-  ///   are walked all the same. An error with neither a failure nor a
-  ///   cancellation anywhere in it goes to [onFailure] whole, with
-  ///   [stackTrace].
-  /// * Each `ParallelWaitError` is walked once and handed over whole at most
-  ///   once, by identity, however many branches lead to it.
-  ///
-  /// When the caller is a hook of an observer, the job catches what a callback
-  /// throws: the zone gets it, except a [Cancelled], which is dropped, along
-  /// with the branches not yet walked. See [Several failures in one error](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#several-failures-in-one-error)
-  /// on the errors page.
+  /// See [Several failures in one error](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#several-failures-in-one-error)
+  /// on the errors page for the order of the walk.
   static void visitErrors(
     Object error,
     StackTrace stackTrace, {
@@ -303,25 +278,19 @@ abstract interface class Job<T> {
 
   /// Creates a job that runs [onValue] after this job succeeds and cleans up.
   ///
-  /// The callback receives its own [JobContext] and this job's value. It is
-  /// called asynchronously, even when this job has already finished, and may
+  /// The callback receives its own [JobContext] and this job's value, is
+  /// called asynchronously even when this job has already finished, and may
   /// return a value or a future. A failed source forwards its error and stack
-  /// trace without calling [onValue], and forwarding observes the failure: the
-  /// continuation answers for it from then on. A cancellation travels both
-  /// ways: cancelling the continuation asks its unfinished source to cancel,
-  /// and a cancelled source cancels the continuation. **A job is continued
-  /// once:** a second call throws a [StateError] before anything is made, and
-  /// so does a call on a job that [shared] has continued. To continue one job
-  /// in several branches, give each branch a handle of [shared]. An engine that
-  /// hands one job to several callers may refuse this call from the first one
-  /// on.
+  /// trace without calling [onValue], and the continuation answers for the
+  /// failure from then on. **A job is continued once:** a second call throws a
+  /// [StateError] before anything is made, and so does a call on a job that
+  /// [shared] has continued; give each branch a handle of [shared]. An engine
+  /// that hands one job to several callers may refuse this call from the first
+  /// one on.
   ///
-  /// The continuation starts itself when ready and is not a [ChildJob]:
-  /// [JobContext.run] does not take it. It is a root job of the core with its
-  /// own optional [observer], and awaiting it from its source's body or cleanup
-  /// deadlocks. A continuation of `void` fails with an [ArgumentError] when its
-  /// callback returns a job of [Job.deferred] that nobody has started.
-  /// [key] and [describe] name it as they name any job, see
+  /// The continuation is a root job of the core with its own optional
+  /// [observer], not a [ChildJob], and awaiting it from its source's body or
+  /// cleanup deadlocks. [key] and [describe] name it as they name any job, see
   /// [A job's name](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#a-jobs-name);
   /// without [describe] its description is `then`.
   ///
@@ -343,35 +312,21 @@ abstract interface class Job<T> {
   /// Creates a handle that finishes with the outcome of this job and cannot
   /// reach it: one branch of a job continued in several.
   ///
-  /// A job is continued once: by one [then], or by handles of this. Each call
-  /// makes a new handle, cancelled independently of the others; the value
-  /// is the same for all of them, so a resource it holds is closed by code
-  /// that waits for every branch, not by each branch. A call on a job that
-  /// [then] has continued throws a [StateError] before anything is made, and
-  /// so does [then] on a job that has a handle.
+  /// A job is continued once, by one [then] or by handles of this: a call on a
+  /// job that [then] has continued throws a [StateError] before anything is
+  /// made. Each handle is cancelled independently of the others and carries
+  /// the same value, so a resource it holds is closed by code that waits for
+  /// every branch, not by each branch.
   ///
-  /// The handle has no body. It ends with the [Done] or [Failed] of this job,
-  /// and with a [Cancelled] whose reason is a [ChainCancelReason] as soon as
-  /// this job accepts a cancellation, without waiting for its cleanup. While
-  /// this job refuses or holds a cancellation, the handle waits. Cancelling
-  /// the handle, or a continuation after it, ends the handle at once and
-  /// leaves this job alone. Nor does the handle start a job of
-  /// [Job.deferred] that nobody has started. The handle of a job that has
-  /// already finished ends on the next microtask, not inside the call: until
-  /// then its [outcome] is `null`, as with [then].
+  /// The handle has no body: it ends with the [Done] or [Failed] of this job,
+  /// or [Cancelled] with a [ChainCancelReason] as soon as this job accepts a
+  /// cancellation, and waits while this job refuses or holds one. It does not
+  /// start a job of [Job.deferred], and on a job that has already finished it
+  /// ends on the next microtask, not inside the call.
   ///
-  /// A failure the handle carries observes this job, and the handle answers
-  /// for it unless somebody observes the handle. Several handles that carry
-  /// one failure answer for it once. A handle cancelled before this job
-  /// failed carries nothing, and this job answers for its own failure.
-  ///
-  /// The handle is a root job of the core with its own optional [observer],
-  /// which hears [JobObserver.onFinish] and not [JobObserver.onStart]. It
-  /// inherits nothing and is not a [ChildJob]: [JobContext.run] does not take
-  /// it. It is continued like any job, by one [then] or by handles of its
-  /// own. [key] and [describe] name it as they name any job, see
-  /// [A job's name](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#a-jobs-name);
-  /// without [describe] its description is `shared`.
+  /// The handle is a root job that inherits nothing, with its own optional
+  /// [observer], which hears [JobObserver.onFinish] and not
+  /// [JobObserver.onStart]. Without [describe] its description is `shared`.
   ///
   /// ```dart
   /// final text = Job<String>((ctx) async => 'hello');
@@ -380,6 +335,10 @@ abstract interface class Job<T> {
   /// length.cancel(); // text and loud run on
   /// print(await loud.value); // HELLO
   /// ```
+  ///
+  /// See [A handle for each branch](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/chains.md#a-handle-for-each-branch)
+  /// on the chains page, and [A job's name](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#a-jobs-name)
+  /// on the observing page for [key] and [describe].
   Job<T> shared({
     Object? key,
     String Function()? describe,
@@ -389,17 +348,12 @@ abstract interface class Job<T> {
   /// Registers [callback] for cancellation and returns an unregister function.
   ///
   /// Calls it once, synchronously, with the [Cancelled] when the job accepts a
-  /// cancellation: for a running job after the cancellation has cascaded to
-  /// its children and its [JobContext.onCancel] callbacks have run, without
-  /// waiting for the body; for a job cancelled before start, when it is
-  /// dropped. A refused cancellation does not call it, a held one calls it
-  /// when accepted, and a job that ends [Done] or [Failed] releases it
-  /// uncalled; registering once the pass over the callbacks has begun calls
-  /// it at once. Registering does not observe a [Failed] outcome. The
-  /// callback is synchronous: the future of an `async` one is not awaited and
-  /// its errors are not caught here, while a synchronous error goes to
-  /// [JobObserver.onError] and on to the answer, and a [Cancelled] it throws
-  /// never reaches the zone.
+  /// cancellation, without waiting for the body; a refused cancellation does
+  /// not call it, and a job that ends [Done] or [Failed] releases it uncalled.
+  /// Registering does not observe a [Failed] outcome. The callback is
+  /// synchronous: its error goes to [JobObserver.onError] and on to the
+  /// answer, and the future of an `async` one is not awaited, nor are its
+  /// errors caught here.
   ///
   /// ```dart
   /// final unregister = job.whenCancelled((cancelled) {
@@ -410,7 +364,7 @@ abstract interface class Job<T> {
   /// ```
   ///
   /// See [Listening for the cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#listening-for-the-cancellation)
-  /// on the outcomes page.
+  /// on the outcomes page for when the callback runs and where its errors go.
   void Function() whenCancelled(void Function(Cancelled) callback);
 
   /// Registers [callback] for the end of the job and returns an unregister
@@ -474,14 +428,13 @@ abstract interface class Job<T> {
   /// The failure then reaches neither the zone nor [JobAnswerer.onUnanswered];
   /// [JobObserver.onError] still hears it, and the outcome stays there to be
   /// read. Call it on a fire-and-forget job whose failure is already handled
-  /// elsewhere, by a [JobObserver] of your own; code that waits for [done] or
-  /// [value] observes the failure itself and needs no call. Waiting does not
-  /// observe the failure of the body of a job that ends [Cancelled], nor of one
-  /// an engine ended by hand with an outcome of its own: the outcome does not
-  /// carry it, it is answered for however the outcome was read, and this is
-  /// what silences it. An error an operation throws because the cancellation
-  /// stopped it is better named once, in [Job.isCancellationError], than
-  /// silenced job by job.
+  /// elsewhere; code that waits for [done] or [value] observes the failure
+  /// itself and needs no call. It silences this job alone, not its children.
+  /// Waiting does not observe the failure of the body of a job that ends
+  /// [Cancelled]: the outcome does not carry it, and this call silences it
+  /// only when made before the job ends, or at the latest from
+  /// [JobObserver.onFinish] or a callback of [whenCancelled] or [whenFinished]
+  /// registered before it ends.
   ///
   /// ```dart
   /// Job<void>(
@@ -490,16 +443,7 @@ abstract interface class Job<T> {
   /// ).ignoreFailure();
   /// ```
   ///
-  /// It silences this job alone. The failure of the body of a child of
-  /// [JobContext.run] that ends [Cancelled], and that of a branch of
-  /// [JobContext.runAll] the group did not throw, reach no caller: this, called
-  /// on the child, silences them, and called on the parent, neither. A [Failed]
-  /// the parent takes reaches the parent's caller either way.
-  ///
-  /// Call it before the job ends, or at the latest from [JobObserver.onFinish]
-  /// or a callback of [whenCancelled] or [whenFinished] registered before it
-  /// ends: a failure the outcome does not carry is answered as the job
-  /// finishes, and a call from a listener of [done] comes too late for it. See [Telling the core it is handled](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#telling-the-core-it-is-handled)
+  /// See [Telling the core it is handled](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#telling-the-core-it-is-handled)
   /// on the outcomes page.
   void ignoreFailure();
 }
@@ -535,13 +479,17 @@ abstract interface class ChildJob<T> implements Job<T> {}
 /// A job that starts when it is told to: by hand, through [start], or by a
 /// parent, through [JobContext.run].
 abstract interface class DeferredJob<T> implements ChildJob<T> {
-  /// Runs the body, in the zone this is called from. Called inside the work
-  /// of [JobContext.unattended], the job starts in the zone that work was
-  /// started from, past any zone forked inside the work, as a job made in
-  /// there does.
+  /// Runs the body, in the zone this is called from.
+  ///
+  /// Called inside the work of [JobContext.unattended], the job starts in the
+  /// zone that work was started from, past any zone forked inside the work, as
+  /// a job made in there does.
   ///
   /// Throws [StateError] if the job already ran, and also if it was
   /// cancelled before it started: a job dropped then is finished, and a
   /// finished job does not run.
+  ///
+  /// See [Deferred start](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/extending.md#deferred-start)
+  /// on the extending page.
   void start();
 }

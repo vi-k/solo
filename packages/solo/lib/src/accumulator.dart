@@ -7,8 +7,9 @@ enum AccumulationPolicy {
   adjacent,
 
   /// Joins the last matching group, as [join] does, and moves that group's
-  /// job to the queue's tail, keeping its handle. Nothing is cancelled, so
-  /// `cancellable: false` has nothing to refuse.
+  /// job to the queue's tail, keeping its handle.
+  ///
+  /// Nothing is cancelled, so `cancellable: false` has nothing to refuse.
   replace,
 
   /// Joins the last matching group at its existing position in the queue.

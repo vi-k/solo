@@ -19,8 +19,8 @@ final class SoloTransition<S extends Object> {
   final S current;
 
   /// The job the change belongs to, or `null` for an `externalSetState`.
-  /// A child of the running job is that child, not the root it belongs to.
   ///
+  /// A child of the running job is that child, not the root it belongs to.
   /// Usually the job whose `emit` made the change. A state returned by the
   /// job's `ifFailed` or `ifCancelled` handler is its change as well, although
   /// by then its body has ended and emitted nothing itself. A handler that

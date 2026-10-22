@@ -19,11 +19,6 @@ enum Policy {
   /// A child is not looked at, running or not: it runs inside another job
   /// and never went through the queue, which is all a policy rules.
   ///
-  /// The running job counts only while it is still going to do the work. One
-  /// that has been cancelled and is unwinding is not a duplicate — it will
-  /// never do what the new call is asking for — and the new job is enqueued as
-  /// usual.
-  ///
   /// The job found by the key is handed back as the result type of the new one,
   /// so the two result types have to be the same one: a key held by a job of
   /// another type throws [ArgumentError], and it throws before the new job is
@@ -34,8 +29,7 @@ enum Policy {
   ///
   /// The new job goes with all it was given: the `timeout` of a call that
   /// found a live duplicate is lost along with it, and the job handed back
-  /// keeps the deadline it was made with, or none. Once that job has ended
-  /// — by its own deadline too — the next call queues a job of its own.
+  /// keeps the deadline it was made with, or none.
   ///
   /// Every caller of the key may hold the same job, so each one continues
   /// it through its own handle of `shared()`, and a plain `then` on a job
@@ -44,22 +38,26 @@ enum Policy {
   /// one hands it back. A `then` its own caller took before stays, and then
   /// `shared()` throws for the caller of this policy, who is left with
   /// `done` and `value`: give this policy a key of its own.
+  ///
+  /// See [Queue and policies](https://github.com/vi-k/solo/blob/main/packages/solo/doc/jobs.md#queue-and-policies)
+  /// on the jobs page.
   droppable,
 
-  /// Append, then remove queued jobs with the same key: their `onFinish`
-  /// and cancellation listeners already see the new job queued. The running
-  /// root job is left alone, and so is a queued job created with
-  /// `cancellable: false` — the removal is the one `SoloQueue.removeWhere`
-  /// does without `force`. A removed job ends `Cancelled(replaced)`, whose
-  /// reason is a `ReplacedCancelReason`.
+  /// Append, then remove queued jobs with the same key.
+  ///
+  /// The `onFinish` and cancellation listeners of the removed jobs already see
+  /// the new job queued. The running root job is left alone, and so is a
+  /// queued job created with `cancellable: false` — the removal is the one
+  /// `SoloQueue.removeWhere` does without `force`. A removed job ends
+  /// `Cancelled(replaced)`, whose reason is a `ReplacedCancelReason`.
   replace,
 
   /// Like [replace], and also cancel the running root job with the same
   /// key without waiting for it — unless that one was created with
-  /// `cancellable: false`, which refuses. The reason of that cancellation
-  /// is a `ReplacedCancelReason` as well.
+  /// `cancellable: false`, which refuses.
   ///
-  /// The `ifCancelled` of the cancelled job runs, and its state is published
+  /// The reason of that cancellation is a `ReplacedCancelReason` as well. The
+  /// `ifCancelled` of the cancelled job runs, and its state is published
   /// before the newer job starts. A handler that should leave the state to
   /// the newer job hands back the state it was given, which publishes
   /// nothing:
@@ -69,7 +67,8 @@ enum Policy {
   ///     cancelled.reason is ReplacedCancelReason ? state : const Initial(),
   /// ```
   ///
-  /// The table of `doc/state.md`, "Handler eligibility and errors", has the
-  /// rest.
+  /// The table of
+  /// [Handler eligibility and errors](https://github.com/vi-k/solo/blob/main/packages/solo/doc/state.md#handler-eligibility-and-errors)
+  /// on the state page has the rest.
   restart,
 }

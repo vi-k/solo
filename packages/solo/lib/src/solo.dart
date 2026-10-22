@@ -20,8 +20,9 @@ part 'job_context.dart';
 part 'queue.dart';
 
 /// The engine: state, queue, hooks and its own listeners ([addListener]).
-/// [publish] is the seam for a delivery of another kind; `SoloStream`
-/// adds a broadcast stream through it.
+///
+/// [publish] is the seam for a delivery of another kind; `SoloStream` adds a
+/// broadcast stream through it.
 ///
 /// A controller's operations are methods of its own, such as `load()`, built
 /// from [enqueue], or from [job] and [enqueueJob], and from [collect] and
@@ -32,14 +33,16 @@ part 'queue.dart';
 /// [onChange], [onClose] and the [observer]'s — are a cross-cutting channel, so
 /// an error thrown by one goes to the current zone and changes nothing else:
 /// the job's outcome, the queue and [close] carry on as if the hook had
-/// returned. [onUnanswered] is the one with a body of its own: what reaches it
-/// and has nowhere else to go — a disposer, an `onCancel` callback, a late
-/// failure of an abandoned call or of work handed to `JobContext.unattended`,
-/// the failure of the body of a job that ends [Cancelled], a rule that threw, a
-/// [Failed] nobody observes — goes on to [unansweredHandler], or to the zone
-/// when none is set. If it throws, the error it was asked about goes to the
-/// zone first. [publish] is not one of them: it is how a subclass delivers the
+/// returned. [publish] is not one of them: it is how a subclass delivers the
 /// state, and an error there is the subclass's own business.
+///
+/// [onUnanswered] is the one hook with a body of its own: what reaches it and
+/// has nowhere else to go goes on to [unansweredHandler], or to the zone when
+/// none is set. If it throws, the error it was asked about goes to the zone
+/// first.
+///
+/// See [Reference](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#solo)
+/// for every member and the section that explains it.
 abstract class Solo<S extends Object> {
   /// A global observer for all controllers; `null` by default.
   ///
@@ -97,16 +100,15 @@ abstract class Solo<S extends Object> {
   /// or its cleanup, waits for good, and this is the line that shows it.
   ///
   /// A droppable duplicate gets a tail too, since [enqueueJob] hands back the
-  /// job it duplicates. A duplicate of a queued job gets the same tail as
-  /// above, `enqueue Job(load): duplicate of Job(load), which is queued while
-  /// Job(outer) is running: it starts after Job(outer) ends`. A duplicate of
-  /// the running job gets `enqueue Job(x): duplicate of Job(x), which is
-  /// running: if awaited from inside Job(x), it waits for itself`: a wait for
-  /// the running job from its body, a child or its cleanup is a wait for
-  /// itself, cancelling the job does not wake a plain `await`, and not even
-  /// [close] ends it. Who called is not known here, so a duplicate enqueued
+  /// job it duplicates. A duplicate of a queued job gets the tail of the job
+  /// it duplicates, and a duplicate of the running job gets `enqueue Job(x):
+  /// duplicate of Job(x), which is running: if awaited from inside Job(x), it
+  /// waits for itself`. Who called is not known here, so a duplicate enqueued
   /// from outside, by a second tap on a button, gets the tail as well, and a
   /// wait for the job there is no trap.
+  ///
+  /// See [Steps in a row](https://github.com/vi-k/solo/blob/main/packages/solo/doc/children.md#steps-in-a-row)
+  /// on the children page for both traps.
   static void Function(String message)? debug;
 
   S _state;
@@ -161,15 +163,14 @@ abstract class Solo<S extends Object> {
   /// Calls [hook] the way every hook is called: see [callHook].
   static void _callHook(void Function() hook) => callHook(hook);
 
-  /// The current state, for a reader outside a job. Reading is always
-  /// safe; only jobs write.
+  /// The current state, for a reader outside a job.
   ///
-  /// Not named `state` on purpose. A job body is a closure inside a method
-  /// of the controller, so every member of the controller is in scope
-  /// there, and a bare `state` would compile and read the state without a
-  /// checkpoint — past a cancellation the body was supposed to honour. A
-  /// body reads through [SoloContext.state] instead, and this name makes
+  /// Reading is always safe; only jobs write. Not named `state` on purpose: a
+  /// body reads through [SoloContext.state], a checkpoint, and this name makes
   /// the wrong one impossible to write by habit.
+  ///
+  /// See [Why `currentState` and not `state`](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#why-currentstate-and-not-state)
+  /// in the package README.
   S get currentState => _state;
 
   /// Whether [close] was called.
@@ -252,8 +253,9 @@ abstract class Solo<S extends Object> {
   }
 
   /// Notifies the engine's own listeners, then stands as the seam a
-  /// subclass or mixin adds a delivery of its own through. Called after
-  /// `onChange` and before running jobs are re-evaluated.
+  /// subclass or mixin adds a delivery of its own through.
+  ///
+  /// Called after `onChange` and before running jobs are re-evaluated.
   @protected
   @mustCallSuper
   void publish(S previous, S current) {
@@ -289,11 +291,6 @@ abstract class Solo<S extends Object> {
   /// `cancellable: false`: the deadline is a cancellation, and such a job would
   /// refuse it.
   ///
-  /// `canStart` is asked once, at start; `keepWhile` at start, on every state
-  /// change while the job runs and on every read through the context. A rule
-  /// answers and does not write: a write from inside `keepWhile` throws
-  /// [StateError], and the rule throws with it.
-  ///
   /// `cancellable: false` turns down `cancel`, `clear` without `force`, parent
   /// cancellation and, once the job runs, `close` — not a state that stops
   /// matching `W` or `keepWhile`. The flag counts only once the engine holds
@@ -303,17 +300,8 @@ abstract class Solo<S extends Object> {
   ///
   /// [ifFailed] and [ifCancelled] compute the state after a failed or cancelled
   /// body, once its children and cleanup are over, and change nothing about the
-  /// outcome. [ifCancelled] runs at completion: the signal to stop the
-  /// operation belongs in [JobContext.onCancel], which delivers it at once. A
-  /// rule that throws while the permission of the handlers is checked
-  /// suppresses the correction, and its error is reported. The same rule
-  /// throwing at `ctx.state` or `ctx.check()` reaches the body instead, and a
-  /// `Failed` it leaves is corrected like any other.
-  ///
-  /// [timeout] counts from the start of the body, not from [enqueueJob], and
-  /// lands as a cancellation, as that of [Job.new] does: [ifCancelled] gets a
-  /// [Cancelled] whose reason is a [TimeoutCancelReason], [ifFailed] is not
-  /// called, and `on TimeoutException` catches nothing.
+  /// outcome. [timeout] counts from the start of the body and lands as a
+  /// cancellation, not as a `TimeoutException`.
   ///
   /// See [Parameters of a job](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#parameters-of-a-job)
   /// on the reference page, which leads to the section of each parameter.
@@ -349,21 +337,13 @@ abstract class Solo<S extends Object> {
   /// and duplicates; the list is copied once when the group is sealed. The
   /// handler receives a regular context and runs under the same rules as [job].
   /// It changes state only when it runs, never when an event is added. [policy]
-  /// chooses the waiting group and its position; the default joins the last
-  /// open group of this accumulator wherever it stands, so a job of another
-  /// kind queued between two events is not a boundary. Take
-  /// [AccumulationPolicy.adjacent] where it has to be one. [key] is an ordinary
-  /// job key and does not make different accumulators compatible. [timing] can
-  /// debounce each group or throttle starts across this accumulator; ready jobs
-  /// later in the queue can bypass a group waiting for its window.
+  /// chooses the waiting group and its position, and [timing] when a group is
+  /// ready.
   ///
-  /// [timeout] is a deadline for each job the accumulator queues, not for
-  /// the accumulator, and it lands as the `timeout` of [job] does. It is
-  /// counted from the start of the handler, after the window of [timing]:
-  /// the window is time in the queue. The jobs are made lazily, by
-  /// [SoloAccumulator.add], so the cancellation a deadline makes carries the
-  /// trace of the `add` that made the job — the event the group came about
-  /// for — and not of this call.
+  /// [timeout] is a deadline for each job the accumulator queues, counted from
+  /// the start of the handler, after the window of [timing]. The jobs are made
+  /// lazily, by [SoloAccumulator.add], so the cancellation a deadline makes
+  /// carries the trace of the `add` that made the job, and not of this call.
   ///
   /// Throws [ArgumentError] when the accumulator is created, not on its
   /// first event, if [timeout] is zero or negative, or comes with
@@ -372,12 +352,10 @@ abstract class Solo<S extends Object> {
   ///
   /// [ifFailed] and [ifCancelled] are the state handlers of [job], and they
   /// write for the group: each job the accumulator queues calls one of them
-  /// at most once, however many events it holds, after its handler, its
-  /// children and its cleanup. A group that never starts — cancelled or
-  /// dropped while it waits, still waiting when the controller closes, or
-  /// turned down by `canStart` — calls neither. One that `canStart` let
-  /// through has started, so a cancellation in `onStart` calls [ifCancelled]
-  /// though the handler never ran.
+  /// at most once, however many events it holds.
+  ///
+  /// See [Reference](https://github.com/vi-k/solo/blob/main/packages/solo/doc/accumulation.md#reference)
+  /// on the accumulation page for grouping, timing, start and closing.
   @protected
   SoloAccumulator<E, T> collect<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {
@@ -411,16 +389,16 @@ abstract class Solo<S extends Object> {
       );
 
   /// Creates an accumulator holding one value, combined synchronously by
-  /// [merge] on each addition after the first. Nullable events are supported.
+  /// [merge] on each addition after the first.
   ///
-  /// [merge] must be pure: do not mutate either argument, the controller or
-  /// its queue. Errors escape from [SoloAccumulator.add] without changing the
-  /// previous value. A recursive add from merge throws [StateError].
-  /// Only the latest merged value is retained; no event history is stored.
-  /// The handler, rules, key, policy and state handlers follow [collect]. No
-  /// job is created until the first event, and no state changes before the
-  /// handler runs. [timing] has the same group readiness behavior as it does
-  /// for [collect].
+  /// Nullable events are supported. [merge] must be pure: do not mutate either
+  /// argument, the controller or its queue. Errors escape from
+  /// [SoloAccumulator.add] without changing the previous value. A recursive
+  /// add from merge throws [StateError]. Only the latest merged value is
+  /// retained; no event history is stored. The handler, rules, key, policy and
+  /// state handlers follow [collect]. No job is created until the first event,
+  /// and no state changes before the handler runs. [timing] has the same group
+  /// readiness behavior as it does for [collect].
   ///
   /// [timeout] is a deadline for each job, as for [collect]: counted from
   /// the start of the handler, after the window of [timing], and the
@@ -464,35 +442,32 @@ abstract class Solo<S extends Object> {
   /// [Policy.droppable].
   ///
   /// A job [Policy.droppable] may hand back to another caller refuses a
-  /// plain `then`: every caller continues it through `shared()`. See
-  /// [Policy.droppable].
+  /// plain `then`: every caller continues it through `shared()`.
   ///
-  /// [first] puts the job at the head of the queue instead of the tail. It
-  /// passes what is waiting and nothing else: the running job is not the
-  /// queue's to touch, so this one starts when that job finishes. A replacement
-  /// queued by [Policy.restart] waits at the tail like any other, so a job
-  /// enqueued `first` after it starts ahead of it — cancelling the running job
-  /// does not reserve the slot after it.
+  /// [first] puts the job at the head of the queue instead of the tail, past
+  /// what is waiting and not past the running job. A replacement queued by
+  /// [Policy.restart] waits at the tail like any other, so a job enqueued
+  /// `first` after it starts ahead of it.
   ///
-  /// [Policy.replace] and [Policy.restart] queue [job] before they cancel
-  /// the jobs it replaces. Their `onFinish` and cancellation listeners run
-  /// inside this call, and a job they queue under the same key replaces
-  /// [job] in turn: the job asked for last is the one that runs. So a hook
-  /// that queues a job of the key every time one is cancelled, replaced
-  /// included, replaces its own jobs one after another and runs out of
-  /// stack; such a hook leaves a [ReplacedCancelReason] alone.
+  /// [Policy.replace] and [Policy.restart] queue [job] before they cancel the
+  /// jobs it replaces, whose `onFinish` and cancellation listeners run inside
+  /// this call: a job they queue under the key replaces [job] in turn. A hook
+  /// that does so on every cancellation, a replacement too, runs out of stack;
+  /// such a hook leaves a [ReplacedCancelReason] alone.
   ///
   /// Throws [StateError] if [job] was already enqueued or run, and
   /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has no
   /// key, if [job] was created by another controller, or if [Policy.droppable]
   /// finds that key on a job of another result type. Every [ArgumentError] here
-  /// is thrown before [job] is taken, so a job refused for one of those reasons
-  /// is untouched and can be enqueued again; the [StateError] is about a handle
-  /// that has been taken once already. After `close` the job finishes at once
-  /// with `Cancelled(closed)`, and a key held by another result type is not
-  /// looked for at all — except by [Policy.droppable] during a
-  /// [SoloCloseMode.drain]: the queue it runs still holds jobs that will do
-  /// their work, and one with the key is handed back as before the close.
+  /// is thrown before [job] is taken, so the job can be enqueued again.
+  ///
+  /// After `close` the job finishes at once with `Cancelled(closed)`, and a key
+  /// held by another result type is not looked for at all — except by
+  /// [Policy.droppable] during a [SoloCloseMode.drain], which hands back a job
+  /// with the key that the drain still runs, as before the close.
+  ///
+  /// See [Queue and policies](https://github.com/vi-k/solo/blob/main/packages/solo/doc/jobs.md#queue-and-policies)
+  /// on the jobs page.
   @protected
   SoloJob<T> enqueueJob<T>(
     Job<T> job, {
@@ -715,19 +690,16 @@ abstract class Solo<S extends Object> {
   /// ));
   /// ```
   ///
-  /// A timer reads it between the steps of a close; a synchronous hook reads it
-  /// in the middle of one. A close that is finishing reads `null` from
-  /// `onFinish` of its last job and from [onClose], though the returned future
-  /// has not completed yet, and an idle controller reads `null` right after
-  /// `close()`. The last subscription's `onDone` still reads
-  /// [SoloPendingStream]. A subclass whose `close` waits for something of its
-  /// own before or after `super.close` holds it where the controller does not
-  /// see: domain cleanup belongs in [onClose].
+  /// A close that is finishing reads `null` from `onFinish` of its last job and
+  /// from [onClose], though the returned future has not completed yet, and an
+  /// idle controller reads `null` right after `close()`. The last
+  /// subscription's `onDone` still reads [SoloPendingStream]. A subclass whose
+  /// `close` waits for something of its own before or after `super.close`
+  /// holds it where the controller does not see: domain cleanup belongs in
+  /// [onClose].
   ///
-  /// It reports and does not diagnose. A body that holds on for reasons of
-  /// its own — a bare `await` on a slow call, an external operation it is
-  /// inside — shows up as [SoloPhase.body]: the engine knows the body has
-  /// not come back, and not what it waits for.
+  /// See [What is holding the controller](https://github.com/vi-k/solo/blob/main/packages/solo/doc/diagnostics.md#what-is-holding-the-controller)
+  /// on the diagnostics page.
   SoloPending? get pending {
     final current = _current;
     if (current != null) {
@@ -759,9 +731,10 @@ abstract class Solo<S extends Object> {
   SoloJob<Object?>? get current => _current;
 
   /// The last queued job matching [test], else the current job if it
-  /// matches, else `null`. A job whose start rules are being asked counts
-  /// as queued, ahead of the rest: it is off the queue and not started
-  /// yet, and a rule of it may ask.
+  /// matches, else `null`.
+  ///
+  /// A job whose start rules are being asked counts as queued, ahead of the
+  /// rest: it is off the queue and not started yet, and a rule of it may ask.
   ///
   /// Only a job that is still going to do the work answers. A queued one
   /// always is — cancelling it takes it off the queue — but the current
@@ -811,9 +784,11 @@ abstract class Solo<S extends Object> {
   static bool _goingOn(Job<Object?> job) => !job.isCancelled && !job.isFinished;
 
   /// Reflects state already changed by an external source, such as a device or
-  /// socket. Re-evaluates the rules of running bodies and the permission of
-  /// finishing jobs to apply their state handlers. Use the state handlers of
-  /// [enqueue] or [job] for an operation's own failure or cancellation.
+  /// socket.
+  ///
+  /// Re-evaluates the rules of running bodies and the permission of finishing
+  /// jobs to apply their state handlers. Use the state handlers of [enqueue] or
+  /// [job] for an operation's own failure or cancellation.
   ///
   /// Accepted for as long as the engine is running, a [close] with
   /// [SoloCloseMode.drain] included. Once closing has finished the state is
@@ -833,8 +808,10 @@ abstract class Solo<S extends Object> {
   }
 
   /// Closes the controller, then calls the observer's `onClose` and
-  /// [onClose]. Repeated calls return the same future. Once closing
-  /// finishes, the state is final and cannot change.
+  /// [onClose].
+  ///
+  /// Repeated calls return the same future. Once closing finishes, the state
+  /// is final and cannot change.
   ///
   /// [SoloCloseMode.cancel], the default, drops every queued job with
   /// `Cancelled(closed)` and cancels the current one — a `cancellable: false`
@@ -956,7 +933,9 @@ abstract class Solo<S extends Object> {
   }
 
   /// Clears the queue and cancels the current job; `force` affects only the
-  /// queue. Completes when the current job has actually finished.
+  /// queue.
+  ///
+  /// Completes when the current job has actually finished.
   ///
   /// Every job it ends carries [reason], a [ManualCancelReason] unless the
   /// caller names one: a policy of the domain that clears the controller
@@ -1017,17 +996,10 @@ abstract class Solo<S extends Object> {
   ///
   /// What comes here: a [Failed] nobody observes, a microtask after the job
   /// ends — `enqueue(ifFailed: ...)` is no observing — and the errors an
-  /// outcome cannot carry: an action abandoned by [JobContext.abandonable]
-  /// failing later, a disposer, an `onCancel` callback, work handed over with
-  /// [JobContext.unattended], a `keepWhile` that threw anywhere but at a
-  /// checkpoint of the body, a failed branch of [JobContext.runAll] the group
-  /// did not throw, and a failed body of a job that ends [Cancelled].
-  /// [Job.ignoreFailure] keeps the last two away, and [Job.isCancellationError]
-  /// the failures it names of a job that has accepted a cancellation. Each
-  /// failure inside a `ParallelWaitError` comes on its own; a [Cancelled],
-  /// alone or inside one, never comes, and a [Failed] made of a cancellation
-  /// goes to the zone past this hook. Every error here has been through
-  /// [onError] already.
+  /// outcome cannot carry, which the errors page lists. A [Cancelled], alone
+  /// or inside a `ParallelWaitError`, never comes, and a [Failed] made of a
+  /// cancellation goes to the zone past this hook. [Job.ignoreFailure] and
+  /// [Job.isCancellationError] keep some of them away.
   ///
   /// See [Answering for an error](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#answering-for-an-error)
   /// and [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#where-each-error-goes)

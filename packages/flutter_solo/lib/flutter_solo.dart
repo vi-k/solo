@@ -1,11 +1,11 @@
 /// State management for Flutter: sequential jobs over one state,
 /// exclusive ownership, cooperative cancellation, and rebuilds through
-/// `ValueListenable`. Re-exports `solo` — and, through it, `async_job` —
-/// whole, so this is the only import an app needs.
+/// `ValueListenable`.
 ///
-/// `select` and `listen` are the exception: they are extensions on the
-/// framework's own listenables, so they live next door in
-/// `listenable.dart` with the subscriptions `listen` hands back, and an
+/// Re-exports `solo` — and, through it, `async_job` — whole, so this is the
+/// only import an app needs. `select` and `listen` are the exception: they
+/// are extensions on the framework's own listenables, so they live next door
+/// in `listenable.dart` with the subscriptions `listen` hands back, and an
 /// import of their own decides whether an app takes them.
 library;
 

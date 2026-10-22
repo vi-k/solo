@@ -5,8 +5,9 @@ import 'package:meta/meta.dart';
 /// engine knows.
 enum SoloPhase {
   /// The body has not come back yet, whatever it is waiting on: a checkpoint of
-  /// its context, a bare `await`, an external call. The engine knows the body
-  /// is still out, not what holds it.
+  /// its context, a bare `await`, an external call.
+  ///
+  /// The engine knows the body is still out, not what holds it.
   body,
 
   /// The body is over and the job is waiting for its children.
@@ -72,23 +73,28 @@ final class SoloPendingJob extends SoloPending {
   final Cancelled? cancellation;
 
   /// The cancellation an open `JobContext.uncancellable` section is holding
-  /// back, or `null`. The job is not marked with it until the section
-  /// closes, so [cancellation] is `null` meanwhile. A rule of the job is not
-  /// held: it marks the job at once, and the cancellation held until then
-  /// is dropped, so this goes back to `null`.
+  /// back, or `null`.
+  ///
+  /// The job is not marked with it until the section closes, so
+  /// [cancellation] is `null` meanwhile. A rule of the job is not held: it
+  /// marks the job at once, and the cancellation held until then is dropped,
+  /// so this goes back to `null`.
   final Cancelled? heldCancellation;
 
   /// How many children the job is still waiting for.
   final int children;
 
-  /// Whether a `JobContext.uncancellable` section is open. A cancellation
-  /// that arrives now is held until it closes; an open section alone does
-  /// not mean one has, and [heldCancellation] is what says so.
+  /// Whether a `JobContext.uncancellable` section is open.
+  ///
+  /// A cancellation that arrives now is held until it closes; an open section
+  /// alone does not mean one has, and [heldCancellation] is what says so.
   final bool inUncancellableSection;
 
   /// Whether the job accepts a cancellation it may refuse, as it was
-  /// created. One created with `cancellable: false` turns every such
-  /// cancellation down.
+  /// created.
+  ///
+  /// One created with `cancellable: false` turns every such cancellation
+  /// down.
   final bool cancellable;
 
   /// Whether `close` has been called on the controller.
@@ -96,12 +102,15 @@ final class SoloPendingJob extends SoloPending {
 
   /// Whether that `close` is a drain: the job is not asked to stop, it
   /// runs to its end by the usual rules, and the queue behind it runs
-  /// next. [closing] is true as well.
+  /// next.
+  ///
+  /// [closing] is true as well.
   final bool draining;
 
   /// The jobs queued behind this one, in queue order: none of them starts
-  /// before this one is over. Taken when the snapshot is: the queue moving
-  /// on does not change it.
+  /// before this one is over.
+  ///
+  /// Taken when the snapshot is: the queue moving on does not change it.
   ///
   /// A body that calls a method of its own controller and awaits the job that
   /// comes back waits for one of these: that job waits for the slot the body is
@@ -173,8 +182,9 @@ final class SoloPendingJob extends SoloPending {
 /// `close(mode: SoloCloseMode.drain)`, or from a hook before the engine
 /// comes back to the queue.
 final class SoloPendingQueue extends SoloPending {
-  /// The jobs the drain has still to run, in queue order. Taken when the
-  /// snapshot is: the queue moving on does not change it.
+  /// The jobs the drain has still to run, in queue order.
+  ///
+  /// Taken when the snapshot is: the queue moving on does not change it.
   ///
   /// A job whose start rules are being asked right now is first: it is off
   /// the queue and not started yet, so a rule that closes the controller

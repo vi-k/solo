@@ -9,16 +9,20 @@ part of 'solo.dart';
 /// throws a [StateError] for a job that has already finished.
 abstract interface class SoloContext<S extends Object, W extends S>
     implements JobContext {
-  /// The current state. Throws [Cancelled] if the job is cancelled, if the
-  /// state is not `W`, or if `keepWhile` returns `false`.
+  /// The current state.
+  ///
+  /// Throws [Cancelled] if the job is cancelled, if the state is not `W`, or
+  /// if `keepWhile` returns `false`.
   W get state;
 
   /// [state] narrowed to `T`; cancels the job with `Cancelled(rules,
   /// 'is not T')` on mismatch.
   T stateAs<T extends S>();
 
-  /// Sets the controller state. The new state is not checked against this
-  /// job's rules; other running jobs are re-evaluated.
+  /// Sets the controller state.
+  ///
+  /// The new state is not checked against this job's rules; other running
+  /// jobs are re-evaluated.
   ///
   /// A checkpoint on both sides. It throws the job's [Cancelled] before the
   /// write, as every member does, and again after it if the write cancelled

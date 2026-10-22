@@ -1070,8 +1070,13 @@ abstract class JobBase<T> implements Job<T> {
   Cancelled? get pendingCancel => _pendingCancel;
 
   /// Whether the job accepts a cancellation it may refuse, as it was
-  /// created. An uncancellable section does not change this: it holds a
-  /// cancellation rather than refusing it.
+  /// created.
+  ///
+  /// An uncancellable section does not change this: it holds a cancellation
+  /// rather than refusing it.
+  ///
+  /// See [Refusing while the job waits](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/extending.md#refusing-while-the-job-waits)
+  /// on the extending page.
   @protected
   bool get cancellable => _cancellable;
 
@@ -1089,19 +1094,24 @@ abstract class JobBase<T> implements Job<T> {
   /// by [enterUncancellable], and cleared when the outermost section closes and
   /// lets it through. The job does not accept it meanwhile — [pendingCancel]
   /// stays `null` — so this, and `JobContext.heldCancellation` for the body,
-  /// are the only places such a request shows. A cancellation the job cannot
-  /// refuse is not held: the job accepts it at once, and the one held until
-  /// then is dropped and cleared here. So is one a section the body walked away
-  /// from still holds when the body cancels itself or the job ends: it would
-  /// land on a job already cancelled or over. And so is the request of the
-  /// job's own deadline once the body and the children are over: the deadline
-  /// ends there, and a rejectable request that arrived behind it shows here in
-  /// its place.
+  /// are the only places such a request shows.
+  ///
+  /// A cancellation the job cannot refuse is not held: the job accepts it at
+  /// once, and the one held until then is dropped and cleared here. So is one
+  /// a section the body walked away from still holds when the body cancels
+  /// itself or the job ends: it would land on a job already cancelled or over.
+  /// And so is the request of the job's own deadline once the body and the
+  /// children are over: the deadline ends there, and a rejectable request that
+  /// arrived behind it shows here in its place.
+  ///
+  /// See [Holding the cancellation back](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#holding-the-cancellation-back)
+  /// on the cancellation page.
   @protected
   Cancelled? get heldCancel => _heldCancel;
 
   /// Opens an uncancellable section: a rejectable cancellation arriving
   /// now is held, and the job accepts it only when the section closes.
+  ///
   /// Sections nest.
   @protected
   void enterUncancellable() => _uncancellableDepth++;
@@ -1200,8 +1210,12 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Waiting without observing: an engine waits for a job to finish
   /// without marking its outcome observed, so a failure nobody looked at
-  /// is still answered for. Code outside an engine registers with
-  /// [whenFinished] instead.
+  /// is still answered for.
+  ///
+  /// Code outside an engine registers with [whenFinished] instead.
+  ///
+  /// See [A job of your own](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/extending.md#a-job-of-your-own)
+  /// on the extending page.
   @protected
   Future<void> get untilFinished => _done.future.then((_) {});
 
@@ -1359,60 +1373,34 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Ends the job with [outcome].
   ///
-  /// On a job that has already finished the outcome stays, the same as with
-  /// [cancel]: an outcome is final, and an engine racing its own body must not
-  /// be able to replace one. A [Failed] handed in there has no outcome to carry
-  /// it, and it goes where the errors with no outcome go: to
-  /// [JobObserver.onError] and to the answer of the observer — the zone unless
-  /// it is a [JobAnswerer] — or to [JobObserver.onError] alone once
-  /// [Job.ignoreFailure] was called.
+  /// An override calls `super.finish`, or the job never ends. Ending a running
+  /// job is not a way to cancel it: this waits for no children and unwinds no
+  /// cleanup stack, so cancel with [cancelWith] instead. On a finished job the
+  /// outcome stays, and a [Failed] handed in goes to [JobObserver.onError] and,
+  /// unless [Job.ignoreFailure] was called, on to the answer. A job that has
+  /// accepted a cancellation keeps it: a [Done] handed in is closed by nobody,
+  /// and the error of a [Failed] goes on to the answer unless
+  /// [Job.isCancellationError] names it.
   ///
-  /// Ending a job that is still running is not a way to cancel it: this waits
-  /// for no children and unwinds no cleanup stack, so everything the body
-  /// opened stays open. Cancel with [cancelWith] instead, and let the body
-  /// unwind; how many cleanups were left behind is in the debug trace. A
-  /// failure of the body, thrown before this or after, is in no outcome then,
-  /// unless it is the one handed in: [JobObserver.onError] hears it where the
-  /// body is caught, and it goes on to the answer, as a failure of the body of
-  /// a cancelled job does.
+  /// A [Failed] handed in is announced here, once, before [finished] and
+  /// [JobObserver.onFinish], so an `onError` that cancels finds the job
+  /// finished. Do not call [notifyObserver] for it first: the observer would
+  /// hear it twice. An error the body threw is not announced again.
   ///
-  /// A branch of [JobContext.runAll] that ends with a [Done] handed in after
-  /// its group heard that its body failed is the exception. The value comes too
-  /// late for the group: it goes by the failure, as if the branch had ended
-  /// with it, and throws it, or answers for it as for any failure of a branch
-  /// it does not throw, and the value stays in the outcome of the branch alone.
-  /// The group hears of the failure right after [JobObserver.onError] does, or,
-  /// for a body that is not `async` and threw while [JobContext.runAll] was
-  /// starting the branches, once it has started them all. A value handed in
-  /// before that, from `onError` too, is what the group goes by, and the branch
-  /// answers for the failure itself.
+  /// A branch of [JobContext.runAll] handed a [Done] after its group heard its
+  /// body fail goes by the failure for the group. The group hears of it right
+  /// after [JobObserver.onError] does, or, for a body that is not `async` and
+  /// threw while the group was starting the branches, once it has started them
+  /// all; a value handed in before that is what the group goes by, and the
+  /// branch answers for the failure itself.
   ///
-  /// A [Failed] handed in is announced here: [JobObserver.onError] hears it
-  /// once, before [finished] and [JobObserver.onFinish]. Unlike a failure
-  /// of the body, which is announced while the job still runs, it is
-  /// announced after the job is over, so an `onError` that cancels finds
-  /// it finished and the outcome stays [Failed]. If nobody then observes
-  /// the outcome, the error is answered for as any [Failed] is. Do not
-  /// call [notifyObserver] for it first: the observer would hear it twice.
-  /// An error the core has announced for this job already — one its body
-  /// threw — is not announced again.
+  /// A [Cancelled] handed in here or to [cancelWith] belongs to this job alone:
+  /// with one instance for two children, a `const` one included, the parent
+  /// names the child that ended last, and with asserts on the second of them
+  /// also sends an [AssertionError] to the zone it was created in.
   ///
-  /// A job that has accepted a cancellation ends with that cancellation,
-  /// whatever is handed in. A [Done] is replaced, and its value goes nowhere
-  /// and is closed by nobody: release it before calling this. A [Failed] is
-  /// replaced too, and its error goes where a failure of the body of a
-  /// cancelled job goes — to [JobObserver.onError] and on to the answer, unless
-  /// [Job.isCancellationError] names it. A [Cancelled] handed in stands.
-  ///
-  /// A [Cancelled] handed in here or to [cancelWith] belongs to this job
-  /// alone. The parent finds the child behind a cancellation by the
-  /// instance, and with one instance for two of its children — a `const`
-  /// one is one for the whole program — it names the child that ended last.
-  /// With asserts on, the second of them ends as it does without them, and
-  /// an [AssertionError] goes to the zone it was created in.
-  ///
-  /// An override calls `super.finish`: this is where the job gets its
-  /// outcome, and without it the job never ends.
+  /// See [Finishing a job by hand](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/extending.md#finishing-a-job-by-hand)
+  /// on the extending page.
   @protected
   @mustCallSuper
   void finish(Outcome<T> outcome) {
@@ -1624,12 +1612,13 @@ abstract class JobBase<T> implements Job<T> {
   /// [JobContext.onCancel], [Job.whenCancelled] or [Job.whenFinished], work
   /// handed over with [JobContext.unattended]. The observer hears it through
   /// [JobObserver.onError], and one that is a [JobAnswerer] answers for it
-  /// through [JobAnswerer.onUnanswered], whose default body sends it to the
-  /// zone the job was created in; without such an observer the error goes to
-  /// that zone directly. Two calls, each guarded on its own: an `onError` that
-  /// throws does not cost the error its answer. Both go by the walk of
-  /// [Job.visitErrors]: `onError` is told about each error inside a
-  /// `ParallelWaitError` on its own, and the answer is asked for each failure.
+  /// through [JobAnswerer.onUnanswered]; without such an observer the error
+  /// goes to the zone the job was created in.
+  ///
+  /// Two calls, each guarded on its own: an `onError` that throws does not
+  /// cost the error its answer. Both go by the walk of [Job.visitErrors]:
+  /// `onError` is told about each error inside a `ParallelWaitError` on its
+  /// own, and the answer is asked for each failure.
   ///
   /// A cancellation — a [Cancelled], or a `ParallelWaitError` carrying
   /// nothing but cancellations — never reaches the zone from here, and
@@ -1637,6 +1626,9 @@ abstract class JobBase<T> implements Job<T> {
   /// failure. An observer hears it through `onError`; without one, nobody
   /// does. Nor is anybody asked about a failure that [Job.isCancellationError]
   /// names, once the job has accepted a cancellation.
+  ///
+  /// See [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#where-each-error-goes)
+  /// on the errors page.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
     notifyObserver(error, stackTrace);
@@ -1804,15 +1796,19 @@ abstract class JobBase<T> implements Job<T> {
   @visibleForOverriding
   void finished() {}
 
-  /// The child's own word on who may adopt it. Empty here:
-  /// [JobContextBase.startChild] has already checked that the child is a job of
-  /// this core.
+  /// The child's own word on who may adopt it.
+  ///
+  /// Empty here: [JobContextBase.startChild] has already checked that the
+  /// child is a job of this core.
   ///
   /// To refuse, throw — an [ArgumentError] for a parent that may not have this
   /// child, a [StateError] for a child that is spoken for. The error comes out
   /// of the call that asked — for [JobContext.runAll], once the branches it
   /// already started have stopped — before the child has a parent, and the
   /// child stays `created`.
+  ///
+  /// See [One loop, and no other way to start](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/extending.md#one-loop-and-no-other-way-to-start)
+  /// on the extending page.
   @visibleForOverriding
   void adoptedBy(JobContextBase parent) {}
 
@@ -2536,11 +2532,9 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Never throws: a key whose `toString` throws, or a [describe] that
   /// does, is printed as a mark, `Job(key: <describe threw StateError>)`.
-  /// The core builds its own error messages with this, and the message
-  /// must stay the core's rather than turn into the error of a name. The
-  /// error itself is reported where the core names a job on a channel of
-  /// its own: in a parent's cancellation, to [JobObserver.onError], and
-  /// on a line of [Job.debug], to the zone.
+  ///
+  /// See [A job's name](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#a-jobs-name)
+  /// on the observing page.
   @override
   String toString() {
     String part(String what, String Function() print) {

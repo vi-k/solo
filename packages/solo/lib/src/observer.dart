@@ -7,13 +7,14 @@ import 'solo.dart';
 import 'transition.dart';
 
 /// Cross-cutting hooks for every controller: analytics, error reporting, a
-/// single log. Set [Solo.observer] once at startup.
+/// single log.
 ///
-/// The engine calls the observer before the controller's own hook, and
-/// independently of it: a subclass that forgets `super` does not switch the
-/// observer off. A hook that throws hands its error to the current zone and
-/// changes nothing else — the engine goes on, and the controller's own hook
-/// is still called. A [Cancelled] a hook throws does not reach the zone.
+/// Set [Solo.observer] once at startup. The engine calls the observer before
+/// the controller's own hook, and independently of it: a subclass that
+/// forgets `super` does not switch the observer off. A hook that throws hands
+/// its error to the current zone and changes nothing else — the engine goes
+/// on, and the controller's own hook is still called. A [Cancelled] a hook
+/// throws does not reach the zone.
 ///
 /// Several observers watch every controller through [SoloObserver.all].
 abstract class SoloObserver {
@@ -106,10 +107,11 @@ abstract class SoloObserver {
   /// A job called [JobContext.log].
   void onLog(Solo<Object> solo, Job<Object?> job, Object? message) {}
 
-  /// The engine is about to finish closing: [Solo.isFinished] is still
-  /// false, listeners are still registered, and a synchronous
-  /// `externalSetState` still reaches them. Work scheduled after this hook
-  /// runs after the engine has crossed that boundary.
+  /// The engine is about to finish closing.
+  ///
+  /// [Solo.isFinished] is still false, listeners are still registered, and a
+  /// synchronous `externalSetState` still reaches them. Work scheduled after
+  /// this hook runs after the engine has crossed that boundary.
   void onClose(Solo<Object> solo) {}
 }
 

@@ -18,16 +18,6 @@ import 'solo_selector.dart';
 /// the controller. An error it throws is reported and changes nothing else, the
 /// same as an error of a listener.
 ///
-/// While somebody listens, the selection picks once per change: as long as the
-/// source holds the object the last pick was made from, [value] hands that pick
-/// back, and the pick that decided whether to notify is the one a listener
-/// reads. A source that changes its value in place keeps the object, so a
-/// listener that reads [value] before the selection has taken the change in,
-/// one the source calls ahead of the selection, gets the pick from before the
-/// change; a controller of `solo` with an immutable state never meets this.
-/// With nobody listening, the source is not subscribed to, [value] picks every
-/// time, and nothing picked out of it is kept.
-///
 /// ```dart
 /// class _ProfileState extends State<Profile> {
 ///   late final canSave =
@@ -44,13 +34,8 @@ import 'solo_selector.dart';
 /// }
 /// ```
 ///
-/// Hold the selection in a field rather than build one in `build`, and build it
-/// again in `didUpdateWidget` when the widget can bring another source, or take
-/// [SoloSelector], which holds the pick itself. Nothing has to be disposed of,
-/// and a selection outlives its source harmlessly: [value] keeps reading the
-/// final state of a closed [SoloListenable].
-///
-/// See [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value)
+/// Hold the selection in a field rather than build one in `build`, or take
+/// [SoloSelector], which holds the pick itself; see [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value)
 /// in the package README.
 final class SoloSelection<S, T> implements ValueListenable<T> {
   final ValueListenable<S> _source;
@@ -131,7 +116,10 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// While somebody listens and the source holds the object the last pick
   /// was made from, this is that pick and not a new one: a source that
   /// changes its value in place reaches it once the selection has taken
-  /// the change in. See [SoloSelection].
+  /// the change in.
+  ///
+  /// See [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value)
+  /// in the package README.
   @override
   T get value {
     final source = _source.value;
@@ -223,7 +211,9 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   }
 
   /// Removes one registration of [listener]; unknown listeners are
-  /// ignored. Losing the last one drops the subscription to the source.
+  /// ignored.
+  ///
+  /// Losing the last one drops the subscription to the source.
   @override
   void removeListener(VoidCallback listener) {
     if (!_listeners.remove(listener) || !_listeners.isEmpty) {

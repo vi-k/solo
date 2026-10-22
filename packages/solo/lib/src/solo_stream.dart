@@ -21,14 +21,16 @@ mixin SoloStream<S extends Object> on Solo<S> {
   Future<void>? _closed;
   var _streamClosing = false;
 
-  /// Every state change, in order, delivered on the next microtask. The
-  /// source of truth is [currentState]; an event may be older than it by
-  /// the time it arrives. Equality is not checked: each change is an
-  /// event.
+  /// Every state change, in order, delivered on the next microtask.
+  ///
+  /// The source of truth is [currentState]; an event may be older than it by
+  /// the time it arrives. Equality is not checked: each change is an event.
   Stream<S> get stream => _controller.stream;
 
-  /// Closes the engine, then the stream. Repeated calls return the same
-  /// future, so the chain is built once and kept.
+  /// Closes the engine, then the stream.
+  ///
+  /// Repeated calls return the same future, so the chain is built once and
+  /// kept.
   ///
   /// The stream closes once every subscription has taken its done event,
   /// so one left paused holds the returned future until it is resumed or
