@@ -16,9 +16,9 @@ import 'support/readme_scopo.dart';
 /// `readme_rakes_test.dart` holds the page to that file. The tests run here,
 /// apart from the rest of the page: scopo is a dev dependency built against a
 /// released `async_job`, and a change it does not build against fails the
-/// loading of this file alone. Nor could the two share a library: scopo
-/// declares a `listen` on `Listenable`, as the second import of this package
-/// does.
+/// loading of this file alone. Up to scopo 0.18.0 the two could not share a
+/// library either: its main import declared a `listen` on `Listenable`, as
+/// the second import of this package does.
 
 const _doc = 'README.md';
 

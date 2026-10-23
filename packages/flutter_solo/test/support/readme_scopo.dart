@@ -2,9 +2,12 @@
 // "The controller's life", each as a function that returns it.
 // `test/readme_scopo_test.dart` runs it.
 //
-// It stands apart from `readme_widgets.dart`, which imports the second
-// import of this package: scopo declares a `listen` on `Listenable` of its
-// own, and a library that imports both cannot call either.
+// It stands apart from `readme_widgets.dart` for the reason
+// `test/readme_scopo_test.dart` gives: a change of `async_job` that scopo does
+// not build against fails the loading of the files that import scopo, and of
+// them alone. Up to scopo 0.18.0 there was a second reason: its main import
+// declared a `listen` on `Listenable`, as the second import of this package
+// does, and a library that imported both could call neither.
 //
 // A widget expression of the page ends with `)` on a line of its own; it
 // stands as the one element of a list, as in `readme_widgets.dart`.

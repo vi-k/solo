@@ -94,7 +94,7 @@ dependencies:
   # The package without Flutter of doc/mixins.md imports these two by name.
   meta: any
   # The controller's life of the README puts a controller in its scopes.
-  scopo: ^0.17.0
+  scopo: ^0.18.0
   solo: any
 
 dev_dependencies:
@@ -1766,8 +1766,10 @@ void main() {
 
 # ------------------------------------------------- the scopes of the README
 # The two blocks of "The controller's life" that take scopo, in a driver of
-# their own: scopo declares a `listen` on `Listenable` as well, and next to
-# the second import of flutter_solo neither could be called.
+# their own, as in the package's tests: a change of `async_job` that scopo
+# does not build against then fails this driver alone. Up to scopo 0.18.0 its
+# main import declared a `listen` on `Listenable` as well, and next to the
+# second import of flutter_solo neither could be called.
 _screen_scope = _fr['the-controller-s-life/import-dart-async']
 _scope_imports, _screen_scope_body = split_imports(_screen_scope)
 assert _scope_imports == [
