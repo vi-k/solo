@@ -63,8 +63,8 @@ abstract interface class JobContext {
   ///
   /// See [Stopping the operation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#stopping-the-operation)
   /// on the cancellation page and
-  /// [A value that comes late](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#a-value-that-comes-late)
-  /// on the cleanup page.
+  /// [A value that comes late](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup-rules.md#a-value-that-comes-late)
+  /// on the cleanup rules page.
   Future<T> abandonable<T>(
     FutureOr<T> Function() action, {
     FutureOr<void> Function(T value)? dispose,
@@ -137,8 +137,8 @@ abstract interface class JobContext {
   ///
   /// See [Holding the cancellation back](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#holding-the-cancellation-back)
   /// on the cancellation page, and
-  /// [Unregistering inside the action](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#unregistering-inside-the-action)
-  /// on the cleanup page for a hand-over and its [disown] in one section.
+  /// [Unregistering inside the action](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup-rules.md#unregistering-inside-the-action)
+  /// on the cleanup rules page for a hand-over and its [disown] in one section.
   Future<T> uncancellable<T>(FutureOr<T> Function() action);
 
   /// Waits for [duration], or until the job is cancelled.
@@ -285,8 +285,8 @@ abstract interface class JobContext {
   /// See [Running a child](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#running-a-child)
   /// and [When `ctx.run` refuses a child](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#when-ctxrun-refuses-a-child)
   /// on the children page, and
-  /// [Registering on arrival](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#registering-on-arrival)
-  /// on the cleanup page.
+  /// [Registering on arrival](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup-rules.md#registering-on-arrival)
+  /// on the cleanup rules page.
   Future<T> run<T>(
     ChildJob<T> child, {
     FutureOr<void> Function(T value)? dispose,

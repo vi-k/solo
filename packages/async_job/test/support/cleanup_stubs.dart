@@ -1,6 +1,7 @@
-// What the code of `doc/cleanup.md` takes for granted: the lock, the
-// database, the cursor and the sink. Each test sets the stage first, so a
-// stub can take its time, fail, or wait for a lock somebody else holds.
+// What the code of `doc/cleanup.md` and `doc/cleanup-rules.md` takes for
+// granted: the lock, the database, the cursor and the sink. Each test sets
+// the stage first, so a stub can take its time, fail, or wait for a lock
+// somebody else holds.
 import 'dart:async';
 
 import 'delay.dart';

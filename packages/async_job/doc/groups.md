@@ -115,9 +115,9 @@ is written, when the other branch fails or is cancelled, or when the parent
 itself is cancelled in between. A branch that never returned closes its source
 through the `discard` it opened the source with. This would repair the leak
 under `Future.wait` too. It is the rule of
-[Registering on arrival](cleanup.md#registering-on-arrival) on the cleanup
-page. The callback is `dispose` rather than `discard`, because the parent keeps
-the sources to itself.
+[Registering on arrival](cleanup-rules.md#registering-on-arrival) on the
+cleanup rules page. The callback is `dispose` rather than `discard`, because
+the parent keeps the sources to itself.
 
 `.wait` repairs the outcome. It collects every error into one
 `ParallelWaitError`, together with the values of the branches that succeeded.
@@ -336,7 +336,7 @@ and a `discard` runs only if its job does not end `Done`. Here the source
 reached the branch. So the branch registers the source again the moment it
 arrives, with the `discard` passed to `ctx.run`. That registration is the
 branch's own, the third row of the table. The cleanup page shows the call in
-[Registering on arrival](cleanup.md#registering-on-arrival).
+[Registering on arrival](cleanup-rules.md#registering-on-arrival).
 
 The last row follows from
 [Choosing the callback](cleanup.md#choosing-the-callback) on the cleanup page.
@@ -407,9 +407,9 @@ after it stay open.
 A registration of its own for each source closes the rest all the same. The
 cleanup stack runs every callback, whatever the one before it did. An error
 from one goes to `onError` and, by default, on to the zone, as
-[Cleanup order and late results](cleanup.md#cleanup-order-and-late-results) on
-the cleanup page describes. The loop of registrations takes the place of the
-`try`, on the very next line:
+[Cleanup order and late results](cleanup-rules.md#cleanup-order-and-late-results)
+on the cleanup rules page describes. The loop of registrations takes the place
+of the `try`, on the very next line:
 
 ```dart
 final sources = await ctx.runAll(branches);

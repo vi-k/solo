@@ -1,11 +1,12 @@
-// `doc/cleanup.md` runs here. Its code lives in three files, because the
-// versions of one section differ by a word or a line: the opening example
-// and the answers in `support/cleanup_page.dart`, the first attempts in
+// `doc/cleanup.md` and `doc/cleanup-rules.md` run here. Their code lives
+// in three files, because the versions of one section differ by a word or
+// a line: the opening example and the answers in
+// `support/cleanup_page.dart`, the first attempts in
 // `support/cleanup_first_attempts.dart`, and the second attempt of "A
 // resource that travels" in this file. The code under each heading is
-// held to the file of that heading, the lines the page quotes are what its
-// code prints, and what the page says about cleanup without code of its
-// own is pinned here as well.
+// held to the file of that heading, the lines the pages quote are what
+// their code prints, and what the pages say about cleanup without code of
+// their own is pinned here as well.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -70,7 +71,10 @@ const keptBackLine = 'Job() ended Done(null) without the value of 1 '
     'conditional cleanup (database): unless it is inside the result, nothing '
     'will dispose of it';
 
-/// What each `text` block of the page says, in the order of the page.
+/// The pages this file runs: the choice of the callback, then the rules.
+const pages = ['doc/cleanup.md', 'doc/cleanup-rules.md'];
+
+/// What each `text` block of the pages says, in the order of the pages.
 const quoted = [
   [
     'lock acquired',
@@ -1321,9 +1325,9 @@ void main() {
 
   group('The page', () {
     test('quotes what its code prints', () {
-      final text = File('doc/cleanup.md').readAsStringSync();
+      final text = pages.map((doc) => File(doc).readAsStringSync());
       final blocks = RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .allMatches(text)
+          .allMatches(text.join('\n'))
           .map((match) => match.group(1)!.split('\n'))
           .toList();
 
@@ -1387,44 +1391,66 @@ void main() {
     });
   });
 
-  test('the page has no fence the checks do not read', () {
-    expect(strayFences('doc/cleanup.md'), isEmpty);
-  });
-
-  // Each version under its own file: a line of the answer turned into the
-  // line of an attempt would still be found among all of them.
-  final holders = {
-    '# Cleanup': 'test/support/cleanup_page.dart',
-    '### The first attempt': 'test/support/cleanup_first_attempts.dart',
-    '### `dispose` for what the job keeps': 'test/support/cleanup_page.dart',
-    '### Closing what the job keeps back': 'test/support/cleanup_page.dart',
-    '### The second attempt': 'test/cleanup_rakes_test.dart',
-    '### Registering on arrival': 'test/support/cleanup_page.dart',
-    '## Registering without a call': 'test/support/cleanup_page.dart',
-    '### Unregistering inside the action': 'test/support/cleanup_page.dart',
-    '### Cancellation after the body returns': 'test/support/cleanup_page.dart',
-    '### Registering after a plain `await`': 'test/support/cleanup_page.dart',
-  };
-  for (final MapEntry(key: heading, value: holder) in holders.entries) {
-    test('the code under "$heading" is a run of lines of $holder', () {
-      final pieces = codeMissingFrom('doc/cleanup.md', holder, under: heading);
-      expect(pieces, isEmpty);
+  for (final doc in pages) {
+    test('$doc has no fence the checks do not read', () {
+      expect(strayFences(doc), isEmpty);
     });
   }
 
-  test('every piece of code on the page is a run of lines of these files', () {
-    expect(
-      codeMissingFrom(
-        'doc/cleanup.md',
-        'test/cleanup_rakes_test.dart',
-        alsoIn: [
-          'test/support/cleanup_page.dart',
-          'test/support/cleanup_first_attempts.dart',
-        ],
-      ),
-      isEmpty,
-    );
-  });
+  // Each version under its own file: a line of the answer turned into the
+  // line of an attempt would still be found among all of them.
+  const attemptsFile = 'test/support/cleanup_first_attempts.dart';
+  const answersFile = 'test/support/cleanup_page.dart';
+  final holders = [
+    ('doc/cleanup.md', '# Cleanup', answersFile),
+    ('doc/cleanup.md', '### The first attempt', attemptsFile),
+    ('doc/cleanup.md', '### `dispose` for what the job keeps', answersFile),
+    ('doc/cleanup.md', '### Closing what the job keeps back', answersFile),
+    ('doc/cleanup-rules.md', '### The first attempt', attemptsFile),
+    (
+      'doc/cleanup-rules.md',
+      '### The second attempt',
+      'test/cleanup_rakes_test.dart',
+    ),
+    ('doc/cleanup-rules.md', '### Registering on arrival', answersFile),
+    ('doc/cleanup-rules.md', '## Registering without a call', answersFile),
+    (
+      'doc/cleanup-rules.md',
+      '### Unregistering inside the action',
+      answersFile
+    ),
+    (
+      'doc/cleanup-rules.md',
+      '### Cancellation after the body returns',
+      answersFile,
+    ),
+    (
+      'doc/cleanup-rules.md',
+      '### Registering after a plain `await`',
+      answersFile,
+    ),
+  ];
+  for (final (doc, heading, holder) in holders) {
+    test('the code under "$heading" on $doc is a run of lines of $holder', () {
+      expect(codeMissingFrom(doc, holder, under: heading), isEmpty);
+    });
+  }
+
+  for (final doc in pages) {
+    test('every piece of code on $doc is a run of lines of these files', () {
+      expect(
+        codeMissingFrom(
+          doc,
+          'test/cleanup_rakes_test.dart',
+          alsoIn: [
+            'test/support/cleanup_page.dart',
+            'test/support/cleanup_first_attempts.dart',
+          ],
+        ),
+        isEmpty,
+      );
+    });
+  }
 }
 
 Future<void> pump() => Future<void>.delayed(Duration.zero);

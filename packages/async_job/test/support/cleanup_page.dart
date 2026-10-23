@@ -1,10 +1,11 @@
-// The code of `doc/cleanup.md` that works, verbatim: the opening example
-// and the version each section settles on. The first attempts differ from
-// these by a word or a line, so they live in a library of their own,
-// `cleanup_first_attempts.dart`, and the second attempt of "A resource
-// that travels" in `cleanup_rakes_test.dart`: a line of an answer turned
-// into the line of an attempt would still be found in a file that held
-// both. A block that leaves `ctx` to its reader takes it as a parameter.
+// The code of `doc/cleanup.md` and `doc/cleanup-rules.md` that works,
+// verbatim: the opening example and the version each section settles on.
+// The first attempts differ from these by a word or a line, so they live
+// in a library of their own, `cleanup_first_attempts.dart`, and the second
+// attempt of "A resource that travels" in `cleanup_rakes_test.dart`: a
+// line of an answer turned into the line of an attempt would still be
+// found in a file that held both. A block that leaves `ctx` to its reader
+// takes it as a parameter.
 import 'package:async_job/async_job.dart';
 
 import 'cleanup_stubs.dart';

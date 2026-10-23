@@ -37,11 +37,11 @@ class ASectionOfAnotherPackage(unittest.TestCase):
     def test_a_section_of_a_guide(self):
         self.assertEqual(
             rewrite(
-                f'{REPO}/blob/main/packages/async_job/doc/cleanup.md'
+                f'{REPO}/blob/main/packages/async_job/doc/cleanup-rules.md'
                 '#cleanup-order-and-late-results',
                 'packages/solo/doc/resources.md',
             ),
-            '/async_job/cleanup/#cleanup-order-and-late-results',
+            '/async_job/cleanup-rules/#cleanup-order-and-late-results',
         )
 
     def test_a_russian_readme_keeps_its_language(self):
@@ -77,15 +77,17 @@ class ARelativeLink(unittest.TestCase):
         )
 
     def test_a_russian_page_of_another_package(self):
-        # Read as a page of `solo`, it was `/ru/solo/cleanup/`, which
-        # does not exist.
+        # Read as a page of `solo`, it was `/ru/solo/cleanup-rules/`,
+        # which does not exist.
         self.assertEqual(
             rewrite(
-                '../async_job/cleanup.md#порядок-уборки-и-поздние-результаты',
+                '../async_job/cleanup-rules.md'
+                '#порядок-уборки-и-поздние-результаты',
                 'docs/ru/solo/resources.md',
                 locale='ru',
             ),
-            '/ru/async_job/cleanup/#порядок-уборки-и-поздние-результаты',
+            '/ru/async_job/cleanup-rules/'
+            '#порядок-уборки-и-поздние-результаты',
         )
 
     def test_a_russian_page_from_a_russian_readme(self):

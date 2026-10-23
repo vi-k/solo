@@ -211,8 +211,9 @@ registers its release themselves. A parent that takes it through
 line below would be too late. `ctx.run` checks the parent once the child's
 value is in hand, and a checkpoint that throws there takes the value with it.
 So the line that would have registered the release is never reached.
-[A resource that travels](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#a-resource-that-travels)
-on the cleanup page of `async_job` follows a database through such a hand-over.
+[A resource that travels](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup-rules.md#a-resource-that-travels)
+on the cleanup rules page of `async_job` follows a database through such a
+hand-over.
 
 ## Handing a resource to the state
 
@@ -368,8 +369,8 @@ release must precede the next job or controller closure.
 
 The first three steps belong to the core, `async_job`, and so do the late
 results they can bring.
-[Cleanup order and late results](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#cleanup-order-and-late-results)
-on the cleanup page of `async_job` describes that order and keeps it. A
+[Cleanup order and late results](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup-rules.md#cleanup-order-and-late-results)
+on the cleanup rules page of `async_job` describes that order and keeps it. A
 controller adds the last row:
 
 1. The outcome is fixed first.

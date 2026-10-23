@@ -151,6 +151,10 @@ PAIRS = [
         REPO / "docs" / "ru" / "async_job" / "cleanup.md",
     ),
     (
+        REPO / "packages" / "async_job" / "doc" / "cleanup-rules.md",
+        REPO / "docs" / "ru" / "async_job" / "cleanup-rules.md",
+    ),
+    (
         REPO / "packages" / "async_job" / "doc" / "observing.md",
         REPO / "docs" / "ru" / "async_job" / "observing.md",
     ),

@@ -4,6 +4,9 @@
 
 - The queue and the rule left [Building on the core](doc/extending.md) for a
   page of their own, [An engine of your own](doc/engine.md).
+- A resource handed to another job, cleanup without a call and the order of
+  cleanup left [Cleanup](doc/cleanup.md) for
+  [Cleanup rules](doc/cleanup-rules.md).
 
 ## 0.3.0
 

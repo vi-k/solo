@@ -946,7 +946,7 @@ void main() {
   });
 
   test('a receiver that registered on arrival closes what it was handed', () {
-    // The example of `doc/cleanup.md`: `connect` opens the database and
+    // The example of `doc/cleanup-rules.md`: `connect` opens the database and
     // `ready` hands it on migrated. When the migration fails, what closes
     // it is the registration `ready` made when the value arrived -- the one
     // `connect` made is settled by `connect`'s own outcome and is gone.

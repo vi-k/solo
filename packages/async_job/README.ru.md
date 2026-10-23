@@ -163,7 +163,7 @@ final outcome = await job.done; // Cancelled(manual)
 - **`discard: (database) => database.close()`** закрывает базу, когда задача
   кончается `Failed` или `Cancelled`; при `Done(database)` база остаётся
   открытой для вызывающего. См.
-  [«Порядок уборки и поздние результаты»](../../docs/ru/async_job/cleanup.md#порядок-уборки-и-поздние-результаты).
+  [«Порядок уборки и поздние результаты»](../../docs/ru/async_job/cleanup-rules.md#порядок-уборки-и-поздние-результаты).
 - **`ctx.onCancel(stop.cancel)`** передаёт отмену собственному токену клиента
   в тот момент, когда задача её принимает. `CancelToken` принадлежит клиенту
   базы, а не этому пакету.
@@ -292,7 +292,8 @@ Cancelled(manual)
 | [Группы](../../docs/ru/async_job/groups.md) | `.wait`, `ctx.runAll`, что группа отдаёт обратно |
 | [Цепочки](../../docs/ru/async_job/chains.md) | `then`, продолжение ребёнка, шаги подряд |
 | [Стримы](../../docs/ru/async_job/streams.md) | `ctx.each`, `Job.each` и что делают `await for` и `listen` в теле |
-| [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |
+| [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `ctx.disown` для значения, которое задача не отдаёт |
+| [Правила уборки](../../docs/ru/async_job/cleanup-rules.md) | Ресурс, переданный другой задаче, `onDispose` и снятие, порядок и поздние результаты |
 | [Наблюдение](../../docs/ru/async_job/observing.md) | `JobObserver`, имя задачи, логи |
 | [Ошибки](../../docs/ru/async_job/errors.md) | Куда идёт ошибка, `JobAnswerer`, `Job.isCancellationError`, `Job.visitErrors`, `unattended`, `Job.debug` |
 | [Тестирование](../../docs/ru/async_job/testing.md) | Задача под `fakeAsync` и что двигает её время |

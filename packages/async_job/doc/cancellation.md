@@ -125,8 +125,8 @@ passed to `abandonable`. While the body or the job's children still run, that
 callback runs at once, and the job awaits it. If the job is already running its
 cleanup stack, the callback joins the stack. Once the job has finished, the
 callback runs on its own.
-[A value that comes late](cleanup.md#a-value-that-comes-late) on the cleanup
-page takes this order apart.
+[A value that comes late](cleanup-rules.md#a-value-that-comes-late) on the
+cleanup rules page takes this order apart.
 
 ### The second attempt
 

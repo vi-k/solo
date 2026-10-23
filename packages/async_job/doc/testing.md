@@ -8,7 +8,7 @@ for nothing in real time. `package:fake_async` gives a test such time.
 A test checks that cancelling a database open still closes the database once
 the open finishes. `discard` closes a value that arrives after the
 cancellation, as in
-[A value that comes late](cleanup.md#a-value-that-comes-late).
+[A value that comes late](cleanup-rules.md#a-value-that-comes-late).
 
 ### The first attempt
 

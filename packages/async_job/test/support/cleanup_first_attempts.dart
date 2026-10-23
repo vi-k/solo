@@ -1,9 +1,10 @@
-// The first attempts of `doc/cleanup.md`, verbatim. Each differs from the
-// version that works by a word or a line, so they live apart from the
-// answers in `cleanup_page.dart`: a line of an answer turned into the line
-// of its first attempt would still be found in a file that held both.
-// `connect` of "A resource that travels" stands here, because the page
-// shows it in the first attempt; the later versions of `ready` take it.
+// The first attempts of `doc/cleanup.md` and `doc/cleanup-rules.md`,
+// verbatim. Each differs from the version that works by a word or a line,
+// so they live apart from the answers in `cleanup_page.dart`: a line of an
+// answer turned into the line of its first attempt would still be found in
+// a file that held both. `connect` of "A resource that travels" stands
+// here, because the page shows it in the first attempt; the later versions
+// of `ready` take it.
 import 'package:async_job/async_job.dart';
 
 import 'cleanup_stubs.dart';
