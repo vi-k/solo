@@ -22,8 +22,10 @@ The lines under the code are what the code prints:
 ## Where each error goes
 
 The table shows which places of the introduction of [Errors](errors.md) each
-error passes, with an observer and without one. Rarer ways, such as those of
-`ctx.runAll` and of engines, are in [Rare routes](#rare-routes) below.
+error passes, with an observer and without one. The answer is `onUnanswered` of
+an observer that mixes in `JobAnswerer`; a job without such an observer has the
+zone for its answer. Rarer ways, such as those of `ctx.runAll` and of engines,
+are in [Rare routes](#rare-routes) below.
 
 | The error | With an observer | Without one |
 | --- | --- | --- |

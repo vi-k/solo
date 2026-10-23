@@ -335,8 +335,8 @@ over and ends `Done` inside the branch, before the group has decided anything,
 and a `discard` runs only if its job does not end `Done`. Here the source
 reached the branch. So the branch registers the source again the moment it
 arrives, with the `discard` passed to `ctx.run`. That registration is the
-branch's own, the third row of the table. The cleanup page shows the call in
-[Registering on arrival](cleanup-rules.md#registering-on-arrival).
+branch's own, the third row of the table. The cleanup rules page shows the call
+in [Registering on arrival](cleanup-rules.md#registering-on-arrival).
 
 The last row follows from
 [Choosing the callback](cleanup.md#choosing-the-callback) on the cleanup page.
@@ -407,9 +407,9 @@ after it stay open.
 A registration of its own for each source closes the rest all the same. The
 cleanup stack runs every callback, whatever the one before it did. An error
 from one goes to `onError` and, by default, on to the zone, as
-[Cleanup order and late results](cleanup-rules.md#cleanup-order-and-late-results)
-on the cleanup rules page describes. The loop of registrations takes the place
-of the `try`, on the very next line:
+[Choosing the callback](cleanup.md#choosing-the-callback) on the cleanup page
+describes. The loop of registrations takes the place of the `try`, on the very
+next line:
 
 ```dart
 final sources = await ctx.runAll(branches);

@@ -112,14 +112,23 @@ Each callback is awaited, so the job ends only after the last of them is over.
 Whoever waits for the job waits for them too: a `solo` controller completes
 `close()` only once the cleanup of the job it cancelled has run.
 
-Cleanup callbacks run after the body ends, and cancellation does not interrupt
-them: neither one already accepted nor one arriving into the unwinding itself.
-`check`, `abandonable`, `join`, `pause`, `uncancellable`, `run`, `start`,
-`runAll`, `each` and `onCancel` are the body's and throw `StateError` here, so
-a callback must await its resource directly. On a cancelled job `check` throws
-the job's `Cancelled` instead, as it does once the job has finished. So an
-action the body walked away from, polling `check` to stop, gets the
-cancellation it waits for.
+The job keeps the callbacks it registers on its cleanup stack. They run after
+the body ends, and cancellation does not interrupt them: neither one already
+accepted nor one arriving into the unwinding itself. `check`, `abandonable`,
+`join`, `pause`, `uncancellable`, `run`, `start`, `runAll`, `each` and
+`onCancel` are the body's and throw `StateError` here, so a callback must await
+its resource directly. On a cancelled job `check` throws the job's `Cancelled`
+instead, as it does once the job has finished. So an action the body walked
+away from, polling `check` to stop, gets the cancellation it waits for.
+
+Two releases do not wait for the stack. A checkpoint that throws on a value
+that has just arrived releases it on the spot, before the body hears the
+cancellation, as
+[Registering on arrival](cleanup-rules.md#registering-on-arrival) shows. A
+value that comes late is released when it comes, during the body or after the
+job has ended, as
+[A value that comes late](cleanup-rules.md#a-value-that-comes-late) describes.
+Both sections are on the cleanup rules page.
 
 A callback must not await its own job: `done`, `value` and `cancel()` all
 complete after the cleanup that would be waiting for them. Keep callbacks

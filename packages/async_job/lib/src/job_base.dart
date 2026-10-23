@@ -1108,7 +1108,7 @@ abstract class JobBase<T> implements Job<T> {
   /// rather than refusing it.
   ///
   /// See [Refusing while the job waits](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/engine.md#refusing-while-the-job-waits)
-  /// on the extending page.
+  /// on the engine page.
   @protected
   bool get cancellable => _cancellable;
 
@@ -1840,7 +1840,7 @@ abstract class JobBase<T> implements Job<T> {
   /// child stays `created`.
   ///
   /// See [One loop, and no other way to start](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/engine.md#one-loop-and-no-other-way-to-start)
-  /// on the extending page.
+  /// on the engine page.
   @visibleForOverriding
   void adoptedBy(JobContextBase parent) {}
 

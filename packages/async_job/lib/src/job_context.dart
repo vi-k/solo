@@ -472,7 +472,7 @@ abstract interface class JobContext {
 /// [cancelOwnJob].
 ///
 /// See [A rule of your own](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/engine.md#a-rule-of-your-own)
-/// on the extending page for where [check] is asked.
+/// on the engine page for where [check] is asked.
 abstract class JobContextBase implements JobContext {
   final JobBase<Object?> _owner;
 
