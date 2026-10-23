@@ -554,13 +554,28 @@ a parent asynchronous scope of scopo is released only after its children:
 
 ```dart
 AsyncDataScope<ProfileController>(
-  initData: (context, ctx) async => ProfileController(ProfileApi()),
+  initData: (context, ctx) async {
+    final controller = ProfileController(ProfileApi());
+    final unregister = ctx.onDiscard(controller.close);
+    await ctx.abandonable(() => controller.load().value);
+    unregister(); // from here on, disposeData closes it
+
+    return controller;
+  },
   disposeData: (controller) => controller.close(),
-  progressBuilder: (context, progress) => const SizedBox.shrink(),
+  progressBuilder: (context, _) => const CircularProgressIndicator(),
   errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
   builder: (context, controller) => ProfileView(controller: controller),
 )
 ```
+
+The scope is ready once the profile is loaded: until then it shows
+`progressBuilder`, and a load that fails is what `errorBuilder` shows. Until it
+is returned, the controller belongs to the body alone, since the scope hands
+`disposeData` only a value it was given. `ctx.onDiscard` closes it on the two
+other paths: a failed load, and a scope removed while it loads, where
+`ctx.abandonable` stops waiting at once and the close cancels the load. The
+registration goes at the handover, with no wait between it and the return.
 
 What the parent releases outlives the jobs of the controller, a save it waits
 out with `ctx.join` included. Under `ScopeModel` the parent releases it while

@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scopo/scopo.dart';
 
-import 'support/readme_profile.dart';
+import 'support/readme_profile.dart' hide ProfileApi;
+import 'support/readme_profile.dart' as profile show ProfileApi;
 import 'support/readme_scopo.dart';
 
 /// The sentinel of the two blocks of `README.md` that take scopo, in
@@ -59,6 +61,26 @@ Future<void> ready(WidgetTester tester, Finder finder) async {
   expect(finder, findsOneWidget);
 }
 
+/// Every controller made while a test runs, the ones a scope never returned
+/// included.
+List<ProfileController> made() {
+  final controllers = <ProfileController>[];
+  Solo.observer = _Made(controllers);
+  addTearDown(() => Solo.observer = null);
+
+  return controllers;
+}
+
+class _Made extends SoloObserver {
+  final List<ProfileController> controllers;
+
+  _Made(this.controllers);
+
+  @override
+  void onCreate(Solo<Object> solo) =>
+      controllers.add(solo as ProfileController);
+}
+
 void main() {
   // A widget test is given ten minutes by default.
   (TestWidgetsFlutterBinding.ensureInitialized()
@@ -111,18 +133,59 @@ void main() {
           'still running.');
     });
 
+    testWidgets('AsyncDataScope is ready once the profile is loaded',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(home: sharedScope()));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(ProfileView), findsNothing);
+
+      await ready(tester, find.text('Ada Lovelace'));
+      expect(ProfileApi.last!.trace, ['fetch begins', 'fetch ends']);
+      _says('The scope is ready once the profile is loaded: until then it '
+          'shows `progressBuilder`');
+    });
+
+    testWidgets('a load that fails closes the controller', (tester) async {
+      final controllers = made();
+      ProfileApi.next = profile.ProfileApi(error: StateError('no network'));
+      addTearDown(() => ProfileApi.next = profile.ProfileApi());
+      await tester.pumpWidget(MaterialApp(home: sharedScope()));
+
+      await ready(tester, find.text('Bad state: no network'));
+      expect(controllers.single.isClosed, isTrue);
+      _says('a load that fails is what `errorBuilder` shows');
+      _says('`ctx.onDiscard` closes it on the two other paths: a failed load');
+    });
+
+    testWidgets('a scope removed while it loads closes the controller at once',
+        (tester) async {
+      final controllers = made();
+      ProfileApi.next = profile.ProfileApi(delay: const Duration(seconds: 1));
+      addTearDown(() => ProfileApi.next = profile.ProfileApi());
+      await tester.pumpWidget(MaterialApp(home: sharedScope()));
+      await tester.pump(const Duration(milliseconds: 50));
+      final controller = controllers.single;
+      expect(controller.isClosed, isFalse);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(controller.isClosed, isTrue);
+      expect(ProfileApi.last!.trace, ['fetch begins']);
+      await tester.pump(const Duration(seconds: 1));
+      _says('a scope removed while it loads, where `ctx.abandonable` stops '
+          'waiting at once and the close cancels the load.');
+    });
+
     testWidgets('AsyncDataScope holds the parent until the close is over',
         (tester) async {
       await tester.pumpWidget(MaterialApp(home: underParent(sharedScope())));
-      await ready(tester, find.text('Load'));
+      await ready(tester, find.text('Ada Lovelace'));
       final controller = AsyncDataScope.of<ProfileController>(
         tester.element(find.byType(ProfileView)),
         listen: false,
       ).data;
       parentTrace = controller.api.trace;
       addTearDown(() => parentTrace = null);
-      controller.load().ignoreFailure();
-      await tester.pump(const Duration(milliseconds: 10));
       final save = controller.save();
       await tester.pump(const Duration(milliseconds: 3));
 

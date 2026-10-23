@@ -1861,13 +1861,11 @@ void main() {
   testWidgets('AsyncDataScope holds the parent until the close is over',
       (tester) async {
     await tester.pumpWidget(MaterialApp(home: underParent(sharedScope())));
-    await ready(tester, find.text('Load'));
+    await ready(tester, find.text('Ada Lovelace'));
     final controller = AsyncDataScope.of<ProfileController>(
       tester.element(find.byType(ProfileView)),
       listen: false,
     ).data;
-    controller.load().ignoreFailure();
-    await tester.pump(const Duration(milliseconds: 20));
 
     await saveAndLeave(tester, controller);
     expect(

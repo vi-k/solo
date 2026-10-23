@@ -553,13 +553,28 @@ ScopeModel<ProfileController>(
 
 ```dart
 AsyncDataScope<ProfileController>(
-  initData: (context, ctx) async => ProfileController(ProfileApi()),
+  initData: (context, ctx) async {
+    final controller = ProfileController(ProfileApi());
+    final unregister = ctx.onDiscard(controller.close);
+    await ctx.abandonable(() => controller.load().value);
+    unregister(); // дальше его закрывает disposeData
+
+    return controller;
+  },
   disposeData: (controller) => controller.close(),
-  progressBuilder: (context, progress) => const SizedBox.shrink(),
+  progressBuilder: (context, _) => const CircularProgressIndicator(),
   errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
   builder: (context, controller) => ProfileView(controller: controller),
 )
 ```
+
+Скоуп готов, когда профиль загружен: до этого он показывает `progressBuilder`,
+а провал загрузки показывает `errorBuilder`. Пока контроллер не возвращён, он
+принадлежит только телу: скоуп отдаёт в `disposeData` лишь то значение, которое
+получил. На двух других путях его закрывает `ctx.onDiscard`: при провале
+загрузки и когда скоуп убирают посреди загрузки — тогда `ctx.abandonable` сразу
+перестаёт ждать, а закрытие отменяет загрузку. Регистрацию снимают в момент
+передачи, без ожидания между ней и возвратом.
 
 То, что освобождает родитель, переживает задачи контроллера, включая
 сохранение, которого контроллер дожидается через `ctx.join`. Под `ScopeModel`
