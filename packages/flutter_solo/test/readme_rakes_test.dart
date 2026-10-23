@@ -18,8 +18,9 @@ import 'support/readme_widgets.dart';
 ///
 /// The code of the page stands verbatim in two files of `test/support/`:
 /// `readme_profile.dart` holds the model of "Usage", and
-/// `readme_widgets.dart` the fragments between "Why" and "Outcomes". The
-/// tests below run it. The
+/// `readme_widgets.dart` the fragments between "Why" and "Outcomes" but for
+/// the two that take scopo, which stand in `readme_scopo.dart` and are run
+/// by `readme_scopo_test.dart`. The tests below run the rest. The
 /// one block the page cuts short, the controller of "Usage" with the mixin
 /// and `// ...same as above...` for a body, stands in full in
 /// `readme_listenable.dart`, imported here as `listenable`: a test over a
@@ -45,6 +46,7 @@ const _support = [
   'test/support/readme_profile.dart',
   'test/support/readme_widgets.dart',
   'test/support/readme_install.dart',
+  'test/support/readme_scopo.dart',
 ];
 
 String _page() => File(_doc).readAsStringSync();
@@ -157,7 +159,7 @@ void main() {
       expect(strayFences(_doc), ['```sh']);
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
-        hasLength(15),
+        hasLength(17),
         reason: 'a new block of the page needs a place in the support files '
             'and a test that runs it',
       );

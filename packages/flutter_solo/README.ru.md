@@ -523,6 +523,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
 в скоупе [scopo](https://pub.dev/packages/scopo), в поле объекта приложения.
 Там же он и закрывается, один раз.
 
+Скоуп scopo может занять и место `State` из примера выше. `ScopeModel` создаёт
+контроллер, когда скоуп монтируется, отдаёт его в `dispose`, когда скоуп уходит
+из дерева, а поддерево достаёт контроллер через `ScopeModel.of`:
+
+```dart
+import 'dart:async';
+
+import 'package:scopo/scopo.dart';
+
+ScopeModel<ProfileController>(
+  create: (context) {
+    final controller = ProfileController(ProfileApi());
+    controller.load().ignoreFailure();
+
+    return controller;
+  },
+  dispose: (controller) => unawaited(controller.close()),
+  builder: (context) => ProfileView(
+    controller: ScopeModel.of<ProfileController>(context, listen: false),
+  ),
+)
+```
+
+Этот `dispose` синхронный, как у `State`, и закрытия никто не ждёт. Где ждать
+должен асинхронный скоуп scopo над ним, положите контроллер в `AsyncDataScope`.
+Он дожидается future, которую возвращает `disposeData`, а родительский
+асинхронный скоуп scopo освобождается только после своих детей:
+
+```dart
+AsyncDataScope<ProfileController>(
+  initData: (context, ctx) async => ProfileController(ProfileApi()),
+  disposeData: (controller) => controller.close(),
+  progressBuilder: (context, progress) => const SizedBox.shrink(),
+  errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
+  builder: (context, controller) => ProfileView(controller: controller),
+)
+```
+
+То, что освобождает родитель, переживает задачи контроллера, включая
+сохранение, которого контроллер дожидается через `ctx.join`. Под `ScopeModel`
+родитель освобождает своё, пока сохранение ещё идёт. У обоих ожиданий есть
+предел, `disposeScopeTimeout` у скоупа и `waitForChildrenTimeout` у его
+родителя, по умолчанию три секунды. Когда он истёк, scopo сообщает об этом
+и продолжает освобождение, как будто не ждал вовсе. `ScopeTimeout.none` снимает
+предел для одного скоупа. Экран ниже по дереву достаёт контроллер через
+`AsyncDataScope.of<ProfileController>(context, listen: false).data`.
+
 ## Исходы
 
 Метод отдаёт свою `Job`, поэтому экран может дождаться конца работы, которую

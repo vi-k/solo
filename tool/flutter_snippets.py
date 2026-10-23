@@ -93,6 +93,8 @@ dependencies:
     path: {flutter_solo}
   # The package without Flutter of doc/mixins.md imports these two by name.
   meta: any
+  # The controller's life of the README puts a controller in its scopes.
+  scopo: ^0.17.0
   solo: any
 
 dev_dependencies:
@@ -1757,6 +1759,125 @@ void main() {
     expect(canSave.value, isTrue);
     expect(_heardBySecondImport, [true]);
     subscription.cancel();
+  });
+}
+''',
+])
+
+# ------------------------------------------------- the scopes of the README
+# The two blocks of "The controller's life" that take scopo, in a driver of
+# their own: scopo declares a `listen` on `Listenable` as well, and next to
+# the second import of flutter_solo neither could be called.
+_screen_scope = _fr['the-controller-s-life/import-dart-async']
+_scope_imports, _screen_scope_body = split_imports(_screen_scope)
+assert _scope_imports == [
+    "import 'dart:async';",
+    "import 'package:scopo/scopo.dart';",
+], _scope_imports
+_shared_imports, _shared_scope_body = split_imports(
+    _fr['the-controller-s-life/asyncdatascope-profilecontroll'])
+assert _shared_imports == [], _shared_imports
+
+FILES['readme_scopo_test'] = '\n'.join([
+    *sorted(set(
+        _usage_imports + _scope_imports + [
+            "import 'package:flutter_test/flutter_test.dart';",
+        ])),
+    '',
+    _usage_body,
+    README_API,
+    wrap('screenScope', _screen_scope_body, ''),
+    wrap('sharedScope', _shared_scope_body, ''),
+    '''
+/// What the API had saved when the parent scope was released, once it was.
+List<String>? savedAtRelease;
+
+/// The controller below the parent, which a test names once it is built.
+ProfileController? below;
+
+/// [child] under a parent asynchronous scope, as the page describes it.
+Widget underParent(Widget child) => AsyncScope(
+      initScope: (context, ctx) async {},
+      disposeScope: () => savedAtRelease = [...below!.api.saved],
+      progressBuilder: (context, progress) => const SizedBox.shrink(),
+      errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
+      builder: (context) => child,
+    );
+
+/// Pumps until [finder] finds a widget: a scope builds its ready branch
+/// some time after its initialization ends.
+Future<void> ready(WidgetTester tester, Finder finder) async {
+  for (var frame = 0; frame < 50 && finder.evaluate().isEmpty; frame++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  expect(finder, findsOne);
+}
+
+/// Starts a save of [controller], and takes the tree away while it runs.
+Future<void> saveAndLeave(
+  WidgetTester tester,
+  ProfileController controller,
+) async {
+  below = controller;
+  savedAtRelease = null;
+  final save = controller.save();
+  await tester.pump(const Duration(milliseconds: 3));
+  await tester.pumpWidget(const SizedBox());
+  await tester.pump(const Duration(milliseconds: 20));
+  await tester.pump(const Duration(milliseconds: 20));
+  expect(controller.isClosed, isTrue);
+  expect(controller.api.saved, ['Ada Lovelace'], reason: 'join waited it out');
+  expect('${save.outcome}', 'Cancelled(closed)');
+}
+
+void main() {
+  testWidgets('ScopeModel creates the controller and closes it',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(home: screenScope()));
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(find.text('Ada Lovelace'), findsOne, reason: 'create loaded it');
+    final controller = ScopeModel.of<ProfileController>(
+      tester.element(find.byType(ProfileView)),
+      listen: false,
+    );
+
+    await tester.pumpWidget(const SizedBox());
+    expect(controller.isClosed, isTrue, reason: 'dispose closed it');
+  });
+
+  testWidgets('under ScopeModel the parent goes first', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: underParent(screenScope())));
+    await ready(tester, find.text('Ada Lovelace'));
+    final controller = ScopeModel.of<ProfileController>(
+      tester.element(find.byType(ProfileView)),
+      listen: false,
+    );
+
+    await saveAndLeave(tester, controller);
+    expect(savedAtRelease, isEmpty, reason: 'nothing waits for the close');
+    debugPrint('ScopeModel: the parent released with $savedAtRelease saved');
+  });
+
+  testWidgets('AsyncDataScope holds the parent until the close is over',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(home: underParent(sharedScope())));
+    await ready(tester, find.text('Load'));
+    final controller = AsyncDataScope.of<ProfileController>(
+      tester.element(find.byType(ProfileView)),
+      listen: false,
+    ).data;
+    controller.load().ignoreFailure();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    await saveAndLeave(tester, controller);
+    expect(
+      savedAtRelease,
+      ['Ada Lovelace'],
+      reason: 'the parent waited for disposeData, and it for the save',
+    );
+    debugPrint(
+      'AsyncDataScope: the parent released with $savedAtRelease saved',
+    );
   });
 }
 ''',

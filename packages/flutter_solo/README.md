@@ -524,6 +524,53 @@ live: a `get_it` registration, an `InheritedWidget` above those screens, a
 scope of [scopo](https://pub.dev/packages/scopo), a field of the app object. It
 is closed there, once.
 
+A scope of scopo can also take the place of the `State` above. `ScopeModel`
+creates the controller once it is mounted and hands it to `dispose` when it
+leaves the tree, and the subtree reads it with `ScopeModel.of`:
+
+```dart
+import 'dart:async';
+
+import 'package:scopo/scopo.dart';
+
+ScopeModel<ProfileController>(
+  create: (context) {
+    final controller = ProfileController(ProfileApi());
+    controller.load().ignoreFailure();
+
+    return controller;
+  },
+  dispose: (controller) => unawaited(controller.close()),
+  builder: (context) => ProfileView(
+    controller: ScopeModel.of<ProfileController>(context, listen: false),
+  ),
+)
+```
+
+That `dispose` is synchronous, as in a `State`, and nothing waits for the
+close. Where an asynchronous scope of scopo above it has to wait, put the
+controller in `AsyncDataScope`. It awaits the future `disposeData` returns, and
+a parent asynchronous scope of scopo is released only after its children:
+
+```dart
+AsyncDataScope<ProfileController>(
+  initData: (context, ctx) async => ProfileController(ProfileApi()),
+  disposeData: (controller) => controller.close(),
+  progressBuilder: (context, progress) => const SizedBox.shrink(),
+  errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
+  builder: (context, controller) => ProfileView(controller: controller),
+)
+```
+
+What the parent releases outlives the jobs of the controller, a save it waits
+out with `ctx.join` included. Under `ScopeModel` the parent releases it while
+that save is still running. Both waits have a bound, `disposeScopeTimeout` of
+the scope and `waitForChildrenTimeout` of its parent, three seconds by default.
+Past it scopo reports the expiry and goes on with the release, as if it had not
+waited at all. `ScopeTimeout.none` takes the bound off for one scope. A screen
+further down reads the controller with
+`AsyncDataScope.of<ProfileController>(context, listen: false).data`.
+
 ## Outcomes
 
 A method hands back its job, so the screen can wait for the end of the work it
