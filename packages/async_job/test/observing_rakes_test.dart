@@ -1,6 +1,6 @@
-// `doc/observing.md` and `doc/testing.md` run here, and `doc/errors.md` runs
-// in `errors_rakes_test.dart`. The code of the pages stands verbatim in
-// `support/observing_page.dart`, their first attempts in
+// `doc/observing.md` and `doc/testing.md` run here, and `doc/errors.md` and
+// `doc/error-rules.md` run in `errors_rakes_test.dart`. The code of the pages
+// stands verbatim in `support/observing_page.dart`, their first attempts in
 // `support/observing_first_attempts.dart`, and what that code takes for
 // granted in `support/observing_stubs.dart`; what the two files of tests share
 // is in `support/observing_rakes.dart`. Every block of the pages runs in a

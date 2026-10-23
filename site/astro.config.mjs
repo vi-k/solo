@@ -135,6 +135,7 @@ export default defineConfig({
             page('async_job/cleanup-rules', 'Cleanup rules', 'Правила уборки'),
             page('async_job/observing', 'Observing', 'Наблюдение'),
             page('async_job/errors', 'Errors', 'Ошибки'),
+            page('async_job/error-rules', 'Error rules', 'Правила ошибок'),
             page('async_job/testing', 'Testing', 'Тестирование'),
             page(
               'async_job/extending',

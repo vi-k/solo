@@ -102,9 +102,10 @@ Override `started()` and `finished()` to follow the lifecycle:
 - An error `started()` or `finished()` throws goes to `onError` and then to the
   [zone](errors.md#where-errors-go), unless the observer catches it in
   `onUnanswered`. That is the way of an error no outcome carries, as
-  [Where each error goes](errors.md#where-each-error-goes) on the errors page
-  describes. The job goes on as it would have, and what is left half-done is
-  your own bookkeeping, so keep both hooks short and unconditional.
+  [Where each error goes](error-rules.md#where-each-error-goes) on the error
+  rules page describes. The job goes on as it would have, and what is left
+  half-done is your own bookkeeping, so keep both hooks short and
+  unconditional.
 
 `MyJob` drops its body in `finished()`: kept, it would hold everything it
 captured for as long as anyone holds the job.

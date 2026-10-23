@@ -1659,8 +1659,8 @@ abstract class JobBase<T> implements Job<T> {
   /// does. Nor is anybody asked about a failure that [Job.isCancellationError]
   /// names, once the job has accepted a cancellation.
   ///
-  /// See [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#where-each-error-goes)
-  /// on the errors page.
+  /// See [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
+  /// on the error rules page.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
     notifyObserver(error, stackTrace);

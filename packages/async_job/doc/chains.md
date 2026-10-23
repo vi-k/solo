@@ -167,7 +167,7 @@ continuations, so a cancellation of one of them stops its own wait and goes no
 further. `loaded` belongs to whoever made it, and that code cancels it when
 nobody needs the text. A failure of `loaded` that comes after `parsed` has left
 reaches `parsed` as the late error of an action `ctx.abandonable` stopped
-waiting for: see [Where each error goes](errors.md#where-each-error-goes).
+waiting for: see [Where each error goes](error-rules.md#where-each-error-goes).
 
 ## When a link fails
 

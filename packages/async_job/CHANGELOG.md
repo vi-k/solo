@@ -7,6 +7,9 @@
 - A resource handed to another job, cleanup without a call and the order of
   cleanup left [Cleanup](doc/cleanup.md) for
   [Cleanup rules](doc/cleanup-rules.md).
+- The way of each kind of error, the debug channel, an error that holds several
+  failures and the rare cases left [Errors](doc/errors.md) for
+  [Error rules](doc/error-rules.md).
 
 ## 0.3.0
 

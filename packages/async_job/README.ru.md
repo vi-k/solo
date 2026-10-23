@@ -295,7 +295,8 @@ Cancelled(manual)
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `ctx.disown` для значения, которое задача не отдаёт |
 | [Правила уборки](../../docs/ru/async_job/cleanup-rules.md) | Ресурс, переданный другой задаче, `onDispose` и снятие, порядок и поздние результаты |
 | [Наблюдение](../../docs/ru/async_job/observing.md) | `JobObserver`, имя задачи, логи |
-| [Ошибки](../../docs/ru/async_job/errors.md) | Куда идёт ошибка, `JobAnswerer`, `Job.isCancellationError`, `Job.visitErrors`, `unattended`, `Job.debug` |
+| [Ошибки](../../docs/ru/async_job/errors.md) | Куда идёт ошибка, `JobAnswerer`, `Job.isCancellationError`, `unattended`, `JobObserver.all` |
+| [Правила ошибок](../../docs/ru/async_job/error-rules.md) | Путь ошибки каждого вида, `Job.debug`, `Job.visitErrors`, редкие случаи |
 | [Тестирование](../../docs/ru/async_job/testing.md) | Задача под `fakeAsync` и что двигает её время |
 | [Своё поверх ядра](../../docs/ru/async_job/extending.md) | `JobBase`, `JobContextBase`, своя задача, `Job.deferred`, `finish` |
 | [Свой движок](../../docs/ru/async_job/engine.md) | Очередь, которая отказывает в `cancelWith`, правило в `check()` |

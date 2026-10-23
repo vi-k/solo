@@ -199,8 +199,8 @@ abstract interface class Job<T> {
   /// walked all the same. Each `ParallelWaitError` is walked at most once, by
   /// identity.
   ///
-  /// See [Several failures in one error](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#several-failures-in-one-error)
-  /// on the errors page for the order of the walk.
+  /// See [Several failures in one error](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#several-failures-in-one-error)
+  /// on the error rules page for the order of the walk.
   static void visitErrors(
     Object error,
     StackTrace stackTrace, {

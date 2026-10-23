@@ -1,13 +1,14 @@
-// `doc/errors.md` runs here. The code of the page stands verbatim in
-// `support/observing_page.dart`, its first attempts in
+// `doc/errors.md` and `doc/error-rules.md` run here. The code of the pages
+// stands verbatim in `support/observing_page.dart`, their first attempts in
 // `support/observing_first_attempts.dart`, and what that code takes for
 // granted in `support/observing_stubs.dart`, which it shares with
 // `doc/observing.md`; so does `support/observing_rakes.dart` with the tests
-// of that page. Every block of the page runs in a test below, every quote is
-// compared with what its block prints, and every piece of code on the page
-// has to be a run of lines of those files: a piece or a quote that drifts
-// turns this file red. The rules the page states in prose and in its table
-// are held with code of the tests' own where the page shows none.
+// of that page. Every block of the pages runs in a test below, every quote
+// is compared with what its block prints, and every piece of code on the
+// pages has to be a run of lines of those files: a piece or a quote that
+// drifts turns this file red. The rules the pages state in prose and in
+// their tables are held with code of the tests' own where the pages show
+// none.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -26,67 +27,89 @@ import 'support/observing_stubs.dart';
 import 'support/page_code.dart';
 import 'support/probe_job.dart';
 
+/// The pages this file runs: where an error goes, then its rules.
+const pages = ['doc/errors.md', 'doc/error-rules.md'];
+
+/// The pages, and their translation where it is.
+///
+/// The translation lives outside the package, and the `floor` job runs this
+/// file on the archive, where the original is read alone. In the tree each
+/// page of both has to be there.
+final versions = {
+  'original': pages,
+  if (Directory('../../docs/ru').existsSync())
+    'translation': [
+      '../../docs/ru/async_job/errors.md',
+      '../../docs/ru/async_job/error-rules.md',
+    ],
+};
+
+/// The pages of [version] read together.
+String readAll(String version) =>
+    versions[version]!.map((page) => File(page).readAsStringSync()).join('\n');
+
 void main() {
   group('The code of the page', () {
     setUp(() => stage = Stage());
 
-    test('every quote on the page is what its code prints', () {
+    test('every quote on the pages is what its code prints', () {
       stage.databaseLocked = true;
       final prints = [
         quotable(play(first.migrating, cancelAt: 10)),
         withTheStopNamed(() => quotable(play(first.migrating, cancelAt: 10))),
         quotable(play(openingReported, cancelAt: 10)),
-        debugged(() => play(first.migrating, cancelAt: 10)),
         play(first.sendingUnawaited),
         play(() => sendingHandedOver(Reporter())),
-        play(saving),
         play(first.sendingWithBoth),
         play(sendingToTheList),
+        debugged(() => play(first.migrating, cancelAt: 10)),
+        play(saving),
       ];
       expect(
-        pageQuotes('doc/errors.md'),
+        [for (final doc in pages) ...pageQuotes(doc)],
         prints,
-        reason: 'each quote under the code that prints it',
+        reason: 'each quote under the code that prints it, page by page',
       );
     });
 
-    test('the page has no fence the checks do not read', () {
-      expect(strayFences('doc/errors.md'), isEmpty);
-    });
+    for (final doc in pages) {
+      test('$doc has no fence the checks do not read', () {
+        expect(strayFences(doc), isEmpty);
+      });
+    }
 
     // Each version under its own file: a line of an answer turned into the
     // line of a first attempt would still be found among all of them.
     const page = 'test/support/observing_page.dart';
     const firstAttempts = 'test/support/observing_first_attempts.dart';
-    const holders = {
-      '### The first attempt': firstAttempts,
-      '### Errors of a cancellation': page,
-      '### An observer': page,
-      '### The debug channel': page,
-      '### Limits of the filter': page,
-      '### Work handed to the job': page,
-      '## Answering for errors': page,
-      '### Several failures in one error': page,
-      '## Several observers': page,
-      '### Observers in one list': page,
-      '## Reporting each error once': page,
-    };
-    for (final MapEntry(key: heading, value: holder) in holders.entries) {
-      test('the code under "$heading" is a run of lines of $holder', () {
+    const holders = [
+      ('doc/errors.md', '### The first attempt', firstAttempts),
+      ('doc/errors.md', '### Errors of a cancellation', page),
+      ('doc/errors.md', '### An observer', page),
+      ('doc/error-rules.md', '## The debug channel', page),
+      ('doc/error-rules.md', '### Limits of the filter', page),
+      ('doc/errors.md', '### Work handed to the job', page),
+      ('doc/errors.md', '## Answering for errors', page),
+      ('doc/error-rules.md', '## Several failures in one error', page),
+      ('doc/errors.md', '## Several observers', page),
+      ('doc/errors.md', '### Observers in one list', page),
+      ('doc/errors.md', '## Reporting each error once', page),
+    ];
+    for (final (doc, heading, holder) in holders) {
+      test('the code under "$heading" on $doc is a run of lines of $holder',
+          () {
+        expect(codeMissingFrom(doc, holder, under: heading), isEmpty);
+      });
+    }
+
+    for (final doc in pages) {
+      test('every piece of code on $doc is a run of lines of these files', () {
         expect(
-          codeMissingFrom('doc/errors.md', holder, under: heading),
+          codeMissingFrom(doc, page, alsoIn: [firstAttempts]),
           isEmpty,
         );
       });
     }
-
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom('doc/errors.md', page, alsoIn: [firstAttempts]),
-        isEmpty,
-      );
-    });
   });
 
   group('Where errors go', () {
@@ -472,29 +495,24 @@ void main() {
     });
 
     test('the page sends an unobserved failure to the answer', () {
-      // The translation is not in the archive: it is read where it is.
       const said = {
-        'doc/errors.md': [
+        'original': [
           '`onError`, then the answer if nobody observed the outcome',
           'if nobody observes that outcome, it goes on to the answer',
           'then the zone past the answer if nobody observed the outcome',
           'is answered for the same way, failure by failure',
         ],
-        '../../docs/ru/async_job/errors.md': [
+        'translation': [
           '`onError`, затем ответ, если исход никто не наблюдал',
           'если этот исход никто не наблюдает, он идёт к ответу',
           'затем зона мимо ответа, если исход никто не наблюдал',
           'отвечают так же, провал за провалом',
         ],
       };
-      for (final MapEntry(key: page, value: phrases) in said.entries) {
-        if (!File(page).existsSync()) {
-          continue;
-        }
-        final text =
-            File(page).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
-        for (final phrase in phrases) {
-          expect(text, contains(phrase), reason: page);
+      for (final version in versions.keys) {
+        final text = readAll(version).replaceAll(RegExp(r'\s+'), ' ');
+        for (final phrase in said[version]!) {
+          expect(text, contains(phrase), reason: version);
         }
       }
     });
@@ -1236,27 +1254,22 @@ void main() {
     });
 
     test('the page holds an unawaited abandonable to the zone in the body', () {
-      // The translation is not in the archive: it is read where it is.
       const said = {
-        'doc/errors.md': [
+        'original': [
           'a cancellation of the job makes a `ctx.abandonable` called without',
           "or with the job's cancellation, only while the body runs",
           'on purpose adds a second, past the answer',
         ],
-        '../../docs/ru/async_job/errors.md': [
+        'translation': [
           'отмена задачи заставляет `ctx.abandonable`, вызванный без `await`',
           'или с отменой задачи, только пока тело идёт',
           'нарочно кончает задачу `Failed`, добавляет второй, мимо ответа',
         ],
       };
-      for (final MapEntry(key: page, value: phrases) in said.entries) {
-        if (!File(page).existsSync()) {
-          continue;
-        }
-        final text =
-            File(page).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
-        for (final phrase in phrases) {
-          expect(text, contains(phrase), reason: page);
+      for (final version in versions.keys) {
+        final text = readAll(version).replaceAll(RegExp(r'\s+'), ' ');
+        for (final phrase in said[version]!) {
+          expect(text, contains(phrase), reason: version);
         }
       }
     });
@@ -1360,19 +1373,15 @@ void main() {
       );
     });
 
-    // The line the page quotes after [lead], in the original and in the
-    // translation.
+    // The line the pages quote after [lead], in each version.
     void quotes(Map<String, String> lead, String line) {
-      for (final MapEntry(key: page, value: pattern) in lead.entries) {
-        if (!File(page).existsSync()) {
-          continue;
-        }
+      for (final version in versions.keys) {
         expect(
-          RegExp('$pattern`([^`]+)`')
-              .firstMatch(File(page).readAsStringSync())!
+          RegExp('${lead[version]}`([^`]+)`')
+              .firstMatch(readAll(version))!
               .group(1),
           line,
-          reason: page,
+          reason: version,
         );
       }
     }
@@ -1411,8 +1420,8 @@ void main() {
       ]);
       quotes(
         {
-          'doc/errors.md': r'give\s+way\s+to\s+one:\s+',
-          '../../docs/ru/async_job/errors.md': r'канал\s+печатает\s+одну:\s+',
+          'original': r'give\s+way\s+to\s+one:\s+',
+          'translation': r'канал\s+печатает\s+одну:\s+',
         },
         lines.last,
       );

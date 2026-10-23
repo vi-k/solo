@@ -117,7 +117,7 @@ is the zone of the test, and `package:test` fails a test whose zone hears an
 error. The errors that no outcome carries, such as those of cleanup or of
 `ctx.unattended`, get there the same way unless an observer
 [answers for](errors.md#answering-for-errors) them: see
-[Where each error goes](errors.md#where-each-error-goes).
+[Where each error goes](error-rules.md#where-each-error-goes).
 
 ### The failure read by the test
 

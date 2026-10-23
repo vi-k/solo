@@ -1,6 +1,7 @@
-// What the tests of `doc/observing.md` and `doc/errors.md` share: a job run
-// under fake time with what it prints, the quotes of a page, and the
-// observers and errors the tests write of their own.
+// What the tests of `doc/observing.md`, `doc/errors.md` and
+// `doc/error-rules.md` share: a job run under fake time with what it prints,
+// the quotes of a page, and the observers and errors the tests write of their
+// own.
 
 import 'dart:async';
 import 'dart:io';

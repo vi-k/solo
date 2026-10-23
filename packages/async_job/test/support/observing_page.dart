@@ -1,11 +1,11 @@
-// The code of `doc/observing.md`, `doc/errors.md` and `doc/testing.md` as
-// the pages answer it, verbatim: every block of the pages but their first
-// attempts is a run of lines of this file, and `observing_rakes_test.dart`
-// and `errors_rakes_test.dart` run it. The first
-// attempts live in `observing_first_attempts.dart`: a line of an answer
-// turned into a line of a first attempt must not be found among the
-// answers. A block that declares names another block declares too lives in
-// a function of its own.
+// The code of `doc/observing.md`, `doc/errors.md`, `doc/error-rules.md` and
+// `doc/testing.md` as the pages answer it, verbatim: every block of the pages
+// but their first attempts is a run of lines of this file, and
+// `observing_rakes_test.dart` and `errors_rakes_test.dart` run it. The first
+// attempts live in `observing_first_attempts.dart`: a line of an answer turned
+// into a line of a first attempt must not be found among the answers. A block
+// that declares names another block declares too lives in a function of its
+// own.
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';

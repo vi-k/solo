@@ -99,8 +99,8 @@ abstract mixin class JobObserver {
   /// [identical].
   ///
   /// Which error comes by which route, and what keeps it out of the answer, is
-  /// in [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#where-each-error-goes)
-  /// on the errors page.
+  /// in [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
+  /// on the error rules page.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 
   /// A job called [JobContext.log], with what it passed.
@@ -154,8 +154,8 @@ mixin JobAnswerer on JobObserver {
   /// then what the override threw goes to the current zone.
   ///
   /// See [Answering for errors](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#answering-for-errors)
-  /// on the errors page, and [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#where-each-error-goes)
-  /// for which error comes by which route.
+  /// on the errors page, and [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
+  /// on the error rules page for which error comes by which route.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     if (job is JobBase<Object?> && (JobBase._builtOnCore[job] ?? false)) {
       job._toZone(error, stackTrace);

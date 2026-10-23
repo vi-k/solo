@@ -95,9 +95,9 @@ in its place: `Job(load: <describe threw StateError>)`. The core names jobs in
 its own error messages, and a broken name does not replace the message. The
 error of the name itself is still reported, in two places. When the core names
 a child in its parent's cancellation, the error goes the way of an error from
-outside the body, as the table in [Rare routes](errors.md#rare-routes) shows.
-When a line of [the debug channel](errors.md#the-debug-channel) names the job,
-the error goes to the current zone, as the error of a hook does.
+outside the body, as the table in [Rare routes](error-rules.md#rare-routes)
+shows. When a line of [the debug channel](error-rules.md#the-debug-channel)
+names the job, the error goes to the current zone, as the error of a hook does.
 
 ### Timing a cancellation
 
