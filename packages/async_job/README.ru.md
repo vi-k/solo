@@ -296,7 +296,8 @@ Cancelled(manual)
 | [Наблюдение](../../docs/ru/async_job/observing.md) | `JobObserver`, имя задачи, логи |
 | [Ошибки](../../docs/ru/async_job/errors.md) | Куда идёт ошибка, `JobAnswerer`, `Job.isCancellationError`, `Job.visitErrors`, `unattended`, `Job.debug` |
 | [Тестирование](../../docs/ru/async_job/testing.md) | Задача под `fakeAsync` и что двигает её время |
-| [Своё поверх ядра](../../docs/ru/async_job/extending.md) | `JobBase`, `JobContextBase`, свой движок |
+| [Своё поверх ядра](../../docs/ru/async_job/extending.md) | `JobBase`, `JobContextBase`, своя задача, `Job.deferred`, `finish` |
+| [Свой движок](../../docs/ru/async_job/engine.md) | Очередь, которая отказывает в `cancelWith`, правило в `check()` |
 
 ## solo
 

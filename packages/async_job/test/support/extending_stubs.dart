@@ -1,6 +1,7 @@
-// What the code of `doc/extending.md` takes for granted: the account, the
-// operations, the observer that prints, and the reason of the rule, which
-// the page shows and every version of its engine shares.
+// What the code of `doc/extending.md` and `doc/engine.md` takes for
+// granted: the account, the operations, the observer that prints, and the
+// reason of the rule, which `doc/engine.md` shows and every version of its
+// engine shares.
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';

@@ -377,7 +377,7 @@ void main() {
     expect(caught, isEmpty);
   });
 
-  // `doc/extending.md`: `abandonable`, `join` and `uncancellable` begin by
+  // `doc/engine.md`: `abandonable`, `join` and `uncancellable` begin by
   // calling `check()`. A rule already broken stops the action before it starts;
   // asked only after, it would let the action run for a job whose rules no
   // longer hold.
@@ -409,7 +409,7 @@ void main() {
     });
   }
 
-  // `doc/extending.md` puts `pause` with them: its action is the wait.
+  // `doc/engine.md` puts `pause` with them: its action is the wait.
   test('pause asks check() before the wait begins', () {
     fakeAsync((async) {
       Object? thrown;
@@ -429,7 +429,7 @@ void main() {
     });
   });
 
-  // `doc/extending.md`: `join` asks `check()` again after its action, and
+  // `doc/engine.md`: `join` asks `check()` again after its action, and
   // the other three do not. A rule broken while the action runs is noticed
   // there by `join` alone.
   final during = <String,

@@ -295,7 +295,8 @@ search.
 | [Observing](doc/observing.md) | `JobObserver`, a job's name, logs |
 | [Errors](doc/errors.md) | Where an error goes, `JobAnswerer`, `Job.isCancellationError`, `Job.visitErrors`, `unattended`, `Job.debug` |
 | [Testing](doc/testing.md) | A job under `fakeAsync`, and what moves its time |
-| [Building on the core](doc/extending.md) | `JobBase`, `JobContextBase`, your own engine |
+| [Building on the core](doc/extending.md) | `JobBase`, `JobContextBase`, a job of your own, `Job.deferred`, `finish` |
+| [An engine of your own](doc/engine.md) | A queue that refuses in `cancelWith`, a rule in `check()` |
 
 ## solo
 

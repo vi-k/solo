@@ -366,10 +366,10 @@ forever. `cancel()` has no stronger form to drop the job with.
 An engine that holds jobs before their start knows what the core does not: it
 starts them itself. `solo`, built on this core, starts the jobs of its queue,
 and it refuses on behalf of a `cancellable: false` job while that job waits
-there. [A queue of your own](extending.md#a-queue-of-your-own) on the extending
-page builds such a refusal. `solo` also cancels a job when the controller's
-state no longer suits it: a job there declares which states it runs in. Neither
-a section nor `cancellable: false` holds that cancellation back.
+there. [A queue of your own](engine.md#a-queue-of-your-own) on the engine page
+builds such a refusal. `solo` also cancels a job when the controller's state no
+longer suits it: a job there declares which states it runs in. Neither a
+section nor `cancellable: false` holds that cancellation back.
 
 ## Catching errors of the operation
 

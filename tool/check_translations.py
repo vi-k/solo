@@ -167,6 +167,10 @@ PAIRS = [
         REPO / "docs" / "ru" / "async_job" / "extending.md",
     ),
     (
+        REPO / "packages" / "async_job" / "doc" / "engine.md",
+        REPO / "docs" / "ru" / "async_job" / "engine.md",
+    ),
+    (
         REPO / "packages" / "async_job" / "CHANGELOG.md",
         REPO / "docs" / "ru" / "async_job" / "CHANGELOG.md",
     ),

@@ -1107,7 +1107,7 @@ abstract class JobBase<T> implements Job<T> {
   /// An uncancellable section does not change this: it holds a cancellation
   /// rather than refusing it.
   ///
-  /// See [Refusing while the job waits](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/extending.md#refusing-while-the-job-waits)
+  /// See [Refusing while the job waits](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/engine.md#refusing-while-the-job-waits)
   /// on the extending page.
   @protected
   bool get cancellable => _cancellable;
@@ -1839,7 +1839,7 @@ abstract class JobBase<T> implements Job<T> {
   /// already started have stopped — before the child has a parent, and the
   /// child stays `created`.
   ///
-  /// See [One loop, and no other way to start](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/extending.md#one-loop-and-no-other-way-to-start)
+  /// See [One loop, and no other way to start](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/engine.md#one-loop-and-no-other-way-to-start)
   /// on the extending page.
   @visibleForOverriding
   void adoptedBy(JobContextBase parent) {}

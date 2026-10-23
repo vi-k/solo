@@ -1,5 +1,5 @@
-// The job of `doc/extending.md` as its first part shows it, verbatim:
-// before the queue and before the rule, which give its classes other
+// The job of `doc/extending.md` as that page shows it, verbatim: before
+// the queue and the rule of `doc/engine.md`, which give its classes other
 // members, so it lives in a library of its own.
 import 'package:async_job/engine.dart';
 

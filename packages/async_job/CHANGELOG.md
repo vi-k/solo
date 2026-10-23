@@ -1,3 +1,10 @@
+## Unreleased
+
+### Documentation
+
+- The queue and the rule left [Building on the core](doc/extending.md) for a
+  page of their own, [An engine of your own](doc/engine.md).
+
 ## 0.3.0
 
 ### Breaking changes

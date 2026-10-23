@@ -1,4 +1,4 @@
-// The first attempts of `doc/extending.md`, verbatim: the queue whose
+// The first attempts of `doc/engine.md`, verbatim: the queue whose
 // jobs leave every cancellation to the core, and the rule that throws an
 // error of the engine's own. They hold classes of the same names as the
 // answers, so they live in a library of their own.

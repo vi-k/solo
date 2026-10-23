@@ -1,11 +1,12 @@
-// `doc/extending.md` runs here. This file holds the engine as the page
-// answers it: the job that refuses while it waits, its queue, the rule.
-// The versions before the answers carry classes of the same names and live
-// in libraries of their own — `support/extending_plain.dart` for the job as
-// the page first shows it, `support/extending_first_attempts.dart` for the
-// first attempts. Every piece of code on the page is a run of lines of one
-// of these files, and every quote under it is what that code prints: a
-// piece or a quote that drifts turns this file red.
+// `doc/extending.md` and `doc/engine.md` run here. This file holds the
+// engine as the second page answers it: the job that refuses while it
+// waits, its queue, the rule. The versions before the answers carry classes
+// of the same names and live in libraries of their own —
+// `support/extending_plain.dart` for the job as the first page shows it,
+// `support/extending_first_attempts.dart` for the first attempts. Every
+// piece of code on the two pages is a run of lines of one of these files,
+// and every quote under it is what that code prints: a piece or a quote
+// that drifts turns this file red.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -74,6 +75,9 @@ final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
     }
   }
 }
+
+/// The pages this file runs: the job, then the engine built on it.
+const pages = ['doc/extending.md', 'doc/engine.md'];
 
 /// The three copies of the page's job: as it is first shown, in the first
 /// attempt at a queue, and with the queue of the answer.
@@ -1347,16 +1351,19 @@ void main() {
       }),
     ].map((lines) => lines.join('\n')).toList();
     final quotes = [
-      for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .allMatches(File('doc/extending.md').readAsStringSync()))
-        block.group(1)!,
+      for (final page in pages)
+        for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
+            .allMatches(File(page).readAsStringSync()))
+          block.group(1)!,
     ];
     expect(quotes, prints, reason: 'each quote under the code that prints it');
   });
 
-  test('the page has no fence the checks do not read', () {
-    expect(strayFences('doc/extending.md'), isEmpty);
-  });
+  for (final page in pages) {
+    test('$page has no fence the checks do not read', () {
+      expect(strayFences(page), isEmpty);
+    });
+  }
 
   // Each version under its own file: a line of the answer turned into the
   // line of a first attempt would still be found among all of them.
@@ -1371,7 +1378,7 @@ void main() {
   for (final MapEntry(key: heading, value: holder) in holders.entries) {
     test('the code under "$heading" is a run of lines of $holder', () {
       final pieces = codeMissingFrom(
-        'doc/extending.md',
+        'doc/engine.md',
         holder,
         alsoIn: ['test/support/extending_stubs.dart'],
         under: heading,
@@ -1386,10 +1393,10 @@ void main() {
   // comes with the rule, and `MyContext` has none, as first shown. Each
   // member a row names is declared in the code under the heading the row
   // links to, and a row of the constructor alone finds the constructor
-  // there. The link is read by its anchor, the way GitHub makes it, so the
-  // two sections called "The first attempt" stay apart, and its text is the
-  // heading of that anchor. A member moved to another section, renamed or
-  // added turns this red.
+  // there. The link is read by its page and anchor, the way GitHub makes
+  // it, so the two sections called "The first attempt" stay apart, and its
+  // text is the heading of that anchor. A member moved to another section,
+  // renamed or added turns this red.
   test(
       'the table under "### The whole engine" names every member of this '
       'file and the section that declares it', () {
@@ -1412,36 +1419,44 @@ void main() {
 
     final dart = RegExp(r'```dart\n(.*?)\n```', dotAll: true);
     // The anchor GitHub gives a heading: lower case, no punctuation but `-`
-    // and `_`, a `-` for each space, and `-1`, `-2` on a repeat.
+    // and `_`, a `-` for each space, and `-1`, `-2` on a repeat within its
+    // page. Both are keyed `page.md#anchor`.
     final code = <String, String>{};
     final titles = <String, String>{};
     var table = '';
-    for (final part in File('doc/extending.md')
-        .readAsStringSync()
-        .split(RegExp('^(?=#)', multiLine: true))) {
-      final heading = part.split('\n').first;
-      final name = heading.replaceFirst(RegExp('^#+ '), '');
-      final base = name
-          .toLowerCase()
-          .replaceAll(RegExp(r'[^\w\- ]'), '')
-          .replaceAll(' ', '-');
-      var anchor = base;
-      for (var n = 1; titles.containsKey(anchor); n++) {
-        anchor = '$base-$n';
+    for (final page in pages) {
+      final file = page.split('/').last;
+      for (final part in File(page)
+          .readAsStringSync()
+          .split(RegExp('^(?=#)', multiLine: true))) {
+        final heading = part.split('\n').first;
+        final name = heading.replaceFirst(RegExp('^#+ '), '');
+        final base = name
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^\w\- ]'), '')
+            .replaceAll(' ', '-');
+        var anchor = '$file#$base';
+        for (var n = 1; titles.containsKey(anchor); n++) {
+          anchor = '$file#$base-$n';
+        }
+        titles[anchor] = name;
+        code[anchor] = [
+          for (final block in dart.allMatches(part)) block.group(1)!,
+        ].join('\n');
+        if (heading == '### The whole engine') table = part;
       }
-      titles[anchor] = name;
-      code[anchor] = [
-        for (final block in dart.allMatches(part)) block.group(1)!,
-      ].join('\n');
-      if (heading == '### The whole engine') table = part;
     }
 
     final named = <String, Set<String>>{};
-    final row = RegExp(r'^\| `(\w+)` \| (.*) \| \[(.*)\]\(#(.*)\) \|$');
+    // A link without a page leads to the page of the table.
+    final row = RegExp(
+      r'^\| `(\w+)` \| (.*) \| \[(.*)\]\(([\w-]+\.md)?#(.*)\) \|$',
+    );
     for (final line in table.split('\n')) {
       final match = row.firstMatch(line);
       if (match == null) continue;
-      final [type!, members!, section!, anchor!] = match.groups([1, 2, 3, 4]);
+      final [type!, members!, section!] = match.groups([1, 2, 3]);
+      final anchor = '${match.group(4) ?? 'engine.md'}#${match.group(5)}';
       expect(titles[anchor], section, reason: line);
       final names = {
         for (final name in RegExp(r'`(\w+)(?:\(\))?`').allMatches(members))
@@ -1468,18 +1483,20 @@ void main() {
     );
   });
 
-  test('every piece of code on the page is a run of lines of these files', () {
-    expect(
-      codeMissingFrom(
-        'doc/extending.md',
-        'test/extending_rakes_test.dart',
-        alsoIn: [
-          'test/support/extending_plain.dart',
-          'test/support/extending_first_attempts.dart',
-          'test/support/extending_stubs.dart',
-        ],
-      ),
-      isEmpty,
-    );
-  });
+  for (final page in pages) {
+    test('every piece of code on $page is a run of lines of these files', () {
+      expect(
+        codeMissingFrom(
+          page,
+          'test/extending_rakes_test.dart',
+          alsoIn: [
+            'test/support/extending_plain.dart',
+            'test/support/extending_first_attempts.dart',
+            'test/support/extending_stubs.dart',
+          ],
+        ),
+        isEmpty,
+      );
+    });
+  }
 }
