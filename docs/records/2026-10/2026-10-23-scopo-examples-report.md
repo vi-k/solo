@@ -123,6 +123,30 @@ is the choice». scopo же отдаёт своё расширение на `Lis
 Пока его нет, помогает `hide ListenableListenExtension` у импорта scopo. scopo
 ведёт отдельная сессия; решать владельцу.
 
+С `select` хуже. scopo объявляет его как
+`ListenableSelectExtension<L extends Listenable> on L`, и на контроллере
+с `SoloListenable` он точнее, чем `SoloSelect` `flutter_solo`
+на `ValueListenable<S>`: тип получателя подставляется в `L` целиком. Поэтому
+ошибки неоднозначности нет, а молча выбирается scopo. Зонд 2026-10-23:
+`Counter extends Solo<int> with SoloListenable<int>`, оба импорта, у scopo
+скрыт только `ListenableListenExtension`.
+`controller.select((state) => state.isEven)` дал «The getter 'isEven' isn't
+defined for the type 'Counter'» и «2 positional arguments expected by 'select',
+but 1 found»: селектор scopo получает сам контроллер, а не состояние.
+На переменной типа `ValueListenable<int>` выигрывает `SoloSelect`. Пользователю
+с обоими пакетами приходится скрывать оба расширения scopo.
+
+Внутри scopo `listen` нужен только документации, примерам и тестам, а `select`
+зовёт виджет `ListenableSelector`, и подписка `select` наследует
+`ListenableSubscription`. Владелец 2026-10-23 спросил, не удалить ли
+`ListenableListenExtension` из scopo совсем. Это ломающий выпуск scopo,
+и делать его сессии scopo по слову владельца.
+
+Решение владельца 2026-10-23: перенести `listen` и `select` scopo из главного
+импорта в отдельный, а не удалять. Удаление оставило бы пользователей scopo без
+solo без замены, а `select` нужен самому `ListenableSelector`. Задача передана
+сессии scopo сообщением.
+
 ## Ревью работы
 
 Независимый ревьюер на Opus прочёл коммит до правок по ревью, в своей копии,
