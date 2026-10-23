@@ -63,6 +63,10 @@ PAIRS = [
         REPO / "docs" / "ru" / "solo" / "accumulation.md",
     ),
     (
+        REPO / "packages" / "solo" / "doc" / "accumulation-rules.md",
+        REPO / "docs" / "ru" / "solo" / "accumulation-rules.md",
+    ),
+    (
         REPO / "packages" / "solo" / "doc" / "jobs.md",
         REPO / "docs" / "ru" / "solo" / "jobs.md",
     ),

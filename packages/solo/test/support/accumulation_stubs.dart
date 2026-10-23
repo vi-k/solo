@@ -1,7 +1,7 @@
 // What `accumulation_rakes_test.dart` puts under the code of
-// `doc/accumulation.md`, and none of it is on the page: servers and a device
-// that record what they were asked and when, and a controller for what the
-// page says of the engine without showing code.
+// `doc/accumulation.md` and `doc/accumulation-rules.md`, and none of it is on
+// the pages: servers and a device that record what they were asked and when,
+// and a controller for what the pages say of the engine without showing code.
 import 'package:solo/solo.dart';
 
 import 'accumulation_page.dart';

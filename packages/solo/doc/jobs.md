@@ -308,8 +308,8 @@ which clears the queue and cancels the running job as well, takes one too.
 The order in `jobs` is not the order jobs will run in. A job waiting for an
 accumulation window can be passed by a ready one standing behind it, so the
 head of the queue is not always what starts next. See
-[Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready)
-on the accumulation page.
+[Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready)
+on the accumulation rules page.
 
 ### Pausing the queue
 

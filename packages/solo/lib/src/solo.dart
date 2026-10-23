@@ -360,8 +360,8 @@ abstract class Solo<S extends Object> {
   /// write for the group: each job the accumulator queues calls one of them
   /// at most once, however many events it holds.
   ///
-  /// See [Reference](https://github.com/vi-k/solo/blob/main/packages/solo/doc/accumulation.md#reference)
-  /// on the accumulation page for grouping, timing, start and closing.
+  /// See [Accumulation rules](https://github.com/vi-k/solo/blob/main/packages/solo/doc/accumulation-rules.md)
+  /// for grouping, timing, start and closing.
   @protected
   SoloAccumulator<E, T> collect<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {

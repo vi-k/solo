@@ -359,7 +359,8 @@ bloc.
 | [Resources and cleanup](doc/resources.md) | `onDispose`, `dispose` and `discard`, transfer, ordering |
 | [Children and chains](doc/children.md) | Child jobs, chains, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each` in a controller, following another controller |
-| [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle |
+| [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle in four recipes |
+| [Accumulation rules](doc/accumulation-rules.md) | When a group is ready, `AccumulationPolicy`, one job for a group and `shared()`, `merge`, `close()` |
 | [Diagnostics](doc/diagnostics.md) | `SoloObserver`, `pending`, logs, a slow cancellation |
 | [Errors](doc/errors.md) | `onError`, `unansweredHandler`, catching and retrying, `ctx.unattended` |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |

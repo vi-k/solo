@@ -1,3 +1,12 @@
+## Unreleased
+
+### Documentation
+
+- When a group is ready, which group an event joins, and how a group's job
+  starts, is cancelled, fails and ends on `close()` left
+  [Event accumulation](doc/accumulation.md) for
+  [Accumulation rules](doc/accumulation-rules.md).
+
 ## 0.3.0
 
 This package re-exports `async_job` whole, so the changes of the core are this
@@ -44,7 +53,7 @@ below.
   accumulator group, refuse a plain `then` from the first call: every caller
   continues it through a handle of `shared()`. See
   [Queue and policies](doc/jobs.md#queue-and-policies) and
-  [Start, cancellation and errors](doc/accumulation.md#start-cancellation-and-errors).
+  [Start, cancellation and errors](doc/accumulation-rules.md#start-cancellation-and-errors).
 - **The state handlers of `enqueue` and `job` are renamed: `onError` to
   `ifFailed`, `onCancel` to `ifCancelled`.**
 - **`SoloBase` is renamed to `Solo`, and the former `Solo` — the class that
@@ -202,7 +211,7 @@ The lines of `Solo.debug` about a job being queued begin with `enqueue`, not
   handlers of `job`.** A group that wrote a state of its own while it ran takes
   it back through them when it fails or is cancelled; it calls one of them at
   most once, however many events it holds. See
-  [Start, cancellation and errors](doc/accumulation.md#start-cancellation-and-errors).
+  [Start, cancellation and errors](doc/accumulation-rules.md#start-cancellation-and-errors).
 - **`Job.isCancellationError` of `async_job` names the errors a cancellation
   causes.** A failure of a cancelled job that it names reaches `onError` and
   goes no further: neither `onUnanswered` nor `Solo.unansweredHandler` hears

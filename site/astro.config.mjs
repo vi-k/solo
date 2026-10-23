@@ -106,6 +106,11 @@ export default defineConfig({
               'Event accumulation',
               'Накопление событий',
             ),
+            page(
+              'solo/accumulation-rules',
+              'Accumulation rules',
+              'Правила накопления',
+            ),
             page('solo/diagnostics', 'Diagnostics', 'Диагностика'),
             page('solo/errors', 'Errors', 'Ошибки'),
             page('solo/testing', 'Testing', 'Тестирование'),

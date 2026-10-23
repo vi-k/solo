@@ -3,14 +3,15 @@
 Several events can share one queued job. `collect` keeps every event in a list;
 `accumulate` combines each event with a single accumulated value.
 
-Where to start, by what the controller needs:
+Where to start, by what the controller needs; the last three rows lead to
+[Accumulation rules](accumulation-rules.md):
 
 | The controller needs | Read |
 | --- | --- |
 | One of four common cases: a search box, settings saved on every flip, log lines sent in batches, commands where only the last counts | [Recipes](#recipes), whose table names what reaches the work and the accumulator of each |
-| A group that starts after a pause in the events, at a limited rate, or at once | [Choosing when a group is ready](#choosing-when-a-group-is-ready): `timing` |
-| An event that joins a queued group, or starts a group of its own behind another job | [Choosing where events join](#choosing-where-events-join): `AccumulationPolicy` |
-| One handle for every caller of a group, and how its job starts, is cancelled, fails and ends on `close()` | [Start, cancellation and errors](#start-cancellation-and-errors) |
+| A group that starts after a pause in the events, at a limited rate, or at once | [Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready): `timing` |
+| An event that joins a queued group, or starts a group of its own behind another job | [Choosing where events join](accumulation-rules.md#choosing-where-events-join): `AccumulationPolicy` |
+| One handle for every caller of a group, and how its job starts, is cancelled, fails and ends on `close()` | [Start, cancellation and errors](accumulation-rules.md#start-cancellation-and-errors) |
 
 ## Recipes
 
@@ -159,14 +160,22 @@ One request. `merge` keeps the incoming text and drops what it had, so the
 group carries the latest query; the debounce holds the group until the typing
 stops for 300 ms. That pause is what it costs: the answer arrives later than
 either attempt above, and it is the only answer sent. `policy` spells out the
-default, `join`; [Choosing where events join](#choosing-where-events-join) says
-what a policy decides.
+default, `join`;
+[Choosing where events join](accumulation-rules.md#choosing-where-events-join)
+says what a policy decides.
 
 A group that has already started finishes before the next one starts, and the
 returned job exposes the outcome and cancellation, like other jobs. What
 finishes there is the job: cancelling one ends its waiting, not the request it
 has already sent, so that request can still be in flight when the next group
 starts.
+
+Every call of `query` that lands in one group returns the same job, so a plain
+`then` on it throws `StateError`; a caller continues it through `shared()`.
+`merge` runs inside `add` and has to be synchronous and pure. Both rules, with
+what happens when they are broken, are in
+[Start, cancellation and errors](accumulation-rules.md#start-cancellation-and-errors)
+on the accumulation rules page.
 
 ### Settings saved on every flip of a switch
 
@@ -337,8 +346,8 @@ The screen also reads the settings back from the server, and `reload` is an
 ordinary job rather than an accumulated one. This accumulator takes the default
 policy, `join`, so a `reload` queued between two flips is not a boundary: the
 flips are one group and one write whatever else the queue was doing.
-[Choosing where events join](#choosing-where-events-join) says when to take
-`adjacent` instead.
+[Choosing where events join](accumulation-rules.md#choosing-where-events-join)
+says when to take `adjacent` instead.
 
 The first event becomes the accumulated value without calling `merge`. Each
 following event calls `merge(accumulated, incoming)` synchronously from `add`,
@@ -511,11 +520,11 @@ the buffer is the job's input:
 This controller's state counts entries whose send operation completed and whose
 handler reached `emit`. The working type `int` is that whole state, so the
 handler starts whatever the count is and reads it as `ctx.state`.
-[Choosing where events join](#choosing-where-events-join) explains why `join`
-is the default this example spells out.
-[Choosing when a group is ready](#choosing-when-a-group-is-ready) explains what
-a throttle interval is measured from in each of its two modes, and what each of
-them costs.
+[Choosing where events join](accumulation-rules.md#choosing-where-events-join)
+explains why `join` is the default this example spells out.
+[Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready)
+explains what a throttle interval is measured from in each of its two modes,
+and what each of them costs.
 
 Collecting entries does not guarantee delivery. A failed send, a cancelled
 group or a plain `close()` can leave them unsent; `close()` with
@@ -691,308 +700,3 @@ runs to its end whatever is removed behind it. To cancel the running job as
 well, reach for `cancelAll()` — it clears the whole queue and cancels the
 current job — or give both commands one key and `Policy.restart`. `removeWhere`
 skips jobs created with `cancellable: false` unless `force: true` is given.
-
-## Reference
-
-These sections work through grouping, ordering and the outcomes returned to
-individual callers.
-
-### Choosing when a group is ready
-
-Both factories accept an optional `timing`. The setting controls when a group
-may start; `collect` still keeps every accepted event, and `accumulate` keeps
-whatever its `merge` returns. For example,
-`merge: (accumulated, incoming) => incoming` keeps only the latest value.
-
-| | `debounce(duration)` | `throttle(duration)` | `throttle(duration, startAtOnce: false)` |
-| --- | --- | --- | --- |
-| The first group is ready | after `duration` with no new event | at once | after `duration` |
-| An addition | restarts the timer | does not extend the timer | does not extend the timer |
-| The wait is measured from | the last accepted event | the previous actual start | the previous start, or the moment the group appeared |
-
-`AccumulationTiming.debounce(duration)` waits for a pause after the last
-accepted event in each group. Every addition restarts the timer, even when
-`merge` returns an unchanged value. With a 200 ms window, events at 0, 60 and
-120 ms make the group ready at 320 ms. When the debounce timer fires, the group
-is sealed even if another job is running. Later events form a new group; they
-cannot change the sealed input. `collect` takes its snapshot then, and not
-again. Continuous input can keep an open group waiting indefinitely. That wait
-is the point in the search recipe: the request goes out when the typing stops.
-The same wait is the reason the log collector takes a throttle instead: entries
-that all have to arrive cannot wait on a pause that may never come.
-
-`AccumulationTiming.throttle(duration)` allows the first group to start
-immediately, then waits at least `duration` between actual starts of the same
-accumulator. Additions during the interval gather in an open group without
-extending the timer. When the interval ends, queued input is ready without
-needing another event. The group accepts events until the queue takes it for
-execution. An interval that passes with no event creates no job, and the group
-of the next event is ready at once: the interval is counted from the previous
-start, and it has run out.
-
-`startAtOnce: false` counts the interval before the first group as well. An
-accumulator with nothing of its own queued or running starts its interval when
-the group appears, and the group becomes ready when the interval ends, carrying
-everything written meanwhile. That condition is the whole of it: an interval
-already running is never restarted, and a group that appears beside another of
-the same accumulator, queued or running, starts none. So a group that has
-waited its interval out and needs only the execution slot is not pushed back by
-a later event, whatever the policy does with that event. An interval that
-passes with no event leaves nothing running, and the next group counts a whole
-interval from its own appearance.
-
-Starting at once has a price when nothing is running. The queue takes the first
-group on the next microtask, so a burst that does not fit in one synchronous
-turn is split: the first event goes on its own and the rest wait out the whole
-interval. A burst written while a job of the controller is running stays
-together, however many turns it takes: under a throttle the group is sealed
-when the queue takes it, and the queue cannot take it until that job ends.
-
-Waiting has a price of its own. A single event on an idle accumulator is held
-for the whole interval, and `close(mode: SoloCloseMode.drain)` waits with it —
-a plain `close()` drops it. Take `startAtOnce: false` where the rate matters
-more than the latency of the first event, as the log recipe does, and leave the
-default where the first event is what the user is waiting for.
-
-The start is the transition to running, before `onStart`. A group rejected by
-start rules consumes no throttle interval; cancellation from `onStart` does.
-With `startAtOnce: false` a refusal leaves the accumulator with nothing queued,
-so the next group to appear counts a full interval of its own from the moment
-it appears. If a group starts at 0 ms with a 200 ms interval, but another job
-holds the slot until 500 ms, the next group starts at 500 ms and the one after
-that cannot start before 700 ms. If the group's own handler, children or
-cleanup outlast the interval, the next group can start as soon as they finish.
-
-Waiting groups stay visible in `queue.jobs`. The queue takes the first ready
-job in list order, allowing ready jobs to pass waiting groups. The list can
-therefore be nonempty while no job is running. Timing does not occupy the
-execution slot; once a handler starts, the queue waits for its children and
-cleanup before starting another root job.
-
-Omitting `timing`, or passing `Duration.zero`, makes groups ready immediately
-and creates no timers, whatever `startAtOnce` says. Negative durations throw
-`ArgumentError`. A timing configuration can be shared by several accumulators;
-each accumulator has its own groups and throttle interval. Timer callbacks
-follow Dart's event-loop order: an event processed before a debounce callback
-can restart the timer; an event processed after it belongs to a new group. A
-busy event loop can delay callbacks and starts.
-
-### Choosing where events join
-
-```dart
-// Three calls in a row: the queue takes nothing between them. Where A2
-// lands is the policy's decision.
-final a1 = settings.update(const SettingsPatch(theme: 'dark'));
-settings.reload(); // B, an ordinary job of its own
-final a2 = settings.update(const SettingsPatch(language: 'ru'));
-```
-
-Both factories accept an `AccumulationPolicy`, fixed when the accumulator is
-created.
-
-| Policy | Queue after the additions | Handle for A2 |
-| --- | --- | --- |
-| `adjacent` | `[A1, B, A2]` | A new job |
-| `replace` | `[B, A(A1 + A2)]` | A1's existing job, moved behind B |
-| `join` (default) | `[A(A1 + A2), B]` | A1's existing job |
-
-`adjacent` adjoins an event to a group only when that group is at the queue's
-tail. `replace` replaces a group's job at the tail: it finds the last open
-queued group of the same accumulator, looking past other jobs, and moves that
-job behind them, so A ends up behind B. `join` joins the event to that same
-group where it stands, so A keeps its place before B. Either way B stays in the
-queue: the search only looks past it. Execution also depends on readiness: a
-ready B can pass A while A waits for timing.
-
-`join` is the default so that a group does not depend on what else is queued.
-An entry written while another job waits in the queue still belongs in the
-batch that is already there. Under `adjacent` it would start a second group
-behind that job, and a throttle would hold that group for another interval: two
-requests for entries written moments apart. The same two events would be one
-group or two depending on what else the controller happened to be doing, which
-is a decision no caller made. What `join` gives up is the boundary: the batch
-keeps its place ahead of the job that arrived between.
-
-Take `adjacent` where that boundary is the point:
-
-- where `merge` throws away what it replaces and a job queued between two
-  events has to run between them, as the command recipe does;
-- where such a job changes what the accumulated input means.
-
-Policies use the current queue. If B has already run, a waiting A may again be
-at the tail, so a later event can join it with `adjacent`. Already separate
-groups are never combined retroactively. A sealed debounce group is ineligible
-for all three policies.
-
-`replace` replaces the job of the group it found at the tail, with the incoming
-event added to that group. The handle is the one every addition to this group
-got, the events already accepted stay in it, and a group that is already at the
-tail keeps the place it has. Nothing is cancelled on the way, so no
-cancellation callback runs in the middle of the move. `Solo.debug`, the
-engine's own trace from [Logs](diagnostics.md#logs) on the diagnostics page,
-says `move <job> to the tail`; there is no observer event, because no job
-started or finished.
-
-The move starts a fresh debounce window and preserves the accumulator's
-throttle interval. It applies to a queued group, including one configured with
-`cancellable: false` — a move is not a removal, and the flag has nothing to
-refuse. A running group is never moved: it stops accepting events when the
-queue takes it. The ordinary queue's `Policy.replace` has its own cancellation
-rules; `AccumulationPolicy` is a separate enum.
-
-The accumulator's identity determines which groups can combine. Two
-accumulators with the same `key` remain separate. The key still labels their
-jobs for the ordinary queue's search and policies. Creating a new accumulator
-on every call prevents events from joining an existing one.
-
-### Start, cancellation and errors
-
-```dart
-final group = logs.logEvent(const LogEntry('checkout opened'));
-final same = logs.logEvent(const LogEntry('cart shown'));
-
-// Everyone who added to this group holds the same handle...
-print(identical(group, same));
-
-// ...so cancelling it cancels the whole group, and each of them reads the
-// same outcome.
-await group.cancel();
-switch (await same.done) {
-  case Done():
-    print('sent');
-  case Failed(:final error):
-    print('failed: $error');
-  case Cancelled(:final reason):
-    print('cancelled: $reason');
-}
-```
-
-```text
-true
-cancelled: manual
-```
-
-Additions to one group share one handle, result and cancellation under every
-policy, and cancelling it affects the whole group. `replace` moves the job
-rather than building another, so the handle outlives the move: cancelling it
-cancels the group wherever the job now stands, and there is no second handle to
-await.
-
-For the same reason a plain `then` on the group's job throws `StateError`, on
-the first event as well. Each caller continues the job through `shared()`,
-`group.shared().then(...)`, and cancelling what `shared()` returned ends that
-branch alone. See
-[A handle for each branch](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/chains.md#a-handle-for-each-branch).
-
-All three policies operate on queued groups. A group stops accepting events
-when debounce seals it or when it is taken from the queue, before `canStart`
-and `onStart`. Events added from either callback go to a later group. The
-handler runs with the configured working type and rules, and the group's job is
-an ordinary job to the queue in every other way.
-
-An accumulator creates no job until the first event. Without timing, if each
-group finishes before the next event arrives, each event starts a separate job.
-A `join` policy's search can scan the queue; `adjacent` only checks its tail.
-`replace` also searches the queue.
-
-`merge` must be synchronous and pure. It must not mutate either argument or
-call into the controller. If it throws, `add` throws the same error and the
-existing group, its job and its timer remain unchanged. Calling the same
-accumulator's `add` from within its `merge` throws `StateError`. After the
-callback the engine looks for the group again and writes the result only if the
-search finds the same group: if `merge` has cancelled its job or closed the
-controller, `add` throws `StateError`.
-
-`canStart`, `keepWhile` and cancellation apply to the whole job, and the rules
-themselves are in [State and rules](state.md#state-and-rules) on the state
-page. A start rule that turns the job down cancels everything the group has
-accumulated. The handler's result and errors follow the ordinary `Job`
-contract; accepted cancellation still takes precedence over a later value or
-error. The accumulator does not roll back partial external effects or resend
-failed input automatically.
-
-A group that writes a state of its own while it runs leaves that state behind
-when it fails or is cancelled: once the cancellation is accepted `emit` throws,
-and a `close()` in the middle of an upload leaves `Uploading(3)` for good. The
-state handlers `ifFailed` and `ifCancelled` take it back, as they do for `job`.
-They are not the handler of the group: a group calls one of them at most once,
-however many events it holds, after its handler, its children and its cleanup.
-The table
-[Handler eligibility and errors](state.md#handler-eligibility-and-errors) on
-the state page holds for the group as for any job:
-
-```dart
-sealed class UploadState {
-  const UploadState();
-}
-
-final class Waiting extends UploadState {
-  const Waiting();
-}
-
-final class Uploading extends UploadState {
-  final int photos;
-
-  const Uploading(this.photos);
-}
-
-final class UploadFailed extends UploadState {
-  final Object error;
-
-  const UploadFailed(this.error);
-}
-
-final class PhotoUploader extends Solo<UploadState> {
-  final Future<void> Function(List<String> photos) _send;
-  late final _photos = collect<UploadState, String, void>(
-    (ctx, photos) async {
-      ctx.emit(Uploading(photos.length));
-      await ctx.abandonable(() => _send(photos));
-      ctx.emit(const Waiting());
-    },
-    key: 'upload',
-    timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
-    ifFailed: (state, error, stackTrace) => UploadFailed(error),
-    ifCancelled: (state, cancelled) => const Waiting(),
-  );
-
-  PhotoUploader(this._send) : super(const Waiting());
-
-  Job<void> addPhoto(String path) => _photos.add(path);
-}
-```
-
-```text
-uploading: Uploading(3)
-after close(): Waiting
-a failed upload: UploadFailed(Bad state: offline)
-```
-
-A group that never starts calls neither state handler: one cancelled in its
-window or while it waits in the queue, dropped by `clear`, still waiting when
-the controller closes, or turned down by `canStart`. A group that `canStart`
-has let through has started, even before its handler is called: a cancellation
-in `onStart` calls `ifCancelled`, and the handler never sees the events.
-
-Cancelling a queued debounce group removes its timer. Removing or clearing
-throttle groups preserves an already started interval, so adding another event
-cannot bypass the limit. That timer expires once; it is renewed when a group
-actually starts, and with `startAtOnce: false` also when a group appears on an
-accumulator that has none of its own queued or running.
-
-`close()` cancels every timing timer, drops queued groups and cancels or waits
-for the running job under the usual rules. It sends no final batch: a group
-still waiting for its window is dropped, and its job, the one handle every
-addition to it got, completes with `Cancelled(closed)`.
-`close(mode: SoloCloseMode.drain)` is the other choice — it waits the
-accumulation window out and runs the groups already queued, by the rules in
-[Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
-on the cancellation page. Neither mode takes anything new: an `add` after
-`close()` returns a new job already completed with `Cancelled(closed)`; it does
-not call `merge` or the handler. That holds under a drain for a group still
-waiting for its window: an event is new data, so it does not join the group,
-and the group goes out as it was at the `close`. A `Policy.droppable` call gets
-its queued job back under a drain because it adds no work, and an event would
-add some. Whatever the last batch has to carry is added before `close`. Once a
-group completes, its internal input storage is released. A handler, result or
-error that retains the input still owns those references.

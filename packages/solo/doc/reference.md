@@ -87,9 +87,9 @@ parameters after it. The first type argument of each is the working type, in
 | --- | --- | --- | --- |
 | `key` | `enqueue`, `job`, `collect`, `accumulate` | The key of the job, what a `Policy` matches on and, without `describe`, what the job prints as: `Job(key)` | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
 | `describe` | `enqueue`, `job`, `collect`, `accumulate` | The label after the key for logs, observers and `toString()`: `Job(key: label)` | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
-| `policy` | `enqueue`, `collect`, `accumulate` | A `Policy` for `enqueue`, deciding what happens to a job whose key is already queued or running, or an `AccumulationPolicy` for an accumulator, deciding which waiting group an event joins | [Queue and policies](jobs.md#queue-and-policies), [Choosing where events join](accumulation.md#choosing-where-events-join) |
-| `timing` | `collect`, `accumulate` | When a group may start, an `AccumulationTiming`: `debounce` or `throttle` | [Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready) |
-| `merge` | `accumulate` | A required, synchronous and pure function that merges an incoming event into the value of the group | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
+| `policy` | `enqueue`, `collect`, `accumulate` | A `Policy` for `enqueue`, deciding what happens to a job whose key is already queued or running, or an `AccumulationPolicy` for an accumulator, deciding which waiting group an event joins | [Queue and policies](jobs.md#queue-and-policies), [Choosing where events join](accumulation-rules.md#choosing-where-events-join) |
+| `timing` | `collect`, `accumulate` | When a group may start, an `AccumulationTiming`: `debounce` or `throttle` | [Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready) |
+| `merge` | `accumulate` | A required, synchronous and pure function that merges an incoming event into the value of the group | [Start, cancellation and errors](accumulation-rules.md#start-cancellation-and-errors) |
 | `canStart` | `enqueue`, `job`, `collect`, `accumulate` | Asked once as the job is about to start, ending it `Cancelled(rules: canStart)` on `false` | [The rules](state.md#the-rules) |
 | `keepWhile` | `enqueue`, `job`, `collect`, `accumulate` | Keeps the job while the state allows it, and on `false` cancels it `Cancelled(rules: keepWhile)` | [The rules](state.md#the-rules) |
 | `cancellable` | `enqueue`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing | [A whole job](cancellation.md#a-whole-job) |
@@ -156,7 +156,7 @@ field: events combine only within one accumulator, even under the same key.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job, which every caller continues through `shared()` | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
+| `accumulator.add(event)` | Adds the event to a waiting group or starts one, and returns the group's job, which every caller continues through `shared()` | [Start, cancellation and errors](accumulation-rules.md#start-cancellation-and-errors) |
 
 ## Other types
 
@@ -168,6 +168,6 @@ field: events combine only within one accumulator, even under the same key.
 | `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `SoloPhase`, a `SoloPendingQueue` or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `SoloStream` | A mixin that adds a broadcast `stream` of the states | [Observing state](state.md#observing-state) |
-| `AccumulationPolicy` | Which waiting group an event joins: `join`, `adjacent` or `replace` | [Choosing where events join](accumulation.md#choosing-where-events-join) |
-| `AccumulationTiming` | When a group may start: `debounce` or `throttle` | [Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready) |
+| `AccumulationPolicy` | Which waiting group an event joins: `join`, `adjacent` or `replace` | [Choosing where events join](accumulation-rules.md#choosing-where-events-join) |
+| `AccumulationTiming` | When a group may start: `debounce` or `throttle` | [Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready) |
 | `SoloCancelReason` | The base of the reasons `solo` adds to the core's: `RulesCancelReason`, `ClosedCancelReason`, `DuplicateCancelReason` and `ReplacedCancelReason` | [Cancellation details](cancellation.md#cancellation-details) |

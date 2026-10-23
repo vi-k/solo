@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Builds runnable scenarios from packages/solo/doc/accumulation.md.
+"""Builds runnable scenarios from packages/solo/doc/accumulation.md and
+packages/solo/doc/accumulation-rules.md.
 
 Every snippet is copied byte-identical out of the markdown and wrapped in a
 runnable file: fakes above it, a driver below it. That is what keeps the
@@ -19,8 +20,8 @@ accumulation_check, with a path dependency on packages/solo. Then:
 Timing is what this document is about, so every driver runs under FakeAsync:
 a debounce of 200 ms and a throttle of a second are elapsed, not waited for.
 
-Every `dart` block of the document is built: the script stops if one of them
-went into no driver, so a block added to the page is a block somebody has to
+Every `dart` block of the two pages is built: the script stops if one of them
+went into no driver, so a block added to a page is a block somebody has to
 run.
 """
 import os
@@ -31,7 +32,10 @@ import doc_blocks
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/solo-accumulation-check'
-DOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'accumulation.md')
+DOCS = [
+    os.path.join(REPO, 'packages', 'solo', 'doc', 'accumulation.md'),
+    os.path.join(REPO, 'packages', 'solo', 'doc', 'accumulation-rules.md'),
+]
 
 PUBSPEC = """name: accumulation_check
 publish_to: none
@@ -61,8 +65,9 @@ dependency_overrides:
 
 # A snippet is addressed by section and by a name it declares. The addressing
 # lives in doc_blocks.py, next to this file, and is shared with the vs-bloc
-# bench: `accumulation.md` has unnumbered headings, so its sections are keyed
-# by a slug of the heading -- 'recipes/SettingsController'.
+# bench: the two pages have unnumbered headings, so their sections are keyed
+# by a slug of the heading -- 'recipes/SettingsController'. No heading is on
+# both pages, so the keys of the two do not collide.
 class Blocks(dict):
     """The blocks of the document, and which of them a driver has taken."""
 
@@ -85,8 +90,15 @@ class Blocks(dict):
         return sorted(left.values())
 
 
-snips = Blocks(doc_blocks.blocks(
-    open(DOC).read(), 'dart', doc_blocks.DECLARES['dart']))
+found = {}
+for doc in DOCS:
+    page = doc_blocks.blocks(
+        open(doc).read(), 'dart', doc_blocks.DECLARES['dart'])
+    both = found.keys() & page.keys()
+    if both:
+        sys.exit(f'{doc}: keys on both pages: {sorted(both)}')
+    found.update(page)
+snips = Blocks(found)
 
 FAKE_ASYNC = "import 'package:fake_async/fake_async.dart';\n"
 SOLO_IMPORT = "import 'package:solo/solo.dart';"
@@ -854,7 +866,9 @@ FILES['logs'] = (
     + """
 Future<void> oneHandle(LogController logs) async {
 """
-    + snips['reference/final-group-logs-logevent-cons'].rstrip('\n')
+    + snips[
+        'start-cancellation-and-errors/final-group-logs-logevent-cons'
+    ].rstrip('\n')
     + """
 }
 """
@@ -1435,7 +1449,9 @@ FILES['policies'] = (
     + """
 void threeCalls(SettingsController settings) {
 """
-    + snips['reference/three-calls-in-a-row-the-queue'].rstrip('\n')
+    + snips[
+        'choosing-where-events-join/three-calls-in-a-row-the-queue'
+    ].rstrip('\n')
     + """
   require(identical(a1, a2), "join: A2 is A1's own job, joined where it is");
 }
@@ -1555,7 +1571,7 @@ void main() {
 # without its state handlers: the prose says that one leaves `Uploading(3)`
 # behind, and a number in prose is nobody's trace to check, so the driver
 # requires it.
-UPLOADER = snips['reference/PhotoUploader']
+UPLOADER = snips['start-cancellation-and-errors/PhotoUploader']
 UPLOAD_HANDLERS = (
     '    ifFailed: (state, error, stackTrace) => UploadFailed(error),\n'
     '    ifCancelled: (state, cancelled) => const Waiting(),\n')

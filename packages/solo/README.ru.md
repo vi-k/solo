@@ -371,7 +371,8 @@ Job<String> reload() => enqueue<Loaded, String>(
 | [Ресурсы и освобождение](../../docs/ru/solo/resources.md) | `onDispose`, `dispose` и `discard`, передача, порядок |
 | [Дочерние задачи и цепочки](../../docs/ru/solo/children.md) | Дочерние `Job`, цепочки, шаги подряд |
 | [Стримы](../../docs/ru/solo/streams.md) | `ctx.each` в контроллере, слежение за другим контроллером |
-| [Накопление событий](../../docs/ru/solo/accumulation.md) | `collect`, `accumulate`, debounce и throttle |
+| [Накопление событий](../../docs/ru/solo/accumulation.md) | `collect`, `accumulate`, debounce и throttle в четырёх рецептах |
+| [Правила накопления](../../docs/ru/solo/accumulation-rules.md) | Когда группа готова, `AccumulationPolicy`, одна задача на группу и `shared()`, `merge`, `close()` |
 | [Диагностика](../../docs/ru/solo/diagnostics.md) | `SoloObserver`, `pending`, логи, долгая отмена |
 | [Ошибки](../../docs/ru/solo/errors.md) | `onError`, `unansweredHandler`, перехват и повтор, `ctx.unattended` |
 | [Тестирование](../../docs/ru/solo/testing.md) | Ожидание исходов, фейковое время, таймауты |

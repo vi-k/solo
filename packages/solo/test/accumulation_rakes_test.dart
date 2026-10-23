@@ -14,51 +14,55 @@ import 'support/accumulation_second_attempts.dart';
 import 'support/accumulation_stubs.dart';
 import 'support/page_code.dart';
 
-/// The sentinel of `doc/accumulation.md`.
+/// The sentinel of `doc/accumulation.md` and `doc/accumulation-rules.md`.
 ///
-/// The code of the page stands verbatim in the files
+/// The code of the pages stands verbatim in the files
 /// `test/support/accumulation_*.dart`: the first attempts in one, the second
-/// attempts in another, the accumulators, the types and the two blocks of
-/// the reference in a third. The tests below run that
-/// code through the scenario the page gives each recipe, build the lines the
-/// page quotes under it and compare them with the quote. What the page says
-/// of the engine without showing code is pinned on `Bench`, a controller
-/// whose handlers write down when they started and with what.
+/// attempts in another, the accumulators, the types and the blocks of the
+/// rules page in a third. The tests below run that code through the scenario
+/// the first page gives each recipe, build the lines the pages quote under it
+/// and compare them with the quote. What the pages say of the engine without
+/// showing code is pinned on `Bench`, a controller whose handlers write down
+/// when they started and with what.
 ///
 /// The bench `tool/accumulation_snippets.py` builds the same blocks out of
-/// the page itself and stays the guard of its code; this file is what
-/// `dart test` knows of the page between two runs of the bench.
+/// the pages themselves and stays the guard of their code; this file is what
+/// `dart test` knows of the pages between two runs of the bench.
 ///
 /// Every scenario runs under fake time. A test collects what it saw and
 /// asserts once the zone it ran in has returned: an `expect` that failed
 /// inside would be one more error of that zone.
 
 const _doc = 'doc/accumulation.md';
+const _rules = 'doc/accumulation-rules.md';
 const _pageFile = 'test/support/accumulation_page.dart';
 const _attemptsFile = 'test/support/accumulation_first_attempts.dart';
 const _secondAttemptsFile = 'test/support/accumulation_second_attempts.dart';
 
-String _page() => File(_doc).readAsStringSync();
+String _read(String page) => File(page).readAsStringSync();
 
-/// The page with every run of whitespace turned into one space, so that a
+/// Both pages, the recipes first.
+String _pages() => [_doc, _rules].map(_read).join('\n');
+
+/// The pages with every run of whitespace turned into one space, so that a
 /// phrase is found wherever its lines were broken.
-String _prose() => _page().replaceAll(RegExp(r'\s+'), ' ');
+String _prose() => _pages().replaceAll(RegExp(r'\s+'), ' ');
 
-/// Holds the page to [phrase]: the test that calls this runs what the phrase
-/// says, so a page that stops saying it leaves the test with nothing to
+/// Holds the pages to [phrase]: the test that calls this runs what the
+/// phrase says, so pages that stop saying it leave the test with nothing to
 /// stand for.
 ///
-/// The page is not handed to `expect`: a failure would print all of it.
+/// The pages are not handed to `expect`: a failure would print all of them.
 void _says(String phrase) => expect(
       _prose().contains(phrase),
       isTrue,
-      reason: '$_doc no longer says: $phrase',
+      reason: '$_doc and $_rules no longer say: $phrase',
     );
 
-/// What the page quotes under its `text` fences, in order.
+/// What the pages quote under their `text` fences, in order.
 List<String> _quotes() => [
       for (final block
-          in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(_page()))
+          in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(_pages()))
         block.group(1)!,
     ];
 
@@ -301,41 +305,45 @@ void main() {
     });
 
     test('every other block stands in the file of the page', () {
-      for (final heading in [
-        '### A search that fires on every keystroke',
-        '### Settings saved on every flip of a switch',
-        '### One request per log line',
-        '### Commands where only the last one counts',
-        '#### The accumulator',
-        '#### When they are separate jobs after all',
-        '### Choosing where events join',
-        '### Start, cancellation and errors',
+      for (final (page, heading) in [
+        (_doc, '### A search that fires on every keystroke'),
+        (_doc, '### Settings saved on every flip of a switch'),
+        (_doc, '### One request per log line'),
+        (_doc, '### Commands where only the last one counts'),
+        (_doc, '#### The accumulator'),
+        (_doc, '#### When they are separate jobs after all'),
+        (_rules, '## Choosing where events join'),
+        (_rules, '## Start, cancellation and errors'),
       ]) {
         expect(
-          codeMissingFrom(_doc, _pageFile, under: heading),
+          codeMissingFrom(page, _pageFile, under: heading),
           isEmpty,
-          reason: heading,
+          reason: '$page: $heading',
         );
       }
     });
 
-    test('no block of the page is left out of both files', () {
+    test('no block of the pages is left out of the files', () {
+      for (final page in [_doc, _rules]) {
+        expect(
+          codeMissingFrom(
+            page,
+            _pageFile,
+            alsoIn: [_attemptsFile, _secondAttemptsFile],
+          ),
+          isEmpty,
+          reason: page,
+        );
+      }
       expect(
-        codeMissingFrom(
-          _doc,
-          _pageFile,
-          alsoIn: [_attemptsFile, _secondAttemptsFile],
-        ),
-        isEmpty,
-      );
-      expect(
-        RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
+        RegExp(r'^```dart$', multiLine: true).allMatches(_pages()),
         hasLength(19),
       );
     });
 
     test('every fence is dart or text, and thirteen of them are quotes', () {
       expect(strayFences(_doc), isEmpty);
+      expect(strayFences(_rules), isEmpty);
       expect(_quotes(), hasLength(13));
       _says('Under each version of a controller is what the scenario above it '
           'leads to');
@@ -343,7 +351,7 @@ void main() {
 
     test('a first attempt opens every recipe, the accumulator closes it', () {
       final headings = [
-        for (final line in _page().split('\n'))
+        for (final line in _read(_doc).split('\n'))
           if (line.startsWith('####')) line.substring(5),
       ];
       expect(headings, [
@@ -362,11 +370,12 @@ void main() {
     });
 
     test('the sections it points at are named by their headings', () {
-      _says('[Choosing where events join](#choosing-where-events-join) says '
-          'when to take `adjacent` instead');
+      _says('[Choosing where events '
+          'join](accumulation-rules.md#choosing-where-events-join) says when '
+          'to take `adjacent` instead');
       _says('[Choosing when a group is '
-          'ready](#choosing-when-a-group-is-ready) explains what a throttle '
-          'interval is measured from');
+          'ready](accumulation-rules.md#choosing-when-a-group-is-ready) '
+          'explains what a throttle interval is measured from');
       expect(_prose().contains('The policy section'), isFalse);
       expect(_prose().contains('the timing section'), isFalse);
     });
@@ -498,7 +507,8 @@ void main() {
       expect(run.api.askedAt, [450]);
       _says('the debounce holds the group until the typing stops for 300 ms');
       _says('`policy` spells out the default, `join`; [Choosing where events '
-          'join](#choosing-where-events-join) says what a policy decides');
+          'join](accumulation-rules.md#choosing-where-events-join) says what a '
+          'policy decides');
     });
 
     test('its answer is later than either attempt above', () {
@@ -556,19 +566,27 @@ void main() {
     test("every keystroke of a group gets the group's one job", () {
       _says('the returned job exposes the outcome and cancellation, like '
           'other jobs');
+      _says('Every call of `query` that lands in one group returns the same '
+          'job, so a plain `then` on it throws `StateError`; a caller '
+          'continues it through `shared()`');
       final api = FakeSearchApi();
       final jobs = <Job<void>>{};
       var outcome = '';
+      var shared = '';
       _zone((async) {
         final search = Search(api);
         for (final text in ['s', 'so', 'sol']) {
           jobs.add(search.query(text));
         }
+        final branch = jobs.first.shared().then<void>((ctx, value) {});
         async.elapse(ms(1000));
         outcome = '${jobs.single.outcome}';
+        shared = '${branch.outcome}';
       });
       expect(jobs, hasLength(1));
       expect(outcome, 'Done(null)');
+      expect(shared, 'Done(null)');
+      expect(() => jobs.single.then<void>((ctx, value) {}), throwsStateError);
     });
   });
 

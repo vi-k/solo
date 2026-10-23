@@ -221,13 +221,13 @@
 «никакого Flutter в ядре»), `flutter` (`flutter_solo` и его пример), `floor`
 (о нём ниже), `snippets` (два стенда, `tool/doc_snippets.py`
 и `tool/accumulation_snippets.py`: собирают код `packages/solo/doc/vs-bloc.md`
-и `packages/solo/doc/accumulation.md` в три пакета и прогоняют все драйверы)
-и `docs` (семь питоновских проверок, сторожа четырёх из них — `reflow.py`,
-`check_line_width.py`, `check_links.py` и `check_dartdoc.py`, сторож
-`archive_floor_test.py` — и сборка сайта со своим сторожем
-`build_site_test.py`). Триггеры: push в `main`, pull request и ручной запуск.
-Прогон перед коммитом это не отменяет: CI говорит уже после того, как правка
-в `main`.
+и `packages/solo/doc/accumulation.md` с `accumulation-rules.md` в три пакета
+и прогоняют все драйверы) и `docs` (семь питоновских проверок, сторожа четырёх
+из них — `reflow.py`, `check_line_width.py`, `check_links.py`
+и `check_dartdoc.py`, сторож `archive_floor_test.py` — и сборка сайта со своим
+сторожем `build_site_test.py`). Триггеры: push в `main`, pull request и ручной
+запуск. Прогон перед коммитом это не отменяет: CI говорит уже после того, как
+правка в `main`.
 
 `floor` проверяет не дерево, а то, что получит пользователь: архив, без
 dev-зависимостей, на полу. `tool/archive_floor.py stage <каталог>` раскладывает

@@ -9,20 +9,19 @@
 пример, `flutter_solo` и его пример собираются против дерева. Живут
 до следующего выпуска ядра.
 
-В работе: деление длинных страниц из `docs/backlog.md`, план
-`2026-10-23-split-long-pages-plan.md`, владелец принял 2026-10-24: без якорей
-для опубликованных ссылок, имена из плана. Сделаны три страницы ядра: очередь
-и правило ушли с `extending.md` на `engine.md`, правила уборки — с `cleanup.md`
+Последнее законченное — деление длинных страниц из бэклога, план
+`2026-10-23-split-long-pages-plan.md`, раздел «Ход работы»: очередь и правило
+ушли с `extending.md` на `engine.md`, правила уборки — с `cleanup.md`
 на `cleanup-rules.md`, правила ошибок — с `errors.md` на `error-rules.md`,
-раздел «Ход работы» плана. Дальше — `accumulation.md` `solo`
-на `accumulation-rules.md` по разделу страницы в плане; тем же коммитом итог
-в вердикт L7 `2026-10-22-solo-project-review.md`, итог вопроса 2
-`2026-10-22-async-job-project-review.md` и запись из `docs/backlog.md`.
+правила накопления — с `accumulation.md` `solo` на `accumulation-rules.md`.
+Итоги — в вопросе 2 `2026-10-22-async-job-project-review.md` и в вердикте L7
+`2026-10-22-solo-project-review.md`, бэклог пуст. Перечитывание страниц Fable
+с оценками — по слову владельца.
 
-Последнее законченное — примеры со scopo в разделе «The controller's life»
-README `flutter_solo`, `2026-10-23-scopo-examples-report.md`: scopo 0.17.0
-вышел под `async_job` 0.3.0, блоки, сторожа и драйвер стенда на месте.
-По вопросу владельца `AsyncDataScope` теперь грузит профиль в `initData`, под
+До того — примеры со scopo в разделе «The controller's life» README
+`flutter_solo`, `2026-10-23-scopo-examples-report.md`: scopo 0.17.0 вышел под
+`async_job` 0.3.0, блоки, сторожа и драйвер стенда на месте. По вопросу
+владельца `AsyncDataScope` теперь грузит профиль в `initData`, под
 `ctx.onDiscard` и `ctx.abandonable` — раздел «Загрузка в `initData`» того же
 отчёта. Владелец README прочитал 2026-10-23.
 
@@ -39,18 +38,18 @@ CI с 2026-10-21 стоит на `ubuntu-26.04` во всех заданиях `
 Не трогать: процессы `codex` на машине — не этой сессии.
 
 Дерево: `main`, всё в origin вплоть до коммита с подъёмом scopo до 0.18.0; план
-деления и три страницы — локальные коммиты поверх, без push. Незакоммиченного
-нет, записей stash нет. Проверки `errors.md` 2026-10-24, против дерева:
-`async_job` +1822, `solo` +2070, его пример +112, `flutter_solo` +249, его
-пример +6, формат и анализ чистые, все питоновские проверки и сборка сайта
-зелёные. В свежей копии сначала `dart pub get`, потом `dart format`: без него
-форматтер переписывает пакет в новый стиль. Проверки 2026-10-23, против
-опубликованных пакетов: `solo` +2070, его пример +112, `flutter_solo` +249
-со сторожами scopo (и на scopo 0.18.0), его пример +6, стенд
-`flutter_snippets.py` — 50, анализ и dry-run всех трёх чистые; `floor`
-на 3.27.0 локально на втором из них — все пять корней. CI `gate` зелёный
-во всех пяти заданиях на `c685e082`, `6cefb00b`, `2c4791e7` и `2e6a404b`,
-`site` на `2e6a404b` тоже.
+деления и четыре страницы — локальные коммиты поверх, без push.
+Незакоммиченного нет, записей stash нет. Проверки `accumulation.md` 2026-10-24,
+против дерева: `async_job` +1822, `solo` +2070, его пример +112, `flutter_solo`
++249, его пример +6, формат и анализ чистые, все питоновские проверки и сборка
+сайта зелёные, стенд накопления и сверка трасс обеих страниц тоже. В свежей
+копии сначала `dart pub get`, потом `dart format`: без него форматтер
+переписывает пакет в новый стиль. Проверки 2026-10-23, против опубликованных
+пакетов: `solo` +2070, его пример +112, `flutter_solo` +249 со сторожами scopo
+(и на scopo 0.18.0), его пример +6, стенд `flutter_snippets.py` — 50, анализ
+и dry-run всех трёх чистые; `floor` на 3.27.0 локально на втором из них — все
+пять корней. CI `gate` зелёный во всех пяти заданиях на `c685e082`, `6cefb00b`,
+`2c4791e7` и `2e6a404b`, `site` на `2e6a404b` тоже.
 
 ## Что стоит помнить
 
@@ -205,11 +204,12 @@ CI с 2026-10-21 стоит на `ubuntu-26.04` во всех заданиях `
 в `test/support/streams_*.dart` и заглушками `children_stubs.dart`.
 
 **Стенды есть не у всех страниц.** Они есть у `vs-bloc.md`
-(`tool/doc_snippets.py`), `accumulation.md` (`tool/accumulation_snippets.py`),
-README `flutter_solo` с его `doc/mixins.md` и `doc/testing.md` и быстрого
-старта README `solo` (`tool/flutter_snippets.py`). Код `jobs.md` с 2026-10-03
-стоит в support-файлах `packages/solo/test/support/jobs_*.dart` и запускается
-тестами `jobs_rakes_test.dart`, `queue_pause_recipe_test.dart`
+(`tool/doc_snippets.py`), `accumulation.md` с `accumulation-rules.md`
+(`tool/accumulation_snippets.py`), README `flutter_solo` с его `doc/mixins.md`
+и `doc/testing.md` и быстрого старта README `solo`
+(`tool/flutter_snippets.py`). Код `jobs.md` с 2026-10-03 стоит в support-файлах
+`packages/solo/test/support/jobs_*.dart` и запускается тестами
+`jobs_rakes_test.dart`, `queue_pause_recipe_test.dart`
 и `droppable_recipe_test.dart`, всего 109. Код `cancellation.md` с 2026-10-04
 стоит в `packages/solo/test/support/cancellation_*.dart` и запускается тестом
 `cancellation_rakes_test.dart`, 146 тестов; код `resources.md` —
@@ -219,9 +219,10 @@ README `flutter_solo` с его `doc/mixins.md` и `doc/testing.md` и быст�
 в `children_*.dart`, тест `children_rakes_test.dart`, 118; код `testing.md` —
 в `testing_*.dart`, тест `testing_rakes_test.dart`, 96; код `camera.md` —
 в `packages/solo/example/test/support/camera_*.dart`, тест
-`camera_rakes_test.dart` пакета примера, 89. Код `accumulation.md` сверх стенда
-стоит в `packages/solo/test/support/accumulation_*.dart`, тест
-`accumulation_rakes_test.dart`, 130; код сторон `solo` страницы `vs-bloc.md` —
+`camera_rakes_test.dart` пакета примера, 89. Код `accumulation.md`
+и `accumulation-rules.md` сверх стенда стоит
+в `packages/solo/test/support/accumulation_*.dart`, тест
+`accumulation_rakes_test.dart`, 132; код сторон `solo` страницы `vs-bloc.md` —
 в `vs_bloc_*.dart` там же, тест `vs_bloc_rakes_test.dart`, 72, а блоки стороны
 bloc держит только стенд.
 

@@ -1,8 +1,8 @@
-// The code of `doc/accumulation.md`, verbatim, less the first and second
-// attempts: every piece of those blocks is a run of lines of this file, and
-// `accumulation_rakes_test.dart` runs it. A block the page shows as a method
-// or as a few statements stands in a class or a function of this file, and
-// what this file adds to the page says so.
+// The code of `doc/accumulation.md` and `doc/accumulation-rules.md`,
+// verbatim, less the first and second attempts: every piece of those blocks
+// is a run of lines of this file, and `accumulation_rakes_test.dart` runs it.
+// A block a page shows as a method or as a few statements stands in a class
+// or a function of this file, and what this file adds to the pages says so.
 import 'package:solo/solo.dart';
 
 class SearchState {

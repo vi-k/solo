@@ -24,8 +24,9 @@ name: gate
 # it, and the bench of its README and `doc/mixins.md` along with it, whose
 # drivers are widget tests. `docs` needs no SDK at all. `snippets` builds
 # the code of `packages/solo/doc/vs-bloc.md` and of
-# `packages/solo/doc/accumulation.md` and runs it. `floor` replays the
-# suites from the archives on the lowest SDK the pubspecs admit.
+# `packages/solo/doc/accumulation.md` with
+# `packages/solo/doc/accumulation-rules.md` and runs it. `floor` replays
+# the suites from the archives on the lowest SDK the pubspecs admit.
 #
 # What `floor` proves is what the other four cannot. They resolve the tree:
 # every file in it, the dev dependencies along with the rest, the newest
@@ -376,7 +377,8 @@ jobs:
         run: |
           python3 tool/check_traces.py \
             packages/solo/doc/vs-bloc.md "$RUNNER_TEMP/vs-bloc.out" \
-            packages/solo/doc/accumulation.md "$RUNNER_TEMP/accumulation.out"
+            packages/solo/doc/accumulation.md "$RUNNER_TEMP/accumulation.out" \
+            packages/solo/doc/accumulation-rules.md "$RUNNER_TEMP/accumulation.out"
 
       - name: Nothing drifted
         run: |
