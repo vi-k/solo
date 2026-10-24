@@ -344,6 +344,7 @@ on when the value arrives:
 | While the job runs its cleanup stack | on the stack, after the callback that is running |
 | While a branch of `ctx.runAll` waits for its group after its cleanup stack | at once, after the stack, with only the end of the branch waiting for it |
 | After the job has ended | at once, late and alone, with nobody waiting for it |
+| During the body, to a call the body walked away from without a cancellation | on the stack, with the unwinding |
 
 The callback does not wait for the unwinding. A child the job is still waiting
 for may want the same lock or slot of a pool, and a value held for the
@@ -367,12 +368,23 @@ waits for the release. Kept for the second pass, the value would keep the slot
 from the cleanup of another branch the group waits for, and the group would
 wait for good.
 
-A value that comes to a call the body walked away from without a cancellation
-still goes to whoever holds the call's future, and its release waits for the
-unwinding on the stack. The core takes a value for late from the moment it
-learns the body has ended, not from the body's `return`, so a call that gives
-out a resource is not one to walk away from.
+In the last row the value is not late: the body walked away from the call
+without a cancellation, so the value still goes to whoever holds the call's
+future, and its release waits for the unwinding on the stack. The core takes a
+value for late from the moment it learns the body has ended, not from the
+body's `return`, so a call that gives out a resource is not one to walk away
+from.
 
-A call left unawaited on purpose has its type written out,
-`unawaited(ctx.abandonable<Database>(...))`. Without it `T` is inferred from
-`unawaited` as `void`, and `dispose` has to take `void`.
+A call left unawaited on purpose has its type written out:
+
+```dart
+unawaited(
+  ctx.abandonable<Database>(
+    Database.open,
+    dispose: (database) => database.close(),
+  ),
+);
+```
+
+Without `<Database>` the type is inferred from `unawaited` as `void`, and
+`dispose` has to take `void`.

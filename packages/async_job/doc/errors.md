@@ -5,7 +5,8 @@ A `JobObserver` hears the errors that no outcome carries, as
 whoever answers for it. An error the job catches passes these places in order
 and goes no further than the first one that keeps it. A cancellation the job
 catches goes no further than `onError`, unless an engine ends the job `Failed`
-with it, as the last row of [Rare routes](error-rules.md#rare-routes) shows.
+with it, as the last two rows of [Rare routes](error-rules.md#rare-routes)
+show.
 
 | Place | What it does with the error | Section |
 | --- | --- | --- |
@@ -204,11 +205,15 @@ job ends `Cancelled`, and the filter above does not name a `StateError`.
 
 A failure the outcome carries goes on to the answer a microtask after the job
 ends, unless somebody has observed the outcome by then, and an observer that
-answers gets it in `onUnanswered`. The outcome counts as observed when somebody
-reads `done` or `value`, calls `ignoreFailure()`, or forwards the failure
-through `then`: a continuation cancelled before its source failed forwards
-nothing, and the failure stays unobserved. See
-[A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
+answers gets it in `onUnanswered`. The outcome counts as observed when
+somebody:
+
+- reads `done` or `value`;
+- calls `ignoreFailure()`;
+- forwards the failure through `then`. A continuation cancelled before its
+  source failed forwards nothing, and the failure stays unobserved.
+
+See [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
 outcomes page. The observer's hooks do not observe the outcome, even a hook
 that reads `job.outcome`, as the `onFinish` of `Log` in
 [Observer](observing.md#observer) does.

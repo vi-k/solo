@@ -100,11 +100,8 @@ outcome: Done(database)
 | What the job keeps to itself: a lock, a temporary file, a subscription | `dispose` | released | released |
 | What the body returns or hands outside | `discard` | handed over open | released |
 
-A branch of `ctx.runAll` releases later than its body ends. It starts unwinding
-only when every branch of the group has ended its body and waited for its
-children, or when the body of one of them has ended in anything but a value. A
-lock two branches share stays taken until then. The branch waiting for it keeps
-the group from getting there, so the group hangs.
+A branch of `ctx.runAll` releases later than its body ends, so a lock two
+branches share can hang the group:
 [Branches that wait for each other](groups.md#branches-that-wait-for-each-other)
 on the groups page shows the hang and how to take such a lock.
 
@@ -121,14 +118,10 @@ its resource directly. On a cancelled job `check` throws the job's `Cancelled`
 instead, as it does once the job has finished. So an action the body walked
 away from, polling `check` to stop, gets the cancellation it waits for.
 
-Two releases do not wait for the stack. A checkpoint that throws on a value
-that has just arrived releases it on the spot, before the body hears the
-cancellation, as
-[Registering on arrival](cleanup-rules.md#registering-on-arrival) shows. A
-value that comes late is released when it comes, during the body or after the
-job has ended, as
-[A value that comes late](cleanup-rules.md#a-value-that-comes-late) describes.
-Both sections are on the cleanup rules page.
+Two values are released without waiting for the stack, one a checkpoint throws
+on just as it arrives and one that comes late: the cleanup rules page has both,
+in [Registering on arrival](cleanup-rules.md#registering-on-arrival) and
+[A value that comes late](cleanup-rules.md#a-value-that-comes-late).
 
 A callback must not await its own job: `done`, `value` and `cancel()` all
 complete after the cleanup that would be waiting for them. Keep callbacks

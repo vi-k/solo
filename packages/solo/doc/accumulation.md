@@ -349,9 +349,9 @@ flips are one group and one write whatever else the queue was doing.
 [Choosing where events join](accumulation-rules.md#choosing-where-events-join)
 says when to take `adjacent` instead.
 
-The first event becomes the accumulated value without calling `merge`. Each
-following event calls `merge(accumulated, incoming)` synchronously from `add`,
-before the handler starts. Only its result is kept.
+The first event becomes the accumulated value without calling `merge`; each
+following one calls `merge(accumulated, incoming)` synchronously from `add`,
+before the handler starts.
 
 The three calls hand back one job, and awaiting it once is awaiting all three:
 
@@ -387,23 +387,10 @@ throwing.
 If saving fails, the state is unchanged and the group fails. Retrying the
 failed changes is the caller's decision; a later independent patch does not
 automatically include them. This example assumes one writer and an API future
-that completes when the write has actually ended. `ctx.join` keeps the
-execution slot until that future completes, even after cancellation, and that
-is what stops the next write from starting on top of this one. A client timeout
-alone does not establish that a server has stopped writing. A `save` that
-completes its future on a timeout hands the slot back while the server is still
-writing, and the next group's write goes out over an unfinished one. Which of
-the two the server keeps is then no longer the queue's decision, and the screen
-and the server can end up disagreeing for good. Cancellation can also prevent
-the final `emit` after the server has accepted the write.
-
-A deadline given to the accumulator with `timeout` is a cancellation, not a
-client timeout: `ctx.join` keeps the slot until `save` completes, so the next
-write still waits for this one to end. What the deadline costs is the final
-`emit`. A group past its deadline is cancelled while the server is still
-writing, ends `Cancelled(timeout)` once the write is stored, and never reaches
-its `emit`. The state keeps the old settings, and the next group applies its
-patch to them and writes the old values back over the change.
+that completes when the write has actually ended. What a client timeout and a
+`timeout` of the accumulator do to that are in
+[Start, cancellation and errors](accumulation-rules.md#start-cancellation-and-errors)
+on the accumulation rules page.
 
 ### One request per log line
 

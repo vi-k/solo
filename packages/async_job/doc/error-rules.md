@@ -60,7 +60,7 @@ Rarer routes, such as those of `ctx.runAll` and of engines, are in
   reaches both. The table shows one route from the job to the zone: the answer,
   when nobody answers for the error, or `onUnanswered` sends it on or throws.
   An engine that ends a job `Failed` on purpose adds a second, past the answer:
-  the last row of [Rare routes](#rare-routes).
+  the last two rows of [Rare routes](#rare-routes).
 - One failure that is the outcome of several jobs reaches `onError` once on
   each of them. A child of `ctx.run` fails, its parent lets the failure out of
   its body, and the observer the child inherited hears the same object on the
@@ -214,7 +214,8 @@ These are the routes of a branch of `ctx.runAll`, of the name of a child, of a
 | An error of the `toString` of a child's `key`, its `describe` or its `Cancelled`, when the core names the child in the parent's cancellation | `onError`, then the answer | The zone |
 | A `Cancelled` thrown outside the body | `onError` | Nobody |
 | The job's own cancellation, out of an action `ctx.abandonable` stopped waiting for or out of work of `ctx.unattended` | Nobody | Nobody |
-| The failure of a job an engine ends `Failed` with a `Cancelled`, or with a `ParallelWaitError` of nothing but cancellations, to make it fail on purpose | `onError`, then the zone past the answer if nobody observed the outcome | The zone if nobody observed the outcome |
+| The failure of a job an engine ends `Failed` with a `Cancelled` to make it fail on purpose | `onError`, then the zone past the answer if nobody observed the outcome | The zone if nobody observed the outcome |
+| The failure of a job an engine ends `Failed` with a `ParallelWaitError` of nothing but cancellations | `onError`, then the zone past the answer if nobody observed the outcome | The zone if nobody observed the outcome |
 
 **What Dart hands to the zone past the job.** A context call the body does not
 await throws into a future that nobody awaits. Dart, not the job, hands that

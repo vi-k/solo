@@ -6,6 +6,8 @@
 // line of an answer turned into the line of an attempt would still be
 // found in a file that held both. A block that leaves `ctx` to its reader
 // takes it as a parameter.
+import 'dart:async';
+
 import 'package:async_job/async_job.dart';
 
 import 'cleanup_stubs.dart';
@@ -102,6 +104,15 @@ Job<Database> afterTheReturn() {
     return database;
   });
   return job;
+}
+
+void leftUnawaited(JobContext ctx) {
+  unawaited(
+    ctx.abandonable<Database>(
+      Database.open,
+      dispose: (database) => database.close(),
+    ),
+  );
 }
 
 Job<Database> plainAwait() {

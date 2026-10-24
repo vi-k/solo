@@ -396,7 +396,8 @@ around `start`:
 ```
 
 The engine calls it from `account.onSignOut`, which the account calls when the
-user signs out:
+user signs out. The page runs one job; an engine with several calls `_stop` on
+each job it runs, with a `Cancelled` built for each:
 
 ```dart
 account.onSignOut = () => job._stop(

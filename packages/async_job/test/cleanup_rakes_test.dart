@@ -1313,6 +1313,20 @@ void main() {
       });
     });
 
+    test('a call left unawaited: the database that comes late is closed', () {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          page.leftUnawaited(ctx);
+        })
+          ..ignoreFailure();
+        async.flushTimers();
+        // The body ends before `open` does, so the value is late and its
+        // `dispose` runs as it comes.
+        expect(job.outcome, isA<Done<void>>());
+        expect(trace, ['database opened', 'database closed']);
+      });
+    });
+
     test('a plain await: a success hands the database over open', () {
       fakeAsync((async) {
         final job = page.plainAwait()..ignoreFailure();

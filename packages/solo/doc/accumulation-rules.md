@@ -75,28 +75,29 @@ a plain `close()` drops it. Take `startAtOnce: false` where the rate matters
 more than the latency of the first event, as the log recipe does, and leave the
 default where the first event is what the user is waiting for.
 
-The start is the transition to running, before `onStart`. A group rejected by
-start rules consumes no throttle interval; cancellation from `onStart` does.
-With `startAtOnce: false` a refusal leaves the accumulator with nothing queued,
-so the next group to appear counts a full interval of its own from the moment
-it appears. If a group starts at 0 ms with a 200 ms interval, but another job
-holds the slot until 500 ms, the next group starts at 500 ms and the one after
-that cannot start before 700 ms. If the group's own handler, children or
-cleanup outlast the interval, the next group can start as soon as they finish.
-
-Waiting groups stay visible in `queue.jobs`. The queue takes the first ready
-job in list order, allowing ready jobs to pass waiting groups. The list can
-therefore be nonempty while no job is running. Timing does not occupy the
-execution slot; once a handler starts, the queue waits for its children and
-cleanup before starting another root job.
-
-Omitting `timing`, or passing `Duration.zero`, makes groups ready immediately
-and creates no timers, whatever `startAtOnce` says. Negative durations throw
-`ArgumentError`. A timing configuration can be shared by several accumulators;
-each accumulator has its own groups and throttle interval. Timer callbacks
-follow Dart's event-loop order: an event processed before a debounce callback
-can restart the timer; an event processed after it belongs to a new group. A
-busy event loop can delay callbacks and starts.
+- **What uses an interval.** The start is the transition to running, before
+  `onStart`. A group rejected by start rules consumes no throttle interval;
+  cancellation from `onStart` does. With `startAtOnce: false` a refusal leaves
+  the accumulator with nothing queued, so the next group to appear counts a
+  full interval of its own from the moment it appears.
+- **A slot held by another job.** If a group starts at 0 ms with a 200 ms
+  interval, but another job holds the slot until 500 ms, the next group starts
+  at 500 ms and the one after that cannot start before 700 ms. If the group's
+  own handler, children or cleanup outlast the interval, the next group can
+  start as soon as they finish.
+- **What the queue shows.** Waiting groups stay visible in `queue.jobs`. The
+  queue takes the first ready job in list order, allowing ready jobs to pass
+  waiting groups. The list can therefore be nonempty while no job is running.
+  Timing does not occupy the execution slot; once a handler starts, the queue
+  waits for its children and cleanup before starting another root job.
+- **Zero and negative durations.** Omitting `timing`, or passing
+  `Duration.zero`, makes groups ready immediately and creates no timers,
+  whatever `startAtOnce` says. Negative durations throw `ArgumentError`.
+- **Timers.** A timing configuration can be shared by several accumulators;
+  each accumulator has its own groups and throttle interval. Timer callbacks
+  follow Dart's event-loop order: an event processed before a debounce callback
+  can restart the timer; an event processed after it belongs to a new group. A
+  busy event loop can delay callbacks and starts.
 
 ## Choosing where events join
 
@@ -216,13 +217,16 @@ group finishes before the next event arrives, each event starts a separate job.
 A `join` policy's search can scan the queue; `adjacent` only checks its tail.
 `replace` also searches the queue.
 
-`merge` must be synchronous and pure. It must not mutate either argument or
-call into the controller. If it throws, `add` throws the same error and the
-existing group, its job and its timer remain unchanged. Calling the same
-accumulator's `add` from within its `merge` throws `StateError`. After the
-callback the engine looks for the group again and writes the result only if the
-search finds the same group: if `merge` has cancelled its job or closed the
-controller, `add` throws `StateError`.
+`merge` must be synchronous and pure:
+
+- It must not mutate either argument or call into the controller.
+- If it throws, `add` throws the same error and the existing group, its job and
+  its timer remain unchanged.
+- Calling the same accumulator's `add` from within its `merge` throws
+  `StateError`.
+- After the callback the engine looks for the group again and writes the result
+  only if the search finds the same group: if `merge` has cancelled its job or
+  closed the controller, `add` throws `StateError`.
 
 `canStart`, `keepWhile` and cancellation apply to the whole job, and the rules
 themselves are in [State and rules](state.md#state-and-rules) on the state
@@ -231,6 +235,27 @@ accumulated. The handler's result and errors follow the ordinary `Job`
 contract; accepted cancellation still takes precedence over a later value or
 error. The accumulator does not roll back partial external effects or resend
 failed input automatically.
+
+The recipe
+[Settings saved on every flip of a switch](accumulation.md#settings-saved-on-every-flip-of-a-switch)
+assumes one writer and an API future that completes when the write has actually
+ended. `ctx.join` keeps the execution slot until that future completes, even
+after cancellation, and that is what stops the next write from starting on top
+of this one. A client timeout alone does not establish that a server has
+stopped writing. A `save` that completes its future on a timeout hands the slot
+back while the server is still writing, and the next group's write goes out
+over an unfinished one. Which of the two the server keeps is then no longer the
+queue's decision, and the screen and the server can end up disagreeing for
+good. Cancellation can also prevent the final `emit` after the server has
+accepted the write.
+
+A deadline given to the accumulator with `timeout` is a cancellation, not a
+client timeout: `ctx.join` keeps the slot until `save` completes, so the next
+write still waits for this one to end. What the deadline costs is the final
+`emit`. A group past its deadline is cancelled while the server is still
+writing, ends `Cancelled(timeout)` once the write is stored, and never reaches
+its `emit`. The state keeps the old settings, and the next group applies its
+patch to them and writes the old values back over the change.
 
 A group that writes a state of its own while it runs leaves that state behind
 when it fails or is cancelled: once the cancellation is accepted `emit` throws,

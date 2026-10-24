@@ -29,7 +29,9 @@ sign-out.
 ## A job of your own
 
 A job of your own creates the context its body gets and runs the body with it.
-Two private wrappers let the rest of the engine start the job and wait for it:
+Two private wrappers let the rest of the engine start the job and wait for it.
+Nothing on this page calls them: the queue of
+[A queue of your own](engine.md#a-queue-of-your-own) on the engine page does.
 
 ```dart
 import 'package:async_job/engine.dart';
@@ -91,8 +93,9 @@ in the zone it was created in: the body gets the timers, the zone values and
 the error handler of the code that made the job. A future of that zone that
 fails reaches the body there. Started under another `runZonedGuarded`, the body
 would never hear of the failure and would wait for good, and the queue with it.
-For a job made inside `ctx.unattended`, `creationZone` is the zone that work
-was started from, the one `start` itself moves to when called inside the work.
+For a job made inside the work of `ctx.unattended`, `creationZone` is the zone
+that work was started from. `start` called inside that work moves to the same
+zone by itself.
 
 Override `started()` and `finished()` to follow the lifecycle:
 
@@ -193,11 +196,13 @@ after, is in no outcome unless it is the very one handed in. `onError` hears
 it, and it goes on to `onUnanswered` or the zone, as the failure of the body of
 a cancelled job does. `ignoreFailure()` on the job stops it at `onError`.
 
-Two narrow cases are in the dartdoc of `JobBase.finish`: a `Done` handed to a
-branch of `runAll` after its group heard the body fail, and one `Cancelled`
-handed to two jobs, through `finish` or `cancelWith`. The second is why
-`onSignOut` in
-[Not waiting for the checkpoint](engine.md#not-waiting-for-the-checkpoint) on
-the engine page builds a `Cancelled` at every call. A `Cancelled` that a body
-throws, or a rule from `check()`, may be shared, a `const` one included: the
-job ends with one the core builds from it.
+Two narrow cases are in the dartdoc of `JobBase.finish`:
+
+- A `Done` handed to a branch of `runAll` after its group heard the body fail.
+- One `Cancelled` handed to two jobs, through `finish` or `cancelWith`. This is
+  why `onSignOut` in
+  [Not waiting for the checkpoint](engine.md#not-waiting-for-the-checkpoint) on
+  the engine page builds a `Cancelled` at every call.
+
+A `Cancelled` that a body throws, or a rule from `check()`, may be shared, a
+`const` one included: the job ends with one the core builds from it.
