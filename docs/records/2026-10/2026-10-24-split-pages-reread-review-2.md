@@ -17,10 +17,9 @@
 
 По слову владельца 2026-10-24 «ревью через Fable». Я понял его как то же
 перечитывание, что у Astra и Sol, и так и сказал владельцу. Клон `main`
-на `d3f7ef08` с разрешёнными зависимостями во всех пяти корнях —
-`.artifacts/2026-10-24-fable-reread/tree`. Задание —
-`.artifacts/2026-10-24-fable-reread/briefs/brief.md`, то же, что у Astra и Sol,
-со старыми версиями страниц из `git show 93539d68:<путь>` и решениями 105–107.
+на `d3f7ef08` с разрешёнными зависимостями во всех пяти корнях. Задание —
+в приложении 1, то же, что у Astra и Sol, со старыми версиями страниц
+из `git show 93539d68:<путь>` и решениями 105–107.
 
 | Ревьюер | Модель и вызов | Время |
 | --- | --- | --- |
@@ -28,8 +27,8 @@
 
 Отслеживаемых файлов Fable не тронул. Инструмент записи файлов харнесс ему
 не дал, поэтому четыре зонда он писал через оболочку. Полных наборов, стенда
-и сборки сайта не запускал и сказал это сам. Отчёт —
-`.artifacts/2026-10-24-fable-reread/out/fable.md`.
+и сборки сайта не запускал и сказал это сам. Отчёт — в приложении 2; путь
+к клону в задании и отчёте заменён на `<клон>`.
 
 Зонды я прогнал в своей копии на `d3f7ef08`, вывод совпал с отчётом. Решающий
 для D6:
@@ -40,7 +39,7 @@ a2 is a group of its own: true
 starts: [R starts@0, A[a1]@1500, B@1500, A[a2]@2500]
 ```
 
-Копии зондов — `.artifacts/2026-10-24-fable-reread/mine/probes/`.
+Зонды — в приложении 3.
 
 ## Страницы
 
@@ -318,3 +317,655 @@ the tail»; строки «Guides» обоих README.
     четыре, а не пять, как у Fable: «синхронна и чиста» стала вводной.
 
   Переводы правлены тем же коммитом.
+
+## Приложение 1. Задание
+
+### Перечитывание восьми страниц документации
+
+Это ревью, а не реализация и не обсуждение замысла. Вопросов не задавай
+и подтверждения не жди: ждать его не у кого. Ход считается проваленным, если ты
+закончишь его без отчёта по форме ниже. Отчёт целиком — твой последний ответ.
+
+#### Где ты работаешь
+
+Клон репозитория на коммите `d3f7ef08` ветки `main` лежит в `<клон>`. Работай
+только в нём и называй файлы абсолютными путями; основная копия репозитория —
+не твоя. Зависимости уже разрешены во всех пяти корнях: `packages/async_job`,
+`packages/solo`, `packages/solo/example`, `packages/flutter_solo`,
+`packages/flutter_solo/example`. Временные файлы держи в клоне,
+в `.review-tmp/`. Если хук не даст запустить `git` в клоне, состояние проверяй
+через `find`.
+
+Репозиторий — монорепозиторий трёх Dart-пакетов: `async_job` — ядро,
+структурная асинхронная задача `Job` с деревом детей, отменой, уборкой
+и исходами; `solo` — контроллер состояния поверх ядра, без Flutter;
+`flutter_solo` — виджеты и миксины для Flutter поверх `solo`.
+
+#### Что изменилось
+
+Четыре длинные страницы разделены надвое: у каждой обычный путь остался
+на первой странице, а правила и редкие случаи ушли на вторую. Пары:
+
+| Первая страница | Вторая страница |
+| --- | --- |
+| `packages/async_job/doc/extending.md` | `packages/async_job/doc/engine.md` |
+| `packages/async_job/doc/cleanup.md` | `packages/async_job/doc/cleanup-rules.md` |
+| `packages/async_job/doc/errors.md` | `packages/async_job/doc/error-rules.md` |
+| `packages/solo/doc/accumulation.md` | `packages/solo/doc/accumulation-rules.md` |
+
+Разделы переехали почти дословно. Заново написаны швы: вступления вторых
+страниц, абзацы первых страниц, которые говорят, что ушло и куда, строки таблиц
+«Guides» в `packages/async_job/README.md` и `packages/solo/README.md`, ссылки
+других страниц на переехавшие разделы.
+
+**Твоя область — эти восемь страниц и таблицы «Guides» двух README.** Остальные
+страницы `doc/` и код пакетов читать можно, чтобы проверить, верно ли сказано
+и куда ведут ссылки, но находки о них вне рамок — кроме ссылки, которая ведёт
+на переехавший раздел и после деления читается неверно.
+
+#### Главный вопрос
+
+Что нужно сделать, чтобы ты поставил странице 10? Ответь на него для каждой
+из восьми страниц: перечень шагов, у каждого — какой недостаток он снимает
+и насколько, по-твоему, поднимет оценку. «Ничего, уже 10» — тоже ответ, если ты
+так считаешь, но тогда объясни, почему.
+
+#### Что сделать
+
+1. **Каждая страница отдельно.** Ты — Dart/Flutter-разработчик, который впервые
+   нашёл пакет на pub.dev. Поставь каждой из восьми страниц оценку читаемости
+   из десяти и объясни, что её подняло и что опустило: язык и длина фраз,
+   вступление, устройство разделов, списки и таблицы, первые попытки, длина —
+   что увидишь. Ответь на главный вопрос.
+2. **Каждая пара как целое.** Понятно ли с первой страницы, где можно
+   остановиться и что лежит на второй; читается ли вторая сама по себе или
+   требует держать первую открытой; не потерялось ли на шве правило, без
+   которого первая страница ведёт к ошибке; не повторено ли одно и то же
+   на обеих; не осталось ли слов вроде «выше», «ниже», «this page», которые
+   после деления указывают не туда. Оцени, помогло ли деление, по сравнению
+   с тем, какой была бы одна страница: старая версия есть в истории git
+   (`git -C <клон> show 93539d68:<путь>`), её можно прочесть.
+3. **Верность.** Код в документах и трассы под ним держат тесты и стенды
+   репозитория, поэтому «код не собирается» находкой быть вряд ли может. А вот
+   утверждение заново написанного шва о поведении проверяй зондом, когда его
+   можно проверить.
+4. **Ссылки.** Ведут ли ссылки других страниц, README и dartdoc на переехавшие
+   разделы туда, куда обещают, и не врёт ли текст ссылки после переезда.
+
+#### Чего не делать
+
+- Не меняй отслеживаемые файлы. Новые файлы создавай только как зонды:
+  `test/probe_*.dart` внутри пакета — из корня клона и из системного `/tmp`
+  `package:`-импорты не резолвятся. Под конец `git status --short` клона должен
+  показывать только твои `probe_*` и `.review-tmp/`.
+- Не читай `docs/records/`, `docs/handoff.md`, `docs/backlog.md`
+  и `.artifacts/`: там история прошлых ревью и решений, она сместит взгляд.
+  `AGENTS.md`, `docs/architecture.md` и `docs/conventions.md` читать можно —
+  это правила и устройство репозитория. Если правила репозитория (`AGENTS.md`
+  велит начинать с handoff, обновлять его, коммитить) спорят с этим заданием,
+  выигрывает задание, а сам конфликт назови в отчёте.
+- `docs/settled.md` прочитай целиком до начала работы: там решения «оставить
+  как есть» и «не делать», которые закрыли вопросы прошлых ревью; о делении
+  страниц — пункт 105, о первых попытках и длине страниц — пункты 71 и 86,
+  о подзаголовках и картах разделов — 106 и 107. Находку, которая спорит
+  с решением оттуда, поднимай только с доводом, которого в решении нет: новым
+  фактом, зондом, случаем, о котором причина молчит. Такая находка помечается
+  «повтор решения N» и называет новый довод. Без нового довода находки нет.
+- Не коммить, не пушь, не публикуй.
+- Русские переводы (`README.ru.md`, `docs/ru/`) и сайт документации (`site/`,
+  `tool/build_site.py`) — вне рамок.
+
+#### Базовая линия
+
+На этом коммите перед ревью:
+`dart format --output=none --set-exit-if-changed .` без изменений
+и `dart analyze --fatal-infos` без замечаний во всех пакетах; `dart test`
+зелёный — `async_job` 1822 теста, `solo` 2070, пример `solo` 112;
+`flutter test` зелёный — `flutter_solo` 249, его пример 6. Стенд
+`tool/accumulation_snippets.py` собирает код обеих страниц накопления, и все
+его трассы совпадают с напечатанным. Поэтому «тесты падают» и «анализатор
+ругается» находкой быть не могут. Если у тебя вышло иначе, это сведения о твоём
+окружении — назови их в разделе ПРОГОН.
+
+#### Отчёт
+
+По-русски, Markdown. Разделы по порядку:
+
+1. **Страницы** — таблица «страница — оценка читаемости из десяти — почему —
+   что сделать для 10», все восемь строк; под таблицей — какие страницы
+   читаются хуже остальных и почему.
+2. **Пары** — по абзацу на каждую из четырёх пар: где проходит шов, держится ли
+   он, помогло ли деление и насколько.
+3. **Сводка** — пять–десять строк: главное, что ты увидел.
+4. **Находки** — номера D1, D2, … У каждой: тяжесть; место — файл и заголовок
+   раздела; что не так; почему читатель на этом споткнётся или ошибётся;
+   доказательство — зонд (файл, что делает, что напечатал) или «по чтению»; что
+   предлагаешь. Тяжесть: **High** — документ ведёт к неверному коду,
+   до которого доходят обычным путём; **Medium** — читатель запутается или
+   ошибётся в редком, но законном случае, или ссылка ведёт не туда; **Low** —
+   остальное.
+5. **Что хорошо и трогать не надо** — коротко.
+6. **ПРОГОН** — каждая команда, которую ты действительно запустил (проверки
+   и зонды), с точной последней строкой её вывода. Чего не запускал или что
+   упало из-за окружения — так и напиши: «не запускал» лучше пересказа.
+
+## Приложение 2. Отчёт Fable
+
+### Отчёт о перечитывании восьми страниц после деления
+
+Клон `<клон>`, коммит `d3f7ef08`. Отслеживаемые файлы не менялись; в дереве
+только четыре зонда `test/probe_*.dart` и `.review-tmp/`.
+
+Конфликт правил: `AGENTS.md` велит начинать с `docs/handoff.md`, обновлять его
+и коммитить работу — по заданию я не читал `handoff.md`, `backlog.md`,
+`docs/records/` и `.artifacts/`, ничего не коммитил. Ещё одно: инструмент
+записи файлов харнесс заблокировал («parent bg session hasn't isolated yet»),
+поэтому зонды и скрипты писались через оболочку heredoc'ами — на содержание
+не влияет.
+
+#### 1. Страницы
+
+| Страница | Оценка | Почему | Что сделать для 10 |
+| --- | --- | --- | --- |
+| `packages/async_job/doc/extending.md` | 8 | Вступление ясно говорит, что строит эта страница и что — следующая. Раздел «A job of your own» — один блок кода и затем ~80 строк плотной прозы (зоны, хуки, ответ за ошибки, продолжения, `reportToZone`, `throwIfUnattended`); списки спасают, но фраза о `creationZone` для работы `ctx.unattended` («the one `start` itself moves to when called inside the work») читается с третьего раза. Две приватные обёртки `_launch`/`_untilFinished` на этой странице никто не зовёт. «Deferred start» и «Finishing a job by hand» коротки и ясны. | 1) Одной фразой у кода сказать, что `_launch` и `_untilFinished` зовёт очередь со страницы движка — снимает вопрос «зачем они здесь» (+0,5). 2) Переписать фразу о `creationZone` внутри `ctx.unattended` в два простых предложения (+0,5). 3) Абзац «Two narrow cases are in the dartdoc…» — три факта в одном абзаце; разнести в список (+0,5, до 9–10). |
+| `packages/async_job/doc/engine.md` | 9 | Лучшая из восьми по устройству: первая попытка → трасса → нумерованный разбор → исправление → таблица «кто отвечает» → сборка «The whole engine». Раздел правила так же: таблица вызовов `check()`, попытка, ответ, таблица двух остановок. Опускает только `printer`, который появляется из ниоткуда (D7), и подвисший `account.onSignOut = () => job._stop(...)` на одну задачу. | 1) Назвать `printer` во вступлении или показать его две строки (D7, +0,5). 2) У `account.onSignOut` оговорить, что движок на деле обходит все свои идущие задачи (+0,5). |
+| `packages/async_job/doc/cleanup.md` | 8 | Вход превосходный: код и таблица пяти членов сразу. Первая попытка с трассой и нумерованным разбором — образцово. Опускает раздел «`dispose` for what the job keeps»: после таблицы идут пять абзацев правил, из них «Two releases do not wait for the stack» — две отсылки на вторую страницу без примера, для новичка непонятные (D3). Абзац о ветке `runAll` и зависании — чужая тема, пересказанная здесь. | 1) Унести «Two releases…» на страницу правил, в «Cleanup order and late results» (D3, +1). 2) Абзац о `runAll` сжать до фразы со ссылкой на `groups.md` (+0,5). 3) Три темы второй страницы во вступлении дать ссылками на её разделы, а не на страницу целиком (Low, +0,5). |
+| `packages/async_job/doc/cleanup-rules.md` | 8 | «A resource that travels» — три версии и таблица «когда пришла отмена — кто закрывает»: отлично. «Registering without a call» — хорош, пример с транзакцией кстати. Опускает конец: «A value that comes late» — таблица четырёх строк, четыре абзаца по строкам, а потом два абзаца («A value that comes to a call the body walked away from without a cancellation…», типизация `unawaited<Database>`), где различие «ушёл без отмены» / «брошено `abandonable`» надо вычитывать. Ссылка назад «at the end of Choosing the callback» ведёт на верх H2 (D4). | 1) Добавить в таблицу поздних значений строку «тело ушло от вызова без отмены — на стеке, с размоткой», чтобы последний абзац стал строкой таблицы (+1). 2) Заметку про `unawaited(ctx.abandonable<Database>(...))` поставить рядом с кодом, где это видно, или снабдить блоком (+0,5). 3) Якорь в D4 (+0,5). |
+| `packages/async_job/doc/errors.md` | 9 | Таблица пяти мест во вступлении — сильный вход; «Reporting each error once» с таблицей «кто что докладывает» — то, за чем приходят. Все разделы в форме попытка → трасса → разбор. Опускает: вторая фраза страницы отправляет на редкий случай второй страницы («unless an engine ends the job `Failed`…») раньше таблицы; абзац в конце «An observer» о том, когда исход считается наблюдённым, — плотный, с тремя ссылками. | 1) Убрать из второй фразы оговорку о движке (она есть в «Rare routes») или перенести ниже таблицы (+0,5). 2) «Когда исход считается наблюдённым» дать списком из трёх пунктов (+0,5). |
+| `packages/async_job/doc/error-rules.md` | 8 | Короткая страница правил, читается как справка — для второй страницы это уместно. Таблица маршрутов и два списка с жирными зачинами ясны; «Debug channel» с трассой — хорош. Опускает: первая фраза опирается на «the places of the introduction of Errors», которые здесь не названы (D5); «Limits of the filter» — список, разорванный блоком кода (D10); последняя строка «Rare routes» — ячейка в 30 слов. | 1) Назвать пять мест одной строкой (D5, +0,5). 2) «Limits of the filter» переделать в абзацы или вынести код после списка (D10, +0,5). 3) Последнюю строку «Rare routes» разбить на две (+0,5). |
+| `packages/solo/doc/accumulation.md` | 8 | Две таблицы на входе («с чего начать», «четыре рецепта») — верный вход; каждый рецепт самодостаточен и доказателен, трассы с временем читаются. Новый абзац о `then`/`shared()` и `merge` — короткий и точный. Опускает длина: 702 строки, и в рецептах остались правила: в «Settings…» два абзаца (387–406) о «одном писателе», клиентском таймауте и `timeout`-дедлайне — это правила, не рецепт (D9); «When they are separate jobs after all» — отступление, хоть и нужное README. | 1) Перенести абзацы 400–406 (и большую часть 387–398) на страницу правил, оставив фразу со ссылкой (D9, +1; не задевает первые попытки, 71/86). 2) Фразу про `merge` в «Settings» (352–354) сократить до ссылки, она повторяет новый абзац рецептов (+0,5). |
+| `packages/solo/doc/accumulation-rules.md` | 7 | Слабее остальных. «Choosing where events join» — открывается кодом и таблицей, прекрасно. Но «Choosing when a group is ready» после таблицы — 75 строк прозы, из них абзацы 77–98 — россыпь фактов без зачина (старт до `onStart`, отказ не тратит интервал, пример со слотом до 500 мс, `queue.jobs`, `Duration.zero`, порядок таймеров). Список `startAtOnce: false` стал лучше старого абзаца, но пункты 2 и 3 пересекаются (D6). «Start, cancellation and errors» — 50 строк абзацев до `PhotoUploader` и ещё 20 после, где договор `merge` — один абзац из шести утверждений. | 1) Абзацы 77–98 собрать в список с жирными зачинами, как «What keeps an error out of the answer» на `error-rules.md`, или в таблицу «случай — debounce — throttle» (+1,5). 2) Договор `merge` — списком из пяти пунктов (+0,5). 3) Уточнить пункт 2 списка `startAtOnce: false` (D6, +0,5). |
+
+Хуже остальных читаются `accumulation-rules.md` и хвост `cleanup-rules.md`: это
+страницы правил, и там проза свалена абзацами без опоры — читатель ищет своё
+правило перечитыванием, а не глазами по таблице. Из первых страниц слабее
+других `cleanup.md` — ровно из-за абзаца-шва D3 и пятёрки абзацев правил после
+ответа.
+
+#### 2. Пары
+
+**`extending.md` → `engine.md`.** Шов — после «A job of your own» и двух
+коротких разделов о `Job.deferred` и `finish`; очередь и правило ушли целиком.
+Первая страница говорит, где кончается её дело и что строит вторая; вторая
+во вступлении называет четыре имени, которые берёт (`MyJob`, `MyContext`,
+`_launch`, `_untilFinished`), и ведёт на раздел. Таблица «The whole engine»
+теперь честно показывает, что два члена живут на другой странице. Вторая
+читается без первой, если принять четыре имени на веру. Ничего не потерялось:
+правило `creationZone.run(start)` осталось при `_launch`. Повторов нет.
+Единственная шероховатость — первая страница заканчивается двумя справочными
+разделами после «задачи движка», и тот, кто строит движок, уходит на вторую
+страницу и возвращается за `finish`. Деление помогло сильнее всех: 617 → 203 +
+427, граница настоящая — задача против очереди.
+
+**`cleanup.md` → `cleanup-rules.md`.** Шов после «A value the job keeps back».
+Вступление первой говорит, что на второй, но ссылкой на страницу, без якорей.
+Правила «что можно колбэку» переехали не на вторую страницу, а из старого
+«Cleanup order» в ответ первой — правильно по сути (без них новичок напишет
+`ctx.join` внутри `dispose`), но ответ раздела потяжелел, и вместе с ними
+появился абзац-шов «Two releases do not wait for the stack», который на первой
+странице не на что опереть (D3); вторая страница ссылается на эти правила
+обратно грубым якорем (D4). Таблица поздних значений получила третью строку
+и прозу по строкам — лучше старой. Потерь нет: таблица пяти членов на первой
+странице сама называет `onDispose`, `onDiscard` и `disown`. Один повтор в одну
+фразу (D8). Деление помогло: 556 → 207 + 378, первую страницу читают за один
+присест.
+
+**`errors.md` → `error-rules.md`.** Шов после «Several observers»; ушли «Where
+each error goes», «The debug channel», «Several failures in one error», «Rare
+cases». Вступление первой называет вторую и ведёт на два её раздела якорями;
+вторая честно говорит, что её код продолжает три раздела первой
+(`DatabaseErrors`, миграция, фильтр). Правило `ignoreFailure()` осталось
+на первой — зонд подтвердил, что оно верно и для отменённой задачи.
+Единственная скрытая зависимость — «the places of the introduction»,
+не названные на второй (D5). Повторов, кроме этой короткой фразы
+об `ignoreFailure`, нет. Деление помогло умеренно: 614 → 410 + 236; первая всё
+ещё самая длинная из первых страниц ядра, но все её разделы — истории
+с попыткой, а не справка.
+
+**`accumulation.md` → `accumulation-rules.md`.** Шов — старый раздел
+«Reference» целиком стал второй страницей, почти дословно; правки две и обе
+к лучшему: «`replace` replaces a group's job at the tail» → «moves a group's
+job to the tail» и список под `startAtOnce: false`. Первая страница ведёт тремя
+строками таблицы «с чего начать» на разделы второй, а новый абзац в «Recipes»
+несёт два правила, без которых читатель рецепта ошибётся (`then` →
+`StateError`, `merge` синхронен) — зонд подтвердил. Вторая читается сама: оба
+нужных контроллера названы и привязаны ссылками. Потерь нет, повторов — только
+намеренный короткий. Что осталось не сделанным: правила внутри рецепта настроек
+(D9). Деление помогло: раздел-справка в хвосте не давал места остановиться,
+теперь первая страница заканчивается четвёртым рецептом, а граница видна
+в «Guides». Но первая по-прежнему 702 строки.
+
+#### 3. Сводка
+
+- Деление сделано чисто: все четыре шва верны по содержанию,
+  `tool/check_links.py` зелёный («every document link resolves»), слов
+  «above/below/this page», указывающих на другую страницу, не осталось — все
+  проверенные вхождения указывают внутрь своей страницы.
+- Четыре зонда подтвердили утверждения швов: `then` на задаче группы бросает
+  `StateError` с внятным текстом; `ctx.run` закрывает значение до того, как
+  тело услышит отмену; `ignoreFailure()` держит провал тела отменённой задачи
+  на `onError`; вторая группа троттла за чужой задачей ждёт целый интервал
+  от старта первой.
+- Найденные дефекты мелкие: ссылка README ядра, которая после переезда раздела
+  ведёт на страницу, не объясняющую её утверждение (D2); проза «Guides» README
+  `solo` считает четыре строки, где их стало пять (D1); абзац-шов
+  на `cleanup.md`, непонятный на первой странице (D3); пересекающиеся пункты
+  списка на `accumulation-rules.md` (D6); безымянный `printer` (D7).
+- Первые страницы читаются хорошо, `engine.md` и `errors.md` — лучше всех.
+  Вторые страницы читаются как справка, и слабее всех `accumulation-rules.md`:
+  проза абзацами там, где просится таблица или список с зачинами.
+- Главный остаток работы по пункту 105 — правила, оставшиеся внутри рецептов
+  `accumulation.md`, и абзац правил, перекочевавший на первую страницу
+  `cleanup.md`.
+
+#### 4. Находки
+
+**D1. Low.** `packages/solo/README.md`, «Guides», абзац перед таблицей (строки
+345–347). «The next four come when a controller needs what they cover:
+resources, children, streams, accumulation» — между «Cancellation»
+и «Diagnostics» теперь пять строк: добавилась «Accumulation rules». До деления
+(`git show 93539d68:packages/solo/README.md | sed -n 359,363p`) строк было
+четыре. Читатель, сверяющий карту с таблицей, находит лишнюю строку
+и не понимает, куда она относится; тот же абзац не упоминает «Diagnostics» (это
+было и до деления). Доказательство — по чтению. Предлагаю: «The next five…:
+resources, children, streams, accumulation and its rules», и в фразе о «about
+to ship» назвать diagnostics рядом с errors и testing.
+
+**D2. Medium.** `packages/async_job/README.md`, «Quick start», пункт
+о `discard` (строки 161–164): «closes the database when the job ends `Failed`
+or `Cancelled`; with `Done(database)` it stays open for the caller. See
+[Cleanup order and late results](doc/cleanup-rules.md#cleanup-order-and-late-results)».
+Раздел по ссылке — о четырёх шагах размотки, втором проходе и поздних
+значениях; утверждение пункта объясняет таблица «Resource — Callback — done —
+fails or is cancelled» в «`dispose` for what the job keeps» на `cleanup.md`.
+До деления ссылка вела на `doc/cleanup.md#cleanup-order-and-late-results` (`git
+show 93539d68:packages/async_job/README.md | grep -n -B3 'Cleanup order'`),
+и читатель хотя бы попадал на ту же страницу, что и таблица; теперь он попадает
+на страницу правил, где про `Done` — только исключение для ветки `runAll`.
+Доказательство — по чтению. Предлагаю ссылку
+на `doc/cleanup.md#dispose-for-what-the-job-keeps` (якорь по правилам GitHub,
+без бэктиков) с текстом «`dispose` for what the job keeps»; если хотелось
+сказать именно о значении, пришедшем после отмены внутри `ctx.join`, это
+правило контрольной точки из «Registering on arrival» на странице правил —
+вторая ссылка.
+
+**D3. Low.** `packages/async_job/doc/cleanup.md`, «`dispose` for what the job
+keeps», абзац «Two releases do not wait for the stack…» (строки 124–131). Новый
+текст шва: две отсылки на вторую страницу («a checkpoint that throws on a value
+that has just arrived», «a value that comes late») без примера и без
+определений — оба понятия вводятся только на `cleanup-rules.md`. Читатель
+первой страницы к этому месту знает лишь, что стек есть и колбэки
+не прерываются; «два освобождения не ждут стека» для него — шум. Само
+утверждение верно: зонд `packages/async_job/test/probe_cleanup_arrival.dart`
+(`ready` берёт `connect` через `ctx.run(connect, discard:)`, отмена ложится
+между `Done` `connect` и контрольной точкой `run`) напечатал `database opened`,
+`database close begins`, `database closed`, `body heard the cancellation`,
+`outcome: Cancelled(manual)`. Предлагаю перенести абзац на `cleanup-rules.md`,
+в «Cleanup order and late results», сразу под таблицу шагов — там оба
+исключения у себя дома.
+
+**D4. Low.** `packages/async_job/doc/cleanup-rules.md`, «Cleanup order and late
+results» (строки 287–288): «What a callback may do while it runs is at the end
+of [Choosing the callback](cleanup.md#choosing-the-callback)». Якорь ведёт
+на верх H2; абзацы о колбэках стоят на ~90 строк ниже, в конце H3 «`dispose`
+for what the job keeps», за первой попыткой, трассой и таблицей. Читатель ищет,
+где «конец». По чтению. Предлагаю якорь
+`cleanup.md#dispose-for-what-the-job-keeps` и текст «the end of `dispose` for
+what the job keeps».
+
+**D5. Low.** `packages/async_job/doc/error-rules.md`, «Where each error goes»,
+первая фраза: «The table shows which places of the introduction of
+[Errors](errors.md) each error passes». Сами места — `onError`, исход, фильтр,
+ответ, зона — на этой странице не названы; абзац объясняет только «the answer».
+Читатель, пришедший по ссылке из `chains.md`, `testing.md`, `observing.md` или
+dartdoc `onUnanswered`, должен открыть первую страницу, чтобы прочитать таблицу
+этой. По чтению. Предлагаю одну фразу: «An error passes `onError`, the outcome,
+the filter `Job.isCancellationError`, the answer and the zone, in that order,
+as the introduction of Errors lays them out».
+
+**D6. Low.** `packages/solo/doc/accumulation-rules.md`, «Choosing when a group
+is ready», список под `startAtOnce: false` (строки 47–57). Пункты 2 и 3
+пересекаются: когда вторая группа того же накопителя появляется за чужой
+задачей, пока первая ждёт, верны оба условия — «an interval still running»
+и «another group of its own queued». Пункт 2 обещает готовность, когда кончится
+идущий интервал; пункт 3 — целый интервал от старта другой группы. Зонд
+`packages/solo/test/probe_throttle_adjacent.dart` (задача `R` держит слот
+до 1500 мс; `a1` в 0, `B` в 10, `a2` в 20 мс, `adjacent`,
+`throttle(1 s, startAtOnce: false)`) напечатал
+`queued jobs after the additions: 3`, `a2 is a group of its own: true`,
+`starts: [R starts@0, A[a1]@1500, B@1500, A[a2]@2500]` — правит пункт 3. Первый
+вариант зонда без `R` дал `starts: [B@10, A[a1, a2, a3]@1000]`: `B` прошёл
+сразу, `A1` снова стал хвостом, и `a2` влился в него — это совпадает с фразой
+страницы «If B has already run, a waiting A may again be at the tail».
+Предлагаю пункт 2 начать «An interval still running, and nothing of its own
+queued or running: …».
+
+**D7. Low.** `packages/async_job/doc/engine.md`, «A rule of your own», код
+`final job = MyJob<void>(observer: printer, (ctx) async {…})` (строка 276).
+`printer` не определён ни на одной из двух страниц; он есть только
+в `packages/async_job/test/support/extending_stubs.dart:46`
+(`final printer = Printer();`). Вступление говорит, что «the job's observer
+prints what reaches it», но имя появляется из ниоткуда, и читатель, собирающий
+код у себя, останавливается. Было и до деления. По чтению. Предлагаю
+во вступлении: «`printer` is that observer», или показать его класс в две
+строки.
+
+**D8. Low.** `packages/async_job/doc/cleanup.md:206–207`
+и `packages/async_job/doc/cleanup-rules.md:170–171` — одна и та же фраза
+«`ctx.disown` looks the value up by identity and returns whether it found one,
+so pass (it) the very instance the call returned». На первой странице она
+добавлена при делении. Единственный повтор, который я нашёл на четырёх парах;
+он оправдан — первая страница вводит `disown`, и правило нужно там. Можно
+оставить; если убирать, то со второй страницы, оставив ссылку на «Closing what
+the job keeps back».
+
+**D9. Low.** `packages/solo/doc/accumulation.md`, «Settings saved on every flip
+of a switch» → «The accumulator», абзацы 387–406 («This example assumes one
+writer…», «A deadline given to the accumulator with `timeout` is a
+cancellation, not a client timeout…»). Это правила об `ctx.join`, слоте,
+клиентском таймауте и дедлайне, а не рецепт; деление унесло «Reference», но эти
+абзацы остались внутри рецепта и делают его самым длинным. Читатель рецепта
+пробирается через 20 строк правил между трассой и следующим рецептом.
+По чтению. Предлагаю оставить одну фразу («`ctx.join` keeps the slot until
+`save` completes, and a `timeout` is a cancellation that costs the final
+`emit`») со ссылкой, а разбор перенести в «Start, cancellation and errors»
+на `accumulation-rules.md`, рядом с «accepted cancellation still takes
+precedence». Первых попыток это не касается (71, 86), а второй странице это
+и положено (105).
+
+**D10. Low.** `packages/async_job/doc/error-rules.md`, «Limits of the filter»
+(строки 172–195). Список из трёх пунктов, первый из которых заканчивается
+блоком кода в нулевой колонке, после чего список продолжается — визуально
+список разорван, второй пункт читается как новый список. По чтению. Предлагаю
+три абзаца вместо пунктов или код после списка со строкой-зачином «The filter
+names the wrapper by its cause:».
+
+**D11. Low.** `packages/solo/doc/accumulation-rules.md`, «Choosing when a group
+is ready», абзацы 77–98. После списка `startAtOnce: false` идут пять абзацев
+россыпью: старт — переход до `onStart`, отказ правил не тратит интервал, пример
+со слотом до 500 мс, видимость в `queue.jobs`, `Duration.zero` и отрицательные
+длительности, общий `timing`, порядок таймеров. Ни зачина, ни таблицы —
+читатель, ищущий одно правило, перечитывает все. По чтению. Предлагаю список
+с жирными зачинами («**What consumes an interval.**», «**What the queue
+shows.**», «**Edge values.**») — форма, которой уже пользуется «Where each
+error goes»; подзаголовков не нужно (106).
+
+**D12. Low.** `packages/async_job/doc/errors.md`, вступление, вторая фраза
+(строки 5–8): «A cancellation the job catches goes no further than `onError`,
+unless an engine ends the job `Failed` with it, as the last row of Rare routes
+shows». Редкий случай второй страницы попадает во вторую фразу первой,
+до таблицы мест. По чтению. Предлагаю оставить «goes no further than `onError`»
+и убрать оговорку — она стоит в «Rare routes» и в «One error, several calls»
+на странице правил.
+
+Повторов решений из `docs/settled.md` я не поднимаю: ни одна находка не спорит
+с 71, 86, 105–107.
+
+#### 5. Что хорошо и трогать не надо
+
+- Устройство `engine.md`: попытка → трасса → нумерованный разбор → исправление
+  → таблица → сборка «The whole engine» с указанием страниц. И таблица двух
+  остановок в конце.
+- Вход `cleanup.md`: код и таблица пяти членов на первом экране; таблица «когда
+  пришла отмена — кто закрывает» в «Registering on arrival».
+- Таблица пяти мест и «Reporting each error once» на `errors.md`; легенда трасс
+  таблицей на обеих страницах об ошибках.
+- Вступления вторых страниц: все четыре называют, чей код продолжают и какие
+  имена берут с первой.
+- Новый абзац о `then`/`shared()` и `merge` в «Recipes» — коротко, точно,
+  подтверждено зондом.
+- Переписанное «`replace` moves a group's job to the tail» вместо «replaces at
+  the tail» — яснее старого.
+- Строки «Guides» обоих README — точные, по одной строке на страницу, граница
+  пар видна.
+
+#### 6. ПРОГОН
+
+Все команды — из клона `<клон>` или его пакетов. Полные наборы `dart test`,
+`flutter test`, `tool/accumulation_snippets.py`, `check_traces.py`,
+`check_translations.py`, `build_site.py`, `archive_floor.py` — **не запускал**:
+базовая линия дана в задании. Фоновых задач не запускал ни одной; проверка
+`rtk proxy lsof +D …/tasks` каталога не нашла (`no matches found`).
+
+| Команда | Последняя строка вывода |
+| --- | --- |
+| `git rev-parse HEAD && git status --short \| head -20 && wc -l docs/settled.md packages/async_job/doc/{extending,engine,cleanup,cleanup-rules,errors,error-rules}.md packages/solo/doc/{accumulation,accumulation-rules}.md packages/{async_job,solo}/README.md` | `Σ 4414` (HEAD `d3f7ef08b387f0bfc23ddd504be0096e3301da82`, статус чистый) |
+| `grep -n -A30 '^## Guides' packages/solo/README.md` | `370-\| [Camera example](doc/camera.md) \| One controller with rules, cleanup and a device \|` |
+| `git show 93539d68 --stat \| head -5; for f in …; do git show 93539d68:$f \| wc -l; … grep -n '^#'; done` | `848:### Start, cancellation and errors` |
+| `rtk proxy grep -rn -E '(cleanup\|cleanup-rules\|errors\|error-rules\|extending\|engine\|accumulation\|accumulation-rules)\.md(#[a-z0-9-]+)?' --include='*.md' --include='*.dart' packages docs/architecture.md docs/conventions.md \| grep -v … > .review-tmp/links.txt; wc -l …; cut -d: -f1 … \| sort \| uniq -c` | `   8 packages/solo/README.md` (всего `125 .review-tmp/links.txt`) |
+| `rtk proxy python3 tool/check_links.py; echo "exit=$?"` | `exit=0` (строкой выше: `every document link resolves`) |
+| `for f in …; do git show 93539d68:$f > .review-tmp/old/$(basename $f); done; sed -n 1,34p .review-tmp/old/extending.md` | `## A job of your own` |
+| `rtk proxy grep -rn -E 'blob/main/packages/(async_job\|solo)/doc/(cleanup\|…)\.md' packages/*/lib packages/*/README.md packages/*/CHANGELOG.md packages/*/doc \| grep -v README.ru` | `packages/solo/doc/cancellation.md:121:[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/errors.md#errors-of-a-cancellation)` |
+| `rtk proxy grep -n -i -E '\b(above\|below\|this page\|earlier\|later in\|the next section\|…)\b' <восемь страниц>` | `packages/solo/doc/accumulation-rules.md:4:This page gives the rules behind them: when a group is ready, which group an` |
+| `rtk proxy python3 .review-tmp/secdiff.py old/extending.md …/extending.md …/engine.md` | `` `job.done` completes with. `` |
+| `rtk proxy python3 .review-tmp/secdiff.py old/cleanup.md …/cleanup.md …/cleanup-rules.md` | `` cancels, and `outcome:` is how the job ends. `` |
+| `rtk proxy python3 .review-tmp/secdiff.py old/errors.md …/errors.md …/error-rules.md` | `over whole at most once, however many branches lead to it.` |
+| `rtk proxy python3 .review-tmp/secdiff.py old/accumulation.md …/accumulation.md …/accumulation-rules.md` | `error that retains the input still owns those references.` |
+| `rtk proxy cat .review-tmp/links.txt \| grep -v -E '^packages/async_job/(CHANGELOG\|README)\|^packages/solo/(CHANGELOG\|README)\|lib/src'` | `` docs/conventions.md:197:  относительной ссылкой на русскую страницу, `../async_job/cleanup.md`. `` |
+| `rtk proxy python3 .review-tmp/secdiff2.py old/errors.md …/error-rules.md "<заголовок>"` ×3; `… old/accumulation.md …/accumulation-rules.md "<заголовок>"` ×2 | `##### Start, cancellation and errors: old 150 lines, new 150 lines` |
+| `git show 93539d68:packages/solo/README.md \| grep -n -A12 '^## Guides' \| head -16; … \| grep -n -E '^\| \[' \| sed -n 1,20p; sed -n 1,16p packages/async_job/CHANGELOG.md; sed -n 1,12p packages/solo/CHANGELOG.md` | `` This package re-exports `async_job` whole, so the changes of the core are this `` |
+| `sed -n 150,180p packages/async_job/README.md; sed -n 270,279p …; sed -n 150,160p packages/solo/README.md; sed -n 372,392p …` | `` \| The queue has to stand still for a while \| a job waiting on a `Completer` at the head of it \| [Pausing the queue](doc/jobs.md#pausing-the-queue) \| `` |
+| `grep -n -i -B3 -A25 'second attempt' packages/async_job/test/cleanup_rakes_test.dart \| sed -n 1,120p` | `1374-        quoted[9],` |
+| `sed -n 1,40p packages/solo/pubspec.yaml; grep -n -A8 dev_dependencies packages/async_job/pubspec.yaml; ls packages/solo/test \| grep -i -E 'accum\|throttle\|debounce'; grep -rn -l fakeAsync packages/solo/test \| head -5; grep -n -m3 printer .review-tmp/old/extending.md packages/async_job/doc/engine.md packages/async_job/test/support/extending_stubs.dart` | `packages/async_job/test/support/extending_stubs.dart:46:final printer = Printer();` |
+| `rtk proxy python3 tool/reflow.py --check; echo "reflow exit=$?"` | `reflow exit=0` (`every paragraph is filled to 79 columns`) |
+| `rtk proxy python3 tool/check_line_width.py; echo "width exit=$?"` | `width exit=0` (`no Markdown line over 79 columns, no blank line doubled`) |
+| `rtk proxy python3 tool/check_doc_shape.py; echo "shape exit=$?"` | `shape exit=0` (`every attempt opens its code with its mark`) |
+| `rtk proxy python3 tool/check_page_code.py; echo "page_code exit=$?"` | `page_code exit=0` (`3 copies of packages/async_job/test/support/page_code.dart agree with it`) |
+| `rtk proxy python3 tool/check_dartdoc.py; echo "dartdoc exit=$?"` | `dartdoc exit=0` (`every public dartdoc is a hint`) |
+| `git show 93539d68:packages/async_job/README.md \| grep -n -B3 'Cleanup order and late results'; git show 93539d68:packages/solo/README.md \| sed -n 359,363p \| cut -c1-60` | `` \| [Diagnostics](doc/diagnostics.md) \| `SoloObserver`, `pendi `` (строкой выше: `164:  [Cleanup order and late results](doc/cleanup.md#cleanup-order-and-late-results).`) |
+| `rtk proxy grep -rn -B2 -A1 -E '(cleanup-rules\|error-rules\|engine\|accumulation-rules)\.md#' <восемь страниц других пакетов> \| grep -v '^--$' \| cut -c1-200` | `` packages/solo/doc/reference.md-173-\| `SoloCancelReason` \| The base of the reasons `solo` adds to the core's: … `` |
+| `sed -n 1,80p packages/solo/test/accumulation_timing_test.dart; grep -n 'startAtOnce: false' … \| head -3` | `428:          startAtOnce: false,` |
+| `cd packages/solo && rtk proxy dart test test/probe_accumulation_then.dart` (первый прогон) | `00:00 +1: All tests passed!` (выше: `then on first: StateError: Job(sum) is handed back to every event of its group: continue it through shared(), a handle for each caller`, `shared().then value: continued`, `group outcome: Done(null), state: 3`) |
+| `cd packages/async_job && rtk proxy dart test test/probe_cleanup_arrival.dart` (первый прогон) | `00:00 +1: All tests passed!` (выше по порядку: `database opened`, `database close begins`, `database closed`, `body heard the cancellation`, `outcome: Cancelled(manual)`) |
+| `cd packages/async_job && rtk proxy dart test test/probe_ignore_failure_cancelled.dart` | `00:00 +1: All tests passed!` (без `ignoreFailure`: `onError: Bad state: stopped`, `zone: Bad state: stopped`, `outcome: Cancelled(manual)`; с ним: `onError: Bad state: stopped`, `outcome: Cancelled(manual)`, строки `zone:` нет) |
+| `cd packages/solo && rtk proxy dart test test/probe_throttle_adjacent.dart` (первая версия, без задачи на слоте) | `00:00 +1: All tests passed!` (выше: `queued jobs after the additions: 1`, `starts: [B@10, A[a1, a2, a3]@1000]`) |
+| `dart format --output=none --set-exit-if-changed <зонды>; dart analyze --fatal-infos <зонды>` в обоих пакетах (первый раз) | `analyze solo exit=1` (`3 issues found.` в ядре, `1 issue found.` в solo — линты зондов, не страниц) |
+| `rtk proxy git status --short; rtk proxy lsof +D …/tasks` | `(eval):1: no matches found: /Users/user/.claude/projects/*/tasks` (статус: `?? .review-tmp/` и четыре `?? …/test/probe_*.dart`) |
+| `cd packages/solo && sed -i … probe_accumulation_then.dart; dart format …; dart analyze …; rtk proxy dart test test/probe_throttle_adjacent.dart test/probe_accumulation_then.dart` (вторая версия зонда, с задачей `R` на слоте) | `00:00 +2: All tests passed!` (выше: `queued jobs after the additions: 3`, `a2 is a group of its own: true`, `starts: [R starts@0, A[a1]@1500, B@1500, A[a2]@2500]`; `analyze solo exit=0`, `No issues found!`) |
+| `cd packages/async_job && python3 - <<EOF …EOF; dart format …; dart analyze …; rtk proxy dart test test/probe_cleanup_arrival.dart test/probe_ignore_failure_cancelled.dart` | `00:00 +2: All tests passed!` (`analyze async_job exit=1`: один `cascade_invocations` в зонде) |
+| `cd packages/async_job && python3 - <<EOF …EOF; dart format --output=none --set-exit-if-changed …; dart analyze --fatal-infos …; rtk proxy dart test test/probe_cleanup_arrival.dart \| tail -1; cd ../.. && rtk proxy git status --short` | `?? packages/solo/test/probe_throttle_adjacent.dart` (выше: `analyze async_job exit=0`, `No issues found!`, `00:00 +1: All tests passed!`; в статусе только `.review-tmp/` и четыре зонда) |
+
+Зонды лежат в `packages/async_job/test/probe_cleanup_arrival.dart`,
+`packages/async_job/test/probe_ignore_failure_cancelled.dart`,
+`packages/solo/test/probe_accumulation_then.dart`,
+`packages/solo/test/probe_throttle_adjacent.dart`; скрипты сравнения и старые
+версии страниц — в `.review-tmp/`.
+
+## Приложение 3. Зонды
+
+### `probe_accumulation_then.dart`
+
+```dart
+// Probe: accumulation.md, "Recipes" seam paragraph. A plain `then` on the
+// job every `add` of one group returns throws `StateError`; `shared().then`
+// is the way to continue it. Prints what it finds.
+import 'package:solo/solo.dart';
+import 'package:test/test.dart';
+
+final class Probe extends Solo<int> {
+  late final _events = accumulate<int, int, void>(
+    (ctx, value) async => ctx.emit(ctx.state + value),
+    merge: (accumulated, incoming) => accumulated + incoming,
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 50)),
+    key: 'sum',
+  );
+
+  Probe() : super(0);
+
+  Job<void> add(int value) => _events.add(value);
+}
+
+void main() {
+  test('then on a group job throws StateError, shared().then works', () async {
+    final probe = Probe();
+    final first = probe.add(1);
+    final second = probe.add(2);
+    print('identical handles: ${identical(first, second)}');
+    try {
+      first.then<void>((ctx, _) async {});
+      print('then on first: no throw');
+      // ignore: avoid_catching_errors
+    } on StateError catch (e) {
+      print('then on first: StateError: ${e.message}');
+    }
+    final branch = first.shared().then<String>((ctx, _) async => 'continued');
+    final value = await branch.value;
+    print('shared().then value: $value');
+    print('group outcome: ${await second.done}, state: ${probe.currentState}');
+    await probe.close();
+  });
+}
+```
+
+### `probe_cleanup_arrival.dart`
+
+```dart
+// Probe: cleanup.md, the new paragraph "Two releases do not wait for the
+// stack": a checkpoint that throws on a value that has just arrived
+// releases it on the spot, before the body hears the cancellation.
+import 'package:async_job/async_job.dart';
+import 'package:test/test.dart';
+
+final trace = <String>[];
+
+final class Db {
+  Future<void> close() async {
+    trace.add('database close begins');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    trace.add('database closed');
+  }
+}
+
+Future<Db> open() async {
+  await Future<void>.delayed(const Duration(milliseconds: 10));
+  trace.add('database opened');
+  return Db();
+}
+
+void main() {
+  test('run releases on the spot before the body hears the cancellation',
+      () async {
+    final connect =
+        Job.deferred<Db>(key: 'connect', (ctx) => ctx.abandonable(open));
+    final ready = Job.deferred<Db?>((ctx) async {
+      try {
+        final db = await ctx.run(connect, discard: (db) => db.close());
+        trace.add('body got the value');
+        return db;
+      } on Cancelled {
+        trace.add('body heard the cancellation');
+        rethrow;
+      }
+    })
+      ..ignoreFailure();
+    // Lands between the Done of connect and the checkpoint of run.
+    connect.done.then((_) => ready.cancel().ignore()).ignore();
+    ready.start();
+    final outcome = await ready.done;
+    trace
+      ..add('outcome: $outcome')
+      ..forEach(print);
+  });
+}
+```
+
+### `probe_ignore_failure_cancelled.dart`
+
+```dart
+// Probe: errors.md intro: "`ignoreFailure()` on a job keeps the failure of
+// its body right after `onError`, even when the job ends `Cancelled`".
+import 'dart:async';
+
+import 'package:async_job/async_job.dart';
+import 'package:test/test.dart';
+
+final class Reporter extends JobObserver {
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      print('onError: $error');
+}
+
+Future<void> scene({required bool ignore}) {
+  final done = Completer<void>();
+  runZonedGuarded(
+    () async {
+      final stopped = Completer<void>();
+      final job = Job<void>(observer: Reporter(), (ctx) async {
+        ctx.onCancel(() => stopped.completeError(StateError('stopped')));
+        await ctx.join(() => stopped.future);
+      });
+      if (ignore) job.ignoreFailure();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await job.cancel();
+      print('outcome: ${await job.done}');
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      done.complete();
+    },
+    (error, stackTrace) => print('zone: $error'),
+  );
+  return done.future;
+}
+
+void main() {
+  test('ignoreFailure keeps the body failure of a cancelled job at onError',
+      () async {
+    print('-- without ignoreFailure:');
+    await scene(ignore: false);
+    print('-- with ignoreFailure:');
+    await scene(ignore: true);
+  });
+}
+```
+
+### `probe_throttle_adjacent.dart`
+
+```dart
+// Probe: accumulation-rules.md, "Choosing when a group is ready", the
+// rewritten list under `startAtOnce: false`. While a long job R holds the
+// slot, group A1 appears and starts the interval; an ordinary job B queues
+// behind it; a second group A2 appears behind B (policy `adjacent`). The
+// page says A2 starts no interval and waits for the one the start of A1
+// renews: expected starts R, then A1 and B when R ends, then A2 one whole
+// interval after A1 started.
+import 'package:fake_async/fake_async.dart';
+import 'package:solo/solo.dart';
+import 'package:test/test.dart';
+
+import 'support/plain_solo.dart';
+
+void main() {
+  test('a second group waits for the interval the first start renews', () {
+    fakeAsync((async) {
+      final solo = PlainSolo<int>(0);
+      final starts = <String>[];
+      String at() => '@${async.elapsed.inMilliseconds}';
+      solo.enqueue<int, void>((ctx) async {
+        starts.add('R starts${at()}');
+        await ctx.pause(const Duration(milliseconds: 1500));
+      });
+      final logs = solo.collect<int, String, void>(
+        (ctx, values) async => starts.add('A$values${at()}'),
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+        policy: AccumulationPolicy.adjacent,
+      );
+      // Calls are interleaved with clock changes, so a cascade is misleading.
+      // ignore: cascade_invocations
+      final a1 = logs.add('a1'); // t=0: the first group starts the interval
+      async.elapse(const Duration(milliseconds: 10));
+      solo.enqueue<int, void>((ctx) async => starts.add('B${at()}'));
+      async.elapse(const Duration(milliseconds: 10));
+      final a2 = logs.add('a2'); // t=20: A1 is not at the tail
+      async.flushMicrotasks();
+      print('queued jobs after the additions: ${solo.queue.length}');
+      print('a2 is a group of its own: ${!identical(a1, a2)}');
+      async.elapse(const Duration(milliseconds: 4000));
+      print('starts: $starts');
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+}
+```
