@@ -70,7 +70,12 @@ final class Hearing extends JobObserver {
   Hearing(this.heard);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       heard.add('onError: $error');
 }
 
@@ -81,7 +86,12 @@ final class Answering extends JobObserver with JobAnswerer {
   Answering(this.heard);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       heard.add('onError: $error');
 
   @override

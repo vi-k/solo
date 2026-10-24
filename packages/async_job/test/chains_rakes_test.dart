@@ -851,7 +851,12 @@ final class _Heard extends JobObserver {
   final List<String> heard;
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       heard.add('$error');
 }
 

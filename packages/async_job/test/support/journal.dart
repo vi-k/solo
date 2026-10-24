@@ -44,7 +44,12 @@ final class JobJournal extends JobObserver with JobAnswerer {
   }
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       lines.add('${_label(job)} error $error');
 
   @override

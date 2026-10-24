@@ -39,7 +39,12 @@ final account = Account();
 /// The job's observer, printing what reaches it.
 final class Printer extends JobObserver {
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       print('onError: $error');
 }
 

@@ -16,7 +16,12 @@ final class ErrorObserver extends JobObserver with JobAnswerer {
   ErrorObserver.answering(this.errors) : _answers = true;
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       errors.add(error);
 
   @override

@@ -891,7 +891,12 @@ final class _TouchAfterFinish extends JobObserver {
 /// failure as a reason to give up would.
 final class _CancelOnError extends JobObserver {
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       job.cancel().ignore();
 }
 

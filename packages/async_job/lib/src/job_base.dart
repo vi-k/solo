@@ -16,6 +16,9 @@ part 'run_all.dart';
 /// `void` as a type to compare with: `T == void` does not parse.
 typedef _Void = void;
 
+/// A failure inside an error, and whether the job asks for an answer to it.
+typedef _Verdict = ({Object failure, StackTrace stackTrace, bool answered});
+
 /// One registration on the cleanup stack of a job.
 ///
 /// [always] tells the two kinds apart: a `dispose` registration runs whatever
@@ -1602,28 +1605,57 @@ abstract class JobBase<T> implements Job<T> {
   /// does not carry it, and it is answered later without being announced again
   /// — unless [Job.ignoreFailure] was called or [Job.isCancellationError] names
   /// it, and then nobody answers for it. A [Failed] an engine hands to [finish]
-  /// needs no call here: [finish] announces it itself. [notifyError] starts
-  /// here too, and goes on to the answer.
+  /// needs no call here: [finish] announces it itself. [notifyError] announces
+  /// the same way, and goes on to the answer.
   ///
   /// The observer is told about one error at a time: a `ParallelWaitError` is
   /// walked as [Job.visitErrors] walks it, and each failure and each
   /// cancellation inside it gets a call of its own, with its own stack trace.
   /// The job's own cancellation inside one is left out: the outcome says it.
+  /// Every call comes with `answered: false`: no answer follows it.
   @protected
   void notifyObserver(Object error, StackTrace stackTrace) {
     _debug(() => '$this error: $error');
+    _announce(error, stackTrace, const []);
+  }
+
+  /// Tells the observer about each error inside [error], each failure with
+  /// whether [verdicts] send it on to the answer.
+  ///
+  /// [verdicts] are those of [_verdicts] for the same error, in the order of
+  /// the same walk; an empty list sends no failure on.
+  void _announce(
+    Object error,
+    StackTrace stackTrace,
+    List<_Verdict> verdicts,
+  ) {
     final observer = _observer;
     if (observer == null) {
       return;
     }
     // One call for each error, each guarded on its own. A cancellation is
     // told like a failure: this hook is the only place that hears one.
-    void tell(Object error, StackTrace stackTrace) =>
-        _notify(() => observer.onError(this, error, stackTrace));
+    void tell(Object error, StackTrace stackTrace, {required bool answered}) =>
+        _notify(
+          () => observer.onError(this, error, stackTrace, answered: answered),
+        );
+    var next = 0;
     _visitErrors(
       error,
       stackTrace,
-      onFailure: tell,
+      onFailure: (failure, failureStackTrace) {
+        // The same walk over the same error meets the failures in the same
+        // order; the check by identity only keeps an envelope that answers
+        // differently the second time from promising an answer it won't get.
+        final verdict = next < verdicts.length ? verdicts[next++] : null;
+        tell(
+          failure,
+          failureStackTrace,
+          answered: verdict != null &&
+              verdict.answered &&
+              identical(verdict.failure, failure),
+        );
+      },
       onCancelled: (cancelled, cancelledStackTrace) {
         // The job's own cancellation inside an envelope is not news: the
         // outcome says it. One that comes alone was thrown by a callback,
@@ -1631,7 +1663,7 @@ abstract class JobBase<T> implements Job<T> {
         if (identical(cancelled, error) ||
             (!identical(cancelled, _pendingCancel) &&
                 !identical(cancelled, _outcome))) {
-          tell(cancelled, cancelledStackTrace);
+          tell(cancelled, cancelledStackTrace, answered: false);
         }
       },
     );
@@ -1659,12 +1691,18 @@ abstract class JobBase<T> implements Job<T> {
   /// does. Nor is anybody asked about a failure that [Job.isCancellationError]
   /// names, once the job has accepted a cancellation.
   ///
+  /// Which failures go on to the answer is settled before `onError` hears any
+  /// of them, and `onError` is told so: `answered: true` for each of those,
+  /// `false` for a cancellation and for a failure the filter names.
+  ///
   /// See [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
   /// on the error rules page.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
-    notifyObserver(error, stackTrace);
-    _handleUnanswered(error, stackTrace);
+    _debug(() => '$this error: $error');
+    final verdicts = _verdicts(error, stackTrace);
+    _announce(error, stackTrace, verdicts);
+    _askForAnswers(error, verdicts);
   }
 
   /// Hands [error] to the zone the job was created in, unless it is a
@@ -1700,56 +1738,80 @@ abstract class JobBase<T> implements Job<T> {
   /// walked as [Job.visitErrors] walks it, each failure in it goes to the
   /// observer or to the zone with its own stack trace, and a cancellation
   /// goes to neither. Nor does a failure [Job.isCancellationError] names,
-  /// once the job has accepted a cancellation: it is asked about each failure
-  /// of such a job here, and only here, so that [JobObserver.onError] has
-  /// heard it like any other.
+  /// once the job has accepted a cancellation: [_verdicts] asks about it.
   ///
   /// An engine answers through the observer it puts on its jobs, as `solo`
   /// does: there is no second door.
-  void _handleUnanswered(Object error, StackTrace stackTrace) {
-    final observer = _observer;
+  void _handleUnanswered(Object error, StackTrace stackTrace) =>
+      _askForAnswers(error, _verdicts(error, stackTrace));
+
+  /// The failures inside [error], in the order [Job.visitErrors] walks them,
+  /// each with whether the answer is asked for it.
+  ///
+  /// It is, unless the job has accepted a cancellation and
+  /// [Job.isCancellationError] names the failure. The filter is asked here,
+  /// and only here, once for each failure, and one walk's verdicts serve both
+  /// [JobObserver.onError] and the answer: [notifyError] settles them before
+  /// `onError` hears the error, so that `answered` says what then happens.
+  List<_Verdict> _verdicts(Object error, StackTrace stackTrace) {
     // Read once for the whole walk, and only for a job that has accepted a
     // cancellation: what the filter names is an error the cancellation of
     // this job stopped, and a job nobody cancelled has none.
     final isCancellationError = isCancelled ? Job.isCancellationError : null;
-    var said = false;
-    // One answer for each failure, each guarded on its own: an answer that
-    // throws does not cost the next failure its own.
+    final verdicts = <_Verdict>[];
     _visitErrors(
       error,
       stackTrace,
-      onFailure: (failure, failureStackTrace) {
-        if (isCancellationError != null &&
-            _askIsCancellationError(isCancellationError, failure)) {
-          _debug(
-            () => '$this kept a cancellation error out of the answer: '
-                '$failure',
-          );
-          return;
-        }
-        if (!said) {
-          said = true;
-          _debug(() => '$this error nobody answered for: $error');
-        }
-        if (observer is JobAnswerer) {
-          try {
-            observer.onUnanswered(this, failure, failureStackTrace);
-          } on Object catch (hookError, hookStackTrace) {
-            // The answer is the channel here, not the fact, and a broken
-            // channel is a second problem rather than a reason to lose the
-            // first: nothing else holds this error. Both reach the zone,
-            // this one first; a cancellation the answer throws stays out,
-            // and so does the error itself thrown back, which is there once.
-            _toZone(failure, failureStackTrace);
-            if (!identical(hookError, failure)) {
-              _hookErrorToZone(hookError, hookStackTrace);
-            }
-          }
-        } else {
-          _toZone(failure, failureStackTrace);
-        }
-      },
+      onFailure: (failure, failureStackTrace) => verdicts.add(
+        (
+          failure: failure,
+          stackTrace: failureStackTrace,
+          answered: isCancellationError == null ||
+              !_askIsCancellationError(isCancellationError, failure),
+        ),
+      ),
     );
+    return verdicts;
+  }
+
+  /// Asks for the answer to each failure of [verdicts] that goes on to it:
+  /// the observer's [JobAnswerer.onUnanswered], or the zone the job was
+  /// created in. [error] is what the failures came in, for the debug channel.
+  void _askForAnswers(Object error, List<_Verdict> verdicts) {
+    final observer = _observer;
+    var said = false;
+    // One answer for each failure, each guarded on its own: an answer that
+    // throws does not cost the next failure its own.
+    for (final (:failure, :stackTrace, :answered) in verdicts) {
+      if (!answered) {
+        _debug(
+          () => '$this kept a cancellation error out of the answer: '
+              '$failure',
+        );
+        continue;
+      }
+      if (!said) {
+        said = true;
+        _debug(() => '$this error nobody answered for: $error');
+      }
+      if (observer is JobAnswerer) {
+        try {
+          observer.onUnanswered(this, failure, stackTrace);
+        } on Object catch (hookError, hookStackTrace) {
+          // The answer is the channel here, not the fact, and a broken
+          // channel is a second problem rather than a reason to lose the
+          // first: nothing else holds this error. Both reach the zone,
+          // this one first; a cancellation the answer throws stays out,
+          // and so does the error itself thrown back, which is there once.
+          _toZone(failure, stackTrace);
+          if (!identical(hookError, failure)) {
+            _hookErrorToZone(hookError, hookStackTrace);
+          }
+        }
+      } else {
+        _toZone(failure, stackTrace);
+      }
+    }
   }
 
   /// What [isCancellationError] says of [failure], and `false` when it

@@ -1351,7 +1351,12 @@ final class _Answers extends JobObserver with JobAnswerer {
   _Answers(this.heard, this.answered);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
     if (job.level == 0) {
       heard.add(error);
     }

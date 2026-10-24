@@ -234,7 +234,12 @@ final class _ThrowingObserver extends JobObserver with JobAnswerer {
   void onFinish(Job<Object?> job) => throw StateError('onFinish');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       throw StateError('onError');
 
   @override

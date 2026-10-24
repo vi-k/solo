@@ -18,7 +18,12 @@ final class Hearing extends JobObserver with JobAnswerer {
   void Function(Job<Object?> job)? onHeard;
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
     seen.add('onError ${job.key}: $error');
     onHeard?.call(job);
   }

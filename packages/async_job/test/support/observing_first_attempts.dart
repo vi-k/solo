@@ -70,9 +70,14 @@ final class Both extends JobObserver with JobAnswerer {
   }
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    _reporter.onError(job, error, stackTrace);
-    _crashes.onError(job, error, stackTrace);
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
+    _reporter.onError(job, error, stackTrace, answered: answered);
+    _crashes.onError(job, error, stackTrace, answered: answered);
   }
 
   @override

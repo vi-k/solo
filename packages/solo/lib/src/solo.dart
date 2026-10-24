@@ -1385,8 +1385,15 @@ final class _SoloJobObserver<S extends Object>
     Solo._callHook(() => _solo.onFinish(job));
   }
 
+  // `answered` goes no further: neither [Solo.onError] nor [SoloObserver]
+  // takes it.
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
     Solo._callHook(
       () => Solo.observer?.onError(_solo, job, error, stackTrace),
     );

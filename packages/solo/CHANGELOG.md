@@ -1,5 +1,9 @@
 ## Unreleased
 
+This package re-exports `async_job` whole, so the changes of the core are this
+package's too: see
+[the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
+
 ### Documentation
 
 - When a group is ready, which group an event joins, and how a group's job

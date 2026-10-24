@@ -112,7 +112,12 @@ final class Answerer extends JobObserver with JobAnswerer {
   Answerer({this.passedOn = false});
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       print('onError: $error');
 
   @override
@@ -137,7 +142,12 @@ final class Hooks extends JobObserver {
   void onFinish(Job<Object?> job) => print('${name}onFinish $job');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       print('${name}onError: $error');
 
   @override
@@ -189,7 +199,12 @@ class Tally {
 /// Extends [Tally] and mixes in the observer and the answer.
 final class TallyingAnswerer extends Tally with JobObserver, JobAnswerer {
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
     count++;
     print('onError: $error');
   }
@@ -229,7 +244,12 @@ final class FakeTimeCancellations extends JobObserver {
 /// An observer whose `onError` throws.
 final class Throwing extends JobObserver {
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       throw StateError('reporter down');
 }
 
@@ -242,9 +262,14 @@ final class HandedOn extends JobObserver with JobAnswerer {
   HandedOn(this.first, this.second);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    first.onError(job, error, stackTrace);
-    second.onError(job, error, stackTrace);
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
+    first.onError(job, error, stackTrace, answered: answered);
+    second.onError(job, error, stackTrace, answered: answered);
   }
 
   @override

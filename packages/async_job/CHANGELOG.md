@@ -1,5 +1,13 @@
 ## Unreleased
 
+### Breaking changes
+
+- **`JobObserver.onError` takes `{required bool answered}`: whether the job
+  asks for an answer to the error right after the call.** For an error no
+  outcome carries, `Job.isCancellationError` is now asked before `onError`, not
+  after it. See
+  [Where each error goes](doc/error-rules.md#where-each-error-goes).
+
 ### Documentation
 
 - The queue and the rule left [Building on the core](doc/extending.md) for a

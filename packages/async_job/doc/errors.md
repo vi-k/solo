@@ -179,7 +179,12 @@ database is locked.
 ```dart
 final class Reporter extends JobObserver {
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       print('onError: $error');
 }
 
@@ -365,9 +370,14 @@ final class Both extends JobObserver with JobAnswerer {
   final _crashes = Crashes();
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    _reporter.onError(job, error, stackTrace);
-    _crashes.onError(job, error, stackTrace);
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
+    _reporter.onError(job, error, stackTrace, answered: answered);
+    _crashes.onError(job, error, stackTrace, answered: answered);
   }
 
   @override

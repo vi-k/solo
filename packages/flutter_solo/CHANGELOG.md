@@ -1,3 +1,11 @@
+## Unreleased
+
+This package re-exports `solo` and, through it, `async_job`, so their changes
+are its own: see
+[the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
+and
+[the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
+
 ## 0.3.0
 
 This package re-exports `solo` and, through it, `async_job`, so their changes

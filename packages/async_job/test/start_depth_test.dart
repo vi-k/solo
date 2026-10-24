@@ -2013,7 +2013,12 @@ final class _Heard extends JobObserver {
   void onStart(Job<Object?> job) => log.add('start ${job.key}');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       log.add('error ${job.key} ${error.runtimeType}');
 
   @override

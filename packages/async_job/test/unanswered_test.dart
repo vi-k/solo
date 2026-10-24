@@ -33,7 +33,12 @@ final class Counting extends JobObserver with JobAnswerer {
   Counting({this.answers = false});
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       seen.add('onError: $error');
 
   @override
@@ -81,7 +86,12 @@ final class ThrowingNotice extends JobObserver with JobAnswerer {
   final answered = <Object>[];
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       throw StateError('onError');
 
   @override
@@ -247,8 +257,13 @@ class Forwarding extends JobObserver with JobAnswerer {
   Forwarding(this.inner, {this.ignoresOnFinish = false});
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      inner?.onError(job, error, stackTrace);
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
+      inner?.onError(job, error, stackTrace, answered: answered);
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
@@ -274,8 +289,13 @@ final class CancellingOnError extends Forwarding {
   CancellingOnError(super.inner, {super.ignoresOnFinish});
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    super.onError(job, error, stackTrace);
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
+    super.onError(job, error, stackTrace, answered: answered);
     job.cancel().ignore();
   }
 }

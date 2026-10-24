@@ -15,7 +15,12 @@ class _ErrorObserver extends JobObserver {
   final errors = <Object>[];
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
     errors.add(error);
   }
 }

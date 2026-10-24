@@ -1904,7 +1904,12 @@ final class _Heard extends JobObserver {
   final List<(Job<Object?>, Object)> heard;
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       heard.add((job, error));
 }
 
@@ -1914,7 +1919,12 @@ final class _Counted extends JobObserver {
   int count = 0;
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {
     if (_heard[error] ?? false) return;
     _heard[error] = true;
     count++;

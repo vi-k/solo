@@ -19,7 +19,12 @@ class _Observer extends JobObserver {
   void onStart(Job<Object?> job) => starting?.call(job);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       this.error?.call(job, error);
 }
 

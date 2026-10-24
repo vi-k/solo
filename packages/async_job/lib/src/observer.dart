@@ -98,10 +98,21 @@ abstract mixin class JobObserver {
   /// once on each of them: tell the second call from a new error by
   /// [identical].
   ///
+  /// [answered] is `true` when the job asks for an answer to this error right
+  /// after this call: [JobAnswerer.onUnanswered], or the zone. It is `false`
+  /// for a cancellation, for a failure [Job.isCancellationError] keeps out of
+  /// the answer, and for the failure of a body or of an outcome: the answer to
+  /// that one, if it comes, comes once the job has ended.
+  ///
   /// Which error comes by which route, and what keeps it out of the answer, is
   /// in [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
   /// on the error rules page.
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) {}
 
   /// A job called [JobContext.log], with what it passed.
   ///
@@ -192,8 +203,13 @@ final class _AllObservers with JobObserver {
   void onFinish(Job<Object?> job) => _each((o) => o.onFinish(job));
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      _each((o) => o.onError(job, error, stackTrace));
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
+      _each((o) => o.onError(job, error, stackTrace, answered: answered));
 
   @override
   void onLog(Job<Object?> job, Object? message) =>

@@ -22,7 +22,12 @@ class Recording with JobObserver {
   void onFinish(Job<Object?> job) => seen.add('$name onFinish');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       seen.add('$name onError: $error');
 
   @override

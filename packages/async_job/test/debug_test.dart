@@ -832,7 +832,12 @@ final class _RecordingObserver extends JobObserver {
   _RecordingObserver(this._seen);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       _seen.add('$error');
 
   @override

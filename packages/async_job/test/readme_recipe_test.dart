@@ -118,7 +118,12 @@ final class Listening with JobObserver {
   final heard = <String>[];
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       heard.add('onError: $error');
 }
 

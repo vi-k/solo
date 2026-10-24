@@ -163,7 +163,12 @@ Device device = Device();
 /// An observer that prints what reaches it.
 final class PrintingObserver extends JobObserver {
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required bool answered,
+  }) =>
       say('onError: $error');
 
   @override
