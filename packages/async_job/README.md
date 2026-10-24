@@ -161,7 +161,7 @@ final outcome = await job.done; // Cancelled(manual)
 - **`discard: (database) => database.close()`** closes the database when the
   job ends `Failed` or `Cancelled`; with `Done(database)` it stays open for the
   caller. See
-  [Cleanup order and late results](doc/cleanup-rules.md#cleanup-order-and-late-results).
+  [`dispose` for what the job keeps](doc/cleanup.md#dispose-for-what-the-job-keeps).
 - **`ctx.onCancel(stop.cancel)`** hands the cancellation to the client's own
   token the moment the job accepts it. `CancelToken` belongs to the database
   client, not to this package.

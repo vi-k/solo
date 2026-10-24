@@ -343,13 +343,13 @@ Also on the [documentation site](https://docs.yet-another.dev/solo/), with
 search.
 
 The first three pages are for every controller, in this order: jobs, state,
-cancellation. The next four come when a controller needs what they cover:
-resources, children, streams, accumulation. Errors and testing are for a
-controller about to ship, the common mistakes are a list to check against, and
-the reference names every member with the section that explains it. Flutter is
-for a controller behind a screen, the camera example puts the pages together in
-one controller, and solo and bloc side by side is for a reader who comes from
-bloc.
+cancellation. The next five come when a controller needs what they cover:
+resources, children, streams, accumulation and its rules. Diagnostics, errors
+and testing are for a controller about to ship, the common mistakes are a list
+to check against, and the reference names every member with the section that
+explains it. Flutter is for a controller behind a screen, the camera example
+puts the pages together in one controller, and solo and bloc side by side is
+for a reader who comes from bloc.
 
 | Page | What it covers |
 | --- | --- |

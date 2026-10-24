@@ -51,8 +51,9 @@ accumulator already has:
 - Nothing of its own queued or running, and no interval running: the group
   starts the interval when it appears and becomes ready when the interval ends,
   carrying everything written meanwhile.
-- An interval still running from the previous start: the group becomes ready
-  when that interval ends. An interval already running is never restarted.
+- Nothing of its own queued or running, and an interval still running from the
+  previous start: the group becomes ready when that interval ends. An interval
+  already running is never restarted.
 - Another group of its own, queued or running: the new group starts no interval
   and waits for the one that the start of the other group renews.
 

@@ -163,7 +163,7 @@ final outcome = await job.done; // Cancelled(manual)
 - **`discard: (database) => database.close()`** закрывает базу, когда задача
   кончается `Failed` или `Cancelled`; при `Done(database)` база остаётся
   открытой для вызывающего. См.
-  [«Порядок уборки и поздние результаты»](../../docs/ru/async_job/cleanup-rules.md#порядок-уборки-и-поздние-результаты).
+  [«`dispose` для того, что задача оставляет себе»](../../docs/ru/async_job/cleanup.md#dispose-для-того-что-задача-оставляет-себе).
 - **`ctx.onCancel(stop.cancel)`** передаёт отмену собственному токену клиента
   в тот момент, когда задача её принимает. `CancelToken` принадлежит клиенту
   базы, а не этому пакету.

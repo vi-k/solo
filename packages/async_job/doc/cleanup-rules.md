@@ -285,7 +285,7 @@ ahead. It takes them in this order:
 | End | the outcome, and the release of whatever an engine holds |
 
 What a callback may do while it runs is at the end of
-[Choosing the callback](cleanup.md#choosing-the-callback).
+[`dispose` for what the job keeps](cleanup.md#dispose-for-what-the-job-keeps).
 
 ### Cancellation after the body returns
 

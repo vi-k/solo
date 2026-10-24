@@ -21,11 +21,13 @@ The lines under the code are what the code prints:
 
 ## Where each error goes
 
-The table shows which places of the introduction of [Errors](errors.md) each
-error passes, with an observer and without one. The answer is `onUnanswered` of
-an observer that mixes in `JobAnswerer`; a job without such an observer has the
-zone for its answer. Rarer ways, such as those of `ctx.runAll` and of engines,
-are in [Rare routes](#rare-routes) below.
+An error passes the places of the introduction of [Errors](errors.md) in order:
+`onError`, the outcome, the filter `Job.isCancellationError`, the answer and
+the zone. The table shows which of them each error passes, with an observer and
+without one. The answer is `onUnanswered` of an observer that mixes in
+`JobAnswerer`; a job without such an observer has the zone for its answer.
+Rarer routes, such as those of `ctx.runAll` and of engines, are in
+[Rare routes](#rare-routes) below.
 
 | The error | With an observer | Without one |
 | --- | --- | --- |
@@ -171,39 +173,39 @@ including the errors Dart hands to the zone past the job.
 
 ### Limits of the filter
 
-- An error that the body makes of its own cancellation reaches the filter too,
-  but the type test of
-  [Errors of a cancellation](errors.md#errors-of-a-cancellation) does not know
-  it. A body that catches everything around `ctx.abandonable` and throws an
-  error of its own in its place, such as `throw AppException(error)`, wraps
-  each `Cancelled` in an `AppException`, and the zone hears it at each
-  cancellation. The filter names the wrapper by its cause:
+An error that the body makes of its own cancellation reaches the filter too,
+but the type test of
+[Errors of a cancellation](errors.md#errors-of-a-cancellation) does not know
+it. A body that catches everything around `ctx.abandonable` and throws an error
+of its own in its place, such as `throw AppException(error)`, wraps each
+`Cancelled` in an `AppException`, and the zone hears it at each cancellation.
+The filter names the wrapper by its cause:
 
 ```dart
 Job.isCancellationError =
     (error) => error is AppException && error.cause is Cancelled;
 ```
 
-- The `catch` can call `ctx.check()` first instead, as in
-  [Asking the job](cancellation.md#asking-the-job) on the cancellation page:
-  then the cancellation itself goes out, and a cancellation is no failure. That
-  costs more than the filter: once the job has accepted a cancellation,
-  `ctx.check()` throws it whatever the `catch` took. This way a body that waits
-  with `ctx.join` loses a real failure that reaches the `catch` after the
-  cancellation, such as an open that found the database locked: neither
-  `onError` nor the zone hears it. The filter keeps out only the errors it
-  names.
-- The filter only keeps errors out of the answer, and `ctx.runAll` shows it. A
-  branch cancelled from outside whose body throws an error of a cancellation
-  has failed as far as the group can tell. So the group cancels the other
-  branches with a `SiblingCancelReason` whose cause is that error. A branch
-  nobody cancelled that ends `Failed` with such an error is a failure like any
-  other. The group throws it in place of a cancellation of another branch, and
-  the body of the parent gets that error, not `Cancelled`.
+The `catch` can call `ctx.check()` first instead, as in
+[Asking the job](cancellation.md#asking-the-job) on the cancellation page: then
+the cancellation itself goes out, and a cancellation is no failure. That costs
+more than the filter: once the job has accepted a cancellation, `ctx.check()`
+throws it whatever the `catch` took. This way a body that waits with `ctx.join`
+loses a real failure that reaches the `catch` after the cancellation, such as
+an open that found the database locked: neither `onError` nor the zone hears
+it. The filter keeps out only the errors it names.
+
+The filter only keeps errors out of the answer, and `ctx.runAll` shows it. A
+branch cancelled from outside whose body throws an error of a cancellation has
+failed as far as the group can tell. So the group cancels the other branches
+with a `SiblingCancelReason` whose cause is that error. A branch nobody
+cancelled that ends `Failed` with such an error is a failure like any other.
+The group throws it in place of a cancellation of another branch, and the body
+of the parent gets that error, not `Cancelled`.
 
 ### Rare routes
 
-These are the ways of a branch of `ctx.runAll`, of the name of a child, of a
+These are the routes of a branch of `ctx.runAll`, of the name of a child, of a
 `Cancelled` and of an engine.
 
 | The error | With an observer | Without one |

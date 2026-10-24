@@ -10,10 +10,10 @@ them. The engine is a queue of jobs with a rule:
   [The whole engine](#the-whole-engine) says which piece goes where.
 - [A rule of your own](#a-rule-of-your-own): the jobs stop at a sign-out.
 
-The lines under the code are what it prints when it runs. The job's observer
-prints what reaches it, `onError:` for an error; `cancel` and `sign out` are
-the moments the user cancels the job or signs out, and `outcome:` is what
-`job.done` completes with.
+The lines under the code are what it prints when it runs. The job's observer,
+`printer`, prints what reaches it, `onError:` for an error; `cancel` and
+`sign out` are the moments the user cancels the job or signs out, and
+`outcome:` is what `job.done` completes with.
 
 ## A queue of your own
 
