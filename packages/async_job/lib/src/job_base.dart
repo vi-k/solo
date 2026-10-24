@@ -1622,8 +1622,11 @@ abstract class JobBase<T> implements Job<T> {
   /// Tells the observer about each error inside [error], each failure with
   /// whether [verdicts] send it on to the answer.
   ///
-  /// [verdicts] are those of [_verdicts] for the same error, in the order of
-  /// the same walk; an empty list sends no failure on.
+  /// [verdicts] are those of [_verdicts] for the same error; an empty list
+  /// sends no failure on. A failure is matched to its verdict by identity,
+  /// each verdict used once: an envelope whose second walk meets other
+  /// failures, or the same ones in another order, still has each failure told
+  /// what the answer does with it.
   void _announce(
     Object error,
     StackTrace stackTrace,
@@ -1639,23 +1642,34 @@ abstract class JobBase<T> implements Job<T> {
         _notify(
           () => observer.onError(this, error, stackTrace, answered: answered),
         );
-    var next = 0;
+    // Verdicts not matched yet; [first] is the earliest of them. The same
+    // walk over the same error meets the failures in the order the verdicts
+    // were taken in, and then the match is the first one, every time.
+    final unmatched = List<bool>.filled(verdicts.length, true);
+    var first = 0;
+    bool answeredFor(Object failure) {
+      for (var i = first; i < verdicts.length; i++) {
+        if (unmatched[i] && identical(verdicts[i].failure, failure)) {
+          unmatched[i] = false;
+          while (first < verdicts.length && !unmatched[first]) {
+            first++;
+          }
+          return verdicts[i].answered;
+        }
+      }
+      // Not met by the walk the verdicts came from: nobody is asked about
+      // it.
+      return false;
+    }
+
     _visitErrors(
       error,
       stackTrace,
-      onFailure: (failure, failureStackTrace) {
-        // The same walk over the same error meets the failures in the same
-        // order; the check by identity only keeps an envelope that answers
-        // differently the second time from promising an answer it won't get.
-        final verdict = next < verdicts.length ? verdicts[next++] : null;
-        tell(
-          failure,
-          failureStackTrace,
-          answered: verdict != null &&
-              verdict.answered &&
-              identical(verdict.failure, failure),
-        );
-      },
+      onFailure: (failure, failureStackTrace) => tell(
+        failure,
+        failureStackTrace,
+        answered: answeredFor(failure),
+      ),
       onCancelled: (cancelled, cancelledStackTrace) {
         // The job's own cancellation inside an envelope is not news: the
         // outcome says it. One that comes alone was thrown by a callback,
