@@ -28,10 +28,8 @@
 `2026-10-24-split-pages-reread-review-2.md`. Оценки 7–9, хуже всех
 `accumulation-rules.md`. Из двенадцати находок исправлены D1, D2, D4, D5, D6,
 D7 и D10, D8 стала пунктом 108 `docs/settled.md`. По ответу владельца сделаны
-D3, D9, D11 и все советы для 10. **Открыта D12** — оговорка о движке
-во вступлении `errors.md`: владелец ответил «давай подумаем», три варианта
-и моё предложение — в итогах вопроса 4 той записи. Зонды —
-`.artifacts/2026-10-24-fable-reread/mine/probes/`.
+D3, D9, D11, D12 и все советы для 10; открытых вопросов по перечитыванию нет.
+Зонды — `.artifacts/2026-10-24-fable-reread/mine/probes/`.
 
 До того — примеры со scopo в разделе «The controller's life» README
 `flutter_solo`, `2026-10-23-scopo-examples-report.md`: scopo 0.17.0 вышел под

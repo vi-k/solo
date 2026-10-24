@@ -4,9 +4,7 @@ A `JobObserver` hears the errors that no outcome carries, as
 [Observing](observing.md) shows. This page follows an error from the job to
 whoever answers for it. An error the job catches passes these places in order
 and goes no further than the first one that keeps it. A cancellation the job
-catches goes no further than `onError`, unless an engine ends the job `Failed`
-with it, as the last two rows of [Rare routes](error-rules.md#rare-routes)
-show.
+catches goes no further than `onError`.
 
 | Place | What it does with the error | Section |
 | --- | --- | --- |
@@ -19,7 +17,10 @@ show.
 A job without an observer that answers has the zone for its answer.
 `ignoreFailure()` on a job keeps the failure of its body right after `onError`,
 even when the job ends `Cancelled`, as
-[Where each error goes](error-rules.md#where-each-error-goes) shows.
+[Where each error goes](error-rules.md#where-each-error-goes) shows. An engine
+of your own can still carry a caught cancellation past `onError`: it ends the
+job `Failed` with it, as the last two rows of
+[Rare routes](error-rules.md#rare-routes) show.
 
 An app that only wants every error reported once starts from the next section,
 [Reporting each error once](#reporting-each-error-once).
