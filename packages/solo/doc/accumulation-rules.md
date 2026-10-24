@@ -44,16 +44,22 @@ execution. An interval that passes with no event creates no job, and the group
 of the next event is ready at once: the interval is counted from the previous
 start, and it has run out.
 
-`startAtOnce: false` counts the interval before the first group as well. An
-accumulator with nothing of its own queued or running starts its interval when
-the group appears, and the group becomes ready when the interval ends, carrying
-everything written meanwhile. That condition is the whole of it: an interval
-already running is never restarted, and a group that appears beside another of
-the same accumulator, queued or running, starts none. So a group that has
-waited its interval out and needs only the execution slot is not pushed back by
-a later event, whatever the policy does with that event. An interval that
-passes with no event leaves nothing running, and the next group counts a whole
-interval from its own appearance.
+`startAtOnce: false` counts the interval before the first group as well. When a
+group of the accumulator appears, what it waits for depends on what the
+accumulator already has:
+
+- Nothing of its own queued or running, and no interval running: the group
+  starts the interval when it appears and becomes ready when the interval ends,
+  carrying everything written meanwhile.
+- An interval still running from the previous start: the group becomes ready
+  when that interval ends. An interval already running is never restarted.
+- Another group of its own, queued or running: the new group starts no interval
+  and waits for the one that the start of the other group renews.
+
+So a group that has waited its interval out and needs only the execution slot
+is not pushed back by a later event, whatever the policy does with that event.
+An interval that passes with no event leaves nothing running, and the next
+group counts a whole interval from its own appearance.
 
 Starting at once has a price when nothing is running. The queue takes the first
 group on the next microtask, so a burst that does not fit in one synchronous
@@ -111,10 +117,10 @@ created.
 | `join` (default) | `[A(A1 + A2), B]` | A1's existing job |
 
 `adjacent` adjoins an event to a group only when that group is at the queue's
-tail. `replace` replaces a group's job at the tail: it finds the last open
-queued group of the same accumulator, looking past other jobs, and moves that
-job behind them, so A ends up behind B. `join` joins the event to that same
-group where it stands, so A keeps its place before B. Either way B stays in the
+tail. `replace` moves a group's job to the tail: it finds the last open queued
+group of the same accumulator, looking past other jobs, and moves that job
+behind them, so A ends up behind B. `join` joins the event to that same group
+where it stands, so A keeps its place before B. Either way B stays in the
 queue: the search only looks past it. Execution also depends on readiness: a
 ready B can pass A while A waits for timing.
 
@@ -138,7 +144,7 @@ at the tail, so a later event can join it with `adjacent`. Already separate
 groups are never combined retroactively. A sealed debounce group is ineligible
 for all three policies.
 
-`replace` replaces the job of the group it found at the tail, with the incoming
+`replace` moves the job of the group it found to the tail, with the incoming
 event added to that group. The handle is the one every addition to this group
 got, the events already accepted stay in it, and a group that is already at the
 tail keeps the place it has. Nothing is cancelled on the way, so no

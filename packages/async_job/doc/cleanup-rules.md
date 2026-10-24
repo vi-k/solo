@@ -340,8 +340,9 @@ on when the value arrives:
 
 | When the value arrives | When its callback runs |
 | --- | --- |
-| During the body, while the job waits for its children, or while a branch of `ctx.runAll` waits for its group | at once |
+| During the body, while the job waits for its children, or while a branch of `ctx.runAll` waits for its group before its cleanup stack | at once, alongside the rest of the job |
 | While the job runs its cleanup stack | on the stack, after the callback that is running |
+| While a branch of `ctx.runAll` waits for its group after its cleanup stack | at once, after the stack, with only the end of the branch waiting for it |
 | After the job has ended | at once, late and alone, with nobody waiting for it |
 
 The callback does not wait for the unwinding. A child the job is still waiting
@@ -349,21 +350,22 @@ for may want the same lock or slot of a pool, and a value held for the
 unwinding would keep it from that child for good. A release that begins before
 the job ends keeps the job from ending until the release is over.
 
-In the first row of the table the release runs alongside the rest of the job:
-the body, the children and the release of another such value. Of the cleanup
-callbacks, only the callback of a late value overlaps anything. On the cleanup
-stack the release takes the place of a callback registered when the value came.
-A callback registered later may run while the release is still going. One
-registered earlier, such as the one that closes the pool the value came from,
-runs only once the release is over.
+Before the stack, the first row, the release runs alongside the rest of the
+job: the body, the children and the release of another such value. Of the
+cleanup callbacks, only the callback of a late value overlaps anything.
 
-A branch of `ctx.runAll` waits for its group twice: before its cleanup stack
-and after it, until every branch has run its own. A value that comes before the
-stack is released as above. One that comes after it is released at once too.
-But the stack has run by then, the callback that closes the pool included, and
-only the end of the branch waits for the release. Kept for the second pass, the
-value would keep the slot from the cleanup of another branch the group waits
-for, and the group would wait for good.
+On the stack, the second row, the release takes the place of a callback
+registered when the value came. A callback registered later may run while the
+release is still going. One registered earlier, such as the one that closes the
+pool the value came from, runs only once the release is over.
+
+After the stack of a branch, the third row, the release runs at once as well. A
+branch of `ctx.runAll` waits for its group twice: before its cleanup stack and
+after it, until every branch has run its own. By the second wait the stack has
+run, the callback that closes the pool included, and only the end of the branch
+waits for the release. Kept for the second pass, the value would keep the slot
+from the cleanup of another branch the group waits for, and the group would
+wait for good.
 
 A value that comes to a call the body walked away from without a cancellation
 still goes to whoever holds the call's future, and its release waits for the

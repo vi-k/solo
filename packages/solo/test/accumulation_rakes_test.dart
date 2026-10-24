@@ -566,9 +566,9 @@ void main() {
     test("every keystroke of a group gets the group's one job", () {
       _says('the returned job exposes the outcome and cancellation, like '
           'other jobs');
-      _says('Every call of `query` that lands in one group returns the same '
-          'job, so a plain `then` on it throws `StateError`; a caller '
-          'continues it through `shared()`');
+      _says('Every `add` that lands in one group returns the same job, so a '
+          'plain `then` on it throws `StateError`; a caller continues it '
+          'through `shared()`');
       final api = FakeSearchApi();
       final jobs = <Job<void>>{};
       var outcome = '';
@@ -1580,8 +1580,9 @@ void main() {
 
     test('startAtOnce false: a group beside a running one starts no interval',
         () {
-      _says('a group that appears beside another of the same accumulator, '
-          'queued or running, starts none');
+      _says('Another group of its own, queued or running: the new group '
+          'starts no interval and waits for the one that the start of the '
+          'other group renews.');
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();

@@ -1,9 +1,9 @@
 # Error rules
 
 [Errors](errors.md) follows an error from the job to whoever answers for it.
-This page gives the rules of that way: which places each kind of error passes,
-the debug channel that shows them, an error that holds several failures, and
-the rare cases. Its code goes on from that page: the migration of
+This page gives the rules of that route: which places each kind of error
+passes, the debug channel that shows them, an error that holds several
+failures, and the rare cases. Its code goes on from that page: the migration of
 [Where errors go](errors.md#where-errors-go), stopped at its token while the
 user cancels, the filter of
 [Errors of a cancellation](errors.md#errors-of-a-cancellation), and the
@@ -55,7 +55,7 @@ are in [Rare routes](#rare-routes) below.
 **One error, several calls.**
 
 - An app that reports in both `onError` and its zone hears twice an error that
-  reaches both. The table shows one way from the job to the zone: the answer,
+  reaches both. The table shows one route from the job to the zone: the answer,
   when nobody answers for the error, or `onUnanswered` sends it on or throws.
   An engine that ends a job `Failed` on purpose adds a second, past the answer:
   the last row of [Rare routes](#rare-routes).
@@ -188,8 +188,8 @@ Job.isCancellationError =
   [Asking the job](cancellation.md#asking-the-job) on the cancellation page:
   then the cancellation itself goes out, and a cancellation is no failure. That
   costs more than the filter: once the job has accepted a cancellation,
-  `ctx.check()` throws it whatever the `catch` took. A body that waits with
-  `ctx.join` loses that way a real failure that reaches the `catch` after the
+  `ctx.check()` throws it whatever the `catch` took. This way a body that waits
+  with `ctx.join` loses a real failure that reaches the `catch` after the
   cancellation, such as an open that found the database locked: neither
   `onError` nor the zone hears it. The filter keeps out only the errors it
   names.
@@ -225,7 +225,7 @@ error to the zone the body runs in.
   called without `await` throw `Cancelled` into its future, and Dart hands the
   job's own cancellation to that zone like any other error.
 - `ctx.abandonable` is the one exception once the body has ended: an action
-  that fails then takes the way of the late error in
+  that fails then takes the route of the late error in
   [Where each error goes](#where-each-error-goes), to `onError` and on to the
   answer. A call of `ctx.abandonable` without `await` reaches the zone the body
   runs in, with its error or with the job's cancellation, only while the body

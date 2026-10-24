@@ -22,8 +22,8 @@ even when the job ends `Cancelled`, as
 
 An app that only wants every error reported once starts from the next section,
 [Reporting each error once](#reporting-each-error-once).
-[Error rules](error-rules.md) goes on from this page: the way each kind of
-error takes, the debug channel, an error that holds several failures, and the
+[Error rules](error-rules.md) goes on from this page: the places each kind of
+error passes, the debug channel, an error that holds several failures, and the
 rare cases.
 
 The lines under the code are what the code prints:
@@ -77,7 +77,7 @@ hears one failure once on each job whose outcome that failure is.
 [An observer](#an-observer) below says when an outcome counts as observed.
 [Where each error goes](error-rules.md#where-each-error-goes) and
 [Rare routes](error-rules.md#rare-routes) on the error rules page show every
-way an error takes.
+route an error can take.
 
 ## Where errors go
 

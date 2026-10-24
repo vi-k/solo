@@ -41,6 +41,13 @@ expires, or, under a throttle or with no timing at all, when the queue takes
 the job to run it. The handler receives that input and an ordinary
 `SoloContext<S, W>`; it changes state through `ctx.emit`.
 
+Every `add` that lands in one group returns the same job, so a plain `then` on
+it throws `StateError`; a caller continues it through `shared()`. The `merge`
+of `accumulate` runs inside `add` and has to be synchronous and pure. Both
+rules hold in every recipe below; they are in
+[Start, cancellation and errors](accumulation-rules.md#start-cancellation-and-errors)
+on the accumulation rules page, with what happens when they are broken.
+
 ### A search that fires on every keystroke
 
 A search box asks the server for results while the user types. Every keystroke
@@ -169,13 +176,6 @@ returned job exposes the outcome and cancellation, like other jobs. What
 finishes there is the job: cancelling one ends its waiting, not the request it
 has already sent, so that request can still be in flight when the next group
 starts.
-
-Every call of `query` that lands in one group returns the same job, so a plain
-`then` on it throws `StateError`; a caller continues it through `shared()`.
-`merge` runs inside `add` and has to be synchronous and pure. Both rules, with
-what happens when they are broken, are in
-[Start, cancellation and errors](accumulation-rules.md#start-cancellation-and-errors)
-on the accumulation rules page.
 
 ### Settings saved on every flip of a switch
 
