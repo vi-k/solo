@@ -62,13 +62,18 @@ Rarer routes, such as those of `ctx.runAll` and of engines, are in
   An engine that ends a job `Failed` on purpose adds a second, past the answer:
   the last two rows of [Rare routes](#rare-routes).
 - `answered` of `onError` says whether the answer follows the call at once. It
-  is `true` in the rows of the table whose error no outcome carries, and for an
-  error of the name of a child in [Rare routes](#rare-routes): such an error
-  reaches the answer right after `onError`. It is `false` for a cancellation,
-  for an error the filter keeps out of the answer, and for the failure of a
-  body, whose answer, if it comes, comes once the job has ended. An app that
-  reports in `onError` and in its answer leaves the calls with `answered: true`
-  to the answer, and still hears twice a failure of a body nobody observes.
+  is `true` for an error no outcome carries, unless it is a cancellation, the
+  filter keeps it out of the answer, or it is a `Failed` an engine hands to a
+  job `ignoreFailure` was called on: the answer to such an error comes right
+  after `onError`. The rows of the table for cleanup, callbacks, late errors of
+  `ctx.abandonable` and work of `ctx.unattended` are of this kind, and so are,
+  among others, an error of the name of a child in [Rare routes](#rare-routes)
+  and a `Failed` an engine hands to a job that is already over. It is `false`
+  for a cancellation, for an error the filter keeps out of the answer, and for
+  the failure of a body or of an outcome: the answer to that one, if it comes,
+  comes once the job has ended. An app that reports in `onError` and in its
+  answer leaves the calls with `answered: true` to the answer, and still hears
+  twice a failure of a body nobody observes.
 - One failure that is the outcome of several jobs reaches `onError` once on
   each of them. A child of `ctx.run` fails, its parent lets the failure out of
   its body, and the observer the child inherited hears the same object on the

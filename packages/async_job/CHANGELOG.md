@@ -5,7 +5,11 @@
 - **`JobObserver.onError` takes `{required bool answered}`: whether the job
   asks for an answer to the error right after the call.** For an error no
   outcome carries, `Job.isCancellationError` is now asked before `onError`, not
-  after it. See
+  after it: an `onError` that cancels its own job no longer sends that error
+  under the filter, and the error of a filter that throws reaches the zone
+  before `onError` hears the error the filter was asked about. `notifyError` no
+  longer calls the `@protected` `notifyObserver`: an override of
+  `notifyObserver` no longer sees the errors `notifyError` announces. See
   [Where each error goes](doc/error-rules.md#where-each-error-goes).
 
 ### Documentation
