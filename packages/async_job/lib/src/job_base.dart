@@ -476,6 +476,17 @@ abstract class JobBase<T> implements Job<T> {
   /// by then: the early word found nothing to say itself to. This is where the
   /// group reads what it was not there to hear.
   Outcome<T>? _bodyOutcome;
+
+  /// The verdicts on a failure of the body of a job that had accepted a
+  /// cancellation when the body threw it, taken where the body was caught.
+  ///
+  /// The cancellation decides the outcome, so the failure is answered later
+  /// by [_reportCovered], and [JobObserver.onError] was told what that answer
+  /// would be. Kept until then, so the filter is asked once: whatever
+  /// [Job.isCancellationError] says after `onError` heard the failure changes
+  /// nothing. Taken, and so let go of, where the route of the body ends:
+  /// not in [finish], which comes before the answer.
+  ({Object error, List<_Verdict> verdicts})? _bodyVerdicts;
   bool _disposing = false;
 
   /// A branch of [JobContext.runAll] stands at its second barrier, between
@@ -1529,7 +1540,11 @@ abstract class JobBase<T> implements Job<T> {
         replaced == null &&
         !_wasAnnounced(decided.error)) {
       _noteAnnounced(decided.error);
-      notifyObserver(decided.error, decided.stackTrace);
+      _notifyObserver(
+        decided.error,
+        decided.stackTrace,
+        otherwise: _laterOrNever,
+      );
     }
     // Guarded: the hook belongs to an engine, and its error must not stand
     // between the job and its outcome — an unfinished job holds its parent, its
@@ -1612,54 +1627,82 @@ abstract class JobBase<T> implements Job<T> {
   /// walked as [Job.visitErrors] walks it, and each failure and each
   /// cancellation inside it gets a call of its own, with its own stack trace.
   /// The job's own cancellation inside one is left out: the outcome says it.
-  /// Every call comes with `answered: false`: no answer follows it.
+  /// A failure comes with [JobErrorAnswer.later], or [JobErrorAnswer.never]
+  /// once [Job.ignoreFailure] was called; a cancellation with
+  /// [JobErrorAnswer.cancellation].
+  ///
+  /// The core does not announce through this method: it is the door for an
+  /// engine, and an override of it hears only what the engine sends.
   @protected
-  void notifyObserver(Object error, StackTrace stackTrace) {
+  void notifyObserver(Object error, StackTrace stackTrace) =>
+      _notifyObserver(error, stackTrace, otherwise: _laterOrNever);
+
+  /// [JobErrorAnswer.later], or [JobErrorAnswer.never] for a job
+  /// [Job.ignoreFailure] was called on: nothing answers for its failure.
+  JobErrorAnswer get _laterOrNever =>
+      _ignored ? JobErrorAnswer.never : JobErrorAnswer.later;
+
+  /// Says [error] on the debug channel and tells the observer about it, as
+  /// [_announce] does.
+  void _notifyObserver(
+    Object error,
+    StackTrace stackTrace, {
+    List<_Verdict> verdicts = const [],
+    required JobErrorAnswer otherwise,
+  }) {
     _debug(() => '$this error: $error');
-    _announce(error, stackTrace, const []);
+    _announce(error, stackTrace, verdicts, otherwise: otherwise);
   }
 
   /// Tells the observer about each error inside [error], each failure with
-  /// whether [verdicts] send it on to the answer.
+  /// what [verdicts] say the job does about it.
   ///
-  /// [verdicts] are those of [_verdicts] for the same error; an empty list
-  /// sends no failure on. A failure is matched to its verdict by identity,
-  /// each verdict used once: an envelope whose second walk meets other
-  /// failures, or the same ones in another order, still has each failure told
-  /// what the answer does with it.
+  /// [verdicts] are those of [_verdicts] for the same error: a failure with
+  /// one goes with [JobErrorAnswer.answered] or, when the filter named it,
+  /// [JobErrorAnswer.cancellation]. A failure with none goes with
+  /// [otherwise]. A failure is matched to its verdict by identity, each
+  /// verdict used once: an envelope whose second walk meets other failures,
+  /// or the same ones in another order, still has each failure told what the
+  /// answer does with it. A cancellation always goes with
+  /// [JobErrorAnswer.cancellation].
   void _announce(
     Object error,
     StackTrace stackTrace,
-    List<_Verdict> verdicts,
-  ) {
+    List<_Verdict> verdicts, {
+    required JobErrorAnswer otherwise,
+  }) {
     final observer = _observer;
     if (observer == null) {
       return;
     }
     // One call for each error, each guarded on its own. A cancellation is
     // told like a failure: this hook is the only place that hears one.
-    void tell(Object error, StackTrace stackTrace, {required bool answered}) =>
+    void tell(
+      Object error,
+      StackTrace stackTrace, {
+      required JobErrorAnswer answer,
+    }) =>
         _notify(
-          () => observer.onError(this, error, stackTrace, answered: answered),
+          () => observer.onError(this, error, stackTrace, answer: answer),
         );
     // Verdicts not matched yet; [first] is the earliest of them. The same
     // walk over the same error meets the failures in the order the verdicts
     // were taken in, and then the match is the first one, every time.
     final unmatched = List<bool>.filled(verdicts.length, true);
     var first = 0;
-    bool answeredFor(Object failure) {
+    JobErrorAnswer answerFor(Object failure) {
       for (var i = first; i < verdicts.length; i++) {
         if (unmatched[i] && identical(verdicts[i].failure, failure)) {
           unmatched[i] = false;
           while (first < verdicts.length && !unmatched[first]) {
             first++;
           }
-          return verdicts[i].answered;
+          return verdicts[i].answered
+              ? JobErrorAnswer.answered
+              : JobErrorAnswer.cancellation;
         }
       }
-      // Not met by the walk the verdicts came from: nobody is asked about
-      // it.
-      return false;
+      return otherwise;
     }
 
     _visitErrors(
@@ -1668,7 +1711,7 @@ abstract class JobBase<T> implements Job<T> {
       onFailure: (failure, failureStackTrace) => tell(
         failure,
         failureStackTrace,
-        answered: answeredFor(failure),
+        answer: answerFor(failure),
       ),
       onCancelled: (cancelled, cancelledStackTrace) {
         // The job's own cancellation inside an envelope is not news: the
@@ -1677,7 +1720,11 @@ abstract class JobBase<T> implements Job<T> {
         if (identical(cancelled, error) ||
             (!identical(cancelled, _pendingCancel) &&
                 !identical(cancelled, _outcome))) {
-          tell(cancelled, cancelledStackTrace, answered: false);
+          tell(
+            cancelled,
+            cancelledStackTrace,
+            answer: JobErrorAnswer.cancellation,
+          );
         }
       },
     );
@@ -1706,16 +1753,23 @@ abstract class JobBase<T> implements Job<T> {
   /// names, once the job has accepted a cancellation.
   ///
   /// Which failures go on to the answer is settled before `onError` hears any
-  /// of them, and `onError` is told so: `answered: true` for each of those,
-  /// `false` for a cancellation and for a failure the filter names.
+  /// of them, and `onError` is told so: [JobErrorAnswer.answered] for each of
+  /// those, [JobErrorAnswer.cancellation] for a cancellation and for a failure
+  /// the filter names.
   ///
   /// See [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
   /// on the error rules page.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
-    _debug(() => '$this error: $error');
     final verdicts = _verdicts(error, stackTrace);
-    _announce(error, stackTrace, verdicts);
+    // A failure the walk that took the verdicts did not meet is asked about
+    // by nobody.
+    _notifyObserver(
+      error,
+      stackTrace,
+      verdicts: verdicts,
+      otherwise: JobErrorAnswer.never,
+    );
     _askForAnswers(error, verdicts);
   }
 
@@ -1766,7 +1820,9 @@ abstract class JobBase<T> implements Job<T> {
   /// [Job.isCancellationError] names the failure. The filter is asked here,
   /// and only here, once for each failure, and one walk's verdicts serve both
   /// [JobObserver.onError] and the answer: [notifyError] settles them before
-  /// `onError` hears the error, so that `answered` says what then happens.
+  /// `onError` hears the error, so that the [JobErrorAnswer] it is handed says
+  /// what then happens. So does the route of a body that fails in a job that
+  /// has accepted a cancellation: see [_bodyVerdicts].
   List<_Verdict> _verdicts(Object error, StackTrace stackTrace) {
     // Read once for the whole walk, and only for a job that has accepted a
     // cancellation: what the filter names is an error the cancellation of
@@ -2027,7 +2083,7 @@ abstract class JobBase<T> implements Job<T> {
           announcedBefore = announced && isFinished;
           if (!announced) {
             _noteAnnounced(error);
-            notifyObserver(error, stackTrace);
+            _announceBodyFailure(error, stackTrace);
           }
           outcome = Failed(error, stackTrace);
         }
@@ -2198,8 +2254,11 @@ abstract class JobBase<T> implements Job<T> {
         // there is no window to wait for.
         if (endedByHand) {
           _answerForHandFinished(outcome, announcedBefore: announcedBefore);
-        } else if (outcome is Failed && !identical(decided, outcome)) {
-          _reportCovered(outcome, announced: true);
+        } else {
+          final verdicts = _takeBodyVerdicts();
+          if (outcome is Failed && !identical(decided, outcome)) {
+            _reportCovered(outcome, announced: true, verdicts: verdicts);
+          }
         }
       }
 
@@ -2381,18 +2440,73 @@ abstract class JobBase<T> implements Job<T> {
   /// none. Nor does one the group of [JobContext.runAll] took in place of a
   /// value handed in after the group heard of it: the group throws it or
   /// answers for it — see [_failureWentToGroup].
-  void _reportCovered(Failed outcome, {required bool announced}) {
+  ///
+  /// [verdicts] are those taken where the body was caught, when the job had
+  /// accepted a cancellation by then (see [_bodyVerdicts]): the answer goes by
+  /// them, and the filter is not asked again. Used only for the error they
+  /// were taken on.
+  void _reportCovered(
+    Failed outcome, {
+    required bool announced,
+    ({Object error, List<_Verdict> verdicts})? verdicts,
+  }) {
     if (_ignored) {
       if (!announced) {
-        notifyObserver(outcome.error, outcome.stackTrace);
+        _notifyObserver(
+          outcome.error,
+          outcome.stackTrace,
+          otherwise: JobErrorAnswer.never,
+        );
       }
       return;
     }
     if (announced) {
-      _handleUnanswered(outcome.error, outcome.stackTrace);
+      if (verdicts != null && identical(verdicts.error, outcome.error)) {
+        _askForAnswers(outcome.error, verdicts.verdicts);
+      } else {
+        _handleUnanswered(outcome.error, outcome.stackTrace);
+      }
     } else {
       notifyError(outcome.error, outcome.stackTrace);
     }
+  }
+
+  /// Tells the observer about a failure of the body, where the body was
+  /// caught.
+  ///
+  /// A job that has accepted a cancellation ends [Cancelled] whatever the body
+  /// threw, and the failure is answered once the job is over, unless the
+  /// filter names it: the filter is asked here, the verdicts are kept for
+  /// that answer in [_bodyVerdicts], and `onError` is told
+  /// [JobErrorAnswer.answered] or [JobErrorAnswer.cancellation]. For any other
+  /// job the outcome may still carry the failure, and nobody is asked:
+  /// [JobErrorAnswer.later], or [JobErrorAnswer.never] once
+  /// [Job.ignoreFailure] was called.
+  ///
+  /// A cancellation that lands after this, while the job waits for its
+  /// children or unwinds, covers the failure too, and the filter is asked about
+  /// it then: `onError` was told [JobErrorAnswer.later], which promised
+  /// nothing.
+  void _announceBodyFailure(Object error, StackTrace stackTrace) {
+    if (!isCancelled || _ignored) {
+      _notifyObserver(error, stackTrace, otherwise: _laterOrNever);
+      return;
+    }
+    final verdicts = _verdicts(error, stackTrace);
+    _bodyVerdicts = (error: error, verdicts: verdicts);
+    _notifyObserver(
+      error,
+      stackTrace,
+      verdicts: verdicts,
+      otherwise: JobErrorAnswer.never,
+    );
+  }
+
+  /// [_bodyVerdicts], let go of.
+  ({Object error, List<_Verdict> verdicts})? _takeBodyVerdicts() {
+    final verdicts = _bodyVerdicts;
+    _bodyVerdicts = null;
+    return verdicts;
   }
 
   /// Answers for the failure of the body of a job an engine ended by hand, at
@@ -2411,10 +2525,11 @@ abstract class JobBase<T> implements Job<T> {
     // past this point, and it must hold neither the failure nor the value the
     // body ended with.
     _bodyOutcome = null;
+    final verdicts = _takeBodyVerdicts();
     if (body is! Failed || announcedBefore || _failureWentToGroup) return;
     final ended = _outcome;
     if (ended is Failed && identical(ended.error, body.error)) return;
-    _reportCovered(body, announced: true);
+    _reportCovered(body, announced: true, verdicts: verdicts);
   }
 
   /// Runs the cleanup stack from the top until it is empty, and then

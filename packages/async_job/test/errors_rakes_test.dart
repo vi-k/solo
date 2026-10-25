@@ -234,10 +234,12 @@ void main() {
           quotable(
             play(() => migratingObserved(Answerer()), cancelAt: 10),
           ),
+          // The job is cancelled when the body throws, so the filter is asked
+          // there, before `onError` is told what the answer will be.
           [
             'cancel',
-            'onError: DatabaseStopped',
             'zone: Bad state: filter failed',
+            'onError: DatabaseStopped',
             'onUnanswered: DatabaseStopped',
             'outcome: Cancelled(manual)',
           ],
@@ -1908,7 +1910,7 @@ final class _Heard extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       heard.add((job, error));
 }
@@ -1923,7 +1925,7 @@ final class _Counted extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
     if (_heard[error] ?? false) return;
     _heard[error] = true;

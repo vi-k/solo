@@ -10,12 +10,11 @@ import 'package:test/test.dart';
 import 'support/delay.dart';
 import 'support/probe_job.dart';
 
-// `answered` of `JobObserver.onError` says whether the job asks for an answer
-// to the error right after the call: `JobAnswerer.onUnanswered` of an observer
-// that answers, or the zone. An error of cleanup or of a callback is answered
-// that way unless it is a cancellation or the filter of cancellation errors
-// names it; a failure of a body is answered later, if at all, once the job
-// has ended.
+// The answer `JobObserver.onError` is handed says what the job does about the
+// error: `answered` when it asks for an answer, `cancellation` when it never
+// will because the error is a cancellation, `never` when it never will for
+// another reason, and `later` when the outcome that carries the error may
+// still be read and nothing is promised.
 
 /// What an operation throws once the cancellation of its job stops it.
 final class Stopped implements Exception {
@@ -25,7 +24,7 @@ final class Stopped implements Exception {
   String toString() => 'Stopped';
 }
 
-/// Both hooks in one list, the flag beside each error; answers for every
+/// Both hooks in one list, the answer beside each error; answers for every
 /// error, so nothing reaches the zone through it.
 class Heard extends JobObserver with JobAnswerer {
   final seen = <String>[];
@@ -35,9 +34,9 @@ class Heard extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
-      seen.add('onError: $error, answered: $answered');
+      seen.add('onError: $error, ${answer.name}');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -57,9 +56,9 @@ final class Cancelling extends Heard {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
-    super.onError(job, error, stackTrace, answered: answered);
+    super.onError(job, error, stackTrace, answer: answer);
     job.cancel().ignore();
   }
 }
@@ -77,9 +76,9 @@ final class Listening extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
-      seen.add('onError: $error, answered: $answered');
+      seen.add('onError: $error, ${answer.name}');
 }
 
 /// What the filter was asked about, in order.
@@ -106,6 +105,47 @@ final class Shifting
   @override
   List<AsyncError?> get errors => shifted ? _after : _before;
 }
+
+/// A [Heard] that, hearing an error, sets a filter that names everything.
+final class Swapping extends Heard {
+  @override
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {
+    super.onError(job, error, stackTrace, answer: answer);
+    Job.isCancellationError = (error) {
+      asked.add('late: $error');
+      return true;
+    };
+  }
+}
+
+/// A job that hears its cancellation and then fails with [error], the way an
+/// operation the cancellation stopped throws; the body waits on a plain
+/// future, so the error comes out of a body whose job is cancelled already.
+/// Cancelled 10 ms in; returns what reached the zone.
+List<String> stoppedAfterCancel(
+  Object error,
+  JobObserver observer, {
+  bool ignore = false,
+}) =>
+    zoneOf((async) {
+      final stop = Completer<void>();
+      final job = Job<void>(observer: observer, (ctx) async {
+        ctx.onCancel(stop.complete);
+        await stop.future;
+        Error.throwWithStackTrace(error, StackTrace.current);
+      });
+      if (ignore) {
+        job.ignoreFailure();
+      }
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+    });
 
 /// Runs [body] under fake time in a zone of its own and returns what
 /// reached that zone, written into [caught] when given one.
@@ -150,12 +190,12 @@ void main() {
   setUp(asked.clear);
   tearDown(() => Job.isCancellationError = null);
 
-  group('answered', () {
+  group('answer', () {
     test('an error of ctx.onDispose, the answer right after', () {
       final heard = Heard();
       expect(disposing(StateError('disk full'), heard), isEmpty);
       expect(heard.seen, [
-        'onError: Bad state: disk full, answered: true',
+        'onError: Bad state: disk full, answered',
         'onUnanswered: Bad state: disk full',
       ]);
     });
@@ -166,7 +206,7 @@ void main() {
         disposing(StateError('disk full'), listening),
         ['Bad state: disk full'],
       );
-      expect(listening.seen, ['onError: Bad state: disk full, answered: true']);
+      expect(listening.seen, ['onError: Bad state: disk full, answered']);
     });
 
     test('a failure of the body of a child the parent reads', () {
@@ -188,7 +228,7 @@ void main() {
         async.flushTimers();
       });
       expect(caught, ['Bad state: child']);
-      expect(heard.seen, ['onError: Bad state: child, answered: false']);
+      expect(heard.seen, ['onError: Bad state: child, later']);
       expect(zone, isEmpty);
     });
 
@@ -202,7 +242,7 @@ void main() {
         async.flushTimers();
       });
       expect(heard.seen, [
-        'onError: Bad state: body, answered: false',
+        'onError: Bad state: body, later',
         'onFinish',
         'onUnanswered: Bad state: body',
       ]);
@@ -213,7 +253,7 @@ void main() {
       const cancelled = Cancelled('from cleanup');
       final heard = Heard();
       expect(disposing(cancelled, heard), isEmpty);
-      expect(heard.seen, ['onError: $cancelled, answered: false']);
+      expect(heard.seen, ['onError: $cancelled, cancellation']);
     });
 
     test('a failure of a cancelled job the filter names, asked once', () {
@@ -221,7 +261,7 @@ void main() {
       final heard = Heard();
       expect(disposing(const Stopped(), heard, cancel: true), isEmpty);
       expect(asked, ['Stopped']);
-      expect(heard.seen, ['onError: Stopped, answered: false']);
+      expect(heard.seen, ['onError: Stopped, cancellation']);
     });
 
     test('a failure of a cancelled job the filter does not name, asked once',
@@ -231,7 +271,7 @@ void main() {
       expect(disposing(StateError('disk full'), heard, cancel: true), isEmpty);
       expect(asked, ['Bad state: disk full']);
       expect(heard.seen, [
-        'onError: Bad state: disk full, answered: true',
+        'onError: Bad state: disk full, answered',
         'onUnanswered: Bad state: disk full',
       ]);
     });
@@ -255,14 +295,14 @@ void main() {
       expect(zone, isEmpty);
       expect(asked, ['Stopped', 'Bad state: disk full']);
       expect(heard.seen, [
-        'onError: $cancelled, answered: false',
-        'onError: Stopped, answered: false',
-        'onError: Bad state: disk full, answered: true',
+        'onError: $cancelled, cancellation',
+        'onError: Stopped, cancellation',
+        'onError: Bad state: disk full, answered',
         'onUnanswered: Bad state: disk full',
       ]);
     });
 
-    test('JobObserver.all hands the flag to each observer', () {
+    test('JobObserver.all hands the answer to each observer', () {
       final listening = Listening();
       final heard = Heard();
       final zone = zoneOf((async) {
@@ -278,12 +318,12 @@ void main() {
       });
       expect(zone, isEmpty);
       expect(listening.seen, [
-        'onError: Bad state: body, answered: false',
-        'onError: Bad state: disk full, answered: true',
+        'onError: Bad state: body, never',
+        'onError: Bad state: disk full, answered',
       ]);
       expect(heard.seen, [
-        'onError: Bad state: body, answered: false',
-        'onError: Bad state: disk full, answered: true',
+        'onError: Bad state: body, never',
+        'onError: Bad state: disk full, answered',
         'onUnanswered: Bad state: disk full',
       ]);
     });
@@ -306,7 +346,7 @@ void main() {
       expect(zone, isEmpty);
       expect(asked, isEmpty);
       expect(heard.seen, [
-        'onError: Stopped, answered: true',
+        'onError: Stopped, answered',
         'onUnanswered: Stopped',
       ]);
     });
@@ -323,7 +363,7 @@ void main() {
       );
       expect(log, [
         'Bad state: filter broke',
-        'onError: Bad state: disk full, answered: true',
+        'onError: Bad state: disk full, answered',
         'Bad state: disk full',
       ]);
     });
@@ -344,7 +384,7 @@ void main() {
       expect(disposing(envelope, heard, cancel: true), isEmpty);
       expect(asked, ['Bad state: a', 'Bad state: b']);
       expect(heard.seen, [
-        'onError: Bad state: b, answered: true',
+        'onError: Bad state: b, answered',
         'onUnanswered: Bad state: a',
         'onUnanswered: Bad state: b',
       ]);
@@ -360,7 +400,7 @@ void main() {
       });
       expect(zone, isEmpty);
       expect(heard.seen, [
-        'onError: Bad state: hook failed, answered: true',
+        'onError: Bad state: hook failed, answered',
         'onUnanswered: Bad state: hook failed',
       ]);
     });
@@ -374,7 +414,7 @@ void main() {
       });
       expect(zone, isEmpty);
       expect(heard.seen, [
-        'onError: Bad state: late, answered: true',
+        'onError: Bad state: late, answered',
         'onUnanswered: Bad state: late',
       ]);
     });
@@ -389,7 +429,7 @@ void main() {
         job.drop(Failed(StateError('late'), StackTrace.current));
       });
       expect(zone, isEmpty);
-      expect(heard.seen, ['onError: Bad state: late, answered: false']);
+      expect(heard.seen, ['onError: Bad state: late, never']);
     });
 
     test('a Failed handed to a running job: its outcome carries it', () {
@@ -406,7 +446,7 @@ void main() {
       });
       expect(zone, isEmpty);
       expect(heard.seen, [
-        'onError: Bad state: by hand, answered: false',
+        'onError: Bad state: by hand, later',
         'onFinish',
         'onUnanswered: Bad state: by hand',
       ]);
@@ -423,7 +463,7 @@ void main() {
       });
       expect(zone, isEmpty);
       expect(heard.seen, [
-        'onError: Bad state: engine failed to cancel, answered: true',
+        'onError: Bad state: engine failed to cancel, answered',
         'onUnanswered: Bad state: engine failed to cancel',
       ]);
     });
@@ -439,7 +479,7 @@ void main() {
       });
       expect(zone, isEmpty);
       expect(heard.seen, [
-        'onError: Bad state: source, answered: false',
+        'onError: Bad state: source, later',
         'onFinish',
         'onUnanswered: Bad state: source',
       ]);
@@ -456,10 +496,170 @@ void main() {
       });
       expect(zone, isEmpty);
       expect(heard.seen, [
-        'onError: Bad state: source, answered: false',
+        'onError: Bad state: source, later',
         'onFinish',
         'onUnanswered: Bad state: source',
       ]);
+    });
+  });
+
+  group('the body of a job that is cancelled already', () {
+    test('a failure the filter names: cancellation, asked once', () {
+      nameTheStop();
+      final heard = HeardToTheEnd();
+      expect(stoppedAfterCancel(const Stopped(), heard), isEmpty);
+      expect(asked, ['Stopped']);
+      expect(heard.seen, ['onError: Stopped, cancellation', 'onFinish']);
+    });
+
+    test('a failure the filter does not name: answered, asked once', () {
+      nameTheStop();
+      final heard = HeardToTheEnd();
+      expect(stoppedAfterCancel(StateError('disk full'), heard), isEmpty);
+      expect(asked, ['Bad state: disk full']);
+      expect(heard.seen, [
+        'onError: Bad state: disk full, answered',
+        'onFinish',
+        'onUnanswered: Bad state: disk full',
+      ]);
+    });
+
+    test('a failure with no filter: answered', () {
+      final heard = HeardToTheEnd();
+      expect(stoppedAfterCancel(const Stopped(), heard), isEmpty);
+      expect(heard.seen, [
+        'onError: Stopped, answered',
+        'onFinish',
+        'onUnanswered: Stopped',
+      ]);
+    });
+
+    test('a failure of a job that ignores its failure: never, nobody asked',
+        () {
+      nameTheStop();
+      final heard = HeardToTheEnd();
+      expect(
+        stoppedAfterCancel(StateError('disk full'), heard, ignore: true),
+        isEmpty,
+      );
+      expect(asked, isEmpty);
+      expect(heard.seen, ['onError: Bad state: disk full, never', 'onFinish']);
+    });
+
+    test('a filter set after onError is not asked: the verdict stands', () {
+      nameTheStop();
+      final heard = Swapping();
+      expect(stoppedAfterCancel(StateError('disk full'), heard), isEmpty);
+      expect(asked, ['Bad state: disk full']);
+      expect(heard.seen, [
+        'onError: Bad state: disk full, answered',
+        'onUnanswered: Bad state: disk full',
+      ]);
+    });
+  });
+
+  group('later', () {
+    test('a failure of a body nobody cancelled: the filter is not asked', () {
+      nameTheStop();
+      final heard = HeardToTheEnd();
+      final zone = zoneOf((async) {
+        Job<void>(observer: heard, (ctx) async {
+          await delay(10);
+          throw const Stopped();
+        });
+        async.flushTimers();
+      });
+      expect(zone, isEmpty);
+      expect(asked, isEmpty);
+      expect(heard.seen, [
+        'onError: Stopped, later',
+        'onFinish',
+        'onUnanswered: Stopped',
+      ]);
+    });
+
+    test('left over: a cancellation that lands after the body failed', () {
+      nameTheStop();
+      final heard = HeardToTheEnd();
+      final zone = zoneOf((async) {
+        final job = Job<void>(observer: heard, (ctx) async {
+          ctx.start(Job.deferred<void>((ctx) => delay(30)));
+          await delay(10);
+          throw const Stopped();
+        });
+        async.elapse(const Duration(milliseconds: 20));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+      expect(zone, isEmpty);
+      expect(asked, ['Stopped']);
+      // `later` promised nothing: the cancellation covers the failure, and
+      // the filter names it. The child inherits the observer and ends first.
+      expect(heard.seen, ['onError: Stopped, later', 'onFinish', 'onFinish']);
+    });
+
+    test('left over: an onError that cancels a continuation', () {
+      nameTheStop();
+      final heard = Cancelling();
+      final zone = zoneOf((async) {
+        Job<int>((ctx) async {
+          await delay(10);
+          throw const Stopped();
+        }).then((ctx, value) => value, observer: heard);
+        async.flushTimers();
+      });
+      expect(zone, isEmpty);
+      expect(asked, ['Stopped']);
+      expect(heard.seen, ['onError: Stopped, later']);
+    });
+  });
+
+  group('never', () {
+    test('a continuation of a source answered for already', () {
+      final heard = HeardToTheEnd();
+      final zone = zoneOf((async) {
+        final source = Job<int>((ctx) async {
+          await delay(10);
+          throw StateError('source');
+        });
+        async.flushTimers();
+        source.then((ctx, value) => value, observer: heard);
+        async.flushTimers();
+      });
+      expect(zone, ['Bad state: source']);
+      expect(heard.seen, ['onError: Bad state: source, never', 'onFinish']);
+    });
+
+    test('a shared handle of a source answered for already', () {
+      final heard = HeardToTheEnd();
+      final zone = zoneOf((async) {
+        final source = Job<int>((ctx) async {
+          await delay(10);
+          throw StateError('source');
+        });
+        async.flushTimers();
+        source.shared(observer: heard);
+        async.flushTimers();
+      });
+      expect(zone, ['Bad state: source']);
+      expect(heard.seen, ['onError: Bad state: source, never', 'onFinish']);
+    });
+
+    test('a Failed handed to a running job that ignores its failure', () {
+      final heard = HeardToTheEnd();
+      final zone = zoneOf((async) {
+        final job = ProbeJob<int>(observer: heard, (ctx) async {
+          await ctx.abandonable(() => delay(20));
+          return 1;
+        })
+          ..ignoreFailure()
+          ..launch();
+        async.elapse(const Duration(milliseconds: 10));
+        job.drop(Failed(StateError('by hand'), StackTrace.current));
+        async.flushTimers();
+      });
+      expect(zone, isEmpty);
+      expect(heard.seen, ['onError: Bad state: by hand, never', 'onFinish']);
     });
   });
 

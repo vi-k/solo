@@ -116,7 +116,7 @@ final class Answerer extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       print('onError: $error');
 
@@ -146,7 +146,7 @@ final class Hooks extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       print('${name}onError: $error');
 
@@ -203,7 +203,7 @@ final class TallyingAnswerer extends Tally with JobObserver, JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
     count++;
     print('onError: $error');
@@ -248,7 +248,7 @@ final class Throwing extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       throw StateError('reporter down');
 }
@@ -266,10 +266,10 @@ final class HandedOn extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
-    first.onError(job, error, stackTrace, answered: answered);
-    second.onError(job, error, stackTrace, answered: answered);
+    first.onError(job, error, stackTrace, answer: answer);
+    second.onError(job, error, stackTrace, answer: answer);
   }
 
   @override

@@ -98,7 +98,11 @@ final class _ThenJob<T, R> extends JobBase<R> {
           _observed = true;
         }
         _noteAnnounced(result.error);
-        notifyObserver(result.error, result.stackTrace);
+        _notifyObserver(
+          result.error,
+          result.stackTrace,
+          otherwise: heardAlready ? JobErrorAnswer.never : _laterOrNever,
+        );
         // An observer may cancel this continuation while hearing the error.
         // The failure is this continuation's now, and a cancellation that
         // decides its outcome covers it, as it would a failure of a body.

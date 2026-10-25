@@ -38,7 +38,7 @@ final class Heard extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       seen.add('onError: $error');
 
@@ -60,7 +60,7 @@ final class Listening extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       seen.add('onError: $error');
 }

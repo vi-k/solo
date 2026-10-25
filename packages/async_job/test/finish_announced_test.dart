@@ -22,7 +22,7 @@ final class Hearing extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
     seen.add('onError ${job.key}: $error');
     onHeard?.call(job);

@@ -1355,7 +1355,7 @@ final class _Answers extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
     if (job.level == 0) {
       heard.add(error);

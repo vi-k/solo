@@ -98,11 +98,7 @@ abstract mixin class JobObserver {
   /// once on each of them: tell the second call from a new error by
   /// [identical].
   ///
-  /// [answered] is `true` when the job asks for an answer to this error right
-  /// after this call: [JobAnswerer.onUnanswered], or the zone. It is `false`
-  /// for a cancellation, for a failure [Job.isCancellationError] keeps out of
-  /// the answer, and for the failure of a body or of an outcome: the answer to
-  /// that one, if it comes, comes once the job has ended.
+  /// [answer] says what the job does about this error: see [JobErrorAnswer].
   ///
   /// Which error comes by which route, and what keeps it out of the answer, is
   /// in [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
@@ -111,7 +107,7 @@ abstract mixin class JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {}
 
   /// A job called [JobContext.log], with what it passed.
@@ -124,6 +120,42 @@ abstract mixin class JobObserver {
   /// listener's convention: one that prints the message as it came prints
   /// the closure itself.
   void onLog(Job<Object?> job, Object? message) {}
+}
+
+/// What the job does about an error it hands to [JobObserver.onError].
+///
+/// Settled before the call and told with it, so an observer that reports in
+/// both [JobObserver.onError] and [JobAnswerer.onUnanswered] can leave an
+/// error to the hook that will hear it. Only [answered] promises an answer,
+/// and only [cancellation] and [never] promise there is none; [later] promises
+/// nothing.
+///
+/// See [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
+/// on the error rules page.
+enum JobErrorAnswer {
+  /// The job asks for an answer to the error: [JobAnswerer.onUnanswered] of
+  /// an observer that answers, or the zone.
+  ///
+  /// Right after this call, or, for the failure of a body the job's
+  /// cancellation covers, once the job has ended. A [Job.ignoreFailure] called
+  /// before then takes that answer away.
+  answered,
+
+  /// The job never asks for an answer, because the error is a cancellation:
+  /// a [Cancelled], or a failure of a job that has accepted a cancellation
+  /// that [Job.isCancellationError] names.
+  cancellation,
+
+  /// The outcome that carries the error may still be read.
+  ///
+  /// The answer may be asked for later or never, and this value promises
+  /// neither.
+  later,
+
+  /// The job never asks for an answer, and the error is not a cancellation:
+  /// the failure of a job [Job.ignoreFailure] was called on, or one this job
+  /// carries for another that has been answered for already.
+  never,
 }
 
 /// An observer that answers for the errors nobody else has: those no
@@ -207,9 +239,9 @@ final class _AllObservers with JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
-      _each((o) => o.onError(job, error, stackTrace, answered: answered));
+      _each((o) => o.onError(job, error, stackTrace, answer: answer));
 
   @override
   void onLog(Job<Object?> job, Object? message) =>

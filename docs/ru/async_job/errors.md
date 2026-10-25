@@ -187,7 +187,7 @@ final class Reporter extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       print('onError: $error');
 }
@@ -381,10 +381,10 @@ final class Both extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
-    _reporter.onError(job, error, stackTrace, answered: answered);
-    _crashes.onError(job, error, stackTrace, answered: answered);
+    _reporter.onError(job, error, stackTrace, answer: answer);
+    _crashes.onError(job, error, stackTrace, answer: answer);
   }
 
   @override

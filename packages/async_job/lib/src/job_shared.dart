@@ -85,7 +85,11 @@ final class _SharedJob<T> extends JobBase<T> {
           _observed = true;
         }
         _noteAnnounced(failed.error);
-        notifyObserver(failed.error, failed.stackTrace);
+        _notifyObserver(
+          failed.error,
+          failed.stackTrace,
+          otherwise: heardAlready ? JobErrorAnswer.never : _laterOrNever,
+        );
         // An observer that cancels the handle while hearing the error ends
         // it there and then, and the cancellation covers the failure. The
         // handle answers for it then, on the mark the other carriers read.

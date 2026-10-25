@@ -19,7 +19,7 @@ class _ErrorObserver extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
     errors.add(error);
   }

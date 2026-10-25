@@ -855,7 +855,7 @@ final class _Heard extends JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       heard.add('$error');
 }

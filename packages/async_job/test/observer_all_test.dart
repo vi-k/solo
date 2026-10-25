@@ -26,7 +26,7 @@ class Recording with JobObserver {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       seen.add('$name onError: $error');
 

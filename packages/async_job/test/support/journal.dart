@@ -48,7 +48,7 @@ final class JobJournal extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       lines.add('${_label(job)} error $error');
 

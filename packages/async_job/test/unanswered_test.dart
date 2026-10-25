@@ -37,7 +37,7 @@ final class Counting extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       seen.add('onError: $error');
 
@@ -90,7 +90,7 @@ final class ThrowingNotice extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
       throw StateError('onError');
 
@@ -261,9 +261,9 @@ class Forwarding extends JobObserver with JobAnswerer {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) =>
-      inner?.onError(job, error, stackTrace, answered: answered);
+      inner?.onError(job, error, stackTrace, answer: answer);
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
@@ -293,9 +293,9 @@ final class CancellingOnError extends Forwarding {
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
-    required bool answered,
+    required JobErrorAnswer answer,
   }) {
-    super.onError(job, error, stackTrace, answered: answered);
+    super.onError(job, error, stackTrace, answer: answer);
     job.cancel().ignore();
   }
 }

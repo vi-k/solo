@@ -2,15 +2,21 @@
 
 ### Breaking changes
 
-- **`JobObserver.onError` takes `{required bool answered}`: whether the job
-  asks for an answer to the error right after the call.** For an error no
-  outcome carries, `Job.isCancellationError` is now asked before `onError`, not
-  after it: an `onError` that cancels its own job no longer sends that error
-  under the filter, and the error of a filter that throws reaches the zone
-  before `onError` hears the error the filter was asked about. `notifyError` no
-  longer calls the `@protected` `notifyObserver`: an override of
-  `notifyObserver` no longer sees the errors `notifyError` announces. See
-  [Where each error goes](doc/error-rules.md#where-each-error-goes).
+- **`JobObserver.onError` takes `{required JobErrorAnswer answer}`: what the
+  job does about the error.** `answered`: it asks for an answer, through
+  `JobAnswerer.onUnanswered` or the zone. `cancellation`: it never does,
+  because the error is a cancellation. `never`: it never does for another
+  reason, such as `ignoreFailure()`. `later`: the outcome that carries the
+  error may still be read, and nothing is promised. For an error no outcome
+  carries, and for the failure of the body of a job that has accepted a
+  cancellation by the time the body throws, `Job.isCancellationError` is now
+  asked before `onError`, not after it: an `onError` that cancels its own job
+  no longer sends that error under the filter, a filter set once `onError` has
+  heard the failure is not asked about it, and the error of a filter that
+  throws reaches the zone before `onError` hears the error the filter was asked
+  about. The core no longer announces through the `@protected`
+  `notifyObserver`: an override of it hears only what the engine itself sends.
+  See [Where each error goes](doc/error-rules.md#where-each-error-goes).
 
 ### Documentation
 
