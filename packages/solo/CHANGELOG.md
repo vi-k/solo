@@ -1,4 +1,4 @@
-## Unreleased
+## 0.4.0
 
 This package re-exports `async_job` whole, so the changes of the core are this
 package's too: see

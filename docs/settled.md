@@ -523,6 +523,12 @@ M8.)
 и в dartdoc `add`. (2026-10-22; `2026-10-22-solo-project-review.md`, L2,
 решение владельца.)
 
+**109. `Solo.onError` и `SoloObserver.onError` значения `JobErrorAnswer`
+не получают.** Его говорит `JobObserver.onError` ядра, по заявке scopo, который
+слушает задачи ядра сам; хуки `solo` остались как были. Пробросить можно позже,
+добавлением, если появится потребитель. (2026-10-25;
+`2026-10-24-observer-answer-design.md`, решение владельца.)
+
 ## `flutter_solo`
 
 **60. `SoloSelector.changed:` сравнивает с последним принятым значением,

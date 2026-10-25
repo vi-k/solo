@@ -2,7 +2,7 @@ name: solo
 description: >-
   One job at a time: sequential jobs with exclusive state ownership,
   declarative rules and cooperative cancellation. Pure Dart.
-version: 0.3.0
+version: 0.4.0
 repository: https://github.com/vi-k/solo/tree/main/packages/solo
 issue_tracker: https://github.com/vi-k/solo/issues
 topics:
@@ -15,7 +15,7 @@ environment:
   sdk: ^3.6.0
 
 dependencies:
-  async_job: ^0.3.0
+  async_job: ^0.4.0
   meta: ^1.15.0
 
 dev_dependencies:
