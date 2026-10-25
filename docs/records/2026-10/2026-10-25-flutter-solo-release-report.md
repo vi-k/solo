@@ -1,5 +1,6 @@
-> **Состояние на 2026-10-25:** владелец разрешил публикацию `flutter_solo`
-> 0.4.0; связка выполняется коммитом `Release flutter_solo 0.4.0`.
+> **Состояние на 2026-10-25:** `flutter_solo` 0.4.0 опубликован на pub.dev;
+> релизный коммит `29c4738b` и аннотированный тег отправлены в origin. Выпуск
+> 0.4.0 завершён: все три пакета на pub.dev.
 > **Что это:** снятие оверрайдов `flutter_solo` и подготовка его выпуска 0.4.0.
 > **Связанные записи:** `2026-10-25-solo-release-report.md`,
 > `2026-10-25-async-job-release-report.md`,
@@ -66,3 +67,17 @@ CI `gate` на `37da782f` (прогон 40179110802) зелёный во все�
 ни локально, ни в origin, дерево чистое; на pub.dev `latest: 0.3.0`. Связка
 выполняется подряд: коммит `Release flutter_solo 0.4.0`, аннотированный тег
 `flutter_solo-v0.4.0`, push, `flutter pub publish`.
+
+- `37da782f` — снятие оверрайдов, `29c4738b` — Release flutter_solo 0.4.0;
+- аннотированный тег `flutter_solo-v0.4.0` указывает на `29c4738b`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/flutter_solo-v0.4.0^{}` дают `29c4738b`;
+- `flutter pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/flutter_solo version 0.4.0»;
+- API pub.dev вернул `latest: 0.4.0` и зависимость `solo: ^0.4.0`.
+
+Пакет: https://pub.dev/packages/flutter_solo/versions/0.4.0
+
+Выпуск 0.4.0 завершён: `async_job`, `solo` и `flutter_solo` опубликованы,
+оверрайдов в дереве нет. Следующая правка ядра или `solo` возвращает оверрайды
+верхних пакетов — правило в `AGENTS.md`, раздел «Оверрайды разработки».
