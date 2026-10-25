@@ -40,6 +40,11 @@ final class ProbeJob<T> extends JobBase<T> implements ChildJob<T> {
   /// Cancels the job with a cancellation of its own, the way an engine does.
   void cancelBy(Cancelled cancelled) => cancelWith(cancelled);
 
+  /// Tells the observer about an error the way an engine does, through the
+  /// door the core leaves it.
+  void announce(Object error, StackTrace stackTrace) =>
+      notifyObserver(error, stackTrace);
+
   /// Sends an error to the zone the way an engine does, when its own route for
   /// one with nowhere to go ends with nobody.
   void report(Object error, StackTrace stackTrace) =>

@@ -138,7 +138,10 @@ enum JobErrorAnswer {
   ///
   /// Right after this call, or, for the failure of a body the job's
   /// cancellation covers, once the job has ended. A [Job.ignoreFailure] called
-  /// before then takes that answer away.
+  /// before then takes that answer away. An overflow the body throws before
+  /// its start has returned comes as [later] instead: if it cut the start
+  /// short as well, the core ends the job with its failure ignored, and nobody
+  /// answers for it.
   answered,
 
   /// The job never asks for an answer, because the error is a cancellation:
@@ -152,9 +155,13 @@ enum JobErrorAnswer {
   /// neither.
   later,
 
-  /// The job never asks for an answer, and the error is not a cancellation:
-  /// the failure of a job [Job.ignoreFailure] was called on, or one this job
-  /// carries for another that has been answered for already.
+  /// The job never asks for an answer, and the error is not a cancellation.
+  ///
+  /// The failure of a job [Job.ignoreFailure] was called on, one this job
+  /// carries for another that has been answered for already, or one inside a
+  /// `ParallelWaitError` that the walk the job decided by did not meet. An
+  /// ignored failure is never put to [Job.isCancellationError], so this may
+  /// carry an error the filter would have called a cancellation.
   never,
 }
 

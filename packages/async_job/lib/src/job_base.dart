@@ -1612,30 +1612,30 @@ abstract class JobBase<T> implements Job<T> {
     }
   }
 
-  /// Announces [error] to the observer and asks nobody to answer for it.
+  /// Announces [error] to the observer and asks nobody to answer for it: the
+  /// door an engine announces through.
   ///
-  /// For an error that has an outcome of its own — the body's. It is answered
-  /// for through that outcome, if nobody observes it, and shouting twice about
-  /// one error is worse than once. When the job ends [Cancelled], the outcome
-  /// does not carry it, and it is answered later without being announced again
-  /// — unless [Job.ignoreFailure] was called or [Job.isCancellationError] names
-  /// it, and then nobody answers for it. A [Failed] an engine hands to [finish]
-  /// needs no call here: [finish] announces it itself. [notifyError] announces
-  /// the same way, and goes on to the answer.
+  /// For an error the engine answers for in its own way, or one an outcome of
+  /// its making will carry: the core does nothing more with it, and asks
+  /// nobody about it, [Job.isCancellationError] included. A [Failed] an engine
+  /// hands to [finish] needs no call here: [finish] announces it itself.
+  /// [notifyError] announces the same way, and goes on to the answer.
   ///
   /// The observer is told about one error at a time: a `ParallelWaitError` is
   /// walked as [Job.visitErrors] walks it, and each failure and each
   /// cancellation inside it gets a call of its own, with its own stack trace.
   /// The job's own cancellation inside one is left out: the outcome says it.
-  /// A failure comes with [JobErrorAnswer.later], or [JobErrorAnswer.never]
-  /// once [Job.ignoreFailure] was called; a cancellation with
-  /// [JobErrorAnswer.cancellation].
+  /// A failure comes with [JobErrorAnswer.later], even on a job
+  /// [Job.ignoreFailure] was called on: the core cannot say what an engine
+  /// will do with it. A cancellation comes with [JobErrorAnswer.cancellation].
   ///
-  /// The core does not announce through this method: it is the door for an
-  /// engine, and an override of it hears only what the engine sends.
+  /// The door for an engine: the core does not announce through it, and an
+  /// override of it hears only what the engine sends. Nor does it note the
+  /// error as announced: a [Failed] with the same error handed to [finish]
+  /// afterwards is announced again.
   @protected
   void notifyObserver(Object error, StackTrace stackTrace) =>
-      _notifyObserver(error, stackTrace, otherwise: _laterOrNever);
+      _notifyObserver(error, stackTrace, otherwise: JobErrorAnswer.later);
 
   /// [JobErrorAnswer.later], or [JobErrorAnswer.never] for a job
   /// [Job.ignoreFailure] was called on: nothing answers for its failure.
@@ -2479,16 +2479,25 @@ abstract class JobBase<T> implements Job<T> {
   /// filter names it: the filter is asked here, the verdicts are kept for
   /// that answer in [_bodyVerdicts], and `onError` is told
   /// [JobErrorAnswer.answered] or [JobErrorAnswer.cancellation]. For any other
-  /// job the outcome may still carry the failure, and nobody is asked:
-  /// [JobErrorAnswer.later], or [JobErrorAnswer.never] once
+  /// job nobody is asked, and nothing is settled yet: the outcome may still
+  /// carry the failure, or, for a job an engine has ended by hand with an
+  /// outcome of its own, the route of the body answers for it once it ends.
+  /// `onError` is told [JobErrorAnswer.later], or [JobErrorAnswer.never] once
   /// [Job.ignoreFailure] was called.
   ///
   /// A cancellation that lands after this, while the job waits for its
   /// children or unwinds, covers the failure too, and the filter is asked about
   /// it then: `onError` was told [JobErrorAnswer.later], which promised
   /// nothing.
+  ///
+  /// So is an overflow the body threw before the start returned, cancelled job
+  /// or not: if that overflow cut the start short too, the core ends the job
+  /// with [Job.ignoreFailure] called (see [_concludeTorn]), and nobody answers
+  /// for it. Which of the two it is, nothing here can tell yet.
   void _announceBodyFailure(Object error, StackTrace stackTrace) {
-    if (!isCancelled || _ignored) {
+    if (!isCancelled ||
+        _ignored ||
+        (error is StackOverflowError && !_startReturned)) {
       _notifyObserver(error, stackTrace, otherwise: _laterOrNever);
       return;
     }

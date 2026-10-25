@@ -145,18 +145,22 @@ outcome: Cancelled(manual)
 ```
 
 The job stays as it was. `Job.isCancellationError` is asked about each failure
-of a job that has accepted a cancellation. It is asked when the job is about to
-send the failure to the answer, and only then. An error it names stops at
-`onError` and changes no outcome. A failure of a job that nobody cancelled is
-not asked about: a body that throws `DatabaseStopped` while its own job goes on
-ends `Failed` with it, and if nobody observes that outcome, it goes on to the
+of a job that has accepted a cancellation. It is asked when the job decides
+whether an answer will be asked for the failure, and only then. For an error no
+outcome carries, and for the failure of the body of a job that is cancelled
+already when the body throws, that is before `onError`, and a filter set after
+that does not apply to that failure. An error it names stops at `onError` and
+changes no outcome. A failure of a job that nobody cancelled is not asked
+about: a body that throws `DatabaseStopped` while its own job goes on ends
+`Failed` with it, and if nobody observes that outcome, it goes on to the
 answer. Somebody else cancelled the token then, and the job has to say so.
 
 The filter is called synchronously, with one failure at a time and never with a
 `Cancelled`, so keep it to a type test. The job walks a `ParallelWaitError` and
 asks about each failure inside it on its own. A filter that throws is an error
-of the app: it goes to the zone the job was created in, and the failure it was
-asked about goes on to the answer.
+of the app: it goes to the zone the job was created in, before `onError` hears
+the failure when the filter is asked first, and the failure it was asked about
+goes on to the answer.
 
 The field belongs to the app, like `Job.debug`, and a library does not set it.
 Where two parts of the app name errors of their own, the second chains the

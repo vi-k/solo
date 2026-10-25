@@ -49,6 +49,24 @@ final class HeardToTheEnd extends Heard {
   void onFinish(Job<Object?> job) => seen.add('onFinish');
 }
 
+/// Both hooks in one list, each line with the key of the job.
+final class HeardByKey extends JobObserver with JobAnswerer {
+  final seen = <String>[];
+
+  @override
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
+      seen.add('${job.key} onError: ${error.runtimeType}, ${answer.name}');
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      seen.add('${job.key} onUnanswered: ${error.runtimeType}');
+}
+
 /// A [Heard] that cancels the job from `onError`.
 final class Cancelling extends Heard {
   @override
@@ -661,6 +679,68 @@ void main() {
       expect(zone, isEmpty);
       expect(heard.seen, ['onError: Bad state: by hand, never', 'onFinish']);
     });
+  });
+
+  test('notifyObserver, the door of an engine, says later even when ignored',
+      () {
+    final heard = Heard();
+    final zone = zoneOf((async) {
+      ProbeJob<int>(observer: heard, (ctx) async => 1)
+        ..ignoreFailure()
+        ..announce(StateError('engine'), StackTrace.current);
+      async.flushTimers();
+    });
+    expect(zone, isEmpty);
+    expect(heard.seen, ['onError: Bad state: engine, later']);
+  });
+
+  test('a torn start of a cancelled job whose body overflowed', () async {
+    nameTheStop();
+    final heard = HeardByKey();
+    var scheduled = 0;
+    final zone = <String>[];
+    late Job<void> root;
+    runZonedGuarded(
+      () {
+        // The body cancels its own job and then overflows, before its first
+        // `await`; the zone has no stack for what the routine waits for
+        // next, and the start is cut short. The core ends such a job
+        // without an answer to the overflow: the body of the parent heard it.
+        final child = RulesJob<void>(
+          (ctx) {
+            ctx.breakRule('gave up');
+            throw const StackOverflowError();
+          },
+          key: 'child',
+        );
+        root = Job<void>(key: 'root', observer: heard, (ctx) async {
+          try {
+            await runZoned(
+              () => ctx.run(child),
+              zoneSpecification: ZoneSpecification(
+                scheduleMicrotask: (self, parent, zone, callback) {
+                  if (scheduled++ == 0) {
+                    throw const StackOverflowError();
+                  }
+                  parent.scheduleMicrotask(zone, callback);
+                },
+              ),
+            );
+          } on Object {
+            // The overflow the start throws.
+          }
+          await delay(1);
+        });
+      },
+      (error, _) => zone.add('$error'),
+    );
+    await root.done.timeout(const Duration(seconds: 5));
+    await delay(1);
+    expect(zone, isEmpty);
+    expect(asked, isEmpty, reason: 'an ignored failure is never put to it');
+    // Told `later`, not `answered`: where the body was caught nothing could
+    // tell an overflow that cuts the start short from one that does not.
+    expect(heard.seen, ['child onError: StackOverflowError, later']);
   });
 
   test('the filter of cancellation errors is left as it was found', () {

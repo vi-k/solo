@@ -153,10 +153,13 @@ abstract interface class Job<T> {
   /// through [JobContext.onCancel] stops it.
   ///
   /// Asked about each failure of a job that has accepted a cancellation, when
-  /// the job is about to send the failure to the answer, and only then: such an
-  /// error reaches [JobObserver.onError] like any other, and nobody is asked to
-  /// answer for it, neither [JobAnswerer.onUnanswered] nor the zone. A failure
-  /// of a job that was not cancelled is not asked about, nor is one that
+  /// the job decides whether to ask for an answer to it: before
+  /// [JobObserver.onError] for an error no outcome carries and for a failure of
+  /// the body of a job cancelled by the time the body throws, and once the job
+  /// has ended for a failure of the body a later cancellation covers. An error
+  /// it names reaches [JobObserver.onError] like any other, and nobody is asked
+  /// to answer for it, neither [JobAnswerer.onUnanswered] nor the zone. A
+  /// failure of a job that was not cancelled is not asked about, nor is one
   /// [Job.ignoreFailure] has already kept out of the answer. `null`, the
   /// default, names none.
   ///
@@ -165,10 +168,12 @@ abstract interface class Job<T> {
   /// ```
   ///
   /// Called synchronously, with one failure at a time, never a [Cancelled]:
-  /// keep it to a type test. Read when the answer is asked for, so a new one
-  /// applies to every answer from then on. One that throws is an error of the
-  /// app: its error goes to the zone the job was created in, and the failure it
-  /// was asked about goes on to the answer. A [Cancelled] it throws is dropped.
+  /// keep it to a type test. Read when that decision is made, so a new one
+  /// applies to every decision from then on, and not to a failure decided
+  /// already. One that throws is an error of the app: its error goes to the
+  /// zone the job was created in — before [JobObserver.onError] hears the
+  /// failure, when the decision comes first — and the failure it was asked
+  /// about goes on to the answer. A [Cancelled] it throws is dropped.
   ///
   /// Set by the application, once, in `main`. A library does not set it, and
   /// `solo` does not either.
