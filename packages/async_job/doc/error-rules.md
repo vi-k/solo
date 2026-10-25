@@ -79,19 +79,24 @@ the error, and is settled before the call.
 
 | `answer` | When |
 | --- | --- |
-| `answered` | An error no outcome carries, that is no cancellation and that the filter does not name: an error of cleanup, of a callback, of work of `ctx.unattended`, a late error of `ctx.abandonable`, an error of the name of a child, a `Failed` an engine hands to a job that is already over. The answer comes right after `onError`. And the failure of the body of a job that has accepted a cancellation by the time the body throws, unless the filter names it: the answer comes once the job has ended, unless `ignoreFailure()` is called before then |
-| `cancellation` | A `Cancelled`, and an error the filter names on a job that has accepted a cancellation |
-| `never` | A failure of the body or of the outcome of a job `ignoreFailure()` was called on, and the failure of a source that a continuation of `then` or a handle of `shared` carries after the source has been answered for |
+| `answered` | An error no outcome carries, that is no cancellation and that the filter does not name: an error of cleanup, of a callback, of work of `ctx.unattended`, a late error of `ctx.abandonable`, an error of the name of a child, a `Failed` an engine hands to a job that is already over, unless `ignoreFailure()` was called on it. The answer comes right after `onError`. And the failure of the body of a job that has accepted a cancellation by the time the body throws, unless the filter names it: the answer comes once the job has ended, unless `ignoreFailure()` is called before then. An overflow the body throws before its start has returned is `later` instead: when it cut the start short as well, the core ends the job with its failure ignored |
+| `cancellation` | A `Cancelled`, and an error the filter names on a job that has accepted a cancellation. A `Failed` an engine builds around a `Cancelled` still goes to the zone, past the answer, if nobody observes the outcome |
+| `never` | A failure of the body or of the outcome of a job `ignoreFailure()` was called on, a `Failed` an engine hands to such a job when it is already over, the failure of a source that a continuation of `then` or a handle of `shared` carries after the source has been answered for, and a failure inside a `ParallelWaitError` that the walk the job decided by did not meet. An ignored failure is never put to the filter, so `never` may carry an error the filter would have called a cancellation |
 | `later` | Any other failure of a body or of an outcome: the outcome may still be read, and the answer, if it comes, comes once the job has ended |
 
-`later` promises nothing, and two of its errors may end with no answer and
+`later` promises nothing, and three of its errors may end with no answer and
 nothing more said to the observer. One is a failure of the body of a job that
 accepts a cancellation only after the body threw. The other is the failure of a
 source when `onError` of its continuation cancels the continuation. A
 cancellation covers each of them after `onError`, the filter is asked about it
-then, and one the filter names gets no answer. An app that reports in `onError`
-and in its answer leaves the calls with `answered` to the answer, and still
-hears twice a failure of a body nobody observes.
+then, and one the filter names gets no answer. The third is an overflow the
+body throws before its start has returned, when it cut the start short as well:
+the core ends the job with its failure ignored. A `ParallelWaitError` whose
+second walk meets other failures than the first is told as that second walk
+meets it, and a failure only the first walk met is answered for although
+`onError` never heard it. An app that reports in `onError` and in its answer
+leaves the calls with `answered` to the answer, and still hears twice a failure
+of a body nobody observes.
 
 ## The debug channel
 

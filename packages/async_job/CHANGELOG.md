@@ -15,8 +15,10 @@
   heard the failure is not asked about it, and the error of a filter that
   throws reaches the zone before `onError` hears the error the filter was asked
   about. The core no longer announces through the `@protected`
-  `notifyObserver`: an override of it hears only what the engine itself sends.
-  See [Where each error goes](doc/error-rules.md#where-each-error-goes).
+  `notifyObserver`: an override of it hears only what the engine itself sends,
+  and `onError` is told `later` about each of those, even after
+  `ignoreFailure()`. See
+  [Where each error goes](doc/error-rules.md#where-each-error-goes).
 
 ### Documentation
 
