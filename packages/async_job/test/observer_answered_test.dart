@@ -204,6 +204,43 @@ List<String> disposing(
       caught,
     );
 
+/// Runs a child whose body cancels its own job and then overflows before its
+/// start has returned, with nothing to cut the start short; the filter names
+/// an overflow when [named]. Returns what reached the zone.
+Future<List<String>> overflowedWhole(
+  JobObserver observer, {
+  required bool named,
+}) async {
+  Job.isCancellationError = (error) {
+    asked.add('${error.runtimeType}');
+    return named && error is StackOverflowError;
+  };
+  final zone = <String>[];
+  late Job<void> root;
+  runZonedGuarded(
+    () {
+      final child = RulesJob<void>(
+        (ctx) {
+          ctx.breakRule('gave up');
+          throw const StackOverflowError();
+        },
+        key: 'child',
+      );
+      root = Job<void>(key: 'root', observer: observer, (ctx) async {
+        try {
+          await ctx.run(child);
+        } on Object {
+          // The child ends cancelled.
+        }
+      });
+    },
+    (error, _) => zone.add('$error'),
+  );
+  await root.done.timeout(const Duration(seconds: 5));
+  await delay(1);
+  return zone;
+}
+
 void main() {
   setUp(asked.clear);
   tearDown(() => Job.isCancellationError = null);
@@ -740,6 +777,26 @@ void main() {
     expect(asked, isEmpty, reason: 'an ignored failure is never put to it');
     // Told `later`, not `answered`: where the body was caught nothing could
     // tell an overflow that cuts the start short from one that does not.
+    expect(heard.seen, ['child onError: StackOverflowError, later']);
+  });
+
+  test('a whole start of a cancelled job whose body overflowed', () async {
+    final heard = HeardByKey();
+    expect(await overflowedWhole(heard, named: false), isEmpty);
+    // Told `later` where the body was caught, the filter asked once the job
+    // has ended, and the answer follows.
+    expect(asked, ['StackOverflowError']);
+    expect(heard.seen, [
+      'child onError: StackOverflowError, later',
+      'child onUnanswered: StackOverflowError',
+    ]);
+  });
+
+  test('a whole start of a cancelled job whose body overflowed, named',
+      () async {
+    final heard = HeardByKey();
+    expect(await overflowedWhole(heard, named: true), isEmpty);
+    expect(asked, ['StackOverflowError']);
     expect(heard.seen, ['child onError: StackOverflowError, later']);
   });
 

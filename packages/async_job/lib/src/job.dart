@@ -168,12 +168,13 @@ abstract interface class Job<T> {
   /// ```
   ///
   /// Called synchronously, with one failure at a time, never a [Cancelled]:
-  /// keep it to a type test. Read when that decision is made, so a new one
-  /// applies to every decision from then on, and not to a failure decided
-  /// already. One that throws is an error of the app: its error goes to the
-  /// zone the job was created in — before [JobObserver.onError] hears the
-  /// failure, when the decision comes first — and the failure it was asked
-  /// about goes on to the answer. A [Cancelled] it throws is dropped.
+  /// keep it to a type test. Read at that decision, so a new one applies to no
+  /// failure decided already. An overflow the body throws before its start
+  /// has returned is asked about once the job has ended, or never if it cut
+  /// the start short too. One that throws is an error of the app: its error
+  /// goes to the zone the job was created in, before [JobObserver.onError]
+  /// hears the failure when the decision comes first, and the failure goes on
+  /// to the answer. A [Cancelled] it throws is dropped.
   ///
   /// Set by the application, once, in `main`. A library does not set it, and
   /// `solo` does not either.
