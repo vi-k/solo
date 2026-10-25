@@ -94,7 +94,7 @@ dependencies:
   # The package without Flutter of doc/mixins.md imports these two by name.
   meta: any
   # The controller's life of the README puts a controller in its scopes.
-  scopo: ^0.18.0
+  scopo: ^0.19.0
   solo: any
 
 dev_dependencies:
