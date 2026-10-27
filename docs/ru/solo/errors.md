@@ -111,7 +111,12 @@ final class ProfileController extends Solo<ProfileState> {
   // ...задачи из быстрого старта...
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       reportCrash(error, stackTrace);
 }
 ```
@@ -128,7 +133,12 @@ final class ProfileController extends Solo<ProfileState> {
 - правило, которое бросило вместо ответа.
 
 Хук отправляет отчёт и возвращается. Он ни за что не отвечает, и его
-переопределение не двигает ни одну ошибку никуда.
+переопределение не двигает ни одну ошибку никуда. Его `answer` говорит, что
+задача сделает с ошибкой дальше: при `answered` о ней спросят и `onUnanswered`,
+если до того у задачи не позовут `ignoreFailure()`. Остальные значения
+разбирает раздел
+[«Куда идёт каждая ошибка»](../async_job/error-rules.md#куда-идёт-каждая-ошибка)
+страницы о правилах ошибок пакета `async_job`.
 
 Он слышит каждую ошибку по одному разу на каждую задачу. Ошибка, которую
 бросила дочерняя задача и пропустила родительская, становится провалом обеих:
@@ -159,8 +169,9 @@ final class Failures extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       reportCrash(error, stackTrace);
 }
 ```

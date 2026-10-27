@@ -91,12 +91,18 @@ abstract class SoloObserver {
   /// [Solo.unansweredHandler] — answering for an error is a job of its own, and
   /// setting up a log must not quietly turn reporting off. See [Failed] for the
   /// errors that also reach the zone.
+  ///
+  /// [answer] says what the job does about this error, as in the core: with
+  /// [JobErrorAnswer.answered], [Solo.onUnanswered] of [solo] is asked about
+  /// it unless [Job.ignoreFailure] is called before it is. See
+  /// [JobErrorAnswer].
   void onError(
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) {}
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {}
 
   /// The state changed, from a job or from `externalSetState`.
   ///
@@ -152,9 +158,10 @@ final class _AllSoloObservers extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
-      _each((o) => o.onError(solo, job, error, stackTrace));
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
+      _each((o) => o.onError(solo, job, error, stackTrace, answer: answer));
 
   @override
   void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>

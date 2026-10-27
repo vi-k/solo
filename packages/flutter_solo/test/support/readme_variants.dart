@@ -185,8 +185,9 @@ final class Watching extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       seen.add(error);
 }
 

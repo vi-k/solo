@@ -149,6 +149,11 @@ mixin Workbench on Solo<CameraState> {
   final hookHeard = <String>[];
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       hookHeard.add('$job: $error');
 }

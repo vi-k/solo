@@ -33,7 +33,12 @@ final class ProfileController extends Solo<ProfileState> {
       );
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       reportCrash(error, stackTrace);
 
   @override

@@ -1,3 +1,11 @@
+## Не выпущено
+
+### Ломающие изменения
+
+- **`Solo.onError` и `SoloObserver.onError` принимают
+  `{required JobErrorAnswer answer}`, как `JobObserver.onError` ядра.** См.
+  [«Отправка ошибки»](errors.md#отправка-ошибки).
+
 ## 0.4.0
 
 Этот пакет реэкспортирует `async_job` целиком, поэтому изменения ядра

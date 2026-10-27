@@ -122,7 +122,12 @@ final class CatchingPlayerController extends Solo<PlayerState> {
   final heard = <String>[];
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       heard.add('$error');
 
   Job<void> seek(Duration position) => enqueue<Ready, void>(

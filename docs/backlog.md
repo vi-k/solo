@@ -5,15 +5,6 @@
 запись — только спросив владельца.
 
 <!-- Записи ниже. Одна запись — один пункт списка. -->
-- **solo: `SoloObserver.onError` без `JobErrorAnswer`.** Записал агент по слову
-  владельца 2026-10-27, из HisBible. С 0.4.0 `JobObserver.onError` получает
-  `answer`, а `SoloObserver.onError` нет (`solo.dart:1391`, пункт 109
-  `docs/settled.md` оставлял проброс до появления потребителя). Потребитель
-  есть: журнал HisBible пишется через `Solo.observer`. Отмену снаружи отличить
-  можно
-  (`error is Cancelled || (job.isCancelled && Job.isCancellationError(error))`),
-  уже обработанную ошибку (`never`) — нельзя. Набросок:
-  `{required JobErrorAnswer answer}` у `SoloObserver.onError`, как в ядре.
 - **solo: рецепт отложенного старта задания.** Записал агент по слову владельца
   2026-10-27, из HisBible. Повтор решения 56 `docs/settled.md`. Задание
   начинается по сигналу или через время, не держит очередь и снимается при

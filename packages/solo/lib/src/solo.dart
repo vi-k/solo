@@ -987,8 +987,17 @@ abstract class Solo<S extends Object> {
   /// cancellation is not an error and never comes here; a [Cancelled] thrown by
   /// an abandoned action does, because for an observer that is a late failure
   /// like any other. See [Failed] for the errors that also reach the zone.
+  ///
+  /// [answer] says what the job does about this error, as in the core: with
+  /// [JobErrorAnswer.answered], [onUnanswered] is asked about it unless
+  /// [Job.ignoreFailure] is called before it is. See [JobErrorAnswer].
   @protected
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {}
 
   /// Nobody answered for this error, and this controller is the last one
   /// holding it.
@@ -1385,8 +1394,6 @@ final class _SoloJobObserver<S extends Object>
     Solo._callHook(() => _solo.onFinish(job));
   }
 
-  // [answer] goes no further: neither [Solo.onError] nor [SoloObserver]
-  // takes it.
   @override
   void onError(
     Job<Object?> job,
@@ -1395,9 +1402,12 @@ final class _SoloJobObserver<S extends Object>
     required JobErrorAnswer answer,
   }) {
     Solo._callHook(
-      () => Solo.observer?.onError(_solo, job, error, stackTrace),
+      () =>
+          Solo.observer?.onError(_solo, job, error, stackTrace, answer: answer),
     );
-    Solo._callHook(() => _solo.onError(job, error, stackTrace));
+    Solo._callHook(
+      () => _solo.onError(job, error, stackTrace, answer: answer),
+    );
   }
 
   /// The controller answers for its jobs: [Solo.onUnanswered], and the

@@ -73,8 +73,9 @@ final class Watching extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       heard.add('${job.key}: ${text(error)}');
 }
 
@@ -106,8 +107,9 @@ final class Saying extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       _say('onError');
 
   @override
@@ -142,7 +144,12 @@ final class EveryHook extends Solo<int> with OpenSolo<int> {
   void onFinish(Job<Object?> job) => _say('onFinish');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       _say('onError');
 
   @override

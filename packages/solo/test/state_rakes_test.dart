@@ -359,7 +359,12 @@ final class _Leaky extends Solo<int> {
   }
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       trace.add('ifFailed: $error');
 
   @override
@@ -519,7 +524,12 @@ final class _Eligible extends Solo<String> {
   void reflect(String state) => externalSetState(state);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       trace.add('onError of ${job.key}: $error');
 
   @override

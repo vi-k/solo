@@ -107,7 +107,12 @@ final class ProfileController extends Solo<ProfileState> {
   // ...the jobs from the quick start...
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       reportCrash(error, stackTrace);
 }
 ```
@@ -125,7 +130,11 @@ notified.
 - a rule that threw instead of answering.
 
 The hook reports and returns. It answers for nothing, and overriding it moves
-no error anywhere.
+no error anywhere. Its `answer` says what the job does about the error next:
+with `answered`, `onUnanswered` is asked about it too, unless `ignoreFailure()`
+is called before it is. The other values are in
+[Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
+on the error rules page of `async_job`.
 
 It hears each error once for each job. An error that a child throws and its
 parent lets through is a failure of both, so the hook hears it twice. The `job`
@@ -155,8 +164,9 @@ final class Failures extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       reportCrash(error, stackTrace);
 }
 ```

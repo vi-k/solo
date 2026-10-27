@@ -35,7 +35,12 @@ final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
   void onFinish(Job<Object?> job) => log.add('finish:${job.key}');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {
     if (error is TestFailure) {
       Error.throwWithStackTrace(error, stackTrace);
     }

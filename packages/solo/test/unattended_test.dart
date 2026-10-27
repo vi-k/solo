@@ -25,7 +25,12 @@ final class _Recorder extends Solo<TestState> with OpenSolo<TestState> {
   void set(TestState state) => externalSetState(state);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       lines.add('$name.onError [${job.key}] $error');
   // A recorder of a test: it answers for the errors here, so nothing
   // reaches the handler or the zone.
@@ -231,7 +236,12 @@ final class _Watched extends Solo<TestState> with OpenSolo<TestState> {
       lines.add('finish ${job.key} ${job.outcome}');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       lines.add('error ${job.key} $error');
   // A recorder of a test: it reads the errors and answers for them here,
   // so nothing reaches the handler or the zone.

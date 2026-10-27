@@ -130,6 +130,11 @@ final class ParentController extends Solo<FirmwareState> {
       );
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       seen.add('onError of ${job.key}: $error');
 }

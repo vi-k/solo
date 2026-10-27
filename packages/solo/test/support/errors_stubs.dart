@@ -278,7 +278,12 @@ mixin Desk<S extends Object> on Solo<S> {
   void reflect(S state) => externalSetState(state);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       heard.add('${job.key}: ${text(error)}');
 
   @override

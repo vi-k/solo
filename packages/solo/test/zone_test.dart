@@ -985,7 +985,12 @@ final class _Noting extends Solo<TestState> with OpenSolo<TestState> {
   _Noting() : super(const Initial());
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       errors.add('$error');
 }
 
@@ -1005,9 +1010,14 @@ final class _Loud extends Solo<TestState> with OpenSolo<TestState> {
   void set(TestState state) => externalSetState(state);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {
     errors.add('$error');
-    super.onError(job, error, stackTrace);
+    super.onError(job, error, stackTrace, answer: answer);
   }
 }
 
@@ -1028,9 +1038,14 @@ final class _StartThrows extends Solo<TestState> with OpenSolo<TestState> {
   void onStart(Job<Object?> job) => throw StateError('onStart of b');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {
     errors.add('$error');
-    super.onError(job, error, stackTrace);
+    super.onError(job, error, stackTrace, answer: answer);
   }
 }
 
@@ -1040,12 +1055,17 @@ final class _Reentrant extends Solo<TestState> with OpenSolo<TestState> {
   _Reentrant() : super(const Initial());
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {
     if (!_nested) {
       _nested = true;
       externalSetState(const Working());
     }
-    super.onError(job, error, stackTrace);
+    super.onError(job, error, stackTrace, answer: answer);
   }
 }
 

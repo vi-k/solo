@@ -709,7 +709,8 @@ final class _Retrier extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       _onError(solo, job);
 }

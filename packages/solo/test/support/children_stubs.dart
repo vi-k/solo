@@ -166,7 +166,12 @@ mixin Desk on Solo<AppState> {
       );
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       heard.add('$job: $error');
 
   @override

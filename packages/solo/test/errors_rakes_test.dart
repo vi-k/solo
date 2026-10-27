@@ -79,9 +79,14 @@ final class _ReportsAndCallsSuper extends Solo<int> with OpenSolo<int> {
   _ReportsAndCallsSuper() : super(0);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {
     heard.add(text(error));
-    super.onError(job, error, stackTrace);
+    super.onError(job, error, stackTrace, answer: answer);
   }
 }
 
@@ -91,7 +96,12 @@ final class _ReportsAndReturns extends Solo<int> with OpenSolo<int> {
   _ReportsAndReturns() : super(0);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       heard.add(text(error));
 }
 
@@ -198,7 +208,12 @@ final class _Zoned extends Solo<int> {
   SoloJob<void> submit(SoloJob<void> job) => enqueueJob(job);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       trace.add('controller in ${Zone.current[#zone]}: ${text(error)}');
 }
 
@@ -213,8 +228,9 @@ final class _ZonedObserver extends SoloObserver {
     Solo<Object?> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       trace.add('observer in ${Zone.current[#zone]}: ${text(error)}');
 }
 

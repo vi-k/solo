@@ -1,0 +1,7 @@
+# Use local solo until the release after 0.4.0 is published.
+# The overrides of `packages/flutter_solo` do not reach here: pub applies
+# only the ones of the package it resolves, and a path dependency brings
+# its `pubspec.yaml` alone.
+dependency_overrides:
+  solo:
+    path: ../../solo

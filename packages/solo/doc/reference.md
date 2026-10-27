@@ -68,7 +68,7 @@ repeats `@protected`.
 | --- | --- | --- |
 | `onStart(job)` | A job body is about to run | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `onFinish(job)` | A job has an outcome, a job dropped before its start included | [Watching every controller](diagnostics.md#watching-every-controller) |
-| `onError(job, error, stackTrace)` | Hears every error a job runs into and reports it, moving nothing | [Reporting an error](errors.md#reporting-an-error) |
+| `onError(job, error, stackTrace, answer: ...)` | Hears every error a job runs into and reports it, moving nothing | [Reporting an error](errors.md#reporting-an-error) |
 | `onUnanswered(job, error, stackTrace)` | Answers for an error no outcome carries and a `Failed` nobody observes, by default through `Solo.unansweredHandler` or the zone | [Answering for an error](errors.md#answering-for-an-error) |
 | `onLog(job, message)` | A job called `ctx.log` | [Logs](diagnostics.md#logs) |
 | `onChange(transition)` | The state changed, with a `SoloTransition` that says which job changed it | [Watching every controller](diagnostics.md#watching-every-controller) |

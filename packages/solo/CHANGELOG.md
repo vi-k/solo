@@ -1,3 +1,11 @@
+## Unreleased
+
+### Breaking changes
+
+- **`Solo.onError` and `SoloObserver.onError` take
+  `{required JobErrorAnswer answer}`, as `JobObserver.onError` of the core
+  does.** See [Reporting an error](doc/errors.md#reporting-an-error).
+
 ## 0.4.0
 
 This package re-exports `async_job` whole, so the changes of the core are this

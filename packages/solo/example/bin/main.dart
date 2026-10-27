@@ -47,8 +47,9 @@ final class _PrintObserver extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       print('${_label(job)} error $error');
 
   @override

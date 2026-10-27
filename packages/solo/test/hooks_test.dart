@@ -859,7 +859,12 @@ final class _Hooked extends Solo<TestState> with OpenSolo<TestState> {
   void onFinish(Job<Object?> job) => lines.add('hook: finish ${job.key}');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       lines.add('hook: error $error');
 
   @override

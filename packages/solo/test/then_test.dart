@@ -24,7 +24,12 @@ final class _Heard extends Solo<int> with OpenSolo<int> {
   void onFinish(Job<Object?> job) => heard.add('finish $job');
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       heard.add('error $job: $error');
 
   @override
@@ -45,8 +50,9 @@ final class _Watching extends SoloObserver {
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
-    StackTrace stackTrace,
-  ) =>
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) =>
       heard.add('error $job: $error');
 
   @override
