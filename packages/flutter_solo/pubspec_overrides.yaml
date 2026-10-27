@@ -1,6 +1,0 @@
-# Use local solo and async_job until 0.5.0 is published.
-dependency_overrides:
-  solo:
-    path: ../solo
-  async_job:
-    path: ../async_job
