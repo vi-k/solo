@@ -71,9 +71,10 @@ abstract interface class Job<T> {
   /// The named parameters are those of [Job.new]. The deadline of [timeout]
   /// is counted from the start, so the time the job waits for it is not
   /// counted; and a child with a deadline is how one step of a body gets
-  /// one: `await ctx.run(Job.deferred(step, key: 'step', timeout: limit))`
+  /// one: `await ctx.run(ctx.child(step, key: 'step', timeout: limit))`
   /// throws the child's `Cancelled(timeout)` into the body of the parent,
-  /// which catches it or lets it out.
+  /// which catches it or lets it out. [JobContext.child] makes the child
+  /// the engine of the body accepts; in the core that is this one.
   static DeferredJob<T> deferred<T>(
     Future<T> Function(JobContext ctx) body, {
     Object? key,

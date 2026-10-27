@@ -289,6 +289,9 @@ List<String> contextMembers() {
       deprecated = true;
       continue;
     }
+    if (code == '@useResult') {
+      continue;
+    }
     final name = RegExp(r'get (\w+);').firstMatch(code)?.group(1) ??
         RegExp(r' (\w+)(?:<[^(]*>)?\(')
             .allMatches(code)
@@ -1104,6 +1107,7 @@ void main() {
         'abandonable': (ctx) => ctx.abandonable(() => 1),
         'uncancellable': (ctx) => ctx.uncancellable(() => 1),
         'pause': (ctx) => ctx.pause(),
+        'child': (ctx) => ctx.child<int>((ctx) async => 1),
         'run': (ctx) => ctx.run(Job.deferred<int>((ctx) async => 1)),
         'start': (ctx) => ctx.start(Job.deferred<int>((ctx) async => 1)),
         'runAll': (ctx) => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),
@@ -1443,6 +1447,7 @@ void main() {
           ],
           [
             'check',
+            'child',
             'onCancel',
             'onDispose',
             'onDiscard',

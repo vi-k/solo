@@ -225,6 +225,7 @@ what a cancellation that comes while it runs does to it:
 | `ctx.abandonable(action)` | Waits while the job lives | Throws `Cancelled` | Throws at once |
 | `ctx.uncancellable(action)` | Holds the cancellation back | Throws `Cancelled` | Holds it until the step ends |
 | `ctx.pause(duration)` | Lets time pass | Throws `Cancelled` | Ends and throws |
+| `ctx.child(body)` | Makes a child to run | Works as usual |  |
 | `ctx.run(child)` | Runs a child and waits | Throws `Cancelled` | Passes it on, waits, throws |
 | `ctx.start(child)` | Starts a child, no waiting | Throws `Cancelled` | Passes it on |
 | `ctx.runAll(children)` | Runs children side by side | Throws `Cancelled` | Passes it on, waits, throws |

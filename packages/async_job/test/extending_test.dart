@@ -14,6 +14,7 @@ import 'dart:async';
 
 import 'package:async_job/engine.dart';
 import 'package:fake_async/fake_async.dart';
+import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
@@ -223,6 +224,46 @@ final class EachContext extends JobContextBase {
   }
 }
 
+/// An engine that makes the children of its jobs itself: it overrides
+/// `child`, and `each` takes its children from there as well.
+final class ChildMakingJob<T> extends JobBase<T> implements ChildJob<T> {
+  ChildMakingJob(this._body);
+
+  final Future<T> Function(JobContext ctx) _body;
+
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => ChildMakingContext(this);
+
+  @override
+  Future<T> execute(covariant ChildMakingContext ctx) => _body(ctx);
+}
+
+final class ChildMakingContext extends JobContextBase {
+  ChildMakingContext(super.owner);
+
+  static final made = <ChildJob<Object?>>[];
+
+  @override
+  @useResult
+  ChildJob<T> child<T>(
+    Future<T> Function(JobContext ctx) body, {
+    Object? key,
+    String Function()? describe,
+    Duration? timeout,
+  }) {
+    final child = Job.deferred<T>(
+      body,
+      key: key,
+      describe: () => 'a child of mine',
+      timeout: timeout,
+    );
+    made.add(child);
+    return child;
+  }
+}
+
 /// What the rule of a domain throws when it no longer holds.
 final class RuleBroken implements Exception {
   const RuleBroken();
@@ -334,6 +375,64 @@ void main() {
       );
       expect(identical(subscription, EachContext.made.single), isTrue);
       expect(seen, [1]);
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('an engine that overrides child gives each its children too', () {
+    fakeAsync((async) {
+      ChildMakingContext.made.clear();
+      final controller = StreamController<int>();
+      late Job<void> subscription;
+      final job = ChildMakingJob<void>((ctx) async {
+        await ctx.run(ctx.child(key: 'step', (ctx) async {}));
+        subscription = ctx.each(controller.stream, key: 'events', (ctx, _) {});
+      })
+        ..ignoreFailure()
+        ..launch();
+      async.flushMicrotasks();
+      unawaited(controller.close());
+      async.flushTimers();
+      expect(
+        ChildMakingContext.made.map((child) => '$child').toList(),
+        ['Job(step: a child of mine)', 'Job(events: a child of mine)'],
+      );
+      expect(identical(subscription, ChildMakingContext.made.last), isTrue);
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('an engine with rules that keeps child gets a child of the core', () {
+    fakeAsync((async) {
+      JobContext? childContext;
+      var ranThrough = false;
+      Object? thrown;
+      final job = CheckingJob<void>((ctx) async {
+        final child = ctx.child<void>((ctx) async {
+          childContext = ctx;
+          await ctx.abandonable(() => delay(10));
+          ranThrough = true;
+        });
+        ctx.rules = () => throw const RuleBroken();
+        try {
+          await ctx.run(child);
+        } on RuleBroken catch (error) {
+          thrown = error;
+        }
+      })
+        ..launch();
+      async.flushTimers();
+      expect(childContext, isNot(isA<CheckingContext>()));
+      expect(
+        ranThrough,
+        isTrue,
+        reason: 'the context of the core asks no rules of the engine',
+      );
+      expect(
+        thrown,
+        isA<RuleBroken>(),
+        reason: 'the parent still asks its own when the child is over',
+      );
       expect(job.outcome, isA<Done<void>>());
     });
   });

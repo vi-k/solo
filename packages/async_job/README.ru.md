@@ -227,6 +227,7 @@ Cancelled(manual)
 | `ctx.abandonable(action)` | Ждёт, пока жива задача | Бросает `Cancelled` | Бросает сразу |
 | `ctx.uncancellable(action)` | Придерживает отмену | Бросает `Cancelled` | Держит её до конца шага |
 | `ctx.pause(duration)` | Даёт пройти времени | Бросает `Cancelled` | Прерывается и бросает |
+| `ctx.child(body)` | Делает ребёнка для запуска | Работает как обычно |  |
 | `ctx.run(child)` | Запускает ребёнка и ждёт | Бросает `Cancelled` | Передаёт её, ждёт, бросает |
 | `ctx.start(child)` | Запускает ребёнка, не ждёт | Бросает `Cancelled` | Передаёт её |
 | `ctx.runAll(children)` | Запускает детей бок о бок | Бросает `Cancelled` | Передаёт её, ждёт, бросает |

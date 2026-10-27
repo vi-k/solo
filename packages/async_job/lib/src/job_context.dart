@@ -8,19 +8,20 @@ part of 'job_base.dart';
 /// only register do not — [onDispose], [onDiscard], [disown] and [unattended]
 /// go on working, so a body that has just been cancelled can still put what it
 /// holds on the cleanup stack, and still hand out a stop nobody waits for — and
-/// neither do [log], [job] and [heldCancellation]. What a cancellation
-/// arriving *during* a call does to that call is the call's own business: see
-/// [abandonable], [join], [pause] and [uncancellable].
+/// neither do [child], [log], [job] and [heldCancellation]: [child] only makes
+/// a child, and the members that start one are the ones that refuse. What a
+/// cancellation arriving *during* a call does to that call is the call's own
+/// business: see [abandonable], [join], [pause] and [uncancellable].
 ///
 /// A context that outlived its job — captured by a closure nobody awaited
 /// — neither waits nor starts nor registers anything: every member throws
-/// a [StateError] once the job has finished, except [check], [log], [job]
-/// and [heldCancellation]. While the core unwinds the cleanup stack the same
-/// holds for the members that wait or start something, and for [check] on a
-/// job that is not cancelled — but [onDispose], [onDiscard], [disown] and
-/// [unattended] go on working, because a value arriving that late is put on
-/// the stack the core is unwinding, and a disposer may hand out work nobody
-/// waits for.
+/// a [StateError] once the job has finished, except [check], [child], [log],
+/// [job] and [heldCancellation]. While the core unwinds the cleanup stack the
+/// same holds for the members that wait or start something, and for [check]
+/// on a job that is not cancelled — but [child], [onDispose], [onDiscard],
+/// [disown] and [unattended] go on working, because a value arriving that late
+/// is put on the stack the core is unwinding, and a disposer may hand out work
+/// nobody waits for.
 abstract interface class JobContext {
   /// Gives up if the job was cancelled, or if a rule its engine adds stopped
   /// holding.
@@ -257,6 +258,44 @@ abstract interface class JobContext {
   /// inside the same uncancellable section, when it is asynchronous.
   bool disown(Object value);
 
+  /// Makes an unstarted child that the engine of this job accepts, for [run],
+  /// [start] and [runAll].
+  ///
+  /// The way to make a child for code that holds a context and does not know
+  /// the engine behind it: a [Job.deferred] would do for the core, and an
+  /// engine that owns its children, `solo` for one, turns it away.
+  ///
+  /// ```dart
+  /// final rows = await ctx.run(ctx.child(load, key: 'rows', timeout: limit));
+  /// ```
+  ///
+  /// Starts nothing and checks nothing, so it never throws for the state of
+  /// this job: [run], [start] and [runAll] do the refusing, as they do for any
+  /// child. [timeout] is that of [Job.deferred]: counted from the start of the
+  /// child's body, and zero or negative throws [ArgumentError] from here.
+  ///
+  /// The context that makes the child chooses its rules; the job that starts
+  /// it, most often the same one, becomes its parent, which waits for it,
+  /// passes it its cancellation and its observer. Until it starts, the child
+  /// belongs to whoever holds it: no job waits for it or cancels it, its
+  /// deadline does not run, its `done` does not complete, and it holds [body]
+  /// and all it captured, so cancel one that will not start.
+  ///
+  /// In [JobContextBase] it is a [Job.deferred], a child of the core, whose
+  /// context knows nothing of an engine's rules. An engine with a context or
+  /// rules in [check] of its own, or children it owns, overrides it; `each`
+  /// takes its child from there as well.
+  ///
+  /// See [Running a child](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#running-a-child)
+  /// on the children page.
+  @useResult
+  ChildJob<T> child<T>(
+    Future<T> Function(JobContext ctx) body, {
+    Object? key,
+    String Function()? describe,
+    Duration? timeout,
+  });
+
   /// Starts [child] right now, as a child of this job, ahead of whatever an
   /// engine would have put it through.
   ///
@@ -490,19 +529,31 @@ abstract class JobContextBase implements JobContext {
   /// Creates the unstarted child used by [each], named by [key] and
   /// [describe].
   ///
-  /// A domain that restricts child ownership overrides this factory to
-  /// return its own job with the appropriate context and rules, and hands
-  /// [key] and [describe] to it. They come as the caller of [each] gave them,
-  /// except that [describe] already holds the core's default, `each`, when the
-  /// caller gave none. The result must be accepted by [startChild]. This
-  /// factory must not start the child.
+  /// Takes it from [child], so an engine that overrides [child] has the
+  /// children of [each] made the same way. Override this one only when a
+  /// child of [each] needs more than [child] gives, or a check before it:
+  /// it is called after the core has refused unattended work and a body that
+  /// has ended, and before the child starts. [key] and [describe] come as the
+  /// caller of [each] gave them, except that [describe] already holds the
+  /// core's default, `each`, when the caller gave none. The result must be
+  /// accepted by [startChild]. This factory must not start the child.
   @visibleForOverriding
   Job<void> createEachJob(
     Future<void> Function(JobContext ctx) body, {
     Object? key,
     String Function()? describe,
   }) =>
-      Job.deferred<void>(body, key: key, describe: describe);
+      child<void>(body, key: key, describe: describe);
+
+  @override
+  @useResult
+  ChildJob<T> child<T>(
+    Future<T> Function(JobContext ctx) body, {
+    Object? key,
+    String Function()? describe,
+    Duration? timeout,
+  }) =>
+      Job.deferred<T>(body, key: key, describe: describe, timeout: timeout);
 
   @override
   Job<void> each<T>(
