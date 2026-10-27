@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-27:** связка `solo` 0.5.0 выполняется: релизный
-> коммит, тег, push и `dart pub publish` идут подряд.
+> **Состояние на 2026-10-27:** `solo` 0.5.0 опубликован на pub.dev;
+> релизный коммит `1b9cb1b3` и аннотированный тег отправлены в origin.
 > **Что это:** снятие оверрайдов `solo` и подготовка его выпуска 0.5.0.
 > **Связанные записи:** `2026-10-27-async-job-release-report.md`,
 > `2026-10-27-release-prep-report.md`, `2026-10-25-solo-release-report.md`.
@@ -54,6 +54,21 @@
 предупреждений; на pub.dev `latest: 0.4.0`. CI `gate` на `c243e73c`: `dart`,
 `flutter`, `floor`, `snippets` и `docs` зелёные.
 
-Связка идёт подряд: коммит `Release solo 0.5.0`, аннотированный тег
-`solo-v0.5.0`, push, `dart pub publish`. Итог — в этом разделе следующим
-коммитом.
+Связка выполнена подряд:
+
+- `aa2df801` — снятие оверрайдов, `1b9cb1b3` — Release solo 0.5.0;
+- аннотированный тег `solo-v0.5.0` указывает на `1b9cb1b3`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/solo-v0.5.0^{}` дают `1b9cb1b3`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/solo version 0.5.0»;
+- API pub.dev вернул `latest: 0.5.0`.
+
+Пакет: https://pub.dev/packages/solo/versions/0.5.0
+
+Выпуск завершён. `flutter_solo` не публиковался, его оверрайды и оверрайды его
+примера на дерево остались. scopo 0.20.0 под ядро 0.5.0 уже вышел
+(`async_job: ^0.5.0`), так что следующий шаг — подготовка `flutter_solo`:
+`scopo: ^0.20.0` в dev-зависимостях, снять оба `pubspec_overrides.yaml`,
+`git add` удаление, проверки и dry-run против опубликованных пакетов. Связка
+`flutter_solo` — по отдельному запросу владельца.
