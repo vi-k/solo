@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-27:** связка `async_job` 0.5.0 выполняется: релизный
-> коммит, тег, push и `dart pub publish` идут подряд.
+> **Состояние на 2026-10-27:** `async_job` 0.5.0 опубликован на pub.dev;
+> релизный коммит `baf42d6d` и аннотированный тег отправлены в origin.
 > **Что это:** выполнение разрешённой владельцем связки выпуска `async_job`.
 > **Связанные записи:** `2026-10-27-release-prep-report.md`,
 > `2026-10-27-ctx-child-report.md`, `2026-10-25-async-job-release-report.md`.
@@ -29,6 +29,21 @@
 
 ## Связка
 
-Связка идёт подряд: коммит `Release async_job 0.5.0`, аннотированный тег
-`async_job-v0.5.0`, push, `dart pub publish`. Итог — в этом разделе следующим
-коммитом.
+Связка выполнена подряд:
+
+- `baf42d6d` — Release async_job 0.5.0;
+- аннотированный тег `async_job-v0.5.0` указывает на `baf42d6d`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/async_job-v0.5.0^{}` дают `baf42d6d`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/async_job version 0.5.0»;
+- API pub.dev вернул `latest: 0.5.0`.
+
+Пакет: https://pub.dev/packages/async_job/versions/0.5.0
+
+Выпуск завершён. `solo` и `flutter_solo` не публиковались, их оверрайды
+на дерево остались. Следующий шаг — подготовка `solo`: снять
+`pubspec_overrides.yaml` у пакета и его примера, `git add` удаление, прогнать
+проверки и dry-run против опубликованного `async_job` 0.5.0. Связка `solo` —
+по отдельному запросу владельца. scopo теперь может уйти с оверрайдов
+на опубликованное ядро 0.5.0.
