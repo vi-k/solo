@@ -514,10 +514,13 @@ void onClose() => _countdown?.cancel().ignore();
 
 The countdown is a `Job` of its own, made with the constructor of the core
 rather than by `enqueue`: it waits for no turn and holds no queue. `ctx.pause`
-is the same wait as in the first attempt; a start on a signal waits with
-`ctx.abandonable(() => signal)` in its place. When the countdown ends `Done`,
-`whenFinished` queues the shot, and a cancelled countdown queues nothing.
-`shoot()` is the method of the second attempt.
+is the same wait as in the first attempt. A start on a signal rather than after
+a delay changes the body of the countdown alone: it waits for the signal in
+place of `ctx.pause`, as in
+`Job<void>((ctx) => ctx.abandonable(() => flash.ready))`, where `flash.ready`
+is a future that completes once the flash has charged. When the countdown ends
+`Done`, `whenFinished` queues the shot, and a cancelled countdown queues
+nothing. `shoot()` is the method of the second attempt.
 
 The controller does not know of the countdown, so the class tells it in two
 places. The override of `cancelAll` cancels the countdown with the reason it
@@ -530,8 +533,8 @@ countdown, and the guard at the top of `shootIn` keeps one from starting.
 The field is cleared only while it holds this countdown: a second `shootIn`
 cancels the first and puts its own in the field, and the end of the first must
 not clear that. `whenFinished` hears the end without observing a failure.
-`ctx.pause` does not fail, but a signal can, and an error that comes after the
-countdown is cancelled goes to the zone past `ignoreFailure()`. So a signal
+`ctx.pause` does not fail, but `flash.ready` can, and an error that comes after
+the countdown is cancelled goes to the zone past `ignoreFailure()`. So a signal
 that can fail has its error caught inside `ctx.abandonable` and turned into a
 value, and the shot is taken on that value alone. The cases:
 
