@@ -1,6 +1,6 @@
 # Handoff: текущее состояние проекта
 
-Обновлено: 2026-10-25. Выпуск 0.4.0 завершён: `async_job`, `solo`
+Обновлено: 2026-10-27. Выпуск 0.4.0 завершён: `async_job`, `solo`
 и `flutter_solo` опубликованы на pub.dev 2026-10-25, каждый по отдельному слову
 владельца, — теги `async_job-v0.4.0`, `solo-v0.4.0`, `flutter_solo-v0.4.0`;
 записи `2026-10-25-async-job-release-report.md`,
@@ -29,7 +29,12 @@
 на `cleanup-rules.md`, правила ошибок — с `errors.md` на `error-rules.md`,
 правила накопления — с `accumulation.md` `solo` на `accumulation-rules.md`.
 Итоги — в вопросе 2 `2026-10-22-async-job-project-review.md` и в вердикте L7
-`2026-10-22-solo-project-review.md`, бэклог пуст.
+`2026-10-22-solo-project-review.md`.
+
+В `docs/backlog.md` три записи от 2026-10-27, заявки приложения HisBible,
+проверенные зондами: `answer` в `SoloObserver.onError`, рецепт отложенного
+старта в `solo` и абзац о поддельных часах на `testing.md` ядра. В работу
+владелец их ещё не отдал.
 
 Следом — перечитывание восьми страниц Codex'ом, Astra и Sol, по слову
 владельца: `2026-10-24-split-pages-reread-review.md`. Оценки 8–9 у всех восьми.
