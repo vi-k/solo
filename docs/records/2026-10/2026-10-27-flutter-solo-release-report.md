@@ -1,5 +1,6 @@
-> **Состояние на 2026-10-27:** связка `flutter_solo` 0.5.0 выполняется:
-> релизный коммит, тег, push и `dart pub publish` идут подряд.
+> **Состояние на 2026-10-27:** `flutter_solo` 0.5.0 опубликован на pub.dev;
+> релизный коммит `160578a5` и аннотированный тег отправлены в origin. Выпуск
+> 0.5.0 завершён: все три пакета на pub.dev.
 > **Что это:** снятие оверрайдов `flutter_solo` и подготовка его выпуска 0.5.0.
 > **Связанные записи:** `2026-10-27-solo-release-report.md`,
 > `2026-10-27-async-job-release-report.md`,
@@ -65,6 +66,18 @@ archive passes its gate on the floor: 5 roots»: `async_job` +1885, `solo` +2122
 не пушились: они уходят в origin вместе с релизным, и CI на них идёт уже после
 push.
 
-Связка идёт подряд: коммит `Release flutter_solo 0.5.0`, аннотированный тег
-`flutter_solo-v0.5.0`, push, `dart pub publish`. Итог — в этом разделе
-следующим коммитом.
+Связка выполнена подряд:
+
+- `9edcb0e8` — снятие оверрайдов, `160578a5` — Release flutter_solo 0.5.0;
+- аннотированный тег `flutter_solo-v0.5.0` указывает на `160578a5`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/flutter_solo-v0.5.0^{}` дают `160578a5`;
+- `flutter pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/flutter_solo version 0.5.0»;
+- API pub.dev вернул `latest: 0.5.0`;
+- CI `gate` на `160578a5`: `dart`, `flutter`, `floor`, `snippets` и `docs`
+  зелёные.
+
+Пакет: https://pub.dev/packages/flutter_solo/versions/0.5.0
+
+Выпуск 0.5.0 завершён: все три пакета на pub.dev.

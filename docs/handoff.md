@@ -1,27 +1,16 @@
 # Handoff: текущее состояние проекта
 
-Обновлено: 2026-10-27. Выпуск 0.4.0 завершён: `async_job`, `solo`
-и `flutter_solo` опубликованы на pub.dev 2026-10-25, каждый по отдельному слову
-владельца, — теги `async_job-v0.4.0`, `solo-v0.4.0`, `flutter_solo-v0.4.0`;
-записи `2026-10-25-async-job-release-report.md`,
-`2026-10-25-solo-release-report.md`,
-`2026-10-25-flutter-solo-release-report.md`, подготовка —
-`2026-10-25-release-prep-report.md`. В выпуске значение `JobErrorAnswer`
-в `JobObserver.onError` по заявке scopo (дизайн
-`2026-10-24-observer-answer-design.md`); scopo 0.19.0 под новое ядро вышел
-тем же днём, тег `v0.19.0` в его репозитории, и `flutter_solo` держит
-`scopo: ^0.19.0`. В `Solo.onError` и `SoloObserver.onError` значение пришло
-2026-10-27 и ждёт выпуска `solo`: решение владельца, пункт 109
-`docs/settled.md`.
-
-Выпуск `0.3.0` завершён: все три пакета опубликованы на pub.dev, каждый
-по отдельному слову владельца. `async_job` — тег `async_job-v0.3.0`,
-`2026-10-23-async-job-release-report.md`; `solo` — тег `solo-v0.3.0`,
-`2026-10-23-solo-release-report.md`; `flutter_solo` — тег
-`flutter_solo-v0.3.0`, `2026-10-23-flutter-solo-release-report.md`. Оверрайды
-`solo` и его примера сняты 2026-10-25 при подготовке `solo` 0.4.0 (`806d6227`):
-`async_job` 0.4.0 вышел. Оверрайды `flutter_solo` и его примера сняты
-2026-10-25 (`37da782f`) и вернулись 2026-10-27, абзацем ниже.
+Обновлено: 2026-10-27. Выпуск 0.5.0 завершён: `async_job`, `solo`
+и `flutter_solo` опубликованы на pub.dev 2026-10-27, каждый по отдельному слову
+владельца, — теги `async_job-v0.5.0` на `baf42d6d`, `solo-v0.5.0`
+на `1b9cb1b3`, `flutter_solo-v0.5.0` на `160578a5`; записи
+`2026-10-27-async-job-release-report.md`, `2026-10-27-solo-release-report.md`,
+`2026-10-27-flutter-solo-release-report.md`, подготовка —
+`2026-10-27-release-prep-report.md`. В выпуске `ctx.child` ядра и `answer`
+в `Solo.onError` и `SoloObserver.onError` (пункт 109 `docs/settled.md`). scopo
+0.20.0 под новое ядро вышел тем же днём, тег `v0.20.0` в его репозитории,
+и `flutter_solo` держит `scopo: ^0.20.0`. CI `gate` на `160578a5` зелёный
+во всех пяти заданиях.
 
 Последнее законченное — деление длинных страниц из бэклога, план
 `2026-10-23-split-long-pages-plan.md`, раздел «Ход работы»: очередь и правило
@@ -34,8 +23,8 @@
 Сделан бэклог из заявок приложения HisBible от 2026-10-27, по слову владельца
 от малого к большому: абзац о поддельных часах в разделе «Time moved by the
 test» `testing.md` ядра и `answer` в `Solo.onError` и `SoloObserver.onError` —
-`2026-10-27-solo-error-answer-report.md`, ломающее изменение `solo` ждёт
-выпуска, и рецепт задачи в изоляте в разделе «Work in an isolate»
+`2026-10-27-solo-error-answer-report.md`, ломающее изменение вышло в `solo`
+0.5.0, и рецепт задачи в изоляте в разделе «Work in an isolate»
 `cancellation.md` ядра — `2026-10-27-isolate-recipe-report.md`, и рецепт
 отложенного старта в разделе «A delayed start» `jobs.md` `solo` —
 `2026-10-27-delayed-start-report.md`. Бэклог пуст.
@@ -52,36 +41,18 @@ screen accepts» `state.md` `solo`, дизайн, ревью дизайна и �
 движка. Решение владельца 2026-10-27 — этот вариант, а не `timeout:`
 у `abandonable` и `join`. Дизайн — `2026-10-27-ctx-child-design.md`, план —
 `2026-10-27-ctx-child-plan.md`, отчёт и оба ревью работы, Opus и codex, —
-`2026-10-27-ctx-child-report.md`; все находки закрыты. Влит в `main`
-2026-10-27, не опубликован.
+`2026-10-27-ctx-child-report.md`; все находки закрыты. Вышел в `async_job`
+0.5.0.
 
-Идёт выпуск 0.5.0, по слову владельца 2026-10-27 «пушь и будем публиковать».
-Подготовка сделана — `2026-10-27-release-prep-report.md`: версии 0.5.0 у всех
-трёх пакетов, границы `async_job: ^0.5.0` в `solo` и `solo: ^0.5.0`
-в `flutter_solo`, заголовки `CHANGELOG.md` и переводов. Порядок: `async_job`,
-затем `solo` со снятием своих оверрайдов, scopo под новое ядро своей сессией
-и `flutter_solo`. Связка каждого пакета — только по отдельной просьбе
-владельца, где кроме публикации ничего нет. `async_job` 0.5.0 опубликован
-2026-10-27 по слову владельца, тег `async_job-v0.5.0` на `baf42d6d`,
-`2026-10-27-async-job-release-report.md`. `solo` 0.5.0 опубликован 2026-10-27
-по слову владельца, тег `solo-v0.5.0` на `1b9cb1b3`, оверрайды пакета и примера
-сняты (`aa2df801`), `2026-10-27-solo-release-report.md`. scopo 0.20.0 под ядро
-0.5.0 вышел 2026-10-27 (тег `v0.20.0` в его репозитории, `async_job: ^0.5.0`);
-подготовка `flutter_solo` сделана по слову владельца 2026-10-27 «готовь
-flutter_solo», `2026-10-27-flutter-solo-release-report.md`: `scopo: ^0.20.0`,
-оверрайды пакета и примера сняты коммитом `9edcb0e8`, проверки против
-опубликованных пакетов зелёные. Связка `flutter_solo` 0.5.0 — по слову
-владельца 2026-10-27, `2026-10-27-flutter-solo-release-report.md`. Сессии
-HisBible — сообщение, что `ctx.child` в `main`, по слову владельца.
-
-После выпуска — сообщение сессии tez (arch-review-2, ADR-0014 tez-taxi, MR
-!2025), просьба от 2026-10-27: номера версий всех трёх пакетов, ломающие
-изменения API и изменения поведения из `CHANGELOG.md`. Особо — если менялись
-`Solo.observer` и `unansweredHandler`, маршрут ошибки (`onError` с `answer`),
-`externalSetState` после `close`, `abandonable`, `onCancel` и `join`,
-`Policy.restart`, `Policy.droppable` и ключи, `ScopeModel` и `AsyncDataScope`
-в README `flutter_solo`, `testing.md`. Менять что-либо ради tez не нужно,
-только сообщение.
+Следующее — сообщения двум сессиям, обе по слову владельца. Сессии HisBible —
+что `ctx.child` вышел в `async_job` 0.5.0. Сессии tez (arch-review-2, ADR-0014
+tez-taxi, MR !2025), просьба от 2026-10-27: номера версий всех трёх пакетов,
+ломающие изменения API и изменения поведения из `CHANGELOG.md`. Особо — если
+менялись `Solo.observer` и `unansweredHandler`, маршрут ошибки (`onError`
+с `answer`), `externalSetState` после `close`, `abandonable`, `onCancel`
+и `join`, `Policy.restart`, `Policy.droppable` и ключи, `ScopeModel`
+и `AsyncDataScope` в README `flutter_solo`, `testing.md`. Менять что-либо ради
+tez не нужно, только сообщение.
 
 Оверрайдов в дереве нет: `solo` и его пример сняли свои 2026-10-27
 (`aa2df801`), `flutter_solo` и его пример — тем же днём (`9edcb0e8`). Правишь
