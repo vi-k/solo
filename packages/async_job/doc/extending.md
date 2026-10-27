@@ -87,6 +87,14 @@ A body runs a job of your engine as its child with `ctx.run(job)`, and
 `ctx.run`, your engine through its queue. `DeferredJob` is a `ChildJob` with a
 public `start()`, for a job that whoever holds it may start.
 
+Code that holds only the context makes a child with `ctx.child`, and in
+`JobContextBase` that is a `Job.deferred`, a child of the core. An engine whose
+children are jobs of its own, or whose context keeps rules of its own,
+overrides `child` in its context with `@useResult` and returns an unstarted job
+of its own there. `ctx.each` takes its child from `child` as well. `child`
+starts nothing and checks nothing: `ctx.run`, `ctx.start` and `ctx.runAll` do
+the refusing.
+
 `start` runs the body in the zone it is called from, and a queue calls it
 later, from wherever the queue runs. `creationZone.run(start)` starts the job
 in the zone it was created in: the body gets the timers, the zone values and

@@ -270,6 +270,13 @@ there. While the body runs, these calls ask it:
 | `run` | once the child's value has arrived |
 | `runAll` | before it hands the values back |
 
+`ctx.child` is not in the table: it makes a child and asks nothing. `MyContext`
+keeps the `child` of the core, so a child made with `ctx.child` in a job of
+this engine is a child of the core, and its context does not ask the rule: the
+parent asks it once the child's value has arrived. An engine that wants its
+rule inside the children overrides `child`, as
+[A job of your own](extending.md#a-job-of-your-own) says.
+
 A job of the engine downloads rows over a connection and saves them:
 
 ```dart

@@ -69,6 +69,20 @@ declares it. `Job(body)`, `then` and `Job.each` make jobs that start by
 themselves. Such a job could start before the parent takes it in and run
 outside the parent's cancellation, so the compiler turns it away.
 
+Code that holds a context and does not know the engine behind it makes the
+child with `ctx.child`, which takes what `Job.deferred` takes: the body, `key`,
+`describe` and `timeout`. In the core it is a `Job.deferred`. An engine that
+owns its children, `solo` for one, refuses a `Job.deferred` and makes a child
+of its own there, so `ctx.run(ctx.child((c) => c.abandonable(load)))` runs the
+same code under either engine. The rules of the child are those of the context
+that made it, and its parent is the job that starts it.
+
+`ctx.child` starts nothing and checks nothing: `ctx.run`, `ctx.start` and
+`ctx.runAll` refuse what they refuse for any child. Until it starts, the child
+belongs to whoever holds it. No job waits for it or cancels it, its deadline
+does not run, its `done` does not complete, and it keeps its body with all the
+body captured. A child that will not start is cancelled by whoever holds it.
+
 ## When the parent is cancelled
 
 The user leaves the screen while the rows load, and the parent is cancelled:

@@ -245,10 +245,14 @@ What the cells leave out:
 - `ctx.abandonable` stops waiting when the job is cancelled, and the action
   runs on. `ctx.uncancellable` holds the cancellation until the step ends, and
   the next checkpoint throws it.
+- `ctx.child` makes an unstarted child that the engine of the job accepts, for
+  code that holds the context and does not know the engine: a `Job.deferred` is
+  a child of the core, and an engine that owns its children turns it away. It
+  starts and checks nothing; the members that start a child do the refusing.
 - `ctx.run`, `ctx.start` and `ctx.runAll` take a `ChildJob`, such as one made
-  with `Job.deferred`, and pass the cancellation to their children. `ctx.start`
-  leaves the outcome of its child to whoever holds the child. `ctx.runAll`
-  stops the rest as soon as one child ends without a value.
+  with `Job.deferred` or `ctx.child`, and pass the cancellation to their
+  children. `ctx.start` leaves the outcome of its child to whoever holds the
+  child. `ctx.runAll` stops the rest as soon as one child ends without a value.
 - `ctx.each` hands the events of the stream to its callback one at a time.
 
 - `ctx.onCancel` calls back the moment the job accepts a cancellation.
@@ -288,7 +292,7 @@ search.
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and observing a failure |
 | [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable` |
 | [Time](doc/time.md) | `ctx.pause`, a deadline with `timeout` |
-| [Children](doc/children.md) | `Job.deferred`, `ctx.run`, `ctx.start` for a child the body does not await, how deep a tree goes |
+| [Children](doc/children.md) | `Job.deferred`, `ctx.child`, `ctx.run`, `ctx.start` for a child the body does not await, how deep a tree goes |
 | [Groups](doc/groups.md) | `.wait`, `ctx.runAll`, what a group hands back |
 | [Chains](doc/chains.md) | `then`, a continuation of a child, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each`, `Job.each`, and what `await for` and `listen` do in a body |

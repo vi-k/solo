@@ -126,7 +126,7 @@ Job<Database> deadlineOfTheJob() {
 Job<String> thumbnailWithADeadline() {
   final job = Job<String>(observer: printing, (ctx) async {
     // #docregion
-    final thumbnail = Job.deferred<String>(
+    final thumbnail = ctx.child<String>(
       renderThumbnail,
       key: 'thumbnail',
       timeout: const Duration(milliseconds: 15),

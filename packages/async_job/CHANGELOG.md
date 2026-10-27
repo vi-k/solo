@@ -1,5 +1,25 @@
 ## Unreleased
 
+### Breaking changes
+
+- **`JobContext` gains `child`, and `JobContextBase` implements it.** A class
+  that implements `JobContext` itself adds it, a subclass of `JobContextBase`
+  with a member of that name renames it or makes it an override, and an
+  extension on `JobContext` with a member named `child` is shadowed without a
+  warning.
+
+### Added
+
+- **`ctx.child(body, key:, describe:, timeout:)` makes an unstarted child that
+  the engine of the job accepts,** for code that holds the context and does not
+  know the engine. In `JobContextBase` it is a `Job.deferred`. An engine whose
+  children are jobs of its own overrides it, and `ctx.each` takes its child
+  from there. `ctx.child` starts and checks nothing: `ctx.run`, `ctx.start` and
+  `ctx.runAll` do the refusing. See
+  [Running a child](doc/children.md#running-a-child); the step of
+  [A deadline for one step](doc/time.md#a-deadline-for-one-step) is made this
+  way.
+
 ### Documentation
 
 - [Time moved by the test](doc/testing.md#time-moved-by-the-test) says how to

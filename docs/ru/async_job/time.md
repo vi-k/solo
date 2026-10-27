@@ -219,10 +219,10 @@ outcome: Cancelled(timeout)
 
 Страница уходит без миниатюры, если миниатюра рисуется дольше 15 мс,
 а `renderThumbnail` рисует её 20. Отдельный шаг получает срок как собственный
-ребёнок:
+ребёнок, сделанный через `ctx.child`, которого примет любой движок задачи:
 
 ```dart
-final thumbnail = Job.deferred<String>(
+final thumbnail = ctx.child<String>(
   renderThumbnail,
   key: 'thumbnail',
   timeout: const Duration(milliseconds: 15),

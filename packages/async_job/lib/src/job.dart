@@ -476,11 +476,12 @@ enum JobStatus {
 /// A job a parent may start: [JobContext.run] and [JobContext.runAll] take
 /// nothing else.
 ///
-/// [Job.deferred] makes one. An engine declares it on a job of its own that a
-/// parent may run, `implements ChildJob<T>`. It adds no `start`: a parent
-/// starts the job through [JobContext.run], the engine through its queue, and a
-/// job that waits for a queue stays with the queue. A job that starts itself is
-/// not one: neither `Job(body)` nor [Job.then] nor [Job.each] makes a child.
+/// [Job.deferred] and [JobContext.child] make one. An engine declares it on a
+/// job of its own that a parent may run, `implements ChildJob<T>`. It adds no
+/// `start`: a parent starts the job through [JobContext.run], the engine
+/// through its queue, and a job that waits for a queue stays with the queue. A
+/// job that starts itself is not one: neither `Job(body)` nor [Job.then] nor
+/// [Job.each] makes a child.
 abstract interface class ChildJob<T> implements Job<T> {}
 
 /// A job that starts when it is told to: by hand, through [start], or by a
