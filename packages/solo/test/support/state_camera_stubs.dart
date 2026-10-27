@@ -90,6 +90,18 @@ final class Device {
     stage.trace.add('power up ends');
   }
 
+  int _photos = 0;
+
+  /// Takes a photo and stores it; that takes 100 milliseconds. Answers with
+  /// the number of the photo.
+  Future<int> shoot() async {
+    final photo = ++_photos;
+    stage.trace.add('photo $photo begins');
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    stage.trace.add('photo $photo stored');
+    return photo;
+  }
+
   /// Moves the lens; that takes the motor 50 milliseconds.
   Future<void> setZoom(int zoom) async {
     stage.trace.add('zoom $zoom begins');

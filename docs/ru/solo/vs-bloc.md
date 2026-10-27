@@ -71,7 +71,7 @@
 | `state`, `stream` | `currentState`, `addListener`; `stream` с подмешанным `SoloStream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` или `SoloBuilder` и `SoloSelector`; два последних лежат в `flutter_solo` |
-| `BlocListener` для результата операции | Ожидание `job.done` этой операции |
+| `BlocListener` для результата операции | Ожидание `job.done` этой операции; для новости, которая переживает экран, — [уведомление, которое принимает экран](state.md#уведомление-которое-принимает-экран) |
 | `BlocProvider` | Пакет этим сознательно не занимается: зависимости передают другими способами и пакетами, например [scopo](https://pub.dev/packages/scopo) |
 | `close()` | `close()` |
 | `blocTest` | `test` и ожидание исхода `Job` |

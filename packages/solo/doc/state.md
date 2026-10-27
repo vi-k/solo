@@ -284,8 +284,7 @@ in the second.
 ### A delivery of your own
 
 The listeners above are the engine's, and they cover the common case. `publish`
-is the seam for delivery of another kind, such as a stream, a signal or a line
-in a log:
+is the seam for delivery of another kind, such as a stream or a line in a log:
 
 ```dart
 /// A controller that writes every change to a log.
@@ -459,6 +458,156 @@ alive, and the engine may finish while it waits. Such a callback checks
 made earlier can go stale, and the write then throws a `StateError`.
 `isFinished` is false for as long as the engine runs, a drain included, and
 true once the state is final.
+
+## A notice the screen accepts
+
+When a photo is stored, the screen shows a notice, "Photo 7 saved", until the
+user closes it. A screen built again, after a rotation or on coming back to it,
+shows the notice again while it is open, and a closed one does not come back.
+The camera works on meanwhile: a recording started after the shot runs. A
+cancelled shot gives no notice.
+
+A screen that started the work and shows how it ended awaits `job.done`, as in
+[Jobs and results](jobs.md#jobs-and-results). A notice is for news that
+outlives the screen: the screen that shows it may not be the one that took the
+shot.
+
+### The first attempt
+
+```dart
+// The first attempt: the notice holds the camera until it is closed.
+final class Saved extends CameraState {
+  final int photo;
+
+  const Saved(this.photo);
+}
+
+Job<void> shoot() => enqueue<Ready, void>((ctx) async {
+      final photo = await ctx.join(device.shoot);
+      ctx.emit(Saved(photo));
+    });
+
+Job<void> accept() =>
+    enqueue<Saved, void>((ctx) async => ctx.emit(const Ready()));
+```
+
+The notice is a state of the camera, and the screen shows it while the camera
+is in it. But while the notice is on the screen the camera is not `Ready`, and
+every job that starts in `Ready` is turned down by its rules. A `record()`
+asked for after the shot ends `Cancelled(rules: is not Ready)` with
+`started: false`, and so does the next `shoot()`: the commands are lost rather
+than kept waiting. The camera stands still until the user closes the notice,
+and `accept` brings it back to `const Ready()`, without the zoom it had before.
+
+Writing `Saved` and then `Ready` at once does not hold the camera, but the
+notice then lasts for one change. A listener added with `addListener` hears it,
+inside the change. A screen built later, and a builder that rebuilds on the
+next frame, see `Ready`.
+
+### The second attempt
+
+```dart
+// The second attempt: the acceptance waits behind the recording.
+Job<void> shoot() => enqueue<Ready, void>((ctx) async {
+      final photo = await ctx.join(device.shoot);
+      ctx.emit(ctx.state.withNotice(photo));
+    });
+
+Job<void> accept() =>
+    enqueue<Ready, void>((ctx) async => ctx.emit(ctx.state.withNotice(null)));
+```
+
+`Ready` has a field here, `int? notice`, and `withNotice` copies the state with
+another notice. The camera no longer stands still: the recording starts after
+the shot. But the acceptance is a job of the same queue, and it waits for the
+recording to end, which runs for as long as the frames come. All that time the
+field holds the notice, and a screen built again shows it a second time.
+`first: true` of `enqueueJob` does not help: it puts the acceptance ahead of
+the jobs that wait, not ahead of the one that runs, as the first attempt of
+[External state](#external-state) shows.
+
+The field lives only in `Ready`, so a `Disconnected` written over it wipes the
+notice of a photo that has been stored. Accepting with `externalSetState`
+clears the field at once, but it goes around the queue: a body that read the
+state before a wait and writes a copy of it after brings a closed notice back.
+
+### A board of its own
+
+```dart
+final class Notice {
+  final int photo;
+
+  Notice(this.photo);
+}
+
+final class NoticeBoard {
+  final Notice? notice;
+
+  const NoticeBoard([this.notice]);
+}
+
+final class Notices extends Solo<NoticeBoard> {
+  Notices() : super(const NoticeBoard());
+
+  Job<void> post(Notice notice) =>
+      enqueue<NoticeBoard, void>((ctx) async => ctx.emit(NoticeBoard(notice)));
+
+  Job<void> accept(Notice notice) => enqueue<NoticeBoard, void>((ctx) async {
+        // Only the notice the screen showed: a newer one stays.
+        if (identical(ctx.state.notice, notice)) ctx.emit(const NoticeBoard());
+      });
+}
+```
+
+The camera is handed the board as `notices`, and its shot posts there:
+
+```dart
+Job<void> shoot() => enqueue<Ready, void>((ctx) async {
+      final photo = await ctx.join(device.shoot);
+      notices.post(Notice(photo));
+    });
+```
+
+The notices live in a controller of their own. Its queue holds only short jobs,
+so an acceptance does not wait for a recording. The state of the camera knows
+nothing of notices: no rule of its jobs is asked about one, and no write of the
+camera takes one away. The notice is a field of `NoticeBoard` rather than the
+state itself because a state cannot be `null`: `Solo<S extends Object>`. The
+board holds one notice at a time, and a second `post` replaces one nobody has
+closed. A field and its listeners would do the same work; a controller lets the
+screen listen to the board the way it listens to the camera.
+
+The acceptance names the notice it closes. A notice posted while the screen was
+closing the one before stays, where an `accept` without an address would wipe
+it before anybody saw it. `identical` tells them apart because `Notice` has no
+`const` constructor, so every `post` brings a new object. A notice made again
+from data, such as one read back from storage, needs an id to compare instead.
+
+`post` comes after the work, so a cancelled shot posts nothing. The device may
+have stored the photo all the same, since `ctx.join` lets the call run to its
+end, but the notice tells how the job ended, and the job was cancelled.
+
+The screen listens to `notices` with `addListener`, or, with `SoloListenable`
+mixed in, with `listen` from `flutter_solo`. It shows `currentState.notice`
+and, when the user closes it, calls `accept` with that notice. Two screens that
+listen show the same notice, and an acceptance on one takes it off both.
+
+Whoever made the two controllers closes the board once the close of the camera
+has completed: `await camera.close(...)`, then `notices.close()`. A camera
+closed with `SoloCloseMode.drain` may still post the notice of the shot it
+finishes, and a board closed before that turns the `post` down with
+`Cancelled(closed)`. A closed board keeps its last state, and a screen that
+still listens shows a notice it can no longer close: `accept` ends
+`Cancelled(closed)` as well. The cases:
+
+| What you do | What happens |
+| --- | --- |
+| A shot, then a recording | The recording runs, and the notice is on the board. |
+| `accept` during the recording | The board is empty a microtask later, and a screen built again shows nothing. |
+| A second shot posts while the first notice is being accepted | The second notice stays. |
+| Two shots, and nobody closes the notice | The second notice replaces the first. |
+| The shot is cancelled | No notice, though the photo may be stored. |
+| The board closed before the drain of the camera has finished | The notice of the shot the drain finishes is lost. |
 
 ## State after failure or cancellation
 

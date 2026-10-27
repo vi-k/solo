@@ -24,7 +24,9 @@ import 'support/state_profile_stubs.dart' as stubs;
 /// What the page states of the engine and its code does not show is pinned
 /// on the controllers of this file. The recipe of `externalSetState` and the
 /// closing around it have a file of their own,
-/// `state_external_recipe_test.dart`.
+/// `state_external_recipe_test.dart`. So does the section on a notice the
+/// screen accepts, `notice_recipe_test.dart`, whose code stands in
+/// `test/support/state_notice_*.dart`: three files, one for each version.
 
 /// A controller over any object. A job whose `W` is `String` leaves its
 /// working type by emitting a number, and the rule the jobs here share
@@ -2749,11 +2751,11 @@ void main() {
   });
 
   group('The page', () {
-    test('four sections open with a first attempt', () {
+    test('five sections open with a first attempt', () {
       final attempts = RegExp(r'^#{3,4} The first attempt$', multiLine: true)
           .allMatches(_page())
           .length;
-      expect(attempts, 4);
+      expect(attempts, 5);
     });
 
     test('has no fence the checks do not read', () {
@@ -2766,6 +2768,9 @@ void main() {
     const profileAnswers = 'test/support/state_page_profile.dart';
     const firstAttempts = 'test/support/state_first_attempts.dart';
     const profileStates = 'test/support/state_profile_stubs.dart';
+    const noticeFirst = 'test/support/state_notice_first_attempts.dart';
+    const noticeSecond = 'test/support/state_notice_second_attempts.dart';
+    const noticeAnswer = 'test/support/state_notice_page.dart';
     const holders = {
       '### The first attempt': firstAttempts,
       '### The rules': answers,
@@ -2773,6 +2778,8 @@ void main() {
       '### Observing state': answers,
       '### A delivery of your own': answers,
       '### externalSetState': answers,
+      '### The second attempt': noticeSecond,
+      '### A board of its own': noticeAnswer,
       '### The handlers': profileAnswers,
       '#### The first attempt': firstAttempts,
       '#### The rules': profileAnswers,
@@ -2785,8 +2792,12 @@ void main() {
             'doc/state.md',
             holder,
             // The class the last first attempt adds to the profile states
-            // stands next to them.
-            alsoIn: [if (heading == '#### The first attempt') profileStates],
+            // stands next to them, and the first attempt of the notice
+            // stands with states of its own.
+            alsoIn: [
+              if (heading == '#### The first attempt') profileStates,
+              if (heading == '### The first attempt') noticeFirst,
+            ],
             under: heading,
           ),
           isEmpty,
@@ -2800,7 +2811,14 @@ void main() {
         codeMissingFrom(
           'doc/state.md',
           answers,
-          alsoIn: [profileAnswers, firstAttempts, profileStates],
+          alsoIn: [
+            profileAnswers,
+            firstAttempts,
+            profileStates,
+            noticeFirst,
+            noticeSecond,
+            noticeAnswer,
+          ],
         ),
         isEmpty,
       );

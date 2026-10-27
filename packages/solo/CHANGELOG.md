@@ -11,6 +11,9 @@
 - [A delayed start](doc/jobs.md#a-delayed-start) shows how to start a job later
   without holding the queue, with a wait that `cancelAll` and `close` take
   back.
+- [A notice the screen accepts](doc/state.md#a-notice-the-screen-accepts) shows
+  news that waits on the screen until the user closes it, without holding the
+  work of the controller.
 
 ## 0.4.0
 
