@@ -51,9 +51,11 @@ handling the future of `ctx.run`. Several children side by side are a group of
 `ctx.runAll`, under
 [Waiting for several children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/groups.md#waiting-for-several-children)
 on the groups page. Where those pages make a child with `Job.deferred`, a
-controller makes it with `job(...)`. Its `ctx.run` and `ctx.runAll` take no
-other job, and each branch of a group answers to its start rules as a child of
-`ctx.run` does.
+controller makes it with `job(...)` or `ctx.child`. `ctx.child` is for code
+that holds only the context: it makes a job of the same controller with the
+working type and `keepWhile` of the job that made it. The `ctx.run` and
+`ctx.runAll` of a controller take no other job, and each branch of a group
+answers to its start rules as a child of `ctx.run` does.
 
 `ctx.each(stream, onData)` subscribes in a child that owns the subscription and
 hands the callback each event with the child's context: that is how `_sync`
@@ -237,9 +239,9 @@ reaches a continuation through an unfinished source, but does not own one
 already running after the source finished.
 
 A continuation is never a child. Inside a controller's body `ctx.run` takes
-jobs of that controller, the ones `job(...)` makes and nobody has queued, and a
-continuation is none of those. It is a root job of the core, a plain `Job` and
-not a `ChildJob`, so `ctx.run(tail)` does not compile:
+jobs of that controller, the ones `job(...)` or `ctx.child` makes and nobody
+has queued, and a continuation is none of those. It is a root job of the core,
+a plain `Job` and not a `ChildJob`, so `ctx.run(tail)` does not compile:
 
 ```text
 The argument type 'Job<void>' can't be assigned to the parameter type 'ChildJob<dynamic>'.

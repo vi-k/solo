@@ -915,7 +915,7 @@ void main() {
         expect(errors, isEmpty);
         expect(stage.trace, ['open 1', 'close 1', 'open 2', 'close 2']);
         _says('The rest of that page holds here as well, with `job(...)` '
-            'where it writes `Job.deferred`');
+            'or `ctx.child` where it writes `Job.deferred`');
       });
 
       test('a callback in several steps stops between them for a cancellation',

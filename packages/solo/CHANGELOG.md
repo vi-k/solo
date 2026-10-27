@@ -5,6 +5,13 @@
 - **`Solo.onError` and `SoloObserver.onError` take
   `{required JobErrorAnswer answer}`, as `JobObserver.onError` of the core
   does.** See [Reporting an error](doc/errors.md#reporting-an-error).
+- **`SoloContext` gains `child`, the `ctx.child` of the core: it makes a job of
+  the same controller with the working type and `keepWhile` of the job that
+  made it.** Code that holds only a `JobContext` makes with it a child the
+  controller accepts, where a `Job.deferred` is refused. A class that
+  implements `SoloContext` itself adds it. See
+  [Children and chains](doc/children.md) and
+  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 ### Documentation
 

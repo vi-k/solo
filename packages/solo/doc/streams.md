@@ -102,10 +102,10 @@ its `onUnanswered`, as an error no outcome carries does. A job that must not
 end before its source has closed waits for that itself, the way
 [Waiting for the source to close](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/streams.md#waiting-for-the-source-to-close)
 on the streams page of `async_job` does. The rest of that page holds here as
-well, with `job(...)` where it writes `Job.deferred`. There you find what
-`await for` and a `listen` tied to the job do in a body, how a callback in
-several steps stops for a cancellation, and where the cleanup of one event
-belongs.
+well, with `job(...)` or `ctx.child` where it writes `Job.deferred`. There you
+find what `await for` and a `listen` tied to the job do in a body, how a
+callback in several steps stops for a cancellation, and where the cleanup of
+one event belongs.
 
 ## Following another controller
 

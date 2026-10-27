@@ -1460,8 +1460,9 @@ void main() {
             '$_refused: "Job()"',
           ]);
           _says('Where those pages make a child with `Job.deferred`, a '
-              'controller makes it with `job(...)`. Its `ctx.run` and '
-              '`ctx.runAll` take no other job');
+              'controller makes it with `job(...)` or `ctx.child`.');
+          _says('The `ctx.run` and `ctx.runAll` of a controller take no '
+              'other job');
         });
       }
     });
@@ -1849,7 +1850,8 @@ final class Probe extends Solo<int> {
         'made by job(...) and not queued: ran',
       ]);
       _says("Inside a controller's body `ctx.run` takes jobs of that "
-          'controller, the ones `job(...)` makes and nobody has queued');
+          'controller, the ones `job(...)` or `ctx.child` makes and nobody '
+          'has queued');
     });
   });
 

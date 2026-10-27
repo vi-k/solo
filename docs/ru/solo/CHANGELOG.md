@@ -5,6 +5,13 @@
 - **`Solo.onError` и `SoloObserver.onError` принимают
   `{required JobErrorAnswer answer}`, как `JobObserver.onError` ядра.** См.
   [«Отправка ошибки»](errors.md#отправка-ошибки).
+- **У `SoloContext` появился `child`, `ctx.child` ядра: он делает задачу
+  того же контроллера с рабочим типом и `keepWhile` той задачи, которая его
+  сделала.** Код, у которого есть только `JobContext`, делает им ребёнка,
+  которого контроллер примет, а `Job.deferred` контроллер отвергает. Класс,
+  который сам реализует `SoloContext`, его добавляет. См.
+  [«Дочерние задачи и цепочки»](children.md)
+  и [список изменений `async_job`](../async_job/CHANGELOG.md).
 
 ### Документация
 
