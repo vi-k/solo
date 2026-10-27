@@ -1,3 +1,10 @@
+## Unreleased
+
+### Documentation
+
+- [Time moved by the test](doc/testing.md#time-moved-by-the-test) says how to
+  test a job that does real input and output: fake the timers alone.
+
 ## 0.4.0
 
 ### Breaking changes

@@ -87,6 +87,14 @@ What moves the time depends on what the test waits for:
 | `ctx.pause(duration)`, which waits on a timer | `elapse(duration)` or `flushTimers()` |
 | The deadline of `timeout: limit`, which the core keeps on a timer | `elapse(limit)` or `flushTimers()` |
 
+Real input and output do not finish under `fakeAsync`. Its callback never
+yields to the real event loop, so a file read or a database query the job
+awaits stays pending however far the test moves the time. Such a test fakes the
+timers alone: it runs in a zone of its own whose `ZoneSpecification` overrides
+only `createTimer`, and lets the real event loop turn between its steps. The
+core takes time from timers only, so `ctx.pause` and `timeout:` of a job
+created inside that zone run on the fake clock, and the job needs no change.
+
 ## A failure the test expects
 
 A test checks that an open of a locked database fails.
