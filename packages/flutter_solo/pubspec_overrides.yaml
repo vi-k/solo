@@ -1,4 +1,6 @@
-# Use local solo until the release after 0.4.0 is published.
+# Use local solo and async_job until the releases after 0.4.0 are published.
 dependency_overrides:
   solo:
     path: ../solo
+  async_job:
+    path: ../async_job
