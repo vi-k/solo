@@ -38,6 +38,15 @@ final class _Api extends quick.ProfileApi {
   void fail(Object error) => _answer.completeError(error);
 }
 
+/// Hears the outcome of every job that ends.
+final class _Finished extends SoloObserver {
+  final outcomes = <String>[];
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+      outcomes.add('${job.key}: ${job.outcome}');
+}
+
 /// Hears the errors and the starts every controller reports.
 final class _Watcher extends SoloObserver {
   final errors = <String>[];
@@ -1615,19 +1624,121 @@ void main() {
     });
   });
 
+  group('A delayed start', () {
+    const second = Duration(seconds: 1);
+
+    tearDown(() => Solo.observer = null);
+
+    group('the first attempt', () {
+      test('a zoom one second in waits for the shot', () {
+        fakeAsync((async) {
+          final camera = first.QueuedCountdownController()
+            ..shootIn(second * 10);
+          async.elapse(second);
+          camera.work('zoom', inReady: true);
+          async.elapse(second * 8);
+
+          expect(stage.trace, isEmpty, reason: 'nine seconds in');
+          async.elapse(second * 2);
+          expect(stage.trace, [
+            'shot begins',
+            'shot ends',
+            'zoom starts',
+            'zoom ends',
+          ]);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      });
+
+      test('cancelAll() and close() end the countdown', () {
+        fakeAsync((async) {
+          final camera = first.QueuedCountdownController()
+            ..shootIn(second * 10);
+          async.elapse(second * 5);
+          camera.cancelAll().ignore();
+          async.elapse(second * 20);
+          expect(stage.trace, isEmpty);
+
+          camera.shootIn(second * 10);
+          async.elapse(second * 5);
+          camera.close().ignore();
+          async.flushMicrotasks();
+          expect(camera.isFinished, isTrue);
+          expect(async.pendingTimers, isEmpty);
+          expect(stage.trace, isEmpty);
+        });
+      });
+    });
+
+    group('the second attempt', () {
+      test('a zoom one second in goes at once', () {
+        fakeAsync((async) {
+          final camera = first.TimerCountdownController()..shootIn(second * 10);
+          async.elapse(second);
+          camera.work('zoom', inReady: true);
+          async.elapse(second);
+
+          expect(stage.trace, ['zoom starts', 'zoom ends']);
+          async.elapse(second * 9);
+          expect(stage.trace, [
+            'zoom starts',
+            'zoom ends',
+            'shot begins',
+            'shot ends',
+          ]);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      });
+
+      test('cancelAll() five seconds in: the shot five seconds later', () {
+        fakeAsync((async) {
+          final camera = first.TimerCountdownController()..shootIn(second * 10);
+          async.elapse(second * 5);
+          camera.cancelAll().ignore();
+          async.elapse(second * 4);
+
+          expect(stage.trace, isEmpty);
+          async.elapse(second * 2);
+          expect(stage.trace, ['shot begins', 'shot ends']);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      });
+
+      test('the timer outlives close(), and the shot is refused', () {
+        fakeAsync((async) {
+          final finished = _Finished();
+          Solo.observer = finished;
+          final camera = first.TimerCountdownController()..shootIn(second * 10);
+          async.elapse(second * 5);
+          camera.close().ignore();
+          async.flushMicrotasks();
+
+          expect(camera.isFinished, isTrue);
+          expect(async.pendingTimers, hasLength(1));
+          async.elapse(second * 5);
+          expect(finished.outcomes, ['_Op.shoot: Cancelled(closed)']);
+          expect(stage.trace, isEmpty);
+        });
+      });
+    });
+  });
+
   group('The page', () {
-    test('two sections open with a first attempt', () {
+    test('three sections open with a first attempt', () {
       final attempts = RegExp(r'^#### The first attempt$', multiLine: true)
           .allMatches(_page())
           .length;
-      expect(attempts, 2);
+      expect(attempts, 3);
     });
 
-    test('one of them goes on to a second attempt', () {
+    test('two of them go on to a second attempt', () {
       expect(
         RegExp(r'^#### The second attempt$', multiLine: true)
             .allMatches(_page()),
-        hasLength(1),
+        hasLength(2),
       );
     });
 
@@ -1648,6 +1759,7 @@ void main() {
       '### Working the queue directly': answers,
       '#### The second attempt': firstAttempts,
       '#### The handle of the gate': answers,
+      '#### A countdown the controller owns': answers,
     };
     for (final MapEntry(key: heading, value: holder) in holders.entries) {
       test('the code under "$heading" is a run of lines of $holder', () {

@@ -75,6 +75,8 @@ final class Device {
 
   Future<void> stop() => _command('stop');
 
+  Future<void> shoot() => _command('shot');
+
   Future<void> seek(Duration position, {CancelToken? cancelToken}) async {
     final name = 'seek ${position.inSeconds}';
     stage.trace.add('$name begins');

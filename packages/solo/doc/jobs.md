@@ -62,7 +62,7 @@ answered for by then.
 ### Creating and scheduling jobs
 
 ```dart
-enum _Op { load, save, zoom, seek, stop, pause }
+enum _Op { load, save, zoom, seek, stop, pause, shoot }
 
 // Assembled now, queued after: two steps, for a job to hold on to.
 final saving = job<Ready, void>(
@@ -438,3 +438,120 @@ paused is yours to keep, and `isPaused` is where this controller keeps it.
 back: it is cancelled when its turn comes, with `Cancelled(rules: canStart)`,
 and the queue empties instead of filling up. A pause built on it loses the work
 silently.
+
+### A delayed start
+
+The camera has a self-timer: `shootIn(delay)` takes the shot when the delay is
+over, and the camera goes on taking commands meanwhile — a zoom set during the
+countdown is set at once. `cancelAll()` stops the countdown as it stops the
+rest of the work, and so does closing the controller.
+
+#### The first attempt
+
+```dart
+// The first attempt: the countdown holds the queue.
+Job<void> shootIn(Duration delay) => enqueue<Ready, void>(
+      key: _Op.shoot,
+      (ctx) async {
+        await ctx.pause(delay);
+        await ctx.join(camera.shoot);
+      },
+    );
+```
+
+`ctx.pause` is the wait the core gives a job, and both `cancelAll()` and
+`close()` end it. But a job that waits holds the queue as well as one that
+works, which is what the gate of [Pausing the queue](#pausing-the-queue) is
+for. With a ten-second delay, a zoom asked for one second into the countdown
+starts only after the shot, nine seconds late.
+
+#### The second attempt
+
+```dart
+// The second attempt: the countdown belongs to no job.
+void shootIn(Duration delay) => Timer(delay, shoot);
+
+Job<void> shoot() =>
+    enqueue<Ready, void>(key: _Op.shoot, (ctx) => ctx.join(camera.shoot));
+```
+
+The timer stands outside the queue, and the zoom goes at once. Nothing but the
+timer knows of the countdown, though. `cancelAll()` five seconds in clears the
+queue and cancels the running job, and five seconds later the shot is taken all
+the same. `close()` does not stop the timer either: it outlives the closed
+controller, and when it fires, `shoot()` is refused with `Cancelled(closed)`. A
+widget test that disposes the camera during the countdown fails on that pending
+timer.
+
+#### A countdown the controller owns
+
+```dart
+Job<void>? _countdown;
+
+void shootIn(Duration delay) {
+  if (isClosed) return;
+  _countdown?.cancel().ignore();
+  final countdown = _countdown = Job<void>((ctx) => ctx.pause(delay));
+  countdown.whenFinished((outcome) {
+    if (identical(_countdown, countdown)) _countdown = null;
+    if (outcome is Done) shoot();
+  });
+}
+
+@override
+Future<void> cancelAll({
+  bool force = false,
+  CancelReason reason = const ManualCancelReason(),
+}) async {
+  final countdown = _countdown?.cancel(reason: reason);
+  await super.cancelAll(force: force, reason: reason);
+  await countdown;
+}
+
+@override
+void onClose() => _countdown?.cancel().ignore();
+```
+
+The countdown is a `Job` of its own, made with the constructor of the core
+rather than by `enqueue`: it waits for no turn and holds no queue. `ctx.pause`
+is the same wait as in the first attempt; a start on a signal waits with
+`ctx.abandonable(() => signal)` in its place. When the countdown ends `Done`,
+`whenFinished` queues the shot, and a cancelled countdown queues nothing.
+`shoot()` is the method of the second attempt.
+
+The controller does not know of the countdown, so the class tells it in two
+places. The override of `cancelAll` cancels the countdown with the reason it
+was given and then does its own work through `super`, which clears the queue
+and cancels the running job; the future it returns completes once the countdown
+has ended as well. `onClose` cancels the countdown once the controller has
+closed, whatever mode closed it. After that no hook is left to cancel a new
+countdown, and the guard at the top of `shootIn` keeps one from starting.
+
+The field is cleared only while it holds this countdown: a second `shootIn`
+cancels the first and puts its own in the field, and the end of the first must
+not clear that. `whenFinished` hears the end without observing a failure.
+`ctx.pause` does not fail, but a signal can, and an error that comes after the
+countdown is cancelled goes to the zone past `ignoreFailure()`. So a signal
+that can fail has its error caught inside `ctx.abandonable` and turned into a
+value, and the shot is taken on that value alone. The cases:
+
+| What you do | What happens |
+| --- | --- |
+| `shootIn` with ten seconds, then a zoom one second in | The zoom is set at once, and the shot is taken at ten seconds. |
+| `shootIn` again during the countdown | The countdown starts over: one shot, ten seconds after the second call. |
+| `cancelAll()` during the countdown | No shot, and no timer is left. |
+| `queue.clear()` during the countdown | The shot is taken: the countdown does not stand in the queue. |
+| `close()` during the countdown | No shot, and no timer outlives the controller. |
+| `close(mode: SoloCloseMode.drain)` during the countdown | The queue runs out, and no shot is taken. |
+| `shootIn` after `close()` | Nothing starts. |
+
+When the delay is the same on every call, an accumulator gives nearly all of
+this, and there is no countdown to keep: `accumulate` with
+`AccumulationTiming.debounce(delay)`. Its group waits out the window without
+holding the queue, another `add` starts the window over, and `cancelAll()` and
+`close()` drop the group. It parts from the table in two rows: `queue.clear()`
+drops the group, and a draining `close()` waits the window out and takes the
+shot. A countdown of its own is for a delay that changes from call to call, for
+a start on a signal, and for a wait `queue.clear()` must not touch. See
+[Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready)
+on the accumulation rules page for the window.

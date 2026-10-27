@@ -10,7 +10,7 @@ import 'package:solo/solo.dart';
 import 'jobs_stubs.dart';
 import 'test_solo.dart';
 
-enum _Op { load, pause }
+enum _Op { load, pause, shoot }
 
 /// The first attempt of "A key for each request": the key of the method.
 final class SharedKeyController extends Solo<CameraState>
@@ -76,4 +76,32 @@ final class BodyGateController extends Solo<CameraState>
     _gate?.complete();
     _gate = null;
   }
+}
+
+/// The first attempt of "A delayed start": the countdown is a job in the
+/// queue.
+final class QueuedCountdownController extends Solo<CameraState>
+    with OpenSolo<CameraState>, Workbench {
+  QueuedCountdownController() : super(const Ready());
+
+  // The first attempt: the countdown holds the queue.
+  Job<void> shootIn(Duration delay) => enqueue<Ready, void>(
+        key: _Op.shoot,
+        (ctx) async {
+          await ctx.pause(delay);
+          await ctx.join(camera.shoot);
+        },
+      );
+}
+
+/// The second attempt of "A delayed start": the countdown is a timer.
+final class TimerCountdownController extends Solo<CameraState>
+    with OpenSolo<CameraState>, Workbench {
+  TimerCountdownController() : super(const Ready());
+
+  // The second attempt: the countdown belongs to no job.
+  void shootIn(Duration delay) => Timer(delay, shoot);
+
+  Job<void> shoot() =>
+      enqueue<Ready, void>(key: _Op.shoot, (ctx) => ctx.join(camera.shoot));
 }

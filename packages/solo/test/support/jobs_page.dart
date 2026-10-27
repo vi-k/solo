@@ -12,7 +12,7 @@ import 'jobs_stubs.dart';
 import 'readme_quick_start.dart' show ProfileController;
 import 'test_solo.dart';
 
-enum _Op { load, save, zoom, seek, stop, pause }
+enum _Op { load, save, zoom, seek, stop, pause, shoot }
 
 /// The block under "Jobs and results", on the controller of the quick start.
 Future<void> readOutcome(ProfileController profile) async {
@@ -145,6 +145,46 @@ final class CameraController extends Solo<CameraState>
     _gate?.complete();
     _gate = null;
   }
+}
+
+/// The self-timer of "A delayed start": a countdown the controller owns.
+final class SelfTimerController extends Solo<CameraState>
+    with OpenSolo<CameraState>, Workbench {
+  SelfTimerController() : super(const Ready());
+
+  Job<void> shoot() =>
+      enqueue<Ready, void>(key: _Op.shoot, (ctx) => ctx.join(camera.shoot));
+
+  Job<void>? _countdown;
+
+  void shootIn(Duration delay) {
+    if (isClosed) return;
+    _countdown?.cancel().ignore();
+    final countdown = _countdown = Job<void>((ctx) => ctx.pause(delay));
+    countdown.whenFinished((outcome) {
+      if (identical(_countdown, countdown)) _countdown = null;
+      if (outcome is Done) shoot();
+    });
+  }
+
+  @override
+  Future<void> cancelAll({
+    bool force = false,
+    CancelReason reason = const ManualCancelReason(),
+  }) async {
+    final countdown = _countdown?.cancel(reason: reason);
+    await super.cancelAll(force: force, reason: reason);
+    await countdown;
+  }
+
+  @override
+  void onClose() => _countdown?.cancel().ignore();
+
+  /// Not on the page: the countdown that is running, or `null`.
+  Job<void>? get countdown => _countdown;
+
+  /// Not on the page: whether a countdown is running.
+  bool get isCounting => _countdown != null;
 }
 
 /// The block under "The record key" that tells a method whose job it was

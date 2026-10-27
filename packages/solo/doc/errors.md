@@ -474,7 +474,9 @@ one. The loop in the body let it hear only the failure that ended the job.
 The gap itself is the caller's to stop. Until it does, the timer outlives a
 closed profile: a widget test that closes the profile in the gap fails on it,
 where the loop in the body passes. Nor does the loop know of a load sent in the
-gap: if that load succeeds, the next attempt still loads again.
+gap: if that load succeeds, the next attempt still loads again. A wait the
+controller itself stops is the countdown of
+[A delayed start](jobs.md#a-delayed-start).
 
 ## Errors in state rules
 
