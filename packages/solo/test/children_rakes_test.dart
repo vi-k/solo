@@ -223,7 +223,7 @@ final class _Answering extends _Own with JobAnswerer {
 
 /// How a controller refuses a job it did not make, up to the job.
 const _refused = 'Invalid argument (job): was not created by this Solo '
-    '(make it with job(...) of this controller)';
+    '(make it with job(...) of this controller or with ctx.child)';
 
 void main() {
   setUp(() {

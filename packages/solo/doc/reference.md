@@ -112,7 +112,8 @@ does `ctx.each`.
 | `ctx.state` | The state as `W`, read at a checkpoint where a state the rules of the job refuse cancels the job | [Reading and updating state](state.md#reading-and-updating-state) |
 | `ctx.stateAs<T>()` | The state narrowed further to `T`, where a mismatch cancels the job | [Reading and updating state](state.md#reading-and-updating-state) |
 | `ctx.emit(next)` | The body's only way to write the state, a synchronous one | [Reading and updating state](state.md#reading-and-updating-state) |
-| `ctx.run(child)` | Runs a child made by `job(...)` of this controller and returns its value; a job of the core or of another controller is refused with an `ArgumentError` | [Children and chains](children.md) |
+| `ctx.child(body)` | Makes an unstarted child of this controller under the rules of this job, its working type `W` and `keepWhile`, for the code that holds only a context | [Children and chains](children.md) |
+| `ctx.run(child)` | Runs a child made by `job(...)` of this controller or by `ctx.child` and returns its value; a job of the core or of another controller is refused with an `ArgumentError` | [Children and chains](children.md) |
 | `ctx.start(child)` | Starts such a child right now and leaves its outcome to whoever holds it | [Children and chains](children.md) |
 | `ctx.runAll(children)` | Runs such children side by side and stops the rest as soon as one of them goes wrong | [Children and chains](children.md) |
 | `ctx.each(stream, onData)` | Starts a child that hands the events of a stream to `onData` one at a time, with the child's `SoloContext`, at a checkpoint where a state the rules of the job refuse cancels the job instead | [Processing a stream](streams.md#processing-a-stream) |

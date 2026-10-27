@@ -12,7 +12,18 @@ import 'dart:io';
 /// absolute: the tree of the package stays as it is, and a `dart analyze`
 /// of the package that runs beside the test does not find the file.
 /// Warnings and hints are not errors and are left out.
-Future<List<String>> compileErrors(String code) async {
+Future<List<String>> compileErrors(String code) => _analyze(code, 'ERROR');
+
+/// The warnings the analyzer reports for [code], each as its code and its
+/// message: `unused_result: ...`. Read the way [compileErrors] reads errors.
+Future<List<String>> compileWarnings(String code) =>
+    _analyze(code, 'WARNING', withCode: true);
+
+Future<List<String>> _analyze(
+  String code,
+  String severity, {
+  bool withCode = false,
+}) async {
   final directory = await Directory.systemTemp.createTemp('compile_errors');
   try {
     final config = File('.dart_tool/package_config.json').absolute;
@@ -34,18 +45,23 @@ Future<List<String>> compileErrors(String code) async {
     // A line of the machine format: severity, type, code, file, line,
     // column, length and the message, set apart by `|`; a `|` of the message
     // comes escaped.
-    final errors = [
+    final found = [
       for (final line in LineSplitter.split('${result.stdout}'))
-        if (line.startsWith('ERROR|'))
-          line.split('|').skip(7).join('|').replaceAll(r'\|', '|').trim(),
+        if (line.startsWith('$severity|'))
+          [
+            if (withCode) '${line.split('|')[2].toLowerCase()}:',
+            line.split('|').skip(7).join('|').replaceAll(r'\|', '|').trim(),
+          ].join(' '),
     ];
     // The analyzer exits with 0, with 2 on a warning and with 3 on an error;
-    // a 3 with no error to show, or any other code, means it did not run.
-    if (errors.isEmpty && result.exitCode > 2) {
+    // any other code means it did not run, and so does a 3 with no error to
+    // show.
+    if (result.exitCode > 3 ||
+        severity == 'ERROR' && found.isEmpty && result.exitCode > 2) {
       throw StateError('dart analyze exited with ${result.exitCode}: '
           '${result.stderr}${result.stdout}');
     }
-    return errors;
+    return found;
   } finally {
     await directory.delete(recursive: true);
   }

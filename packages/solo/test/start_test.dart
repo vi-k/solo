@@ -102,7 +102,8 @@ void main() {
       expect(
         '$thrown',
         'Invalid argument (job): was not created by this Solo (make it '
-            'with job(...) of this controller): "Job(theirs)"',
+            'with job(...) of this controller or with ctx.child): '
+            '"Job(theirs)"',
       );
       journal.take();
     });

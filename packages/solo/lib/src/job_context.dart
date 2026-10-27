@@ -9,8 +9,9 @@ part of 'solo.dart';
 /// throws a [StateError] for a job that has already finished.
 ///
 /// A child handed to [run], [start] or [runAll] is made by `job(...)` of the
-/// same controller. A `Job.deferred` of the core, or a job of another
-/// controller, passes the types and is refused with an [ArgumentError]:
+/// same controller or by [child]. A `Job.deferred` of the core, or a job of
+/// another controller, passes the types and is refused with an
+/// [ArgumentError]:
 ///
 /// ```dart
 /// final name = await ctx.run(job<Idle, String>((child) => api.fetchName()));
@@ -50,8 +51,33 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// ```
   void emit(S next);
 
-  /// Runs [child], made by `job(...)` of this controller, as a child of this
-  /// job and returns its value.
+  /// Makes an unstarted child of this controller under this job's rules, for
+  /// [run], [start] and [runAll].
+  ///
+  /// The child gets a [SoloContext] of its own and keeps this job's working
+  /// type `W` and `keepWhile` rule, so a state they refuse cancels it at the
+  /// start with `Cancelled(rules)`. The rules are those of this job even when
+  /// another job of the controller starts the child, and after this job's
+  /// body ends. The `canStart` rule is not repeated, and the child is
+  /// cancellable independently of the `cancellable` setting of this job.
+  ///
+  /// ```dart
+  /// final rows = await ctx.run(ctx.child(load, key: 'rows', timeout: limit));
+  /// ```
+  ///
+  /// All other behavior is [JobContext.child]'s: [key] and [describe] only
+  /// name the child, and the queue policies do not govern it.
+  @override
+  @useResult
+  SoloJob<T> child<T>(
+    Future<T> Function(SoloContext<S, W> ctx) body, {
+    Object? key,
+    String Function()? describe,
+    Duration? timeout,
+  });
+
+  /// Runs [child], made by `job(...)` of this controller or by `ctx.child`,
+  /// as a child of this job and returns its value.
   ///
   /// A `Job.deferred` of the core or a job of another controller is refused
   /// with an [ArgumentError], and a job already in the queue with a
@@ -67,8 +93,9 @@ abstract interface class SoloContext<S extends Object, W extends S>
     FutureOr<void> Function(T value)? discard,
   });
 
-  /// Starts [child], made by `job(...)` of this controller, right now as a
-  /// child of this job, and leaves its outcome to whoever holds it.
+  /// Starts [child], made by `job(...)` of this controller or by
+  /// `ctx.child`, right now as a child of this job, and leaves its outcome to
+  /// whoever holds it.
   ///
   /// Refuses the children [run] refuses. All other behavior is
   /// [JobContext.start]'s.
@@ -79,8 +106,9 @@ abstract interface class SoloContext<S extends Object, W extends S>
   @override
   void start(ChildJob<Object?> child);
 
-  /// Runs [children], each made by `job(...)` of this controller, side by
-  /// side, and stops the rest as soon as one of them goes wrong.
+  /// Runs [children], each made by `job(...)` of this controller or by
+  /// `ctx.child`, side by side, and stops the rest as soon as one of them goes
+  /// wrong.
   ///
   /// Refuses the children [run] refuses. All other behavior is
   /// [JobContext.runAll]'s.
@@ -142,13 +170,24 @@ final class _SoloContext<S extends Object, W extends S, R>
     if (pendingCancel == null) {
       _checkedState();
     }
-    return _solo.job<W, void>(
-      body,
-      key: key,
-      describe: describe,
-      keepWhile: _job._keepWhile,
-    );
+    return child<void>(body, key: key, describe: describe);
   }
+
+  @override
+  @useResult
+  SoloJob<T> child<T>(
+    Future<T> Function(SoloContext<S, W> ctx) body, {
+    Object? key,
+    String Function()? describe,
+    Duration? timeout,
+  }) =>
+      _solo.job<W, T>(
+        body,
+        key: key,
+        describe: describe,
+        keepWhile: _job._keepWhile,
+        timeout: timeout,
+      );
 
   @override
   Job<void> each<T>(
