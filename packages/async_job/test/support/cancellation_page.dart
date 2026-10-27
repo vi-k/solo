@@ -3,6 +3,8 @@
 // `// #enddocregion`, and `cancellation_rakes_test.dart` runs it. Around a
 // region stands what the page leaves to the reader: the job the block goes
 // into.
+import 'dart:isolate';
+
 import 'package:async_job/async_job.dart';
 
 import 'cancellation_stubs.dart';
@@ -280,6 +282,72 @@ Job<void> waitForTheDevice() {
     // ignore: cascade_invocations
     ctx.onCancel(() => ctx.unattended(device.stop));
     await ctx.join(device.record);
+    // #enddocregion
+  });
+  return job;
+}
+
+/// The first attempt of "Work in an isolate": the build is waited for with
+/// `join`, and nothing stops the isolate.
+Job<void> joinTheBuild() {
+  final job = Job<void>(observer: printing, (ctx) async {
+    // #docregion
+    ctx.onDiscard(index.removeFile);
+    await ctx.join(() => Isolate.run(index.build));
+    // #enddocregion
+  });
+  return job;
+}
+
+// #docregion
+/// Runs the synchronous [work] in an isolate of its own, which the
+/// cancellation of [ctx] kills.
+Future<T> runInIsolate<T>(JobContext ctx, T Function() work) async {
+  final port = ReceivePort();
+  void Function()? unregister;
+  final Object? message;
+  try {
+    final isolate = await ctx.join(
+      () => Isolate.spawn(
+        _runAndExit<T>,
+        (work, port.sendPort),
+        paused: true,
+        onError: port.sendPort,
+        onExit: port.sendPort,
+      ),
+      discard: (isolate) => isolate.kill(priority: Isolate.immediate),
+    );
+    unregister = ctx.onCancel(
+      () => isolate.kill(priority: Isolate.immediate),
+    );
+    isolate.resume(isolate.pauseCapability!);
+    // The first message is the answer: the value, the error, or the exit of
+    // an isolate killed before it answered.
+    message = await ctx.join(() => port.first);
+  } finally {
+    unregister?.call();
+    port.close();
+  }
+  return switch (message) {
+    (final T value,) => value,
+    [final error, final stackTrace] =>
+      throw RemoteError('$error', '$stackTrace'),
+    _ => throw StateError('the isolate ended without an answer'),
+  };
+}
+
+void _runAndExit<T>((T Function(), SendPort) task) {
+  final (work, port) = task;
+  Isolate.exit(port, (work(),));
+}
+// #enddocregion
+
+/// "Work in an isolate" with the isolate the cancellation kills.
+Job<void> killTheBuild() {
+  final job = Job<void>(observer: printing, (ctx) async {
+    // #docregion
+    ctx.onDiscard(index.removeFile);
+    await runInIsolate(ctx, index.build);
     // #enddocregion
   });
   return job;

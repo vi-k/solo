@@ -577,3 +577,131 @@ outcome: Cancelled(manual)
 3. В `onError` попадает только то, что колбэк бросит синхронно,
    а `async`-функция синхронно не бросает никогда: даже ошибка до её первого
    `await` уходит в её future.
+
+## Работа в изоляте
+
+Задача строит поисковый индекс базы в отдельном изоляте, чтобы сборка
+не держала изолят, в котором работает приложение. По ходу сборка пишет файл,
+и `onDiscard` удаляет его, если задача кончится не `Done`. Сборка идёт в три
+шага, каждый занимает процессор своего изолята, а пользователь отменяет задачу,
+когда первый шаг готов. Сборка должна остановиться, а файл — удалиться только
+тогда, когда в него уже никто не пишет.
+
+### Первая попытка
+
+`Isolate.run` выполняет функцию в новом изоляте и возвращает её результат,
+а `join` его ждёт:
+
+```dart
+// Первая попытка: изолят ничто не останавливает.
+ctx.onDiscard(index.removeFile);
+await ctx.join(() => Isolate.run(index.build));
+```
+
+```text
+step 1
+cancel
+step 2
+step 3
+index file removed
+outcome: Cancelled(manual)
+```
+
+Сборка доходит до конца, как миграция в разделе
+[«Вторая попытка»](#вторая-попытка): `join` её ждёт, и никто не велит ей
+остановиться. И велеть нечем: `Isolate.run` возвращает future и держит изолят
+при себе, так что нет ни изолята, который можно убить, ни токена, который
+сборка прочла бы. `abandonable` вместо `join` сразу кончает задачу, и файл
+удаляется, пока изолят ещё пишет в него.
+
+### Убить изолят
+
+`Isolate.spawn` отдаёт изолят, который запускает, а `onCancel` его убивает.
+Функция ниже встаёт на место `Isolate.run` для синхронной работы:
+
+```dart
+/// Выполняет синхронную [work] в отдельном изоляте, который отмена [ctx]
+/// убивает.
+Future<T> runInIsolate<T>(JobContext ctx, T Function() work) async {
+  final port = ReceivePort();
+  void Function()? unregister;
+  final Object? message;
+  try {
+    final isolate = await ctx.join(
+      () => Isolate.spawn(
+        _runAndExit<T>,
+        (work, port.sendPort),
+        paused: true,
+        onError: port.sendPort,
+        onExit: port.sendPort,
+      ),
+      discard: (isolate) => isolate.kill(priority: Isolate.immediate),
+    );
+    unregister = ctx.onCancel(
+      () => isolate.kill(priority: Isolate.immediate),
+    );
+    isolate.resume(isolate.pauseCapability!);
+    // Первое сообщение и есть ответ: значение, ошибка или выход изолята,
+    // убитого раньше, чем он ответил.
+    message = await ctx.join(() => port.first);
+  } finally {
+    unregister?.call();
+    port.close();
+  }
+  return switch (message) {
+    (final T value,) => value,
+    [final error, final stackTrace] =>
+      throw RemoteError('$error', '$stackTrace'),
+    _ => throw StateError('the isolate ended without an answer'),
+  };
+}
+
+void _runAndExit<T>((T Function(), SendPort) task) {
+  final (work, port) = task;
+  Isolate.exit(port, (work(),));
+}
+```
+
+```dart
+ctx.onDiscard(index.removeFile);
+await runInIsolate(ctx, index.build);
+```
+
+```text
+step 1
+cancel
+index file removed
+outcome: Cancelled(manual)
+```
+
+Вот что происходит:
+
+1. `Isolate.spawn` запускает изолят с работой и портом. Изолят шлёт туда
+   значение в записи, чтобы его нельзя было принять за список, который шлёт
+   `onError`, и выходит. `onError` и `onExit` шлют в тот же порт, поэтому
+   первое сообщение и есть ответ: значение, ошибка работы или выход изолята,
+   который умер, не ответив.
+2. Изолят запускается на паузе, через `join` с `discard`, который его убивает.
+   Отмена, пришедшая, пока изолят запускается, застаёт `join` в ожидании, и,
+   как сказано в таблице в начале страницы, `join` отдаёт изолят в `discard`,
+   как только тот появился, и только после этого бросает отмену. Изолят
+   умирает, не выполнив ни строки работы; без `discard` он так и остался бы
+   на паузе.
+3. `onCancel` убивает изолят с `Isolate.immediate`, и тот останавливается
+   посреди шага Dart-кода: своих контрольных точек работе не нужно. Вызов
+   нативного кода, например `sleep`, сначала доходит до конца. `resume` пускает
+   работу только тогда, когда `onCancel` уже на месте, а `finally` его снимает,
+   чтобы задача, которая запускает изоляты один за другим, не копила
+   по убийству на каждый.
+4. Второй `join` ждёт ответа, а убитый изолят отвечает своим выходом. Задача
+   кончается только тогда, когда изолят мёртв, и `onDiscard` удаляет файл уже
+   после него. Ответ — сообщение, а не ошибка, поэтому на отменённой задаче
+   `join` бросает её `Cancelled`, и `ctx.check()` не нужен, в отличие
+   от раздела [«Спросить задачу»](#спросить-задачу).
+
+В отличие от `Isolate.run`, ошибка работы выходит из `runInIsolate` как
+`RemoteError` с текстом и стеком ошибки: `onError` шлёт и то и другое строками,
+а сам объект ошибки остаётся в изоляте. Всё, что держит `work`, копируется
+в новый изолят вместе с ней. Замыкание, которое держит `ReceivePort`,
+скопировать нельзя: изолят не запускается, и `runInIsolate` бросает ошибку
+`Isolate.spawn`.

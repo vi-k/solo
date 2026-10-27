@@ -577,3 +577,130 @@ through too, but the job does not hear what becomes of it:
 3. Only what the callback throws synchronously reaches `onError`, and an
    `async` function never throws synchronously: even an error before its first
    `await` goes into its future.
+
+## Work in an isolate
+
+The job builds the search index of the database in an isolate of its own, so
+that the build does not hold up the isolate the app runs in. The build writes a
+file as it goes, and `onDiscard` removes the file unless the job ends `Done`.
+It takes three steps, each holding the CPU of its isolate, and the user cancels
+once the first step is done. The build should stop, and the file should go only
+once nothing writes into it.
+
+### The first attempt
+
+`Isolate.run` runs a function in a new isolate and returns its result, and
+`join` waits for it:
+
+```dart
+// The first attempt: nothing stops the isolate.
+ctx.onDiscard(index.removeFile);
+await ctx.join(() => Isolate.run(index.build));
+```
+
+```text
+step 1
+cancel
+step 2
+step 3
+index file removed
+outcome: Cancelled(manual)
+```
+
+The build runs to its end, as the migration did in
+[The second attempt](#the-second-attempt): `join` waits for it, and nothing
+tells it to stop. Nothing can: `Isolate.run` returns a future and keeps the
+isolate to itself, so there is no isolate to kill and no token for the build to
+read. `abandonable` in place of `join` ends the job at once, and the file is
+removed while the isolate is still writing it.
+
+### Killing the isolate
+
+`Isolate.spawn` hands over the isolate it starts, and `onCancel` kills it. The
+function below takes the place of `Isolate.run` for synchronous work:
+
+```dart
+/// Runs the synchronous [work] in an isolate of its own, which the
+/// cancellation of [ctx] kills.
+Future<T> runInIsolate<T>(JobContext ctx, T Function() work) async {
+  final port = ReceivePort();
+  void Function()? unregister;
+  final Object? message;
+  try {
+    final isolate = await ctx.join(
+      () => Isolate.spawn(
+        _runAndExit<T>,
+        (work, port.sendPort),
+        paused: true,
+        onError: port.sendPort,
+        onExit: port.sendPort,
+      ),
+      discard: (isolate) => isolate.kill(priority: Isolate.immediate),
+    );
+    unregister = ctx.onCancel(
+      () => isolate.kill(priority: Isolate.immediate),
+    );
+    isolate.resume(isolate.pauseCapability!);
+    // The first message is the answer: the value, the error, or the exit of
+    // an isolate killed before it answered.
+    message = await ctx.join(() => port.first);
+  } finally {
+    unregister?.call();
+    port.close();
+  }
+  return switch (message) {
+    (final T value,) => value,
+    [final error, final stackTrace] =>
+      throw RemoteError('$error', '$stackTrace'),
+    _ => throw StateError('the isolate ended without an answer'),
+  };
+}
+
+void _runAndExit<T>((T Function(), SendPort) task) {
+  final (work, port) = task;
+  Isolate.exit(port, (work(),));
+}
+```
+
+```dart
+ctx.onDiscard(index.removeFile);
+await runInIsolate(ctx, index.build);
+```
+
+```text
+step 1
+cancel
+index file removed
+outcome: Cancelled(manual)
+```
+
+This is what happens:
+
+1. `Isolate.spawn` starts the isolate with the work and a port. The isolate
+   sends the value there in a record, so that it cannot pass for the list that
+   `onError` sends, and exits. `onError` and `onExit` send to the same port, so
+   the first message is the answer: the value, the error of the work, or the
+   exit of an isolate that died without answering.
+2. The isolate starts paused, through a `join` with a `discard` that kills it.
+   A cancellation that comes while the isolate is starting finds `join`
+   waiting, and, as the table at the top of the page says, `join` hands the
+   isolate to `discard` as soon as it exists and throws the cancellation after
+   that. The isolate dies without running a line of the work; without the
+   `discard` it would stay paused for good.
+3. `onCancel` kills the isolate with `Isolate.immediate`, which stops it in the
+   middle of a step of Dart code: the work needs no checkpoint of its own. A
+   call into native code, such as `sleep`, ends first. `resume` lets the work
+   run only once `onCancel` is in place, and `finally` unregisters it, so a job
+   that runs isolates one after another does not keep a kill for each.
+4. The second `join` waits for the answer, and a killed isolate answers with
+   its exit. The job ends only once the isolate is dead, and `onDiscard`
+   removes the file after it. The answer is a message, never an error, so on a
+   cancelled job `join` throws the job's `Cancelled`; no `ctx.check()` is
+   needed, unlike in [Asking the job](#asking-the-job).
+
+Unlike with `Isolate.run`, an error of the work comes out of `runInIsolate` as
+a `RemoteError` with the text and the stack trace of the error: `onError` sends
+both as strings, and the error object stays in the isolate. Whatever `work`
+holds is copied into the new isolate with it. A closure that holds a
+`ReceivePort` cannot be copied, the isolate does not start, and `runInIsolate`
+throws the error of `Isolate.spawn`.

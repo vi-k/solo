@@ -4,6 +4,8 @@
 
 - [Time moved by the test](doc/testing.md#time-moved-by-the-test) says how to
   test a job that does real input and output: fake the timers alone.
+- [Work in an isolate](doc/cancellation.md#work-in-an-isolate) shows how to run
+  work in an isolate that the job's cancellation kills in the middle of a step.
 
 ## 0.4.0
 

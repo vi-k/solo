@@ -3,6 +3,7 @@
 // the observer of the pages' jobs. Each test sets the stage first, so one
 // stub can fail or be cancelled; what the stubs say goes to [printed].
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:async_job/async_job.dart';
 
@@ -159,6 +160,69 @@ final class Device {
 
 /// The device of the page.
 Device device = Device();
+
+/// How long a step of [SearchIndex.build] holds the CPU of its isolate.
+const buildStepMs = 50;
+
+/// The ports [SearchIndex.listen] has opened and [closeIndexes] has not
+/// closed yet.
+final _indexPorts = <RawReceivePort>[];
+
+/// The search index of the database, built in an isolate of its own.
+///
+/// [build] runs in that isolate, where [printed] is not this one, so it says
+/// each of its steps through a port to the isolate that made the index.
+final class SearchIndex {
+  SearchIndex._(this._steps, {required this.fails});
+
+  /// An index whose build says its steps here, and calls [heard] on each.
+  /// With [fails], the build throws after its first step.
+  factory SearchIndex.listen({
+    void Function(String line)? heard,
+    bool fails = false,
+  }) {
+    void hear(Object? line) {
+      say('$line');
+      heard?.call('$line');
+    }
+
+    final port = RawReceivePort(hear);
+    _indexPorts.add(port);
+    return SearchIndex._(port.sendPort, fails: fails);
+  }
+
+  final SendPort _steps;
+
+  /// Whether [build] throws after its first step.
+  final bool fails;
+
+  /// Three steps of [buildStepMs] that hold the CPU; returns the number of
+  /// entries.
+  int build() {
+    for (var step = 1; step <= 3; step++) {
+      final clock = Stopwatch()..start();
+      while (clock.elapsedMilliseconds < buildStepMs) {}
+      _steps.send('step $step');
+      if (fails) {
+        throw const FormatException('bad page');
+      }
+    }
+    return 3;
+  }
+
+  void removeFile() => say('index file removed');
+}
+
+/// Closes the ports of every index [SearchIndex.listen] has made.
+void closeIndexes() {
+  for (final port in _indexPorts) {
+    port.close();
+  }
+  _indexPorts.clear();
+}
+
+/// The index of the page; each test that builds it makes its own.
+late SearchIndex index;
 
 /// An observer that prints what reaches it.
 final class PrintingObserver extends JobObserver {

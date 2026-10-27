@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
@@ -101,6 +102,20 @@ const quoted = [
     'device released',
     'outcome: Cancelled(manual)',
   ],
+  [
+    'step 1',
+    'cancel',
+    'step 2',
+    'step 3',
+    'index file removed',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'step 1',
+    'cancel',
+    'index file removed',
+    'outcome: Cancelled(manual)',
+  ],
 ];
 
 /// When the user cancels in the sections on the migration: the page's
@@ -146,6 +161,47 @@ List<String> watch(Job<Object?> Function() start, {int? cancelAt}) {
   );
   return printed.toList();
 }
+
+/// Runs the job [start] makes on a fresh index, on the real clock: the
+/// build runs in an isolate, out of reach of `fakeAsync`. With [cancel],
+/// cancels the job once the build has said its first step. Waits for the
+/// outcome and returns what was printed.
+///
+/// After the outcome, waits for the build left running to say [until]; with
+/// no [until], waits for as long as the whole build takes, so that a build
+/// that should be dead has the time to say its other steps.
+Future<List<String>> build(
+  Job<Object?> Function() start, {
+  bool cancel = true,
+  String? until,
+}) async {
+  freshRun();
+  late Job<Object?> job;
+  final heardUntil = Completer<void>();
+  index = SearchIndex.listen(
+    heard: (line) {
+      if (cancel && line == 'step 1') {
+        say('cancel');
+        unawaited(job.cancel());
+      }
+      if (line == until) {
+        heardUntil.complete();
+      }
+    },
+  );
+  job = start();
+  say('outcome: ${await job.done}');
+  if (until == null) {
+    await Future<void>.delayed(const Duration(milliseconds: 3 * buildStepMs));
+  } else {
+    await heardUntil.future.timeout(const Duration(seconds: 10));
+  }
+  return printed.toList();
+}
+
+/// Work that sends [line] to [port] and does nothing else; made here, out
+/// of any test, so that it holds nothing an isolate cannot take.
+void Function() saying(SendPort port, String line) => () => port.send(line);
 
 void main() {
   setUp(() {
@@ -1307,6 +1363,170 @@ void main() {
           for (final line in seen)
             if (line.endsWith(' throws')) line.split(' ').first,
         }..remove('onCancel'),
+      );
+    });
+  });
+
+  group('Work in an isolate', () {
+    tearDown(closeIndexes);
+
+    test('join waits for an isolate nothing stops', () async {
+      expect(await build(page.joinTheBuild), quoted[quoted.length - 2]);
+    });
+
+    test('abandonable removes the file while the isolate writes it', () async {
+      expect(
+        await build(
+          () => Job<void>(observer: printing, (ctx) async {
+            ctx.onDiscard(index.removeFile);
+            await ctx.abandonable(() => Isolate.run(index.build));
+          }),
+          until: 'step 3',
+        ),
+        [
+          'step 1',
+          'cancel',
+          'index file removed',
+          'outcome: Cancelled(manual)',
+          'step 2',
+          'step 3',
+        ],
+      );
+    });
+
+    test('the cancellation kills the isolate in the middle of a step',
+        () async {
+      expect(await build(page.killTheBuild), quoted.last);
+    });
+
+    test('uncancelled, the value comes out of runInIsolate', () async {
+      expect(
+        await build(
+          () => Job<int>(
+            observer: printing,
+            (ctx) => page.runInIsolate(ctx, index.build),
+          ),
+          cancel: false,
+        ),
+        ['step 1', 'step 2', 'step 3', 'outcome: Done(3)'],
+      );
+    });
+
+    test('a list value is not taken for an error', () async {
+      expect(
+        await build(
+          () => Job<List<String>>(
+            observer: printing,
+            (ctx) => page.runInIsolate(ctx, () => ['a', 'b']),
+          ),
+          cancel: false,
+        ),
+        ['outcome: Done([a, b])'],
+      );
+    });
+
+    test('a cancellation while the isolate starts kills it once it exists',
+        () async {
+      expect(
+        await build(cancel: false, () {
+          final job = page.killTheBuild();
+          // The body is waiting for Isolate.spawn by then.
+          Timer(Duration.zero, () => unawaited(job.cancel()));
+          return job;
+        }),
+        ['index file removed', 'outcome: Cancelled(manual)'],
+      );
+
+      // Without the discard, the isolate starts and builds after the job.
+      expect(
+        await build(cancel: false, until: 'step 3', () {
+          final job = Job<void>(observer: printing, (ctx) async {
+            ctx.onDiscard(index.removeFile);
+            final building = index;
+            await ctx.join(() => Isolate.spawn((_) => building.build(), null));
+          });
+          Timer(Duration.zero, () => unawaited(job.cancel()));
+          return job;
+        }),
+        [
+          'index file removed',
+          'outcome: Cancelled(manual)',
+          'step 1',
+          'step 2',
+          'step 3',
+        ],
+      );
+    });
+
+    test('an isolate killed while it starts runs no line of the work',
+        () async {
+      final heard = <Object?>[];
+      final port = RawReceivePort(heard.add);
+      addTearDown(port.close);
+      final started = port.sendPort;
+      final job = Job<void>(
+        (ctx) => page.runInIsolate(ctx, saying(started, 'work ran')),
+      );
+      Timer(Duration.zero, () => unawaited(job.cancel()));
+
+      expect(await job.done, isA<Cancelled>());
+      await Future<void>.delayed(const Duration(milliseconds: 3 * buildStepMs));
+      expect(heard, isEmpty);
+    });
+
+    test('an error is not taken for the value of a work of any type', () async {
+      index = SearchIndex.listen(fails: true);
+      final job = Job<Object?>(
+        (ctx) => page.runInIsolate<Object?>(ctx, index.build),
+      )..ignoreFailure();
+
+      expect(await job.done, isA<Failed>());
+    });
+
+    test('an error of the work comes as a RemoteError with its text', () async {
+      index = SearchIndex.listen(fails: true);
+      final job = Job<int>((ctx) => page.runInIsolate(ctx, index.build))
+        ..ignoreFailure();
+
+      expect(
+        await job.done,
+        isA<Failed>().having(
+          (failed) => failed.error,
+          'error',
+          isA<RemoteError>()
+              .having(
+                (error) => error.toString(),
+                'text',
+                'FormatException: bad page',
+              )
+              .having(
+                (error) => error.stackTrace.toString(),
+                'stack trace',
+                contains('SearchIndex.build'),
+              ),
+        ),
+      );
+    });
+
+    test('a closure that holds a ReceivePort does not start the isolate',
+        () async {
+      final port = RawReceivePort();
+      addTearDown(port.close);
+      final job = Job<int>(
+        (ctx) => page.runInIsolate(ctx, () => port.hashCode),
+      )..ignoreFailure();
+
+      expect(
+        await job.done,
+        isA<Failed>().having(
+          (failed) => failed.error,
+          'error',
+          isA<ArgumentError>().having(
+            (error) => '$error',
+            'text',
+            contains('ReceivePort'),
+          ),
+        ),
       );
     });
   });
