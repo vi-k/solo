@@ -284,16 +284,32 @@ void main() {
   group('a child handed to another job', () {
     test('runs there', () {
       fakeAsync((async) {
+        final maker = JobJournal();
+        final runner = JobJournal();
         late final ChildJob<int> child;
-        Job<void>((ctx) async {
-          child = ctx.child(step(10, 5));
+        Job<void>(key: 'maker', observer: maker, (ctx) async {
+          child = ctx.child(key: 'child', step(10, 5));
         });
         async.flushMicrotasks();
+        maker.take();
         int? value;
-        final other = Job<void>((ctx) async => value = await ctx.run(child));
+        final other = Job<void>(
+          key: 'runner',
+          observer: runner,
+          (ctx) async {
+            value = await ctx.run(child);
+          },
+        );
         async.flushTimers();
         expect(value, 5);
         expect(other.outcome, isA<Done<void>>());
+        expect(maker.take(), isEmpty);
+        expect(runner.take(), [
+          '[runner] started',
+          '> [child] started',
+          '> [child] finished Done(5)',
+          '[runner] finished Done(null)',
+        ]);
       });
     });
 
