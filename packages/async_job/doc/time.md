@@ -218,7 +218,7 @@ may refuse, and a job with `cancellable: false` would refuse it.
 
 A page goes out without its thumbnail if the thumbnail takes longer than 15 ms;
 `renderThumbnail` takes 20. One step gets a deadline as a child of its own,
-made by `ctx.child`, which any engine of the job accepts:
+made by `ctx.child`, which the engine of the job accepts:
 
 ```dart
 final thumbnail = ctx.child<String>(

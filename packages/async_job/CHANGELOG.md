@@ -6,7 +6,10 @@
   that implements `JobContext` itself adds it, a subclass of `JobContextBase`
   with a member of that name renames it or makes it an override, and an
   extension on `JobContext` with a member named `child` is shadowed without a
-  warning.
+  warning. An engine that makes children of its own, in `createEachJob` or
+  elsewhere, or keeps rules in `check()`, overrides `child` with `@useResult`:
+  the default is a `Job.deferred`, which such an engine refuses or which does
+  not ask its rules.
 
 ### Added
 

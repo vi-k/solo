@@ -14,8 +14,8 @@ import 'support/test_state.dart';
 
 /// What a controller says of a job it did not make.
 const _notCreatedHere =
-    'was not created by this Solo (make it with job(...) of this controller '
-    'or with ctx.child)';
+    'was not created by this Solo (make it with job(...) or ctx.child of this '
+    'controller)';
 
 void main() {
   test('children run inside the parent, nested by level', () {

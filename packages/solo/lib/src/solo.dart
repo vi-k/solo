@@ -23,8 +23,8 @@ part 'queue.dart';
 /// types let a job of the core or of another controller through. A job it
 /// did make, run by a parent of the core, is refused in `adoptedBy`.
 const _notCreatedHere =
-    'was not created by this Solo (make it with job(...) of this controller '
-    'or with ctx.child)';
+    'was not created by this Solo (make it with job(...) or ctx.child of this '
+    'controller)';
 
 /// The engine: state, queue, hooks and its own listeners ([addListener]).
 ///

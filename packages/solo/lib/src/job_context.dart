@@ -55,11 +55,12 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// [run], [start] and [runAll].
   ///
   /// The child gets a [SoloContext] of its own and keeps this job's working
-  /// type `W` and `keepWhile` rule, so a state they refuse cancels it at the
-  /// start with `Cancelled(rules)`. The rules are those of this job even when
-  /// another job of the controller starts the child, and after this job's
-  /// body ends. The `canStart` rule is not repeated, and the child is
-  /// cancellable independently of the `cancellable` setting of this job.
+  /// type `W` and `keepWhile` rule, so a state they refuse cancels it with
+  /// `Cancelled(rules)`, at the start or while it runs. The rules are those
+  /// of this job even when another job of the controller starts the child,
+  /// and after this job's body ends. The `canStart` rule is not repeated, and
+  /// the child is cancellable independently of the `cancellable` setting of
+  /// this job.
   ///
   /// ```dart
   /// final rows = await ctx.run(ctx.child(load, key: 'rows', timeout: limit));

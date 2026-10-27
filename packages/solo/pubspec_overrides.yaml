@@ -1,4 +1,4 @@
-# Use the next async_job release from this checkout until it is published.
+# Use async_job from this checkout until 0.5.0 is published.
 dependency_overrides:
   async_job:
     path: ../async_job

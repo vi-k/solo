@@ -78,8 +78,12 @@ void main() {
             caught = cancelled;
           }
         });
-        async.flushTimers();
+        async.elapse(ms(9));
+        expect(caught, isNull, reason: 'the deadline is 10 ms');
+        async.elapse(ms(1));
         expect(caught, cancelledBy<TimeoutCancelReason>());
+        final reason = (caught! as Cancelled).reason as TimeoutCancelReason;
+        expect(reason.timeout, ms(10));
       });
     });
   });

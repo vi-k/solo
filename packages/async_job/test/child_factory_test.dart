@@ -9,6 +9,7 @@ import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/compile_errors.dart';
 import 'support/delay.dart';
 import 'support/journal.dart';
 
@@ -363,4 +364,25 @@ void main() {
       );
     });
   });
+
+  test(
+    'a child dropped in the body of an engine is a warning',
+    () async {
+      // The context of an engine's body is typed with its own class, and an
+      // override does not inherit `@useResult`: `JobContextBase` keeps it.
+      final warnings = await compileWarnings('''
+import 'package:async_job/engine.dart';
+
+final class MyContext extends JobContextBase {
+  MyContext(super.owner);
+}
+
+void ofEngine(MyContext ctx) {
+  ctx.child<void>((ctx) async {});
+}
+''');
+      expect(warnings, [startsWith('unused_result:')]);
+    },
+    timeout: const Timeout(Duration(minutes: 1)),
+  );
 }

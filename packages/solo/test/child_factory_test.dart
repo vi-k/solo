@@ -68,6 +68,27 @@ void main() {
       });
     });
 
+    test('cancel a child that runs under another job', () {
+      runSolo(initialState: const Preparing(), (solo, journal, async) {
+        late final SoloJob<void> child;
+        solo.enqueue<Preparing, void>(
+          keepWhile: (state) => state.progress < 50,
+          (ctx) async {
+            child = ctx.child((ctx) => ctx.abandonable(() => delay(100)));
+          },
+        );
+        async.flushTimers();
+        final runner = solo.enqueue<TestState, void>((ctx) => ctx.run(child))
+          ..ignoreFailure();
+        async.elapse(ms(10));
+        expect(child.outcome, isNull, reason: 'the child is running');
+        solo.externalSetState(const Preparing(progress: 60));
+        async.flushTimers();
+        expect(child.outcome, cancelledBy<RulesCancelReason>());
+        expect(runner.outcome, cancelledBy<HandlerCancelReason>());
+      });
+    });
+
     test('keep the working type of the job that made the child', () {
       runSolo(initialState: const Preparing(), (solo, journal, async) {
         late final SoloJob<void> child;
@@ -112,6 +133,50 @@ void main() {
         expect(value, 7, reason: 'canStart of the maker is not asked again');
         expect(held.outcome, cancelledBy<ManualCancelReason>());
       });
+    });
+  });
+
+  test('child checks nothing: not the rules, nor the end of the job', () {
+    runSolo(initialState: const Preparing(), (solo, journal, async) {
+      final made = <String, SoloJob<void>>{};
+      late final SoloContext<TestState, Preparing> leaked;
+      solo.enqueue<Preparing, void>(
+        keepWhile: (state) => state.progress < 50,
+        (ctx) async {
+          leaked = ctx;
+          ctx
+            ..unattended(() async {
+              made['unattended'] = ctx.child((ctx) async {});
+            })
+            ..onDispose(() {
+              made['cleanup'] = ctx.child((ctx) async {});
+            });
+        },
+      );
+      async.flushTimers();
+      solo.externalSetState(const Preparing(progress: 60));
+      made['finished, its rules broken'] = leaked.child((ctx) async {});
+      expect(made.keys, [
+        'unattended',
+        'cleanup',
+        'finished, its rules broken',
+      ]);
+      for (final child in made.values) {
+        expect(child.outcome, isNull);
+      }
+      // Another job runs them: the rules of the maker refuse at the start.
+      solo.externalSetState(const Preparing(progress: 10));
+      final ran = solo.enqueue<TestState, void>((ctx) async {
+        await ctx.run(made['unattended']!);
+        await ctx.run(made['cleanup']!);
+      });
+      async.flushTimers();
+      expect(ran.outcome, isA<Done<void>>());
+      solo.externalSetState(const Preparing(progress: 60));
+      final refused = made['finished, its rules broken']!;
+      solo.enqueue<TestState, void>((ctx) => ctx.run(refused)).ignoreFailure();
+      async.flushTimers();
+      expect(refused.outcome, cancelledBy<RulesCancelReason>());
     });
   });
 
