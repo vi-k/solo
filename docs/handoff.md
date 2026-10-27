@@ -44,15 +44,10 @@ screen accepts» `state.md` `solo`, дизайн, ревью дизайна и �
 `2026-10-27-ctx-child-report.md`; все находки закрыты. Вышел в `async_job`
 0.5.0.
 
-Следующее — сообщения двум сессиям, обе по слову владельца. Сессии HisBible —
-что `ctx.child` вышел в `async_job` 0.5.0. Сессии tez (arch-review-2, ADR-0014
-tez-taxi, MR !2025), просьба от 2026-10-27: номера версий всех трёх пакетов,
-ломающие изменения API и изменения поведения из `CHANGELOG.md`. Особо — если
-менялись `Solo.observer` и `unansweredHandler`, маршрут ошибки (`onError`
-с `answer`), `externalSetState` после `close`, `abandonable`, `onCancel`
-и `join`, `Policy.restart`, `Policy.droppable` и ключи, `ScopeModel`
-и `AsyncDataScope` в README `flutter_solo`, `testing.md`. Менять что-либо ради
-tez не нужно, только сообщение.
+Сессии tez о выпуске 0.5.0 владелец сообщил сам 2026-10-27. Сессии HisBible
+сообщение, что `ctx.child` вышел в `async_job` 0.5.0, владелец велел отправить
+2026-10-27, но её не было в живых: в `ListAgents` её нет, `SendMessage` ответил
+«No agent named 'hisbible' is reachable». Отправить, когда она появится.
 
 Оверрайдов в дереве нет: `solo` и его пример сняли свои 2026-10-27
 (`aa2df801`), `flutter_solo` и его пример — тем же днём (`9edcb0e8`). Правишь
