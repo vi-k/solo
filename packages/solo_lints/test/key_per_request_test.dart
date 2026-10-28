@@ -265,4 +265,22 @@ $_profiles
 ''',
     ['key: [[_Op.load]]'],
   );
+
+  // A parameter of the method around a local function is the same on every
+  // call of the local function.
+  Future<void> test_local_function_key_from_outer_parameter() => assertAt(
+    '''
+$_profiles
+  void run(String scope) {
+    Job<Profile> load(String id) => enqueue<Ready, Profile>(
+      key: scope,
+      policy: Policy.droppable,
+      (ctx) => ctx.abandonable(() => api.load(id)),
+    );
+    load('ada');
+  }
+}
+''',
+    ['key: [[scope]]'],
+  );
 }

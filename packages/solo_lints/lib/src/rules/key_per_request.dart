@@ -88,9 +88,9 @@ class _Visitor extends SimpleAstVisitor<void> {
   // The rule does not follow a variable to its value: a key built in a local
   // may well hold the parameters, so it stays silent. A parameter of a
   // closure around the call is new on every call of the closure, so it
-  // counts as a local.
-  final parameters = _parametersAround(call);
-  if (_readsLocal(key, parameters)) return null;
+  // counts as a local; a parameter of a declaration further out is not.
+  final (:declaration, :parameters) = _parametersAround(call);
+  if (_readsLocal(key, declaration, parameters)) return null;
   if (_referenced(key, parameters).isNotEmpty) return null;
   final read = _referenced(body, parameters);
   if (read.isEmpty) return null;
@@ -114,9 +114,10 @@ bool _isDroppable(Expression policy) {
   return isSoloMember(element, 'Policy', 'droppable');
 }
 
-/// The parameters of the nearest method or function declaration around
-/// [node], in declaration order.
-List<FormalParameterElement> _parametersAround(AstNode node) {
+/// The nearest method or function declaration around [node] and its
+/// parameters, in declaration order.
+({AstNode? declaration, List<FormalParameterElement> parameters})
+_parametersAround(AstNode node) {
   for (var at = node.parent; at != null; at = at.parent) {
     // A getter has no parameter list, hence no parameters.
     final FormalParameterList? list;
@@ -128,34 +129,55 @@ List<FormalParameterElement> _parametersAround(AstNode node) {
       default:
         continue;
     }
-    return [
-      for (final p in list?.parameters ?? const <FormalParameter>[])
-        ?p.declaredFragment?.element,
-    ];
+    return (
+      declaration: at,
+      parameters: [
+        for (final p in list?.parameters ?? const <FormalParameter>[])
+          ?p.declaredFragment?.element,
+      ],
+    );
   }
-  return const [];
+  return (declaration: null, parameters: const []);
 }
 
-bool _readsLocal(AstNode node, List<FormalParameterElement> parameters) {
-  final finder = _LocalFinder(parameters.toSet());
+/// Whether [node] reads a local variable, or a parameter of a closure inside
+/// [declaration] other than its [parameters].
+bool _readsLocal(
+  AstNode node,
+  AstNode? declaration,
+  List<FormalParameterElement> parameters,
+) {
+  final finder = _LocalFinder(declaration, parameters.toSet());
   node.accept(finder);
   return finder.found;
 }
 
 class _LocalFinder extends RecursiveAstVisitor<void> {
+  final AstNode? declaration;
   final Set<Element> parameters;
 
   bool found = false;
 
-  _LocalFinder(this.parameters);
+  _LocalFinder(this.declaration, this.parameters);
 
   @override
   void visitSimpleIdentifier(SimpleIdentifier node) {
     final element = node.element;
     if (element is LocalVariableElement ||
-        element is FormalParameterElement && !parameters.contains(element)) {
+        element is FormalParameterElement &&
+            !parameters.contains(element) &&
+            _isInside(element)) {
       found = true;
     }
+  }
+
+  bool _isInside(FormalParameterElement element) {
+    final at = declaration;
+    final offset = element.firstFragment.nameOffset;
+    return at != null &&
+        offset != null &&
+        offset >= at.offset &&
+        offset < at.end;
   }
 }
 
