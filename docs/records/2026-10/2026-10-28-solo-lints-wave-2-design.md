@@ -1,6 +1,6 @@
 > **Состояние на 2026-10-28:** дизайн одобрен владельцем, реализован в ветке
-> `worktree-solo-lints-wave-2`, не влит; расхождения — в отчёте
-> `2026-10-28-solo-lints-wave-2-report.md`. План —
+> `worktree-solo-lints-wave-2`, не влит и не опубликован; расхождения —
+> в отчёте `2026-10-28-solo-lints-wave-2-report.md`. План —
 > `2026-10-28-solo-lints-wave-2-plan.md`.
 > **Что это:** вторая волна `solo_lints` — правила `key_per_request`
 > и `ignore_failure_hides_bugs`, быстрые исправления трёх правил и сторож

@@ -90,7 +90,8 @@ by `onDispose` or `onDiscard` that mentions the variable. See
 The quick fix removes the `onDispose` or `onDiscard` and passes the release to
 the call as `dispose:` or `discard:`, so the lines above become
 `ctx.join(Database.open, dispose: (db) => db.close())`. It is offered for a
-release that is a tear-off or a function literal without parameters.
+release that is a tear-off of a method of the variable, such as `db.close`, or
+a function literal without parameters.
 
 ### catch_without_check
 
@@ -199,12 +200,12 @@ through to the zone, and `ignoreFailure()` hides those as well. Drop
 `ignoreFailure()`: the expected errors stay quiet, and a bug is still reported.
 The rule takes `ignoreFailure()` on a job that comes from `job` or `enqueue`
 with `isExpectedError`, or from the `add` of a `collect` or `accumulate` field
-with one, also through a method of the same library whose body is one
-expression, when nobody uses the job afterwards: the call itself, or a cascade
-whose value is dropped, as the `onPressed` of a button is. The page of common
-mistakes has no section for this one. It is a lint rather than a warning
-because a job whose outcome nobody needs, with the reporting left to the hooks,
-may call `ignoreFailure()` on purpose: see
+with one, also through a method or function of the same library whose body is
+`=>` or a single `return`, when nobody uses the job afterwards: the call
+itself, or a cascade whose value is dropped, as the `onPressed` of a button is.
+The page of common mistakes has no section for this one. It is a lint rather
+than a warning because a job whose outcome nobody needs, with the reporting
+left to the hooks, may call `ignoreFailure()` on purpose: see
 [Answering for every failure](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#answering-for-every-failure).
 
 ## Versions
