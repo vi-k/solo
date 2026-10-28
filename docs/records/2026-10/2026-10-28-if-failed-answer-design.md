@@ -1,6 +1,7 @@
 > **Состояние на 2026-10-28:** дизайн, не реализован. Имя `isExpectedError`
-> выбрал владелец 2026-10-28; вторая редакция после первого ревью ждёт
-> второго круга. Пересматривает пункт 44 `docs/settled.md`.
+> выбрал владелец 2026-10-28; третья редакция, после второго ревью, ждёт
+> подтверждения четырёх решений владельцем. Пересматривает пункт 44
+> `docs/settled.md`.
 > **Что это:** задача называет свои ожидаемые ошибки предикатом
 > `isExpectedError`, и они не доходят до ответчика; баг доходит, как прежде.
 > **Связанные записи:** `2026-10-12-solo-project-review.md` (M3),
@@ -110,8 +111,8 @@ Job<String> load() => enqueue<ProfileState, String>(
   вызывающего: широкий предикат `e is Exception` гасил бы и `FormatException`
   из колбэка виджета. Ядро ведёт ошибку слушателя тем же `notifyError`, что
   и ошибку очистки, поэтому `_SoloJob` переопределяет `whenFinished`
-  и `whenCancelled`: обёртка запоминает то, что бросил колбэк, и бросает
-  дальше, в охрану ядра. Такую ошибку предикат не спрашивают.
+  и `whenCancelled`, и обёртка ловит то, что бросил колбэк, сама — устройство
+  в разделе «Устройство». Такую ошибку предикат не спрашивают.
 - **Продолжения.** `job.shared()` и `job.then(...)` делают свою ручку, и провал
   исходной задачи она несёт со своим ответом: у ручки свой наблюдатель, без
   наблюдателя — зона, мимо `unansweredHandler`. Исходная задача с предикатом
@@ -127,12 +128,20 @@ Job<String> load() => enqueue<ProfileState, String>(
 
 ### Дети
 
-Ребёнок без своего предиката берёт предикат родителя. `ctx.child` уже так
-передаёт `keepWhile` (`_SoloContext.child`
-в `packages/solo/lib/src/job_context.dart`), и `isExpectedError` идёт рядом;
-ребёнок `each` — через `createEachJob` там же; ребёнок из `job(...)`,
-запущенный `ctx.run` или `ctx.start`, — при усыновлении, если своего нет. Свой
-предикат ребёнка сильнее родительского.
+Ребёнок без своего предиката берёт предикат родителя при усыновлении:
+`_SoloJob.adoptedBy` пишет `_isExpectedError ??= ` предикат родителя. Каждый
+ребёнок — `run`, `start`, `runAll`, `each`, `ctx.child`, `job(...)`, отданный
+`ctx.run` или `ctx.start`, — проходит через `JobContextBase.startChild` ядра,
+а тот зовёт `adoptedBy` раньше, чем ставит ребёнку наблюдателя и родителя.
+Своего предиката у `ctx.child` и `each` нет, и второго источника рядом
+с усыновлением не заводится: `keepWhile` идёт через `ctx.child`, но с ним
+ребёнок, которого сделала одна задача, а запустила другая, получил бы два
+ответа. Свой предикат бывает только у ребёнка из `job(...)`, и он сильнее
+родительского. Dartdoc `SoloContext.child` и `each` говорит это одной фразой.
+
+Широкий предикат родителя, `e is Exception`, гасит и баги того же типа
+у ребёнка, которого запустили и бросили; dartdoc предиката говорит это рядом
+с советом держать его проверкой типа.
 
 Без наследования вернулся бы исходный симптом. Первое ревью показало это
 на прототипе, где ребёнок предиката не получал, а у родителя он был:
@@ -150,6 +159,20 @@ B4b same abandonable in the parent's own body:   [onError(Job(load)) ApiError ne
 второй ветки, которую `ctx.runAll` не бросил. Наследование хранится
 в собственном поле ребёнка: `_parentJob` отпускается в `finished()`, а ответ
 за ветку или за ненаблюдённый провал приходит позже.
+
+Второе ревью проверило наследование при усыновлении на своём прототипе:
+
+```text
+B1 Failure(ApiError1) [onError(child) ApiError1 never, onError(child) ApiError2 never, onError(load) ApiError1 never]
+B2  [onError(child) ApiError never]
+B3  [onError(child) ApiError never]
+B4  [onError(child) ApiError later, handler(child) ApiError]
+```
+
+B1 — две ветки `runAll`; B2 — `ctx.start(ctx.child(...))`; B3 — `each` внутри
+`ctx.child`; B4 — свой предикат ребёнка `e is StateError` берёт верх. Ребёнок
+не отвечает за ошибку, которую передали родителю: каждый маршрут ядра
+спрашивает ту задачу, которая ошибку объявила.
 
 Обратное направление остаётся как есть: ребёнок с предикатом, которого ждёт
 родитель без предиката, свою ошибку не отдаёт, но родитель падает с ней
@@ -175,28 +198,76 @@ B4b same abandonable in the parent's own body:   [onError(Job(load)) ApiError ne
 Всё в `solo`, ядро не меняется.
 
 - `_SoloJob` хранит предикат и не отпускает его в `finished()`: ненаблюдённый
-  `Failed` идёт к ответу микротаской позже.
+  `Failed` идёт к ответу микротаской позже. Над `_body` и `_ifFailed` написано,
+  почему их отпускают; dartdoc поля говорит, почему предикат остаётся,
+  а dartdoc параметра просит не держать в нём состояние.
 - **Вердикт считается один раз.** Каждая ошибка, которая доходит
   до `onUnanswered`, сначала прошла `onError` (`packages/solo/doc/errors.md`,
   «Where each error goes»). `_SoloJobObserver.onError` для `answered` и `later`
-  спрашивает предикат, запоминает вердикт на задаче — список пар
-  по идентичности ошибки, не `Expando` (пункт 18: записи и строки) — и при «да»
-  передаёт хукам `never`. `_SoloJobObserver.onUnanswered` берёт вердикт оттуда
-  и при «да» возвращается, не зовя `Solo.onUnanswered`; переопределение
-  `onUnanswered` в контроллере такую ошибку не слышит. Ошибку без вердикта
-  ответ спрашивает сам и тоже запоминает. Иначе нечистый предикат давал бы
-  `never` в `onError`, а потом ту же ошибку отдавал обработчику — первое ревью
-  это показало: `calls=2 [onError ApiError never, handler ApiError]`.
+  спрашивает предикат, запоминает вердикт на задаче и при «да» передаёт хукам
+  `never`. `_SoloJobObserver.onUnanswered` забирает вердикт — запись
+  удаляется — и при «да» возвращается, не зовя `Solo.onUnanswered`;
+  переопределение `onUnanswered` в контроллере такую ошибку не слышит. Ошибку
+  без вердикта ответ спрашивает сам и ничего не запоминает: читать запись после
+  ответа некому. Иначе нечистый предикат давал бы `never` в `onError`, а потом
+  ту же ошибку отдавал обработчику — первое ревью это показало:
+  `calls=2 [onError ApiError never, handler ApiError]`.
+- **Вердикт держится слабо**, как ядро держит `_announcedError`
+  в `packages/async_job/lib/src/job_base.dart`: `Expando<bool>` для ошибок,
+  которые можно держать слабо, и короткий список пар по идентичности для того,
+  что `_isPlain` слабо держать не даёт, — строк, чисел, `bool` и записей. Пункт
+  18 говорит, что `Expando` на таких значениях бросает, и разделение это
+  обходит. Без удаления и без слабой ссылки вердикт пережил бы ошибку: запись
+  `later` для наблюдённого исхода никто не забирает, как и запись для ошибки,
+  ответ за которую потом снял `Job.isCancellationError` или `ignoreFailure()`.
+  Второе ревью на своём прототипе: тело бросило `ApiError`, задачу отменили,
+  пока она сворачивалась, и `Job.isCancellationError` назвал ошибку —
+  `cache=1 outcome=Cancelled(manual)`. Ручка держала бы сильной ссылкой ошибку,
+  которой нет ни в одном исходе, а ядро держит её слабо как раз ради этого. Сто
+  провалов `unattended` с удалением при ответе: `cache=0 handlerCalls=50`.
 - **Предикат, который бросил, ничего не назвал.** Ошибка идёт дальше своим
   маршрутом — к `Solo.onUnanswered` и `unansweredHandler`, — а то, что бросил
-  предикат, — в зону через `reportHookError`, как у бросившего хука; брошенный
-  `Cancelled` пропадает. Так ядро обходится с бросившим
-  `Job.isCancellationError`. Без этого бросок предиката внутри ответа ловило бы
-  ядро и отдавало исходную ошибку в зону мимо обработчика — прототип так
-  и делал: `[zone ApiError, zone Bad state: predicate]`.
-- **Ошибки слушателей вызывающего** `_SoloJob` отмечает в обёртках
-  `whenFinished` и `whenCancelled`, тем же списком по идентичности; для
-  отмеченной ошибки вердикт — «нет», предикат не спрашивают.
+  предикат, — через `_SoloJob._reportToZone`, то есть `reportToZone` ядра:
+  в зону, где задачу создали, без отмен. Так ядро обходится с бросившим
+  `Job.isCancellationError` в `JobBase._askIsCancellationError`. Текущая зона
+  не годится: ответ спрашивают и из работы, отданной `ctx.unattended`, а её
+  зона возвращает то, что до неё дошло, в ответ той же задачи. Второе ревью:
+  предикат `(e) => (e as ApiError).tag.isEmpty`, поздний провал `abandonable`
+  внутри `unattended`, через `reportHookError` в текущую зону, —
+
+  ```text
+  E2  [zone type '_TypeError' is not a subtype of type 'ApiError' in type cast, onError(load) type 'FormatException' is not a subtype of type 'ApiError' in type cast answered, handler(load) type 'FormatException' is not a subtype of type 'ApiError' in type cast, onError(load) FormatException: bug answered, handler(load) FormatException: bug]
+  E3  [zone type 'FormatException' is not a subtype of type 'ApiError' in type cast, onError(load) FormatException: bug answered, handler(load) FormatException: bug]
+  ```
+
+  В E2 бросок предиката стал ошибкой задачи и дошёл до обработчика, а предикат
+  спросили трижды. E3 — то же место, бросает `Job.isCancellationError`: бросок
+  уходит в зону один раз. Без своего маршрута бросок предиката внутри ответа
+  ловило бы ядро и отдавало исходную ошибку в зону мимо обработчика — прототип
+  первой редакции так и делал: `[zone ApiError, zone Bad state: predicate]`.
+- **Ошибки слушателей вызывающего.** Обёртка `whenFinished` и `whenCancelled`
+  у `_SoloJob` ловит то, что бросил колбэк, сама и сама же отдаёт это
+  в `notifyError`. На это время задача держит провалы этой ошибки — как их
+  обходит `Job.visitErrors` — и для них вердикт «нет»: предикат не спрашивают,
+  запись не читают и не пишут. `notifyError` зовёт `onError` и спрашивает ответ
+  синхронно, так что окно закрывается после ответа. `StackOverflowError`
+  обёртка не ловит: его правило в охране ядра читает приватный `_outOfStack`.
+  Через обёртку идут и регистрации самого ядра — `_SharedJob` и `_ThenJob`
+  подписываются `whenCancelled` на исходную задачу; их колбэки ставят пересылку
+  отмены в очередь и не бросают.
+
+  Пометка в списке по идентичности, как во второй редакции, ломалась трижды.
+  Слушатель, бросивший `ParallelWaitError`, замолкал: помечен конверт, а ответ
+  спрашивают о частях — `C3 [onError(load) ApiErrorL never]` против
+  `C4 [onError(load) ApiErrorL answered, handler(load) ApiErrorL]` для того же
+  `ApiError` без конверта. Слушатель, бросивший провал самой задачи, при поиске
+  первого совпадения получал `never`, а к обработчику уходил исход, о котором
+  `onError` уже сказали `never`: `C1 [onError(load) ApiError never,
+  onError(load) ApiError never, handler(load) ApiError]`. Пометка, которую ядро
+  не забрало, потому что ответ был `cancellation`, оставалась и делала «нет»
+  из следующей такой же `const` ошибки самой задачи. Окно не оставляет пометок,
+  видит части конверта, и ошибка слушателя в нём берёт верх над записью
+  исхода — то, что нужно в C1.
 - **Отладка.** Ядро пишет в `Job.debug` «error nobody answered for» до того,
   как `solo` ошибку отпустит. `_SoloJobObserver.onUnanswered` пишет
   в `Solo.debug` следом, что задача назвала ошибку ожидаемой.
@@ -248,16 +319,27 @@ B4b same abandonable in the parent's own body:   [onError(Job(load)) ApiError ne
 из-за пола SDK; в CHANGELOG `solo` пункт назван ломающим для переопределений.
 
 Поведение старого кода не меняется: без `isExpectedError` маршрут прежний.
+Обёртки слушателей стоят у каждой задачи `solo`, с предикатом или без: одно
+замыкание и один кадр стека на регистрацию. Набор на прототипе второго ревью
+с обёртками зелёный, каскады, кончившиеся стеком, тоже; красны те же два
+сторожа справочной страницы.
 
 ## Документы
 
-- dartdoc `job`, `enqueue`, `collect`, `accumulate`, `SoloContext.child`: абзац
-  о предикате — охват, дети, части `ParallelWaitError`, `onError` слышит,
-  `job.value` бросает; `Solo.onUnanswered`, «What comes here»: ожидаемое сюда
-  не приходит; `Solo.onError` и `SoloObserver.onError`: `never` для ожидаемого
-  и оговорка «as in the core».
+- dartdoc `job`, `enqueue`, `collect`, `accumulate`: абзац о предикате — охват,
+  дети, части `ParallelWaitError`, `onError` слышит, `job.value` бросает,
+  широкий тип гасит и баги детей; `SoloContext.child` и `each`: своего
+  предиката нет, ребёнок берёт родительский при усыновлении;
+  `Solo.onUnanswered`, «What comes here»: ожидаемое сюда не приходит;
+  `Solo.onError` и `SoloObserver.onError`: `never` для ожидаемого и оговорка
+  «as in the core».
 - `packages/solo/doc/errors.md`:
-  - «Where each error goes» — ячейки `onUnanswered` второй таблицы;
+  - таблица вступления, строка «A failure kept out of the zone»;
+  - «Where each error goes» — строка «Answer» первой таблицы, ячейки
+    `onUnanswered` второй и её новая строка для ошибки, которую назвал
+    `isExpectedError`, рядом со строкой `Job.isCancellationError`;
+  - «Reporting an error» — абзац об `answer` отсылает за остальными значениями
+    к странице правил ядра, а нового случая `never` там не будет;
   - «Handled and unhandled failures» — после «Observing the outcome» решение
     для задачи, которая знает свои ожидаемые ошибки;
   - «Answering for an error» — переопределение с `_apiFailures.add(error)`
@@ -274,16 +356,25 @@ B4b same abandonable in the parent's own body:   [onError(Job(load)) ApiError ne
 - `packages/solo/doc/testing.md`, «A failure nobody read»: предикат — вторая
   форма рядом с `ignoreFailure()`, для задачи, которая знает свои ошибки; фраза
   «A test that expects such an error» там же остаётся о тесте.
-- `packages/solo/doc/children.md` — наследование; `mistakes.md` и `jobs.md` —
-  места, где сказано старое правило, найдёт план.
+- `packages/solo/doc/children.md` — наследование, и таблица, где ошибка ребёнка
+  «goes to `onUnanswered`»; `mistakes.md` и `jobs.md` — места, где сказано
+  старое правило, найдёт план.
 - README `solo`, быстрый старт: `load` с предикатом, абзац о ненаблюдённом
   `Failed` — с ним.
 - README `flutter_solo`, абзац о том, что провал после `ifFailed` уходит в зону
   и роняет виджет-тест, и `packages/flutter_solo/doc/testing.md` там же, —
-  отсюда и пришла жалоба.
+  отсюда и пришла жалоба. `load` там получает предикат, и кнопка теряет
+  `ignoreFailure()`: `onPressed: () => controller.load()` и два таких же вызова
+  в тестах README. С `ignoreFailure()` кнопка глушила бы и баги, то есть README
+  учил бы ровно тому, от чего предикат избавляет. Абзац о выброшенной задаче
+  («a fire-and-forget call is `controller.load().ignoreFailure()`») говорит
+  теперь о двух формах: задача называет свои ожидаемые ошибки,
+  а `ignoreFailure()` остаётся вызову, которому исход не нужен вовсе. Фраза
+  `packages/flutter_solo/doc/testing.md` о брошенной задаче — так же.
 - Переводы всех перечисленных, CHANGELOG `solo` и его перевод.
 - `docs/settled.md`: пункт 44 — пересмотр, ниже; пункт 109 — оговорка
-  о значении `never`.
+  о значении `never`; пункт 15, который кончается «Глушит провал
+  `ignoreFailure()`», — ссылка на предикат.
 
 Стенды `snippets` берут код `vs-bloc.md` и `accumulation.md`; затронуты ли они,
 решит план.
@@ -297,12 +388,17 @@ B4b same abandonable in the parent's own body:   [onError(Job(load)) ApiError ne
 
 ## Вопросы владельцу
 
-Имя решено. Решения второй редакции, которые стоит подтвердить:
+Имя решено. Решения, которые стоит подтвердить; второе ревью согласилось
+с первыми тремя:
 
 1. `ifFailed` не требуется — раздел «Форма».
-2. Дети без своего предиката берут родительский — раздел «Дети».
+2. Дети без своего предиката берут родительский, при усыновлении и только при
+   нём — раздел «Дети». Широкий предикат родителя гасит и баги того же типа
+   у брошенного ребёнка.
 3. Ошибки слушателей вызывающего, `whenFinished` и `whenCancelled`, в охват
-   не входят — раздел «Чего предикат не трогает».
+   не входят — раздел «Чего предикат не трогает», устройство — в «Устройстве».
+4. Кнопка в README `flutter_solo` теряет `ignoreFailure()`, а `load` получает
+   предикат — раздел «Документы».
 
 ## Код зонда
 
