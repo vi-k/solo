@@ -145,6 +145,76 @@ final job = Job<void>((ctx) async {
 ''',
   );
 
+  Future<void> test_var_never_reassigned() => assertFix(
+    '''
+$_core
+final job = Job<void>((ctx) async {
+  var db = await ctx.join(Database.open);
+  ctx.onDispose(() => db.close());
+  print(db);
+});
+''',
+    '[[ctx.onDispose(() => db.close())]]',
+    '''
+$_core
+final job = Job<void>((ctx) async {
+  var db = await ctx.join(Database.open, dispose: (db) => db.close());
+  print(db);
+});
+''',
+    arguments: ['dispose'],
+  );
+
+  // The release closes the last value of `db`; `dispose:` would close the
+  // first.
+  Future<void> test_no_fix_for_reassigned_var() => assertNoFix('''
+$_core
+final job = Job<void>((ctx) async {
+  var db = await ctx.join(Database.open);
+  ctx.onDispose(() => db.close());
+  db = db.pool;
+  print(db);
+});
+''', '[[ctx.onDispose(() => db.close())]]');
+
+  Future<void> test_no_fix_for_var_assigned_by_pattern() => assertNoFix('''
+$_core
+final job = Job<void>((ctx) async {
+  var db = await ctx.join(Database.open);
+  ctx.onDispose(() => db.close());
+  (db,) = (db.pool,);
+  print(db);
+});
+''', '[[ctx.onDispose(() => db.close())]]');
+
+  Future<void> test_no_fix_for_var_incremented_after() => assertNoFix('''
+$_core
+extension on Database {
+  Database operator +(int n) => pool;
+}
+
+final job = Job<void>((ctx) async {
+  var db = await ctx.join(Database.open);
+  ctx.onDispose(() => db.close());
+  db++;
+  print(db);
+});
+''', '[[ctx.onDispose(() => db.close())]]');
+
+  Future<void> test_no_fix_for_var_incremented_before() => assertNoFix('''
+$_core
+extension on Database {
+  Database operator +(int n) => pool;
+}
+
+final job = Job<void>((ctx) async {
+  var db = await ctx.join(Database.open);
+  ctx.onDispose(() => db.close());
+  ++db;
+  print(db);
+});
+''', '[[ctx.onDispose(() => db.close())]]');
+
   Future<void> test_no_fix_for_other_forms() async {
     await assertNoFix('''
 $_core

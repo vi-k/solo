@@ -333,6 +333,59 @@ final class Profiles extends Solo<State> {
 }
 ''', []);
 
+  Future<void> test_null_predicate() => assertAt('''
+$_header
+final class Profiles extends Solo<State> {
+  Profiles() : super(Ready());
+
+  SoloJob<Profile> load() =>
+      enqueue<Ready, Profile>((ctx) => api.load(), isExpectedError: null);
+
+  void reload() {
+    load().ignoreFailure();
+  }
+}
+''', []);
+
+  Future<void> test_wrapper_forwards_optional_predicate() => assertAt('''
+$_header
+final class Profiles extends Solo<State> {
+  Profiles() : super(Ready());
+
+  SoloJob<T> run<T>(
+    Future<T> Function(SoloContext<State, Ready> ctx) body, {
+    bool Function(Object error)? isExpectedError,
+  }) => enqueue<Ready, T>(body, isExpectedError: isExpectedError);
+
+  void reload() {
+    run((ctx) => api.load()).ignoreFailure();
+  }
+}
+''', []);
+
+  Future<void> test_wrapper_forwards_required_predicate() => _assertOne(
+    '''
+$_header
+final class Profiles extends Solo<State> {
+  Profiles() : super(Ready());
+
+  SoloJob<T> run<T>(
+    Future<T> Function(SoloContext<State, Ready> ctx) body, {
+    required bool Function(Object error) isExpectedError,
+  }) => enqueue<Ready, T>(body, isExpectedError: isExpectedError);
+
+  void reload() {
+    run(
+      (ctx) => api.load(),
+      isExpectedError: (e) => e is ApiException,
+    ).ignoreFailure();
+  }
+}
+''',
+    'ignoreFailure()',
+    'run',
+  );
+
   Future<void> test_variable() => assertAt('''
 $_profiles
   void reload() {

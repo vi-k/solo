@@ -1,6 +1,8 @@
 import 'package:analysis_server_plugin/edit/dart/correction_producer.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer_plugin/utilities/change_builder/change_builder_core.dart';
 import 'package:analyzer_plugin/utilities/fixes/fixes.dart';
 import 'package:analyzer_plugin/utilities/range_factory.dart';
@@ -54,6 +56,13 @@ class PassReleaseToCall extends ResolvedCorrectionProducer {
     if (statements == null || at < 1) return;
     final brought = broughtBy(statements[at - 1]);
     if (brought == null) return;
+    // The release reads the last value of a variable assigned again, while
+    // `dispose:` would get the first.
+    final variable = brought.variable;
+    if (variable is! VariableElement ||
+        !variable.isFinal && _assigned(statement.parent!, variable)) {
+      return;
+    }
     final name = brought.variable.displayName;
     final released = firstPositional(release.argumentList);
     if (released == null) return;
@@ -84,6 +93,13 @@ class PassReleaseToCall extends ResolvedCorrectionProducer {
     });
   }
 
+  /// Whether [node] assigns [variable] anywhere.
+  static bool _assigned(AstNode node, Element variable) {
+    final finder = _Assignment(variable);
+    node.accept(finder);
+    return finder.found;
+  }
+
   /// The function to pass for [released], with the parameter [name], or
   /// `null` when [released] is in a form this fix does not handle: only a
   /// tear-off of a method of the variable and a literal without parameters
@@ -104,5 +120,36 @@ class PassReleaseToCall extends ResolvedCorrectionProducer {
       return '${text.substring(0, open)}$name${text.substring(open)}';
     }
     return null;
+  }
+}
+
+class _Assignment extends RecursiveAstVisitor<void> {
+  final Element variable;
+
+  bool found = false;
+
+  _Assignment(this.variable);
+
+  @override
+  void visitAssignedVariablePattern(AssignedVariablePattern node) {
+    if (node.element == variable) found = true;
+  }
+
+  @override
+  void visitAssignmentExpression(AssignmentExpression node) {
+    if (node.writeElement == variable) found = true;
+    super.visitAssignmentExpression(node);
+  }
+
+  @override
+  void visitPostfixExpression(PostfixExpression node) {
+    if (node.writeElement == variable) found = true;
+    super.visitPostfixExpression(node);
+  }
+
+  @override
+  void visitPrefixExpression(PrefixExpression node) {
+    if (node.writeElement == variable) found = true;
+    super.visitPrefixExpression(node);
   }
 }

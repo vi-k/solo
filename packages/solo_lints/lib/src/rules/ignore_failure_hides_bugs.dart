@@ -168,6 +168,14 @@ class _Reduction {
     return _names(value) ? field.name : null;
   }
 
+  /// Whether [call] names the expected errors: its `isExpectedError` holds a
+  /// value that cannot be null, so `null` and a forwarded optional predicate
+  /// do not count.
+  bool _names(MethodInvocation call) {
+    final type = namedValue(call.argumentList, 'isExpectedError')?.staticType;
+    return type != null && context.typeSystem.isNonNullable(type);
+  }
+
   /// The declaration of [element] in the library under analysis, if it is
   /// there: the analyzer gives a rule no bodies of other libraries.
   AstNode? _declarationOf(Element element) {
@@ -179,10 +187,6 @@ class _Reduction {
     return null;
   }
 }
-
-/// Whether [call] names the expected errors.
-bool _names(MethodInvocation call) =>
-    namedValue(call.argumentList, 'isExpectedError') != null;
 
 /// The expression [body] returns when that is all it does: a `=>` body or a
 /// block of one `return`.

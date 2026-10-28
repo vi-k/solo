@@ -86,9 +86,11 @@ class _Visitor extends SimpleAstVisitor<void> {
   if (body == null) return null;
 
   // The rule does not follow a variable to its value: a key built in a local
-  // may well hold the parameters, so it stays silent.
-  if (_readsLocal(key)) return null;
+  // may well hold the parameters, so it stays silent. A parameter of a
+  // closure around the call is new on every call of the closure, so it
+  // counts as a local.
   final parameters = _parametersAround(call);
+  if (_readsLocal(key, parameters)) return null;
   if (_referenced(key, parameters).isNotEmpty) return null;
   final read = _referenced(body, parameters);
   if (read.isEmpty) return null;
@@ -134,18 +136,26 @@ List<FormalParameterElement> _parametersAround(AstNode node) {
   return const [];
 }
 
-bool _readsLocal(AstNode node) {
-  final finder = _LocalFinder();
+bool _readsLocal(AstNode node, List<FormalParameterElement> parameters) {
+  final finder = _LocalFinder(parameters.toSet());
   node.accept(finder);
   return finder.found;
 }
 
 class _LocalFinder extends RecursiveAstVisitor<void> {
+  final Set<Element> parameters;
+
   bool found = false;
+
+  _LocalFinder(this.parameters);
 
   @override
   void visitSimpleIdentifier(SimpleIdentifier node) {
-    if (node.element is LocalVariableElement) found = true;
+    final element = node.element;
+    if (element is LocalVariableElement ||
+        element is FormalParameterElement && !parameters.contains(element)) {
+      found = true;
+    }
   }
 }
 

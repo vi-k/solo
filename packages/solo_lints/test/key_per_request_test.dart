@@ -147,6 +147,41 @@ $_profiles
 }
 ''', []);
 
+  Future<void> test_key_from_closure_parameter() => assertAt('''
+$_profiles
+  void loadAll(List<String> ids, int page) {
+    ids.forEach(
+      (id) => enqueue<Ready, Profile>(
+        key: id,
+        policy: Policy.droppable,
+        (ctx) => api.load('\$id/\$page'),
+      ),
+    );
+  }
+}
+''', []);
+
+  // The label `name:` names a parameter of the constructor, not one of a
+  // closure.
+  Future<void> test_key_with_named_argument() => assertAt(
+    '''
+$_profiles
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
+    key: _Key(name: 'load'),
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
+}
+
+final class _Key {
+  final String name;
+
+  const _Key({required this.name});
+}
+''',
+    ["key: [[_Key(name: 'load')]]"],
+  );
+
   Future<void> test_body_by_local_function_name() => assertAt(
     '''
 $_profiles

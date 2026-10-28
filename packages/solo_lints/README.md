@@ -175,9 +175,9 @@ a duplicate and hands its caller Ada's profile. Put the argument into the key:
 `key: (_Op.load, id)`. The rule takes `enqueue` of `Solo` with
 `Policy.droppable` and `enqueueJob` of a `job` with that policy, when the key
 reads no parameter of the enclosing method or function and the body reads one.
-A key that reads a local variable is left alone. It is a lint rather than a
-warning because one key is sometimes meant, when the result does not depend on
-the argument. See
+A key that reads a local variable or a parameter of a closure is left alone. It
+is a lint rather than a warning because one key is sometimes meant, when the
+result does not depend on the argument. See
 [A key for each request](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#a-key-for-each-request).
 
 The quick fix replaces the key `K` with the record `(K, a, b)` of the
