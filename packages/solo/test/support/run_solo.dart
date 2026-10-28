@@ -12,9 +12,10 @@ import 'test_state.dart';
 void runSolo(
   void Function(TestSolo solo, JournalObserver journal, FakeAsync async) body, {
   TestState initialState = const Initial(),
+  bool answers = false,
 }) {
   fakeAsync((async) {
-    final journal = JournalObserver();
+    final journal = JournalObserver(answers: answers);
     Solo.observer = journal;
     // Watching is not answering: without a handler every homeless error
     // would also reach the zone of the test. The handler records it as a
@@ -39,9 +40,10 @@ void runSoloStream(
   void Function(TestSoloStream solo, JournalObserver journal, FakeAsync async)
   body, {
   TestState initialState = const Initial(),
+  bool answers = false,
 }) {
   fakeAsync((async) {
-    final journal = JournalObserver();
+    final journal = JournalObserver(answers: answers);
     Solo.observer = journal;
     Solo.unansweredHandler = journal.answerForErrors;
     final solo = TestSoloStream(initialState);

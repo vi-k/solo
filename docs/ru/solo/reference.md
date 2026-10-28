@@ -96,6 +96,7 @@ README пакета `async_job`, а `value`, `done` или `cancel()` задач
 | `cancellable` | `enqueue`, `job`, `collect`, `accumulate` | `false` отклоняет ручную отмену, отмену родителя и закрытие | [«Вся задача»](cancellation.md#вся-задача) |
 | `timeout` | `enqueue`, `job`, `collect`, `accumulate` | Срок, отсчитанный от старта тела, по истечении которого задача кончается `Cancelled(timeout)` | [«Срок задачи»](cancellation.md#срок-задачи) |
 | `ifFailed` | `enqueue`, `job`, `collect`, `accumulate` | Состояние, которое записывается, когда задача упала, после того как закончились тело, его дети и очистка | [«Обработчики»](state.md#обработчики) |
+| `isExpectedError` | `enqueue`, `job`, `collect`, `accumulate` | Называет ошибки, которых задача ждёт: названную ошибку слышит `onError`, а отвечает за неё никто | [«Обработанные и необработанные ошибки»](errors.md#обработанные-и-необработанные-ошибки) |
 | `ifCancelled` | `enqueue`, `job`, `collect`, `accumulate` | Состояние, которое записывается, когда задачу отменили, после того как закончились тело, его дети и очистка | [«Обработчики»](state.md#обработчики) |
 
 ## SoloContext

@@ -95,6 +95,7 @@ parameters after it. The first type argument of each is the working type, in
 | `cancellable` | `enqueue`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing | [A whole job](cancellation.md#a-whole-job) |
 | `timeout` | `enqueue`, `job`, `collect`, `accumulate` | A deadline counted from the start of the body, after which the job ends `Cancelled(timeout)` | [A deadline of a job](cancellation.md#a-deadline-of-a-job) |
 | `ifFailed` | `enqueue`, `job`, `collect`, `accumulate` | The state to write when the job fails, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
+| `isExpectedError` | `enqueue`, `job`, `collect`, `accumulate` | Names the errors the job expects: one it names is heard by `onError` and answered for by nobody | [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) |
 | `ifCancelled` | `enqueue`, `job`, `collect`, `accumulate` | The state to write when the job is cancelled, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
 
 ## SoloContext

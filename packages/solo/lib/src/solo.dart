@@ -310,6 +310,13 @@ abstract class Solo<S extends Object> {
   /// outcome. [timeout] counts from the start of the body and lands as a
   /// cancellation, not as a `TimeoutException`.
   ///
+  /// [isExpectedError] names the errors the job expects. `onError` hears one it
+  /// names with [JobErrorAnswer.never], and nobody is asked to answer for it:
+  /// not `onUnanswered`, not `unansweredHandler`, not the zone. `value` still
+  /// throws it. It is asked about each error of the job on its own, the parts
+  /// of a `ParallelWaitError` too, whether `ifFailed` ran or not, and a child
+  /// started in the body takes it. Keep it a type check.
+  ///
   /// See [Parameters of a job](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#parameters-of-a-job)
   /// on the reference page, which leads to the section of each parameter.
   @protected
@@ -322,6 +329,7 @@ abstract class Solo<S extends Object> {
     Duration? timeout,
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => _SoloJob<S, W, T>(
     this,
@@ -334,6 +342,7 @@ abstract class Solo<S extends Object> {
     describe: describe,
     observer: _jobObserver,
     ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
   );
 
@@ -358,7 +367,8 @@ abstract class Solo<S extends Object> {
   ///
   /// [ifFailed] and [ifCancelled] are the state handlers of [job], and they
   /// write for the group: each job the accumulator queues calls one of them
-  /// at most once, however many events it holds.
+  /// at most once, however many events it holds. [isExpectedError] is the one
+  /// of [job], asked for each job the accumulator queues.
   ///
   /// See [Accumulation rules](https://github.com/vi-k/solo/blob/main/packages/solo/doc/accumulation-rules.md)
   /// for grouping, timing, start and closing.
@@ -374,6 +384,7 @@ abstract class Solo<S extends Object> {
     Duration? timeout,
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => _SoloAccumulator<S, W, E, List<E>, T>(
     this,
@@ -390,6 +401,7 @@ abstract class Solo<S extends Object> {
     timeout: timeout,
     describe: describe,
     ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
   );
 
@@ -401,9 +413,10 @@ abstract class Solo<S extends Object> {
   /// [SoloAccumulator.add] without changing the previous value. A recursive
   /// add from merge throws [StateError]. Only the latest merged value is
   /// retained; no event history is stored. The handler, rules, key, policy and
-  /// state handlers follow [collect]. No job is created until the first event,
-  /// and no state changes before the handler runs. [timing] has the same group
-  /// readiness behavior as it does for [collect].
+  /// state handlers, with [isExpectedError], follow [collect]. No job is
+  /// created until the first event, and no state changes before the handler
+  /// runs. [timing] has the same group readiness behavior as it does for
+  /// [collect].
   ///
   /// [timeout] is a deadline for each job, as for [collect]: counted from
   /// the start of the handler, after the window of [timing], and the
@@ -423,6 +436,7 @@ abstract class Solo<S extends Object> {
     Duration? timeout,
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => _SoloAccumulator<S, W, E, E, T>(
     this,
@@ -439,6 +453,7 @@ abstract class Solo<S extends Object> {
     timeout: timeout,
     describe: describe,
     ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
   );
 
@@ -653,6 +668,7 @@ abstract class Solo<S extends Object> {
     String Function()? describe,
     Policy policy = Policy.sequential,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => enqueueJob(
     job<W, T>(
@@ -664,6 +680,7 @@ abstract class Solo<S extends Object> {
       timeout: timeout,
       describe: describe,
       ifFailed: ifFailed,
+      isExpectedError: isExpectedError,
       ifCancelled: ifCancelled,
     ),
     policy: policy,
@@ -985,7 +1002,9 @@ abstract class Solo<S extends Object> {
   ///
   /// [answer] says what the job does about this error, as in the core: with
   /// [JobErrorAnswer.answered], [onUnanswered] is asked about it unless
-  /// [Job.ignoreFailure] is called before it is. See [JobErrorAnswer].
+  /// [Job.ignoreFailure] is called before it is. Unlike the core, `solo` passes
+  /// [JobErrorAnswer.never] for an error `isExpectedError` names. See
+  /// [JobErrorAnswer].
   @protected
   void onError(
     Job<Object?> job,
@@ -1009,7 +1028,8 @@ abstract class Solo<S extends Object> {
   /// outcome cannot carry, which the errors page lists. A [Cancelled], alone
   /// or inside a `ParallelWaitError`, never comes, and a [Failed] made of a
   /// cancellation goes to the zone past this hook. [Job.ignoreFailure] and
-  /// [Job.isCancellationError] keep some of them away.
+  /// [Job.isCancellationError] keep some of them away, and an error the job's
+  /// `isExpectedError` names never comes.
   ///
   /// See [Answering for an error](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#answering-for-an-error)
   /// and [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#where-each-error-goes)
@@ -1392,11 +1412,19 @@ final class _SoloJobObserver<S extends Object>
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
   }) {
+    // The verdict of `isExpectedError` is asked here, once, and kept for
+    // `onUnanswered`: only an error that can go on to an answer is asked about.
+    var heard = answer;
+    if (answer == JobErrorAnswer.answered || answer == JobErrorAnswer.later) {
+      if ((job as _SoloJob)._judge(error)) {
+        heard = JobErrorAnswer.never;
+      }
+    }
     Solo._callHook(
       () =>
-          Solo.observer?.onError(_solo, job, error, stackTrace, answer: answer),
+          Solo.observer?.onError(_solo, job, error, stackTrace, answer: heard),
     );
-    Solo._callHook(() => _solo.onError(job, error, stackTrace, answer: answer));
+    Solo._callHook(() => _solo.onError(job, error, stackTrace, answer: heard));
   }
 
   /// The controller answers for its jobs: [Solo.onUnanswered], and the
@@ -1407,8 +1435,13 @@ final class _SoloJobObserver<S extends Object>
   /// to the core, which sends the error it was asked about to the zone
   /// first and then what it threw, as `onListenerError` does here.
   @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      _solo.onUnanswered(job, error, stackTrace);
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if ((job as _SoloJob)._answersFor(error)) {
+      Solo._debug(() => '$job expected $error: nobody is asked to answer');
+      return;
+    }
+    _solo.onUnanswered(job, error, stackTrace);
+  }
 
   @override
   void onLog(Job<Object?> job, Object? message) {

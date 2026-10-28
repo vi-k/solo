@@ -61,6 +61,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   final Duration? _timeout;
   final String Function()? _describe;
   final S Function(S, Object, StackTrace)? _ifFailed;
+  final bool Function(Object error)? _isExpectedError;
   final S Function(S, Cancelled)? _ifCancelled;
   var _merging = false;
   Timer? _throttleTimer;
@@ -80,6 +81,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     required Duration? timeout,
     required String Function()? describe,
     required S Function(S, Object, StackTrace)? ifFailed,
+    required bool Function(Object error)? isExpectedError,
     required S Function(S, Cancelled)? ifCancelled,
   }) : _timeout = _checkTimeout(timeout, cancellable: cancellable),
        _seed = seed,
@@ -93,6 +95,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
        _cancellable = cancellable,
        _describe = describe,
        _ifFailed = ifFailed,
+       _isExpectedError = isExpectedError,
        _ifCancelled = ifCancelled;
 
   /// The check `JobBase` makes of every job, made once here, when the
@@ -148,6 +151,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
           describe: _describe,
           observer: _solo._jobObserver,
           ifFailed: _ifFailed,
+          isExpectedError: _isExpectedError,
           ifCancelled: _ifCancelled,
         )
         .._accumulation = group

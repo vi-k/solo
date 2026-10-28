@@ -94,8 +94,9 @@ abstract class SoloObserver {
   ///
   /// [answer] says what the job does about this error, as in the core: with
   /// [JobErrorAnswer.answered], [Solo.onUnanswered] of [solo] is asked about
-  /// it unless [Job.ignoreFailure] is called before it is. See
-  /// [JobErrorAnswer].
+  /// it unless [Job.ignoreFailure] is called before it is. Unlike the core,
+  /// `solo` passes [JobErrorAnswer.never] for an error `isExpectedError` names.
+  /// See [JobErrorAnswer].
   void onError(
     Solo<Object> solo,
     Job<Object?> job,

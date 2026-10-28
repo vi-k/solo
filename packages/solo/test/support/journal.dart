@@ -2,6 +2,12 @@ import 'package:solo/solo.dart';
 
 /// Collects an ordered journal of engine events.
 final class JournalObserver extends SoloObserver {
+  /// Whether an `error` line says what the job does about the error, as
+  /// `(answered)`, `(later)`, `(never)` or `(cancellation)`.
+  final bool answers;
+
+  JournalObserver({this.answers = false});
+
   final lines = <String>[];
   final created = <Solo<Object>>[];
 
@@ -44,7 +50,11 @@ final class JournalObserver extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) => lines.add('${_label(job)} error $error');
+  }) => lines.add(
+    answers
+        ? '${_label(job)} error $error (${answer.name})'
+        : '${_label(job)} error $error',
+  );
 
   @override
   void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>

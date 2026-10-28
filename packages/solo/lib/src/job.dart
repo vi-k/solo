@@ -27,6 +27,13 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   S Function(S, Object, StackTrace)? _ifFailed;
   S Function(S, Cancelled)? _ifCancelled;
 
+  /// Names the errors the job expects; see `Solo.job`.
+  ///
+  /// Not let go of in [finished], unlike the handlers above: a [Failed] nobody
+  /// observed goes to its answer a microtask after the job is over, and the
+  /// answer asks this predicate.
+  final bool Function(Object error)? _isExpectedError;
+
   /// The rules outlive the job on purpose: a context that leaked out of a
   /// body reads the state through them long after the outcome, and the
   /// cancellation it builds from a rejection is the whole diagnosis it
@@ -60,11 +67,13 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     required super.observer,
     S Function(S, Object, StackTrace)? ifFailed,
     S Function(S, Cancelled)? ifCancelled,
+    bool Function(Object error)? isExpectedError,
   }) : _body = body,
        _canStart = canStart,
        _keepWhile = keepWhile,
        _ifFailed = ifFailed,
        _ifCancelled = ifCancelled,
+       _isExpectedError = isExpectedError,
        _hasStateHandlers = ifFailed != null || ifCancelled != null;
 
   @override
@@ -265,6 +274,91 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // the rules took it, stays.
     if (identical(next, state)) return;
     _solo._setState(next, emitter: this);
+  }
+
+  /// Verdicts of [_judge] that [_answersFor] has not taken yet, for the errors
+  /// that can be held weakly.
+  ///
+  /// Held weakly, as the core holds the error it announced last: a verdict for
+  /// an error that never reaches [_answersFor] -- the outcome was observed, or
+  /// `Job.isCancellationError` named the error -- must not keep it alive.
+  Expando<bool>? _verdicts;
+
+  /// The verdicts for the errors [_isPlain] says cannot be held weakly:
+  /// strings, numbers, booleans and records. Found by identity.
+  List<(Object, bool)>? _plainVerdicts;
+
+  /// A copy of `JobBase._isPlain`, which is private to the core: the same
+  /// question has to get the same answer here.
+  static bool _isPlain(Object error) {
+    if (error is String || error is num || error is bool || error is Record) {
+      return true;
+    }
+    try {
+      // Never written, so a lookup that goes through answers false.
+      return _weakProbe[error] ?? false;
+    } on Object {
+      return true;
+    }
+  }
+
+  static final _weakProbe = Expando<bool>();
+
+  void _noteVerdict(Object error, bool expected) {
+    if (_isPlain(error)) {
+      (_plainVerdicts ??= []).add((error, expected));
+    } else {
+      (_verdicts ??= Expando<bool>())[error] = expected;
+    }
+  }
+
+  /// The verdict noted for [error], forgotten by the taking.
+  bool? _takeVerdict(Object error) {
+    if (_isPlain(error)) {
+      final plain = _plainVerdicts;
+      if (plain == null) return null;
+      for (var i = 0; i < plain.length; i++) {
+        if (identical(plain[i].$1, error)) {
+          return plain.removeAt(i).$2;
+        }
+      }
+      return null;
+    }
+    final verdicts = _verdicts;
+    if (verdicts == null) return null;
+    final verdict = verdicts[error];
+    verdicts[error] = null;
+    return verdict;
+  }
+
+  /// Whether the predicate names [error]. A predicate that throws names
+  /// nothing: its error goes to the zone the job was made in, and [error]
+  /// goes on by its own route.
+  bool _isExpected(Object error) {
+    final isExpectedError = _isExpectedError;
+    if (isExpectedError == null) return false;
+    try {
+      return isExpectedError(error);
+    } on Object catch (thrown, stackTrace) {
+      _reportToZone(thrown, stackTrace);
+      return false;
+    }
+  }
+
+  /// The verdict for `onError`: asks, notes it for [_answersFor] and says
+  /// whether [error] is expected.
+  bool _judge(Object error) {
+    if (_isExpectedError == null) return false;
+    final expected = _isExpected(error);
+    _noteVerdict(error, expected);
+    return expected;
+  }
+
+  /// The verdict for `onUnanswered`: the one [_judge] noted, taken, or, for
+  /// an error that did not pass `onError`, a question that is not noted.
+  bool _answersFor(Object error) {
+    if (_isExpectedError == null) return false;
+    return _takeVerdict(error) ?? _isExpected(error);
   }
 
   @override

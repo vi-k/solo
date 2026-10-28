@@ -16,6 +16,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     Duration? timeout,
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => super.job<W, T>(
     body,
@@ -26,6 +27,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     timeout: timeout,
     describe: describe,
     ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
   );
 
@@ -41,6 +43,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     Duration? timeout,
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => super.collect<W, E, T>(
     handler,
@@ -53,6 +56,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     timeout: timeout,
     describe: describe,
     ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
   );
 
@@ -69,6 +73,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     Duration? timeout,
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => super.accumulate<W, E, T>(
     handler,
@@ -82,6 +87,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     timeout: timeout,
     describe: describe,
     ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
   );
 
@@ -103,6 +109,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     String Function()? describe,
     Policy policy = Policy.sequential,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => super.enqueue<W, T>(
     body,
@@ -114,6 +121,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     describe: describe,
     policy: policy,
     ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
   );
 
