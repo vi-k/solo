@@ -143,7 +143,8 @@ abstract interface class SoloContext<S extends Object, W extends S>
 }
 
 final class _SoloContext<S extends Object, W extends S, R>
-    extends JobContextBase implements SoloContext<S, W> {
+    extends JobContextBase
+    implements SoloContext<S, W> {
   final _SoloJob<S, W, R> _job;
 
   _SoloContext(this._job) : super(_job);
@@ -181,14 +182,13 @@ final class _SoloContext<S extends Object, W extends S, R>
     Object? key,
     String Function()? describe,
     Duration? timeout,
-  }) =>
-      _solo.job<W, T>(
-        body,
-        key: key,
-        describe: describe,
-        keepWhile: _job._keepWhile,
-        timeout: timeout,
-      );
+  }) => _solo.job<W, T>(
+    body,
+    key: key,
+    describe: describe,
+    keepWhile: _job._keepWhile,
+    timeout: timeout,
+  );
 
   @override
   Job<void> each<T>(
@@ -196,13 +196,12 @@ final class _SoloContext<S extends Object, W extends S, R>
     FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData, {
     Object? key,
     String Function()? describe,
-  }) =>
-      super.each(
-        stream,
-        (child, event) => onData(child as SoloContext<S, W>, event),
-        key: key,
-        describe: describe,
-      );
+  }) => super.each(
+    stream,
+    (child, event) => onData(child as SoloContext<S, W>, event),
+    key: key,
+    describe: describe,
+  );
 
   @override
   void check() {
@@ -277,7 +276,7 @@ final class _SoloContext<S extends Object, W extends S, R>
       () => next is W
           ? '$_job emit: $next'
           : '$_job emit: $next, which is not $W: the rules cancel $_job at '
-              'its next checkpoint',
+                'its next checkpoint',
     );
     _solo._setState(next, emitter: _job);
     // The write is a checkpoint on both sides: hooks, observers and

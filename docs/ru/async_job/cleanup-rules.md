@@ -24,10 +24,8 @@
 // Первая попытка: discard не уходит со значением, и база не закрывается.
 final connect = Job.deferred<Database>(
   key: 'connect',
-  (ctx) => ctx.abandonable(
-    Database.open,
-    discard: (database) => database.close(),
-  ),
+  (ctx) =>
+      ctx.abandonable(Database.open, discard: (database) => database.close()),
 );
 
 final ready = Job.deferred<Database>((ctx) async {

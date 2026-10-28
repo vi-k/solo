@@ -37,7 +37,7 @@ void runSolo(
 /// [TestSoloStream.stream].
 void runSoloStream(
   void Function(TestSoloStream solo, JournalObserver journal, FakeAsync async)
-      body, {
+  body, {
   TestState initialState = const Initial(),
 }) {
   fakeAsync((async) {

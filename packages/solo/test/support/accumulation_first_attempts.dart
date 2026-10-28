@@ -11,13 +11,11 @@ final class QueuedSearch extends Solo<SearchState> {
 
   QueuedSearch(this.api) : super(const SearchState.idle());
 
-  Job<void> query(String text) => enqueue<SearchState, void>(
-        key: 'query',
-        (ctx) async {
-          final results = await ctx.abandonable(() => api.search(text));
-          ctx.emit(SearchState.results(results));
-        },
-      );
+  Job<void> query(String text) =>
+      enqueue<SearchState, void>(key: 'query', (ctx) async {
+        final results = await ctx.abandonable(() => api.search(text));
+        ctx.emit(SearchState.results(results));
+      });
 }
 
 final class EagerSettingsController extends Solo<Settings> {
@@ -25,14 +23,12 @@ final class EagerSettingsController extends Solo<Settings> {
 
   EagerSettingsController(this._api, Settings initial) : super(initial);
 
-  Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
-        key: 'settings',
-        (ctx) async {
-          final next = patch.apply(ctx.state);
-          await ctx.join(() => _api.save(next));
-          ctx.emit(next);
-        },
-      );
+  Job<void> update(SettingsPatch patch) =>
+      enqueue<Settings, void>(key: 'settings', (ctx) async {
+        final next = patch.apply(ctx.state);
+        await ctx.join(() => _api.save(next));
+        ctx.emit(next);
+      });
 }
 
 final class EagerLogController extends Solo<int> {
@@ -40,13 +36,11 @@ final class EagerLogController extends Solo<int> {
 
   EagerLogController(this._api) : super(0);
 
-  Job<void> logEvent(LogEntry entry) => enqueue<int, void>(
-        key: 'logs',
-        (ctx) async {
-          await ctx.join(() => _api.send([entry]));
-          ctx.emit(ctx.state + 1);
-        },
-      );
+  Job<void> logEvent(LogEntry entry) =>
+      enqueue<int, void>(key: 'logs', (ctx) async {
+        await ctx.join(() => _api.send([entry]));
+        ctx.emit(ctx.state + 1);
+      });
 }
 
 final class QueuedPlayer extends Solo<Playback> {
@@ -54,19 +48,14 @@ final class QueuedPlayer extends Solo<Playback> {
 
   QueuedPlayer(this.device) : super(const Paused());
 
-  Job<void> resume() => enqueue<Playback, void>(
-        key: Command.resume,
-        (ctx) async {
-          await ctx.join(device.resume);
-          ctx.emit(const Playing());
-        },
-      );
+  Job<void> resume() =>
+      enqueue<Playback, void>(key: Command.resume, (ctx) async {
+        await ctx.join(device.resume);
+        ctx.emit(const Playing());
+      });
 
-  Job<void> pause() => enqueue<Playback, void>(
-        key: Command.pause,
-        (ctx) async {
-          await ctx.join(device.pause);
-          ctx.emit(const Paused());
-        },
-      );
+  Job<void> pause() => enqueue<Playback, void>(key: Command.pause, (ctx) async {
+    await ctx.join(device.pause);
+    ctx.emit(const Paused());
+  });
 }

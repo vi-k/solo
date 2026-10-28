@@ -39,15 +39,12 @@ the position the user lands on must not wait for the ones dragged past.
 
 ```dart
 // The first attempt: the seeks it let go of still run on the device.
-Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: 'seek',
-      policy: Policy.restart,
-      (ctx) async {
-        // Ends the moment the next seek cancels this one.
-        await ctx.abandonable(() => _player.seek(position));
-        ctx.emit(ctx.state.copyWith(position: position));
-      },
-    );
+Job<void> seek(Duration position) =>
+    enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+      // Ends the moment the next seek cancels this one.
+      await ctx.abandonable(() => _player.seek(position));
+      ctx.emit(ctx.state.copyWith(position: position));
+    });
 ```
 
 `restart` cancels the running job, and `abandonable` lets go of the call at
@@ -62,15 +59,12 @@ the user asked for, whatever the device actually did.
 
 ```dart
 // The second attempt: an obsolete seek runs to its end.
-Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: 'seek',
-      policy: Policy.restart,
-      (ctx) async {
-        // Waited out, so the device never runs two seeks at once.
-        await ctx.join(() => _player.seek(position));
-        ctx.emit(ctx.state.copyWith(position: position));
-      },
-    );
+Job<void> seek(Duration position) =>
+    enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+      // Waited out, so the device never runs two seeks at once.
+      await ctx.join(() => _player.seek(position));
+      ctx.emit(ctx.state.copyWith(position: position));
+    });
 ```
 
 The device no longer gets two seeks at once, but nothing tells it that a seek
@@ -82,17 +76,14 @@ waiting the call out does not make its result count.
 ### The token
 
 ```dart
-Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: 'seek',
-      policy: Policy.restart,
-      (ctx) async {
-        final token = CancelToken();
-        ctx.onCancel(token.cancel);
-        // Wait for the device to stop before another seek starts.
-        await ctx.join(() => _player.seek(position, cancelToken: token));
-        ctx.emit(ctx.state.copyWith(position: position));
-      },
-    );
+Job<void> seek(Duration position) =>
+    enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      // Wait for the device to stop before another seek starts.
+      await ctx.join(() => _player.seek(position, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(position: position));
+    });
 ```
 
 `ctx.onCancel(callback)` connects job cancellation to an operation's own
@@ -138,11 +129,11 @@ written, whatever the job is asked in the meantime.
 ```dart
 // The first attempt: the payment goes through, the receipt does not.
 Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-      // Each call waited out, whatever happens.
-      final receipt = await ctx.join(() => payment.commit());
-      ctx.emit(ctx.state.copyWith(receipt: receipt));
-      await ctx.join(() => journal.write(entry));
-    });
+  // Each call waited out, whatever happens.
+  final receipt = await ctx.join(() => payment.commit());
+  ctx.emit(ctx.state.copyWith(receipt: receipt));
+  await ctx.join(() => journal.write(entry));
+});
 ```
 
 `join` does wait the payment out, and then, as the table above says, throws
@@ -158,13 +149,13 @@ checkpoint, and on the cancelled job it throws.
 ```dart
 // The second attempt: the emit inside the step throws.
 Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-      // The whole step waited out as one call.
-      await ctx.join(() async {
-        final receipt = await payment.commit();
-        ctx.emit(ctx.state.copyWith(receipt: receipt));
-        await journal.write(entry);
-      });
-    });
+  // The whole step waited out as one call.
+  await ctx.join(() async {
+    final receipt = await payment.commit();
+    ctx.emit(ctx.state.copyWith(receipt: receipt));
+    await journal.write(entry);
+  });
+});
 ```
 
 Both calls are now inside what `join` waits out, but the job accepts the
@@ -176,13 +167,13 @@ throws, and the entry is lost once more.
 
 ```dart
 Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-      await ctx.uncancellable(() async {
-        final receipt = await payment.commit();
-        ctx.emit(ctx.state.copyWith(receipt: receipt));
-        await journal.write(entry);
-      });
-      // ...the rest of the job, which cancellation can still stop.
-    });
+  await ctx.uncancellable(() async {
+    final receipt = await payment.commit();
+    ctx.emit(ctx.state.copyWith(receipt: receipt));
+    await journal.write(entry);
+  });
+  // ...the rest of the job, which cancellation can still stop.
+});
 ```
 
 Manual cancellation, parent cancellation and closing are held while an
@@ -207,10 +198,8 @@ page tells
 
 ```dart
 // A job that turns down every request it is allowed to turn down.
-Job<void> flush() => enqueue<Ready, void>(
-      cancellable: false,
-      (ctx) => device.flush(),
-    );
+Job<void> flush() =>
+    enqueue<Ready, void>(cancellable: false, (ctx) => device.flush());
 ```
 
 `cancellable: false` on a job refuses the requests a section holds — manual
@@ -244,14 +233,14 @@ chunk in flight, and however it ends, the device buffer has to be flushed.
 ```dart
 // The first attempt: each half waits the way the other one needed.
 Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
-      ctx.onDispose(() async {
-        // The flush must finish before the queue moves on.
-        await ctx.join(() => device.flush());
-      });
-      for (final chunk in chunks) {
-        await device.write(chunk);
-      }
-    });
+  ctx.onDispose(() async {
+    // The flush must finish before the queue moves on.
+    await ctx.join(() => device.flush());
+  });
+  for (final chunk in chunks) {
+    await device.write(chunk);
+  }
+});
 ```
 
 Each half uses the wait the other half needed. The loop waits with a plain
@@ -269,16 +258,16 @@ has the whole route.
 
 ```dart
 Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
-      ctx.onDispose(() async {
-        // Cleanup runs after the body, where the waiting methods are
-        // gone: a plain await is the wait that works here.
-        await device.flush();
-      });
-      for (final chunk in chunks) {
-        // Checks before the write and after it.
-        await ctx.join(() => device.write(chunk));
-      }
-    });
+  ctx.onDispose(() async {
+    // Cleanup runs after the body, where the waiting methods are
+    // gone: a plain await is the wait that works here.
+    await device.flush();
+  });
+  for (final chunk in chunks) {
+    // Checks before the write and after it.
+    await ctx.join(() => device.write(chunk));
+  }
+});
 ```
 
 The loop now waits with `join`, and every write is a checkpoint. `close()`
@@ -384,18 +373,18 @@ as it is.
 
 ```dart
 Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: 'seek',
-      policy: Policy.restart,
-      timeout: const Duration(seconds: 2),
-      ifCancelled: (state, cancelled) =>
-          cancelled.reason is TimeoutCancelReason ? const Offline() : state,
-      (ctx) async {
-        final token = CancelToken();
-        ctx.onCancel(token.cancel);
-        await ctx.join(() => _player.seek(position, cancelToken: token));
-        ctx.emit(ctx.state.copyWith(position: position));
-      },
-    );
+  key: 'seek',
+  policy: Policy.restart,
+  timeout: const Duration(seconds: 2),
+  ifCancelled: (state, cancelled) =>
+      cancelled.reason is TimeoutCancelReason ? const Offline() : state,
+  (ctx) async {
+    final token = CancelToken();
+    ctx.onCancel(token.cancel);
+    await ctx.join(() => _player.seek(position, cancelToken: token));
+    ctx.emit(ctx.state.copyWith(position: position));
+  },
+);
 ```
 
 `timeout` gives the job a deadline of its own. When the deadline runs out, the
@@ -510,9 +499,9 @@ closes.
 ```dart
 // The first attempt: the job waits for close(), and close() for the job.
 Job<void> logout() => enqueue<Ready, void>((ctx) async {
-      await ctx.join(api.logout);
-      await close();
-    });
+  await ctx.join(api.logout);
+  await close();
+});
 ```
 
 This never comes back. `close()` waits for the running job, including its

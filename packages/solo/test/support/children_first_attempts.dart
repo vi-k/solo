@@ -19,11 +19,9 @@ final class Chained extends page.Syncer {
 
 /// "Steps in a row", the second attempt.
 final class Queued extends page.Syncer {
-  Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-        key: _Op.syncAndRecord,
-        (ctx) async {
-          final path = await sync(item).value;
-          await recordPath(path).value;
-        },
-      );
+  Job<void> syncAndRecord(int item) =>
+      enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+        final path = await sync(item).value;
+        await recordPath(path).value;
+      });
 }

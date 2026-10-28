@@ -27,11 +27,8 @@ final class DocPage {
   /// Holds the page to [phrase]: the test that calls this runs what the
   /// phrase says, so a page that stops saying it leaves the test with
   /// nothing to stand for.
-  void says(String phrase) => expect(
-        prose,
-        contains(phrase),
-        reason: '$path no longer says this',
-      );
+  void says(String phrase) =>
+      expect(prose, contains(phrase), reason: '$path no longer says this');
 
   /// The rows of the table under [header], first cell to second.
   Map<String, String> rows(String header) {
@@ -50,10 +47,12 @@ final class DocPage {
 
   /// The lines the page quotes under a `text` fence, block by block.
   List<List<String>> get quoted => [
-        for (final block
-            in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(source))
-          block.group(1)!.split('\n'),
-      ];
+    for (final block in RegExp(
+      r'```text\n(.*?)\n```',
+      dotAll: true,
+    ).allMatches(source))
+      block.group(1)!.split('\n'),
+  ];
 }
 
 const errorsPage = DocPage('doc/errors.md');
@@ -75,8 +74,7 @@ final class Watching extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('${job.key}: ${text(error)}');
+  }) => heard.add('${job.key}: ${text(error)}');
 }
 
 /// An observer that says when each of its hooks runs, and may throw from
@@ -109,8 +107,7 @@ final class Saying extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      _say('onError');
+  }) => _say('onError');
 
   @override
   void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
@@ -149,8 +146,7 @@ final class EveryHook extends Solo<int> with OpenSolo<int> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      _say('onError');
+  }) => _say('onError');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -213,6 +209,6 @@ void endCall(FakeAsync async, String call) {
 
 /// A job that waits on a call named `op` through `ctx.abandonable`.
 SoloJob<void> waits(Bench bench, String key) => bench.enqueue<int, void>(
-      key: key,
-      (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
-    );
+  key: key,
+  (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+);

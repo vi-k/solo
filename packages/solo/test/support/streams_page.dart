@@ -12,11 +12,11 @@ base class Tracker extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Tracker([super.initialState = const Ready()]);
 
   Job<void> track() => enqueue<Ready, void>(
-        key: 'track',
-        (ctx) => ctx.each(hw.positions, (childCtx, p) {
-          childCtx.emit(childCtx.state.copyWith(position: p));
-        }).value,
-      );
+    key: 'track',
+    (ctx) => ctx.each(hw.positions, (childCtx, p) {
+      childCtx.emit(childCtx.state.copyWith(position: p));
+    }).value,
+  );
 }
 
 /// "The state first, then the stream".
@@ -27,21 +27,18 @@ final class ScreenController extends Solo<Screen> {
 
   ScreenController(this.session) : super(const Screen());
 
-  Job<void> follow() => enqueue<Screen, void>(
-        key: 'follow',
-        (ctx) async {
-          void take(SoloContext<Screen, Screen> target, Session next) =>
-              target.emit(target.state.copyWith(signedIn: next.signedIn));
+  Job<void> follow() => enqueue<Screen, void>(key: 'follow', (ctx) async {
+    void take(SoloContext<Screen, Screen> target, Session next) =>
+        target.emit(target.state.copyWith(signedIn: next.signedIn));
 
-          final following = ctx.each(session.stream, take); // what happens next
-          take(ctx, session.currentState); // what has already happened
-          await following.value;
-        },
-      );
+    final following = ctx.each(session.stream, take); // what happens next
+    take(ctx, session.currentState); // what has already happened
+    await following.value;
+  });
 
   /// Not on the page: another job of the same controller.
   Job<void> other() => enqueue<Screen, void>(
-        key: 'other',
-        (ctx) async => stage.trace.add('other ran'),
-      );
+    key: 'other',
+    (ctx) async => stage.trace.add('other ran'),
+  );
 }

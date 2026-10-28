@@ -31,16 +31,10 @@ final class Preparing extends TestState
     implements NotDisposed, InitialAndPreparing, PreparingAndWorking {
   final int progress;
 
-  const Preparing({
-    this.progress = 0,
-  });
+  const Preparing({this.progress = 0});
 
-  Preparing copyWith({
-    int? progress,
-  }) =>
-      Preparing(
-        progress: progress ?? this.progress,
-      );
+  Preparing copyWith({int? progress}) =>
+      Preparing(progress: progress ?? this.progress);
 
   @override
   bool operator ==(covariant TestState other) =>
@@ -58,19 +52,9 @@ final class Working extends TestState
   final int a;
   final int b;
 
-  const Working({
-    this.a = 0,
-    this.b = 0,
-  });
+  const Working({this.a = 0, this.b = 0});
 
-  Working copyWith({
-    int? a,
-    int? b,
-  }) =>
-      Working(
-        a: a ?? this.a,
-        b: b ?? this.b,
-      );
+  Working copyWith({int? a, int? b}) => Working(a: a ?? this.a, b: b ?? this.b);
 
   @override
   bool operator ==(covariant TestState other) =>
@@ -103,10 +87,10 @@ final class Special extends TestState {
   final int restartableCount;
 
   const Special()
-      : noopCount = 0,
-        sequentialCount = 0,
-        droppableCount = 0,
-        restartableCount = 0;
+    : noopCount = 0,
+      sequentialCount = 0,
+      droppableCount = 0,
+      restartableCount = 0;
 
   const Special._({
     required this.noopCount,
@@ -120,13 +104,12 @@ final class Special extends TestState {
     int? sequentialCount,
     int? droppableCount,
     int? restartableCount,
-  }) =>
-      Special._(
-        noopCount: noopCount ?? this.noopCount,
-        sequentialCount: sequentialCount ?? this.sequentialCount,
-        droppableCount: droppableCount ?? this.droppableCount,
-        restartableCount: restartableCount ?? this.restartableCount,
-      );
+  }) => Special._(
+    noopCount: noopCount ?? this.noopCount,
+    sequentialCount: sequentialCount ?? this.sequentialCount,
+    droppableCount: droppableCount ?? this.droppableCount,
+    restartableCount: restartableCount ?? this.restartableCount,
+  );
 
   Special change(Special Function(Special state) callback) => callback(this);
 
@@ -140,11 +123,11 @@ final class Special extends TestState {
 
   @override
   int get hashCode => Object.hashAll([
-        noopCount,
-        sequentialCount,
-        droppableCount,
-        restartableCount,
-      ]);
+    noopCount,
+    sequentialCount,
+    droppableCount,
+    restartableCount,
+  ]);
 
   void _addToBuf(StringBuffer buf, int value, String name) {
     if (value != 0) {

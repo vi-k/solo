@@ -14,8 +14,9 @@ import 'delay.dart';
 Job<void> overview() {
   final job = Job<void>((ctx) async {
     // A child: the body starts it, waits for it, and cancels along with it.
-    final rows =
-        await ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
+    final rows = await ctx.run(
+      Job.deferred<int>((c) => c.abandonable(loadRows)),
+    );
 
     // A stream: one event at a time, in a child of its own.
     final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
@@ -69,8 +70,10 @@ Job<void> childIgnored() {
   // The first attempt: ignore() drops the failure of the cache.
   final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
     final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
-    final cache =
-        Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+    final cache = Job.deferred<void>(
+      key: 'cache',
+      (c) => c.abandonable(warmCache),
+    );
     ctx.run(cache).ignore();
     final count = ctx.run(rows);
     ctx.log('${await count} rows');
@@ -81,8 +84,10 @@ Job<void> childIgnored() {
 Job<void> childStarted() {
   final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
     final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
-    final cache =
-        Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+    final cache = Job.deferred<void>(
+      key: 'cache',
+      (c) => c.abandonable(warmCache),
+    );
     ctx.start(cache);
     final count = ctx.run(rows);
     ctx.log('${await count} rows');
@@ -120,19 +125,23 @@ Job<void> exportWithWait() {
 }
 
 Job<List<int>> loadAll() => Job<List<int>>((ctx) async {
-      final values = await ctx.runAll([
-        Job.deferred<int>((ctx) => ctx.abandonable(loadRows)),
-        Job.deferred<int>((ctx) => ctx.abandonable(loadExtra)),
-      ]);
-      return values;
-    });
+  final values = await ctx.runAll([
+    Job.deferred<int>((ctx) => ctx.abandonable(loadRows)),
+    Job.deferred<int>((ctx) => ctx.abandonable(loadExtra)),
+  ]);
+  return values;
+});
 
 ChildJob<Source> warmingBranch() {
   final branch = Job.deferred<Source>((ctx) async {
-    final cache =
-        await ctx.abandonable(openCache, dispose: (cache) => cache.close());
-    final rows =
-        await ctx.abandonable(openRows, discard: (source) => source.close());
+    final cache = await ctx.abandonable(
+      openCache,
+      dispose: (cache) => cache.close(),
+    );
+    final rows = await ctx.abandonable(
+      openRows,
+      discard: (source) => source.close(),
+    );
     await ctx.join(() => cache.warm(rows));
 
     return rows;
@@ -187,15 +196,15 @@ Job<void> refusingBranch() {
 }
 
 Job<void> groupTry(List<ChildJob<Source>> branches) => Job<void>((ctx) async {
-      final sources = await ctx.runAll(branches);
-      try {
-        await ctx.join(() => writeArchive(sources));
-      } finally {
-        for (final source in sources) {
-          source.close();
-        }
-      }
-    });
+  final sources = await ctx.runAll(branches);
+  try {
+    await ctx.join(() => writeArchive(sources));
+  } finally {
+    for (final source in sources) {
+      source.close();
+    }
+  }
+});
 
 Job<void> groupRegistered(List<ChildJob<Source>> branches) =>
     Job<void>((ctx) async {
@@ -237,10 +246,11 @@ ChildJob<List<Source>> handedOutDiscard(List<ChildJob<Source>> branches) {
 Future<void> chain() async {
   final loaded = Job<String>((ctx) => ctx.join(loadText));
   final parsed = loaded.then<int>((ctx, text) => int.parse(text));
-  final saved = parsed.then<void>((ctx, number) => ctx.join(
-        () => saveNumber(number),
-        // ignore: require_trailing_commas
-      ));
+  final saved = parsed.then<void>(
+    (ctx, number) => ctx.join(
+      () => saveNumber(number),
+    ),
+  );
 
   await saved.value;
 }
@@ -250,10 +260,11 @@ Future<void> chain() async {
 Future<void> cancelledChain() async {
   final loaded = Job<String>((ctx) => ctx.join(loadText));
   final parsed = loaded.then<int>((ctx, text) => int.parse(text));
-  final saved = parsed.then<void>((ctx, number) => ctx.join(
-        () => saveNumber(number),
-        // ignore: require_trailing_commas
-      ));
+  final saved = parsed.then<void>(
+    (ctx, number) => ctx.join(
+      () => saveNumber(number),
+    ),
+  );
   await delay(10);
 
   // The user left the screen while the text was loading.
@@ -362,11 +373,11 @@ Future<void> archiveAndWarm(Cache cache) async {
     (ctx) => ctx.abandonable(openRows, discard: (rows) => rows.close()),
   );
   final archived = opened.shared().then<void>(
-        (ctx, rows) => ctx.join(() => writeArchive([rows])),
-      );
+    (ctx, rows) => ctx.join(() => writeArchive([rows])),
+  );
   final warmed = opened.shared().then<void>(
-        (ctx, rows) => ctx.join(() => cache.warm(rows)),
-      );
+    (ctx, rows) => ctx.join(() => cache.warm(rows)),
+  );
   await [archived.done, warmed.done].wait;
   if (await opened.done case Done(:final value)) value.close();
 }
@@ -401,8 +412,9 @@ Future<void> reportedRows() async {
 
 Job<void> twoChildrenInARow() {
   final parent = Job<void>((ctx) async {
-    final rows =
-        await ctx.run(Job.deferred<int>((ctx) => ctx.abandonable(load)));
+    final rows = await ctx.run(
+      Job.deferred<int>((ctx) => ctx.abandonable(load)),
+    );
     await ctx.run(Job.deferred<void>((ctx) => ctx.join(() => report(rows))));
   });
   return parent;

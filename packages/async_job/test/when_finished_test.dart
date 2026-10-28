@@ -36,12 +36,9 @@ void main() {
       final zone = <Object>[];
       final heard = <Outcome<void>>[];
       final error = StateError('body');
-      runZonedGuarded(
-        () {
-          Job<void>((ctx) async => throw error).whenFinished(heard.add);
-        },
-        (error, stackTrace) => zone.add(error),
-      );
+      runZonedGuarded(() {
+        Job<void>((ctx) async => throw error).whenFinished(heard.add);
+      }, (error, stackTrace) => zone.add(error));
       async.flushTimers();
       expect(heard.single, isA<Failed>());
       expect(zone, [same(error)]);
@@ -51,54 +48,50 @@ void main() {
   test('a listener that observes the failure keeps it out of the zone', () {
     fakeAsync((async) {
       final zone = <Object>[];
-      runZonedGuarded(
-        () {
-          late Job<void> job;
-          job = Job<void>((ctx) async => throw StateError('body'))
-            ..whenFinished((outcome) {
-              if (outcome is Failed) job.ignoreFailure();
-            });
-        },
-        (error, stackTrace) => zone.add(error),
-      );
+      runZonedGuarded(() {
+        late Job<void> job;
+        job = Job<void>((ctx) async => throw StateError('body'))
+          ..whenFinished((outcome) {
+            if (outcome is Failed) job.ignoreFailure();
+          });
+      }, (error, stackTrace) => zone.add(error));
       async.flushTimers();
       expect(zone, isEmpty);
     });
   });
 
-  test('ignoreFailure from a listener quenches a body a cancellation ended',
-      () {
-    // The outcome is the cancellation; the failure of the body is answered
-    // as the job finishes, and the listener is still in time for it.
-    for (final quench in [true, false]) {
-      fakeAsync((async) {
-        final zone = <Object>[];
-        runZonedGuarded(
-          () {
+  test(
+    'ignoreFailure from a listener quenches a body a cancellation ended',
+    () {
+      // The outcome is the cancellation; the failure of the body is answered
+      // as the job finishes, and the listener is still in time for it.
+      for (final quench in [true, false]) {
+        fakeAsync((async) {
+          final zone = <Object>[];
+          runZonedGuarded(() {
             late Job<void> job;
-            job = Job<void>((ctx) async {
-              try {
-                await ctx.abandonable(() => delay(50));
-              } on Cancelled {
-                throw StateError('body');
-              }
-            })
-              ..whenFinished((_) {
-                if (quench) job.ignoreFailure();
-              });
+            job =
+                Job<void>((ctx) async {
+                  try {
+                    await ctx.abandonable(() => delay(50));
+                  } on Cancelled {
+                    throw StateError('body');
+                  }
+                })..whenFinished((_) {
+                  if (quench) job.ignoreFailure();
+                });
             async.elapse(const Duration(milliseconds: 5));
             job.cancel().ignore();
-          },
-          (error, stackTrace) => zone.add(error),
-        );
-        async.flushTimers();
-        expect(
-          zone.map((error) => '$error'),
-          quench ? isEmpty : ['Bad state: body'],
-        );
-      });
-    }
-  });
+          }, (error, stackTrace) => zone.add(error));
+          async.flushTimers();
+          expect(
+            zone.map((error) => '$error'),
+            quench ? isEmpty : ['Bad state: body'],
+          );
+        });
+      }
+    },
+  );
 
   test('a cancelled job tells whenCancelled first, then whenFinished', () {
     fakeAsync((async) {
@@ -164,13 +157,14 @@ void main() {
       // An engine hands in `Done` while a cancelled job unwinds: the job
       // keeps its cancellation, and so does the listener.
       late ProbeJob<int> job;
-      job = ProbeJob<int>((ctx) async {
-        ctx.onDispose(() => job.drop(const Done(5)));
-        await ctx.abandonable(() => delay(50));
-        return 1;
-      })
-        ..whenFinished(heard.add)
-        ..launch();
+      job =
+          ProbeJob<int>((ctx) async {
+              ctx.onDispose(() => job.drop(const Done(5)));
+              await ctx.abandonable(() => delay(50));
+              return 1;
+            })
+            ..whenFinished(heard.add)
+            ..launch();
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.flushTimers();
@@ -183,14 +177,15 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       late ProbeJob<int> job;
-      job = ProbeJob<int>((ctx) async {
-        ctx
-          ..onDispose(() => order.add('cleanup still to run'))
-          ..onDispose(() => job.drop(const Done(5)));
-        return 1;
-      })
-        ..whenFinished((outcome) => order.add('listener $outcome'))
-        ..launch();
+      job =
+          ProbeJob<int>((ctx) async {
+              ctx
+                ..onDispose(() => order.add('cleanup still to run'))
+                ..onDispose(() => job.drop(const Done(5)));
+              return 1;
+            })
+            ..whenFinished((outcome) => order.add('listener $outcome'))
+            ..launch();
       async.flushTimers();
       expect(order, ['listener Done(5)', 'cleanup still to run']);
     });
@@ -208,21 +203,23 @@ void main() {
     });
   });
 
-  test('removing one registration leaves the same callback registered twice',
-      () {
-    fakeAsync((async) {
-      final heard = <Outcome<int>>[];
-      final job = Job<int>((ctx) async => 1);
-      final remove = job.whenFinished(heard.add);
-      job
-        ..whenFinished(heard.add)
-        ..whenFinished(heard.add);
-      remove();
-      remove();
-      async.flushTimers();
-      expect(heard, hasLength(2));
-    });
-  });
+  test(
+    'removing one registration leaves the same callback registered twice',
+    () {
+      fakeAsync((async) {
+        final heard = <Outcome<int>>[];
+        final job = Job<int>((ctx) async => 1);
+        final remove = job.whenFinished(heard.add);
+        job
+          ..whenFinished(heard.add)
+          ..whenFinished(heard.add);
+        remove();
+        remove();
+        async.flushTimers();
+        expect(heard, hasLength(2));
+      });
+    },
+  );
 
   test('removal during notification leaves the current snapshot intact', () {
     fakeAsync((async) {
@@ -239,21 +236,23 @@ void main() {
     });
   });
 
-  test('a registration during notification runs at once, ahead of the rest',
-      () {
-    fakeAsync((async) {
-      final order = <String>[];
-      late Job<int> job;
-      job = Job<int>((ctx) async => 1)
-        ..whenFinished((_) {
-          order.add('first');
-          job.whenFinished((_) => order.add('late'));
-        })
-        ..whenFinished((_) => order.add('second'));
-      async.flushTimers();
-      expect(order, ['first', 'late', 'second']);
-    });
-  });
+  test(
+    'a registration during notification runs at once, ahead of the rest',
+    () {
+      fakeAsync((async) {
+        final order = <String>[];
+        late Job<int> job;
+        job = Job<int>((ctx) async => 1)
+          ..whenFinished((_) {
+            order.add('first');
+            job.whenFinished((_) => order.add('late'));
+          })
+          ..whenFinished((_) => order.add('second'));
+        async.flushTimers();
+        expect(order, ['first', 'late', 'second']);
+      });
+    },
+  );
 
   test('a registration from onFinish waits its turn', () {
     fakeAsync((async) {
@@ -270,22 +269,18 @@ void main() {
     });
   });
 
-  test(
-      'an error of a listener goes to onError and on to the zone, and the '
+  test('an error of a listener goes to onError and on to the zone, and the '
       'rest still run', () {
     fakeAsync((async) {
       final errors = <Object>[];
       final zone = <Object>[];
       final heard = <Outcome<void>>[];
       final error = StateError('listener');
-      runZonedGuarded(
-        () {
-          Job<void>(observer: ErrorObserver(errors), (ctx) async {})
-            ..whenFinished((_) => throw error)
-            ..whenFinished(heard.add);
-        },
-        (error, stackTrace) => zone.add(error),
-      );
+      runZonedGuarded(() {
+        Job<void>(observer: ErrorObserver(errors), (ctx) async {})
+          ..whenFinished((_) => throw error)
+          ..whenFinished(heard.add);
+      }, (error, stackTrace) => zone.add(error));
       async.flushTimers();
       expect(errors, [same(error)]);
       expect(zone, [same(error)]);
@@ -293,37 +288,36 @@ void main() {
     });
   });
 
-  test('an error of a listener registered on a finished job is guarded too',
-      () {
-    fakeAsync((async) {
-      final errors = <Object>[];
-      final zone = <Object>[];
-      final error = StateError('late listener');
-      runZonedGuarded(
-        () {
-          final job =
-              Job<void>(observer: ErrorObserver(errors), (ctx) async {});
+  test(
+    'an error of a listener registered on a finished job is guarded too',
+    () {
+      fakeAsync((async) {
+        final errors = <Object>[];
+        final zone = <Object>[];
+        final error = StateError('late listener');
+        runZonedGuarded(() {
+          final job = Job<void>(
+            observer: ErrorObserver(errors),
+            (ctx) async {},
+          );
           async.flushTimers();
           job.whenFinished((_) => throw error);
-        },
-        (error, stackTrace) => zone.add(error),
-      );
-      async.flushTimers();
-      expect(errors, [same(error)]);
-      expect(zone, [same(error)]);
-    });
-  });
+        }, (error, stackTrace) => zone.add(error));
+        async.flushTimers();
+        expect(errors, [same(error)]);
+        expect(zone, [same(error)]);
+      });
+    },
+  );
 
   test('a cancellation thrown by a listener stays out of the zone', () {
     fakeAsync((async) {
       final zone = <Object>[];
-      runZonedGuarded(
-        () {
-          Job<void>((ctx) async {})
-              .whenFinished((_) => throw const Cancelled('listener'));
-        },
-        (error, stackTrace) => zone.add(error),
-      );
+      runZonedGuarded(() {
+        Job<void>(
+          (ctx) async {},
+        ).whenFinished((_) => throw const Cancelled('listener'));
+      }, (error, stackTrace) => zone.add(error));
       async.flushTimers();
       expect(zone, isEmpty);
     });
@@ -332,9 +326,9 @@ void main() {
   test('a continuation tells its listeners as any job does', () {
     fakeAsync((async) {
       final heard = <Outcome<int>>[];
-      Job<int>((ctx) async => 1)
-          .then((ctx, value) => value + 1)
-          .whenFinished(heard.add);
+      Job<int>(
+        (ctx) async => 1,
+      ).then((ctx, value) => value + 1).whenFinished(heard.add);
       async.flushTimers();
       expect('${heard.single}', 'Done(2)');
     });

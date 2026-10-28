@@ -36,53 +36,47 @@ void main() {
     },
   );
 
-  test(
-    'listener error goes to zone, pass continues and rules reevaluation '
-    'still cancels job',
-    () {
-      runSolo(initialState: const Preparing(), (solo, journal, async) {
-        final zoneErrors = <Object>[];
-        var secondCalled = false;
+  test('listener error goes to zone, pass continues and rules reevaluation '
+      'still cancels job', () {
+    runSolo(initialState: const Preparing(), (solo, journal, async) {
+      final zoneErrors = <Object>[];
+      var secondCalled = false;
 
-        solo
-          ..addListener(() => throw StateError('first listener failed'))
-          ..addListener(() => secondCalled = true);
+      solo
+        ..addListener(() => throw StateError('first listener failed'))
+        ..addListener(() => secondCalled = true);
 
-        final job = solo.enqueue<Preparing, void>(
-          (ctx) async {
-            await delay(100);
-            ctx.check();
-          },
-          key: 'job',
-          keepWhile: (state) => state.progress < 100,
-        );
+      final job = solo.enqueue<Preparing, void>(
+        (ctx) async {
+          await delay(100);
+          ctx.check();
+        },
+        key: 'job',
+        keepWhile: (state) => state.progress < 100,
+      );
 
-        async.elapse(const Duration(milliseconds: 50));
+      async.elapse(const Duration(milliseconds: 50));
 
-        runZonedGuarded(() {
+      runZonedGuarded(
+        () {
           solo.externalSetState(const Preparing(progress: 100));
-        }, (error, stackTrace) {
+        },
+        (error, stackTrace) {
           zoneErrors.add(error);
-        });
+        },
+      );
 
-        expect(secondCalled, isTrue);
-        expect(zoneErrors, hasLength(1));
-        expect(zoneErrors.first, isA<StateError>());
-        expect(
-          (zoneErrors.first as StateError).message,
-          'first listener failed',
-        );
+      expect(secondCalled, isTrue);
+      expect(zoneErrors, hasLength(1));
+      expect(zoneErrors.first, isA<StateError>());
+      expect((zoneErrors.first as StateError).message, 'first listener failed');
 
-        expect(job.isCancelled, isTrue);
-        async.elapse(const Duration(milliseconds: 50));
-        expect(job.outcome, isA<Cancelled>());
-        expect(
-          (job.outcome! as Cancelled).reason,
-          const RulesCancelReason(),
-        );
-      });
-    },
-  );
+      expect(job.isCancelled, isTrue);
+      async.elapse(const Duration(milliseconds: 50));
+      expect(job.outcome, isA<Cancelled>());
+      expect((job.outcome! as Cancelled).reason, const RulesCancelReason());
+    });
+  });
 
   test(
     'onListenerError error goes to zone, pass continues and rules reevaluation '
@@ -110,17 +104,21 @@ void main() {
         ..addListener(() => throw StateError('listener failed'))
         ..addListener(() => secondCalled = true);
 
-      runZonedGuarded(() {
-        solo.externalSetState(const Preparing(progress: 100));
-      }, (error, stackTrace) {
-        zoneErrors.add(error);
-      });
+      runZonedGuarded(
+        () {
+          solo.externalSetState(const Preparing(progress: 100));
+        },
+        (error, stackTrace) {
+          zoneErrors.add(error);
+        },
+      );
 
       expect(secondCalled, isTrue);
       expect(
         zoneErrors.map((error) => (error as StateError).message).toList(),
         ['listener failed', 'reporter failed'],
-        reason: 'a hook that throws instead of reporting does not take the '
+        reason:
+            'a hook that throws instead of reporting does not take the '
             'failure it was called about with it',
       );
 
@@ -129,10 +127,7 @@ void main() {
       try {
         await job.done;
       } on Object catch (_) {}
-      expect(
-        (job.outcome! as Cancelled).reason,
-        const RulesCancelReason(),
-      );
+      expect((job.outcome! as Cancelled).reason, const RulesCancelReason());
     },
   );
 
@@ -141,17 +136,18 @@ void main() {
       ..addListener(() => throw StateError('listener failed'));
     final zoneErrors = <Object>[];
 
-    runZonedGuarded(() {
-      solo.externalSetState(const Preparing(progress: 100));
-    }, (error, stackTrace) {
-      zoneErrors.add(error);
-    });
-
-    expect(
-      zoneErrors.map((error) => '$error').toList(),
-      ['Bad state: listener failed'],
-      reason: 'the failure the hook was called about still gets there',
+    runZonedGuarded(
+      () {
+        solo.externalSetState(const Preparing(progress: 100));
+      },
+      (error, stackTrace) {
+        zoneErrors.add(error);
+      },
     );
+
+    expect(zoneErrors.map((error) => '$error').toList(), [
+      'Bad state: listener failed',
+    ], reason: 'the failure the hook was called about still gets there');
   });
 
   test('nested externalSetState trace matches spec verbatim', () async {
@@ -206,15 +202,12 @@ void main() {
     'during close drain mode notifications continue and subscription works',
     () {
       runSolo((solo, journal, async) {
-        solo.enqueue<TestState, void>(
-          (ctx) async {
-            await delay(100);
-            solo.externalSetState(const Working(a: 1));
-            await delay(100);
-            solo.externalSetState(const Working(a: 2));
-          },
-          key: 'work',
-        );
+        solo.enqueue<TestState, void>((ctx) async {
+          await delay(100);
+          solo.externalSetState(const Working(a: 1));
+          await delay(100);
+          solo.externalSetState(const Working(a: 2));
+        }, key: 'work');
 
         async.elapse(const Duration(milliseconds: 50));
         unawaited(solo.close(mode: SoloCloseMode.drain));
@@ -242,29 +235,26 @@ void main() {
     },
   );
 
-  test(
-    'subscription in observer onClose hears synchronous externalSetState '
-    'and is dropped immediately after',
-    () async {
-      final log = <String>[];
-      final observer = _OnCloseObserver(log);
-      Solo.observer = observer;
+  test('subscription in observer onClose hears synchronous externalSetState '
+      'and is dropped immediately after', () async {
+    final log = <String>[];
+    final observer = _OnCloseObserver(log);
+    Solo.observer = observer;
 
-      final solo = TestSolo();
-      solo.addListener(() => log.add('existing:${solo.currentState}'));
+    final solo = TestSolo();
+    solo.addListener(() => log.add('existing:${solo.currentState}'));
 
-      expect(solo.hasListeners, isTrue);
-      await solo.close();
+    expect(solo.hasListeners, isTrue);
+    await solo.close();
 
-      expect(log, [
-        'onClose start',
-        'existing:Preparing(progress: 99)',
-        'subscribed-in-onClose:Preparing(progress: 99)',
-        'onClose end',
-      ]);
-      expect(solo.hasListeners, isFalse);
-    },
-  );
+    expect(log, [
+      'onClose start',
+      'existing:Preparing(progress: 99)',
+      'subscribed-in-onClose:Preparing(progress: 99)',
+      'onClose end',
+    ]);
+    expect(solo.hasListeners, isFalse);
+  });
 
   test(
     'after close addListener does not retain listener and does not notify',
@@ -309,20 +299,17 @@ void main() {
     expect(solo.isClosed, isTrue);
   });
 
-  test(
-    'controller without listeners publishes normally without container',
-    () {
-      final solo = TestSolo();
-      expect(solo.hasListeners, isFalse);
+  test('controller without listeners publishes normally without container', () {
+    final solo = TestSolo();
+    expect(solo.hasListeners, isFalse);
 
-      solo.externalSetState(const Working());
-      expect(solo.currentState, const Working());
-      expect(solo.hasListeners, isFalse);
+    solo.externalSetState(const Working());
+    expect(solo.currentState, const Working());
+    expect(solo.hasListeners, isFalse);
 
-      solo.removeListener(() {});
-      expect(solo.hasListeners, isFalse);
-    },
-  );
+    solo.removeListener(() {});
+    expect(solo.hasListeners, isFalse);
+  });
 }
 
 final class _ThrowingReporterSolo extends Solo<TestState>

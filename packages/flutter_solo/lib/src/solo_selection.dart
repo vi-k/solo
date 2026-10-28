@@ -87,9 +87,9 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     ValueListenable<S> source,
     T Function(S value) selector, {
     bool Function(T previous, T current)? changed,
-  })  : _source = source,
-        _selector = selector,
-        _changed = changed ?? _differ;
+  }) : _source = source,
+       _selector = selector,
+       _changed = changed ?? _differ;
 
   /// Picks [selector] out of [solo], a controller that need not be a
   /// [ValueListenable]: a plain [Solo], or one with `SoloStream`.
@@ -101,12 +101,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     Solo<S> solo,
     T Function(S state) selector, {
     bool Function(T previous, T current)? changed,
-  }) =>
-      SoloSelection<S, T>(
-        _SoloSource(solo),
-        selector,
-        changed: changed,
-      );
+  }) => SoloSelection<S, T>(_SoloSource(solo), selector, changed: changed);
 
   /// The default answer of `changed`.
   static bool _differ<T>(T previous, T current) => previous != current;
@@ -262,10 +257,10 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// A reporter that throws does not take the listener's failure with it:
   /// both go to the zone, the listener's first.
   void _report(Object error, StackTrace stackTrace) => _reportIn(
-        error,
-        stackTrace,
-        'notifying a listener of ${describeIdentity(this)}',
-      );
+    error,
+    stackTrace,
+    'notifying a listener of ${describeIdentity(this)}',
+  );
 
   /// Reports [error] through [FlutterError] with [context], or both errors
   /// to the zone if the reporter throws.
@@ -356,8 +351,7 @@ extension SoloSelect<S> on ValueListenable<S> {
   SoloSelection<S, T> select<T>(
     T Function(S value) selector, {
     bool Function(T previous, T current)? changed,
-  }) =>
-      SoloSelection<S, T>(this, selector, changed: changed);
+  }) => SoloSelection<S, T>(this, selector, changed: changed);
 }
 
 /// The class of [SoloSelection._none].

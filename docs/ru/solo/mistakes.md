@@ -83,10 +83,7 @@ ctx.onDispose(db.close);
 Делайте так:
 
 ```dart
-final db = await ctx.join(
-  Database.open,
-  dispose: (db) => db.close(),
-);
+final db = await ctx.join(Database.open, dispose: (db) => db.close());
 ```
 
 Значение, которое не дошло до тела, освобождается на месте, а дошедшее
@@ -150,13 +147,11 @@ try {
 
 ```dart
 // Неверно: sync ждёт конца этой задачи, а задача ждёт sync.
-Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-      key: _Op.syncAndRecord,
-      (ctx) async {
-        final path = await sync(item).value;
-        await recordPath(path).value;
-      },
-    );
+Job<void> syncAndRecord(int item) =>
+    enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+      final path = await sync(item).value;
+      await recordPath(path).value;
+    });
 ```
 
 Текущая задача ждёт новую, а новая ждёт текущую: ничего не движется, пока
@@ -166,13 +161,11 @@ Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
 Делайте так:
 
 ```dart
-Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-      key: _Op.syncAndRecord,
-      (ctx) async {
-        final path = await ctx.run(_sync(item));
-        await ctx.run(_recordPath(path));
-      },
-    );
+Job<void> syncAndRecord(int item) =>
+    enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+      final path = await ctx.run(_sync(item));
+      await ctx.run(_recordPath(path));
+    });
 ```
 
 `Solo.debug` предупреждает о таком ожидании, когда задача встаёт в очередь.
@@ -199,8 +192,7 @@ final class Failures extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      reportCrash(error, stackTrace);
+  }) => reportCrash(error, stackTrace);
 }
 ```
 
@@ -282,10 +274,10 @@ test('load fills in the name', () {
 ```dart
 // Неверно: один ключ на все профили.
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: _Op.load,
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: _Op.load,
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 ```
 
 С одним ключом на `load(id)` политика `Policy.droppable` принимает
@@ -296,10 +288,10 @@ Job<Profile> load(String id) => enqueue<Ready, Profile>(
 
 ```dart
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: (_Op.load, id),
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: (_Op.load, id),
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 ```
 
 Ключом служит любой объект, сравниваемый через `==`, так что подойдёт и запись.

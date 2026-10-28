@@ -54,10 +54,7 @@ final class Reports extends JobObserver with JobAnswerer {
 ```
 
 ```dart
-runZonedGuarded(
-  startApp,
-  (error, stackTrace) => print('report: $error'),
-);
+runZonedGuarded(startApp, (error, stackTrace) => print('report: $error'));
 ```
 
 `startApp` — функция, которая запускает приложение, во Flutter, например,
@@ -173,8 +170,8 @@ outcome: Cancelled(manual)
 
 ```dart
 final previous = Job.isCancellationError;
-Job.isCancellationError =
-    (error) => error is DatabaseStopped || (previous?.call(error) ?? false);
+Job.isCancellationError = (error) =>
+    error is DatabaseStopped || (previous?.call(error) ?? false);
 ```
 
 Тест, который ставит поле, возвращает его в `tearDown`, как вернул бы
@@ -194,16 +191,12 @@ final class Reporter extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      print('onError: $error');
+  }) => print('onError: $error');
 }
 
 final job = Job<Database>(
   observer: Reporter(),
-  (ctx) => ctx.join(
-    Database.open,
-    discard: (database) => database.close(),
-  ),
+  (ctx) => ctx.join(Database.open, discard: (database) => database.close()),
 );
 ```
 
@@ -416,12 +409,11 @@ onUnanswered: Bad state: analytics offline
 ### Наблюдатели одним списком
 
 ```dart
-final job = Job<void>(
-  observer: JobObserver.all([Reporter(), Crashes()]),
-  (ctx) async {
-    ctx.unattended(() => analytics.send('loaded'));
-  },
-);
+final job = Job<void>(observer: JobObserver.all([Reporter(), Crashes()]), (
+  ctx,
+) async {
+  ctx.unattended(() => analytics.send('loaded'));
+});
 ```
 
 ```text

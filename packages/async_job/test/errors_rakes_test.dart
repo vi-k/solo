@@ -96,18 +96,17 @@ void main() {
       ('doc/errors.md', '## Reporting each error once', page),
     ];
     for (final (doc, heading, holder) in holders) {
-      test('the code under "$heading" on $doc is a run of lines of $holder',
-          () {
-        expect(codeMissingFrom(doc, holder, under: heading), isEmpty);
-      });
+      test(
+        'the code under "$heading" on $doc is a run of lines of $holder',
+        () {
+          expect(codeMissingFrom(doc, holder, under: heading), isEmpty);
+        },
+      );
     }
 
     for (final doc in pages) {
       test('every piece of code on $doc is a run of lines of these files', () {
-        expect(
-          codeMissingFrom(doc, page, alsoIn: [firstAttempts]),
-          isEmpty,
-        );
+        expect(codeMissingFrom(doc, page, alsoIn: [firstAttempts]), isEmpty);
       });
     }
   });
@@ -122,9 +121,7 @@ void main() {
         reason: 'the outcome is not what sends it there',
       );
       expect(
-        quotable(
-          play(() => migratingObserved(Reporter()), cancelAt: 10),
-        ),
+        quotable(play(() => migratingObserved(Reporter()), cancelAt: 10)),
         [
           'cancel',
           'onError: DatabaseStopped',
@@ -133,11 +130,9 @@ void main() {
         ],
         reason: 'an observer that only watches moves nothing',
       );
-      expect(
-        play(first.migrating),
-        ['outcome: Done(null)'],
-        reason: 'uncancelled, the migration runs to its end',
-      );
+      expect(play(first.migrating), [
+        'outcome: Done(null)',
+      ], reason: 'uncancelled, the migration runs to its end');
     });
 
     test('the filter keeps the stop at onError and asks nobody to answer', () {
@@ -165,13 +160,11 @@ void main() {
     test('the filter is not asked about a job nobody cancelled', () {
       // Somebody else has cancelled the token: the job goes on, and its body
       // fails with the stop.
-      Job<void> stoppedByAnother({JobObserver? observer}) => Job<void>(
-            observer: observer,
-            (ctx) async {
-              final stop = CancelToken()..cancel();
-              await ctx.join(() => database.migrate(stop));
-            },
-          );
+      Job<void> stoppedByAnother({JobObserver? observer}) =>
+          Job<void>(observer: observer, (ctx) async {
+            final stop = CancelToken()..cancel();
+            await ctx.join(() => database.migrate(stop));
+          });
 
       expect(
         withTheStopNamed(() => play(stoppedByAnother, outcomeObserved: false)),
@@ -187,10 +180,9 @@ void main() {
         ['onError: DatabaseStopped', 'onUnanswered: DatabaseStopped'],
         reason: 'it goes on to the answer',
       );
-      expect(
-        withTheStopNamed(() => play(stoppedByAnother)),
-        ['outcome: Failed(DatabaseStopped)'],
-      );
+      expect(withTheStopNamed(() => play(stoppedByAnother)), [
+        'outcome: Failed(DatabaseStopped)',
+      ]);
     });
 
     test('the filter does not name the failed open', () {
@@ -226,44 +218,44 @@ void main() {
       }
     });
 
-    test('a filter that throws: the zone hears it, and the failure goes on',
-        () {
-      Job.isCancellationError = (error) => throw StateError('filter failed');
-      try {
-        expect(
-          quotable(
-            play(() => migratingObserved(Answerer()), cancelAt: 10),
-          ),
-          // The job is cancelled when the body throws, so the filter is asked
-          // there, before `onError` is told what the answer will be.
-          [
-            'cancel',
-            'zone: Bad state: filter failed',
-            'onError: DatabaseStopped',
-            'onUnanswered: DatabaseStopped',
-            'outcome: Cancelled(manual)',
-          ],
-        );
-      } finally {
-        Job.isCancellationError = null;
-      }
-    });
+    test(
+      'a filter that throws: the zone hears it, and the failure goes on',
+      () {
+        Job.isCancellationError = (error) => throw StateError('filter failed');
+        try {
+          expect(
+            quotable(play(() => migratingObserved(Answerer()), cancelAt: 10)),
+            // The job is cancelled when the body throws, so the filter is asked
+            // there, before `onError` is told what the answer will be.
+            [
+              'cancel',
+              'zone: Bad state: filter failed',
+              'onError: DatabaseStopped',
+              'onUnanswered: DatabaseStopped',
+              'outcome: Cancelled(manual)',
+            ],
+          );
+        } finally {
+          Job.isCancellationError = null;
+        }
+      },
+    );
 
     test('the filter does not see what Dart hands to the zone itself', () {
       Job<void> leaving() => Job<void>((ctx) async {
-            final stop = CancelToken();
-            ctx.onCancel(stop.cancel);
-            unawaited(ctx.join(() => database.migrate(stop)));
-            await ctx.abandonable(() => delay(50));
-          });
+        final stop = CancelToken();
+        ctx.onCancel(stop.cancel);
+        unawaited(ctx.join(() => database.migrate(stop)));
+        await ctx.abandonable(() => delay(50));
+      });
       Job<void> stoppingLater() => Job<void>((ctx) async {
-            // ignore: avoid_types_on_closure_parameters
-            ctx.onCancel(() async {
-              await delay(5);
-              throw const DatabaseStopped();
-            });
-            await ctx.abandonable(() => delay(50));
-          });
+        // ignore: avoid_types_on_closure_parameters
+        ctx.onCancel(() async {
+          await delay(5);
+          throw const DatabaseStopped();
+        });
+        await ctx.abandonable(() => delay(50));
+      });
 
       for (final start in [leaving, stoppingLater]) {
         expect(
@@ -275,71 +267,68 @@ void main() {
 
     test('a body that wraps its own cancellation: the zone, unless named', () {
       Job<void> wrapping({bool checksFirst = false}) => Job<void>((ctx) async {
-            try {
-              await ctx.abandonable(() => delay(30));
-              // ignore: avoid_catches_without_on_clauses
-            } catch (error) {
-              if (checksFirst) {
-                ctx.check();
-              }
-              throw AppException(error);
-            }
-          });
+        try {
+          await ctx.abandonable(() => delay(30));
+          // ignore: avoid_catches_without_on_clauses
+        } catch (error) {
+          if (checksFirst) {
+            ctx.check();
+          }
+          throw AppException(error);
+        }
+      });
 
-      expect(
-        withTheStopNamed(() => quotable(play(wrapping, cancelAt: 10))),
-        [
-          'cancel',
-          'zone: AppException(Cancelled(manual))',
-          'outcome: Cancelled(manual)',
-        ],
-        reason: 'the filter of the stop does not name the wrapper',
-      );
+      expect(withTheStopNamed(() => quotable(play(wrapping, cancelAt: 10))), [
+        'cancel',
+        'zone: AppException(Cancelled(manual))',
+        'outcome: Cancelled(manual)',
+      ], reason: 'the filter of the stop does not name the wrapper');
       nameTheWrapper();
       try {
-        expect(
-          quotable(play(wrapping, cancelAt: 10)),
-          ['cancel', 'outcome: Cancelled(manual)'],
-        );
+        expect(quotable(play(wrapping, cancelAt: 10)), [
+          'cancel',
+          'outcome: Cancelled(manual)',
+        ]);
       } finally {
         Job.isCancellationError = null;
       }
-      expect(
-        quotable(play(() => wrapping(checksFirst: true), cancelAt: 10)),
-        ['cancel', 'outcome: Cancelled(manual)'],
-        reason: 'the cancellation itself goes out',
-      );
+      expect(quotable(play(() => wrapping(checksFirst: true), cancelAt: 10)), [
+        'cancel',
+        'outcome: Cancelled(manual)',
+      ], reason: 'the cancellation itself goes out');
     });
 
-    test('a catch that asks the job first loses a failure after the cancel',
-        () {
-      Job<void> opening({required bool checksFirst}) =>
-          Job<void>(observer: Reporter(), (ctx) async {
-            try {
-              await ctx.join(Database.open);
-              // ignore: avoid_catches_without_on_clauses
-            } catch (error) {
-              if (checksFirst) ctx.check();
-              throw AppException(error);
-            }
-          });
+    test(
+      'a catch that asks the job first loses a failure after the cancel',
+      () {
+        Job<void> opening({required bool checksFirst}) =>
+            Job<void>(observer: Reporter(), (ctx) async {
+              try {
+                await ctx.join(Database.open);
+                // ignore: avoid_catches_without_on_clauses
+              } catch (error) {
+                if (checksFirst) ctx.check();
+                throw AppException(error);
+              }
+            });
 
-      expect(
-        quotable(play(() => opening(checksFirst: false), cancelAt: 10)),
-        [
-          'cancel',
-          'onError: AppException(Bad state: database locked)',
-          'zone: AppException(Bad state: database locked)',
-          'outcome: Cancelled(manual)',
-        ],
-        reason: 'the open fails after the cancellation',
-      );
-      expect(
-        quotable(play(() => opening(checksFirst: true), cancelAt: 10)),
-        ['cancel', 'outcome: Cancelled(manual)'],
-        reason: 'the open failed after the cancellation, and nobody heard it',
-      );
-    });
+        expect(
+          quotable(play(() => opening(checksFirst: false), cancelAt: 10)),
+          [
+            'cancel',
+            'onError: AppException(Bad state: database locked)',
+            'zone: AppException(Bad state: database locked)',
+            'outcome: Cancelled(manual)',
+          ],
+          reason: 'the open fails after the cancellation',
+        );
+        expect(
+          quotable(play(() => opening(checksFirst: true), cancelAt: 10)),
+          ['cancel', 'outcome: Cancelled(manual)'],
+          reason: 'the open failed after the cancellation, and nobody heard it',
+        );
+      },
+    );
 
     // The two things of `ctx.runAll` the page names: the group learns of an
     // error of a cancellation from the body, and a branch nobody cancelled
@@ -369,49 +358,49 @@ void main() {
       expect(lines, ['outcome: Cancelled(handler: Job(): Cancelled(manual))']);
       expect(
         reason,
-        isA<SiblingCancelReason>()
-            .having((reason) => reason.cause, 'cause', isA<DatabaseStopped>()),
+        isA<SiblingCancelReason>().having(
+          (reason) => reason.cause,
+          'cause',
+          isA<DatabaseStopped>(),
+        ),
       );
     });
 
-    test('a branch nobody cancelled throws its stop in place of a cancellation',
-        () {
-      Job<void> group() {
-        final cancelled = Job.deferred<void>(
-          (ctx) => ctx.abandonable(() => delay(50)),
-        );
-        unawaited(delay(10).then((_) => cancelled.cancel()));
-        return Job<void>((ctx) async {
-          await ctx.runAll([
-            // Somebody else has cancelled its token, and the branch does not
-            // take the stop the group asks for.
-            Job.deferred<void>(cancellable: false, (ctx) async {
-              final stop = CancelToken()..cancel();
-              await ctx.join(() => database.migrate(stop));
-            }),
-            cancelled,
-          ]);
-        });
-      }
+    test(
+      'a branch nobody cancelled throws its stop in place of a cancellation',
+      () {
+        Job<void> group() {
+          final cancelled = Job.deferred<void>(
+            (ctx) => ctx.abandonable(() => delay(50)),
+          );
+          unawaited(delay(10).then((_) => cancelled.cancel()));
+          return Job<void>((ctx) async {
+            await ctx.runAll([
+              // Somebody else has cancelled its token, and the branch does not
+              // take the stop the group asks for.
+              Job.deferred<void>(cancellable: false, (ctx) async {
+                final stop = CancelToken()..cancel();
+                await ctx.join(() => database.migrate(stop));
+              }),
+              cancelled,
+            ]);
+          });
+        }
 
-      expect(
-        withTheStopNamed(() => play(group)),
-        ['outcome: Failed(DatabaseStopped)'],
-      );
-      expect(
-        withTheStopNamed(() => play(group, outcomeObserved: false)),
-        ['zone: DatabaseStopped'],
-      );
-    });
+        expect(withTheStopNamed(() => play(group)), [
+          'outcome: Failed(DatabaseStopped)',
+        ]);
+        expect(withTheStopNamed(() => play(group, outcomeObserved: false)), [
+          'zone: DatabaseStopped',
+        ]);
+      },
+    );
 
     test('the hooks do not observe the outcome, not even Log reading it', () {
-      expect(
-        play(() => failing(observer: Log()), outcomeObserved: false),
-        [
-          'Job(save): Failed(Bad state: disk full)',
-          'zone: Bad state: disk full',
-        ],
-      );
+      expect(play(() => failing(observer: Log()), outcomeObserved: false), [
+        'Job(save): Failed(Bad state: disk full)',
+        'zone: Bad state: disk full',
+      ]);
     });
 
     test('done, value, then and ignoreFailure() observe the outcome', () {
@@ -423,78 +412,73 @@ void main() {
         'ignoreFailure()': (job) => job.ignoreFailure(),
       };
       for (final MapEntry(key: way, value: observe) in ways.entries) {
-        final lines = play(
-          () {
-            final job = failing();
-            observe(job);
-            return job;
-          },
-          outcomeObserved: false,
-        );
+        final lines = play(() {
+          final job = failing();
+          observe(job);
+          return job;
+        }, outcomeObserved: false);
         expect(lines, isEmpty, reason: way);
       }
-      expect(
-        play(failing, outcomeObserved: false),
-        ['zone: Bad state: disk full'],
-        reason: 'nothing observes it',
-      );
+      expect(play(failing, outcomeObserved: false), [
+        'zone: Bad state: disk full',
+      ], reason: 'nothing observes it');
     });
 
-    test('a failure the job ends with: onError, then the answer if unobserved',
-        () {
-      expect(
-        play(() => failing(observer: Reporter()), outcomeObserved: false),
-        ['onError: Bad state: disk full', 'zone: Bad state: disk full'],
-      );
-      expect(
-        play(() => failing(observer: Answerer()), outcomeObserved: false),
-        ['onError: Bad state: disk full', 'onUnanswered: Bad state: disk full'],
-        reason: 'an observer that answers gets it, and the zone does not',
-      );
-      expect(
-        play(() => failing(observer: Answerer())),
-        [
-          'onError: Bad state: disk full',
-          'outcome: Failed(Bad state: disk full)',
-        ],
-        reason: 'observing the outcome takes it off the way',
-      );
-      expect(
-        play(() => failing(observer: Reporter())),
-        [
-          'onError: Bad state: disk full',
-          'outcome: Failed(Bad state: disk full)',
-        ],
-      );
-      expect(
-        play(failing, outcomeObserved: false),
-        ['zone: Bad state: disk full'],
-      );
-      expect(play(failing), ['outcome: Failed(Bad state: disk full)']);
-    });
-
-    test('a failure an engine makes of a cancellation goes past the answer',
-        () {
-      for (final error in [
-        const Cancelled('as a failure'),
-        ParallelWaitError<List<void>, List<AsyncError?>>(
-          [null, null],
-          [
-            AsyncError(const Cancelled('one'), StackTrace.empty),
-            AsyncError(const Cancelled('two'), StackTrace.empty),
-          ],
-        ),
-      ]) {
-        final lines = play(
-          () => ProbeJob<void>((ctx) async {}, observer: Answerer())
-            ..drop(Failed(error, StackTrace.empty)),
-          outcomeObserved: false,
+    test(
+      'a failure the job ends with: onError, then the answer if unobserved',
+      () {
+        expect(
+          play(() => failing(observer: Reporter()), outcomeObserved: false),
+          ['onError: Bad state: disk full', 'zone: Bad state: disk full'],
         );
-        expect(lines.first, startsWith('onError:'));
-        expect(lines, isNot(contains(startsWith('onUnanswered:'))));
-        expect(lines.last, 'zone: $error');
-      }
-    });
+        expect(
+          play(() => failing(observer: Answerer()), outcomeObserved: false),
+          [
+            'onError: Bad state: disk full',
+            'onUnanswered: Bad state: disk full',
+          ],
+          reason: 'an observer that answers gets it, and the zone does not',
+        );
+        expect(play(() => failing(observer: Answerer())), [
+          'onError: Bad state: disk full',
+          'outcome: Failed(Bad state: disk full)',
+        ], reason: 'observing the outcome takes it off the way');
+        expect(play(() => failing(observer: Reporter())), [
+          'onError: Bad state: disk full',
+          'outcome: Failed(Bad state: disk full)',
+        ]);
+        expect(play(failing, outcomeObserved: false), [
+          'zone: Bad state: disk full',
+        ]);
+        expect(play(failing), ['outcome: Failed(Bad state: disk full)']);
+      },
+    );
+
+    test(
+      'a failure an engine makes of a cancellation goes past the answer',
+      () {
+        for (final error in [
+          const Cancelled('as a failure'),
+          ParallelWaitError<List<void>, List<AsyncError?>>(
+            [null, null],
+            [
+              AsyncError(const Cancelled('one'), StackTrace.empty),
+              AsyncError(const Cancelled('two'), StackTrace.empty),
+            ],
+          ),
+        ]) {
+          final lines = play(
+            () =>
+                ProbeJob<void>((ctx) async {}, observer: Answerer())
+                  ..drop(Failed(error, StackTrace.empty)),
+            outcomeObserved: false,
+          );
+          expect(lines.first, startsWith('onError:'));
+          expect(lines, isNot(contains(startsWith('onUnanswered:'))));
+          expect(lines.last, 'zone: $error');
+        }
+      },
+    );
 
     test('the page sends an unobserved failure to the answer', () {
       const said = {
@@ -538,19 +522,15 @@ void main() {
     });
 
     Job<void> failingBeforeCancel({JobObserver? observer}) => Job<void>(
-          observer: observer,
-          (ctx) async {
-            ctx
-                .run(
-                  Job.deferred<void>(
-                    (ctx) => ctx.abandonable(() => delay(50)),
-                  ),
-                )
-                .ignore();
-            await delay(10);
-            throw StateError('disk full');
-          },
-        );
+      observer: observer,
+      (ctx) async {
+        ctx
+            .run(Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50))))
+            .ignore();
+        await delay(10);
+        throw StateError('disk full');
+      },
+    );
 
     test('a cancellation after the failure: answered, whoever reads it', () {
       expect(
@@ -582,7 +562,8 @@ void main() {
           'zone: Bad state: disk full',
           'outcome: Cancelled(manual)',
         ],
-        reason: 'the reader gets the cancellation, and the failure is answered '
+        reason:
+            'the reader gets the cancellation, and the failure is answered '
             'all the same',
       );
       expect(
@@ -591,29 +572,60 @@ void main() {
         ),
         ['cancel', 'zone: Bad state: disk full'],
       );
-      expect(
-        quotable(play(failingBeforeCancel, cancelAt: 20)),
-        ['cancel', 'zone: Bad state: disk full', 'outcome: Cancelled(manual)'],
-      );
+      expect(quotable(play(failingBeforeCancel, cancelAt: 20)), [
+        'cancel',
+        'zone: Bad state: disk full',
+        'outcome: Cancelled(manual)',
+      ]);
     });
 
-    test('reading done or value leaves the failure of the body to the answer',
-        () {
-      // The outcome carries the cancellation, so neither read takes the
-      // failure of the body on, unlike `ignoreFailure()`.
-      final reads = <String, void Function(Job<void> job)>{
-        'done': (job) => job.done.ignore(),
-        'value': (job) => job.value.ignore(),
-      };
-      for (final MapEntry(key: way, value: read) in reads.entries) {
+    test(
+      'reading done or value leaves the failure of the body to the answer',
+      () {
+        // The outcome carries the cancellation, so neither read takes the
+        // failure of the body on, unlike `ignoreFailure()`.
+        final reads = <String, void Function(Job<void> job)>{
+          'done': (job) => job.done.ignore(),
+          'value': (job) => job.value.ignore(),
+        };
+        for (final MapEntry(key: way, value: read) in reads.entries) {
+          expect(
+            quotable(
+              play(
+                () {
+                  final job = failingBeforeCancel(observer: Answerer());
+                  read(job);
+                  return job;
+                },
+                cancelAt: 20,
+                outcomeObserved: false,
+              ),
+            ),
+            [
+              'onError: Bad state: disk full',
+              'cancel',
+              'onUnanswered: Bad state: disk full',
+            ],
+            reason: way,
+          );
+        }
+      },
+    );
+
+    Job<void> failingBeforeCleanup({JobObserver? observer}) =>
+        Job<void>(observer: observer, (ctx) async {
+          ctx.onDispose(() => delay(50));
+          await delay(10);
+          throw StateError('disk full');
+        });
+
+    test(
+      'a cancellation while the cleanup runs: answered, whoever reads it',
+      () {
         expect(
           quotable(
             play(
-              () {
-                final job = failingBeforeCancel(observer: Answerer());
-                read(job);
-                return job;
-              },
+              () => failingBeforeCleanup(observer: Answerer(passedOn: true)),
               cancelAt: 20,
               outcomeObserved: false,
             ),
@@ -622,85 +634,57 @@ void main() {
             'onError: Bad state: disk full',
             'cancel',
             'onUnanswered: Bad state: disk full',
+            'zone: Bad state: disk full',
           ],
-          reason: way,
         );
-      }
-    });
-
-    Job<void> failingBeforeCleanup({JobObserver? observer}) => Job<void>(
-          observer: observer,
-          (ctx) async {
-            ctx.onDispose(() => delay(50));
-            await delay(10);
-            throw StateError('disk full');
-          },
+        expect(
+          quotable(
+            play(
+              () => failingBeforeCleanup(observer: Answerer(passedOn: true)),
+              cancelAt: 20,
+            ),
+          ),
+          [
+            'onError: Bad state: disk full',
+            'cancel',
+            'onUnanswered: Bad state: disk full',
+            'zone: Bad state: disk full',
+            'outcome: Cancelled(manual)',
+          ],
+          reason:
+              'the reader gets the cancellation, and the failure is answered '
+              'all the same',
         );
-
-    test('a cancellation while the cleanup runs: answered, whoever reads it',
-        () {
-      expect(
-        quotable(
-          play(
-            () => failingBeforeCleanup(observer: Answerer(passedOn: true)),
-            cancelAt: 20,
-            outcomeObserved: false,
+        expect(
+          quotable(
+            play(failingBeforeCleanup, cancelAt: 20, outcomeObserved: false),
           ),
-        ),
-        [
-          'onError: Bad state: disk full',
+          ['cancel', 'zone: Bad state: disk full'],
+        );
+        expect(quotable(play(failingBeforeCleanup, cancelAt: 20)), [
           'cancel',
-          'onUnanswered: Bad state: disk full',
-          'zone: Bad state: disk full',
-        ],
-      );
-      expect(
-        quotable(
-          play(
-            () => failingBeforeCleanup(observer: Answerer(passedOn: true)),
-            cancelAt: 20,
-          ),
-        ),
-        [
-          'onError: Bad state: disk full',
-          'cancel',
-          'onUnanswered: Bad state: disk full',
           'zone: Bad state: disk full',
           'outcome: Cancelled(manual)',
-        ],
-        reason: 'the reader gets the cancellation, and the failure is answered '
-            'all the same',
-      );
-      expect(
-        quotable(
-          play(failingBeforeCleanup, cancelAt: 20, outcomeObserved: false),
-        ),
-        ['cancel', 'zone: Bad state: disk full'],
-      );
-      expect(
-        quotable(play(failingBeforeCleanup, cancelAt: 20)),
-        ['cancel', 'zone: Bad state: disk full', 'outcome: Cancelled(manual)'],
-      );
-    });
+        ]);
+      },
+    );
 
     Job<void> childFailingBeforeCancel({JobObserver? observer}) => Job<void>(
-          observer: observer,
-          (ctx) async {
-            await ctx.run(
-              Job.deferred<void>((ctx) async {
-                ctx
-                    .run(
-                      Job.deferred<void>(
-                        (ctx) => ctx.abandonable(() => delay(50)),
-                      ),
-                    )
-                    .ignore();
-                await delay(10);
-                throw StateError('disk full');
-              }),
-            );
-          },
+      observer: observer,
+      (ctx) async {
+        await ctx.run(
+          Job.deferred<void>((ctx) async {
+            ctx
+                .run(
+                  Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50))),
+                )
+                .ignore();
+            await delay(10);
+            throw StateError('disk full');
+          }),
         );
+      },
+    );
 
     test('a child of run the same way: onError, then the zone', () {
       // The parent read the child's outcome, and the outcome carries the
@@ -719,10 +703,11 @@ void main() {
           'outcome: Cancelled(manual)',
         ],
       );
-      expect(
-        quotable(play(childFailingBeforeCancel, cancelAt: 20)),
-        ['cancel', 'zone: Bad state: disk full', 'outcome: Cancelled(manual)'],
-      );
+      expect(quotable(play(childFailingBeforeCancel, cancelAt: 20)), [
+        'cancel',
+        'zone: Bad state: disk full',
+        'outcome: Cancelled(manual)',
+      ]);
     });
 
     test('one error is heard on each job whose outcome it became', () {
@@ -762,8 +747,10 @@ void main() {
       late Job<int> continuation;
       play(() {
         source = Job<int>(observer: observer, (ctx) => throw StateError('one'));
-        return continuation =
-            source.then((ctx, value) => value, observer: observer);
+        return continuation = source.then(
+          (ctx, value) => value,
+          observer: observer,
+        );
       });
       expect([for (final (job, _) in heard) job], [source, continuation]);
       expect(identical(heard.first.$2, heard.last.$2), isTrue);
@@ -793,12 +780,12 @@ void main() {
       // The open of the child fails at 20 ms, the cancellation comes at 30 ms,
       // and the future the body awaits on its own fails at 40 ms.
       Job<void> waiting({JobObserver? observer}) => Job<void>(
-            observer: observer,
-            (ctx) => [
-              ctx.run(Job.deferred<void>((ctx) => ctx.join(Database.open))),
-              delay(40).then<void>((_) => throw StateError('disk full')),
-            ].wait,
-          );
+        observer: observer,
+        (ctx) => [
+          ctx.run(Job.deferred<void>((ctx) => ctx.join(Database.open))),
+          delay(40).then<void>((_) => throw StateError('disk full')),
+        ].wait,
+      );
 
       expect(
         quotable(play(() => waiting(observer: Reporter()), cancelAt: 30)),
@@ -811,30 +798,26 @@ void main() {
           'zone: Bad state: disk full',
           'outcome: Cancelled(manual)',
         ],
-        reason: 'the child hears its own failure at 20 ms, the parent each '
+        reason:
+            'the child hears its own failure at 20 ms, the parent each '
             'error of the envelope',
       );
-      expect(
-        quotable(play(waiting, cancelAt: 30)),
-        [
-          'cancel',
-          'zone: Bad state: database locked',
-          'zone: Bad state: disk full',
-          'outcome: Cancelled(manual)',
-        ],
-      );
+      expect(quotable(play(waiting, cancelAt: 30)), [
+        'cancel',
+        'zone: Bad state: database locked',
+        'zone: Bad state: disk full',
+        'outcome: Cancelled(manual)',
+      ]);
     });
 
-    Job<void> failingAfterCancel({JobObserver? observer}) => Job<void>(
-          observer: observer,
-          (ctx) async {
-            try {
-              await ctx.abandonable(() => delay(20));
-            } on Cancelled {
-              throw StateError('cleanup step failed');
-            }
-          },
-        );
+    Job<void> failingAfterCancel({JobObserver? observer}) =>
+        Job<void>(observer: observer, (ctx) async {
+          try {
+            await ctx.abandonable(() => delay(20));
+          } on Cancelled {
+            throw StateError('cleanup step failed');
+          }
+        });
 
     test('a failure after the cancellation: onError, then the answer', () {
       expect(
@@ -873,50 +856,47 @@ void main() {
       );
     });
 
-    test('a step of uncancellable or behind join: onError, then the answer',
-        () {
-      final ways = <String, Job<void> Function({JobObserver? observer})>{
-        'uncancellable': ({observer}) =>
-            Job<void>(observer: observer, (ctx) => ctx.uncancellable(pay)),
-        'join': ({observer}) =>
-            Job<void>(observer: observer, (ctx) => ctx.join(pay)),
-      };
-      for (final MapEntry(key: way, value: held) in ways.entries) {
-        expect(
-          quotable(play(() => held(observer: Reporter()), cancelAt: 10)),
-          [
+    test(
+      'a step of uncancellable or behind join: onError, then the answer',
+      () {
+        final ways = <String, Job<void> Function({JobObserver? observer})>{
+          'uncancellable': ({observer}) =>
+              Job<void>(observer: observer, (ctx) => ctx.uncancellable(pay)),
+          'join': ({observer}) =>
+              Job<void>(observer: observer, (ctx) => ctx.join(pay)),
+        };
+        for (final MapEntry(key: way, value: held) in ways.entries) {
+          expect(
+            quotable(play(() => held(observer: Reporter()), cancelAt: 10)),
+            [
+              'cancel',
+              'onError: Bad state: payment failed',
+              'zone: Bad state: payment failed',
+              'outcome: Cancelled(manual)',
+            ],
+            reason: way,
+          );
+          expect(
+            quotable(play(() => held(observer: Answerer()), cancelAt: 10)),
+            [
+              'cancel',
+              'onError: Bad state: payment failed',
+              'onUnanswered: Bad state: payment failed',
+              'outcome: Cancelled(manual)',
+            ],
+            reason: way,
+          );
+          expect(quotable(play(held, cancelAt: 10)), [
             'cancel',
-            'onError: Bad state: payment failed',
             'zone: Bad state: payment failed',
             'outcome: Cancelled(manual)',
-          ],
-          reason: way,
-        );
-        expect(
-          quotable(play(() => held(observer: Answerer()), cancelAt: 10)),
-          [
-            'cancel',
-            'onError: Bad state: payment failed',
-            'onUnanswered: Bad state: payment failed',
-            'outcome: Cancelled(manual)',
-          ],
-          reason: way,
-        );
-        expect(
-          quotable(play(held, cancelAt: 10)),
-          [
-            'cancel',
-            'zone: Bad state: payment failed',
-            'outcome: Cancelled(manual)',
-          ],
-          reason: way,
-        );
-      }
-    });
+          ], reason: way);
+        }
+      },
+    );
 
-    Job<void> failingOutside({JobObserver? observer}) => Job<void>(
-          observer: observer,
-          (ctx) async {
+    Job<void> failingOutside({JobObserver? observer}) =>
+        Job<void>(observer: observer, (ctx) async {
             ctx
               ..onDispose(() => throw StateError('cleanup'))
               ..onCancel(() => throw StateError('onCancel'))
@@ -928,8 +908,7 @@ void main() {
               await delay(30);
               throw StateError('late wait');
             });
-          },
-        )
+          })
           ..whenCancelled((_) => throw StateError('whenCancelled'))
           ..whenFinished((_) => throw StateError('whenFinished'));
 
@@ -943,34 +922,30 @@ void main() {
         'Bad state: late wait',
       ];
       List<String> starting(List<String> lines, String prefix) => [
-            for (final line in lines)
-              if (line.startsWith(prefix)) line,
-          ];
+        for (final line in lines)
+          if (line.startsWith(prefix)) line,
+      ];
 
       final heard = play(
         () => failingOutside(observer: Reporter()),
         cancelAt: 10,
         outcomeObserved: false,
       );
-      expect(
-        starting(heard, 'onError'),
-        [for (final error in errors) 'onError: $error'],
-      );
-      expect(
-        starting(heard, 'zone'),
-        [for (final error in errors) 'zone: $error'],
-        reason: 'an observer written to watch changes nowhere an error goes',
-      );
+      expect(starting(heard, 'onError'), [
+        for (final error in errors) 'onError: $error',
+      ]);
+      expect(starting(heard, 'zone'), [
+        for (final error in errors) 'zone: $error',
+      ], reason: 'an observer written to watch changes nowhere an error goes');
 
       final answered = play(
         () => failingOutside(observer: Answering()),
         cancelAt: 10,
         outcomeObserved: false,
       );
-      expect(
-        starting(answered, 'onUnanswered'),
-        [for (final error in errors) 'onUnanswered: $error'],
-      );
+      expect(starting(answered, 'onUnanswered'), [
+        for (final error in errors) 'onUnanswered: $error',
+      ]);
       expect(
         starting(answered, 'zone'),
         isEmpty,
@@ -982,21 +957,18 @@ void main() {
         cancelAt: 10,
         outcomeObserved: false,
       );
-      expect(
-        starting(passedOn, 'zone'),
-        [for (final error in errors) 'zone: $error'],
-        reason: 'super sends each one on to the zone as well',
-      );
+      expect(starting(passedOn, 'zone'), [
+        for (final error in errors) 'zone: $error',
+      ], reason: 'super sends each one on to the zone as well');
 
       final unheard = play(
         failingOutside,
         cancelAt: 10,
         outcomeObserved: false,
       );
-      expect(
-        starting(unheard, 'zone'),
-        [for (final error in errors) 'zone: $error'],
-      );
+      expect(starting(unheard, 'zone'), [
+        for (final error in errors) 'zone: $error',
+      ]);
     });
 
     List<String> childNamed({
@@ -1005,32 +977,27 @@ void main() {
       CancelReason reason = const ManualCancelReason(),
       JobObserver? observer,
       bool outcomeObserved = false,
-    }) =>
-        play(
-          () {
-            final child = Job.deferred<void>(
-              key: key,
-              describe: describe,
-              (ctx) => ctx.abandonable(() => delay(50)),
-            );
-            unawaited(
-              Future<void>.delayed(
-                const Duration(milliseconds: 10),
-                () => child.cancel(reason: reason),
-              ),
-            );
-            return Job<void>(observer: observer, (ctx) => ctx.run(child));
-          },
-          outcomeObserved: outcomeObserved,
-        );
-
-    test(
-        "a child's key, describe or Cancelled that fails to name the child: "
-        'onError, then the zone', () {
-      expect(
-        childNamed(key: BrokenKey(), observer: Reporter()),
-        ['onError: Bad state: key failed', 'zone: Bad state: key failed'],
+    }) => play(() {
+      final child = Job.deferred<void>(
+        key: key,
+        describe: describe,
+        (ctx) => ctx.abandonable(() => delay(50)),
       );
+      unawaited(
+        Future<void>.delayed(
+          const Duration(milliseconds: 10),
+          () => child.cancel(reason: reason),
+        ),
+      );
+      return Job<void>(observer: observer, (ctx) => ctx.run(child));
+    }, outcomeObserved: outcomeObserved);
+
+    test("a child's key, describe or Cancelled that fails to name the child: "
+        'onError, then the zone', () {
+      expect(childNamed(key: BrokenKey(), observer: Reporter()), [
+        'onError: Bad state: key failed',
+        'zone: Bad state: key failed',
+      ]);
       expect(childNamed(key: BrokenKey()), ['zone: Bad state: key failed']);
       expect(
         childNamed(
@@ -1082,63 +1049,55 @@ void main() {
       );
     });
 
-    Job<void> cancelledOutside({JobObserver? observer}) => Job<void>(
-          observer: observer,
-          (ctx) async {
-            ctx.onDispose(
-              () => throw const Cancelled.by(
-                reason: ManualCancelReason(),
-              ),
-            );
-          },
-        );
+    Job<void> cancelledOutside({JobObserver? observer}) =>
+        Job<void>(observer: observer, (ctx) async {
+          ctx.onDispose(
+            () => throw const Cancelled.by(reason: ManualCancelReason()),
+          );
+        });
 
     test('a Cancelled thrown outside the body: onError or nobody', () {
-      expect(
-        play(() => cancelledOutside(observer: Reporter())),
-        ['onError: Cancelled(manual)', 'outcome: Done(null)'],
-        reason: 'the default body of onUnanswered drops a cancellation',
-      );
-      expect(
-        play(() => cancelledOutside(observer: Answerer())),
-        ['onError: Cancelled(manual)', 'outcome: Done(null)'],
-        reason: 'an override is not asked about it either',
-      );
+      expect(play(() => cancelledOutside(observer: Reporter())), [
+        'onError: Cancelled(manual)',
+        'outcome: Done(null)',
+      ], reason: 'the default body of onUnanswered drops a cancellation');
+      expect(play(() => cancelledOutside(observer: Answerer())), [
+        'onError: Cancelled(manual)',
+        'outcome: Done(null)',
+      ], reason: 'an override is not asked about it either');
       expect(play(cancelledOutside), ['outcome: Done(null)']);
     });
 
     test("the job's own cancellation out of work left behind: nobody", () {
       // Both checkpoints run after the job accepted the cancellation: one in
       // work of unattended, one in the action `abandonable` let go of.
-      Job<void> checking({JobObserver? observer}) => Job<void>(
-            observer: observer,
-            (ctx) async {
-              ctx.unattended(() async {
-                await delay(20);
-                ctx.check();
-              });
-              await ctx.abandonable(() async {
-                await delay(20);
-                ctx.check();
-              });
-            },
-          );
+      Job<void> checking({JobObserver? observer}) =>
+          Job<void>(observer: observer, (ctx) async {
+            ctx.unattended(() async {
+              await delay(20);
+              ctx.check();
+            });
+            await ctx.abandonable(() async {
+              await delay(20);
+              ctx.check();
+            });
+          });
 
       expect(
         quotable(play(() => checking(observer: Answerer()), cancelAt: 10)),
         ['cancel', 'outcome: Cancelled(manual)'],
       );
-      expect(
-        quotable(play(checking, cancelAt: 10)),
-        ['cancel', 'outcome: Cancelled(manual)'],
-      );
+      expect(quotable(play(checking, cancelAt: 10)), [
+        'cancel',
+        'outcome: Cancelled(manual)',
+      ]);
     });
 
     test('the same cancellation thrown by a callback: onError', () {
       Job<void> rethrowing({JobObserver? observer}) => Job<void>(
-            observer: observer,
-            (ctx) => ctx.abandonable(() => delay(50)),
-          )..whenCancelled((cancelled) => throw cancelled);
+        observer: observer,
+        (ctx) => ctx.abandonable(() => delay(50)),
+      )..whenCancelled((cancelled) => throw cancelled);
 
       expect(
         quotable(play(() => rethrowing(observer: Answerer()), cancelAt: 10)),
@@ -1147,113 +1106,115 @@ void main() {
     });
 
     test('a join the body did not await: the zone, past the observer', () {
-      Job<void> leaving({JobObserver? observer}) => Job<void>(
-            observer: observer,
-            (ctx) async {
-              unawaited(
-                ctx.join(() async {
-                  await delay(20);
-                  throw StateError('late join');
-                }),
-              );
-            },
-          );
-
-      expect(
-        play(() => leaving(observer: Answerer())),
-        ['outcome: Done(null)', 'zone: Bad state: late join'],
-      );
-      expect(
-        play(leaving),
-        ['outcome: Done(null)', 'zone: Bad state: late join'],
-      );
-    });
-
-    test('any call the body did not await: the zone, cancellation included',
-        () {
-      Job<void> walkingOn(
-        JobObserver? observer,
-        Future<void> Function(JobContext ctx) call,
-      ) =>
+      Job<void> leaving({JobObserver? observer}) =>
           Job<void>(observer: observer, (ctx) async {
-            unawaited(call(ctx));
-            await delay(50);
+            unawaited(
+              ctx.join(() async {
+                await delay(20);
+                throw StateError('late join');
+              }),
+            );
           });
 
-      expect(
-        quotable(
-          play(
-            () => walkingOn(
-              Answerer(),
-              (ctx) => ctx.abandonable(() => delay(30)),
-            ),
-            cancelAt: 10,
-          ),
-        ),
-        ['cancel', 'zone: Cancelled(manual)', 'outcome: Cancelled(manual)'],
-      );
-      for (final call in <Future<void> Function(JobContext ctx)>[
-        (ctx) => ctx.abandonable(pay),
-        (ctx) => ctx.uncancellable(pay),
-      ]) {
-        expect(
-          play(() => walkingOn(Answerer(), call)),
-          ['zone: Bad state: payment failed', 'outcome: Done(null)'],
-        );
-      }
+      expect(play(() => leaving(observer: Answerer())), [
+        'outcome: Done(null)',
+        'zone: Bad state: late join',
+      ]);
+      expect(play(leaving), [
+        'outcome: Done(null)',
+        'zone: Bad state: late join',
+      ]);
     });
+
+    test(
+      'any call the body did not await: the zone, cancellation included',
+      () {
+        Job<void> walkingOn(
+          JobObserver? observer,
+          Future<void> Function(JobContext ctx) call,
+        ) => Job<void>(observer: observer, (ctx) async {
+          unawaited(call(ctx));
+          await delay(50);
+        });
+
+        expect(
+          quotable(
+            play(
+              () => walkingOn(
+                Answerer(),
+                (ctx) => ctx.abandonable(() => delay(30)),
+              ),
+              cancelAt: 10,
+            ),
+          ),
+          ['cancel', 'zone: Cancelled(manual)', 'outcome: Cancelled(manual)'],
+        );
+        for (final call in <Future<void> Function(JobContext ctx)>[
+          (ctx) => ctx.abandonable(pay),
+          (ctx) => ctx.uncancellable(pay),
+        ]) {
+          expect(play(() => walkingOn(Answerer(), call)), [
+            'zone: Bad state: payment failed',
+            'outcome: Done(null)',
+          ]);
+        }
+      },
+    );
 
     test('a wait left behind by a body that ended: an abandoned action', () {
       Job<void> leaving({JobObserver? observer}) => Job<void>(
-            observer: observer,
-            (ctx) async => unawaited(ctx.abandonable(pay)),
-          );
+        observer: observer,
+        (ctx) async => unawaited(ctx.abandonable(pay)),
+      );
 
       expect(play(() => leaving(observer: Answerer())), [
         'outcome: Done(null)',
         'onError: Bad state: payment failed',
         'onUnanswered: Bad state: payment failed',
       ]);
-      expect(
-        play(leaving),
-        ['outcome: Done(null)', 'zone: Bad state: payment failed'],
-      );
+      expect(play(leaving), [
+        'outcome: Done(null)',
+        'zone: Bad state: payment failed',
+      ]);
     });
 
-    test("a wait left behind, the job's cancellation after the body: nobody",
-        () {
-      // The page holds `abandonable` to the zone only until the body ends. A
-      // body that cancels itself ends as the job accepts its cancellation, and
-      // one from outside may arrive while the job waits for a child.
-      expect(
-        play(
-          () => Job<void>(observer: Answerer(), (ctx) async {
-            unawaited(ctx.abandonable(() => delay(30)));
-            await delay(10);
-            throw const Cancelled('gave up');
-          }),
-        ),
-        ['outcome: Cancelled(handler: gave up)'],
-      );
-      expect(
-        quotable(
+    test(
+      "a wait left behind, the job's cancellation after the body: nobody",
+      () {
+        // The page holds `abandonable` to the zone only until the body ends.
+        // A body that cancels itself ends as the job accepts its
+        // cancellation, and one from outside may arrive while the job waits
+        // for a child.
+        expect(
           play(
             () => Job<void>(observer: Answerer(), (ctx) async {
-              ctx
-                  .run(
-                    Job.deferred<void>(
-                      (ctx) => ctx.abandonable(() => delay(50)),
-                    ),
-                  )
-                  .ignore();
               unawaited(ctx.abandonable(() => delay(30)));
+              await delay(10);
+              throw const Cancelled('gave up');
             }),
-            cancelAt: 10,
           ),
-        ),
-        ['cancel', 'outcome: Cancelled(manual)'],
-      );
-    });
+          ['outcome: Cancelled(handler: gave up)'],
+        );
+        expect(
+          quotable(
+            play(
+              () => Job<void>(observer: Answerer(), (ctx) async {
+                ctx
+                    .run(
+                      Job.deferred<void>(
+                        (ctx) => ctx.abandonable(() => delay(50)),
+                      ),
+                    )
+                    .ignore();
+                unawaited(ctx.abandonable(() => delay(30)));
+              }),
+              cancelAt: 10,
+            ),
+          ),
+          ['cancel', 'outcome: Cancelled(manual)'],
+        );
+      },
+    );
 
     test('the page holds an unawaited abandonable to the zone in the body', () {
       const said = {
@@ -1305,83 +1266,81 @@ void main() {
     Job<void> branchNotThrown({
       JobObserver? observer,
       bool secondIgnored = false,
-    }) =>
-        Job<void>(
-          observer: observer,
-          (ctx) async {
-            final second = Job.deferred<int>(cancellable: false, (ctx) async {
-              await ctx.abandonable(() => delay(20));
-              throw StateError('second');
-            });
-            if (secondIgnored) {
-              second.ignoreFailure();
-            }
-            try {
-              await ctx.runAll([
-                Job.deferred<int>((ctx) async {
-                  await ctx.abandonable(() => delay(10));
-                  throw StateError('first');
-                }),
-                second,
-              ]);
-            } on Object catch (_) {
-              // The group throws the first one, and only that one.
-            }
-          },
-        );
+    }) => Job<void>(observer: observer, (ctx) async {
+      final second = Job.deferred<int>(cancellable: false, (ctx) async {
+        await ctx.abandonable(() => delay(20));
+        throw StateError('second');
+      });
+      if (secondIgnored) {
+        second.ignoreFailure();
+      }
+      try {
+        await ctx.runAll([
+          Job.deferred<int>((ctx) async {
+            await ctx.abandonable(() => delay(10));
+            throw StateError('first');
+          }),
+          second,
+        ]);
+      } on Object catch (_) {
+        // The group throws the first one, and only that one.
+      }
+    });
 
-    test('a branch failure the group did not throw: onError, then the zone',
-        () {
-      expect(
-        play(() => branchNotThrown(observer: Reporter())),
-        [
+    test(
+      'a branch failure the group did not throw: onError, then the zone',
+      () {
+        expect(play(() => branchNotThrown(observer: Reporter())), [
           'onError: Bad state: first',
           'onError: Bad state: second',
           'zone: Bad state: second',
           'outcome: Done(null)',
-        ],
-      );
-      expect(
-        play(branchNotThrown),
-        ['zone: Bad state: second', 'outcome: Done(null)'],
-      );
-    });
-
-    test('ignoreFailure closes the second way for a failure no outcome carries',
-        () {
-      expect(
-        quotable(
-          play(
-            () => failingBeforeCancel(observer: Answerer(passedOn: true))
-              ..ignoreFailure(),
-            cancelAt: 20,
-            outcomeObserved: false,
-          ),
-        ),
-        ['onError: Bad state: disk full', 'cancel'],
-      );
-      expect(
-        play(
-          () => branchNotThrown(
-            observer: Answerer(passedOn: true),
-            secondIgnored: true,
-          ),
-        ),
-        [
-          'onError: Bad state: first',
-          'onError: Bad state: second',
+        ]);
+        expect(play(branchNotThrown), [
+          'zone: Bad state: second',
           'outcome: Done(null)',
-        ],
-      );
-    });
+        ]);
+      },
+    );
+
+    test(
+      'ignoreFailure closes the second way for a failure no outcome carries',
+      () {
+        expect(
+          quotable(
+            play(
+              () =>
+                  failingBeforeCancel(observer: Answerer(passedOn: true))
+                    ..ignoreFailure(),
+              cancelAt: 20,
+              outcomeObserved: false,
+            ),
+          ),
+          ['onError: Bad state: disk full', 'cancel'],
+        );
+        expect(
+          play(
+            () => branchNotThrown(
+              observer: Answerer(passedOn: true),
+              secondIgnored: true,
+            ),
+          ),
+          [
+            'onError: Bad state: first',
+            'onError: Bad state: second',
+            'outcome: Done(null)',
+          ],
+        );
+      },
+    );
 
     // The line the pages quote after [lead], in each version.
     void quotes(Map<String, String> lead, String line) {
       for (final version in versions.keys) {
         expect(
-          RegExp('${lead[version]}`([^`]+)`')
-              .firstMatch(readAll(version))!
-              .group(1),
+          RegExp(
+            '${lead[version]}`([^`]+)`',
+          ).firstMatch(readAll(version))!.group(1),
           line,
           reason: version,
         );
@@ -1420,23 +1379,16 @@ void main() {
         'Job() finished: Cancelled(manual)',
         'Job() kept a cancellation error out of the answer: DatabaseStopped',
       ]);
-      quotes(
-        {
-          'original': r'give\s+way\s+to\s+one:\s+',
-          'translation': r'канал\s+печатает\s+одну:\s+',
-        },
-        lines.last,
-      );
+      quotes({
+        'original': r'give\s+way\s+to\s+one:\s+',
+        'translation': r'канал\s+печатает\s+одну:\s+',
+      }, lines.last);
     });
 
     test('it prints what the observer hears, whether there is one or not', () {
       expect(
         debugged(
-          () => play(
-            first.migrating,
-            cancelAt: 10,
-            outcomeObserved: false,
-          ),
+          () => play(first.migrating, cancelAt: 10, outcomeObserved: false),
         ).where((line) => line.contains(' error: ')),
         ['Job() error: DatabaseStopped'],
       );
@@ -1453,38 +1405,40 @@ void main() {
       );
     });
 
-    test('a ParallelWaitError takes one line, and onError hears each failure',
-        () {
-      final lines = debugged(
-        () => play(
-          () => Job<void>(observer: Reporter(), (ctx) async {
-            await [
-              ctx.join<void>(() async {
-                await delay(20);
-                throw StateError('a');
-              }),
-              ctx.join<void>(() async {
-                await delay(30);
-                throw StateError('b');
-              }),
-            ].wait;
-          }),
-          cancelAt: 10,
-          outcomeObserved: false,
-        ),
-      );
+    test(
+      'a ParallelWaitError takes one line, and onError hears each failure',
+      () {
+        final lines = debugged(
+          () => play(
+            () => Job<void>(observer: Reporter(), (ctx) async {
+              await [
+                ctx.join<void>(() async {
+                  await delay(20);
+                  throw StateError('a');
+                }),
+                ctx.join<void>(() async {
+                  await delay(30);
+                  throw StateError('b');
+                }),
+              ].wait;
+            }),
+            cancelAt: 10,
+            outcomeObserved: false,
+          ),
+        );
 
-      expect(
-        lines.where(
-          (line) => line.contains(' error: ') || line.startsWith('onError:'),
-        ),
-        [
-          startsWith('Job() error: ParallelWaitError'),
-          'onError: Bad state: a',
-          'onError: Bad state: b',
-        ],
-      );
-    });
+        expect(
+          lines.where(
+            (line) => line.contains(' error: ') || line.startsWith('onError:'),
+          ),
+          [
+            startsWith('Job() error: ParallelWaitError'),
+            'onError: Bad state: a',
+            'onError: Bad state: b',
+          ],
+        );
+      },
+    );
 
     test('and says so when an error goes on to the zone', () {
       // The second row of the table, then the first: each line of the zone
@@ -1502,10 +1456,10 @@ void main() {
 
   group('Work the job does not wait for', () {
     test('without an observer the work goes straight to the zone', () {
-      expect(
-        play(() => sendingHandedOver(null)),
-        ['outcome: Done(null)', 'zone: Bad state: analytics offline'],
-      );
+      expect(play(() => sendingHandedOver(null)), [
+        'outcome: Done(null)',
+        'zone: Bad state: analytics offline',
+      ]);
     });
 
     test('the job neither waits for the work nor cancels it', () {
@@ -1617,40 +1571,29 @@ void main() {
           Job<void>(observer: observer, (ctx) async {
             ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
           });
-      expect(
-        play(leaving),
-        [
-          'outcome: Done(null)',
-          'zone: DatabaseException',
-          'zone: Bad state: analytics offline',
-        ],
-        reason: 'without an observer the zone hears them one at a time too',
-      );
-      expect(
-        play(() => leaving(observer: Reporter())),
-        [
-          'outcome: Done(null)',
-          'onError: DatabaseException',
-          'onError: Bad state: analytics offline',
-          'zone: DatabaseException',
-          'zone: Bad state: analytics offline',
-        ],
-        reason: 'onError hears them one at a time as well',
-      );
+      expect(play(leaving), [
+        'outcome: Done(null)',
+        'zone: DatabaseException',
+        'zone: Bad state: analytics offline',
+      ], reason: 'without an observer the zone hears them one at a time too');
+      expect(play(() => leaving(observer: Reporter())), [
+        'outcome: Done(null)',
+        'onError: DatabaseException',
+        'onError: Bad state: analytics offline',
+        'zone: DatabaseException',
+        'zone: Bad state: analytics offline',
+      ], reason: 'onError hears them one at a time as well');
     });
 
     test('the outcome keeps the envelope, and Job.visitErrors walks it', () {
       late Job<void> job;
-      final printed = play(
-        () {
-          job = Job<void>(observer: Reporter(), (ctx) async {
-            await [saveDraft(), sendAnalytics()].wait;
-          });
-          unawaited(readingTheOutcome(job));
-          return job;
-        },
-        outcomeObserved: false,
-      );
+      final printed = play(() {
+        job = Job<void>(observer: Reporter(), (ctx) async {
+          await [saveDraft(), sendAnalytics()].wait;
+        });
+        unawaited(readingTheOutcome(job));
+        return job;
+      }, outcomeObserved: false);
 
       expect(printed, [
         'onError: DatabaseException',
@@ -1692,67 +1635,65 @@ void main() {
             ctx.unattended(work);
           });
 
-      expect(
-        play(() => leaving(saveDraft)),
-        ['outcome: Done(null)', 'onUnanswered: DatabaseException'],
-      );
-      expect(
-        play(() => leaving(sendAnalytics)),
-        ['outcome: Done(null)', 'zone: Bad state: analytics offline'],
-      );
-      expect(
-        play(() => leaving(() async => throw const Cancelled('alone'))),
-        ['outcome: Done(null)'],
-        reason: 'nobody is asked about a Cancelled that comes alone',
-      );
+      expect(play(() => leaving(saveDraft)), [
+        'outcome: Done(null)',
+        'onUnanswered: DatabaseException',
+      ]);
+      expect(play(() => leaving(sendAnalytics)), [
+        'outcome: Done(null)',
+        'zone: Bad state: analytics offline',
+      ]);
+      expect(play(() => leaving(() async => throw const Cancelled('alone'))), [
+        'outcome: Done(null)',
+      ], reason: 'nobody is asked about a Cancelled that comes alone');
     });
 
-    test('the override answers for a child of a child, the zone for the app',
-        () {
-      // The observer is the root's; the child and the child's child
-      // inherit it.
-      Job<void> tree(JobObserver observer) => Job<void>(
-            observer: observer,
-            (ctx) => ctx.run(
-              Job.deferred<void>(
-                (ctx) => ctx.run(
-                  Job.deferred<void>((ctx) async {
-                    ctx
-                        .run(
-                          Job.deferred<void>(
-                            (ctx) => ctx.abandonable(() => delay(50)),
-                          ),
-                        )
-                        .ignore();
-                    await delay(10);
-                    throw StateError('disk full');
-                  }),
-                ),
+    test(
+      'the override answers for a child of a child, the zone for the app',
+      () {
+        // The observer is the root's; the child and the child's child
+        // inherit it.
+        Job<void> tree(JobObserver observer) => Job<void>(
+          observer: observer,
+          (ctx) => ctx.run(
+            Job.deferred<void>(
+              (ctx) => ctx.run(
+                Job.deferred<void>((ctx) async {
+                  ctx
+                      .run(
+                        Job.deferred<void>(
+                          (ctx) => ctx.abandonable(() => delay(50)),
+                        ),
+                      )
+                      .ignore();
+                  await delay(10);
+                  throw StateError('disk full');
+                }),
               ),
             ),
-          );
+          ),
+        );
 
-      expect(quotable(play(() => tree(Answering()), cancelAt: 20)), [
-        'cancel',
-        'onUnanswered: Bad state: disk full',
-        'outcome: Cancelled(manual)',
-      ]);
-      expect(quotable(play(() => tree(Reporter()), cancelAt: 20)), [
-        'onError: Bad state: disk full',
-        'cancel',
-        'zone: Bad state: disk full',
-        'outcome: Cancelled(manual)',
-      ]);
-    });
+        expect(quotable(play(() => tree(Answering()), cancelAt: 20)), [
+          'cancel',
+          'onUnanswered: Bad state: disk full',
+          'outcome: Cancelled(manual)',
+        ]);
+        expect(quotable(play(() => tree(Reporter()), cancelAt: 20)), [
+          'onError: Bad state: disk full',
+          'cancel',
+          'zone: Bad state: disk full',
+          'outcome: Cancelled(manual)',
+        ]);
+      },
+    );
   });
 
   group('Several observers', () {
-    Job<void> sending(JobObserver observer) => Job<void>(
-          observer: observer,
-          (ctx) async {
-            ctx.unattended(() => analytics.send('loaded'));
-          },
-        );
+    Job<void> sending(JobObserver observer) =>
+        Job<void>(observer: observer, (ctx) async {
+          ctx.unattended(() => analytics.send('loaded'));
+        });
 
     test('a call that throws switches off the next, unless it is wrapped', () {
       expect(play(() => sending(HandedOn(Throwing(), Reporter()))), [
@@ -1762,9 +1703,7 @@ void main() {
       ]);
       expect(
         play(
-          () => sending(
-            JobObserver.all([Throwing(), Reporter(), Crashes()]),
-          ),
+          () => sending(JobObserver.all([Throwing(), Reporter(), Crashes()])),
         ),
         [
           'outcome: Done(null)',
@@ -1776,15 +1715,12 @@ void main() {
     });
 
     test('with nobody answering, the zone, as for one that does not', () {
-      expect(
-        play(() => sending(JobObserver.all([Reporter(), Reporter()]))),
-        [
-          'outcome: Done(null)',
-          'onError: Bad state: analytics offline',
-          'onError: Bad state: analytics offline',
-          'zone: Bad state: analytics offline',
-        ],
-      );
+      expect(play(() => sending(JobObserver.all([Reporter(), Reporter()]))), [
+        'outcome: Done(null)',
+        'onError: Bad state: analytics offline',
+        'onError: Bad state: analytics offline',
+        'zone: Bad state: analytics offline',
+      ]);
     });
 
     test('two that answer, or one twice, and it throws', () {
@@ -1793,10 +1729,7 @@ void main() {
         () => JobObserver.all([Crashes(), Crashes()]),
         throwsArgumentError,
       );
-      expect(
-        () => JobObserver.all([reporter, reporter]),
-        throwsArgumentError,
-      );
+      expect(() => JobObserver.all([reporter, reporter]), throwsArgumentError);
     });
 
     test('inside the list of another, it answers when one inside it does', () {
@@ -1845,14 +1778,12 @@ void main() {
                 ),
               );
             });
-            final cancelled = Job<void>(
-              observer: Reports(),
-              key: 'cancelled',
-              (ctx) async {
-                await Future<void>.delayed(const Duration(milliseconds: 10));
-                throw StateError('four');
-              },
-            );
+            final cancelled = Job<void>(observer: Reports(), key: 'cancelled', (
+              ctx,
+            ) async {
+              await Future<void>.delayed(const Duration(milliseconds: 10));
+              throw StateError('four');
+            });
             Timer(const Duration(milliseconds: 1), cancelled.cancel);
             Job<void>(observer: Reports(), key: 'cleanup', (ctx) async {
               ctx.onDispose(() => throw StateError('five'));
@@ -1911,8 +1842,7 @@ final class _Heard extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add((job, error));
+  }) => heard.add((job, error));
 }
 
 /// The counter of failures of `observing.md`: by identity, in an [Expando].

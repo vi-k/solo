@@ -229,9 +229,9 @@ void showText(String text) => stage.trace.add('shown $text');
 
 /// What a branch throws to cancel itself.
 Cancelled selfCancel() => Cancelled.by(
-      reason: const ManualCancelReason(),
-      stackTrace: StackTrace.current,
-    );
+  reason: const ManualCancelReason(),
+  stackTrace: StackTrace.current,
+);
 
 /// The stop signal of the database client, the kind `onCancel` is for.
 final class CancelToken {

@@ -20,10 +20,8 @@ const hour = Duration(hours: 1);
 
 /// Made in a frame of its own, so the trace of the deadline can be told to
 /// lead here.
-Job<void> jobWithADeadline() => Job<void>(
-      timeout: ms(10),
-      (ctx) => ctx.abandonable(() => delay(50)),
-    );
+Job<void> jobWithADeadline() =>
+    Job<void>(timeout: ms(10), (ctx) => ctx.abandonable(() => delay(50)));
 
 /// An engine, with the protected surface the tests need.
 final class Engine<T> extends JobBase<T> implements ChildJob<T> {
@@ -67,12 +65,12 @@ final class Engine<T> extends JobBase<T> implements ChildJob<T> {
   /// A cancellation the job cannot refuse, the way the rules of a domain
   /// make one.
   void cancelHard() => cancelWith(
-        Cancelled.by(
-          reason: const ManualCancelReason(),
-          stackTrace: StackTrace.current,
-        ),
-        rejectable: false,
-      );
+    Cancelled.by(
+      reason: const ManualCancelReason(),
+      stackTrace: StackTrace.current,
+    ),
+    rejectable: false,
+  );
 
   Cancelled? get held => heldCancel;
 
@@ -215,8 +213,7 @@ void main() {
         final job = Job<void>(timeout: hour, (ctx) async {
           await ctx.abandonable(() => gate.future);
           throw StateError('boom');
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.flushMicrotasks();
         expect(async.pendingTimers, hasLength(1));
         gate.complete();
@@ -295,16 +292,13 @@ void main() {
   test('a failed job with a deadline reaches the zone as one without', () {
     final caught = <Object>[];
     int? timersLeft;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>(timeout: hour, (ctx) async => throw StateError('boom'));
-          async.flushMicrotasks();
-          timersLeft = async.pendingTimers.length;
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>(timeout: hour, (ctx) async => throw StateError('boom'));
+        async.flushMicrotasks();
+        timersLeft = async.pendingTimers.length;
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught.map((error) => '$error').toList(), ['Bad state: boom']);
     expect(timersLeft, 0);
   });
@@ -312,31 +306,26 @@ void main() {
   test('a failed body whose child outlives the deadline', () {
     final caught = <Object>[];
     Outcome<void>? outcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(timeout: ms(10), (ctx) async {
-            ctx
-                .run(
-                  Job.deferred<void>(
-                    (child) => child.abandonable(() => delay(50)),
-                  ),
-                )
-                .ignore();
-            throw StateError('body');
-          });
-          async.flushTimers();
-          outcome = job.outcome;
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(timeout: ms(10), (ctx) async {
+          ctx
+              .run(
+                Job.deferred<void>(
+                  (child) => child.abandonable(() => delay(50)),
+                ),
+              )
+              .ignore();
+          throw StateError('body');
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.flushTimers();
+        outcome = job.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect('$outcome', 'Cancelled(timeout)');
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Bad state: body'],
-      reason: 'the cancellation covered the failure, which goes to the zone',
-    );
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: body',
+    ], reason: 'the cancellation covered the failure, which goes to the zone');
   });
 
   test('a deferred job started after more than its deadline', () {
@@ -468,8 +457,7 @@ void main() {
         unawaited(ctx.uncancellable(() => delay(50)));
         await ctx.join(() => delay(20));
         return 1;
-      })
-        ..launch();
+      })..launch();
       async.elapse(ms(15));
       expect(job.held?.reason, isA<TimeoutCancelReason>());
       async.elapse(ms(300));
@@ -572,11 +560,7 @@ void main() {
     test('a deadline with cancellable: false', () {
       fakeAsync((async) {
         expect(
-          () => Job<void>(
-            cancellable: false,
-            timeout: ms(10),
-            (ctx) async {},
-          ),
+          () => Job<void>(cancellable: false, timeout: ms(10), (ctx) async {}),
           throwsA(timeoutError('cancellable: false')),
         );
         expect(
@@ -596,21 +580,18 @@ void main() {
     final errors = <Object>[];
     final caught = <Object>[];
     Outcome<void>? outcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Engine<void>(
-            timeout: ms(10),
-            observer: ErrorObserver.answering(errors),
-            throwOnTimeout: true,
-            (ctx) => ctx.abandonable(() => delay(50)),
-          )..launch();
-          async.flushTimers();
-          outcome = job.outcome;
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Engine<void>(
+          timeout: ms(10),
+          observer: ErrorObserver.answering(errors),
+          throwOnTimeout: true,
+          (ctx) => ctx.abandonable(() => delay(50)),
+        )..launch();
+        async.flushTimers();
+        outcome = job.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect('$outcome', 'Cancelled(timeout)');
     expect(errors.map((error) => '$error').toList(), ['Bad state: engine']);
     expect(caught, isEmpty);
@@ -662,20 +643,16 @@ void main() {
   test('whenCancelled, onCancel and the observer hear the reason', () {
     fakeAsync((async) {
       final seen = <String>[];
-      Job<void>(
-        timeout: ms(10),
-        observer: FinishObserver(seen),
-        (ctx) async {
-          ctx.onCancel(() {
-            try {
-              ctx.check();
-            } on Cancelled catch (cancelled) {
-              seen.add('onCancel ${cancelled.reason.runtimeType}');
-            }
-          });
-          await ctx.abandonable(() => delay(50));
-        },
-      ).whenCancelled(
+      Job<void>(timeout: ms(10), observer: FinishObserver(seen), (ctx) async {
+        ctx.onCancel(() {
+          try {
+            ctx.check();
+          } on Cancelled catch (cancelled) {
+            seen.add('onCancel ${cancelled.reason.runtimeType}');
+          }
+        });
+        await ctx.abandonable(() => delay(50));
+      }).whenCancelled(
         (cancelled) =>
             seen.add('whenCancelled ${cancelled.reason.runtimeType}'),
       );
@@ -701,8 +678,7 @@ void main() {
             body = Zone.current;
             ctx.onCancel(() => cancel = Zone.current);
             await ctx.abandonable(() => delay(50));
-          })
-            ..start();
+          })..start();
         });
       });
       async.flushTimers();
@@ -742,8 +718,7 @@ void main() {
           unawaited(ctx.uncancellable(() => delay(50)));
           await ctx.join(() => delay(20));
           return 1;
-        })
-          ..launch();
+        })..launch();
         async.elapse(ms(15));
         job.cancel().ignore();
         expect(job.held?.reason, isA<TimeoutCancelReason>());
@@ -766,8 +741,7 @@ void main() {
           unawaited(ctx.uncancellable(() => delay(50)));
           await ctx.join(() => delay(20));
           return 1;
-        })
-          ..launch();
+        })..launch();
         async.elapse(ms(15));
         job.cancel(reason: foreign).ignore();
         async.elapse(ms(10));
@@ -788,8 +762,7 @@ void main() {
         final job = Engine<int>(timeout: ms(10), (ctx) async {
           await ctx.uncancellable(() => section.future);
           return 1;
-        })
-          ..launch();
+        })..launch();
         async.elapse(ms(10));
         final reason = cancelHeavily(job);
         job.drop(const Done(0));
@@ -806,8 +779,7 @@ void main() {
         final job = Engine<int>(timeout: ms(10), (ctx) async {
           await ctx.uncancellable(() => section.future);
           return 1;
-        })
-          ..launch();
+        })..launch();
         async.elapse(ms(10));
         final reason = cancelHeavily(job);
         job.cancelHard();
@@ -827,8 +799,7 @@ void main() {
           await ctx.uncancellable(() => section.future);
           await after.future;
           return 1;
-        })
-          ..launch();
+        })..launch();
         async.elapse(ms(10));
         final reason = cancelHeavily(job);
         section.complete();
@@ -842,8 +813,7 @@ void main() {
       });
     });
 
-    test(
-        'when the section lets the deadline go to an engine that turns it '
+    test('when the section lets the deadline go to an engine that turns it '
         'down', () {
       fakeAsync((async) {
         final section = Completer<void>();
@@ -854,8 +824,7 @@ void main() {
           await ctx.uncancellable(() => section.future);
           await after.future;
           return 1;
-        })
-          ..launch();
+        })..launch();
         async.elapse(ms(10));
         final reason = cancelHeavily(job);
         section.complete();
@@ -879,8 +848,7 @@ void main() {
           unawaited(ctx.uncancellable(() => section.future));
           await body.future;
           throw const Cancelled('gave up');
-        })
-          ..launch();
+        })..launch();
         async.elapse(ms(10));
         final reason = cancelHeavily(job);
         body.complete();

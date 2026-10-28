@@ -75,12 +75,11 @@ void main() {
   test('a stream with no events at all still holds the parent', () {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();
-      final parent = solo.enqueue<NotDisposed, void>(
-        key: 'parent',
-        (ctx) async {
-          ctx.each(source.stream, (child, event) {});
-        },
-      );
+      final parent = solo.enqueue<NotDisposed, void>(key: 'parent', (
+        ctx,
+      ) async {
+        ctx.each(source.stream, (child, event) {});
+      });
       async.elapse(const Duration(seconds: 10));
       expect(
         parent.isFinished,
@@ -160,12 +159,11 @@ void main() {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();
       late Job<void> listening;
-      final parent = solo.enqueue<TestState, void>(
-        cancellable: false,
-        (ctx) async {
-          listening = ctx.each(source.stream, (child, event) {});
-        },
-      );
+      final parent = solo.enqueue<TestState, void>(cancellable: false, (
+        ctx,
+      ) async {
+        listening = ctx.each(source.stream, (child, event) {});
+      });
       async.flushMicrotasks();
       parent.cancel().ignore();
       async.flushMicrotasks();
@@ -179,27 +177,30 @@ void main() {
     });
   });
 
-  test('a core-typed context still creates a child owned by the controller',
-      () {
-    runSolo((solo, journal, async) {
-      final source = StreamController<int>();
-      final parent = solo.enqueue<NotDisposed, void>((ctx) async {
-        final JobContext core = ctx;
-        await core.each(source.stream, (child, event) {
-          expect(child, isA<SoloContext<TestState, NotDisposed>>());
-          (child as SoloContext<TestState, NotDisposed>)
-              .emit(Preparing(progress: event));
-        }).value;
+  test(
+    'a core-typed context still creates a child owned by the controller',
+    () {
+      runSolo((solo, journal, async) {
+        final source = StreamController<int>();
+        final parent = solo.enqueue<NotDisposed, void>((ctx) async {
+          final JobContext core = ctx;
+          await core.each(source.stream, (child, event) {
+            expect(child, isA<SoloContext<TestState, NotDisposed>>());
+            (child as SoloContext<TestState, NotDisposed>).emit(
+              Preparing(progress: event),
+            );
+          }).value;
+        });
+        async.flushMicrotasks();
+        source.add(4);
+        async.flushMicrotasks();
+        expect(solo.currentState, const Preparing(progress: 4));
+        source.close().ignore();
+        async.flushMicrotasks();
+        expect(parent.outcome, isA<Done<void>>());
       });
-      async.flushMicrotasks();
-      source.add(4);
-      async.flushMicrotasks();
-      expect(solo.currentState, const Preparing(progress: 4));
-      source.close().ignore();
-      async.flushMicrotasks();
-      expect(parent.outcome, isA<Done<void>>());
-    });
-  });
+    },
+  );
 
   test('close waits for the active handler before releasing resources', () {
     runSolo((solo, journal, async) {
@@ -224,10 +225,12 @@ void main() {
       expect(log, ['handler starts']);
       active.complete();
       async.flushMicrotasks();
-      expect(
-        log,
-        ['handler starts', 'handler ends', 'dispose', 'close returns'],
-      );
+      expect(log, [
+        'handler starts',
+        'handler ends',
+        'dispose',
+        'close returns',
+      ]);
       source.close().ignore();
     });
   });

@@ -27,15 +27,11 @@ void main() {
     fakeAsync((async) {
       final journal = JobJournal();
       int? value;
-      final parent = Job<void>(
-        key: 'parent',
-        observer: journal,
-        (ctx) async {
-          value = await ctx.run(
-            ctx.child(step(10, 7), key: 'rows', describe: () => 'load'),
-          );
-        },
-      );
+      final parent = Job<void>(key: 'parent', observer: journal, (ctx) async {
+        value = await ctx.run(
+          ctx.child(step(10, 7), key: 'rows', describe: () => 'load'),
+        );
+      });
       async.flushTimers();
       expect(value, 7);
       expect(parent.outcome, isA<Done<void>>());
@@ -155,10 +151,9 @@ void main() {
 
   group('child makes a child wherever run refuses one', () {
     void expectRefused(Object? error, String message) => expect(
-          error,
-          isA<StateError>()
-              .having((e) => e.message, 'message', contains(message)),
-        );
+      error,
+      isA<StateError>().having((e) => e.message, 'message', contains(message)),
+    );
 
     test('in unattended work', () {
       fakeAsync((async) {
@@ -294,13 +289,9 @@ void main() {
         async.flushMicrotasks();
         maker.take();
         int? value;
-        final other = Job<void>(
-          key: 'runner',
-          observer: runner,
-          (ctx) async {
-            value = await ctx.run(child);
-          },
-        );
+        final other = Job<void>(key: 'runner', observer: runner, (ctx) async {
+          value = await ctx.run(child);
+        });
         async.flushTimers();
         expect(value, 5);
         expect(other.outcome, isA<Done<void>>());
@@ -354,23 +345,15 @@ void main() {
       async.elapse(ms(10));
       expect(child.isRunning, isTrue, reason: 'the section holds the cascade');
       async.flushTimers();
-      expect(
-        (child.outcome! as Cancelled).reason,
-        isA<TimeoutCancelReason>(),
-      );
-      expect(
-        (parent.outcome! as Cancelled).reason,
-        isA<ManualCancelReason>(),
-      );
+      expect((child.outcome! as Cancelled).reason, isA<TimeoutCancelReason>());
+      expect((parent.outcome! as Cancelled).reason, isA<ManualCancelReason>());
     });
   });
 
-  test(
-    'a child dropped in the body of an engine is a warning',
-    () async {
-      // The context of an engine's body is typed with its own class, and an
-      // override does not inherit `@useResult`: `JobContextBase` keeps it.
-      final warnings = await compileWarnings('''
+  test('a child dropped in the body of an engine is a warning', () async {
+    // The context of an engine's body is typed with its own class, and an
+    // override does not inherit `@useResult`: `JobContextBase` keeps it.
+    final warnings = await compileWarnings('''
 import 'package:async_job/engine.dart';
 
 final class MyContext extends JobContextBase {
@@ -381,8 +364,6 @@ void ofEngine(MyContext ctx) {
   ctx.child<void>((ctx) async {});
 }
 ''');
-      expect(warnings, [startsWith('unused_result:')]);
-    },
-    timeout: const Timeout(Duration(minutes: 1)),
-  );
+    expect(warnings, [startsWith('unused_result:')]);
+  }, timeout: const Timeout(Duration(minutes: 1)));
 }

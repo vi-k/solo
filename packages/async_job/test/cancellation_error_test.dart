@@ -39,8 +39,7 @@ final class Heard extends JobObserver with JobAnswerer {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('onError: $error');
+  }) => seen.add('onError: $error');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
@@ -61,8 +60,7 @@ final class Listening extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('onError: $error');
+  }) => seen.add('onError: $error');
 }
 
 /// What the filter was asked about, in order.
@@ -90,12 +88,12 @@ List<String> zoneOf(void Function(FakeAsync async) body) {
 /// A job whose operation throws [error] 20 ms in, the way an operation
 /// stopping at a token of the job does.
 Job<void> stopping(Object error, {JobObserver? observer}) => Job<void>(
-      observer: observer,
-      (ctx) => ctx.join(() async {
-        await delay(20);
-        Error.throwWithStackTrace(error, StackTrace.current);
-      }),
-    );
+  observer: observer,
+  (ctx) => ctx.join(() async {
+    await delay(20);
+    Error.throwWithStackTrace(error, StackTrace.current);
+  }),
+);
 
 /// Makes the job with [make], cancels it 10 ms in unless [cancel] is
 /// false, and returns what reached the zone.
@@ -226,8 +224,7 @@ void main() {
             throw const Stopped();
           });
           await ctx.abandonable(() => delay(100));
-        })
-          ..launch();
+        })..launch();
         async.elapse(const Duration(milliseconds: 10));
         job.drop(const Cancelled('engine'));
         async.flushTimers();
@@ -333,8 +330,9 @@ void main() {
       nameTheStop();
       final heard = Heard();
       final zone = run(
-        () => stopping(StateError('database locked'), observer: heard)
-          ..ignoreFailure(),
+        () =>
+            stopping(StateError('database locked'), observer: heard)
+              ..ignoreFailure(),
       );
       expect(asked, isEmpty);
       expect(heard.seen, ['onError: Bad state: database locked']);
@@ -352,8 +350,7 @@ void main() {
               }),
             ),
           );
-        })
-          ..ignoreFailure(),
+        })..ignoreFailure(),
       );
       expect(zone, ['Bad state: database locked']);
     });
@@ -389,8 +386,7 @@ void main() {
       expect(asked, ['Stopped']);
     });
 
-    test(
-        'one that throws hands its error to the zone the job was created '
+    test('one that throws hands its error to the zone the job was created '
         'in, and the failure goes on', () {
       Job.isCancellationError = (error) => throw StateError('filter failed');
       final heard = Heard();
@@ -399,8 +395,7 @@ void main() {
       expect(heard.seen, ['onError: Stopped', 'onUnanswered: Stopped']);
     });
 
-    test(
-        'asked from unattended work, its error still goes to the zone the '
+    test('asked from unattended work, its error still goes to the zone the '
         'job was created in', () {
       Job.isCancellationError = (error) => throw StateError('filter failed');
       final heard = Heard(answers: true);
@@ -453,10 +448,9 @@ void main() {
     test('says once that nobody answered for what is left', () {
       nameTheStop();
       final lines = printed(StateError('database locked'));
-      expect(
-        lines.where((line) => line.contains('nobody answered for')),
-        ['Job() error nobody answered for: Bad state: database locked'],
-      );
+      expect(lines.where((line) => line.contains('nobody answered for')), [
+        'Job() error nobody answered for: Bad state: database locked',
+      ]);
       expect(
         lines.where((line) => line.contains('kept a cancellation error')),
         isEmpty,

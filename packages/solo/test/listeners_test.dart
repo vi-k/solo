@@ -15,7 +15,7 @@ void main() {
         ..add(() {
           log.add('third');
         })
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['first', 'second', 'third']);
     });
 
@@ -26,7 +26,7 @@ void main() {
       Listeners()
         ..add(callback)
         ..add(callback)
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(count, 2);
     });
 
@@ -54,11 +54,11 @@ void main() {
         ..add(f)
         ..add(g)
         ..add(f)
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['A', 'G', 'F']);
 
       log.clear();
-      listeners.notify((_, __) {});
+      listeners.notify((_, _) {});
       expect(log, ['A', 'G', 'F', 'F']);
     });
 
@@ -79,7 +79,7 @@ void main() {
         ..add(() {
           log.add('third');
         })
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['first', 'third']);
     });
 
@@ -98,11 +98,11 @@ void main() {
             listeners.add(second);
           }
         })
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['first']);
 
       log.clear();
-      listeners.notify((_, __) {});
+      listeners.notify((_, _) {});
       expect(log, ['first', 'second']);
     });
 
@@ -124,11 +124,11 @@ void main() {
           }
         })
         ..add(b)
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['A']);
 
       log.clear();
-      listeners.notify((_, __) {});
+      listeners.notify((_, _) {});
       expect(log, ['A', 'B']);
     });
 
@@ -141,7 +141,7 @@ void main() {
         log.add('A:$depth');
         if (depth == 0) {
           depth++;
-          listeners.notify((_, __) {});
+          listeners.notify((_, _) {});
           depth--;
         }
       }
@@ -153,7 +153,7 @@ void main() {
         ..add(a)
         ..add(b)
         ..add(c)
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['A:0', 'A:1', 'B:1', 'C:1', 'B:0', 'C:0']);
     });
 
@@ -168,7 +168,7 @@ void main() {
         if (depth == 0) {
           listeners.remove(b);
           depth++;
-          listeners.notify((_, __) {});
+          listeners.notify((_, _) {});
           depth--;
         }
       }
@@ -180,7 +180,7 @@ void main() {
         ..add(a)
         ..add(b)
         ..add(c)
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['A:0', 'A:1', 'C:1', 'C:0']);
     });
 
@@ -195,7 +195,7 @@ void main() {
         if (depth == 0) {
           listeners.add(c);
           depth++;
-          listeners.notify((_, __) {});
+          listeners.notify((_, _) {});
           depth--;
         }
       }
@@ -205,7 +205,7 @@ void main() {
       listeners
         ..add(a)
         ..add(b)
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['A:0', 'A:1', 'B:1', 'C:1', 'B:0']);
     });
 
@@ -220,7 +220,7 @@ void main() {
         if (depth == 0) {
           listeners.remove(f);
           depth++;
-          listeners.notify((_, __) {});
+          listeners.notify((_, _) {});
           depth--;
         }
       }
@@ -233,7 +233,7 @@ void main() {
         ..add(g)
         ..add(f)
         ..add(f)
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['A:0', 'A:1', 'G:1', 'F:1', 'G:0', 'F:0']);
     });
 
@@ -250,7 +250,7 @@ void main() {
           manipulated = true;
           listeners.remove(b);
           depth++;
-          listeners.notify((_, __) {});
+          listeners.notify((_, _) {});
           depth--;
         } else if (depth == 1) {
           listeners.add(b);
@@ -262,11 +262,11 @@ void main() {
       listeners
         ..add(a)
         ..add(b)
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['A:0', 'A:1']);
 
       log.clear();
-      listeners.notify((_, __) {});
+      listeners.notify((_, _) {});
       expect(log, ['A:0', 'B:0']);
     });
 
@@ -313,7 +313,7 @@ void main() {
         ..add(() {
           log.add('second');
         })
-        ..notify((_, __) {});
+        ..notify((_, _) {});
       expect(log, ['first']);
       expect(listeners.isEmpty, isTrue);
     });
@@ -329,7 +329,7 @@ void main() {
 
       final listeners = Listeners()..add(counter.tick);
       expect(listeners.remove(counter.tick), isTrue);
-      listeners.notify((_, __) {});
+      listeners.notify((_, _) {});
       expect(counter.calls, 0);
       expect(listeners.isEmpty, isTrue);
     });

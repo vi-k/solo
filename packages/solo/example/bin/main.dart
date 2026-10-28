@@ -37,8 +37,9 @@ final class _PrintObserver extends SoloObserver {
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) {
     final outcome = job.outcome;
-    final verb =
-        outcome is Cancelled && !outcome.started ? 'dropped' : 'finished';
+    final verb = outcome is Cancelled && !outcome.started
+        ? 'dropped'
+        : 'finished';
     print('${_label(job)} $verb $outcome');
   }
 
@@ -49,8 +50,7 @@ final class _PrintObserver extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      print('${_label(job)} error $error');
+  }) => print('${_label(job)} error $error');
 
   @override
   void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>

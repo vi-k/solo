@@ -143,12 +143,9 @@ with a `DatabaseException`, and `sendAnalytics` fails with a `StateError`.
 both failures:
 
 ```dart
-final job = Job<void>(
-  observer: DatabaseErrors(),
-  (ctx) async {
-    ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
-  },
-);
+final job = Job<void>(observer: DatabaseErrors(), (ctx) async {
+  ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
+});
 ```
 
 ```text
@@ -206,8 +203,8 @@ of its own in its place, such as `throw AppException(error)`, wraps each
 The filter names the wrapper by its cause:
 
 ```dart
-Job.isCancellationError =
-    (error) => error is AppException && error.cause is Cancelled;
+Job.isCancellationError = (error) =>
+    error is AppException && error.cause is Cancelled;
 ```
 
 The `catch` can call `ctx.check()` first instead, as in

@@ -14,16 +14,13 @@ final class LoaderRegisteringUnder extends Solo<AppState>
     with OpenSolo<AppState>, Desk {
   LoaderRegisteringUnder() : super(const Idle());
 
-  Job<void> load() => enqueue<Idle, void>(
-        key: 'load',
-        (ctx) async {
-          final db = await ctx.join(Database.open);
-          ctx.onDispose(db.close);
+  Job<void> load() => enqueue<Idle, void>(key: 'load', (ctx) async {
+    final db = await ctx.join(Database.open);
+    ctx.onDispose(db.close);
 
-          final rows = await ctx.join(db.readAll);
-          ctx.emit(Loaded(rows));
-        },
-      );
+    final rows = await ctx.join(db.readAll);
+    ctx.emit(Loaded(rows));
+  });
 }
 
 /// The first attempt of "Returning a resource to the caller": the result
@@ -32,17 +29,11 @@ final class OpenerDisposing extends Solo<AppState>
     with OpenSolo<AppState>, Desk {
   OpenerDisposing() : super(const Idle());
 
-  Job<Database> open() => enqueue<Idle, Database>(
-        key: 'open',
-        (ctx) async {
-          final db = await ctx.join(
-            Database.open,
-            dispose: (db) => db.close(),
-          );
-          await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
-          return db;
-        },
-      );
+  Job<Database> open() => enqueue<Idle, Database>(key: 'open', (ctx) async {
+    final db = await ctx.join(Database.open, dispose: (db) => db.close());
+    await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
+    return db;
+  });
 }
 
 /// The first attempt of "Handing a resource to the state": the write with
@@ -52,17 +43,11 @@ final class HandoverKeeping extends Solo<AppState>
   HandoverKeeping() : super(const Idle());
 
   /// Not on the page: the method around the statements.
-  Job<void> hand() => enqueue<Idle, void>(
-        key: 'hand',
-        (ctx) async {
-          final db = await ctx.join(
-            Database.open,
-            dispose: (db) => db.close(),
-          );
-          await ctx.uncancellable(db.migrate);
-          ctx.emit(Ready(db));
-        },
-      );
+  Job<void> hand() => enqueue<Idle, void>(key: 'hand', (ctx) async {
+    final db = await ctx.join(Database.open, dispose: (db) => db.close());
+    await ctx.uncancellable(db.migrate);
+    ctx.emit(Ready(db));
+  });
 }
 
 /// The second attempt of the same section: the registration dropped, and
@@ -73,19 +58,13 @@ final class HandoverDisowning extends Solo<AppState>
 
   /// Not on the page: the method and the call that opens the database,
   /// which the page shows in the first attempt.
-  Job<void> hand() => enqueue<Idle, void>(
-        key: 'hand',
-        (ctx) async {
-          final db = await ctx.join(
-            Database.open,
-            dispose: (db) => db.close(),
-          );
-          await ctx.uncancellable(db.migrate);
-          ctx
-            ..disown(db)
-            ..emit(Ready(db));
-        },
-      );
+  Job<void> hand() => enqueue<Idle, void>(key: 'hand', (ctx) async {
+    final db = await ctx.join(Database.open, dispose: (db) => db.close());
+    await ctx.uncancellable(db.migrate);
+    ctx
+      ..disown(db)
+      ..emit(Ready(db));
+  });
 }
 
 /// The first attempt of "When the release happens": the wait that lets go
@@ -94,11 +73,8 @@ final class TempAbandoner extends Solo<AppState> with OpenSolo<AppState>, Desk {
   TempAbandoner() : super(const Idle());
 
   /// Not on the page: the method around the statement.
-  Job<void> write() => enqueue<Idle, void>(
-        key: 'temp',
-        (ctx) async {
-          // Deleted whatever happens: dispose runs on every outcome.
-          await ctx.abandonable(openTemp, dispose: (file) => file.delete());
-        },
-      );
+  Job<void> write() => enqueue<Idle, void>(key: 'temp', (ctx) async {
+    // Deleted whatever happens: dispose runs on every outcome.
+    await ctx.abandonable(openTemp, dispose: (file) => file.delete());
+  });
 }

@@ -12,39 +12,39 @@ import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 SoloJob<void> droppable(TestSolo solo, int n) => solo.enqueue<Special, void>(
-      key: 'droppable',
-      describe: () => '$n',
-      policy: Policy.droppable,
-      (ctx) async {
-        await delay(100);
-        final count = ctx.state.droppableCount + 1;
-        ctx.emit(ctx.state.copyWith(droppableCount: count));
-      },
-    );
+  key: 'droppable',
+  describe: () => '$n',
+  policy: Policy.droppable,
+  (ctx) async {
+    await delay(100);
+    final count = ctx.state.droppableCount + 1;
+    ctx.emit(ctx.state.copyWith(droppableCount: count));
+  },
+);
 
 SoloJob<void> restartable(TestSolo solo, int n) => solo.enqueue<Special, void>(
-      key: 'restartable',
-      describe: () => '$n',
-      policy: Policy.restart,
-      (ctx) async {
-        final before = ctx.state.restartableCount + 1;
-        ctx.emit(ctx.state.copyWith(restartableCount: before));
-        await delay(100);
-        final after = ctx.state.restartableCount + 1;
-        ctx.emit(ctx.state.copyWith(restartableCount: after));
-      },
-    );
+  key: 'restartable',
+  describe: () => '$n',
+  policy: Policy.restart,
+  (ctx) async {
+    final before = ctx.state.restartableCount + 1;
+    ctx.emit(ctx.state.copyWith(restartableCount: before));
+    await delay(100);
+    final after = ctx.state.restartableCount + 1;
+    ctx.emit(ctx.state.copyWith(restartableCount: after));
+  },
+);
 
 SoloJob<void> replaceable(TestSolo solo, int n) => solo.enqueue<Special, void>(
-      key: 'replace',
-      describe: () => '$n',
-      policy: Policy.replace,
-      (ctx) async {
-        await delay(100);
-        final count = ctx.state.sequentialCount + 1;
-        ctx.emit(ctx.state.copyWith(sequentialCount: count));
-      },
-    );
+  key: 'replace',
+  describe: () => '$n',
+  policy: Policy.replace,
+  (ctx) async {
+    await delay(100);
+    final count = ctx.state.sequentialCount + 1;
+    ctx.emit(ctx.state.copyWith(sequentialCount: count));
+  },
+);
 
 void main() {
   test('droppable returns the queued job and drops the duplicate', () {
@@ -100,8 +100,11 @@ void main() {
       async.flushTimers();
       expect(
         first.outcome,
-        isA<Cancelled>()
-            .having((c) => c.reason, 'reason', isA<ManualCancelReason>()),
+        isA<Cancelled>().having(
+          (c) => c.reason,
+          'reason',
+          isA<ManualCancelReason>(),
+        ),
       );
     });
   });
@@ -326,15 +329,13 @@ void main() {
 
   test('droppable refuses a key held by a job of a narrower type', () {
     runSolo((solo, journal, async) {
-      solo.enqueue<TestState, String>(
-        key: 'shared',
-        policy: Policy.droppable,
-        (ctx) async {
-          await delay(100);
+      solo.enqueue<TestState, String>(key: 'shared', policy: Policy.droppable, (
+        ctx,
+      ) async {
+        await delay(100);
 
-          return 'x';
-        },
-      );
+        return 'x';
+      });
       async.flushMicrotasks();
       journal.take();
       // A `Job<String>` is a `SoloJob<Object>`, so handing it back would
@@ -367,10 +368,14 @@ void main() {
       // The call writes `Object`, both jobs are `Job<String>`: the type
       // argument here is whatever the call site felt like and decides
       // nothing.
-      final incoming =
-          solo.job<TestState, String>(key: 'shared', (ctx) async => 'y');
-      final answer =
-          solo.enqueueJob<Object>(incoming, policy: Policy.droppable);
+      final incoming = solo.job<TestState, String>(
+        key: 'shared',
+        (ctx) async => 'y',
+      );
+      final answer = solo.enqueueJob<Object>(
+        incoming,
+        policy: Policy.droppable,
+      );
 
       expect(identical(answer, held), isTrue);
       async.flushTimers();
@@ -619,18 +624,17 @@ void main() {
   group('a job queued from the code of a job it replaces', () {
     for (final policy in [Policy.replace, Policy.restart]) {
       for (final hook in ['onFinish', 'whenCancelled']) {
-        for (final running in [
-          false,
-          if (policy == Policy.restart) true,
-        ]) {
+        for (final running in [false, if (policy == Policy.restart) true]) {
           final where = running ? 'running' : 'queued';
           // The `onFinish` of a running job comes after `enqueueJob` has
           // returned, so that variant never reaches the reentrant path; it
           // holds what was right before the order changed.
           test('${policy.name}, from $hook of a $where job, runs last', () {
             fakeAsync((async) {
-              final solo =
-                  _Rerequesting(policy, fromOnFinish: hook == 'onFinish');
+              final solo = _Rerequesting(
+                policy,
+                fromOnFinish: hook == 'onFinish',
+              );
               final a = solo.request('A');
               if (running) async.flushMicrotasks();
               if (hook == 'whenCancelled') {
@@ -695,15 +699,11 @@ final class _Rerequesting extends Solo<String> with OpenSolo<String> {
 
   SoloJob<void> request(String value) {
     requested.add(value);
-    return enqueue<String, void>(
-      key: 'search',
-      policy: policy,
-      (ctx) async {
-        started.add(value);
-        if (value == 'A') await ctx.abandonable(() => delay(100));
-        ctx.emit(value);
-      },
-    );
+    return enqueue<String, void>(key: 'search', policy: policy, (ctx) async {
+      started.add(value);
+      if (value == 'A') await ctx.abandonable(() => delay(100));
+      ctx.emit(value);
+    });
   }
 
   @override

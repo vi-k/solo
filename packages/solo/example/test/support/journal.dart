@@ -30,8 +30,9 @@ final class JournalObserver extends SoloObserver {
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) {
     final outcome = job.outcome;
-    final verb =
-        outcome is Cancelled && !outcome.started ? 'dropped' : 'finished';
+    final verb = outcome is Cancelled && !outcome.started
+        ? 'dropped'
+        : 'finished';
     lines.add('${_label(job)} $verb $outcome');
   }
 
@@ -42,8 +43,7 @@ final class JournalObserver extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      lines.add('${_label(job)} error $error');
+  }) => lines.add('${_label(job)} error $error');
 
   @override
   void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>

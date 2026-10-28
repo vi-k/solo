@@ -20,99 +20,84 @@ void main() {
   for (final kind in _TimingKind.values) {
     for (final collect in [true, false]) {
       for (final policy in AccumulationPolicy.values) {
-        test(
-          '${kind.name} ${collect ? 'collect' : 'accumulate'} '
-          '${policy.name}: ready B bypasses waiting A',
-          () {
-            fakeAsync((async) {
-              final solo = TestSolo();
-              final calls = <String>[];
-              Future<void> handle(int value) async {
-                calls.add('A:$value');
-              }
+        test('${kind.name} ${collect ? 'collect' : 'accumulate'} '
+            '${policy.name}: ready B bypasses waiting A', () {
+          fakeAsync((async) {
+            final solo = TestSolo();
+            final calls = <String>[];
+            Future<void> handle(int value) async {
+              calls.add('A:$value');
+            }
 
-              final events = collect
-                  ? solo.collect<TestState, int, void>(
-                      (ctx, values) => handle(values.reduce((a, b) => a + b)),
-                      policy: policy,
-                      timing: _timing(kind),
-                    )
-                  : solo.accumulate<TestState, int, void>(
-                      (ctx, value) => handle(value),
-                      merge: (a, b) => a + b,
-                      policy: policy,
-                      timing: _timing(kind),
-                    );
-              if (kind == _TimingKind.throttle) {
-                events.add(0);
-                async.flushMicrotasks();
-              }
-
-              final first = events.add(1);
-              final separator = solo.enqueue<TestState, void>(
-                (ctx) async => calls.add('B'),
-              );
-              final second = events.add(2);
-
-              expect(
-                identical(first, second),
-                policy != AccumulationPolicy.adjacent,
-              );
-              expect(
-                solo.queue.jobs,
-                switch (policy) {
-                  AccumulationPolicy.adjacent => [first, separator, second],
-                  AccumulationPolicy.replace => [separator, second],
-                  AccumulationPolicy.join => [first, separator],
-                },
-              );
-              if (policy == AccumulationPolicy.replace) {
-                expect(first.outcome, isNull);
-              }
-
+            final events = collect
+                ? solo.collect<TestState, int, void>(
+                    (ctx, values) => handle(values.reduce((a, b) => a + b)),
+                    policy: policy,
+                    timing: _timing(kind),
+                  )
+                : solo.accumulate<TestState, int, void>(
+                    (ctx, value) => handle(value),
+                    merge: (a, b) => a + b,
+                    policy: policy,
+                    timing: _timing(kind),
+                  );
+            if (kind == _TimingKind.throttle) {
+              events.add(0);
               async.flushMicrotasks();
-              expect(
-                calls,
-                kind == _TimingKind.throttle ? ['A:0', 'B'] : ['B'],
-              );
-              expect(
-                solo.queue.jobs,
-                switch (policy) {
-                  AccumulationPolicy.adjacent => [first, second],
-                  AccumulationPolicy.replace => [second],
-                  AccumulationPolicy.join => [first],
-                },
-              );
+            }
 
-              async.elapse(_interval);
-              expect(
-                calls,
-                switch ((kind, policy)) {
-                  (_TimingKind.debounce, AccumulationPolicy.adjacent) => [
-                      'B',
-                      'A:1',
-                      'A:2',
-                    ],
-                  (_TimingKind.debounce, _) => ['B', 'A:3'],
-                  (_TimingKind.throttle, AccumulationPolicy.adjacent) => [
-                      'A:0',
-                      'B',
-                      'A:1',
-                    ],
-                  (_TimingKind.throttle, _) => ['A:0', 'B', 'A:3'],
-                },
-              );
-              if (kind == _TimingKind.throttle &&
-                  policy == AccumulationPolicy.adjacent) {
-                async.elapse(_interval);
-                expect(calls, ['A:0', 'B', 'A:1', 'A:2']);
-              }
+            final first = events.add(1);
+            final separator = solo.enqueue<TestState, void>(
+              (ctx) async => calls.add('B'),
+            );
+            final second = events.add(2);
 
-              solo.close();
-              async.flushMicrotasks();
+            expect(
+              identical(first, second),
+              policy != AccumulationPolicy.adjacent,
+            );
+            expect(solo.queue.jobs, switch (policy) {
+              AccumulationPolicy.adjacent => [first, separator, second],
+              AccumulationPolicy.replace => [separator, second],
+              AccumulationPolicy.join => [first, separator],
             });
-          },
-        );
+            if (policy == AccumulationPolicy.replace) {
+              expect(first.outcome, isNull);
+            }
+
+            async.flushMicrotasks();
+            expect(calls, kind == _TimingKind.throttle ? ['A:0', 'B'] : ['B']);
+            expect(solo.queue.jobs, switch (policy) {
+              AccumulationPolicy.adjacent => [first, second],
+              AccumulationPolicy.replace => [second],
+              AccumulationPolicy.join => [first],
+            });
+
+            async.elapse(_interval);
+            expect(calls, switch ((kind, policy)) {
+              (_TimingKind.debounce, AccumulationPolicy.adjacent) => [
+                'B',
+                'A:1',
+                'A:2',
+              ],
+              (_TimingKind.debounce, _) => ['B', 'A:3'],
+              (_TimingKind.throttle, AccumulationPolicy.adjacent) => [
+                'A:0',
+                'B',
+                'A:1',
+              ],
+              (_TimingKind.throttle, _) => ['A:0', 'B', 'A:3'],
+            });
+            if (kind == _TimingKind.throttle &&
+                policy == AccumulationPolicy.adjacent) {
+              async.elapse(_interval);
+              expect(calls, ['A:0', 'B', 'A:1', 'A:2']);
+            }
+
+            solo.close();
+            async.flushMicrotasks();
+          });
+        });
       }
     }
   }
@@ -450,13 +435,10 @@ void main() {
       final solo = TestSolo();
       final gate = Completer<void>();
       final calls = <String>[];
-      final events = solo.collect<TestState, int, void>(
-        (ctx, values) async {
-          calls.add('${async.elapsed}:$values');
-          if (values.first == 1) await ctx.join(() => gate.future);
-        },
-        timing: AccumulationTiming.throttle(_interval),
-      );
+      final events = solo.collect<TestState, int, void>((ctx, values) async {
+        calls.add('${async.elapsed}:$values');
+        if (values.first == 1) await ctx.join(() => gate.future);
+      }, timing: AccumulationTiming.throttle(_interval));
       final first = events.add(1);
       async.flushMicrotasks();
       final next = events.add(2);
@@ -471,26 +453,23 @@ void main() {
       async.elapse(const Duration(milliseconds: 99));
       expect(calls, ['0:00:00.000000:[1]']);
       async.elapse(const Duration(milliseconds: 1));
-      expect(calls, [
-        '0:00:00.000000:[1]',
-        '0:00:00.200000:[2]',
-      ]);
+      expect(calls, ['0:00:00.000000:[1]', '0:00:00.200000:[2]']);
 
       solo.close();
       async.flushMicrotasks();
     });
   });
 
-  test('throttle waits for the body, child, and cleanup after its deadline',
-      () {
-    fakeAsync((async) {
-      final solo = TestSolo();
-      final body = Completer<void>();
-      final child = Completer<void>();
-      final cleanup = Completer<void>();
-      final calls = <String>[];
-      final events = solo.collect<TestState, int, void>(
-        (ctx, values) async {
+  test(
+    'throttle waits for the body, child, and cleanup after its deadline',
+    () {
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final body = Completer<void>();
+        final child = Completer<void>();
+        final cleanup = Completer<void>();
+        final calls = <String>[];
+        final events = solo.collect<TestState, int, void>((ctx, values) async {
           calls.add('${async.elapsed}:body:$values');
           if (values.first != 1) return;
           ctx
@@ -507,49 +486,45 @@ void main() {
             });
           await ctx.join(() => body.future);
           calls.add('${async.elapsed}:body ended');
-        },
-        timing: AccumulationTiming.throttle(_interval),
-      );
+        }, timing: AccumulationTiming.throttle(_interval));
 
-      final first = events.add(1);
-      async.flushMicrotasks();
-      final next = events.add(2);
-      async.elapse(const Duration(milliseconds: 250));
-      expect(calls, ['0:00:00.000000:body:[1]']);
-      expect(next.isQueued, isTrue);
+        final first = events.add(1);
+        async.flushMicrotasks();
+        final next = events.add(2);
+        async.elapse(const Duration(milliseconds: 250));
+        expect(calls, ['0:00:00.000000:body:[1]']);
+        expect(next.isQueued, isTrue);
 
-      body.complete();
-      async.flushMicrotasks();
-      expect(calls, [
-        '0:00:00.000000:body:[1]',
-        '0:00:00.250000:body ended',
-      ]);
-      child.complete();
-      async.flushMicrotasks();
-      expect(calls, [
-        '0:00:00.000000:body:[1]',
-        '0:00:00.250000:body ended',
-        '0:00:00.250000:child',
-        '0:00:00.250000:cleanup',
-      ]);
-      expect(first.isFinished, isFalse);
-      expect(next.isQueued, isTrue);
+        body.complete();
+        async.flushMicrotasks();
+        expect(calls, ['0:00:00.000000:body:[1]', '0:00:00.250000:body ended']);
+        child.complete();
+        async.flushMicrotasks();
+        expect(calls, [
+          '0:00:00.000000:body:[1]',
+          '0:00:00.250000:body ended',
+          '0:00:00.250000:child',
+          '0:00:00.250000:cleanup',
+        ]);
+        expect(first.isFinished, isFalse);
+        expect(next.isQueued, isTrue);
 
-      cleanup.complete();
-      async.flushMicrotasks();
-      expect(calls, [
-        '0:00:00.000000:body:[1]',
-        '0:00:00.250000:body ended',
-        '0:00:00.250000:child',
-        '0:00:00.250000:cleanup',
-        '0:00:00.250000:cleaned',
-        '0:00:00.250000:body:[2]',
-      ]);
+        cleanup.complete();
+        async.flushMicrotasks();
+        expect(calls, [
+          '0:00:00.000000:body:[1]',
+          '0:00:00.250000:body ended',
+          '0:00:00.250000:child',
+          '0:00:00.250000:cleanup',
+          '0:00:00.250000:cleaned',
+          '0:00:00.250000:body:[2]',
+        ]);
 
-      solo.close();
-      async.flushMicrotasks();
-    });
-  });
+        solo.close();
+        async.flushMicrotasks();
+      });
+    },
+  );
 
   test('multiple pending throttle groups start one interval apart', () {
     fakeAsync((async) {
@@ -634,10 +609,7 @@ void main() {
       expect(identical(first, second), isFalse);
       expect(calls, ['0:00:00.200000:[1]']);
       async.elapse(_interval);
-      expect(calls, [
-        '0:00:00.200000:[1]',
-        '0:00:00.400000:[2]',
-      ]);
+      expect(calls, ['0:00:00.200000:[1]', '0:00:00.400000:[2]']);
 
       solo.close();
       async.flushMicrotasks();
@@ -735,8 +707,7 @@ void main() {
   // 2026-09-14[32]-accumulation-rules-plan.md -- arming the interval in
   // `_AccumulationGroup._accepted` instead of where the group appears.
   for (final startAtOnce in [true, false]) {
-    test(
-        'a throttle group waiting for the slot meets a later event, '
+    test('a throttle group waiting for the slot meets a later event, '
         'startAtOnce: $startAtOnce', () {
       fakeAsync((async) {
         final solo = TestSolo();
@@ -767,8 +738,7 @@ void main() {
       });
     });
 
-    test(
-        'replace meets a throttle group already waiting for the slot, '
+    test('replace meets a throttle group already waiting for the slot, '
         'startAtOnce: $startAtOnce', () {
       fakeAsync((async) {
         final solo = TestSolo();
@@ -877,10 +847,7 @@ void main() {
       expect(calls, ['0:00:01.000000:start [1]']);
       events.add(2);
       async.elapse(const Duration(seconds: 4));
-      expect(calls, [
-        '0:00:01.000000:start [1]',
-        '0:00:03.500000:start [2]',
-      ]);
+      expect(calls, ['0:00:01.000000:start [1]', '0:00:03.500000:start [2]']);
 
       solo.close();
       async.flushTimers();
@@ -1035,9 +1002,9 @@ void main() {
 }
 
 AccumulationTiming _timing(_TimingKind kind) => switch (kind) {
-      _TimingKind.debounce => AccumulationTiming.debounce(_interval),
-      _TimingKind.throttle => AccumulationTiming.throttle(_interval),
-    };
+  _TimingKind.debounce => AccumulationTiming.debounce(_interval),
+  _TimingKind.throttle => AccumulationTiming.throttle(_interval),
+};
 
 final class _Callbacks extends SoloObserver {
   final void Function(Job<Object?>)? _onStart;
@@ -1046,8 +1013,8 @@ final class _Callbacks extends SoloObserver {
   _Callbacks({
     void Function(Job<Object?>)? onStart,
     void Function(Job<Object?>)? onFinish,
-  })  : _onStart = onStart,
-        _onFinish = onFinish;
+  }) : _onStart = onStart,
+       _onFinish = onFinish;
 
   @override
   void onStart(Solo<Object> solo, Job<Object?> job) => _onStart?.call(job);

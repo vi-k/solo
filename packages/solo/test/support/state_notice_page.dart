@@ -30,9 +30,9 @@ final class Notices extends Solo<NoticeBoard> {
       enqueue<NoticeBoard, void>((ctx) async => ctx.emit(const NoticeBoard()));
 
   Job<void> accept(Notice notice) => enqueue<NoticeBoard, void>((ctx) async {
-        // Only the notice the screen showed: a newer one stays.
-        if (identical(ctx.state.notice, notice)) ctx.emit(const NoticeBoard());
-      });
+    // Only the notice the screen showed: a newer one stays.
+    if (identical(ctx.state.notice, notice)) ctx.emit(const NoticeBoard());
+  });
 }
 
 /// Not on the page: the camera, handed the board.
@@ -44,16 +44,16 @@ final class Camera extends Solo<CameraState> {
   Camera(this.device, this.notices) : super(const Ready());
 
   Job<void> shoot() => enqueue<Ready, void>((ctx) async {
-        final photo = await ctx.join(device.shoot);
-        notices.post(Notice(photo));
-      });
+    final photo = await ctx.join(device.shoot);
+    notices.post(Notice(photo));
+  });
 
   /// Not on the page: the recording of "The rules", less its `canStart`
   /// and `keepWhile`: it runs for as long as the frames come.
   Job<void> record() => enqueue<Ready, void>(
-        key: 'record',
-        (ctx) => ctx.each(device.frames, (child, frame) async {
-          await child.join(() => store(frame));
-        }).value,
-      );
+    key: 'record',
+    (ctx) => ctx.each(device.frames, (child, frame) async {
+      await child.join(() => store(frame));
+    }).value,
+  );
 }

@@ -55,17 +55,17 @@ final class ProfileController extends Solo<ProfileState> {
   ProfileController(this.api) : super(const Initial());
 
   Job<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.droppable,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 }
 ```
 
@@ -151,16 +151,19 @@ test('load fills in the name', () async {
 которую оно бросило:
 
 ```dart
-test('a failed load carries the error to the caller', () async {
-  final profile = ProfileController(
-    FakeProfileApi(error: StateError('no network')),
-  );
+test(
+  'a failed load carries the error to the caller',
+  () async {
+    final profile = ProfileController(
+      FakeProfileApi(error: StateError('no network')),
+    );
 
-  await expectLater(profile.load().value, throwsA(isA<StateError>()));
-  expect(profile.currentState, isA<Failure>());
+    await expectLater(profile.load().value, throwsA(isA<StateError>()));
+    expect(profile.currentState, isA<Failure>());
 
-  await profile.close();
-});
+    await profile.close();
+  },
+);
 ```
 
 Отмена тоже исход, и тест про неё спрашивает `done`:
@@ -315,19 +318,19 @@ test('a failed load shows the failure', () async {
 
 ```dart
 // Первая попытка: тест ничего не доказывает о зоне.
-test('a failure nobody read reaches the zone', () async {
-  await runZonedGuarded(
-    () async {
+test(
+  'a failure nobody read reaches the zone',
+  () async {
+    await runZonedGuarded(() async {
       final profile = ProfileController(
         FakeProfileApi(error: StateError('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
 
       expect(profile.currentState, isA<Failure>());
-    },
-    (error, stackTrace) => expect(error, isA<StateError>()),
-  );
-});
+    }, (error, stackTrace) => expect(error, isA<StateError>()));
+  },
+);
 ```
 
 Тест проходит, и прошёл бы, даже если бы до зоны не дошло ни одной ошибки.
@@ -348,23 +351,23 @@ test('a failure nobody read reaches the zone', () async {
 ### Собрать в зоне, проверить снаружи
 
 ```dart
-test('a failure nobody read reaches the zone', () async {
-  final zoneErrors = <Object>[];
-  late final ProfileController profile;
+test(
+  'a failure nobody read reaches the zone',
+  () async {
+    final zoneErrors = <Object>[];
+    late final ProfileController profile;
 
-  await runZonedGuarded(
-    () async {
+    await runZonedGuarded(() async {
       profile = ProfileController(
         FakeProfileApi(error: StateError('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
-    },
-    (error, stackTrace) => zoneErrors.add(error),
-  );
+    }, (error, stackTrace) => zoneErrors.add(error));
 
-  expect(profile.currentState, isA<Failure>());
-  expect(zoneErrors, [isA<StateError>()]);
-});
+    expect(profile.currentState, isA<Failure>());
+    expect(zoneErrors, [isA<StateError>()]);
+  },
+);
 ```
 
 Зона собирает, а тест проверяет после неё, на своих строках: и состояние,
@@ -403,30 +406,33 @@ final class Journal extends SoloObserver {
       lines.add('state: ${transition.current.runtimeType}');
 }
 
-test('a second load while the first one runs is dropped', () {
-  fakeAsync((async) {
-    final journal = Journal();
-    Solo.observer = journal;
-    addTearDown(() => Solo.observer = null);
-    final profile = ProfileController(FakeProfileApi());
+test(
+  'a second load while the first one runs is dropped',
+  () {
+    fakeAsync((async) {
+      final journal = Journal();
+      Solo.observer = journal;
+      addTearDown(() => Solo.observer = null);
+      final profile = ProfileController(FakeProfileApi());
 
-    final first = profile.load();
-    final second = profile.load();
-    expect(identical(first, second), isTrue);
+      final first = profile.load();
+      final second = profile.load();
+      expect(identical(first, second), isTrue);
 
-    async.elapse(const Duration(milliseconds: 20));
-    expect(journal.lines, [
-      'load started',
-      'state: Loading',
-      'load Cancelled(duplicate)',
-      'state: Loaded',
-      'load Done(Ada Lovelace)',
-    ]);
+      async.elapse(const Duration(milliseconds: 20));
+      expect(journal.lines, [
+        'load started',
+        'state: Loading',
+        'load Cancelled(duplicate)',
+        'state: Loaded',
+        'load Done(Ada Lovelace)',
+      ]);
 
-    profile.close();
-    async.flushTimers();
-  });
-});
+      profile.close();
+      async.flushTimers();
+    });
+  },
+);
 ```
 
 Журнал выходит в другом порядке:
@@ -578,14 +584,17 @@ expect('${job.outcome}', 'Cancelled(manual)');
 
 ```dart
 // Первая попытка: упавший expect пропускает сброс.
-test('a second load while the first one runs is dropped', () {
-  final journal = Journal();
-  Solo.observer = journal;
+test(
+  'a second load while the first one runs is dropped',
+  () {
+    final journal = Journal();
+    Solo.observer = journal;
 
-  // ...сам тест...
+    // ...сам тест...
 
-  Solo.observer = null;
-});
+    Solo.observer = null;
+  },
+);
 ```
 
 Сброс выполняется, только когда тест проходит. `expect` сообщает о провале
@@ -673,15 +682,15 @@ final class CameraController extends Solo<CameraState> {
   CameraController(this.hw) : super(const Idle());
 
   Job<void> connect() => enqueue<Idle, void>(
-        key: 'connect',
-        timeout: const Duration(seconds: 5),
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => hw.open(cancelToken: token));
-          ctx.emit(const Connected());
-        },
-      );
+    key: 'connect',
+    timeout: const Duration(seconds: 5),
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => hw.open(cancelToken: token));
+      ctx.emit(const Connected());
+    },
+  );
 }
 ```
 

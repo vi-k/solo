@@ -27,11 +27,11 @@ import 'support/readme_stubs.dart' as stubs;
 
 /// A state of the quick start, the way a journal would write it.
 String _profile(quick.ProfileState state) => switch (state) {
-      quick.Initial() => 'Initial',
-      quick.Loading() => 'Loading',
-      quick.Loaded(:final name) => 'Loaded($name)',
-      quick.Failure(:final error) => 'Failure($error)',
-    };
+  quick.Initial() => 'Initial',
+  quick.Loading() => 'Loading',
+  quick.Loaded(:final name) => 'Loaded($name)',
+  quick.Failure(:final error) => 'Failure($error)',
+};
 
 /// The API of the quick start, saying when its request begins and ends.
 class _TracingApi extends quick.ProfileApi {
@@ -63,14 +63,12 @@ final class _Unhandled extends Solo<quick.ProfileState> {
 
   _Unhandled(this.api) : super(const quick.Initial());
 
-  Job<String> load() => enqueue<quick.ProfileState, String>(
-        (ctx) async {
-          ctx.emit(const quick.Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(quick.Loaded(name));
-          return name;
-        },
-      );
+  Job<String> load() => enqueue<quick.ProfileState, String>((ctx) async {
+    ctx.emit(const quick.Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(quick.Loaded(name));
+    return name;
+  });
 }
 
 /// A controller whose first job fails with a child still running and a
@@ -81,23 +79,23 @@ final class _Ordered extends Solo<int> {
   _Ordered() : super(0);
 
   Job<void> first() => enqueue<int, void>(
-        ifFailed: (state, error, stackTrace) {
-          trace.add('state handler');
-          return state;
-        },
-        (ctx) async {
-          ctx
-            ..each(
-              Stream<int>.fromFuture(
-                Future<int>.delayed(const Duration(milliseconds: 10), () => 1),
-              ),
-              (child, event) => trace.add('child'),
-            )
-            ..onDispose(() => trace.add('cleanup'));
-          trace.add('body');
-          throw StateError('boom');
-        },
-      );
+    ifFailed: (state, error, stackTrace) {
+      trace.add('state handler');
+      return state;
+    },
+    (ctx) async {
+      ctx
+        ..each(
+          Stream<int>.fromFuture(
+            Future<int>.delayed(const Duration(milliseconds: 10), () => 1),
+          ),
+          (child, event) => trace.add('child'),
+        )
+        ..onDispose(() => trace.add('cleanup'));
+      trace.add('body');
+      throw StateError('boom');
+    },
+  );
 
   Job<void> second() =>
       enqueue<int, void>((ctx) async => trace.add('next job'));
@@ -109,22 +107,22 @@ final class _OwnRule extends Solo<stubs.PlayerState> {
   _OwnRule() : super(const stubs.Idle());
 
   Job<String> body() => enqueue<stubs.PlayerState, String>(
-        keepWhile: (state) => state is! stubs.Disconnected,
-        (ctx) async {
-          ctx.emit(const stubs.Disconnected());
-          return 'went on';
-        },
-      );
+    keepWhile: (state) => state is! stubs.Disconnected,
+    (ctx) async {
+      ctx.emit(const stubs.Disconnected());
+      return 'went on';
+    },
+  );
 
   Job<String> child() => enqueue<stubs.PlayerState, String>(
-        keepWhile: (state) => state is! stubs.Disconnected,
-        (ctx) async {
-          await ctx.each(Stream.value(1), (childCtx, _) {
-            childCtx.emit(const stubs.Disconnected());
-          }).value;
-          return 'went on';
-        },
-      );
+    keepWhile: (state) => state is! stubs.Disconnected,
+    (ctx) async {
+      await ctx.each(Stream.value(1), (childCtx, _) {
+        childCtx.emit(const stubs.Disconnected());
+      }).value;
+      return 'went on';
+    },
+  );
 }
 
 /// A controller of numbers that sets them from outside.
@@ -158,9 +156,10 @@ void main() {
 
   group('Quick start', () {
     test('the first block declares four immutable states', () {
-      final block = RegExp(r'```dart\n(.*?)\n```', dotAll: true)
-          .firstMatch(_page())!
-          .group(1)!;
+      final block = RegExp(
+        r'```dart\n(.*?)\n```',
+        dotAll: true,
+      ).firstMatch(_page())!.group(1)!;
       final states = RegExp(
         r'^final class (\w+) extends ProfileState \{$',
         multiLine: true,
@@ -256,12 +255,16 @@ void main() {
       expect(
         prose,
         allOf(
-          contains('A `Failed` that nobody observes goes on to the zone the '
-              'job was created in, even when `ifFailed` has published a '
-              'state, unless `Solo.unansweredHandler` answers for it'),
-          contains("Reading the job's `done` or `value` observes the outcome; "
-              'a caller that needs no result says so with `ignoreFailure()`, '
-              'as in `profile.load().ignoreFailure()`.'),
+          contains(
+            'A `Failed` that nobody observes goes on to the zone the '
+            'job was created in, even when `ifFailed` has published a '
+            'state, unless `Solo.unansweredHandler` answers for it',
+          ),
+          contains(
+            "Reading the job's `done` or `value` observes the outcome; "
+            'a caller that needs no result says so with `ignoreFailure()`, '
+            'as in `profile.load().ignoreFailure()`.',
+          ),
         ),
       );
       final zones = <String, List<String>>{};
@@ -328,8 +331,10 @@ void main() {
         _page().replaceAll(RegExp(r'\s+'), ' '),
         allOf(
           contains('Two optional parameters of `enqueue`'),
-          contains('Without a handler, the state stays where the body left it: '
-              'an error or a cancellation here would leave `Loading`.'),
+          contains(
+            'Without a handler, the state stays where the body left it: '
+            'an error or a cancellation here would leave `Loading`.',
+          ),
         ),
       );
       fakeAsync((async) {
@@ -351,30 +356,36 @@ void main() {
     });
 
     test('cancelLoading prints the outcome its comment quotes', () {
-      final quote = RegExp(r'print\(job\.outcome\); // (.+)')
-          .firstMatch(_page())!
-          .group(1)!;
+      final quote = RegExp(
+        r'print\(job\.outcome\); // (.+)',
+      ).firstMatch(_page())!.group(1)!;
       expect(_printed(quick.cancelLoading), [quote]);
     });
 
-    test('the job cancelled there is still queued, and ifCancelled never runs',
-        () {
-      fakeAsync((async) {
-        final api = _TracingApi();
-        final profile = quick.ProfileController(api);
-        final heard = <String>[];
-        profile.addListener(() => heard.add(_profile(profile.currentState)));
-        final job = profile.load();
-        expect((job as SoloJob<String>).isQueued, isTrue);
-        job.cancel().ignore();
-        async.flushTimers();
-        expect('${job.outcome}', 'Cancelled(manual)');
-        expect(heard, isEmpty, reason: 'neither the body nor ifCancelled ran');
-        expect(api.trace, isEmpty);
-        profile.close().ignore();
-        async.flushTimers();
-      });
-    });
+    test(
+      'the job cancelled there is still queued, and ifCancelled never runs',
+      () {
+        fakeAsync((async) {
+          final api = _TracingApi();
+          final profile = quick.ProfileController(api);
+          final heard = <String>[];
+          profile.addListener(() => heard.add(_profile(profile.currentState)));
+          final job = profile.load();
+          expect((job as SoloJob<String>).isQueued, isTrue);
+          job.cancel().ignore();
+          async.flushTimers();
+          expect('${job.outcome}', 'Cancelled(manual)');
+          expect(
+            heard,
+            isEmpty,
+            reason: 'neither the body nor ifCancelled ran',
+          );
+          expect(api.trace, isEmpty);
+          profile.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('cancelling a job does not stop the request already sent', () {
       fakeAsync((async) {
@@ -500,17 +511,19 @@ void main() {
       });
     });
 
-    test('a state that leaves Loaded after the answer is caught at the read',
-        () {
-      fakeAsync((async) {
-        open(const quick.Loaded('Ada Lovelace'));
-        api.afterAnswer = () => profile.reflect(const quick.Initial());
-        final job = profile.reload();
-        async.flushTimers();
-        expect('${job.outcome}', 'Cancelled(rules: is not Loaded)');
-        expect(heard, ['Initial'], reason: 'Ada King is never published');
-      });
-    });
+    test(
+      'a state that leaves Loaded after the answer is caught at the read',
+      () {
+        fakeAsync((async) {
+          open(const quick.Loaded('Ada Lovelace'));
+          api.afterAnswer = () => profile.reflect(const quick.Initial());
+          final job = profile.reload();
+          async.flushTimers();
+          expect('${job.outcome}', 'Cancelled(rules: is not Loaded)');
+          expect(heard, ['Initial'], reason: 'Ada King is never published');
+        });
+      },
+    );
 
     test('the controller has no member named state', () {
       open(const quick.Loaded('Ada Lovelace'));
@@ -773,22 +786,24 @@ void main() {
       });
     });
 
-    test("the rule is asked about a child's emit, not about the body's own",
-        () {
-      fakeAsync((async) {
-        final byBody = _OwnRule();
-        final byChild = _OwnRule();
-        final ownJob = byBody.body();
-        final childJob = byChild.child();
-        async.flushTimers();
-        expect('${ownJob.outcome}', 'Done(went on)');
-        expect(byBody.currentState, isA<stubs.Disconnected>());
-        expect('${childJob.outcome}', 'Cancelled(rules: keepWhile)');
-        byBody.close().ignore();
-        byChild.close().ignore();
-        async.flushTimers();
-      });
-    });
+    test(
+      "the rule is asked about a child's emit, not about the body's own",
+      () {
+        fakeAsync((async) {
+          final byBody = _OwnRule();
+          final byChild = _OwnRule();
+          final ownJob = byBody.body();
+          final childJob = byChild.child();
+          async.flushTimers();
+          expect('${ownJob.outcome}', 'Done(went on)');
+          expect(byBody.currentState, isA<stubs.Disconnected>());
+          expect('${childJob.outcome}', 'Cancelled(rules: keepWhile)');
+          byBody.close().ignore();
+          byChild.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('once the body has ended, a disconnect cancels nothing', () {
       fakeAsync((async) {
@@ -825,33 +840,37 @@ void main() {
       expect(device.onDisconnect, isNull, reason: 'onClose let it go');
     });
 
-    test('the call site drops the volume job, and its failure reaches the zone',
-        () {
-      expect(
-        _page().replaceAll(RegExp(r'\s+'), ' '),
-        contains('`setVolume` hands back a job too, and the call site drops '
+    test(
+      'the call site drops the volume job, and its failure reaches the zone',
+      () {
+        expect(
+          _page().replaceAll(RegExp(r'\s+'), ' '),
+          contains(
+            '`setVolume` hands back a job too, and the call site drops '
             'it on purpose: nothing here can answer for a volume the device '
-            'refuses. Its failure goes on to the zone'),
-      );
-      stubs.stage.volumeError = StateError('device refused the volume');
-      final device = stubs.Device();
-      final errors = <String>[];
-      // Nothing is asserted inside the zone: an `expect` that failed there
-      // would be one more error of the zone.
-      fakeAsync((async) {
-        runZonedGuarded(
-          () => tour.callSite(stubs.Api(), device),
-          (error, stackTrace) => errors.add('$error'),
-          zoneSpecification: ZoneSpecification(
-            print: (self, parent, zone, line) {},
+            'refuses. Its failure goes on to the zone',
           ),
         );
-        async.flushTimers();
-      });
+        stubs.stage.volumeError = StateError('device refused the volume');
+        final device = stubs.Device();
+        final errors = <String>[];
+        // Nothing is asserted inside the zone: an `expect` that failed there
+        // would be one more error of the zone.
+        fakeAsync((async) {
+          runZonedGuarded(
+            () => tour.callSite(stubs.Api(), device),
+            (error, stackTrace) => errors.add('$error'),
+            zoneSpecification: ZoneSpecification(
+              print: (self, parent, zone, line) {},
+            ),
+          );
+          async.flushTimers();
+        });
 
-      expect(errors, ['Bad state: device refused the volume']);
-      expect(device.volumes, isEmpty);
-    });
+        expect(errors, ['Bad state: device refused the volume']);
+        expect(device.volumes, isEmpty);
+      },
+    );
 
     test('a drain refuses new work at the call and runs what was queued', () {
       fakeAsync((async) {
@@ -909,34 +928,37 @@ void main() {
       expect(_page(), contains('compares eleven application scenarios'));
     });
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      final missing = codeMissingFrom(
-        'README.md',
-        'test/support/readme_quick_start.dart',
-        alsoIn: [
-          'test/support/readme_reload.dart',
-          'test/support/readme_player.dart',
-        ],
-      );
-      // The one block whose body the page elides: `readme_stream.dart`
-      // holds it with that body filled in.
-      expect(missing, hasLength(1));
-      expect(
-        missing.single,
-        startsWith(
-          'final class ProfileController extends Solo<ProfileState> '
-          'with SoloStream {\n  // ...same as above...\n}',
-        ),
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        final missing = codeMissingFrom(
+          'README.md',
+          'test/support/readme_quick_start.dart',
+          alsoIn: [
+            'test/support/readme_reload.dart',
+            'test/support/readme_player.dart',
+          ],
+        );
+        // The one block whose body the page elides: `readme_stream.dart`
+        // holds it with that body filled in.
+        expect(missing, hasLength(1));
+        expect(
+          missing.single,
+          startsWith(
+            'final class ProfileController extends Solo<ProfileState> '
+            'with SoloStream {\n  // ...same as above...\n}',
+          ),
+        );
+      },
+    );
 
     test('the fences the checks do not read are the two install commands', () {
       expect(strayFences('README.md'), ['```sh', '```sh']);
       expect(
-        RegExp(r'```sh\n(.*?)\n```', dotAll: true)
-            .allMatches(_page())
-            .map((match) => match.group(1)),
+        RegExp(
+          r'```sh\n(.*?)\n```',
+          dotAll: true,
+        ).allMatches(_page()).map((match) => match.group(1)),
         ['dart pub add solo', 'flutter pub add flutter_solo'],
       );
     });

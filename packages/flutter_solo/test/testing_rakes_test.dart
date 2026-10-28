@@ -39,10 +39,10 @@ String _prose() => _page()
 ///
 /// The page is not handed to `expect`: a failure would print all of it.
 void _says(String phrase) => expect(
-      _prose().contains(phrase),
-      isTrue,
-      reason: '$_doc no longer says: $phrase',
-    );
+  _prose().contains(phrase),
+  isTrue,
+  reason: '$_doc no longer says: $phrase',
+);
 
 /// Runs [body] the way `testWidgets` runs the body of a widget test — on the
 /// fake clock of the binding, in a zone that fails the test on an uncaught
@@ -75,7 +75,9 @@ void main() {
   // takes that long to say a wait never ended is one nobody runs.
   (TestWidgetsFlutterBinding.ensureInitialized()
           as AutomatedTestWidgetsFlutterBinding)
-      .defaultTestTimeout = const Timeout(Duration(seconds: 30));
+      .defaultTestTimeout = const Timeout(
+    Duration(seconds: 30),
+  );
 
   group('The page', () {
     test('every piece of its code stands in the support file', () {
@@ -87,15 +89,17 @@ void main() {
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
         hasLength(3),
-        reason: 'a new block of the page needs a place in the support file '
+        reason:
+            'a new block of the page needs a place in the support file '
             'and a test that runs it',
       );
     });
   });
 
   group('The first attempt', () {
-    testWidgets('the first attempt stands until the clock moves',
-        (tester) async {
+    testWidgets('the first attempt stands until the clock moves', (
+      tester,
+    ) async {
       final controller = ProfileController(FakeApi());
       await tester.pumpWidget(
         MaterialApp(home: ProfileView(controller: controller)),
@@ -124,16 +128,19 @@ void main() {
       _says('it answers with the name ten milliseconds after the call');
       _says('The test never gets past the first line');
       _says('Nothing inside `testWidgets` moves that clock but the test.');
-      _says('the test moves the clock, with `pump` or `pumpAndSettle`; '
-          'awaiting a job does not move it');
+      _says(
+        'the test moves the clock, with `pump` or `pumpAndSettle`; '
+        'awaiting a job does not move it',
+      );
     });
   });
 
   group('Moving the clock', () {
     theProfileAppears();
 
-    testWidgets('pumpAndSettle waits for the screen, not for the job',
-        (tester) async {
+    testWidgets('pumpAndSettle waits for the screen, not for the job', (
+      tester,
+    ) async {
       const second = Duration(seconds: 1);
 
       // A slow load under the spinner of the page: the spinner keeps asking
@@ -153,9 +160,7 @@ void main() {
 
       // The same load with nothing animating.
       final quiet = ProfileController(FakeApi(delay: second));
-      await tester.pumpWidget(
-        MaterialApp(home: QuietView(controller: quiet)),
-      );
+      await tester.pumpWidget(MaterialApp(home: QuietView(controller: quiet)));
       await tester.tap(find.text('Load'));
       before = tester.binding.clock.now();
       final frames = await tester.pumpAndSettle();
@@ -170,61 +175,77 @@ void main() {
       await tester.pump(second);
       await spinning.close();
       await quiet.close();
-      _says('`pumpAndSettle` pumps a frame every hundred milliseconds for as '
-          'long as another frame is asked for.');
-      _says('A slower one would be waited for as well, because the spinner '
-          'of `Loading` keeps asking for frames.');
-      _says('With nothing animating, `pumpAndSettle` stops after a frame or '
-          'two, and a load that takes longer than that is still waiting.');
-    });
-
-    testWidgets('closed in the body, a controller with a load running lets go',
-        (tester) async {
-      final controller = ProfileController(FakeApi());
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
+      _says(
+        '`pumpAndSettle` pumps a frame every hundred milliseconds for as '
+        'long as another frame is asked for.',
       );
-      await tester.tap(find.text('Load'));
-      await tester.pump();
-      expect(controller.currentState, isA<Loading>());
-
-      await controller.close();
-
-      expect(controller.isFinished, isTrue);
-      // The call the load walked away from is the fake's own timer.
-      await tester.pump(const Duration(milliseconds: 10));
-      _says('The controller is closed in the body of the test, not in '
-          '`addTearDown`.');
+      _says(
+        'A slower one would be waited for as well, because the spinner '
+        'of `Loading` keeps asking for frames.',
+      );
+      _says(
+        'With nothing animating, `pumpAndSettle` stops after a frame or '
+        'two, and a load that takes longer than that is still waiting.',
+      );
     });
 
-    test('awaited once the clock has stopped, the same close() never returns',
-        () async {
-      late ProfileController controller;
-      final reported = await _asWidgetTest((binding) async {
-        // The answer of this API never comes, so the load is still running
-        // when the body ends, as it is when an expectation fails halfway
-        // through one.
-        controller = ProfileController(SilentApi());
-        controller.load().ignoreFailure();
-        await binding.pump();
+    testWidgets(
+      'closed in the body, a controller with a load running lets go',
+      (tester) async {
+        final controller = ProfileController(FakeApi());
+        await tester.pumpWidget(
+          MaterialApp(home: ProfileView(controller: controller)),
+        );
+        await tester.tap(find.text('Load'));
+        await tester.pump();
         expect(controller.currentState, isA<Loading>());
-      });
-      expect(reported, isEmpty);
 
-      // What a tear-down does next.
-      var back = false;
-      unawaited(controller.close().then((_) => back = true));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+        await controller.close();
 
-      expect(back, isFalse);
-      expect(controller.isFinished, isFalse);
-      _says('the test closes the controller in its body, not in '
-          '`addTearDown`');
-      _says('A tear-down runs after the fake clock has stopped. A `close()` '
+        expect(controller.isFinished, isTrue);
+        // The call the load walked away from is the fake's own timer.
+        await tester.pump(const Duration(milliseconds: 10));
+        _says(
+          'The controller is closed in the body of the test, not in '
+          '`addTearDown`.',
+        );
+      },
+    );
+
+    test(
+      'awaited once the clock has stopped, the same close() never returns',
+      () async {
+        late ProfileController controller;
+        final reported = await _asWidgetTest((binding) async {
+          // The answer of this API never comes, so the load is still running
+          // when the body ends, as it is when an expectation fails halfway
+          // through one.
+          controller = ProfileController(SilentApi());
+          controller.load().ignoreFailure();
+          await binding.pump();
+          expect(controller.currentState, isA<Loading>());
+        });
+        expect(reported, isEmpty);
+
+        // What a tear-down does next.
+        var back = false;
+        unawaited(controller.close().then((_) => back = true));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+
+        expect(back, isFalse);
+        expect(controller.isFinished, isFalse);
+        _says(
+          'the test closes the controller in its body, not in '
+          '`addTearDown`',
+        );
+        _says(
+          'A tear-down runs after the fake clock has stopped. A `close()` '
           'awaited there with a job still running never comes back, and an '
           'expectation that failed halfway through a load is enough to leave '
-          'one running.');
-    });
+          'one running.',
+        );
+      },
+    );
 
     for (final timed in [true, false]) {
       final kind = timed
@@ -256,14 +277,18 @@ void main() {
           ],
         );
         if (timed) {
-          _says('A job given a `timeout` brings another, which the core '
-              'holds until the job ends.');
+          _says(
+            'A job given a `timeout` brings another, which the core '
+            'holds until the job ends.',
+          );
         } else {
-          _says('A timer still pending when the body of a `testWidgets` ends '
-              'fails the test with '
-              '`A Timer is still pending even after the widget tree was '
-              'disposed`, and a load left running holds one: the ten '
-              'milliseconds of the fake.');
+          _says(
+            'A timer still pending when the body of a `testWidgets` ends '
+            'fails the test with '
+            '`A Timer is still pending even after the widget tree was '
+            'disposed`, and a load left running holds one: the ten '
+            'milliseconds of the fake.',
+          );
         }
         unawaited(controller.close());
       });
@@ -271,59 +296,67 @@ void main() {
 
     for (final pumped in [false, true]) {
       test(
-          'closed in the body, a load over the fake of the page '
-          '${pumped ? 'with' : 'without'} the clock moved past the call',
-          () async {
-        late ProfileController controller;
+        'closed in the body, a load over the fake of the page '
+        '${pumped ? 'with' : 'without'} the clock moved past the call',
+        () async {
+          late ProfileController controller;
+          final reported = await _asWidgetTest((binding) async {
+            controller = ProfileController(FakeApi());
+            final job = controller.load()..ignoreFailure();
+            await binding.pump();
+            await controller.close();
+            expect('${job.outcome}', 'Cancelled(closed)');
+            if (pumped) {
+              await binding.pump(const Duration(milliseconds: 10));
+            }
+          });
+
+          expect(
+            [for (final details in reported) '${details.exception}'],
+            [
+              if (!pumped)
+                contains(
+                  'A Timer is still pending even after the widget tree was '
+                  'disposed',
+                ),
+            ],
+          );
+          _says(
+            'but not the call the job walked away from: the fake still '
+            'answers ten milliseconds after it was called, and the test ends '
+            'cleanly once `pump` with a duration has moved the clock past '
+            'that.',
+          );
+        },
+      );
+    }
+
+    test(
+      'closed in the body, a job with a deadline takes its deadline along',
+      () async {
+        late TimedLoad controller;
         final reported = await _asWidgetTest((binding) async {
-          controller = ProfileController(FakeApi());
+          controller = TimedLoad(SilentApi());
           final job = controller.load()..ignoreFailure();
           await binding.pump();
           await controller.close();
           expect('${job.outcome}', 'Cancelled(closed)');
-          if (pumped) {
-            await binding.pump(const Duration(milliseconds: 10));
-          }
         });
 
-        expect(
-          [for (final details in reported) '${details.exception}'],
-          [
-            if (!pumped)
-              contains(
-                'A Timer is still pending even after the widget tree was '
-                'disposed',
-              ),
-          ],
+        expect(reported, isEmpty);
+        expect(controller.isFinished, isTrue);
+        _says(
+          'Closing the controller in the body, as above, ends the job and '
+          'takes its deadline along',
         );
-        _says('but not the call the job walked away from: the fake still '
-            'answers ten milliseconds after it was called, and the test ends '
-            'cleanly once `pump` with a duration has moved the clock past '
-            'that.');
-      });
-    }
-
-    test('closed in the body, a job with a deadline takes its deadline along',
-        () async {
-      late TimedLoad controller;
-      final reported = await _asWidgetTest((binding) async {
-        controller = TimedLoad(SilentApi());
-        final job = controller.load()..ignoreFailure();
-        await binding.pump();
-        await controller.close();
-        expect('${job.outcome}', 'Cancelled(closed)');
-      });
-
-      expect(reported, isEmpty);
-      expect(controller.isFinished, isTrue);
-      _says('Closing the controller in the body, as above, ends the job and '
-          'takes its deadline along');
-    });
+      },
+    );
   });
 
   group('Waiting for the job', () {
-    testWidgets('the handle waits for the job, and its pump leaves the frame',
-        (tester) async {
+    testWidgets('the handle waits for the job, and its pump leaves the frame', (
+      tester,
+    ) async {
       final controller = ProfileController(FakeApi());
       await tester.pumpWidget(
         MaterialApp(home: ProfileView(controller: controller)),
@@ -334,12 +367,15 @@ void main() {
       expect(outcome, isA<Done<String>>());
       expect(find.text('Ada Lovelace'), findsOneWidget);
       await controller.close();
-      _says('`pump` with a duration moves the clock and then draws, so the '
-          'frame it leaves shows the last state.');
+      _says(
+        '`pump` with a duration moves the clock and then draws, so the '
+        'frame it leaves shows the last state.',
+      );
     });
 
-    testWidgets('twenty milliseconds are more than the fake takes',
-        (tester) async {
+    testWidgets('twenty milliseconds are more than the fake takes', (
+      tester,
+    ) async {
       // The handle of the page over a fake that takes longer than its pump
       // gives it: the outcome is not there yet.
       final controller = ProfileController(
@@ -357,24 +393,28 @@ void main() {
       await controller.close();
     });
 
-    testWidgets('read before the clock moves, a load that fails is no trouble',
-        (tester) async {
-      final controller = ProfileController(
-        FakeApi(error: StateError('no network')),
-      );
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
-      );
+    testWidgets(
+      'read before the clock moves, a load that fails is no trouble',
+      (tester) async {
+        final controller = ProfileController(
+          FakeApi(error: StateError('no network')),
+        );
+        await tester.pumpWidget(
+          MaterialApp(home: ProfileView(controller: controller)),
+        );
 
-      final outcome = await theHandle(tester, controller);
+        final outcome = await theHandle(tester, controller);
 
-      expect(outcome, isA<Failed>());
-      expect(find.text('Load'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await controller.close();
-      _says('`done` is read on the first line, before the clock moves, and '
-          'the order matters');
-    });
+        expect(outcome, isA<Failed>());
+        expect(find.text('Load'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await controller.close();
+        _says(
+          '`done` is read on the first line, before the clock moves, and '
+          'the order matters',
+        );
+      },
+    );
 
     test('read after the pump, the same load fails the test', () async {
       Object? taken = 'never asked';
@@ -394,18 +434,23 @@ void main() {
       expect(taken, isNull);
       expect(outcome, isA<Failed>(), reason: 'the test did read done');
       _says('a test that reads `done` reads it before it moves the clock');
-      _says('A `Failed` nobody has asked about is answered for on the '
-          'microtask after the job ends, and with no `Solo.unansweredHandler` '
-          'set it goes to the zone it was created in. Here that is the zone '
-          'of the test, '
-          'which fails the test on the spot, and `tester.takeException()` '
-          'has nothing to take afterwards.');
-      _says('A load that fails makes a test red even though it reads `done`, '
-          'if it reads it after the pump.');
+      _says(
+        'A `Failed` nobody has asked about is answered for on the '
+        'microtask after the job ends, and with no `Solo.unansweredHandler` '
+        'set it goes to the zone it was created in. Here that is the zone '
+        'of the test, '
+        'which fails the test on the spot, and `tester.takeException()` '
+        'has nothing to take afterwards.',
+      );
+      _says(
+        'A load that fails makes a test red even though it reads `done`, '
+        'if it reads it after the pump.',
+      );
     });
 
-    testWidgets('a job the test drops says so with ignoreFailure()',
-        (tester) async {
+    testWidgets('a job the test drops says so with ignoreFailure()', (
+      tester,
+    ) async {
       final controller = ProfileController(
         FakeApi(error: StateError('no network')),
       );
@@ -417,8 +462,9 @@ void main() {
       _says('A job the test starts and drops says so with `ignoreFailure()`.');
     });
 
-    testWidgets('one pump after load() moves the state and not the screen',
-        (tester) async {
+    testWidgets('one pump after load() moves the state and not the screen', (
+      tester,
+    ) async {
       final controller = ProfileController(FakeApi());
       await tester.pumpWidget(
         MaterialApp(home: ProfileView(controller: controller)),
@@ -438,27 +484,33 @@ void main() {
 
       await tester.pump(const Duration(milliseconds: 10));
       await controller.close();
-      _says('after `controller.load()` and one `pump()` the state has moved '
-          'and the screen has not');
+      _says(
+        'after `controller.load()` and one `pump()` the state has moved '
+        'and the screen has not',
+      );
       _says('A second `pump()` draws it.');
     });
 
-    testWidgets('right after a MaterialApp has been pumped, one pump draws it',
-        (tester) async {
-      final controller = ProfileController(FakeApi());
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
-      );
-      expect(tester.binding.hasScheduledFrame, isTrue);
+    testWidgets(
+      'right after a MaterialApp has been pumped, one pump draws it',
+      (tester) async {
+        final controller = ProfileController(FakeApi());
+        await tester.pumpWidget(
+          MaterialApp(home: ProfileView(controller: controller)),
+        );
+        expect(tester.binding.hasScheduledFrame, isTrue);
 
-      controller.load().ignoreFailure();
-      await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        controller.load().ignoreFailure();
+        await tester.pump();
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-      await tester.pump(const Duration(milliseconds: 10));
-      await controller.close();
-      _says('unless a frame was already asked for, as one is right after a '
-          '`MaterialApp` has been pumped');
-    });
+        await tester.pump(const Duration(milliseconds: 10));
+        await controller.close();
+        _says(
+          'unless a frame was already asked for, as one is right after a '
+          '`MaterialApp` has been pumped',
+        );
+      },
+    );
   });
 }

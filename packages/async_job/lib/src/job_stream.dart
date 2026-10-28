@@ -59,12 +59,7 @@ extension _JobStreamBody on JobContext {
         subscriptionCancelled = true;
         final cancelling = sub.cancel();
         if (job case final JobBase<Object?> owner) {
-          cancelling
-              .then<void>(
-                (_) {},
-                onError: owner.notifyError,
-              )
-              .ignore();
+          cancelling.then<void>((_) {}, onError: owner.notifyError).ignore();
         } else {
           cancelling.ignore();
         }

@@ -21,8 +21,7 @@ final class _Counter extends Solo<int> with SoloListenable {
     Future<void> Function(SoloContext<int, int> ctx) body, {
     bool Function(int state)? keepWhile,
     Duration? timeout,
-  }) =>
-      enqueue<int, void>(body, keepWhile: keepWhile, timeout: timeout);
+  }) => enqueue<int, void>(body, keepWhile: keepWhile, timeout: timeout);
 }
 
 final class _ObjectController extends Solo<Object> with SoloListenable {
@@ -130,8 +129,9 @@ void main() {
     expect(find.text('2'), findsOneWidget);
   });
 
-  testWidgets('a job that ends within its deadline leaves no timer behind',
-      (tester) async {
+  testWidgets('a job that ends within its deadline leaves no timer behind', (
+    tester,
+  ) async {
     final counter = _Counter();
     addTearDown(counter.close);
     await tester.pumpWidget(
@@ -158,8 +158,9 @@ void main() {
     // would fail on its end with "A Timer is still pending".
   });
 
-  testWidgets('controller drives ListenableBuilder and AnimatedBuilder',
-      (tester) async {
+  testWidgets('controller drives ListenableBuilder and AnimatedBuilder', (
+    tester,
+  ) async {
     final counter = _Counter();
     addTearDown(counter.close);
 
@@ -472,37 +473,36 @@ void main() {
     },
   );
 
-  testWidgets(
-    'SoloListenable ahead of SoloStream in with delivers both too',
-    (tester) async {
-      final controller = _BothReversed();
-      addTearDown(controller.close);
-      final built = <int>[];
-      final streamed = <int>[];
-      final subscription = controller.stream.listen(streamed.add);
-      addTearDown(subscription.cancel);
+  testWidgets('SoloListenable ahead of SoloStream in with delivers both too', (
+    tester,
+  ) async {
+    final controller = _BothReversed();
+    addTearDown(controller.close);
+    final built = <int>[];
+    final streamed = <int>[];
+    final subscription = controller.stream.listen(streamed.add);
+    addTearDown(subscription.cancel);
 
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: ValueListenableBuilder<int>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              built.add(value);
-              return const SizedBox();
-            },
-          ),
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: ValueListenableBuilder<int>(
+          valueListenable: controller,
+          builder: (context, value, _) {
+            built.add(value);
+            return const SizedBox();
+          },
         ),
-      );
+      ),
+    );
 
-      controller.set(1);
-      expect(streamed, isEmpty);
-      await tester.pump();
+    controller.set(1);
+    expect(streamed, isEmpty);
+    await tester.pump();
 
-      expect(built, [0, 1]);
-      expect(streamed, [1]);
-    },
-  );
+    expect(built, [0, 1]);
+    expect(streamed, [1]);
+  });
 
   test(
     'a paused stream subscription holds close() open on SoloListenable too',
@@ -579,23 +579,25 @@ void main() {
     },
   );
 
-  test('a base that mixes SoloListenable in keeps its own onListenerError',
-      () async {
-    final leaf = _MigratedLeaf();
-    final reports = <FlutterErrorDetails>[];
-    final previous = FlutterError.onError;
-    FlutterError.onError = reports.add;
-    addTearDown(() => FlutterError.onError = previous);
+  test(
+    'a base that mixes SoloListenable in keeps its own onListenerError',
+    () async {
+      final leaf = _MigratedLeaf();
+      final reports = <FlutterErrorDetails>[];
+      final previous = FlutterError.onError;
+      FlutterError.onError = reports.add;
+      addTearDown(() => FlutterError.onError = previous);
 
-    leaf
-      ..addListener(() => throw StateError('the listener blew up'))
-      ..set(1);
+      leaf
+        ..addListener(() => throw StateError('the listener blew up'))
+        ..set(1);
 
-    expect(leaf, isA<ValueListenable<int>>(), reason: 'the base mixes it in');
-    expect(leaf.reported.single, isA<StateError>());
-    expect(reports, isEmpty);
-    await leaf.close();
-  });
+      expect(leaf, isA<ValueListenable<int>>(), reason: 'the base mixes it in');
+      expect(leaf.reported.single, isA<StateError>());
+      expect(reports, isEmpty);
+      await leaf.close();
+    },
+  );
 
   test('SoloListenable mixed in again on the leaf silences the base', () async {
     final leaf = _MixedTwiceLeaf();
@@ -627,10 +629,10 @@ void main() {
 
   test('the bases of these tests import nothing of Flutter', () {
     final source = File('test/support/plain_base.dart').readAsStringSync();
-    final imports = RegExp("^import '([^']+)';", multiLine: true)
-        .allMatches(source)
-        .map((match) => match[1])
-        .toList();
+    final imports = RegExp(
+      "^import '([^']+)';",
+      multiLine: true,
+    ).allMatches(source).map((match) => match[1]).toList();
     expect(imports, ['package:solo/solo.dart']);
   });
 }

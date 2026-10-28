@@ -637,9 +637,7 @@ Future<T> runInIsolate<T>(JobContext ctx, T Function() work) async {
       ),
       discard: (isolate) => isolate.kill(priority: Isolate.immediate),
     );
-    unregister = ctx.onCancel(
-      () => isolate.kill(priority: Isolate.immediate),
-    );
+    unregister = ctx.onCancel(() => isolate.kill(priority: Isolate.immediate));
     isolate.resume(isolate.pauseCapability!);
     // Первое сообщение и есть ответ: значение, ошибка или выход изолята,
     // убитого раньше, чем он ответил.
@@ -650,8 +648,10 @@ Future<T> runInIsolate<T>(JobContext ctx, T Function() work) async {
   }
   return switch (message) {
     (final T value,) => value,
-    [final error, final stackTrace] =>
-      throw RemoteError('$error', '$stackTrace'),
+    [final error, final stackTrace] => throw RemoteError(
+      '$error',
+      '$stackTrace',
+    ),
     _ => throw StateError('the isolate ended without an answer'),
   };
 }

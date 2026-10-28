@@ -195,9 +195,9 @@ mixin Desk on Solo<AppState> {
 
   /// Work that only says that it started, in any state.
   SoloJob<void> next() => enqueue<AppState, void>(
-        key: 'next',
-        (ctx) async => stage.trace.add('next job started'),
-      );
+    key: 'next',
+    (ctx) async => stage.trace.add('next job started'),
+  );
 
   @override
   void onError(
@@ -205,8 +205,7 @@ mixin Desk on Solo<AppState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add(error);
+  }) => heard.add(error);
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {

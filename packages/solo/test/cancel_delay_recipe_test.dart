@@ -47,10 +47,9 @@ String _number(String how) {
 }
 
 /// Whether the page says [phrase], wherever its lines were broken.
-bool _says(String phrase) => File('doc/diagnostics.md')
-    .readAsStringSync()
-    .replaceAll(RegExp(r'\s+'), ' ')
-    .contains(phrase);
+bool _says(String phrase) => File(
+  'doc/diagnostics.md',
+).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ').contains(phrase);
 
 void main() {
   test('a bare await in the body is reported for its whole length', () {
@@ -82,24 +81,26 @@ void main() {
     expect(observer.lines, ['guarded 0']);
   });
 
-  test('a pause of the context is reported as no delay, and leaves no timer',
-      () {
-    final observer = _SlowCancellations();
-    runSolo((solo, journal, async) {
-      Solo.observer = observer;
-      solo.enqueue<TestState, void>(
-        key: 'paused',
-        (ctx) => ctx.pause(const Duration(milliseconds: 300)),
-      );
-      async.elapse(const Duration(milliseconds: 10));
-      solo.cancelAll();
-      async.flushMicrotasks();
-      expect(async.pendingTimers, isEmpty);
-    });
+  test(
+    'a pause of the context is reported as no delay, and leaves no timer',
+    () {
+      final observer = _SlowCancellations();
+      runSolo((solo, journal, async) {
+        Solo.observer = observer;
+        solo.enqueue<TestState, void>(
+          key: 'paused',
+          (ctx) => ctx.pause(const Duration(milliseconds: 300)),
+        );
+        async.elapse(const Duration(milliseconds: 10));
+        solo.cancelAll();
+        async.flushMicrotasks();
+        expect(async.pendingTimers, isEmpty);
+      });
 
-    expect(observer.lines, ['paused ${_number('ctx.pause')}']);
-    expect(observer.lines, ['paused 0']);
-  });
+      expect(observer.lines, ['paused ${_number('ctx.pause')}']);
+      expect(observer.lines, ['paused 0']);
+    },
+  );
 
   test('a rule that breaks during a pause is asked on the way in only', () {
     var allowed = true;
@@ -167,8 +168,10 @@ void main() {
     Duration? waited;
     runSolo((solo, journal, async) {
       Solo.observer = observer;
-      final job =
-          solo.enqueue<TestState, void>(key: 'bare', (ctx) async => delay(300));
+      final job = solo.enqueue<TestState, void>(
+        key: 'bare',
+        (ctx) async => delay(300),
+      );
       async.elapse(const Duration(milliseconds: 10));
       final calledAt = clock.now();
       job.cancel().then((_) => waited = clock.now().difference(calledAt));
@@ -180,8 +183,7 @@ void main() {
   });
 
   for (final call in ['cancel', 'close']) {
-    test(
-        'a section of uncancellable counts from its end, and the caller of '
+    test('a section of uncancellable counts from its end, and the caller of '
         '$call waits for it', () {
       final observer = _SlowCancellations();
       Duration? waited;
@@ -193,8 +195,9 @@ void main() {
         );
         async.elapse(const Duration(milliseconds: 10));
         final calledAt = clock.now();
-        (call == 'cancel' ? job.cancel() : solo.close())
-            .then((_) => waited = clock.now().difference(calledAt));
+        (call == 'cancel' ? job.cancel() : solo.close()).then(
+          (_) => waited = clock.now().difference(calledAt),
+        );
         async.flushTimers();
       });
 

@@ -9,12 +9,12 @@ import 'package:async_job/async_job.dart';
 import 'children_stubs.dart';
 
 Job<void> eachInABody() => Job<void>((ctx) async {
-      // ignore: prefer_expression_function_bodies
-      final saving = ctx.each(messages, (childCtx, message) {
-        return childCtx.join(() => store.saveBody(message));
-      });
-      await saving.value;
-    });
+  // ignore: prefer_expression_function_bodies
+  final saving = ctx.each(messages, (childCtx, message) {
+    return childCtx.join(() => store.saveBody(message));
+  });
+  await saving.value;
+});
 
 Future<void> watchTicks() async {
   final job = Job<void>((ctx) async {
@@ -32,79 +32,80 @@ Future<void> watchTicks() async {
 }
 
 Job<void> savingInSteps() => Job<void>((ctx) async {
-      final processing = ctx.each(messages, (childCtx, message) async {
-        await store.saveBody(message);
-        await store.saveAttachments(message);
-      });
-      ctx.onDispose(() => stage.trace.add('parent cleanup'));
-      await processing.value;
-    });
+  final processing = ctx.each(messages, (childCtx, message) async {
+    await store.saveBody(message);
+    await store.saveAttachments(message);
+  });
+  ctx.onDispose(() => stage.trace.add('parent cleanup'));
+  await processing.value;
+});
 
 Job<void> savingWithCheckpoints() => Job<void>((ctx) async {
-      final processing = ctx.each(messages, (childCtx, message) async {
-        await childCtx.join(() => store.saveBody(message));
-        await childCtx.join(() => store.saveAttachments(message));
-      });
-      ctx.onDispose(() => stage.trace.add('parent cleanup'));
-      await processing.value;
-    });
+  final processing = ctx.each(messages, (childCtx, message) async {
+    await childCtx.join(() => store.saveBody(message));
+    await childCtx.join(() => store.saveAttachments(message));
+  });
+  ctx.onDispose(() => stage.trace.add('parent cleanup'));
+  await processing.value;
+});
 
 Job<void> feedLeftToItself() => Job<void>((ctx) async {
-      final feed = Feed();
-      await ctx.each(feed.messages, (childCtx, message) => save(message)).value;
-    });
+  final feed = Feed();
+  await ctx.each(feed.messages, (childCtx, message) => save(message)).value;
+});
 
 Job<void> feedClosedByTheJob() => Job<void>((ctx) async {
-      final feed = Feed();
-      ctx.onDispose(feed.close);
-      await ctx.each(feed.messages, (childCtx, message) => save(message)).value;
-    });
+  final feed = Feed();
+  ctx.onDispose(feed.close);
+  await ctx.each(feed.messages, (childCtx, message) => save(message)).value;
+});
 
 Job<void> draftsOnTheStackOfTheStream() => Job<void>((ctx) async {
-      final processing = ctx.each(messages, (childCtx, message) async {
-        final draft = await childCtx.join(
+  final processing = ctx.each(messages, (childCtx, message) async {
+    final draft = await childCtx.join(
+      () => store.openDraft(message),
+      dispose: (draft) => draft.close(),
+    );
+    await childCtx.join(draft.write);
+  });
+  await processing.value;
+});
+
+Job<void> draftsOnTheStackOfTheirEvent() => Job<void>((ctx) async {
+  // ignore: prefer_expression_function_bodies
+  final processing = ctx.each(messages, (childCtx, message) {
+    return childCtx.run(
+      Job.deferred<void>((eventCtx) async {
+        final draft = await eventCtx.join(
           () => store.openDraft(message),
           dispose: (draft) => draft.close(),
         );
-        await childCtx.join(draft.write);
-      });
-      await processing.value;
-    });
-
-Job<void> draftsOnTheStackOfTheirEvent() => Job<void>((ctx) async {
-      // ignore: prefer_expression_function_bodies
-      final processing = ctx.each(messages, (childCtx, message) {
-        return childCtx.run(Job.deferred<void>((eventCtx) async {
-          final draft = await eventCtx.join(
-            () => store.openDraft(message),
-            dispose: (draft) => draft.close(),
-          );
-          await eventCtx.join(draft.write);
-          // ignore: require_trailing_commas
-        }));
-      });
-      await processing.value;
-    });
+        await eventCtx.join(draft.write);
+      }),
+    );
+  });
+  await processing.value;
+});
 
 Job<void> awaitForInABody() => Job<void>((ctx) async {
-      await for (final message in messages) {
-        await ctx.join(() => store.saveBody(message));
-      }
-    });
+  await for (final message in messages) {
+    await ctx.join(() => store.saveBody(message));
+  }
+});
 
 Job<void> listenInABody() => Job<void>((ctx) async {
-      final subscription = messages.listen((message) async {
-        await store.saveBody(message);
-      });
-      ctx.onCancel(subscription.cancel);
-      await ctx.abandonable(subscription.asFuture<void>);
-    });
+  final subscription = messages.listen((message) async {
+    await store.saveBody(message);
+  });
+  ctx.onCancel(subscription.cancel);
+  await ctx.abandonable(subscription.asFuture<void>);
+});
 
 Job<void> asyncMapInABody() => Job<void>((ctx) async {
-      final subscription = messages.asyncMap(store.saveBody).listen((_) {});
-      ctx.onCancel(subscription.cancel);
-      await ctx.abandonable(subscription.asFuture<void>);
-    });
+  final subscription = messages.asyncMap(store.saveBody).listen((_) {});
+  ctx.onCancel(subscription.cancel);
+  await ctx.abandonable(subscription.asFuture<void>);
+});
 
 Future<void> saveAll(
   Stream<String> messages,

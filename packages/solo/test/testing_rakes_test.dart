@@ -47,23 +47,25 @@ String _prose() => _page().replaceAll(RegExp(r'\s+'), ' ');
 /// says, so a page that stops saying it leaves the test with nothing to
 /// stand for.
 void _says(String phrase) => expect(
-      _prose(),
-      contains(phrase),
-      reason: 'doc/testing.md no longer says this',
-    );
+  _prose(),
+  contains(phrase),
+  reason: 'doc/testing.md no longer says this',
+);
 
 /// What the page quotes under its `text` fences, in order, line by line.
 List<List<String>> _quotes() => [
-      for (final block
-          in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(_page()))
-        block.group(1)!.split('\n'),
-    ];
+  for (final block in RegExp(
+    r'```text\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(_page()))
+    block.group(1)!.split('\n'),
+];
 
 /// The sections of the page: each `## ` heading with the text under it.
 List<String> _sections() => [
-      for (final part in _page().split(RegExp('^(?=## )', multiLine: true)))
-        if (part.startsWith('## ')) part,
-    ];
+  for (final part in _page().split(RegExp('^(?=## )', multiLine: true)))
+    if (part.startsWith('## ')) part,
+];
 
 /// Declares [written] as a test of this suite, as the page writes it.
 void _asWritten(PageTest written) => test(written.name, written.body);
@@ -74,16 +76,17 @@ Future<nested.TestCaseMonitor> _run(FutureOr<void> Function() body) =>
 
 /// What [error] is, in a line.
 String _what(Object error) => switch (error) {
-      TestFailure() => 'TestFailure',
-      StateError() => 'StateError: ${error.message}',
-      TimeoutException() => 'TimeoutException',
-      String() => error.split('\n').first,
-      _ => '$error',
-    };
+  TestFailure() => 'TestFailure',
+  StateError() => 'StateError: ${error.message}',
+  TimeoutException() => 'TimeoutException',
+  String() => error.split('\n').first,
+  _ => '$error',
+};
 
 /// The errors the test case of [run] has surfaced so far.
-List<String> _errors(nested.TestCaseMonitor run) =>
-    [for (final error in run.errors) _what(error.error)];
+List<String> _errors(nested.TestCaseMonitor run) => [
+  for (final error in run.errors) _what(error.error),
+];
 
 /// What the one failed expectation of [run] printed.
 String _message(nested.TestCaseMonitor run) =>
@@ -101,10 +104,7 @@ Future<void> _nextError(nested.TestCaseMonitor run) async {
 /// one more error of the list.
 Future<List<String>> _zoned(Future<void> Function() body) async {
   final errors = <String>[];
-  await runZonedGuarded(
-    body,
-    (error, stackTrace) => errors.add(_what(error)),
-  );
+  await runZonedGuarded(body, (error, stackTrace) => errors.add(_what(error)));
   return errors;
 }
 
@@ -125,14 +125,14 @@ String _how(Job<Object?> job) => '${job.outcome ?? 'no outcome'}';
 
 /// The name of the state [solo] is in.
 String _state(Solo<Object> solo) => switch (solo.currentState) {
-      Initial() => 'Initial',
-      Loading() => 'Loading',
-      Loaded() => 'Loaded',
-      Failure() => 'Failure',
-      Idle() => 'Idle',
-      Connected() => 'Connected',
-      final other => '$other',
-    };
+  Initial() => 'Initial',
+  Loading() => 'Loading',
+  Loaded() => 'Loaded',
+  Failure() => 'Failure',
+  Idle() => 'Idle',
+  Connected() => 'Connected',
+  final other => '$other',
+};
 
 /// The page's fake, counting its calls: whether the API was reached at all,
 /// and whether a call is still in flight.
@@ -162,20 +162,15 @@ final class _Plain extends Solo<ProfileState> {
 
   _Plain(this.api, {this.limit}) : super(const Initial());
 
-  Job<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        (ctx) async {
-          ctx.emit(const Loading());
-          final limit = this.limit;
-          final name = await ctx.abandonable(
-            () => limit == null
-                ? api.fetchName()
-                : api.fetchName().timeout(limit),
-          );
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+  Job<String> load() => enqueue<ProfileState, String>(key: 'load', (ctx) async {
+    ctx.emit(const Loading());
+    final limit = this.limit;
+    final name = await ctx.abandonable(
+      () => limit == null ? api.fetchName() : api.fetchName().timeout(limit),
+    );
+    ctx.emit(Loaded(name));
+    return name;
+  });
 
   Job<void> next() => enqueue<ProfileState, void>(key: 'next', (ctx) async {});
 }
@@ -207,23 +202,23 @@ final class _HandledCamera extends Solo<CameraState> {
   _HandledCamera(this.hw, this.seen) : super(const Idle());
 
   Job<void> connect() => enqueue<Idle, void>(
-        key: 'connect',
-        timeout: const Duration(seconds: 5),
-        ifFailed: (state, error, stackTrace) {
-          seen.add('ifFailed: $error');
-          return state;
-        },
-        ifCancelled: (state, cancelled) {
-          seen.add('ifCancelled: ${cancelled.reason.name}');
-          return state;
-        },
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => hw.open(cancelToken: token));
-          ctx.emit(const Connected());
-        },
-      );
+    key: 'connect',
+    timeout: const Duration(seconds: 5),
+    ifFailed: (state, error, stackTrace) {
+      seen.add('ifFailed: $error');
+      return state;
+    },
+    ifCancelled: (state, cancelled) {
+      seen.add('ifCancelled: ${cancelled.reason.name}');
+      return state;
+    },
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => hw.open(cancelToken: token));
+      ctx.emit(const Connected());
+    },
+  );
 }
 
 void main() {
@@ -247,8 +242,10 @@ void main() {
 
   group('The fixtures', () {
     test('the controller is the one of the quick start of the README', () {
-      final block =
-          RegExp(r'```dart\n(.*?)\n```', dotAll: true).firstMatch(_page())!;
+      final block = RegExp(
+        r'```dart\n(.*?)\n```',
+        dotAll: true,
+      ).firstMatch(_page())!;
       final readme = File('README.md').readAsStringSync();
       final quickStart = readme.substring(
         readme.indexOf('\n## Quick start\n'),
@@ -277,9 +274,10 @@ void main() {
       fakeAsync((async) {
         final given = StateError('no network');
         Object? thrown;
-        FakeProfileApi(error: given)
-            .fetchName()
-            .then<void>((_) {}, onError: (Object error) => thrown = error);
+        FakeProfileApi(error: given).fetchName().then<void>(
+          (_) {},
+          onError: (Object error) => thrown = error,
+        );
 
         async.elapse(const Duration(milliseconds: 19));
         expect(thrown, isNull);
@@ -340,7 +338,8 @@ void main() {
         final profile = ProfileController(FakeProfileApi());
 
         final job = profile.load();
-        final atOnce = '${_state(profile)}, ${_how(job)}, '
+        final atOnce =
+            '${_state(profile)}, ${_how(job)}, '
             'running ${job.isRunning}';
         await Future<void>.microtask(() {});
         final aMicrotaskLater = '${_state(profile)}, running ${job.isRunning}';
@@ -349,8 +348,10 @@ void main() {
         expect(aMicrotaskLater, 'Loading, running true');
         _says('not even `Loading`, the state the body emits on its first line');
         _says('the body starts on a later microtask');
-        _says('Nothing of the load has happened by the time the expectation '
-            'runs');
+        _says(
+          'Nothing of the load has happened by the time the expectation '
+          'runs',
+        );
 
         await job.done;
         await profile.close();
@@ -413,8 +414,10 @@ void main() {
 
         expect(await job.done, isA<Cancelled>());
         await expectLater(job.value, throwsA(isA<Cancelled>()));
-        _says('`done` hands it over like any other, while `value` would throw '
-            'it');
+        _says(
+          '`done` hands it over like any other, while `value` would throw '
+          'it',
+        );
 
         await profile.close();
       });
@@ -428,53 +431,63 @@ void main() {
         await profile.close();
       });
 
-      test('a load cancelled in the queue never ran: one line, no state',
-          () async {
-        final journal = Journal();
-        Solo.observer = journal;
-        final api = _CountingApi();
-        final profile = ProfileController(api);
-        final job = profile.load();
+      test(
+        'a load cancelled in the queue never ran: one line, no state',
+        () async {
+          final journal = Journal();
+          Solo.observer = journal;
+          final api = _CountingApi();
+          final profile = ProfileController(api);
+          final job = profile.load();
 
-        await job.cancel();
+          await job.cancel();
 
-        expect(_how(job), 'Cancelled(manual)');
-        expect(journal.lines, ['load Cancelled(manual)']);
-        expect(api.started, 0);
-        _says('`cancel()` completes when the job has finished');
-        _says(
+          expect(_how(job), 'Cancelled(manual)');
+          expect(journal.lines, ['load Cancelled(manual)']);
+          expect(api.started, 0);
+          _says('`cancel()` completes when the job has finished');
+          _says(
             'its body never ran, and its `ifCancelled` handler was not called '
-            'at all');
+            'at all',
+          );
 
-        await profile.close();
-      });
+          await profile.close();
+        },
+      );
 
-      test('a load cancelled while it runs ends in the state of its handler',
-          () async {
-        final journal = Journal();
-        Solo.observer = journal;
-        final profile = ProfileController(FakeProfileApi());
-        final job = profile.load();
-        await pumpEventQueue();
+      test(
+        'a load cancelled while it runs ends in the state of its handler',
+        () async {
+          final journal = Journal();
+          Solo.observer = journal;
+          final profile = ProfileController(FakeProfileApi());
+          final job = profile.load();
+          await pumpEventQueue();
 
-        await job.cancel();
+          await job.cancel();
 
-        expect(
-          job.outcome,
-          isA<Cancelled>()
-              .having((outcome) => outcome.started, 'started', isTrue),
-        );
-        expect(journal.lines, [
-          'load started',
-          'state: Loading',
-          'state: Initial',
-          'load Cancelled(manual)',
-        ]);
-        _says('A load cancelled while it runs ends `Cancelled` as well, with '
-            '`started: true`');
+          expect(
+            job.outcome,
+            isA<Cancelled>().having(
+              (outcome) => outcome.started,
+              'started',
+              isTrue,
+            ),
+          );
+          expect(journal.lines, [
+            'load started',
+            'state: Loading',
+            'state: Initial',
+            'load Cancelled(manual)',
+          ]);
+          _says(
+            'A load cancelled while it runs ends `Cancelled` as well, with '
+            '`started: true`',
+          );
 
-        await profile.close();
-      });
+          await profile.close();
+        },
+      );
     });
   });
 
@@ -486,8 +499,10 @@ void main() {
         expect(run.state, _failed);
         expect(_errors(run), ['TestFailure']);
         expect(_message(run), contains("Actual: <Instance of 'Initial'>"));
-        _says('`close()` cancels, and the state the expectation sees is '
-            '`Initial`');
+        _says(
+          '`close()` cancels, and the state the expectation sees is '
+          '`Initial`',
+        );
       });
 
       test('the job never leaves the queue', () async {
@@ -503,35 +518,41 @@ void main() {
         expect(journal.lines, ['load Cancelled(closed)']);
         expect(api.started, 0);
         expect(_state(profile), 'Initial');
-        _says('so `close` drops it with `Cancelled(closed)` before the body '
-            'starts');
-      });
-
-      test('a load that had started is cancelled where it was waiting',
-          () async {
-        final journal = Journal();
-        Solo.observer = journal;
-        final api = _CountingApi();
-        final profile = ProfileController(api);
-        final job = profile.load();
-        await pumpEventQueue();
-
-        await profile.close();
-
-        expect(_how(job), 'Cancelled(closed)');
-        expect(journal.lines, [
-          'load started',
-          'state: Loading',
-          'state: Initial',
-          'load Cancelled(closed)',
-        ]);
-        expect(
-          'started ${api.started}, finished ${api.finished}',
-          'started 1, finished 0',
+        _says(
+          'so `close` drops it with `Cancelled(closed)` before the body '
+          'starts',
         );
-        _says('its `ifCancelled` handler would publish `Initial` over the '
-            '`Loading` its body had emitted');
       });
+
+      test(
+        'a load that had started is cancelled where it was waiting',
+        () async {
+          final journal = Journal();
+          Solo.observer = journal;
+          final api = _CountingApi();
+          final profile = ProfileController(api);
+          final job = profile.load();
+          await pumpEventQueue();
+
+          await profile.close();
+
+          expect(_how(job), 'Cancelled(closed)');
+          expect(journal.lines, [
+            'load started',
+            'state: Loading',
+            'state: Initial',
+            'load Cancelled(closed)',
+          ]);
+          expect(
+            'started ${api.started}, finished ${api.finished}',
+            'started 1, finished 0',
+          );
+          _says(
+            'its `ifCancelled` handler would publish `Initial` over the '
+            '`Loading` its body had emitted',
+          );
+        },
+      );
     });
 
     group('letting the work finish, as the page writes it:', () {
@@ -551,60 +572,73 @@ void main() {
 
         expect(_state(profile), 'Failure');
         expect(errors, ['StateError: no network']);
-        _says('A drain runs the queue; it does not promise the work '
-            'succeeds.');
+        _says(
+          'A drain runs the queue; it does not promise the work '
+          'succeeds.',
+        );
       });
     });
   });
 
   group('A failure nobody read', () {
     group('the first attempt', () {
-      test('is red with the failure of the load, its expectation holding',
-          () async {
-        final run = await _run(first.failureNobodyRead.body);
+      test(
+        'is red with the failure of the load, its expectation holding',
+        () async {
+          final run = await _run(first.failureNobodyRead.body);
 
-        expect(run.state, _failed);
-        expect(_errors(run), ['StateError: no network']);
-        expect('${run.errors.single.error}', 'Bad state: no network');
-        _says('The expectation holds and the test is red anyway.');
-        _says('the runner fails the test with `Bad state: no network`');
-      });
+          expect(run.state, _failed);
+          expect(_errors(run), ['StateError: no network']);
+          expect('${run.errors.single.error}', 'Bad state: no network');
+          _says('The expectation holds and the test is red anyway.');
+          _says('the runner fails the test with `Bad state: no network`');
+        },
+      );
 
-      test('the trace names the fake and the engine, and no line of the test',
-          () async {
-        final traces = <String>[];
+      test(
+        'the trace names the fake and the engine, and no line of the test',
+        () async {
+          final traces = <String>[];
 
-        await runZonedGuarded(
-          first.failureNobodyRead.body,
-          (error, stackTrace) => traces.add('$stackTrace'),
-        );
+          await runZonedGuarded(
+            first.failureNobodyRead.body,
+            (error, stackTrace) => traces.add('$stackTrace'),
+          );
 
-        expect(traces, hasLength(1));
-        expect(traces.single, contains('FakeProfileApi.fetchName'));
-        expect(traces.single, contains('package:async_job/'));
-        expect(traces.single, isNot(contains('testing_first_attempts.dart')));
-        _says('Its stack trace names the line of the fake that threw and a '
-            'frame of the engine, and no line of the test');
-      });
+          expect(traces, hasLength(1));
+          expect(traces.single, contains('FakeProfileApi.fetchName'));
+          expect(traces.single, contains('package:async_job/'));
+          expect(traces.single, isNot(contains('testing_first_attempts.dart')));
+          _says(
+            'Its stack trace names the line of the fake that threw and a '
+            'frame of the engine, and no line of the test',
+          );
+        },
+      );
 
-      test('a test that does not wait at all has passed when the failure comes',
-          () async {
-        final run = await _run(() {
-          ProfileController(FakeProfileApi(error: StateError('no network')))
-              .load();
-        });
-        final whenOver = '${run.state}, ${_errors(run)}';
+      test(
+        'a test that does not wait at all has passed when the failure comes',
+        () async {
+          final run = await _run(() {
+            ProfileController(
+              FakeProfileApi(error: StateError('no network')),
+            ).load();
+          });
+          final whenOver = '${run.state}, ${_errors(run)}';
 
-        await _nextError(run);
+          await _nextError(run);
 
-        expect(whenOver, '$_passed, []');
-        expect(run.state, _failed);
-        expect(_errors(run), ['StateError: no network', _tooLate]);
-        _says('the failure arrives after the test has ended');
-        _says('`This test failed after it had already completed`');
-        _says('With no later test still running by then, the run is over '
-            'before the failure arrives');
-      });
+          expect(whenOver, '$_passed, []');
+          expect(run.state, _failed);
+          expect(_errors(run), ['StateError: no network', _tooLate]);
+          _says('the failure arrives after the test has ended');
+          _says('`This test failed after it had already completed`');
+          _says(
+            'With no later test still running by then, the run is over '
+            'before the failure arrives',
+          );
+        },
+      );
     });
 
     group('ignoreFailure, as the page writes it:', () {
@@ -612,8 +646,7 @@ void main() {
     });
 
     group('ignoreFailure', () {
-      test(
-          'done, value and ignoreFailure() mark the job observed, '
+      test('done, value and ignoreFailure() mark the job observed, '
           'outcome does not', () async {
         final reached = <String, List<String>>{};
 
@@ -657,26 +690,30 @@ void main() {
         _says('Reading `job.outcome` does not mark anything');
       });
 
-      test('a read that comes after the job has ended comes too late',
-          () async {
-        final run = await _run(() async {
-          final profile = ProfileController(
-            FakeProfileApi(error: StateError('no network')),
+      test(
+        'a read that comes after the job has ended comes too late',
+        () async {
+          final run = await _run(() async {
+            final profile = ProfileController(
+              FakeProfileApi(error: StateError('no network')),
+            );
+
+            final job = profile.load();
+            await profile.close(mode: SoloCloseMode.drain);
+
+            expect(await job.done, isA<Failed>());
+            expect(profile.currentState, isA<Failure>());
+          });
+
+          expect(run.state, _failed);
+          expect(_errors(run), ['StateError: no network']);
+          _says('The mark has to come by the microtask after the job ends');
+          _says(
+            'so a test that holds the job, drains the controller and reads '
+            '`done` afterwards is red all the same',
           );
-
-          final job = profile.load();
-          await profile.close(mode: SoloCloseMode.drain);
-
-          expect(await job.done, isA<Failed>());
-          expect(profile.currentState, isA<Failure>());
-        });
-
-        expect(run.state, _failed);
-        expect(_errors(run), ['StateError: no network']);
-        _says('The mark has to come by the microtask after the job ends');
-        _says('so a test that holds the job, drains the controller and reads '
-            '`done` afterwards is red all the same');
-      });
+        },
+      );
 
       test('the field is null until the job has finished', () {
         fakeAsync((async) {
@@ -716,35 +753,41 @@ void main() {
         expect(whenOver, '$_passed, []');
         expect(_errors(run), ['StateError: no network', _tooLate]);
         _says('One failure is out of reach of all three');
-        _says('The job ends `Cancelled`; the call fails twenty milliseconds '
-            'later, and its error belongs to no outcome.');
+        _says(
+          'The job ends `Cancelled`; the call fails twenty milliseconds '
+          'later, and its error belongs to no outcome.',
+        );
         _says("the test's again, and by then the test is over");
       });
 
-      test('closing the controller on a running load lets go of it the same',
-          () async {
-        final run = await _run(() async {
-          final profile = ProfileController(
-            FakeProfileApi(error: StateError('no network')),
-          )..load().ignoreFailure();
-          await pumpEventQueue();
+      test(
+        'closing the controller on a running load lets go of it the same',
+        () async {
+          final run = await _run(() async {
+            final profile = ProfileController(
+              FakeProfileApi(error: StateError('no network')),
+            )..load().ignoreFailure();
+            await pumpEventQueue();
 
-          await profile.close();
-        });
-        final whenOver = '${run.state}, ${_errors(run)}';
+            await profile.close();
+          });
+          final whenOver = '${run.state}, ${_errors(run)}';
 
-        await _nextError(run);
+          await _nextError(run);
 
-        expect(whenOver, '$_passed, []');
-        expect(_errors(run), ['StateError: no network', _tooLate]);
-        _says('or close the controller on it, and `ctx.abandonable` lets go of '
-            'the call');
-      });
+          expect(whenOver, '$_passed, []');
+          expect(_errors(run), ['StateError: no network', _tooLate]);
+          _says(
+            'or close the controller on it, and `ctx.abandonable` lets go of '
+            'the call',
+          );
+        },
+      );
 
       test('Solo.unansweredHandler takes it in place of the zone', () async {
         final answered = Completer<Object>();
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => answered.complete(error);
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+            answered.complete(error);
 
         final run = await _run(() async {
           final profile = ProfileController(
@@ -767,19 +810,21 @@ void main() {
         );
       });
 
-      test('a call that answers after the job is over reports nothing',
-          () async {
-        final errors = await _zoned(() async {
-          final profile = ProfileController(FakeProfileApi());
-          final job = profile.load();
-          await pumpEventQueue();
-          await job.cancel();
-          await profile.close();
-          await Future<void>.delayed(const Duration(milliseconds: 40));
-        });
+      test(
+        'a call that answers after the job is over reports nothing',
+        () async {
+          final errors = await _zoned(() async {
+            final profile = ProfileController(FakeProfileApi());
+            final job = profile.load();
+            await pumpEventQueue();
+            await job.cancel();
+            await profile.close();
+            await Future<void>.delayed(const Duration(milliseconds: 40));
+          });
 
-        expect(errors, isEmpty);
-      });
+          expect(errors, isEmpty);
+        },
+      );
     });
   });
 
@@ -794,44 +839,44 @@ void main() {
         );
 
         expect(run.state, _failed);
-        expect(
-          [
-            for (final line in RegExp("'(.*)'").allMatches(actual))
-              line.group(1),
-          ],
-          _quotes().first,
-        );
+        expect([
+          for (final line in RegExp("'(.*)'").allMatches(actual)) line.group(1),
+        ], _quotes().first);
         _says('The journal comes out in another order:');
       });
 
-      test('the second call drops the job it has just created, in the call',
-          () {
-        fakeAsync((async) {
-          final journal = Journal();
-          final finished = _Finished();
-          Solo.observer = SoloObserver.all([journal, finished]);
-          final profile = ProfileController(FakeProfileApi());
+      test(
+        'the second call drops the job it has just created, in the call',
+        () {
+          fakeAsync((async) {
+            final journal = Journal();
+            final finished = _Finished();
+            Solo.observer = SoloObserver.all([journal, finished]);
+            final profile = ProfileController(FakeProfileApi());
 
-          final job = profile.load();
-          final second = profile.load();
-          final dropped = finished.jobs.single;
-          final outcome = dropped.outcome! as Cancelled;
+            final job = profile.load();
+            final second = profile.load();
+            final dropped = finished.jobs.single;
+            final outcome = dropped.outcome! as Cancelled;
 
-          expect(second, same(job));
-          expect(journal.lines, ['load Cancelled(duplicate)']);
-          expect(dropped, isNot(same(job)));
-          expect(dropped.key, 'load');
-          expect(outcome.reason, isA<DuplicateCancelReason>());
-          expect(outcome.started, isFalse);
-          _says('the second call drops the job it has just created — inside '
-              'the call itself, before anything has started');
-          _says('The key in the line is the key the policy matched on');
-          _says('`duplicate` is the reason, a `DuplicateCancelReason`');
+            expect(second, same(job));
+            expect(journal.lines, ['load Cancelled(duplicate)']);
+            expect(dropped, isNot(same(job)));
+            expect(dropped.key, 'load');
+            expect(outcome.reason, isA<DuplicateCancelReason>());
+            expect(outcome.started, isFalse);
+            _says(
+              'the second call drops the job it has just created — inside '
+              'the call itself, before anything has started',
+            );
+            _says('The key in the line is the key the policy matched on');
+            _says('`duplicate` is the reason, a `DuplicateCancelReason`');
 
-          profile.close();
-          async.flushTimers();
-        });
-      });
+            profile.close();
+            async.flushTimers();
+          });
+        },
+      );
 
       test('the dropped job gets one line: no start, no state of its own', () {
         fakeAsync((async) {
@@ -849,8 +894,10 @@ void main() {
             hasLength(1),
           );
           expect(journal.lines, isNot(contains('state: Initial')));
-          _says('That first line is the `onFinish` of the dropped job, and '
-              'the only line it ever gets');
+          _says(
+            'That first line is the `onFinish` of the dropped job, and '
+            'the only line it ever gets',
+          );
           _says('nothing was running');
 
           profile.close();
@@ -877,32 +924,36 @@ void main() {
         });
       });
 
-      test('the state ends Loaded whether the second call is dropped or runs',
-          () {
-        fakeAsync((async) {
-          final journal = Journal();
-          Solo.observer = journal;
-          final dropping = ProfileController(FakeProfileApi())
-            ..load()
-            ..load();
-          final running = _Plain(FakeProfileApi())
-            ..load().ignoreFailure()
-            ..load().ignoreFailure();
+      test(
+        'the state ends Loaded whether the second call is dropped or runs',
+        () {
+          fakeAsync((async) {
+            final journal = Journal();
+            Solo.observer = journal;
+            final dropping = ProfileController(FakeProfileApi())
+              ..load()
+              ..load();
+            final running = _Plain(FakeProfileApi())
+              ..load().ignoreFailure()
+              ..load().ignoreFailure();
 
-          async.elapse(const Duration(milliseconds: 40));
+            async.elapse(const Duration(milliseconds: 40));
 
-          expect('${_state(dropping)}, ${_state(running)}', 'Loaded, Loaded');
-          expect(
-            journal.lines.where((line) => line == 'load started'),
-            hasLength(3),
-          );
-          _says('The state cannot show that: it ends up `Loaded` either way.');
+            expect('${_state(dropping)}, ${_state(running)}', 'Loaded, Loaded');
+            expect(
+              journal.lines.where((line) => line == 'load started'),
+              hasLength(3),
+            );
+            _says(
+              'The state cannot show that: it ends up `Loaded` either way.',
+            );
 
-          dropping.close();
-          running.close();
-          async.flushTimers();
-        });
-      });
+            dropping.close();
+            running.close();
+            async.flushTimers();
+          });
+        },
+      );
 
       test('one observer hears every controller of the process', () async {
         final journal = Journal();
@@ -917,8 +968,10 @@ void main() {
           journal.lines.where((line) => line == 'load started'),
           hasLength(2),
         );
-        _says('collected by an observer — one for every controller in the '
-            'process');
+        _says(
+          'collected by an observer — one for every controller in the '
+          'process',
+        );
 
         await one.close();
         await other.close();
@@ -945,8 +998,10 @@ void main() {
           expect(afterTheFlush, 'Loading, running true');
           expect(journal.lines, _quotes().last);
           expect(_quotes(), hasLength(2));
-          _says('With it the first job leaves the queue and emits `Loading`, '
-              'and the second call finds a load that is running');
+          _says(
+            'With it the first job leaves the queue and emits `Loading`, '
+            'and the second call finds a load that is running',
+          );
 
           profile.close();
           async.flushTimers();
@@ -957,45 +1012,52 @@ void main() {
 
   group('Awaiting inside fakeAsync', () {
     group('the first attempt', () {
-      test('hangs: the load never starts, and the test case never ends',
-          () async {
-        final journal = Journal();
-        Solo.observer = journal;
+      test(
+        'hangs: the load never starts, and the test case never ends',
+        () async {
+          final journal = Journal();
+          Solo.observer = journal;
 
-        final run =
-            nested.TestCaseMonitor.start(first.awaitedInsideFakeAsync.body);
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+          final run = nested.TestCaseMonitor.start(
+            first.awaitedInsideFakeAsync.body,
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 100));
 
-        expect(run.state, nested.State.running);
-        expect(_errors(run), isEmpty);
-        expect(journal.lines, isEmpty);
-        _says("The test hangs until the test's own timeout kills it.");
-        _says('the load never starts, and no timer inside will ever fire');
-      });
+          expect(run.state, nested.State.running);
+          expect(_errors(run), isEmpty);
+          expect(journal.lines, isEmpty);
+          _says("The test hangs until the test's own timeout kills it.");
+          _says('the load never starts, and no timer inside will ever fire');
+        },
+      );
 
-      test('without the await in front of fakeAsync it is green, unrun',
-          () async {
-        var reached = 'the first await';
+      test(
+        'without the await in front of fakeAsync it is green, unrun',
+        () async {
+          var reached = 'the first await';
 
-        final run = await _run(() {
-          fakeAsync((async) async {
-            final profile = ProfileController(FakeProfileApi());
+          final run = await _run(() {
+            fakeAsync((async) async {
+              final profile = ProfileController(FakeProfileApi());
 
-            final outcome = await profile.load().done;
+              final outcome = await profile.load().done;
 
-            reached = 'the line under it';
-            expect(outcome, isA<Failed>(), reason: 'would fail if it ran');
-            await profile.close();
+              reached = 'the line under it';
+              expect(outcome, isA<Failed>(), reason: 'would fail if it ran');
+              await profile.close();
+            });
           });
-        });
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+          await Future<void>.delayed(const Duration(milliseconds: 50));
 
-        expect(run.state, _passed);
-        expect(_errors(run), isEmpty);
-        expect(reached, 'the first await');
-        _says('the test ends at once and green, and neither line under the '
-            'first `await` has run');
-      });
+          expect(run.state, _passed);
+          expect(_errors(run), isEmpty);
+          expect(reached, 'the first await');
+          _says(
+            'the test ends at once and green, and neither line under the '
+            'first `await` has run',
+          );
+        },
+      );
     });
 
     group('elapsing instead of awaiting, as the page writes it:', () {
@@ -1012,16 +1074,17 @@ void main() {
           async.flushMicrotasks();
 
           expect('${_how(job)}, ${_state(profile)}', 'no outcome, Loading');
-          _says('`flushMicrotasks()` alone leaves the job with no outcome at '
-              'all and the state on `Loading`');
+          _says(
+            '`flushMicrotasks()` alone leaves the job with no outcome at '
+            'all and the state on `Loading`',
+          );
 
           profile.close();
           async.flushTimers();
         });
       });
 
-      test(
-          'a failure reaches the zone unless ignoreFailure() stands in for '
+      test('a failure reaches the zone unless ignoreFailure() stands in for '
           'the read', () {
         final reached = <bool, List<String>>{};
 
@@ -1051,27 +1114,31 @@ void main() {
           page.elapsed.body();
 
           expect(async.pendingTimers, isEmpty);
-          _says('`close()` and a last `flushTimers()` end the test with an '
-              'empty clock');
+          _says(
+            '`close()` and a last `flushTimers()` end the test with an '
+            'empty clock',
+          );
         });
       });
 
-      test('a controller left with work in flight passes all the same',
-          () async {
-        var timers = 0;
+      test(
+        'a controller left with work in flight passes all the same',
+        () async {
+          var timers = 0;
 
-        final run = await _run(() {
-          fakeAsync((async) {
-            ProfileController(FakeProfileApi()).load().ignoreFailure();
-            async.flushMicrotasks();
-            timers = async.pendingTimers.length;
+          final run = await _run(() {
+            fakeAsync((async) {
+              ProfileController(FakeProfileApi()).load().ignoreFailure();
+              async.flushMicrotasks();
+              timers = async.pendingTimers.length;
+            });
           });
-        });
 
-        expect(run.state, _passed);
-        expect(timers, 1);
-        _says('`fakeAsync` says nothing about a timer nobody fired');
-      });
+          expect(run.state, _passed);
+          expect(timers, 1);
+          _says('`fakeAsync` says nothing about a timer nobody fired');
+        },
+      );
 
       test('the last flush fires what a cancelled load left in flight', () {
         var beforeTheFlush = <String>['not reached'];
@@ -1105,7 +1172,8 @@ void main() {
           job
             ..whenCancelled((_) => heard = true)
             ..cancel();
-          final underTheCall = 'cancelled ${job.isCancelled}, heard $heard, '
+          final underTheCall =
+              'cancelled ${job.isCancelled}, heard $heard, '
               '${_how(job)}, ${_state(profile)}';
           async.flushMicrotasks();
 
@@ -1117,8 +1185,10 @@ void main() {
             '${_how(job)}, ${_state(profile)}',
             'Cancelled(manual), Initial',
           );
-          _says('The job accepts the cancellation inside the call, and the '
-              'outcome is still a few microtasks away');
+          _says(
+            'The job accepts the cancellation inside the call, and the '
+            'outcome is still a few microtasks away',
+          );
           _says('the `ifCancelled` handler has to run');
 
           profile.close();
@@ -1132,8 +1202,10 @@ void main() {
           final job = profile.load()..cancel();
 
           expect(_how(job), 'Cancelled(manual)');
-          _says('one still in the queue is dropped inside the call, with its '
-              'outcome there on the next line');
+          _says(
+            'one still in the queue is dropped inside the call, with its '
+            'outcome there on the next line',
+          );
 
           profile.close();
           async.flushTimers();
@@ -1155,43 +1227,46 @@ void main() {
 
   group('What one test leaves for the next', () {
     group('the first attempt', () {
-      test('fails, and its journal stays installed and goes on collecting',
-          () async {
-        final run = await _run(first.resetOnTheLastLine.body);
-        final left = Solo.observer;
+      test(
+        'fails, and its journal stays installed and goes on collecting',
+        () async {
+          final run = await _run(first.resetOnTheLastLine.body);
+          final left = Solo.observer;
 
-        final next = ProfileController(FakeProfileApi());
-        await next.load().done;
-        await next.close();
+          final next = ProfileController(FakeProfileApi());
+          await next.load().done;
+          await next.close();
 
-        expect(run.state, _failed);
-        expect(_errors(run), ['TestFailure']);
-        expect(left, isA<Journal>());
-        expect((left! as Journal).lines, [
-          'load started',
-          'state: Loading',
-          'state: Loaded',
-          'load Done(Ada Lovelace)',
-        ]);
-        _says('The reset runs only when the test passes.');
-        _says('the journal of a test that is over stays installed for the '
-            'next one');
-      });
+          expect(run.state, _failed);
+          expect(_errors(run), ['TestFailure']);
+          expect(left, isA<Journal>());
+          expect((left! as Journal).lines, [
+            'load started',
+            'state: Loading',
+            'state: Loaded',
+            'load Done(Ada Lovelace)',
+          ]);
+          _says('The reset runs only when the test passes.');
+          _says(
+            'the journal of a test that is over stays installed for the '
+            'next one',
+          );
+        },
+      );
 
       test('an expectation that fails throws, and skips the line under it', () {
         var reset = false;
 
-        expect(
-          () {
-            expect(1 + 1, 3);
-            reset = true;
-          },
-          throwsA(isA<TestFailure>()),
-        );
+        expect(() {
+          expect(1 + 1, 3);
+          reset = true;
+        }, throwsA(isA<TestFailure>()));
 
         expect(reset, isFalse);
-        _says('so the first expectation that fails skips every line under '
-            'it');
+        _says(
+          'so the first expectation that fails skips every line under '
+          'it',
+        );
       });
     });
 
@@ -1217,55 +1292,57 @@ void main() {
 
         expect(run.state, _passed);
         expect(_errors(run), isEmpty);
-        _says('The test passes, and it would pass with no failure reaching '
-            'the zone at all.');
-      });
-
-      test('passes with nothing reaching the zone: the handler never runs',
-          () async {
-        var handled = 0;
-
-        final run = await _run(() async {
-          await runZonedGuarded(
-            () async {
-              final profile = ProfileController(
-                FakeProfileApi(error: StateError('no network')),
-              )..load().ignoreFailure();
-              await profile.close(mode: SoloCloseMode.drain);
-
-              expect(profile.currentState, isA<Failure>());
-            },
-            (error, stackTrace) {
-              handled++;
-              expect(error, isA<StateError>());
-            },
-          );
-        });
-
-        expect(run.state, _passed);
-        expect(handled, 0);
-        _says('the handler is called only when an error arrives');
-        _says('When none does it never runs, the test is green, and nothing '
-            'has been said about the zone.');
+        _says(
+          'The test passes, and it would pass with no failure reaching '
+          'the zone at all.',
+        );
       });
 
       test(
-          'a failed expectation in the body is reported by the handler, '
+        'passes with nothing reaching the zone: the handler never runs',
+        () async {
+          var handled = 0;
+
+          final run = await _run(() async {
+            await runZonedGuarded(
+              () async {
+                final profile = ProfileController(
+                  FakeProfileApi(error: StateError('no network')),
+                )..load().ignoreFailure();
+                await profile.close(mode: SoloCloseMode.drain);
+
+                expect(profile.currentState, isA<Failure>());
+              },
+              (error, stackTrace) {
+                handled++;
+                expect(error, isA<StateError>());
+              },
+            );
+          });
+
+          expect(run.state, _passed);
+          expect(handled, 0);
+          _says('the handler is called only when an error arrives');
+          _says(
+            'When none does it never runs, the test is green, and nothing '
+            'has been said about the zone.',
+          );
+        },
+      );
+
+      test('a failed expectation in the body is reported by the handler, '
           'and the await never returns', () async {
         var returned = false;
 
         final run = nested.TestCaseMonitor.start(() async {
-          await runZonedGuarded(
-            () async {
-              final profile = ProfileController(
-                FakeProfileApi(error: StateError('no network')),
-              )..load();
-              await profile.close(mode: SoloCloseMode.drain);
+          await runZonedGuarded(() async {
+            final profile = ProfileController(
+              FakeProfileApi(error: StateError('no network')),
+            )..load();
+            await profile.close(mode: SoloCloseMode.drain);
 
-              expect(profile.currentState, isA<Loaded>());
-            },
-            (error, stackTrace) => expect(error, isA<StateError>()),
-          );
+            expect(profile.currentState, isA<Loaded>());
+          }, (error, stackTrace) => expect(error, isA<StateError>()));
           returned = true;
         });
         await _nextError(run);
@@ -1281,25 +1358,23 @@ void main() {
           ),
         );
         expect(returned, isFalse);
-        _says('compare it to `StateError`, find no match and report that on '
-            'a line of the handler');
+        _says(
+          'compare it to `StateError`, find no match and report that on '
+          'a line of the handler',
+        );
         _says('the `await` would never return');
         _says('so the test would end on a timeout');
       });
 
-      test(
-          'a failed expectation inside a zone goes to the handler of the '
+      test('a failed expectation inside a zone goes to the handler of the '
           'zone', () {
         final caught = <String>[];
         var went = 'into the zone';
 
-        runZonedGuarded(
-          () {
-            expect(1 + 1, 3);
-            went = 'past the expectation';
-          },
-          (error, stackTrace) => caught.add(_what(error)),
-        );
+        runZonedGuarded(() {
+          expect(1 + 1, 3);
+          went = 'past the expectation';
+        }, (error, stackTrace) => caught.add(_what(error)));
 
         expect(caught, ['TestFailure']);
         expect(went, 'into the zone');
@@ -1312,8 +1387,7 @@ void main() {
     });
 
     group('collecting in the zone', () {
-      test(
-          'a job reports to the zone it was created in, not the one it ends '
+      test('a job reports to the zone it was created in, not the one it ends '
           'in', () async {
         final inner = <String>[];
         late ProfileController profile;
@@ -1337,20 +1411,19 @@ void main() {
         var whenCloseReturned = <String>['not reached'];
         final errors = <String>[];
 
-        await runZonedGuarded(
-          () async {
-            final profile = ProfileController(
-              FakeProfileApi(error: StateError('no network')),
-            )..load();
-            await profile.close(mode: SoloCloseMode.drain);
-            whenCloseReturned = [...errors];
-          },
-          (error, stackTrace) => errors.add(_what(error)),
-        );
+        await runZonedGuarded(() async {
+          final profile = ProfileController(
+            FakeProfileApi(error: StateError('no network')),
+          )..load();
+          await profile.close(mode: SoloCloseMode.drain);
+          whenCloseReturned = [...errors];
+        }, (error, stackTrace) => errors.add(_what(error)));
 
         expect(whenCloseReturned, ['StateError: no network']);
-        _says('by the time `close` returns, the job has finished and its '
-            'failure has been reported');
+        _says(
+          'by the time `close` returns, the job has finished and its '
+          'failure has been reported',
+        );
       });
     });
   });
@@ -1366,51 +1439,57 @@ void main() {
         String load(String file) {
           final source = File(file).readAsStringSync();
           final start = source.indexOf('  Job<String> load() =>');
-          return source.substring(start, source.indexOf('\n      );\n', start));
+          return source.substring(start, source.indexOf('\n  );\n', start));
         }
 
         const line = 'final name = await ctx.abandonable(api.fetchName);';
         const deadline = '''
 final name = await ctx.abandonable(
-            () => api.fetchName().timeout(const Duration(milliseconds: 5)),
-          );''';
+        () => api.fetchName().timeout(const Duration(milliseconds: 5)),
+      );''';
         final page = load('test/support/testing_page_fixtures.dart');
         final timed = load('test/support/testing_first_attempt_timeout.dart');
 
         expect(page, contains(line));
         expect(timed, contains(deadline));
         expect(timed.replaceFirst(deadline, line), page);
-        _says('The deadline goes into `load`, in place of its line '
-            '`$line`:');
+        _says(
+          'The deadline goes into `load`, in place of its line '
+          '`$line`:',
+        );
       });
 
-      test('five milliseconds in the job ends Failed with a TimeoutException',
-          () {
-        fakeAsync((async) {
-          final profile = deadline.ProfileController(FakeProfileApi());
-          final job = profile.load()..ignoreFailure();
+      test(
+        'five milliseconds in the job ends Failed with a TimeoutException',
+        () {
+          fakeAsync((async) {
+            final profile = deadline.ProfileController(FakeProfileApi());
+            final job = profile.load()..ignoreFailure();
 
-          async.elapse(const Duration(milliseconds: 4));
-          final before = _how(job);
-          async.elapse(const Duration(milliseconds: 1));
+            async.elapse(const Duration(milliseconds: 4));
+            final before = _how(job);
+            async.elapse(const Duration(milliseconds: 1));
 
-          expect(before, 'no outcome');
-          expect(
-            job.outcome,
-            isA<Failed>().having(
-              (outcome) => outcome.error,
-              'error',
-              isA<TimeoutException>(),
-            ),
-          );
-          expect(_state(profile), 'Failure');
-          _says('Five milliseconds in, the job ends `Failed` with a '
-              '`TimeoutException`');
+            expect(before, 'no outcome');
+            expect(
+              job.outcome,
+              isA<Failed>().having(
+                (outcome) => outcome.error,
+                'error',
+                isA<TimeoutException>(),
+              ),
+            );
+            expect(_state(profile), 'Failure');
+            _says(
+              'Five milliseconds in, the job ends `Failed` with a '
+              '`TimeoutException`',
+            );
 
-          profile.close();
-          async.flushTimers();
-        });
-      });
+            profile.close();
+            async.flushTimers();
+          });
+        },
+      );
 
       test('the queue moves on while the call is still in flight', () {
         fakeAsync((async) {
@@ -1445,7 +1524,8 @@ final name = await ctx.abandonable(
           async.elapse(const Duration(milliseconds: 19));
           at19 = 'finished ${failing.finished}';
           async.elapse(const Duration(milliseconds: 1));
-          at20 = 'finished ${failing.finished}, ${_state(profile)}, '
+          at20 =
+              'finished ${failing.finished}, ${_state(profile)}, '
               '${job.outcome is Failed}';
 
           profile.close();
@@ -1456,8 +1536,10 @@ final name = await ctx.abandonable(
         expect(at20, 'finished 1, Failure, true');
         expect(errors, isEmpty);
         _says('finishes later into nothing');
-        _says('It returns at its twentieth millisecond, fifteen after the job '
-            'was over, with nobody waiting for it.');
+        _says(
+          'It returns at its twentieth millisecond, fifteen after the job '
+          'was over, with nobody waiting for it.',
+        );
       });
 
       test('a call that never answers holds the queue', () {
@@ -1487,8 +1569,10 @@ final name = await ctx.abandonable(
           async.elapse(const Duration(milliseconds: 20));
 
           expect(_how(job), 'Done(Ada Lovelace)');
-          _says('against this fake a deadline of seconds never fires, and the '
-              'job ends `Done`');
+          _says(
+            'against this fake a deadline of seconds never fires, and the '
+            'job ends `Done`',
+          );
 
           profile.close();
           async.flushTimers();
@@ -1519,49 +1603,59 @@ final name = await ctx.abandonable(
           expect(before, isFalse);
           expect(answered, isTrue);
           expect(hw.refused, 0);
-          _says('its `FakeCamera` is a device that never answers on its own, '
-              'a `Camera` whose `open` waits until the test makes it answer');
+          _says(
+            'its `FakeCamera` is a device that never answers on its own, '
+            'a `Camera` whose `open` waits until the test makes it answer',
+          );
         });
       });
 
-      test('refused counts the waiting calls a cancelled token failed, alone',
-          () {
-        fakeAsync((async) {
-          final hw = FakeCamera();
-          final seen = <String>[];
+      test(
+        'refused counts the waiting calls a cancelled token failed, alone',
+        () {
+          fakeAsync((async) {
+            final hw = FakeCamera();
+            final seen = <String>[];
 
-          final answered = CancelToken();
-          hw.open(cancelToken: answered).then(
-                (_) => seen.add('answered'),
-                onError: (Object error) => seen.add('$error'),
-              );
-          hw.answer();
-          async.flushMicrotasks();
-          answered.cancel();
-          async.flushMicrotasks();
-          seen.add('after an answer and its cancel: refused ${hw.refused}');
+            final answered = CancelToken();
+            hw
+                .open(cancelToken: answered)
+                .then(
+                  (_) => seen.add('answered'),
+                  onError: (Object error) => seen.add('$error'),
+                );
+            hw.answer();
+            async.flushMicrotasks();
+            answered.cancel();
+            async.flushMicrotasks();
+            seen.add('after an answer and its cancel: refused ${hw.refused}');
 
-          final dropped = CancelToken();
-          hw.open(cancelToken: dropped).then(
-                (_) => seen.add('answered'),
-                onError: (Object error) => seen.add('$error'),
-              );
-          dropped
-            ..cancel()
-            ..cancel();
-          async.flushMicrotasks();
-          seen.add('after a cancel, twice: refused ${hw.refused}');
+            final dropped = CancelToken();
+            hw
+                .open(cancelToken: dropped)
+                .then(
+                  (_) => seen.add('answered'),
+                  onError: (Object error) => seen.add('$error'),
+                );
+            dropped
+              ..cancel()
+              ..cancel();
+            async.flushMicrotasks();
+            seen.add('after a cancel, twice: refused ${hw.refused}');
 
-          expect(seen, [
-            'answered',
-            'after an answer and its cancel: refused 0',
-            'OpenCancelled',
-            'after a cancel, twice: refused 1',
-          ]);
-          _says('A cancelled token fails the waiting call with `OpenCancelled` '
-              'and counts it in `refused`.');
-        });
-      });
+            expect(seen, [
+              'answered',
+              'after an answer and its cancel: refused 0',
+              'OpenCancelled',
+              'after a cancel, twice: refused 1',
+            ]);
+            _says(
+              'A cancelled token fails the waiting call with `OpenCancelled` '
+              'and counts it in `refused`.',
+            );
+          });
+        },
+      );
 
       test('the deadline stops the device at five seconds, and not before', () {
         fakeAsync((async) {
@@ -1578,13 +1672,17 @@ final name = await ctx.abandonable(
           expect(hw.refused, 1);
           expect(_state(camera), 'Idle');
           expect(async.pendingTimers, isEmpty);
-          _says('The hardware API completes with `OpenCancelled` when its '
-              'token is cancelled, and `join` throws that error, but the job '
-              'is cancelled by then: it ends `Cancelled(timeout)`, not '
-              '`Failed`');
+          _says(
+            'The hardware API completes with `OpenCancelled` when its '
+            'token is cancelled, and `join` throws that error, but the job '
+            'is cancelled by then: it ends `Cancelled(timeout)`, not '
+            '`Failed`',
+          );
           _says('`async.pendingTimers` is empty after the five seconds');
-          _says('A millisecond before the deadline the job has no outcome, and '
-              'the device is still waiting');
+          _says(
+            'A millisecond before the deadline the job has no outcome, and '
+            'the device is still waiting',
+          );
           _says('`refused` counts the call the device let go');
 
           camera.close();
@@ -1625,8 +1723,10 @@ final name = await ctx.abandonable(
           expect(_how(job), 'Done(null)');
           expect(_state(camera), 'Connected');
           expect(async.pendingTimers, isEmpty);
-          _says('The timer the core keeps for it is gone as soon as the job '
-              'ends');
+          _says(
+            'The timer the core keeps for it is gone as soon as the job '
+            'ends',
+          );
 
           camera.close();
           async.flushTimers();
@@ -1656,8 +1756,10 @@ final name = await ctx.abandonable(
         expect(underTheCall, 'refused 1');
         expect(afterTheFlush, 'Cancelled(manual), 0 timers');
         expect(errors, isEmpty);
-        _says('A cancellation that comes from outside takes the same way, so '
-            'a cancelled job stops the device as well');
+        _says(
+          'A cancellation that comes from outside takes the same way, so '
+          'a cancelled job stops the device as well',
+        );
       });
 
       test('the next job waits for the device to stop', () {
@@ -1673,8 +1775,10 @@ final name = await ctx.abandonable(
           expect(before, 'no outcome');
           expect(_how(next), 'Done(null)');
           _says('For a device operation that must stop before the next job');
-          _says('`join` waits for the device to stop, so the next job starts '
-              'after it');
+          _says(
+            '`join` waits for the device to stop, so the next job starts '
+            'after it',
+          );
 
           camera.close();
           async.flushTimers();
@@ -1691,9 +1795,11 @@ final name = await ctx.abandonable(
         });
 
         expect(errors, ['OpenCancelled']);
-        _says("The error is nobody's outcome, and the job answers for it as "
-            'for any failure of its body: left alone, it reaches the zone of '
-            'the test and turns the test red');
+        _says(
+          "The error is nobody's outcome, and the job answers for it as "
+          'for any failure of its body: left alone, it reaches the zone of '
+          'the test and turns the test red',
+        );
       });
 
       test('with it, nothing reaches the zone without ignoreFailure()', () {
@@ -1705,10 +1811,12 @@ final name = await ctx.abandonable(
         });
 
         expect(errors, isEmpty);
-        _says('The app names the stop of its device once, in `main`, with '
-            '`Job.isCancellationError` of the core, and the test names it the '
-            'same way and puts the field back. Then nothing reaches the zone, '
-            'and the test needs no `ignoreFailure()`');
+        _says(
+          'The app names the stop of its device once, in `main`, with '
+          '`Job.isCancellationError` of the core, and the test names it the '
+          'same way and puts the field back. Then nothing reaches the zone, '
+          'and the test needs no `ignoreFailure()`',
+        );
       });
 
       test('the deadline reaches ifCancelled of enqueue, not ifFailed', () {
@@ -1724,8 +1832,10 @@ final name = await ctx.abandonable(
         });
 
         expect(seen, ['ifCancelled: timeout']);
-        _says('An `enqueue` with `ifCancelled` gets the deadline there, not in '
-            '`ifFailed`');
+        _says(
+          'An `enqueue` with `ifCancelled` gets the deadline there, not in '
+          '`ifFailed`',
+        );
       });
     });
   });
@@ -1758,8 +1868,7 @@ final name = await ctx.abandonable(
       }
     });
 
-    test(
-        'the four sections that await come first, fakeAsync starts with '
+    test('the four sections that await come first, fakeAsync starts with '
         'the fifth', () {
       final sections = _sections();
       final underFakeTime = [
@@ -1768,8 +1877,10 @@ final name = await ctx.abandonable(
 
       expect(underFakeTime.take(5), [false, false, false, false, true]);
       expect(sections[3], startsWith('## Assertions inside a zone'));
-      _says('The first four sections below await; `fakeAsync` starts with '
-          'the fifth.');
+      _says(
+        'The first four sections below await; `fakeAsync` starts with '
+        'the fifth.',
+      );
     });
 
     test('the sections on timing and order are the three under fakeAsync', () {
@@ -1784,16 +1895,20 @@ final name = await ctx.abandonable(
         'Awaiting inside fakeAsync',
         'Timeouts',
       ]);
-      _says('The sections on timing and order run under `fakeAsync`: this '
-          'one, [Awaiting inside fakeAsync](#awaiting-inside-fakeasync) and '
-          '[Timeouts](#timeouts).');
+      _says(
+        'The sections on timing and order run under `fakeAsync`: this '
+        'one, [Awaiting inside fakeAsync](#awaiting-inside-fakeasync) and '
+        '[Timeouts](#timeouts).',
+      );
     });
 
     test('the rules on top name every section, four of each kind of test', () {
       final page = _page();
       final rules = [
-        for (final match in RegExp(r'^- \[(.*?)\]\(#(.*?)\): ', multiLine: true)
-            .allMatches(page.substring(0, page.indexOf('\n## '))))
+        for (final match in RegExp(
+          r'^- \[(.*?)\]\(#(.*?)\): ',
+          multiLine: true,
+        ).allMatches(page.substring(0, page.indexOf('\n## '))))
           (heading: match.group(1)!, anchor: match.group(2)!),
       ];
       final sections = {
@@ -1805,9 +1920,8 @@ final name = await ctx.abandonable(
           .replaceAll(RegExp('[^a-z0-9 -]'), '')
           .replaceAll(' ', '-');
       List<int> places(Iterable<String> headings) => [
-            for (final heading in headings)
-              sections.keys.toList().indexOf(heading),
-          ];
+        for (final heading in headings) sections.keys.toList().indexOf(heading),
+      ];
       final awaiting = rules.take(4).map((rule) => rule.heading);
       final underFakeTime = rules.skip(4).map((rule) => rule.heading);
 
@@ -1837,10 +1951,14 @@ final name = await ctx.abandonable(
         );
       }
       _says('Each of the eight sections below comes down to one rule.');
-      _says("Four are for a test that awaits its job or the controller's "
-          '`close`:');
-      _says('The other four are for a test under `fakeAsync`, which awaits '
-          'nothing:');
+      _says(
+        "Four are for a test that awaits its job or the controller's "
+        '`close`:',
+      );
+      _says(
+        'The other four are for a test under `fakeAsync`, which awaits '
+        'nothing:',
+      );
     });
 
     test('all but the last section drive the load of the profile', () {
@@ -1852,28 +1970,34 @@ final name = await ctx.abandonable(
       _says('all but the last drive the `load` of the controller');
     });
 
-    test('the imports the page names are those of its tests and its camera',
-        () {
-      final imports = {
-        for (final file in [
-          'test/support/testing_page.dart',
-          'test/support/testing_camera.dart',
-        ])
-          for (final match in RegExp("^import '([^']*)'", multiLine: true)
-              .allMatches(File(file).readAsStringSync()))
-            if (match.group(1)!.contains(':')) match.group(1)!,
-      };
+    test(
+      'the imports the page names are those of its tests and its camera',
+      () {
+        final imports = {
+          for (final file in [
+            'test/support/testing_page.dart',
+            'test/support/testing_camera.dart',
+          ])
+            for (final match in RegExp(
+              "^import '([^']*)'",
+              multiLine: true,
+            ).allMatches(File(file).readAsStringSync()))
+              if (match.group(1)!.contains(':')) match.group(1)!,
+        };
 
-      expect(imports, {
-        'dart:async',
-        'package:fake_async/fake_async.dart',
-        'package:solo/solo.dart',
-        'package:test/test.dart',
-      });
-      _says('The tests of the page import `dart:async`, '
+        expect(imports, {
+          'dart:async',
+          'package:fake_async/fake_async.dart',
+          'package:solo/solo.dart',
+          'package:test/test.dart',
+        });
+        _says(
+          'The tests of the page import `dart:async`, '
           '`package:fake_async/fake_async.dart`, `package:solo/solo.dart` and '
-          '`package:test/test.dart`');
-    });
+          '`package:test/test.dart`',
+        );
+      },
+    );
 
     test('has no fence the checks do not read', () {
       expect(strayFences('doc/testing.md'), isEmpty);
@@ -1911,17 +2035,19 @@ final name = await ctx.abandonable(
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom(
-          'doc/testing.md',
-          answers,
-          alsoIn: [attempts, timeout, fixtures],
-        ),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom(
+            'doc/testing.md',
+            answers,
+            alsoIn: [attempts, timeout, fixtures],
+          ),
+          isEmpty,
+        );
+      },
+    );
 
     test('every heading with code under it is held to a file', () {
       final withCode = [

@@ -18,14 +18,9 @@
 
 ```dart
 // Первая попытка: задача кончается до первой позиции.
-Job<void> track() => enqueue<Ready, void>(
-      key: 'track',
-      (ctx) async {
-        hw.positions.listen(
-          (p) => ctx.emit(ctx.state.copyWith(position: p)),
-        );
-      },
-    );
+Job<void> track() => enqueue<Ready, void>(key: 'track', (ctx) async {
+  hw.positions.listen((p) => ctx.emit(ctx.state.copyWith(position: p)));
+});
 ```
 
 Тело подписывается и возвращается, поэтому задача кончается раньше, чем придёт
@@ -46,11 +41,11 @@ Bad state: Job(track) has already finished, cannot emit
 
 ```dart
 Job<void> track() => enqueue<Ready, void>(
-      key: 'track',
-      (ctx) => ctx.each(hw.positions, (childCtx, p) {
-        childCtx.emit(childCtx.state.copyWith(position: p));
-      }).value,
-    );
+  key: 'track',
+  (ctx) => ctx.each(hw.positions, (childCtx, p) {
+    childCtx.emit(childCtx.state.copyWith(position: p));
+  }).value,
+);
 ```
 
 `ctx.each(stream, onData)` создаёт и возвращает дочернюю `Job<void>`, которая
@@ -122,11 +117,11 @@ final class ScreenController extends Solo<Screen> {
   ScreenController(this.session) : super(const Screen());
 
   Job<void> follow() => enqueue<Screen, void>(
-        key: 'follow',
-        (ctx) => ctx.each(session.stream, (childCtx, next) {
-          childCtx.emit(childCtx.state.copyWith(signedIn: next.signedIn));
-        }).value,
-      );
+    key: 'follow',
+    (ctx) => ctx.each(session.stream, (childCtx, next) {
+      childCtx.emit(childCtx.state.copyWith(signedIn: next.signedIn));
+    }).value,
+  );
 }
 ```
 
@@ -138,17 +133,14 @@ final class ScreenController extends Solo<Screen> {
 ### Сначала состояние, потом стрим
 
 ```dart
-Job<void> follow() => enqueue<Screen, void>(
-      key: 'follow',
-      (ctx) async {
-        void take(SoloContext<Screen, Screen> target, Session next) =>
-            target.emit(target.state.copyWith(signedIn: next.signedIn));
+Job<void> follow() => enqueue<Screen, void>(key: 'follow', (ctx) async {
+  void take(SoloContext<Screen, Screen> target, Session next) =>
+      target.emit(target.state.copyWith(signedIn: next.signedIn));
 
-        final following = ctx.each(session.stream, take); // что случится дальше
-        take(ctx, session.currentState); // то, что уже случилось
-        await following.value;
-      },
-    );
+  final following = ctx.each(session.stream, take); // что случится дальше
+  take(ctx, session.currentState); // то, что уже случилось
+  await following.value;
+});
 ```
 
 `Screen` и `Session` здесь состояния приложения, и у обоих есть свойство

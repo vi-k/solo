@@ -25,14 +25,10 @@ final class Log extends JobObserver {
   }
 }
 
-final job = Job<int>(
-  key: 'load',
-  observer: Log(),
-  (ctx) async {
-    ctx.log('loading');
-    return ctx.abandonable(load);
-  },
-);
+final job = Job<int>(key: 'load', observer: Log(), (ctx) async {
+  ctx.log('loading');
+  return ctx.abandonable(load);
+});
 ```
 
 ```text

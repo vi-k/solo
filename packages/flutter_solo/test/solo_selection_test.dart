@@ -15,10 +15,8 @@ final class _Screen {
 
   const _Screen({this.name = '', this.progress = 0});
 
-  _Screen copyWith({String? name, int? progress}) => _Screen(
-        name: name ?? this.name,
-        progress: progress ?? this.progress,
-      );
+  _Screen copyWith({String? name, int? progress}) =>
+      _Screen(name: name ?? this.name, progress: progress ?? this.progress);
 }
 
 final class _Controller extends Solo<_Screen> with SoloListenable {
@@ -30,8 +28,7 @@ final class _Controller extends Solo<_Screen> with SoloListenable {
   SoloJob<void> perform(
     Future<void> Function(SoloContext<_Screen, _Screen> ctx) body, {
     bool Function(_Screen state)? keepWhile,
-  }) =>
-      enqueue<_Screen, void>(body, keepWhile: keepWhile);
+  }) => enqueue<_Screen, void>(body, keepWhile: keepWhile);
 }
 
 final class _PlainController extends Solo<_Screen> {
@@ -350,19 +347,24 @@ void main() {
     expect(length.value, 1, reason: 'picked afresh, not the pick from before');
   });
 
-  test('a listener of the source ahead of the selection reads the old pick',
-      () {
-    final source = _InPlaceSource();
-    final length = SoloSelection<List<int>, int>(source, (list) => list.length);
-    final ahead = <int>[];
-    source.addListener(() => ahead.add(length.value));
-    void listener() {}
-    length.addListener(listener);
+  test(
+    'a listener of the source ahead of the selection reads the old pick',
+    () {
+      final source = _InPlaceSource();
+      final length = SoloSelection<List<int>, int>(
+        source,
+        (list) => list.length,
+      );
+      final ahead = <int>[];
+      source.addListener(() => ahead.add(length.value));
+      void listener() {}
+      length.addListener(listener);
 
-    source.grow();
-    expect(ahead, [0], reason: 'the selection has not heard the change yet');
-    expect(length.value, 1, reason: 'and once it has, the pick is fresh');
-  });
+      source.grow();
+      expect(ahead, [0], reason: 'the selection has not heard the change yet');
+      expect(length.value, 1, reason: 'and once it has, the pick is fresh');
+    },
+  );
 
   test('a source changed in place while subscribing is picked again', () async {
     final source = _InPlaceSource(growOnFirstListener: true);
@@ -457,8 +459,7 @@ void main() {
       }
 
       return state.name;
-    })
-      ..addListener(() {});
+    })..addListener(() {});
 
     final job = controller.perform(
       keepWhile: (state) => state.progress < 10,
@@ -592,11 +593,14 @@ void main() {
       ..addListener(() => throw StateError('the listener blew up'))
       ..addListener(() => secondCalled = true);
 
-    runZonedGuarded(() {
-      controller.set(const _Screen(name: 'Ada'));
-    }, (error, stackTrace) {
-      zoneErrors.add(error);
-    });
+    runZonedGuarded(
+      () {
+        controller.set(const _Screen(name: 'Ada'));
+      },
+      (error, stackTrace) {
+        zoneErrors.add(error);
+      },
+    );
 
     expect(
       secondCalled,
@@ -606,7 +610,8 @@ void main() {
     expect(
       zoneErrors.map((error) => (error as StateError).message).toList(),
       ['the listener blew up', 'the reporter blew up'],
-      reason: 'a reporter that throws does not take with it the failure it '
+      reason:
+          'a reporter that throws does not take with it the failure it '
           'was called about',
     );
   });
@@ -653,7 +658,8 @@ void main() {
     expect(
       await collected(payload),
       isTrue,
-      reason: 'kept until the next subscription, the last pick holds a '
+      reason:
+          'kept until the next subscription, the last pick holds a '
           'value the source let go of long ago',
     );
     expect(selection.value, isEmpty);
@@ -672,34 +678,42 @@ void main() {
     expect(() => source.set(1), returnsNormally);
   });
 
-  test('a selection whose subscription failed keeps nothing it picked',
-      () async {
-    final source = _ThrowingListSource();
-    final selection = source.select((list) => list);
-    final payload = _pickedThenRefused(source, selection);
+  test(
+    'a selection whose subscription failed keeps nothing it picked',
+    () async {
+      final source = _ThrowingListSource();
+      final selection = source.select((list) => list);
+      final payload = _pickedThenRefused(source, selection);
 
-    expect(
-      await collected(payload),
-      isTrue,
-      reason: 'nobody listens after the failure, and the pick made for the '
-          'subscription holds a value the source let go of',
-    );
-  });
+      expect(
+        await collected(payload),
+        isTrue,
+        reason:
+            'nobody listens after the failure, and the pick made for the '
+            'subscription holds a value the source let go of',
+      );
+    },
+  );
 
-  test('a source publishing during addListener must not notify synchronously',
-      () {
-    final selection = SoloSelection<int, int>(EagerSource(), (value) => value);
-    var inside = true;
-    var calls = 0;
-    selection.addListener(() {
-      calls++;
-      if (inside) {
-        fail('notified synchronously from inside addListener');
-      }
-    });
-    inside = false;
-    expect(calls, 0, reason: 'nothing may arrive before addListener returns');
-  });
+  test(
+    'a source publishing during addListener must not notify synchronously',
+    () {
+      final selection = SoloSelection<int, int>(
+        EagerSource(),
+        (value) => value,
+      );
+      var inside = true;
+      var calls = 0;
+      selection.addListener(() {
+        calls++;
+        if (inside) {
+          fail('notified synchronously from inside addListener');
+        }
+      });
+      inside = false;
+      expect(calls, 0, reason: 'nothing may arrive before addListener returns');
+    },
+  );
 
   test('a value of the source is never taken for the empty pick', () {
     final reports = _captureReports();
@@ -798,37 +812,39 @@ void main() {
     expect(heard, [2], reason: 'a later subscription follows the source');
   });
 
-  test('a listener put in while subscribing hears no change of the one before',
-      () async {
-    final source = _ArmedSource();
-    addTearDown(source.dispose);
-    final selection = SoloSelection<int, int>(
-      source,
-      (value) => value,
-      changed: (previous, current) => true,
-    );
-    final heard = <int>[];
-    void first() {}
-    void second() => heard.add(selection.value);
-    void replace() => selection
-      ..removeListener(first)
-      ..addListener(second);
-    source
-      ..addListener(_once(replace))
-      ..publishNext = true;
+  test(
+    'a listener put in while subscribing hears no change of the one before',
+    () async {
+      final source = _ArmedSource();
+      addTearDown(source.dispose);
+      final selection = SoloSelection<int, int>(
+        source,
+        (value) => value,
+        changed: (previous, current) => true,
+      );
+      final heard = <int>[];
+      void first() {}
+      void second() => heard.add(selection.value);
+      void replace() => selection
+        ..removeListener(first)
+        ..addListener(second);
+      source
+        ..addListener(_once(replace))
+        ..publishNext = true;
 
-    selection.addListener(first);
-    addTearDown(() => selection.removeListener(second));
-    await Future<void>.delayed(Duration.zero);
-    expect(
-      heard,
-      isEmpty,
-      reason: 'the source has not changed since the second subscription',
-    );
+      selection.addListener(first);
+      addTearDown(() => selection.removeListener(second));
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        heard,
+        isEmpty,
+        reason: 'the source has not changed since the second subscription',
+      );
 
-    source.value = 2;
-    expect(heard, [2]);
-  });
+      source.value = 2;
+      expect(heard, [2]);
+    },
+  );
 
   test('a failed subscription leaves the one made inside it alone', () {
     final source = _ArmedSource();

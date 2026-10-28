@@ -21,29 +21,27 @@ void _byDiscard(JobContext ctx, void Function() run) => ctx.onDiscard(run);
 List<String> _cleanupsOn(
   String scenario,
   void Function(JobContext ctx, void Function() run) register,
-) =>
-    fakeAsync((async) {
-      final order = <String>[];
-      final job = Job<int>((ctx) async {
-        register(ctx, () => order.add('cleaned'));
-        await ctx.abandonable(() => delay(10));
-        if (scenario == 'failed') {
-          throw StateError('boom');
-        }
+) => fakeAsync((async) {
+  final order = <String>[];
+  final job = Job<int>((ctx) async {
+    register(ctx, () => order.add('cleaned'));
+    await ctx.abandonable(() => delay(10));
+    if (scenario == 'failed') {
+      throw StateError('boom');
+    }
 
-        return 1;
-      })
-        ..ignoreFailure();
-      // Five milliseconds so the body starts and registers: a job cancelled
-      // before that never runs its body at all.
-      async.elapse(const Duration(milliseconds: 5));
-      if (scenario == 'cancelled') {
-        job.cancel().ignore();
-      }
-      async.flushTimers();
+    return 1;
+  })..ignoreFailure();
+  // Five milliseconds so the body starts and registers: a job cancelled
+  // before that never runs its body at all.
+  async.elapse(const Duration(milliseconds: 5));
+  if (scenario == 'cancelled') {
+    job.cancel().ignore();
+  }
+  async.flushTimers();
 
-      return order;
-    });
+  return order;
+});
 
 /// Opens a resource the way a real one opens: not at once.
 Future<String> _open() async {
@@ -139,24 +137,16 @@ void main() {
         });
         ctx
             .run(
-              Job.deferred<void>(
-                key: 'child',
-                (ctx) async {
-                  await ctx.abandonable(() => delay(30));
-                  order.add('child');
-                },
-              ),
+              Job.deferred<void>(key: 'child', (ctx) async {
+                await ctx.abandonable(() => delay(30));
+                order.add('child');
+              }),
             )
             .ignore();
       });
       job.done.then((_) => order.add('finished')).ignore();
       async.flushTimers();
-      expect(order, [
-        'child',
-        'cleanup starts',
-        'cleanup ends',
-        'finished',
-      ]);
+      expect(order, ['child', 'cleanup starts', 'cleanup ends', 'finished']);
     });
   });
 
@@ -188,39 +178,30 @@ void main() {
     });
   });
 
-  test(
-      'an error of a cleanup goes to the observer, then the zone, and the '
+  test('an error of a cleanup goes to the observer, then the zone, and the '
       'rest still runs', () {
     final errors = <Object>[];
     final order = <String>[];
     final zone = <Object>[];
     late final Job<int> job;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          job = Job<int>(
-            observer: ErrorObserver(errors),
-            (ctx) async {
-              ctx
-                ..onDispose(() => order.add('below'))
-                ..onDispose(() => throw StateError('cleanup failed'));
-              return 7;
-            },
-          );
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        job = Job<int>(observer: ErrorObserver(errors), (ctx) async {
+          ctx
+            ..onDispose(() => order.add('below'))
+            ..onDispose(() => throw StateError('cleanup failed'));
+          return 7;
         });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone: an `expect` that fails inside it lands in
     // the handler and is counted as a zone error instead of failing.
     expect(order, ['below']);
     expect(errors.single, isA<StateError>());
-    expect(
-      zone.map((error) => '$error'),
-      ['Bad state: cleanup failed'],
-      reason: 'an observer that only watches answers for nothing',
-    );
+    expect(zone.map((error) => '$error'), [
+      'Bad state: cleanup failed',
+    ], reason: 'an observer that only watches answers for nothing');
     expect(job.outcome, isA<Done<int>>());
   });
 
@@ -240,8 +221,7 @@ void main() {
           })
           ..onDiscard(() => order.add('discarded'));
         return 7;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 50));
       job.cancel().ignore();
       async.flushTimers();
@@ -262,8 +242,7 @@ void main() {
           ctx.onDispose(() => order.add('registered while cancelled'));
           rethrow;
         }
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -301,17 +280,17 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       Job<void>((ctx) async {
-        ctx.onDispose(() async {
-          order.add('cleanup starts');
-          await delay(50);
-          order.add('cleanup ends');
-        });
-        await ctx.abandonable(() => delay(10));
-        throw Cancelled.by(
-          reason: const ManualCancelReason(),
-          stackTrace: StackTrace.current,
-        );
-      })
+          ctx.onDispose(() async {
+            order.add('cleanup starts');
+            await delay(50);
+            order.add('cleanup ends');
+          });
+          await ctx.abandonable(() => delay(10));
+          throw Cancelled.by(
+            reason: const ManualCancelReason(),
+            stackTrace: StackTrace.current,
+          );
+        })
         ..ignoreFailure()
         ..whenCancelled((_) => order.add('whenCancelled'));
       async.flushTimers();
@@ -322,20 +301,17 @@ void main() {
   test('a wait the body walked away from gets no error of its own', () {
     fakeAsync((async) {
       final errors = <Object>[];
-      Job<void>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          // The body walks away from its own wait and throws the
-          // cancellation itself: filling `_pendingCancel` must not run the
-          // callbacks of the race.
-          unawaited(ctx.abandonable(() => delay(50)));
-          await ctx.abandonable(() => delay(10));
-          throw Cancelled.by(
-            reason: const ManualCancelReason(),
-            stackTrace: StackTrace.current,
-          );
-        },
-      ).ignoreFailure();
+      Job<void>(observer: ErrorObserver(errors), (ctx) async {
+        // The body walks away from its own wait and throws the
+        // cancellation itself: filling `_pendingCancel` must not run the
+        // callbacks of the race.
+        unawaited(ctx.abandonable(() => delay(50)));
+        await ctx.abandonable(() => delay(10));
+        throw Cancelled.by(
+          reason: const ManualCancelReason(),
+          stackTrace: StackTrace.current,
+        );
+      }).ignoreFailure();
       async.flushTimers();
       expect(errors, isEmpty);
     });
@@ -347,13 +323,10 @@ void main() {
       final job = Job<void>((ctx) async {
         ctx
             .run(
-              Job.deferred<void>(
-                key: 'child',
-                (ctx) async {
-                  ctx.onCancel(() => order.add('child cancelled'));
-                  await ctx.abandonable(() => delay(100));
-                },
-              ),
+              Job.deferred<void>(key: 'child', (ctx) async {
+                ctx.onCancel(() => order.add('child cancelled'));
+                await ctx.abandonable(() => delay(100));
+              }),
             )
             .ignore();
         await ctx.abandonable(() => delay(10));
@@ -363,8 +336,7 @@ void main() {
           reason: const ManualCancelReason(),
           stackTrace: StackTrace.current,
         );
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 30));
       job.cancel().ignore();
       async.flushTimers();
@@ -384,8 +356,7 @@ void main() {
         unawaited(ctx.uncancellable(() => delay(100)));
         await ctx.abandonable(() => delay(10));
         return 1;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 20));
       job.cancel().ignore();
       async.flushTimers();
@@ -411,8 +382,7 @@ void main() {
         );
         await delay(5);
         throw const Cancelled('gave up');
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
       expect(
         order,
@@ -428,17 +398,13 @@ void main() {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<String>((ctx) async {
-        final db = await ctx.join(
-          () async {
-            await delay(10);
-            return 'db';
-          },
-          discard: closed.add,
-        );
+        final db = await ctx.join(() async {
+          await delay(10);
+          return 'db';
+        }, discard: closed.add);
         await ctx.abandonable(() => delay(10));
         return db;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 15));
       job.cancel().ignore();
       async.flushTimers();
@@ -467,8 +433,7 @@ void main() {
           order.add('body sees the cancellation');
           rethrow;
         }
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -481,19 +446,17 @@ void main() {
     fakeAsync((async) {
       final closed = <String>[];
       late final _RuleJob<void> job;
-      job = _RuleJob<void>((ctx) async {
-        await ctx.join(
-          () async {
-            final value = await _open();
-            job.failCheck = true;
+      job =
+          _RuleJob<void>((ctx) async {
+              await ctx.join(() async {
+                final value = await _open();
+                job.failCheck = true;
 
-            return value;
-          },
-          discard: closed.add,
-        );
-      })
-        ..launch()
-        ..ignoreFailure();
+                return value;
+              }, discard: closed.add);
+            })
+            ..launch()
+            ..ignoreFailure();
       async.flushTimers();
       expect(
         closed,
@@ -502,11 +465,7 @@ void main() {
       );
       expect(
         job.outcome,
-        isA<Failed>().having(
-          (outcome) => outcome.error,
-          'error',
-          isStateError,
-        ),
+        isA<Failed>().having((outcome) => outcome.error, 'error', isStateError),
         reason: 'the rule error is the outcome, not the disposal',
       );
     });
@@ -520,13 +479,10 @@ void main() {
         // the body is gone, so it reached nobody and the outcome does not
         // matter.
         unawaited(
-          ctx.join<String>(
-            () async {
-              await delay(50);
-              return 'db';
-            },
-            discard: closed.add,
-          ),
+          ctx.join<String>(() async {
+            await delay(50);
+            return 'db';
+          }, discard: closed.add),
         );
         ctx
             .run(
@@ -537,8 +493,7 @@ void main() {
             )
             .ignore();
         return 1;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<int>>());
       expect(closed, ['db'], reason: 'on Done as well');
@@ -549,24 +504,18 @@ void main() {
     fakeAsync((async) {
       final closed = <String>[];
       final errors = <Object>[];
-      final job = Job<int>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          unawaited(
-            ctx.join<String>(
-              () async {
-                await delay(50);
-                return 'db';
-              },
-              discard: closed.add,
-            ),
-          );
-          // No children: the value lands in the middle of a slow disposer
-          // rather than in the window of the children.
-          ctx.onDispose(() => delay(100));
-          return 1;
-        },
-      )..ignoreFailure();
+      final job = Job<int>(observer: ErrorObserver(errors), (ctx) async {
+        unawaited(
+          ctx.join<String>(() async {
+            await delay(50);
+            return 'db';
+          }, discard: closed.add),
+        );
+        // No children: the value lands in the middle of a slow disposer
+        // rather than in the window of the children.
+        ctx.onDispose(() => delay(100));
+        return 1;
+      })..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<int>>());
       expect(closed, ['db']);
@@ -579,22 +528,16 @@ void main() {
       final closed = <String>[];
       Job<int>((ctx) async {
         unawaited(
-          ctx.join<String>(
-            () async {
-              await delay(50);
-              return 'joined';
-            },
-            discard: closed.add,
-          ),
+          ctx.join<String>(() async {
+            await delay(50);
+            return 'joined';
+          }, discard: closed.add),
         );
         unawaited(
-          ctx.abandonable<String>(
-            () async {
-              await delay(60);
-              return 'waited';
-            },
-            discard: closed.add,
-          ),
+          ctx.abandonable<String>(() async {
+            await delay(60);
+            return 'waited';
+          }, discard: closed.add),
         );
         return 1;
       }).ignoreFailure();
@@ -606,29 +549,23 @@ void main() {
   test('an abandoned join is silent on the successful path', () {
     fakeAsync((async) {
       final errors = <Object>[];
-      Job<int>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          unawaited(
-            ctx.join<String>(
-              () async {
-                await delay(50);
-                return 'db';
-              },
-              discard: (_) {},
-            ),
-          );
-          ctx
-              .run(
-                Job.deferred<void>(
-                  key: 'child',
-                  (ctx) => ctx.abandonable(() => delay(80)),
-                ),
-              )
-              .ignore();
-          return 1;
-        },
-      ).ignoreFailure();
+      Job<int>(observer: ErrorObserver(errors), (ctx) async {
+        unawaited(
+          ctx.join<String>(() async {
+            await delay(50);
+            return 'db';
+          }, discard: (_) {}),
+        );
+        ctx
+            .run(
+              Job.deferred<void>(
+                key: 'child',
+                (ctx) => ctx.abandonable(() => delay(80)),
+              ),
+            )
+            .ignore();
+        return 1;
+      }).ignoreFailure();
       async.flushTimers();
       expect(errors, isEmpty, reason: 'no StateError, no cancellation');
     });
@@ -647,8 +584,7 @@ void main() {
         final drop = ctx.onDispose(() => released.add('by member'));
         await ctx.abandonable(() => delay(10));
         drop();
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
       expect(released, ['by parameter']);
@@ -659,17 +595,13 @@ void main() {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<String>((ctx) async {
-        final db = await ctx.abandonable(
-          () async {
-            await delay(10);
-            return 'db';
-          },
-          discard: closed.add,
-        );
+        final db = await ctx.abandonable(() async {
+          await delay(10);
+          return 'db';
+        }, discard: closed.add);
         await ctx.abandonable(() => delay(10));
         return db;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       // The cancellation lands exactly when the action returned its value:
       // the registration is synchronous, so the cleanup is not lost.
       async.elapse(const Duration(milliseconds: 10));
@@ -692,8 +624,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
 
         return db;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<String>>());
       expect(dropped, [true, false, false], reason: 'one per call, then none');
@@ -709,8 +640,7 @@ void main() {
         const db = 'db';
         ctx.onDispose(() => closed.add(db));
         dropped.add(ctx.disown(db));
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
       expect(dropped, [false]);
@@ -741,8 +671,7 @@ void main() {
         ctx.onDiscard(() => closed.add('by member'))();
         await ctx.abandonable(() => delay(10));
         return db;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.flushTimers();
@@ -753,13 +682,8 @@ void main() {
   test('passing both dispose and discard is an ArgumentError', () {
     fakeAsync((async) {
       final job = Job<void>((ctx) async {
-        await ctx.join(
-          () async => 'db',
-          dispose: (_) {},
-          discard: (_) {},
-        );
-      })
-        ..ignoreFailure();
+        await ctx.join(() async => 'db', dispose: (_) {}, discard: (_) {});
+      })..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Failed>());
       expect((job.outcome! as Failed).error, isA<ArgumentError>());
@@ -808,35 +732,39 @@ void main() {
     });
   });
 
-  test('a discard of abandonable is silent when the value reaches the body',
-      () {
-    fakeAsync((async) {
-      final closed = <String>[];
-      final job = Job<String>((ctx) async {
-        final db = await ctx.abandonable(_open, discard: closed.add);
-        await ctx.abandonable(() => delay(10));
+  test(
+    'a discard of abandonable is silent when the value reaches the body',
+    () {
+      fakeAsync((async) {
+        final closed = <String>[];
+        final job = Job<String>((ctx) async {
+          final db = await ctx.abandonable(_open, discard: closed.add);
+          await ctx.abandonable(() => delay(10));
 
-        return db;
+          return db;
+        });
+        async.flushTimers();
+        expect(job.outcome, isA<Done<String>>());
+        expect(closed, isEmpty);
       });
-      async.flushTimers();
-      expect(job.outcome, isA<Done<String>>());
-      expect(closed, isEmpty);
-    });
-  });
+    },
+  );
 
-  test('a synchronous value of abandonable goes on the stack as any other does',
-      () {
-    fakeAsync((async) {
-      final closed = <String>[];
-      final job = Job<void>((ctx) async {
-        await ctx.abandonable(() => 'file', dispose: closed.add);
-        await ctx.abandonable(() => delay(10));
+  test(
+    'a synchronous value of abandonable goes on the stack as any other does',
+    () {
+      fakeAsync((async) {
+        final closed = <String>[];
+        final job = Job<void>((ctx) async {
+          await ctx.abandonable(() => 'file', dispose: closed.add);
+          await ctx.abandonable(() => delay(10));
+        });
+        async.flushTimers();
+        expect(job.outcome, isA<Done<void>>());
+        expect(closed, ['file']);
       });
-      async.flushTimers();
-      expect(job.outcome, isA<Done<void>>());
-      expect(closed, ['file']);
-    });
-  });
+    },
+  );
 
   test('a synchronous value of abandonable is discarded on a cancellation', () {
     fakeAsync((async) {
@@ -891,7 +819,8 @@ void main() {
     expect(
       ran,
       isEmpty,
-      reason: 'taking a registration back works wherever the unwinding has '
+      reason:
+          'taking a registration back works wherever the unwinding has '
           'put it',
     );
   });
@@ -915,7 +844,8 @@ void main() {
     expect(
       ran,
       ['disown: true'],
-      reason: 'the body handed the value on, and the registration the first '
+      reason:
+          'the body handed the value on, and the registration the first '
           'pass put aside went with it',
     );
   });
@@ -940,7 +870,8 @@ void main() {
     expect(
       ran,
       ['disown: true', 'bottom'],
-      reason: 'the top registration is the one the unwinding had already '
+      reason:
+          'the top registration is the one the unwinding had already '
           'put aside, and the one below it is still owed',
     );
   });
@@ -962,8 +893,7 @@ void main() {
         await ctx.join(migrate);
 
         return database;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
     });
     expect(ready.outcome, isA<Failed>());
@@ -971,30 +901,28 @@ void main() {
   });
 
   test(
-      'a receiver registers through abandonable, and the next line is too late',
-      () {
-    // The document promises this much: a child that refuses the stop ends
-    // [Done] while its parent is already cancelled, `ctx.run` throws the
-    // parent's own [Cancelled], and a registration written after it never
-    // happens. Taken through `abandonable`, the same value still reaches a
-    // `discard`.
-    Job<String>? lastChild;
-    List<String> run({required bool throughAbandonable}) {
-      final closed = <String>[];
-      fakeAsync((async) {
-        final child = lastChild = Job.deferred<String>(
-          cancellable: false,
-          (ctx) async {
+    'a receiver registers through abandonable, and the next line is too late',
+    () {
+      // The document promises this much: a child that refuses the stop ends
+      // [Done] while its parent is already cancelled, `ctx.run` throws the
+      // parent's own [Cancelled], and a registration written after it never
+      // happens. Taken through `abandonable`, the same value still reaches a
+      // `discard`.
+      Job<String>? lastChild;
+      List<String> run({required bool throughAbandonable}) {
+        final closed = <String>[];
+        fakeAsync((async) {
+          final child = lastChild = Job.deferred<String>(cancellable: false, (
+            ctx,
+          ) async {
             await ctx.abandonable(() => delay(20));
 
             return ctx.abandonable(
               () => 'db',
               discard: (db) => closed.add('inner'),
             );
-          },
-        );
-        final parent = Job<String>(
-          (ctx) async {
+          });
+          final parent = Job<String>((ctx) async {
             if (throughAbandonable) {
               return ctx.abandonable(
                 () => ctx.run(child),
@@ -1006,30 +934,32 @@ void main() {
             ctx.onDiscard(() => closed.add('outer'));
 
             return db;
-          },
-        )..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 5));
-        parent.cancel().ignore();
-        async.flushTimers();
-      });
+          })..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 5));
+          parent.cancel().ignore();
+          async.flushTimers();
+        });
 
-      return closed;
-    }
+        return closed;
+      }
 
-    expect(
-      run(throughAbandonable: false),
-      isEmpty,
-      reason: 'the child handed its value over, and the line that would '
-          'have registered it was never reached',
-    );
-    expect(run(throughAbandonable: true), ['outer']);
-    expect(
-      lastChild?.outcome,
-      isA<Done<String>>().having((outcome) => outcome.value, 'value', 'db'),
-      reason: 'the handle still carries the value the receiver closed: two '
-          'ways to one resource, and only one of them may close it',
-    );
-  });
+      expect(
+        run(throughAbandonable: false),
+        isEmpty,
+        reason:
+            'the child handed its value over, and the line that would '
+            'have registered it was never reached',
+      );
+      expect(run(throughAbandonable: true), ['outer']);
+      expect(
+        lastChild?.outcome,
+        isA<Done<String>>().having((outcome) => outcome.value, 'value', 'db'),
+        reason:
+            'the handle still carries the value the receiver closed: two '
+            'ways to one resource, and only one of them may close it',
+      );
+    },
+  );
 
   test('run releases the value when the checkpoint after it refuses', () {
     // The checkpoint `run` makes after the child's value is where a rule of
@@ -1047,64 +977,63 @@ void main() {
         (ctx) =>
             ctx.abandonable(() => 'db', discard: (db) => closed.add('child')),
       );
-      parent = CheckingJob<String>((ctx) {
-        rules = ctx;
+      parent =
+          CheckingJob<String>((ctx) {
+              rules = ctx;
 
-        return ctx.run(child, discard: (db) => closed.add('parent'));
-      })
-        ..launch()
-        ..ignoreFailure();
+              return ctx.run(child, discard: (db) => closed.add('parent'));
+            })
+            ..launch()
+            ..ignoreFailure();
       async.flushTimers();
     });
     expect(parent.outcome, isA<Cancelled>(), reason: 'the rule still rules');
-    expect(
-      closed,
-      ['parent'],
-      reason: 'the value reached nobody: it is released without a condition',
-    );
+    expect(closed, [
+      'parent',
+    ], reason: 'the value reached nobody: it is released without a condition');
   });
 
   for (final refusal in ['a cancellation', 'a rule that throws']) {
-    test('a body that catches $refusal after run and succeeds still releases',
-        () {
-      // The body catches what the checkpoint threw and ends [Done]. A
-      // `discard` left on the stack would never run on a job that
-      // succeeded, and the value that never reached the body would stay
-      // open: `join` released it on the spot, and so does `run`.
-      final closed = <String>[];
-      var delivered = false;
-      late CheckingJob<int> parent;
-      late CheckingContext rules;
-      fakeAsync((async) {
-        final child = Job.deferred<String>((ctx) async {
-          rules.rules = refusal == 'a cancellation'
-              ? () => throw const Cancelled('keepWhile')
-              : () => throw StateError('the rule blew up');
+    test(
+      'a body that catches $refusal after run and succeeds still releases',
+      () {
+        // The body catches what the checkpoint threw and ends [Done]. A
+        // `discard` left on the stack would never run on a job that
+        // succeeded, and the value that never reached the body would stay
+        // open: `join` released it on the spot, and so does `run`.
+        final closed = <String>[];
+        var delivered = false;
+        late CheckingJob<int> parent;
+        late CheckingContext rules;
+        fakeAsync((async) {
+          final child = Job.deferred<String>((ctx) async {
+            rules.rules = refusal == 'a cancellation'
+                ? () => throw const Cancelled('keepWhile')
+                : () => throw StateError('the rule blew up');
 
-          return 'db';
+            return 'db';
+          });
+          parent = CheckingJob<int>((ctx) async {
+            rules = ctx;
+            try {
+              await ctx.run(child, discard: closed.add);
+              delivered = true;
+            } on Object {
+              return -1;
+            }
+
+            return 1;
+          })..launch();
+          async.flushTimers();
         });
-        parent = CheckingJob<int>((ctx) async {
-          rules = ctx;
-          try {
-            await ctx.run(child, discard: closed.add);
-            delivered = true;
-          } on Object {
-            return -1;
-          }
-
-          return 1;
-        })
-          ..launch();
-        async.flushTimers();
-      });
-      expect(parent.outcome, isA<Done<int>>(), reason: 'the body recovered');
-      expect(delivered, isFalse);
-      expect(closed, ['db'], reason: 'the value reached nobody');
-    });
+        expect(parent.outcome, isA<Done<int>>(), reason: 'the body recovered');
+        expect(delivered, isFalse);
+        expect(closed, ['db'], reason: 'the value reached nobody');
+      },
+    );
   }
 
-  test(
-      'run on a job an engine ended with a cancellation throws it and '
+  test('run on a job an engine ended with a cancellation throws it and '
       'releases the value first', () {
     // The child cannot be cancelled and comes back after the engine ended
     // the parent by hand with [Cancelled]. The checkpoint after it throws
@@ -1115,23 +1044,24 @@ void main() {
     final heard = <Object>[];
     var closedWhenHeard = <String>[];
     fakeAsync((async) {
-      final parent = ProbeJob<int>((ctx) async {
-        try {
-          await ctx.run(
-            Job.deferred<String>(cancellable: false, (ctx) async {
-              await delay(20);
-              return 'db';
-            }),
-            discard: closed.add,
-          );
-        } on Object catch (error) {
-          heard.add(error);
-          closedWhenHeard = [...closed];
-        }
-        return 1;
-      })
-        ..ignoreFailure()
-        ..launch();
+      final parent =
+          ProbeJob<int>((ctx) async {
+              try {
+                await ctx.run(
+                  Job.deferred<String>(cancellable: false, (ctx) async {
+                    await delay(20);
+                    return 'db';
+                  }),
+                  discard: closed.add,
+                );
+              } on Object catch (error) {
+                heard.add(error);
+                closedWhenHeard = [...closed];
+              }
+              return 1;
+            })
+            ..ignoreFailure()
+            ..launch();
       async.elapse(const Duration(milliseconds: 5));
       parent.drop(byHand);
       async.flushTimers();
@@ -1158,60 +1088,64 @@ void main() {
         (ctx) =>
             ctx.abandonable(() => 'db', discard: (db) => closed.add('child')),
       );
-      parent = CheckingJob<String>((ctx) {
-        rules = ctx;
+      parent =
+          CheckingJob<String>((ctx) {
+              rules = ctx;
 
-        return ctx.abandonable(
-          () => ctx.run(child),
-          discard: (db) => closed.add('parent'),
-        );
-      })
-        ..launch()
-        ..ignoreFailure();
+              return ctx.abandonable(
+                () => ctx.run(child),
+                discard: (db) => closed.add('parent'),
+              );
+            })
+            ..launch()
+            ..ignoreFailure();
       async.flushTimers();
     });
     expect(parent.outcome, isA<Cancelled>(), reason: 'the rule still rules');
     expect(
       closed,
       isEmpty,
-      reason: 'the value never came back, so the wrapper had nothing to '
+      reason:
+          'the value never came back, so the wrapper had nothing to '
           'register and the resource is left open',
     );
   });
 
-  test('a dispose of run runs whatever the outcome, a discard only if kept',
-      () {
-    List<String> run({required bool byDispose, required bool succeed}) {
-      final closed = <String>[];
-      fakeAsync((async) {
-        final child = Job.deferred<String>((ctx) async => 'db');
-        Job<String>((ctx) async {
-          final db = await ctx.run(
-            child,
-            dispose: byDispose ? closed.add : null,
-            discard: byDispose ? null : closed.add,
-          );
-          if (!succeed) {
-            throw StateError('boom');
-          }
+  test(
+    'a dispose of run runs whatever the outcome, a discard only if kept',
+    () {
+      List<String> run({required bool byDispose, required bool succeed}) {
+        final closed = <String>[];
+        fakeAsync((async) {
+          final child = Job.deferred<String>((ctx) async => 'db');
+          Job<String>((ctx) async {
+            final db = await ctx.run(
+              child,
+              dispose: byDispose ? closed.add : null,
+              discard: byDispose ? null : closed.add,
+            );
+            if (!succeed) {
+              throw StateError('boom');
+            }
 
-          return db;
-        }).ignoreFailure();
-        async.flushTimers();
-      });
+            return db;
+          }).ignoreFailure();
+          async.flushTimers();
+        });
 
-      return closed;
-    }
+        return closed;
+      }
 
-    expect(run(byDispose: true, succeed: true), ['db']);
-    expect(run(byDispose: true, succeed: false), ['db']);
-    expect(
-      run(byDispose: false, succeed: true),
-      isEmpty,
-      reason: 'the value went out with the parent, and its cleanup with it',
-    );
-    expect(run(byDispose: false, succeed: false), ['db']);
-  });
+      expect(run(byDispose: true, succeed: true), ['db']);
+      expect(run(byDispose: true, succeed: false), ['db']);
+      expect(
+        run(byDispose: false, succeed: true),
+        isEmpty,
+        reason: 'the value went out with the parent, and its cleanup with it',
+      );
+      expect(run(byDispose: false, succeed: false), ['db']);
+    },
+  );
 
   test('a value of run that came back late is cleaned up all the same', () {
     final closed = <String>[];
@@ -1244,8 +1178,7 @@ void main() {
       parent = Job<void>((ctx) async {
         // Synchronous, and so is the refusal: no future is ever made.
         unawaited(ctx.run(child, dispose: (db) {}, discard: (db) {}));
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
     });
     expect(parent.outcome, isA<Failed>());
@@ -1268,8 +1201,7 @@ void main() {
         // Handed on to somebody outside, so the registration goes too.
         ctx.disown(db);
         throw StateError('boom');
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
     });
     expect(parent.outcome, isA<Failed>());
@@ -1284,20 +1216,19 @@ void main() {
         // Put off by the first pass on a `Done` and never run: the value
         // reached the caller, so there was nothing to discard.
         return ctx.abandonable(() => resource, discard: (value) {});
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
     });
     expect(job.outcome, isA<Done<Object>>());
     expect(
       _putAside(job),
       isEmpty,
-      reason: 'a registration nobody will run must not outlive the job in '
+      reason:
+          'a registration nobody will run must not outlive the job in '
           'its handle: it holds its value and its closure',
     );
   });
-  test(
-      'a discard below the cleanup a cancellation arrives in runs in its '
+  test('a discard below the cleanup a cancellation arrives in runs in its '
       'place', () async {
     // The condition of a `discard` is read as each registration comes off
     // the stack, not once for the pass: the cancellation arrives while the
@@ -1326,8 +1257,7 @@ void main() {
   // registration that comes k microtasks after the last cleanup has ended
   // either runs or meets a job that is over and is refused. Swept over k.
   for (final kind in ['plain', 'branch']) {
-    test(
-        'no registration falls into the window after the last cleanup, '
+    test('no registration falls into the window after the last cleanup, '
         '$kind', () async {
       for (var k = 0; k < 12; k++) {
         var ran = false;

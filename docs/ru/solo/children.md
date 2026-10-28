@@ -5,27 +5,25 @@
 ```dart
 // Создан контроллером, но ещё никем не запущен: очередь возьмёт его
 // через `sync` ниже, родитель через `ctx.run`.
-SoloJob<String> _sync(int item) => job<Ready, String>(
-      key: _Op.sync,
-      (ctx) async {
-        // Ребёнок на стриме: прогресс загрузки, который API закрывает,
-        // когда загрузка кончилась. Родитель ждёт ребёнка и без await,
-        // а отмена родителя отменяет и его.
-        ctx.each(
-          api.progress(item),
-          (childCtx, sent) =>
-              childCtx.emit(childCtx.state.copyWith(sent: sent)),
-        );
+SoloJob<String> _sync(int item) =>
+    job<Ready, String>(key: _Op.sync, (ctx) async {
+      // Ребёнок на стриме: прогресс загрузки, который API закрывает,
+      // когда загрузка кончилась. Родитель ждёт ребёнка и без await,
+      // а отмена родителя отменяет и его.
+      ctx.each(
+        api.progress(item),
+        (childCtx, sent) =>
+            childCtx.emit(childCtx.state.copyWith(sent: sent)),
+      );
 
-        // Создан контроллером, запущен родителем и минует очередь:
-        // пока он работает, очередь держит родитель.
-        final upload = job<Ready, String>(
-          key: _Op.upload,
-          (childCtx) => childCtx.join(() => api.push(item)),
-        );
-        return ctx.run(upload);
-      },
-    );
+      // Создан контроллером, запущен родителем и минует очередь:
+      // пока он работает, очередь держит родитель.
+      final upload = job<Ready, String>(
+        key: _Op.upload,
+        (childCtx) => childCtx.join(() => api.push(item)),
+      );
+      return ctx.run(upload);
+    });
 
 Job<String> sync(int item) => enqueueJob(_sync(item));
 ```
@@ -69,18 +67,16 @@ future от `ctx.run`. Несколько детей бок о бок соста
 
 ```dart
 // Родитель сам отвечает за упавшую загрузку.
-Job<bool> trySync(int item) => enqueue<Ready, bool>(
-      key: _Op.trySync,
-      (ctx) async {
-        try {
-          final path = await ctx.run(_sync(item));
-          ctx.emit(ctx.state.copyWith(path: path));
-          return true;
-        } on ApiException {
-          return false;
-        }
-      },
-    );
+Job<bool> trySync(int item) =>
+    enqueue<Ready, bool>(key: _Op.trySync, (ctx) async {
+      try {
+        final path = await ctx.run(_sync(item));
+        ctx.emit(ctx.state.copyWith(path: path));
+        return true;
+      } on ApiException {
+        return false;
+      }
+    });
 ```
 
 `ctx.run(child)` возвращает `Future<T>` с результатом ребёнка. Она ждёт
@@ -103,17 +99,15 @@ Job<bool> trySync(int item) => enqueue<Ready, bool>(
 ## Работа рядом с ребёнком
 
 ```dart
-Job<String> syncAndAnnounce(int item) => enqueue<Ready, String>(
-      key: _Op.syncAndAnnounce,
-      (ctx) async {
-        // Сохранена, но не ожидается: загрузка идёт, пока родитель работает.
-        // Ошибка загрузки здесь игнорируется, а тело упадёт с ней
-        // на `return`.
-        final uploading = ctx.run(_sync(item))..ignore();
-        await ctx.join(() => analytics.send('started $item'));
-        return uploading;
-      },
-    );
+Job<String> syncAndAnnounce(int item) =>
+    enqueue<Ready, String>(key: _Op.syncAndAnnounce, (ctx) async {
+      // Сохранена, но не ожидается: загрузка идёт, пока родитель работает.
+      // Ошибка загрузки здесь игнорируется, а тело упадёт с ней
+      // на `return`.
+      final uploading = ctx.run(_sync(item))..ignore();
+      await ctx.join(() => analytics.send('started $item'));
+      return uploading;
+    });
 ```
 
 Чтобы родитель работал одновременно с ребёнком, сохраните future, которую
@@ -158,18 +152,16 @@ Job<String> syncAndAnnounce(int item) => enqueue<Ready, String>(
 ## Ребёнок, которого отвернули правила
 
 ```dart
-Job<String> resend(int item) => enqueue<Ready, String>(
-      key: _Op.resend,
-      (ctx) {
-        // Ребёнок со своим правилом: на паузе загрузки нет.
-        final upload = job<Ready, String>(
-          key: _Op.upload,
-          canStart: (state) => !state.paused,
-          (childCtx) => childCtx.join(() => api.push(item)),
-        );
-        return ctx.run(upload);
-      },
-    );
+Job<String> resend(int item) =>
+    enqueue<Ready, String>(key: _Op.resend, (ctx) {
+      // Ребёнок со своим правилом: на паузе загрузки нет.
+      final upload = job<Ready, String>(
+        key: _Op.upload,
+        canStart: (state) => !state.paused,
+        (childCtx) => childCtx.join(() => api.push(item)),
+      );
+      return ctx.run(upload);
+    });
 ```
 
 Когда состояние на паузе, ничего не загружается, и `resend` кончается так:
@@ -258,9 +250,9 @@ Invalid argument (job): was not created by this Solo (make it with job(...) or c
 ```dart
 // То же разделение, что у `sync`: сам шаг и вход через очередь.
 SoloJob<void> _recordPath(String path) => job<Ready, void>(
-      key: _Op.record,
-      (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
-    );
+  key: _Op.record,
+  (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
+);
 
 Job<void> recordPath(String path) => enqueueJob(_recordPath(path));
 ```
@@ -288,13 +280,11 @@ Job<void> syncAndRecord(int item) =>
 
 ```dart
 // Вторая попытка: sync ждёт конца этой задачи, а задача ждёт sync.
-Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-      key: _Op.syncAndRecord,
-      (ctx) async {
-        final path = await sync(item).value;
-        await recordPath(path).value;
-      },
-    );
+Job<void> syncAndRecord(int item) =>
+    enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+      final path = await sync(item).value;
+      await recordPath(path).value;
+    });
 ```
 
 Теперь очередь на оба шага держит одна задача, и зовёт она методы, которые
@@ -330,13 +320,11 @@ enqueue Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited 
 // Снова `_sync` и `_recordPath`, теперь детьми. Родитель держит очередь,
 // пока не закончат дети, поэтому `save()`, поставленная тем временем,
 // ждёт обоих шагов.
-Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-      key: _Op.syncAndRecord,
-      (ctx) async {
-        final path = await ctx.run(_sync(item));
-        await ctx.run(_recordPath(path));
-      },
-    );
+Job<void> syncAndRecord(int item) =>
+    enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+      final path = await ctx.run(_sync(item));
+      await ctx.run(_recordPath(path));
+    });
 ```
 
 У шага, написанного через `job(...)`, открыты оба пути: `enqueueJob` даёт ему

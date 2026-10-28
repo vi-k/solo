@@ -33,16 +33,13 @@ final class Camera extends Solo<CameraState> {
     });
   }
 
-  Job<void> record() => enqueue<CameraState, void>(
-        key: 'record',
-        (ctx) async {
-          final state = ctx.state;
-          if (state is! Ready || state.free == 0 || state.paused) return;
-          await for (final frame in device.frames) {
-            await store(frame);
-          }
-        },
-      );
+  Job<void> record() => enqueue<CameraState, void>(key: 'record', (ctx) async {
+    final state = ctx.state;
+    if (state is! Ready || state.free == 0 || state.paused) return;
+    await for (final frame in device.frames) {
+      await store(frame);
+    }
+  });
 
   /// Not on the page: a fact of the device, the way a source of the
   /// application reports one.
@@ -51,13 +48,13 @@ final class Camera extends Solo<CameraState> {
   /// Not on the page: a job whose rule requires the connection, waiting for
   /// an answer the device gives only when the test says so.
   Job<void> waitForAnswer() => enqueue<CameraState, void>(
-        key: 'answer',
-        keepWhile: (state) {
-          ruleAsked++;
-          return state is! Disconnected;
-        },
-        (ctx) => ctx.abandonable(() => device.answer.future),
-      );
+    key: 'answer',
+    keepWhile: (state) {
+      ruleAsked++;
+      return state is! Disconnected;
+    },
+    (ctx) => ctx.abandonable(() => device.answer.future),
+  );
 
   /// Not on the page: work that waits its turn.
   Job<void> later() => enqueue<CameraState, void>(key: 'later', (ctx) async {});
@@ -78,31 +75,29 @@ final class ProfileController extends Solo<ProfileState> {
   void reflect(ProfileState state) => externalSetState(state);
 
   /// The first attempt of "State after failure or cancellation".
-  Job<String> loadWithCatch() => enqueue<ProfileState, String>(
-        (ctx) async {
-          ctx.emit(const Loading());
-          try {
-            final name = await ctx.abandonable(api.fetchName);
-            ctx.emit(Loaded(name));
-            return name;
-          } on Object {
-            ctx.emit(const Initial());
-            rethrow;
-          }
-        },
-      );
+  Job<String> loadWithCatch() => enqueue<ProfileState, String>((ctx) async {
+    ctx.emit(const Loading());
+    try {
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    } on Object {
+      ctx.emit(const Initial());
+      rethrow;
+    }
+  });
 
   /// The first attempt of "Preserving an incompatible external state".
   Job<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.droppable,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 }

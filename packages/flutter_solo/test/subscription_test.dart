@@ -229,31 +229,32 @@ void main() {
     expect(calls, 3, reason: 'the other registration is still there');
   });
 
-  test('cancelling one of two subscriptions of a closure takes back its own',
-      () {
-    final counter = _Counter();
-    final notifier = ValueNotifier(0);
-    final byIdentity = _ByIdentity();
-    for (final (source, change) in <(Listenable, void Function())>[
-      (counter, () => counter.set(1)),
-      (notifier, () => notifier.value = 1),
-      (byIdentity, byIdentity.notify),
-    ]) {
-      final heard = <String>[];
-      void a() => heard.add('A');
-      void b() => heard.add('B');
-      source
-        ..listen(a)
-        ..listen(b)
-        ..listen(a).cancel();
-      change();
-      expect(
-        heard,
-        ['A', 'B'],
-        reason: '$source: the last A went, not the first',
-      );
-    }
-  });
+  test(
+    'cancelling one of two subscriptions of a closure takes back its own',
+    () {
+      final counter = _Counter();
+      final notifier = ValueNotifier(0);
+      final byIdentity = _ByIdentity();
+      for (final (source, change) in <(Listenable, void Function())>[
+        (counter, () => counter.set(1)),
+        (notifier, () => notifier.value = 1),
+        (byIdentity, byIdentity.notify),
+      ]) {
+        final heard = <String>[];
+        void a() => heard.add('A');
+        void b() => heard.add('B');
+        source
+          ..listen(a)
+          ..listen(b)
+          ..listen(a).cancel();
+        change();
+        expect(heard, [
+          'A',
+          'B',
+        ], reason: '$source: the last A went, not the first');
+      }
+    },
+  );
 
   test('a selection is listened to the same way', () {
     final counter = _Counter();
@@ -323,7 +324,8 @@ void main() {
     expect(
       await collected(payload),
       isTrue,
-      reason: 'held on to until the next add or read of length, it keeps '
+      reason:
+          'held on to until the next add or read of length, it keeps '
           'the listener and everything it closed over',
     );
     expect(listening.length, 0);
@@ -335,7 +337,8 @@ void main() {
     expect(
       await collected(payload),
       isTrue,
-      reason: 'the group was dropped; through it, one member would hold '
+      reason:
+          'the group was dropped; through it, one member would hold '
           'every other and everything they closed over',
     );
     expect(kept.isCancelled, isFalse, reason: 'the member is kept to the end');
@@ -378,38 +381,39 @@ void main() {
     final last = counter.listen(() => calls++)..addTo(listening);
 
     listening.cancel();
-    expect(
-      errors,
-      [isStateError, isStateError],
-      reason: 'every refusal is reported, none is thrown',
-    );
+    expect(errors, [
+      isStateError,
+      isStateError,
+    ], reason: 'every refusal is reported, none is thrown');
     expect(last.isCancelled, isTrue, reason: 'the pass went on to the end');
 
     counter.set(1);
     expect(calls, 0);
   });
 
-  test('a source that reads or changes the group does not cut the walk short',
-      () {
-    final listening = SoloSubscriptions();
-    late final SoloSubscription last;
-    final lengths = <int>[];
-    final source = _Watched(() {
-      lengths.add(listening.length);
-      last.cancel();
-    });
-    addTearDown(source.dispose);
-    final members = [
-      for (var i = 0; i < 3; i++) source.listen(() {})..addTo(listening),
-    ];
-    last = members.last;
+  test(
+    'a source that reads or changes the group does not cut the walk short',
+    () {
+      final listening = SoloSubscriptions();
+      late final SoloSubscription last;
+      final lengths = <int>[];
+      final source = _Watched(() {
+        lengths.add(listening.length);
+        last.cancel();
+      });
+      addTearDown(source.dispose);
+      final members = [
+        for (var i = 0; i < 3; i++) source.listen(() {})..addTo(listening),
+      ];
+      last = members.last;
 
-    listening.cancel();
+      listening.cancel();
 
-    expect(members.map((member) => member.isCancelled), everyElement(isTrue));
-    expect(source.listened, isFalse, reason: 'every listener taken back');
-    expect(lengths, everyElement(0), reason: 'the group is empty by then');
-  });
+      expect(members.map((member) => member.isCancelled), everyElement(isTrue));
+      expect(source.listened, isFalse, reason: 'every listener taken back');
+      expect(lengths, everyElement(0), reason: 'the group is empty by then');
+    },
+  );
 
   test('a reporter that throws does not stop the walk', () {
     final stuck = _Stuck();
@@ -434,8 +438,9 @@ void main() {
     expect(last.isCancelled, isTrue, reason: 'the pass went on to the end');
   });
 
-  testWidgets('a member that cannot let go does not stop the frame',
-      (tester) async {
+  testWidgets('a member that cannot let go does not stop the frame', (
+    tester,
+  ) async {
     final stuck = _Stuck();
     final errors = <Object>[];
     final previous = FlutterError.onError;

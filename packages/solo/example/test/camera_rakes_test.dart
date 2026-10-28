@@ -44,46 +44,44 @@ final class Variants extends Solo<CameraState>
 
   /// "A working type wide enough" without its `canStart`.
   Job<void> initWithoutCanStart() => enqueue<NotDisposed, void>(
-        key: CameraKey.init,
-        policy: Policy.droppable,
-        (ctx) async {
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          ctx.emit(const Ready());
-        },
-      );
+    key: CameraKey.init,
+    policy: Policy.droppable,
+    (ctx) async {
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      ctx.emit(const Ready());
+    },
+  );
 
   /// The catch of "An opening that fails", telling what its `emit` did.
-  Job<void> initWatchingTheCatch() => enqueue<NotDisposed, void>(
-        key: CameraKey.init,
-        (ctx) async {
-          ctx.emit(const Preparing());
+  Job<void> initWatchingTheCatch() =>
+      enqueue<NotDisposed, void>(key: CameraKey.init, (ctx) async {
+        ctx.emit(const Preparing());
+        try {
+          await ctx.join(hw.open);
+        } on Object catch (error) {
           try {
-            await ctx.join(hw.open);
-          } on Object catch (error) {
-            try {
-              ctx.emit(Broken(error));
-            } on Object catch (thrown) {
-              emitThrew = thrown;
-              rethrow;
-            }
+            ctx.emit(Broken(error));
+          } on Object catch (thrown) {
+            emitThrew = thrown;
             rethrow;
           }
-          ctx.emit(const Ready());
-        },
-      );
+          rethrow;
+        }
+        ctx.emit(const Ready());
+      });
 
   /// The shot without its clear.
   Job<Photo> takePhotoKeepingQueue() => enqueue<Ready, Photo>(
-        key: CameraKey.takePhoto,
-        policy: Policy.droppable,
-        canStart: (state) => !state.paused,
-        (ctx) async {
-          final photo = await ctx.join(hw.capture);
-          ctx.log('captured $photo');
-          return photo;
-        },
-      );
+    key: CameraKey.takePhoto,
+    policy: Policy.droppable,
+    canStart: (state) => !state.paused,
+    (ctx) async {
+      final photo = await ctx.join(hw.capture);
+      ctx.log('captured $photo');
+      return photo;
+    },
+  );
 
   /// The disposal of "Checking in the body" with the clear forced.
   Job<void> disposeForced() {
@@ -93,15 +91,15 @@ final class Variants extends Solo<CameraState>
 
   /// A job like the disposal, to stand in the queue.
   Job<void> queueLikeADisposal() => enqueue<CameraState, void>(
-        key: CameraKey.dispose,
-        cancellable: false,
-        (ctx) async {},
-      );
+    key: CameraKey.dispose,
+    cancellable: false,
+    (ctx) async {},
+  );
 
   /// What waits in the queue, by key.
   List<String> get queued => [
-        for (final job in queue.jobs) (job.key! as Enum).name,
-      ];
+    for (final job in queue.jobs) (job.key! as Enum).name,
+  ];
 
   /// `queue.clear`, for a test to call.
   int clearQueue({bool force = false}) => queue.clear(force: force);
@@ -134,7 +132,8 @@ void camera<C extends Solo<CameraState>>(
     FakeCameraHardware hw,
     JournalObserver journal,
     FakeAsync async,
-  ) body, {
+  )
+  body, {
   FakeCameraHardware? hardware,
 }) {
   fakeAsync((async) {
@@ -201,17 +200,17 @@ void opened(
 /// The `init` of [camera], whichever version it is: the example and the
 /// versions of the page share no interface.
 Job<void> Function() _init(Solo<CameraState> camera) => switch (camera) {
-      CameraController() => camera.init,
-      CameraParts() => camera.init,
-      _ => throw ArgumentError.value(camera),
-    };
+  CameraController() => camera.init,
+  CameraParts() => camera.init,
+  _ => throw ArgumentError.value(camera),
+};
 
 /// The `reopen` of [camera], whichever version it is.
 Job<void> Function() _reopen(Solo<CameraState> camera) => switch (camera) {
-      CameraController() => camera.reopen,
-      CameraParts() => camera.reopen,
-      _ => throw ArgumentError.value(camera),
-    };
+  CameraController() => camera.reopen,
+  CameraParts() => camera.reopen,
+  _ => throw ArgumentError.value(camera),
+};
 
 /// The `setZoom` of [camera], whichever version it is.
 Job<void> Function(double zoom) _setZoom(Solo<CameraState> camera) =>
@@ -223,18 +222,18 @@ Job<void> Function(double zoom) _setZoom(Solo<CameraState> camera) =>
 
 /// The `takePhoto` of [camera], whichever version it is.
 Job<Photo> Function() _takePhoto(Solo<CameraState> camera) => switch (camera) {
-      CameraController() => camera.takePhoto,
-      CameraParts() => camera.takePhoto,
-      _ => throw ArgumentError.value(camera),
-    };
+  CameraController() => camera.takePhoto,
+  CameraParts() => camera.takePhoto,
+  _ => throw ArgumentError.value(camera),
+};
 
 /// The `dispose` of [camera], whichever version it is.
 Job<void> Function() _dispose(Solo<CameraState> camera) => switch (camera) {
-      CameraController() => camera.dispose,
-      CheckedDisposal() => camera.dispose,
-      QueuedDisposal() => camera.dispose,
-      _ => throw ArgumentError.value(camera),
-    };
+  CameraController() => camera.dispose,
+  CheckedDisposal() => camera.dispose,
+  QueuedDisposal() => camera.dispose,
+  _ => throw ArgumentError.value(camera),
+};
 
 /// A constructor of a version.
 typedef _Create = Solo<CameraState> Function(FakeCameraHardware hw);
@@ -277,18 +276,20 @@ String _part(String section, [String? heading]) {
 
 /// The journals [part] quotes, each as its lines.
 List<List<String>> _quoted(String part) => [
-      for (final match
-          in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(part))
-        match.group(1)!.split('\n'),
-    ];
+  for (final match in RegExp(
+    r'```text\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(part))
+    match.group(1)!.split('\n'),
+];
 
 /// Holds [part] to [sentence]: its prose, the breaks of its lines aside.
 void _says(String part, String sentence) => expect(
-      part
-          .replaceAll(RegExp('```.*?```', dotAll: true), ' ')
-          .replaceAll(RegExp(r'\s+'), ' '),
-      contains(sentence),
-    );
+  part
+      .replaceAll(RegExp('```.*?```', dotAll: true), ' ')
+      .replaceAll(RegExp(r'\s+'), ' '),
+  contains(sentence),
+);
 
 /// A copy of [file] without its comments, for the checks that compare code
 /// line by line: the page shows the example's code "comments aside".
@@ -632,10 +633,7 @@ void main() {
       });
 
       expect(taken, hasLength(18));
-      expect(
-        printed.where((line) => !line.startsWith('shot: ')),
-        taken,
-      );
+      expect(printed.where((line) => !line.startsWith('shot: ')), taken);
     });
   });
 
@@ -646,10 +644,7 @@ void main() {
         '`init` publishes `Preparing`, opens the hardware and publishes '
         '`Ready`. It may start only from `Initial`.',
       );
-      for (final create in <_Create>[
-        WideInit.new,
-        CameraController.new,
-      ]) {
+      for (final create in <_Create>[WideInit.new, CameraController.new]) {
         camera(create, (camera, hw, journal, async) {
           _init(camera)().ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
@@ -720,10 +715,7 @@ void main() {
     test('canStart turns a second init away before it starts', () {
       final answer = _part(_opening, '### A working type wide enough');
       _says(answer, 'With it, the call ends before it starts:');
-      for (final create in <_Create>[
-        WideInit.new,
-        CameraController.new,
-      ]) {
+      for (final create in <_Create>[WideInit.new, CameraController.new]) {
         camera(create, (camera, hw, journal, async) {
           final open = _init(camera);
           opened(open, hw, journal, async);
@@ -746,10 +738,7 @@ void main() {
         'that far: `Policy.droppable` hands it the job already in flight, '
         'and the hardware is opened once.',
       );
-      for (final create in <_Create>[
-        WideInit.new,
-        CameraController.new,
-      ]) {
+      for (final create in <_Create>[WideInit.new, CameraController.new]) {
         camera(create, (camera, hw, journal, async) {
           final open = _init(camera);
           final first = open()..ignoreFailure();
@@ -888,10 +877,7 @@ void main() {
         'A failure and a cancellation both land in `Broken`, and `reopen` '
         'starts from there:',
       );
-      for (final create in <_Create>[
-        HandledInit.new,
-        CameraController.new,
-      ]) {
+      for (final create in <_Create>[HandledInit.new, CameraController.new]) {
         final hw = FakeCameraHardware()
           ..failures['open'] = StateError('camera in use');
         camera(create, hardware: hw, (camera, hw, journal, async) {
@@ -920,10 +906,7 @@ void main() {
         'cancellation reaches its own handler instead of a refused `emit`.',
       );
       expect(_quoted(answer), hasLength(2));
-      for (final create in <_Create>[
-        HandledInit.new,
-        CameraController.new,
-      ]) {
+      for (final create in <_Create>[HandledInit.new, CameraController.new]) {
         camera(create, (camera, hw, journal, async) {
           final job = _init(camera)()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
@@ -998,10 +981,8 @@ void main() {
 
     /// The first block of `dart` code in [part], comments aside.
     String code(String part) => _normalize(
-          RegExp(r'```dart\n(.*?)```', dotAll: true)
-              .firstMatch(part)!
-              .group(1)!,
-        );
+      RegExp(r'```dart\n(.*?)```', dotAll: true).firstMatch(part)!.group(1)!,
+    );
 
     test('the first attempt is the body of the handlers of enqueue', () {
       final attempt = _part(_reported, _first);
@@ -1489,10 +1470,10 @@ void main() {
         expect(journal.take(), ['[takePhoto] started']);
         async.elapse(const Duration(milliseconds: 40));
 
-        expect(
-          ['[takePhoto] started', ...journal.take()],
-          _quoted(section).single,
-        );
+        expect([
+          '[takePhoto] started',
+          ...journal.take(),
+        ], _quoted(section).single);
         expect(shot.outcome, isA<Done<Photo>>());
         expect(hw.log, ['capture: begin', 'capture: end']);
       });
@@ -2214,8 +2195,12 @@ void main() {
         'A report that comes after `close()` now finds no listener, and '
         'nothing throws.',
       );
-      camera(listener.ClosingCameraController.new,
-          (camera, hw, journal, async) {
+      camera(listener.ClosingCameraController.new, (
+        camera,
+        hw,
+        journal,
+        async,
+      ) {
         opened(camera.init, hw, journal, async);
         camera.dispose().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
@@ -2267,8 +2252,12 @@ void main() {
         'The report in the journal above came before `close()`, and this '
         'version prints the same journal',
       );
-      camera(listener.ClosingCameraController.new,
-          (camera, hw, journal, async) {
+      camera(listener.ClosingCameraController.new, (
+        camera,
+        hw,
+        journal,
+        async,
+      ) {
         opened(camera.init, hw, journal, async);
 
         camera.dispose().ignoreFailure();
@@ -2408,10 +2397,10 @@ void main() {
 
     test('the page of the example quotes the head and tail of that run', () {
       final readme = File('example.md').readAsStringSync();
-      final block = RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .firstMatch(readme)!
-          .group(1)!
-          .split('\n');
+      final block = RegExp(
+        r'```text\n(.*?)\n```',
+        dotAll: true,
+      ).firstMatch(readme)!.group(1)!.split('\n');
       final cut = block.indexOf('...');
       final head = block.sublist(0, cut);
       final tail = block.sublist(cut + 1);
@@ -2424,9 +2413,11 @@ void main() {
       expect(seen.printed.skip(seen.printed.length - tail.length), tail);
       expect(
         readme.replaceAll('\n', ' '),
-        contains('The shot is cancelled on purpose: the program disposes of '
-            'the camera while the shot is halfway through, and `dispose` '
-            'cancels it before it closes the device.'),
+        contains(
+          'The shot is cancelled on purpose: the program disposes of '
+          'the camera while the shot is halfway through, and `dispose` '
+          'cancels it before it closes the device.',
+        ),
       );
     });
 
@@ -2449,10 +2440,10 @@ void main() {
     });
 
     test('the commands of the section name what the example has', () {
-      final commands = RegExp(r'```sh\n(.*?)\n```', dotAll: true)
-          .firstMatch(_part(_running))!
-          .group(1)!
-          .split('\n');
+      final commands = RegExp(
+        r'```sh\n(.*?)\n```',
+        dotAll: true,
+      ).firstMatch(_part(_running))!.group(1)!.split('\n');
 
       expect(commands, [
         'cd example',
@@ -2492,11 +2483,12 @@ void main() {
         _part(_failing, _first),
         'on the state page, with a device behind the spinner.',
       );
-      final section =
-          File('../doc/state.md').readAsStringSync().split('\n## ').firstWhere(
-                (part) =>
-                    part.startsWith('State after failure or cancellation'),
-              );
+      final section = File('../doc/state.md')
+          .readAsStringSync()
+          .split('\n## ')
+          .firstWhere(
+            (part) => part.startsWith('State after failure or cancellation'),
+          );
 
       expect(section, contains('### The first attempt'));
       expect(section, contains('spinner'));
@@ -2520,10 +2512,7 @@ void main() {
     });
 
     test('the cancellation page says what close does with a queued job', () {
-      _says(
-        _part(_closing, _first),
-        'on the cancellation page describes.',
-      );
+      _says(_part(_closing, _first), 'on the cancellation page describes.');
       final section = File('../doc/cancellation.md')
           .readAsStringSync()
           .split('\n## ')
@@ -2575,35 +2564,37 @@ void main() {
       expect(section, contains('void onClose() => unawaited(_link.cancel());'));
     });
 
-    test('the pages that point here find the disposal awaited before close',
-        () {
-      for (final page in ['cancellation.md', 'resources.md']) {
-        expect(
-          File('../doc/$page').readAsStringSync(),
-          contains('(camera.md#awaiting-the-disposal)'),
-          reason: page,
-        );
-      }
-      final answer = _part(_closing, '### Awaiting the disposal');
-      final disposal = answer.indexOf('await camera.dispose().done');
-      final close = answer.indexOf('await camera.close()');
+    test(
+      'the pages that point here find the disposal awaited before close',
+      () {
+        for (final page in ['cancellation.md', 'resources.md']) {
+          expect(
+            File('../doc/$page').readAsStringSync(),
+            contains('(camera.md#awaiting-the-disposal)'),
+            reason: page,
+          );
+        }
+        final answer = _part(_closing, '### Awaiting the disposal');
+        final disposal = answer.indexOf('await camera.dispose().done');
+        final close = answer.indexOf('await camera.close()');
 
-      expect(disposal, isNot(-1));
-      expect(close, greaterThan(disposal));
-      // The cancellation page says of the example that its only place to
-      // submit work is the caller: the listener of the hardware changes
-      // the state and queues nothing.
-      expect(
-        File('../doc/cancellation.md')
-            .readAsStringSync()
-            .replaceAll(RegExp(r'\s+'), ' '),
-        contains('the only place that submits work is the caller'),
-      );
-      expect(
-        File('lib/src/camera_controller.dart').readAsStringSync(),
-        contains('hw.onError = (error) => externalSetState(Broken(error));'),
-      );
-    });
+        expect(disposal, isNot(-1));
+        expect(close, greaterThan(disposal));
+        // The cancellation page says of the example that its only place to
+        // submit work is the caller: the listener of the hardware changes
+        // the state and queues nothing.
+        expect(
+          File(
+            '../doc/cancellation.md',
+          ).readAsStringSync().replaceAll(RegExp(r'\s+'), ' '),
+          contains('the only place that submits work is the caller'),
+        );
+        expect(
+          File('lib/src/camera_controller.dart').readAsStringSync(),
+          contains('hw.onError = (error) => externalSetState(Broken(error));'),
+        );
+      },
+    );
   });
 
   group('the page', () {
@@ -2619,15 +2610,16 @@ void main() {
       );
 
       final last = <String, String>{};
-      for (final block in RegExp(r'```dart\n(.*?)```', dotAll: true)
-          .allMatches(page)
-          .map((match) => match.group(1)!)) {
+      for (final block in RegExp(
+        r'```dart\n(.*?)```',
+        dotAll: true,
+      ).allMatches(page).map((match) => match.group(1)!)) {
         final heads = _head.allMatches(block).toList();
         for (var i = 0; i < heads.length; i++) {
           final end = i + 1 < heads.length ? heads[i + 1].start : block.length;
           final head = heads[i];
-          last[head.group(1) ?? head.group(2) ?? head.group(3)!] =
-              block.substring(head.start, end);
+          last[head.group(1) ?? head.group(2) ?? head.group(3)!] = block
+              .substring(head.start, end);
         }
       }
 
@@ -2713,9 +2705,7 @@ void main() {
     });
 
     test('a second attempt follows a first one, and an answer follows it', () {
-      final headings = [
-        for (final part in _parts()) part.split('\n').first,
-      ];
+      final headings = [for (final part in _parts()) part.split('\n').first];
       var seconds = 0;
       for (var i = 0; i < headings.length; i++) {
         if (headings[i] == _second) {

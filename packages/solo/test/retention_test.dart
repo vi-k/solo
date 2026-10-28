@@ -90,8 +90,7 @@ Future<(SoloJob<T>, WeakReference<Payload>)> madeInUnattendedWork<T>(
     ctx.unattended(() => made.complete(make()));
 
     return payload;
-  })
-    ..ignoreFailure();
+  })..ignoreFailure();
   final job = await made.future;
   await starter.done;
 
@@ -108,7 +107,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the body ran once and will not run again; held on, it keeps '
+      reason:
+          'the body ran once and will not run again; held on, it keeps '
           'everything it captured for as long as anyone keeps the handle',
     );
 
@@ -141,39 +141,42 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the parent chain leads to jobs that are over, and one handle '
+      reason:
+          'the parent chain leads to jobs that are over, and one handle '
           'in a field would keep the whole tree it came out of',
     );
 
     await solo.close();
   });
 
-  test('a job made in unattended work lets go of the job that started it',
-      () async {
-    final solo = Counter();
-    final (made, capture) = await madeInUnattendedWork(
-      solo,
-      () => solo.enqueue<int, int>((_) async => 1),
-    );
-    await made.done;
-
-    expect(made.outcome, isA<Done<int>>());
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the zone current where the job was made is the fork of the '
-          'work, and a handle that held it would hold the job that started '
-          'the work for as long as anyone keeps the handle',
-    );
-    // Read after the check, so the handle is held through it by the
-    // language and not by how the VM keeps a suspended frame.
-    expect(made.isFinished, isTrue);
-
-    await solo.close();
-  });
-
   test(
-      'a job made in unattended work waits in the queue without holding '
+    'a job made in unattended work lets go of the job that started it',
+    () async {
+      final solo = Counter();
+      final (made, capture) = await madeInUnattendedWork(
+        solo,
+        () => solo.enqueue<int, int>((_) async => 1),
+      );
+      await made.done;
+
+      expect(made.outcome, isA<Done<int>>());
+      expect(
+        await collected(capture),
+        isTrue,
+        reason:
+            'the zone current where the job was made is the fork of the '
+            'work, and a handle that held it would hold the job that started '
+            'the work for as long as anyone keeps the handle',
+      );
+      // Read after the check, so the handle is held through it by the
+      // language and not by how the VM keeps a suspended frame.
+      expect(made.isFinished, isTrue);
+
+      await solo.close();
+    },
+  );
+
+  test('a job made in unattended work waits in the queue without holding '
       'the job that started it', () async {
     final solo = Counter();
     final other = Counter();
@@ -188,7 +191,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the queue starts a job in the zone it was made in, and a job '
+      reason:
+          'the queue starts a job in the zone it was made in, and a job '
           'made in the work starts where the work was started from; kept '
           'for the start, the fork would hold the job that started the '
           'work for as long as this one waits',
@@ -202,8 +206,7 @@ void main() {
     await other.close();
   });
 
-  test(
-      'a job made in unattended work runs without holding the job that '
+  test('a job made in unattended work runs without holding the job that '
       'started it', () async {
     final solo = Counter();
     final other = Counter();
@@ -227,8 +230,7 @@ void main() {
     await other.close();
   });
 
-  test(
-      'a job made in unattended work and not yet added holds nothing of the '
+  test('a job made in unattended work and not yet added holds nothing of the '
       'job that started it', () async {
     final solo = Counter();
     final other = Counter();
@@ -241,7 +243,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'a job made by `job` may wait for `enqueueJob` as long as anyone '
+      reason:
+          'a job made by `job` may wait for `enqueueJob` as long as anyone '
           'keeps the handle, and nothing lets go of what it holds until it '
           'is over',
     );
@@ -251,31 +254,34 @@ void main() {
     await other.close();
   });
 
-  test('the rules outlive the job, because a leaked context reads them',
-      () async {
-    final solo = Counter();
-    final kept = <String>[];
-    late final SoloContext<int, int> leaked;
-    final job = solo.enqueue<int, void>(
-      keepWhile: (state) => state < 5,
-      (ctx) async => leaked = ctx,
-    );
-    await job.done;
-    solo.set(9);
+  test(
+    'the rules outlive the job, because a leaked context reads them',
+    () async {
+      final solo = Counter();
+      final kept = <String>[];
+      late final SoloContext<int, int> leaked;
+      final job = solo.enqueue<int, void>(
+        keepWhile: (state) => state < 5,
+        (ctx) async => leaked = ctx,
+      );
+      await job.done;
+      solo.set(9);
 
-    try {
-      leaked.state;
-    } on Cancelled catch (cancelled) {
-      kept.add(cancelled.description ?? '');
-    }
+      try {
+        leaked.state;
+      } on Cancelled catch (cancelled) {
+        kept.add(cancelled.description ?? '');
+      }
 
-    expect(
-      kept,
-      ['keepWhile'],
-      reason: 'the cancellation a leaked read builds is the whole diagnosis '
-          'it has to offer, and it is built out of the rule',
-    );
+      expect(
+        kept,
+        ['keepWhile'],
+        reason:
+            'the cancellation a leaked read builds is the whole diagnosis '
+            'it has to offer, and it is built out of the rule',
+      );
 
-    await solo.close();
-  });
+      await solo.close();
+    },
+  );
 }

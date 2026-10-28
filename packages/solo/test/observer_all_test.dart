@@ -36,8 +36,7 @@ final class Recording extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('$name ifFailed: $error');
+  }) => seen.add('$name ifFailed: $error');
 
   @override
   void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
@@ -107,10 +106,8 @@ void main() {
   test('every hook goes to each observer in order', () {
     expect(
       heard(
-        (seen) => SoloObserver.all([
-          Recording('a', seen),
-          Recording('b', seen),
-        ]),
+        (seen) =>
+            SoloObserver.all([Recording('a', seen), Recording('b', seen)]),
       ),
       [
         'a onCreate',
@@ -133,8 +130,9 @@ void main() {
 
   test('a hook that throws switches off none of the others', () {
     expect(
-      heard((seen) => SoloObserver.all([Throwing(), Recording('a', seen)]))
-          .where((line) => !line.contains('onC')),
+      heard(
+        (seen) => SoloObserver.all([Throwing(), Recording('a', seen)]),
+      ).where((line) => !line.contains('onC')),
       [
         'zone: Bad state: onStart',
         'a onStart',
@@ -142,14 +140,13 @@ void main() {
         'a ifFailed: Bad state: boom',
         'a onFinish',
       ],
-      reason: 'a Cancelled stays out of the zone, as one thrown by a single '
+      reason:
+          'a Cancelled stays out of the zone, as one thrown by a single '
           'observer does',
     );
-    expect(
-      heard((seen) => Throwing()),
-      ['zone: Bad state: onStart'],
-      reason: 'the single observer, for comparison',
-    );
+    expect(heard((seen) => Throwing()), [
+      'zone: Bad state: onStart',
+    ], reason: 'the single observer, for comparison');
   });
 
   test('the same observer twice is refused, inside another one too', () {
@@ -162,8 +159,9 @@ void main() {
 
   test('two observers equal by == are two observers', () {
     expect(
-      heard((seen) => SoloObserver.all([Alike('a', seen), Alike('b', seen)]))
-          .where((line) => line.contains('onCreate')),
+      heard(
+        (seen) => SoloObserver.all([Alike('a', seen), Alike('b', seen)]),
+      ).where((line) => line.contains('onCreate')),
       ['a onCreate', 'b onCreate'],
     );
   });

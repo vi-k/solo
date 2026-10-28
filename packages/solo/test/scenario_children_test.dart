@@ -197,8 +197,7 @@ void main() {
     });
   });
 
-  test(
-      'Disposed set after 150 ms cancels test2 and test1 by their own '
+  test('Disposed set after 150 ms cancels test2 and test1 by their own '
       'rules', () {
     runSolo((solo, journal, async) {
       addNested(solo);
@@ -215,8 +214,7 @@ void main() {
     });
   });
 
-  test(
-      'Disposed set after 250 ms cancels all three by rules, not by '
+  test('Disposed set after 250 ms cancels all three by rules, not by '
       'cascade', () {
     runSolo((solo, journal, async) {
       addNested(solo);
@@ -309,8 +307,7 @@ void main() {
     });
   });
 
-  test(
-      'Preparing(999) set after 50 ms is overwritten before anyone reads '
+  test('Preparing(999) set after 50 ms is overwritten before anyone reads '
       'it', () {
     runSolo((solo, journal, async) {
       addNested(solo);
@@ -342,23 +339,25 @@ void main() {
     });
   });
 
-  test('Preparing(999) set after 250 ms breaks keepWhile of test3 and test2',
-      () {
-    runSolo((solo, journal, async) {
-      addNested(solo);
-      async.elapse(const Duration(milliseconds: 250));
-      solo.externalSetState(const Preparing(progress: 999));
-      async.flushTimers();
-      expect(async.elapsed, const Duration(milliseconds: 350));
-      expect(journal.take(), [
-        ...nestedPath.sublist(0, 5),
-        'state: Preparing(progress: 999)',
-        '>> [test3] finished Cancelled(rules: keepWhile)',
-        '> [test2] finished Cancelled(rules: keepWhile)',
-        '[test1] finished Cancelled(rules: is not Working)',
-      ]);
-    });
-  });
+  test(
+    'Preparing(999) set after 250 ms breaks keepWhile of test3 and test2',
+    () {
+      runSolo((solo, journal, async) {
+        addNested(solo);
+        async.elapse(const Duration(milliseconds: 250));
+        solo.externalSetState(const Preparing(progress: 999));
+        async.flushTimers();
+        expect(async.elapsed, const Duration(milliseconds: 350));
+        expect(journal.take(), [
+          ...nestedPath.sublist(0, 5),
+          'state: Preparing(progress: 999)',
+          '>> [test3] finished Cancelled(rules: keepWhile)',
+          '> [test2] finished Cancelled(rules: keepWhile)',
+          '[test1] finished Cancelled(rules: is not Working)',
+        ]);
+      });
+    },
+  );
 
   test('Preparing(999) set after 350 ms breaks stateAs<Working> of test1', () {
     runSolo((solo, journal, async) {
@@ -390,8 +389,7 @@ void main() {
     });
   });
 
-  test(
-      'Working set after 150 ms passes the rules of test2 and breaks its '
+  test('Working set after 150 ms passes the rules of test2 and breaks its '
       'stateAs<Preparing>', () {
     runSolo((solo, journal, async) {
       addNested(solo);
@@ -502,11 +500,13 @@ void main() {
     });
   });
 
-  test(
-      'the state that keeps the child alive breaks the parent, and the '
+  test('the state that keeps the child alive breaks the parent, and the '
       'parent takes the child down', () {
-    runSolo(initialState: const Preparing(progress: 10),
-        (solo, journal, async) {
+    runSolo(initialState: const Preparing(progress: 10), (
+      solo,
+      journal,
+      async,
+    ) {
       solo.enqueue<Preparing, void>(
         key: 'parent',
         keepWhile: (state) => state.progress < 50,

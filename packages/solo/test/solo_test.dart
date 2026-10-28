@@ -22,9 +22,11 @@ void main() {
     expect(journal.created, [solo]);
   });
 
-  test('a Solo subclass compiles and reads state, with no stream of its own',
-      () {
-    final solo = PlainSolo<TestState>(const Preparing());
-    expect(solo.currentState, const Preparing());
-  });
+  test(
+    'a Solo subclass compiles and reads state, with no stream of its own',
+    () {
+      final solo = PlainSolo<TestState>(const Preparing());
+      expect(solo.currentState, const Preparing());
+    },
+  );
 }

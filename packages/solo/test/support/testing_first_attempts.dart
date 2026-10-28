@@ -48,31 +48,33 @@ final failureNobodyRead = test('a failed load shows the failure', () async {
 });
 
 /// `## The order of what happened`: two calls in one turn.
-final secondLoadInTheSameTurn =
-    test('a second load while the first one runs is dropped', () {
-  fakeAsync((async) {
-    final journal = Journal();
-    Solo.observer = journal;
-    addTearDown(() => Solo.observer = null);
-    final profile = ProfileController(FakeProfileApi());
+final secondLoadInTheSameTurn = test(
+  'a second load while the first one runs is dropped',
+  () {
+    fakeAsync((async) {
+      final journal = Journal();
+      Solo.observer = journal;
+      addTearDown(() => Solo.observer = null);
+      final profile = ProfileController(FakeProfileApi());
 
-    final first = profile.load();
-    final second = profile.load();
-    expect(identical(first, second), isTrue);
+      final first = profile.load();
+      final second = profile.load();
+      expect(identical(first, second), isTrue);
 
-    async.elapse(const Duration(milliseconds: 20));
-    expect(journal.lines, [
-      'load started',
-      'state: Loading',
-      'load Cancelled(duplicate)',
-      'state: Loaded',
-      'load Done(Ada Lovelace)',
-    ]);
+      async.elapse(const Duration(milliseconds: 20));
+      expect(journal.lines, [
+        'load started',
+        'state: Loading',
+        'load Cancelled(duplicate)',
+        'state: Loaded',
+        'load Done(Ada Lovelace)',
+      ]);
 
-    profile.close();
-    async.flushTimers();
-  });
-});
+      profile.close();
+      async.flushTimers();
+    });
+  },
+);
 
 /// `## Awaiting inside fakeAsync`: the `await` inside the callback.
 final awaitedInsideFakeAsync = test('load fills in the name', () async {
@@ -89,29 +91,30 @@ final awaitedInsideFakeAsync = test('load fills in the name', () async {
 /// `## What one test leaves for the next`: the reset on the last line. The
 /// page leaves the test itself out; an expectation that fails stands for it
 /// here, which is the case the section is about.
-final resetOnTheLastLine =
-    test('a second load while the first one runs is dropped', () {
-  final journal = Journal();
-  Solo.observer = journal;
+final resetOnTheLastLine = test(
+  'a second load while the first one runs is dropped',
+  () {
+    final journal = Journal();
+    Solo.observer = journal;
 
-  // ...the test...
-  expect(journal.lines, ['load started']);
+    // ...the test...
+    expect(journal.lines, ['load started']);
 
-  Solo.observer = null;
-});
+    Solo.observer = null;
+  },
+);
 
 /// `## Assertions inside a zone`: both expectations inside.
-final assertedInsideTheZone =
-    test('a failure nobody read reaches the zone', () async {
-  await runZonedGuarded(
-    () async {
+final assertedInsideTheZone = test(
+  'a failure nobody read reaches the zone',
+  () async {
+    await runZonedGuarded(() async {
       final profile = ProfileController(
         FakeProfileApi(error: StateError('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
 
       expect(profile.currentState, isA<Failure>());
-    },
-    (error, stackTrace) => expect(error, isA<StateError>()),
-  );
-});
+    }, (error, stackTrace) => expect(error, isA<StateError>()));
+  },
+);

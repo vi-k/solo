@@ -92,16 +92,16 @@ final class CheckoutController extends Solo<CheckoutState> {
   CheckoutController(this._api) : super(const Idle());
 
   Job<Receipt> pay(Order order) => enqueue<CheckoutState, Receipt>(
-        key: ('pay', order.id),
-        policy: Policy.droppable,
-        cancellable: false,
-        (ctx) async {
-          ctx.emit(Paying(order.id));
-          final receipt = await _api.pay(order);
-          ctx.emit(Paid(receipt));
-          return receipt;
-        },
-      );
+    key: ('pay', order.id),
+    policy: Policy.droppable,
+    cancellable: false,
+    (ctx) async {
+      ctx.emit(Paying(order.id));
+      final receipt = await _api.pay(order);
+      ctx.emit(Paid(receipt));
+      return receipt;
+    },
+  );
 
   bool withdraw(Order order) =>
       queue.removeWhere((job) => job.key == ('pay', order.id), force: true) > 0;
@@ -141,16 +141,16 @@ final class NarrowCheckoutController extends Solo<CheckoutState> {
   final Api _api;
 
   Job<Receipt> pay(Order order) => enqueue<Open, Receipt>(
-        key: ('pay', order.id),
-        policy: Policy.droppable,
-        cancellable: false,
-        (ctx) async {
-          ctx.emit(Paying(order.id));
-          final receipt = await _api.pay(order);
-          ctx.emit(Paid(receipt));
-          return receipt;
-        },
-      );
+    key: ('pay', order.id),
+    policy: Policy.droppable,
+    cancellable: false,
+    (ctx) async {
+      ctx.emit(Paying(order.id));
+      final receipt = await _api.pay(order);
+      ctx.emit(Paid(receipt));
+      return receipt;
+    },
+  );
 
   void suspend() => externalSetState(const Suspended());
 }
@@ -178,13 +178,13 @@ final class WaitingCheckoutController extends Solo<CheckoutState> {
       });
 
   Job<void> viaJoin(Order order) => enqueue<CheckoutState, void>((ctx) async {
-        try {
-          met.add('join got ${await ctx.join(() => _api.pay(order))}');
-        } on Cancelled {
-          met.add('join threw Cancelled');
-          rethrow;
-        }
-      });
+    try {
+      met.add('join got ${await ctx.join(() => _api.pay(order))}');
+    } on Cancelled {
+      met.add('join threw Cancelled');
+      rethrow;
+    }
+  });
 
   Job<void> viaUncancellable(Order order) =>
       enqueue<CheckoutState, void>((ctx) async {
@@ -209,13 +209,13 @@ final class SectionedCheckoutController extends Solo<CheckoutState> {
   final Api _api;
 
   Job<Receipt> pay(Order order) => enqueue<CheckoutState, Receipt>(
-        key: ('pay', order.id),
-        policy: Policy.droppable,
-        (ctx) => ctx.uncancellable(() async {
-          ctx.emit(Paying(order.id));
-          final receipt = await _api.pay(order);
-          ctx.emit(Paid(receipt));
-          return receipt;
-        }),
-      );
+    key: ('pay', order.id),
+    policy: Policy.droppable,
+    (ctx) => ctx.uncancellable(() async {
+      ctx.emit(Paying(order.id));
+      final receipt = await _api.pay(order);
+      ctx.emit(Paid(receipt));
+      return receipt;
+    }),
+  );
 }

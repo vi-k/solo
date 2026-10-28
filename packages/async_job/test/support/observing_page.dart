@@ -34,14 +34,10 @@ final class Log extends JobObserver {
 }
 
 Job<int> loading() {
-  final job = Job<int>(
-    key: 'load',
-    observer: Log(),
-    (ctx) async {
-      ctx.log('loading');
-      return ctx.abandonable(load);
-    },
-  );
+  final job = Job<int>(key: 'load', observer: Log(), (ctx) async {
+    ctx.log('loading');
+    return ctx.abandonable(load);
+  });
   return job;
 }
 
@@ -63,17 +59,14 @@ final class SlowCancellations extends JobObserver {
 
 /// The body of the log section: it migrates the database and, when the
 /// migration fails, leaves the message to the observer.
-Job<void> migration({JobObserver? observer}) => Job<void>(
-      key: 'migrate',
-      observer: observer,
-      (ctx) async {
-        try {
-          await migrate();
-        } on Object catch (error) {
-          ctx.log(() => 'migration failed: $error');
-        }
-      },
-    );
+Job<void> migration({JobObserver? observer}) =>
+    Job<void>(key: 'migrate', observer: observer, (ctx) async {
+      try {
+        await migrate();
+      } on Object catch (error) {
+        ctx.log(() => 'migration failed: $error');
+      }
+    });
 
 /// What the app sets once, in `main`: the stop of its database is no
 /// failure. A test that calls it puts the field back in `tearDown`.
@@ -84,15 +77,15 @@ void nameTheStop() {
 /// The same, chained after a filter another part of the app has set.
 void nameTheStopAfter() {
   final previous = Job.isCancellationError;
-  Job.isCancellationError =
-      (error) => error is DatabaseStopped || (previous?.call(error) ?? false);
+  Job.isCancellationError = (error) =>
+      error is DatabaseStopped || (previous?.call(error) ?? false);
 }
 
 /// The filter that names a cancellation the body wrapped in its own error.
 /// A test that calls it puts the field back.
 void nameTheWrapper() {
-  Job.isCancellationError =
-      (error) => error is AppException && error.cause is Cancelled;
+  Job.isCancellationError = (error) =>
+      error is AppException && error.cause is Cancelled;
 }
 
 /// What the app sets in `main` to see the debug channel. A test that calls
@@ -108,29 +101,23 @@ final class Reporter extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      print('onError: $error');
+  }) => print('onError: $error');
 }
 
 Job<Database> openingReported() {
   final job = Job<Database>(
     observer: Reporter(),
-    (ctx) => ctx.join(
-      Database.open,
-      discard: (database) => database.close(),
-    ),
+    (ctx) => ctx.join(Database.open, discard: (database) => database.close()),
   );
   return job;
 }
 
 /// The job of the section on work the job does not wait for, with the work
 /// handed to it.
-Job<void> sendingHandedOver(JobObserver? observer) => Job<void>(
-      observer: observer,
-      (ctx) async {
-        ctx.unattended(() => analytics.send('loaded'));
-      },
-    );
+Job<void> sendingHandedOver(JobObserver? observer) =>
+    Job<void>(observer: observer, (ctx) async {
+      ctx.unattended(() => analytics.send('loaded'));
+    });
 
 final class Answering extends JobObserver with JobAnswerer {
   @override
@@ -150,12 +137,9 @@ final class DatabaseErrors extends JobObserver with JobAnswerer {
 }
 
 Job<void> saving() {
-  final job = Job<void>(
-    observer: DatabaseErrors(),
-    (ctx) async {
-      ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
-    },
-  );
+  final job = Job<void>(observer: DatabaseErrors(), (ctx) async {
+    ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
+  });
   return job;
 }
 
@@ -178,12 +162,11 @@ final class Crashes extends JobObserver with JobAnswerer {
 }
 
 Job<void> sendingToTheList() {
-  final job = Job<void>(
-    observer: JobObserver.all([Reporter(), Crashes()]),
-    (ctx) async {
-      ctx.unattended(() => analytics.send('loaded'));
-    },
-  );
+  final job = Job<void>(observer: JobObserver.all([Reporter(), Crashes()]), (
+    ctx,
+  ) async {
+    ctx.unattended(() => analytics.send('loaded'));
+  });
   return job;
 }
 
@@ -218,10 +201,7 @@ final class Reports extends JobObserver with JobAnswerer {
 }
 
 void reportingOnce(void Function() startApp) {
-  runZonedGuarded(
-    startApp,
-    (error, stackTrace) => print('report: $error'),
-  );
+  runZonedGuarded(startApp, (error, stackTrace) => print('report: $error'));
 }
 
 void failureReadByTheTest(Declare test, Check expect) {

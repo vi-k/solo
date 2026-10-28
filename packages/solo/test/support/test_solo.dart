@@ -17,18 +17,17 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      super.job<W, T>(
-        body,
-        key: key,
-        canStart: canStart,
-        keepWhile: keepWhile,
-        cancellable: cancellable,
-        timeout: timeout,
-        describe: describe,
-        ifFailed: ifFailed,
-        ifCancelled: ifCancelled,
-      );
+  }) => super.job<W, T>(
+    body,
+    key: key,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    ifFailed: ifFailed,
+    ifCancelled: ifCancelled,
+  );
 
   @override
   SoloAccumulator<E, T> collect<W extends S, E, T>(
@@ -43,20 +42,19 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      super.collect<W, E, T>(
-        handler,
-        key: key,
-        policy: policy,
-        timing: timing,
-        canStart: canStart,
-        keepWhile: keepWhile,
-        cancellable: cancellable,
-        timeout: timeout,
-        describe: describe,
-        ifFailed: ifFailed,
-        ifCancelled: ifCancelled,
-      );
+  }) => super.collect<W, E, T>(
+    handler,
+    key: key,
+    policy: policy,
+    timing: timing,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    ifFailed: ifFailed,
+    ifCancelled: ifCancelled,
+  );
 
   @override
   SoloAccumulator<E, T> accumulate<W extends S, E, T>(
@@ -72,29 +70,27 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      super.accumulate<W, E, T>(
-        handler,
-        merge: merge,
-        key: key,
-        policy: policy,
-        timing: timing,
-        canStart: canStart,
-        keepWhile: keepWhile,
-        cancellable: cancellable,
-        timeout: timeout,
-        describe: describe,
-        ifFailed: ifFailed,
-        ifCancelled: ifCancelled,
-      );
+  }) => super.accumulate<W, E, T>(
+    handler,
+    merge: merge,
+    key: key,
+    policy: policy,
+    timing: timing,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    ifFailed: ifFailed,
+    ifCancelled: ifCancelled,
+  );
 
   @override
   SoloJob<T> enqueueJob<T>(
     Job<T> job, {
     bool first = false,
     Policy policy = Policy.sequential,
-  }) =>
-      super.enqueueJob<T>(job, first: first, policy: policy);
+  }) => super.enqueueJob<T>(job, first: first, policy: policy);
 
   @override
   SoloJob<T> enqueue<W extends S, T>(
@@ -108,19 +104,18 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     Policy policy = Policy.sequential,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      super.enqueue<W, T>(
-        body,
-        key: key,
-        canStart: canStart,
-        keepWhile: keepWhile,
-        cancellable: cancellable,
-        timeout: timeout,
-        describe: describe,
-        policy: policy,
-        ifFailed: ifFailed,
-        ifCancelled: ifCancelled,
-      );
+  }) => super.enqueue<W, T>(
+    body,
+    key: key,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    policy: policy,
+    ifFailed: ifFailed,
+    ifCancelled: ifCancelled,
+  );
 
   @override
   SoloQueue get queue => super.queue;

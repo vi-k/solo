@@ -188,8 +188,8 @@ void main() {
         },
         ifCancelled: (state, cancelled) =>
             cancelled.reason is TimeoutCancelReason
-                ? const Working(a: 1)
-                : const Initial(),
+            ? const Working(a: 1)
+            : const Initial(),
         (ctx) => pause(ctx, 50),
       );
       async.elapse(ms(100));
@@ -211,8 +211,8 @@ void main() {
         timeout: ms(10),
         ifCancelled: (state, cancelled) =>
             cancelled.reason is TimeoutCancelReason
-                ? const Preparing(progress: 9)
-                : state,
+            ? const Preparing(progress: 9)
+            : state,
         (ctx) async {
           ctx
             ..emit(const Working(a: 1))
@@ -363,8 +363,10 @@ void main() {
         timeout: ms(10),
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
-      final after =
-          solo.enqueue<TestState, int>(key: 'after', (ctx) async => 2);
+      final after = solo.enqueue<TestState, int>(
+        key: 'after',
+        (ctx) async => 2,
+      );
       async.flushMicrotasks();
       var closed = false;
       solo.close(mode: SoloCloseMode.drain).then((_) => closed = true);

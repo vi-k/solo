@@ -43,8 +43,8 @@ List<String> play(
         final calledAt = now;
         unawaited(
           job.cancel().then(
-                (_) => print('cancel() returned after ${now - calledAt} ms'),
-              ),
+            (_) => print('cancel() returned after ${now - calledAt} ms'),
+          ),
         );
       }
       async.flushTimers();
@@ -59,20 +59,18 @@ List<String> play(
 
 /// The lines of [play] that the page quotes: `cancel()` timing is not one.
 List<String> quotable(List<String> lines) => [
-      for (final line in lines)
-        if (!line.startsWith('cancel()')) line,
-    ];
+  for (final line in lines)
+    if (!line.startsWith('cancel()')) line,
+];
 
 /// The job of the first attempt in "Where errors go", with [observer].
-Job<void> migratingObserved(JobObserver observer) => Job<void>(
-      observer: observer,
-      (ctx) async {
-        final stop = CancelToken();
-        ctx.onCancel(stop.cancel);
+Job<void> migratingObserved(JobObserver observer) =>
+    Job<void>(observer: observer, (ctx) async {
+      final stop = CancelToken();
+      ctx.onCancel(stop.cancel);
 
-        await ctx.join(() => database.migrate(stop));
-      },
-    );
+      await ctx.join(() => database.migrate(stop));
+    });
 
 /// What [run] returns with the filter of the page set as `main` sets it;
 /// the field is put back after it.
@@ -99,10 +97,12 @@ List<String> debugged(List<String> Function() run) {
 
 /// The `text` blocks of [page], line by line, in the order of the page.
 List<List<String>> pageQuotes(String page) => [
-      for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .allMatches(File(page).readAsStringSync()))
-        block.group(1)!.split('\n'),
-    ];
+  for (final block in RegExp(
+    r'```text\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(File(page).readAsStringSync()))
+    block.group(1)!.split('\n'),
+];
 
 /// An observer that hears through `onError` and answers in `onUnanswered`,
 /// and with [passedOn] hands each error on to `super` as well.
@@ -117,8 +117,7 @@ final class Answerer extends JobObserver with JobAnswerer {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      print('onError: $error');
+  }) => print('onError: $error');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
@@ -147,8 +146,7 @@ final class Hooks extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      print('${name}onError: $error');
+  }) => print('${name}onError: $error');
 
   @override
   void onLog(Job<Object?> job, Object? message) =>
@@ -249,8 +247,7 @@ final class Throwing extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      throw StateError('reporter down');
+  }) => throw StateError('reporter down');
 }
 
 /// `Both` of the page with any two observers in its place: `onError` handed
@@ -309,11 +306,8 @@ Future<void> pay() async {
 }
 
 /// A body that fails at 10 ms.
-Job<void> failing({JobObserver? observer}) => Job<void>(
-      key: 'save',
-      observer: observer,
-      (ctx) async {
-        await delay(10);
-        throw StateError('disk full');
-      },
-    );
+Job<void> failing({JobObserver? observer}) =>
+    Job<void>(key: 'save', observer: observer, (ctx) async {
+      await delay(10);
+      throw StateError('disk full');
+    });

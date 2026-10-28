@@ -82,7 +82,7 @@ void main() {
           expect(stackTrace, same(trace));
           return 'failure';
         },
-        ifCancelled: (_, __) => fail('unexpected cancellation'),
+        ifCancelled: (_, _) => fail('unexpected cancellation'),
       )..ignoreFailure();
       clock.flushMicrotasks();
       expect(solo.currentState, 'failure');
@@ -127,12 +127,7 @@ void main() {
       clock.flushMicrotasks();
       job.cancel();
       clock.flushMicrotasks();
-      expect(solo.log, [
-        'state:loading',
-        'signal',
-        'finally',
-        'dispose:start',
-      ]);
+      expect(solo.log, ['state:loading', 'signal', 'finally', 'dispose:start']);
       cleanup.complete();
       clock.flushMicrotasks();
       expect(solo.log, [
@@ -160,8 +155,8 @@ void main() {
           ctx.emit('loaded');
           return 42;
         },
-        ifFailed: (_, __, ___) => fail('unexpected error'),
-        ifCancelled: (_, __) => fail('unexpected cancellation'),
+        ifFailed: (_, _, _) => fail('unexpected error'),
+        ifCancelled: (_, _) => fail('unexpected cancellation'),
       );
       clock.flushMicrotasks();
       expect(solo.currentState, 'loaded');
@@ -173,15 +168,15 @@ void main() {
     _run((solo, clock) {
       final operation = Completer<void>();
       SoloJob<void> load() => solo.enqueue<String, void>(
-            key: 'load',
-            policy: Policy.droppable,
-            ifCancelled: (_, __) => 'initial',
-            (ctx) async {
-              ctx.emit('loading');
-              await ctx.abandonable(() => operation.future);
-              ctx.emit('loaded');
-            },
-          );
+        key: 'load',
+        policy: Policy.droppable,
+        ifCancelled: (_, _) => 'initial',
+        (ctx) async {
+          ctx.emit('loading');
+          await ctx.abandonable(() => operation.future);
+          ctx.emit('loaded');
+        },
+      );
       final first = load();
       clock.flushMicrotasks();
       expect(load(), same(first));
@@ -196,19 +191,19 @@ void main() {
     _run((solo, clock) {
       final first = solo.enqueue<String, void>(
         (_) async => fail('cancelled before start'),
-        ifCancelled: (_, __) => fail('queued callback'),
+        ifCancelled: (_, _) => fail('queued callback'),
       )..cancel();
       expect(first.outcome, isA<Cancelled>());
       solo.enqueue<String, void>(
         (_) async => fail('start rejected'),
         canStart: (_) => false,
-        ifCancelled: (_, __) => fail('rejected callback'),
+        ifCancelled: (_, _) => fail('rejected callback'),
       );
       solo
           .enqueue<String, void>(
             (_) async => fail('start rule threw'),
             canStart: (_) => throw StateError('start rule'),
-            ifFailed: (_, __, ___) => fail('start error callback'),
+            ifFailed: (_, _, _) => fail('start error callback'),
           )
           .ignoreFailure();
       clock.flushMicrotasks();
@@ -218,16 +213,15 @@ void main() {
   });
 
   for (final failBody in [false, true]) {
-    test(
-        'external disconnect during cleanup after '
+    test('external disconnect during cleanup after '
         '${failBody ? 'failure' : 'manual cancellation'}', () {
       _run((solo, clock) {
         final operation = Completer<void>();
         final cleanup = Completer<void>();
         final job = solo.enqueue<String, void>(
           keepWhile: (state) => state != 'disconnected',
-          ifFailed: (_, __, ___) => fail('revoked error handler'),
-          ifCancelled: (_, __) => fail('revoked cancel handler'),
+          ifFailed: (_, _, _) => fail('revoked error handler'),
+          ifCancelled: (_, _) => fail('revoked cancel handler'),
           (ctx) async {
             ctx
               ..emit('loading')
@@ -273,19 +267,21 @@ void main() {
     });
   });
 
-  test('a manual cancellation with the reason of the rules keeps correction',
-      () {
-    _run((solo, clock) {
-      final job = solo.enqueue<String, void>(
-        ifCancelled: (_, __) => 'cancelled',
-        (ctx) => ctx.abandonable(() => Completer<void>().future),
-      );
-      clock.flushMicrotasks();
-      job.cancel(reason: const RulesCancelReason());
-      clock.flushMicrotasks();
-      expect(solo.currentState, 'cancelled');
-    });
-  });
+  test(
+    'a manual cancellation with the reason of the rules keeps correction',
+    () {
+      _run((solo, clock) {
+        final job = solo.enqueue<String, void>(
+          ifCancelled: (_, _) => 'cancelled',
+          (ctx) => ctx.abandonable(() => Completer<void>().future),
+        );
+        clock.flushMicrotasks();
+        job.cancel(reason: const RulesCancelReason());
+        clock.flushMicrotasks();
+        expect(solo.currentState, 'cancelled');
+      });
+    },
+  );
 
   test('rules turning a checkpoint down suppress correction', () {
     _run((solo, clock) {
@@ -293,7 +289,7 @@ void main() {
       final gate = Completer<void>();
       final job = solo.enqueue<String, void>(
         keepWhile: (_) => allowed,
-        ifCancelled: (_, __) => 'corrected',
+        ifCancelled: (_, _) => 'corrected',
         (ctx) async {
           await gate.future;
           ctx.state;
@@ -320,7 +316,7 @@ void main() {
       final solo = _Controller<Object>('initial');
       final gate = Completer<void>();
       final job = solo.enqueue<Object, void>(
-        ifCancelled: (_, __) => 'corrected',
+        ifCancelled: (_, _) => 'corrected',
         (ctx) async {
           await gate.future;
           ctx.stateAs<int>();
@@ -347,7 +343,7 @@ void main() {
     fakeAsync((clock) {
       final solo = _Controller<Object>('initial');
       final job = solo.enqueue<String, void>(
-        ifCancelled: (_, __) => fail('wrong working type'),
+        ifCancelled: (_, _) => fail('wrong working type'),
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
       clock.flushMicrotasks();
@@ -365,7 +361,7 @@ void main() {
       final cleanup = Completer<void>();
       solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
-        ifCancelled: (_, __) => fail('revoked permission restored'),
+        ifCancelled: (_, _) => fail('revoked permission restored'),
         (ctx) async {
           ctx.onDispose(() => cleanup.future);
           await ctx.abandonable(() => Completer<void>().future);
@@ -387,7 +383,7 @@ void main() {
       final cleanup = Completer<void>();
       final job = solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
-        ifCancelled: (_, __) => fail('transient disconnect lost'),
+        ifCancelled: (_, _) => fail('transient disconnect lost'),
         (ctx) async {
           ctx.onDispose(() => cleanup.future);
           await ctx.abandonable(() => Completer<void>().future);
@@ -412,7 +408,7 @@ void main() {
       var starts = 0;
       final job = solo.enqueue<String, void>(
         canStart: (_) => ++starts == 1,
-        ifFailed: (state, _, __) {
+        ifFailed: (state, _, _) {
           expect(state, 42);
           return 'failure';
         },
@@ -437,13 +433,10 @@ void main() {
       solo.enqueue<String, void>(
         keepWhile: (state) => state != 'disconnected',
         (ctx) {
-          child = solo.job<String, void>(
-            (ctx) async {
-              ctx.onDispose(() => cleanup.future);
-              await ctx.abandonable(() => Completer<void>().future);
-            },
-            ifCancelled: (_, __) => fail('parent permission lost'),
-          );
+          child = solo.job<String, void>((ctx) async {
+            ctx.onDispose(() => cleanup.future);
+            await ctx.abandonable(() => Completer<void>().future);
+          }, ifCancelled: (_, _) => fail('parent permission lost'));
           return ctx.run(child);
         },
       ).ignoreFailure();
@@ -463,7 +456,7 @@ void main() {
       final correctionFailure = StateError('correction');
       final job = solo.enqueue<String, void>(
         (_) async => throw failure,
-        ifFailed: (_, __, ___) => throw correctionFailure,
+        ifFailed: (_, _, _) => throw correctionFailure,
       )..ignoreFailure();
       solo.enqueue<String, void>((ctx) async => ctx.emit('next'));
       clock.flushMicrotasks();
@@ -476,30 +469,32 @@ void main() {
     });
   });
 
-  test('cancel during correction publication cannot replace a fixed failure',
-      () {
-    _run((solo, clock) {
-      late Job<void> job;
-      solo.changed = (state) {
-        if (state == 'failure') job.cancel();
-      };
-      job = solo.enqueue<String, void>(
-        (_) async => throw StateError('body'),
-        ifFailed: (_, __, ___) => 'failure',
-        ifCancelled: (_, __) => fail('second correction'),
-      )..ignoreFailure();
-      clock.flushMicrotasks();
-      expect(job.outcome, isA<Failed>());
-      expect(solo.currentState, 'failure');
-    });
-  });
+  test(
+    'cancel during correction publication cannot replace a fixed failure',
+    () {
+      _run((solo, clock) {
+        late Job<void> job;
+        solo.changed = (state) {
+          if (state == 'failure') job.cancel();
+        };
+        job = solo.enqueue<String, void>(
+          (_) async => throw StateError('body'),
+          ifFailed: (_, _, _) => 'failure',
+          ifCancelled: (_, _) => fail('second correction'),
+        )..ignoreFailure();
+        clock.flushMicrotasks();
+        expect(job.outcome, isA<Failed>());
+        expect(solo.currentState, 'failure');
+      });
+    },
+  );
 
   test('external disconnect inside a handler prevents its returned write', () {
     _run((solo, clock) {
       final job = solo.enqueue<String, void>(
         (_) async => throw StateError('body'),
         keepWhile: (state) => state != 'disconnected',
-        ifFailed: (_, __, ___) {
+        ifFailed: (_, _, _) {
           solo.external('disconnected');
           return 'failure';
         },
@@ -545,7 +540,7 @@ void main() {
           if (shouldThrow) throw ruleError;
           return true;
         },
-        ifCancelled: (_, __) => fail('uncertain permission'),
+        ifCancelled: (_, _) => fail('uncertain permission'),
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
       clock.flushMicrotasks();
@@ -565,7 +560,7 @@ void main() {
       late Job<void> child;
       final parent = solo.enqueue<String, void>(
         key: 'parent',
-        ifCancelled: (_, __) {
+        ifCancelled: (_, _) {
           solo.log.add('parent:correction');
           return 'cancelled';
         },
@@ -601,27 +596,29 @@ void main() {
     });
   });
 
-  test('a body that returned still loses correction rights during child wait',
-      () {
-    _run((solo, clock) {
-      final stream = StreamController<void>();
-      final parent = solo.enqueue<String, void>(
-        keepWhile: (state) => state != 'disconnected',
-        ifCancelled: (_, __) => fail('finished body lost permission'),
-        (ctx) async {
-          ctx.each<void>(stream.stream, (_, __) {});
-        },
-      );
-      clock.flushMicrotasks();
-      solo.external('disconnected');
-      parent.cancel();
-      clock.flushMicrotasks();
-      expect(solo.currentState, 'disconnected');
-      expect(parent.outcome, isA<Cancelled>());
-      stream.close();
-      clock.flushMicrotasks();
-    });
-  });
+  test(
+    'a body that returned still loses correction rights during child wait',
+    () {
+      _run((solo, clock) {
+        final stream = StreamController<void>();
+        final parent = solo.enqueue<String, void>(
+          keepWhile: (state) => state != 'disconnected',
+          ifCancelled: (_, _) => fail('finished body lost permission'),
+          (ctx) async {
+            ctx.each<void>(stream.stream, (_, _) {});
+          },
+        );
+        clock.flushMicrotasks();
+        solo.external('disconnected');
+        parent.cancel();
+        clock.flushMicrotasks();
+        expect(solo.currentState, 'disconnected');
+        expect(parent.outcome, isA<Cancelled>());
+        stream.close();
+        clock.flushMicrotasks();
+      });
+    },
+  );
 
   test('parent rule cancellation suppresses a compatible child handler', () {
     _run((solo, clock) {
@@ -630,7 +627,7 @@ void main() {
         (ctx) => ctx.run(
           solo.job<String, void>(
             (ctx) => ctx.abandonable(() => Completer<void>().future),
-            ifCancelled: (_, __) => fail('parent rule cancellation'),
+            ifCancelled: (_, _) => fail('parent rule cancellation'),
           ),
         ),
       );
@@ -647,7 +644,7 @@ void main() {
       final failure = StateError('unobserved');
       solo.enqueue<String, void>(
         (_) async => throw failure,
-        ifFailed: (_, __, ___) => 'failure',
+        ifFailed: (_, _, _) => 'failure',
       );
       clock.flushMicrotasks();
       expect(solo.currentState, 'failure');
@@ -665,7 +662,7 @@ void main() {
         (ctx) => ctx.run(
           solo.job<String, void>(
             (ctx) => ctx.abandonable(() => Completer<void>().future),
-            ifCancelled: (_, __) => fail('parent permission revoked'),
+            ifCancelled: (_, _) => fail('parent permission revoked'),
           ),
         ),
       );
@@ -692,7 +689,7 @@ void main() {
                   await ctx.run(
                     solo.job<String, void>(
                       (_) async => throw StateError('grandchild'),
-                      ifFailed: (_, __, ___) {
+                      ifFailed: (_, _, _) {
                         corrections++;
                         return 'failure';
                       },
@@ -725,7 +722,7 @@ void main() {
           if (state == 'changed') throw StateError('rule');
           return true;
         },
-        ifCancelled: (_, __) => fail('uncertain permission'),
+        ifCancelled: (_, _) => fail('uncertain permission'),
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
       clock.flushMicrotasks();
@@ -789,7 +786,7 @@ void main() {
         solo
             .enqueue<String, void>(
               (_) async => throw StateError('body'),
-              ifFailed: (state, _, __) => state,
+              ifFailed: (state, _, _) => state,
             )
             .ignoreFailure();
         clock.flushMicrotasks();
@@ -801,13 +798,15 @@ void main() {
 
     test('leaves a write made from inside it in place', () {
       _run((solo, clock) {
-        solo.enqueue<String, void>(
-          (_) async => throw StateError('body'),
-          ifFailed: (state, _, __) {
-            solo.external('offline');
-            return state;
-          },
-        ).ignoreFailure();
+        solo
+            .enqueue<String, void>(
+              (_) async => throw StateError('body'),
+              ifFailed: (state, _, _) {
+                solo.external('offline');
+                return state;
+              },
+            )
+            .ignoreFailure();
         clock.flushMicrotasks();
         expect(
           solo.currentState,
@@ -825,7 +824,7 @@ void main() {
         solo
             .enqueue<_Box, void>(
               (_) async => throw StateError('body'),
-              ifFailed: (_, __, ___) => const _Box(1),
+              ifFailed: (_, _, _) => const _Box(1),
             )
             .ignoreFailure();
         clock.flushMicrotasks();
@@ -843,7 +842,7 @@ void main() {
         solo
             .enqueue<_Box, void>(
               (_) async => throw StateError('body'),
-              ifFailed: (state, _, __) => _Box(state.value),
+              ifFailed: (state, _, _) => _Box(state.value),
             )
             .ignoreFailure();
         clock.flushMicrotasks();
@@ -859,7 +858,7 @@ void main() {
       _run((solo, clock) {
         final calls = <List<int>>[];
         final events = solo.collect<String, int, void>(
-          ifFailed: (_, __, ___) => fail('unexpected failure'),
+          ifFailed: (_, _, _) => fail('unexpected failure'),
           ifCancelled: (state, cancelled) => 'cancelled:$state',
           (ctx, batch) async {
             calls.add(batch);
@@ -889,20 +888,21 @@ void main() {
     test('runs ifFailed for a failed group and keeps the failure', () {
       _run((solo, clock) {
         final failure = StateError('upload failed');
-        final job = solo
-            .collect<String, int, void>(
-              ifFailed: (state, error, _) {
-                expect(error, same(failure));
-                return 'failed:$state';
-              },
-              ifCancelled: (_, __) => fail('unexpected cancellation'),
-              (ctx, batch) async {
-                ctx.emit('sending:${batch.length}');
-                throw failure;
-              },
-            )
-            .add(1)
-          ..ignoreFailure();
+        final job =
+            solo
+                .collect<String, int, void>(
+                  ifFailed: (state, error, _) {
+                    expect(error, same(failure));
+                    return 'failed:$state';
+                  },
+                  ifCancelled: (_, _) => fail('unexpected cancellation'),
+                  (ctx, batch) async {
+                    ctx.emit('sending:${batch.length}');
+                    throw failure;
+                  },
+                )
+                .add(1)
+              ..ignoreFailure();
         clock.flushMicrotasks();
         expect(solo.currentState, 'failed:sending:1');
         expect(job.outcome, isA<Failed>());
@@ -914,16 +914,18 @@ void main() {
     test('runs ifCancelled when close() cancels a running group', () {
       _run((solo, clock) {
         Cancelled? seen;
-        final job = solo.collect<String, int, void>(
-          ifCancelled: (_, cancelled) {
-            seen = cancelled;
-            return 'waiting';
-          },
-          (ctx, batch) async {
-            ctx.emit('-99');
-            await ctx.abandonable(() => Completer<void>().future);
-          },
-        ).add(1);
+        final job = solo
+            .collect<String, int, void>(
+              ifCancelled: (_, cancelled) {
+                seen = cancelled;
+                return 'waiting';
+              },
+              (ctx, batch) async {
+                ctx.emit('-99');
+                await ctx.abandonable(() => Completer<void>().future);
+              },
+            )
+            .add(1);
         clock.flushMicrotasks();
         expect(solo.currentState, '-99');
         solo.close();
@@ -937,14 +939,16 @@ void main() {
     test('passes a timeout to ifCancelled', () {
       _run((solo, clock) {
         Cancelled? seen;
-        final job = solo.collect<String, int, void>(
-          timeout: const Duration(seconds: 1),
-          ifCancelled: (_, cancelled) {
-            seen = cancelled;
-            return 'timed out';
-          },
-          (ctx, batch) => ctx.abandonable(() => Completer<void>().future),
-        ).add(1);
+        final job = solo
+            .collect<String, int, void>(
+              timeout: const Duration(seconds: 1),
+              ifCancelled: (_, cancelled) {
+                seen = cancelled;
+                return 'timed out';
+              },
+              (ctx, batch) => ctx.abandonable(() => Completer<void>().future),
+            )
+            .add(1);
         clock
           ..flushMicrotasks()
           ..elapse(const Duration(seconds: 1));
@@ -960,9 +964,9 @@ void main() {
           timing: AccumulationTiming.debounce(
             const Duration(milliseconds: 200),
           ),
-          ifFailed: (_, __, ___) => fail('failure callback'),
-          ifCancelled: (_, __) => fail('cancellation callback'),
-          (_, __) async => fail('started'),
+          ifFailed: (_, _, _) => fail('failure callback'),
+          ifCancelled: (_, _) => fail('cancellation callback'),
+          (_, _) async => fail('started'),
         );
         final cancelled = events.add(1)..cancel();
         clock.flushMicrotasks();
@@ -984,8 +988,8 @@ void main() {
         final job = solo
             .collect<String, int, void>(
               keepWhile: (state) => state != 'disconnected',
-              ifFailed: (_, __, ___) => fail('failure callback'),
-              ifCancelled: (_, __) => fail('cancellation callback'),
+              ifFailed: (_, _, _) => fail('failure callback'),
+              ifCancelled: (_, _) => fail('cancellation callback'),
               (ctx, batch) => ctx.abandonable(() => Completer<void>().future),
             )
             .add(1);
@@ -1001,13 +1005,15 @@ void main() {
       _run((solo, clock) {
         final seen = <String>[];
         solo.started = (job) => job.cancel();
-        final job = solo.collect<String, int, void>(
-          ifCancelled: (_, cancelled) {
-            seen.add('ifCancelled ${cancelled.reason}');
-            return 'cancelled';
-          },
-          (_, __) async => seen.add('handler'),
-        ).add(1);
+        final job = solo
+            .collect<String, int, void>(
+              ifCancelled: (_, cancelled) {
+                seen.add('ifCancelled ${cancelled.reason}');
+                return 'cancelled';
+              },
+              (_, _) async => seen.add('handler'),
+            )
+            .add(1);
         clock.flushMicrotasks();
         expect(job.outcome, isA<Cancelled>());
         expect(seen, ['ifCancelled manual']);
@@ -1020,9 +1026,9 @@ void main() {
         final refused = solo
             .collect<String, int, void>(
               canStart: (_) => false,
-              ifFailed: (_, __, ___) => fail('failure callback'),
-              ifCancelled: (_, __) => fail('cancellation callback'),
-              (_, __) async => fail('started'),
+              ifFailed: (_, _, _) => fail('failure callback'),
+              ifCancelled: (_, _) => fail('cancellation callback'),
+              (_, _) async => fail('started'),
             )
             .add(1);
         clock.flushMicrotasks();
@@ -1032,9 +1038,9 @@ void main() {
               timing: AccumulationTiming.debounce(
                 const Duration(milliseconds: 200),
               ),
-              ifFailed: (_, __, ___) => fail('failure callback'),
-              ifCancelled: (_, __) => fail('cancellation callback'),
-              (_, __) async => fail('started'),
+              ifFailed: (_, _, _) => fail('failure callback'),
+              ifCancelled: (_, _) => fail('cancellation callback'),
+              (_, _) async => fail('started'),
             )
             .add(1);
         clock.flushMicrotasks();
@@ -1050,14 +1056,16 @@ void main() {
     test('runs ifCancelled when a restart of its key replaces the group', () {
       _run((solo, clock) {
         Cancelled? seen;
-        final group = solo.collect<String, int, void>(
-          key: 'upload',
-          ifCancelled: (state, cancelled) {
-            seen = cancelled;
-            return state;
-          },
-          (ctx, _) => ctx.abandonable(() => Completer<void>().future),
-        ).add(1);
+        final group = solo
+            .collect<String, int, void>(
+              key: 'upload',
+              ifCancelled: (state, cancelled) {
+                seen = cancelled;
+                return state;
+              },
+              (ctx, _) => ctx.abandonable(() => Completer<void>().future),
+            )
+            .add(1);
         clock.flushMicrotasks();
         solo.enqueue<String, void>(
           key: 'upload',
@@ -1073,16 +1081,17 @@ void main() {
 
     test('runs ifFailed for a group a draining close waits for', () {
       _run((solo, clock) {
-        final job = solo
-            .collect<String, int, void>(
-              timing: AccumulationTiming.debounce(
-                const Duration(milliseconds: 200),
-              ),
-              ifFailed: (_, error, __) => 'failed:$error',
-              (_, __) async => throw StateError('offline'),
-            )
-            .add(1)
-          ..ignoreFailure();
+        final job =
+            solo
+                .collect<String, int, void>(
+                  timing: AccumulationTiming.debounce(
+                    const Duration(milliseconds: 200),
+                  ),
+                  ifFailed: (_, error, _) => 'failed:$error',
+                  (_, _) async => throw StateError('offline'),
+                )
+                .add(1)
+              ..ignoreFailure();
         clock.flushMicrotasks();
         solo.close(mode: SoloCloseMode.drain).ignore();
         clock.elapse(const Duration(milliseconds: 200));
@@ -1122,8 +1131,8 @@ void main() {
         solo.enqueue<String, void>((_) => gate.future);
         final events = solo.collect<String, int, void>(
           policy: AccumulationPolicy.replace,
-          ifFailed: (_, __, ___) => fail('failure callback'),
-          ifCancelled: (_, __) {
+          ifFailed: (_, _, _) => fail('failure callback'),
+          ifCancelled: (_, _) {
             seen.add('ifCancelled');
             return 'cancelled';
           },
@@ -1151,15 +1160,17 @@ void main() {
     test('calls neither handler for a group that turns cancellation down', () {
       _run((solo, clock) {
         final gate = Completer<void>();
-        final job = solo.collect<String, int, void>(
-          cancellable: false,
-          ifFailed: (_, __, ___) => fail('failure callback'),
-          ifCancelled: (_, __) => fail('cancellation callback'),
-          (ctx, _) async {
-            ctx.emit('sending');
-            await gate.future;
-          },
-        ).add(1);
+        final job = solo
+            .collect<String, int, void>(
+              cancellable: false,
+              ifFailed: (_, _, _) => fail('failure callback'),
+              ifCancelled: (_, _) => fail('cancellation callback'),
+              (ctx, _) async {
+                ctx.emit('sending');
+                await gate.future;
+              },
+            )
+            .add(1);
         clock.flushMicrotasks();
         job.cancel();
         solo.close().ignore();

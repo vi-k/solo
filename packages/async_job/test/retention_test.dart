@@ -183,7 +183,7 @@ final class Answering extends JobObserver with JobAnswerer {
 /// none. It goes to the answer, and the observer answers for it and keeps
 /// nothing.
 (Job<void>, WeakReference<Payload>, Completer<void>)
-    failureACancellationCovered() {
+failureACancellationCovered() {
   final payload = Payload();
   final gate = Completer<void>();
   return (
@@ -207,8 +207,7 @@ final class Answering extends JobObserver with JobAnswerer {
   final job = ProbeJob<void>(observer: Answering(), (ctx) async {
     await gate.future;
     throw CarryingFailure(box.removeLast());
-  })
-    ..launch();
+  })..launch();
   return (job, WeakReference(payload), gate);
 }
 
@@ -223,15 +222,14 @@ final class Answering extends JobObserver with JobAnswerer {
   final job = ProbeJob<Object?>((ctx) async {
     await gate.future;
     return box.removeLast();
-  })
-    ..launch();
+  })..launch();
   return (job, WeakReference(payload), gate);
 }
 
 /// Unattended work whose `ctx.abandonable` fails once the gate opens, with a
 /// record that holds the payload; the job itself is over by then.
 (Job<int>, WeakReference<Payload>, Completer<void>, Future<void>)
-    failureOfWorkAfterTheJob() {
+failureOfWorkAfterTheJob() {
   final payload = Payload();
   final gate = Completer<void>();
   final workDone = Completer<void>();
@@ -273,7 +271,7 @@ WeakReference<Payload> holdInACleanup(
 /// the body; [failing] ends the body with an error, so that `onDiscard`
 /// runs.
 Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
-    keepCleanupRemover(
+keepCleanupRemover(
   String kind, {
   required bool removed,
   required bool failing,
@@ -282,14 +280,14 @@ Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
   void Function()? remove;
   final job = Job<int>((ctx) async {
     void release() => payload.bytes.length;
-    final kept =
-        kind == 'onDispose' ? ctx.onDispose(release) : ctx.onDiscard(release);
+    final kept = kind == 'onDispose'
+        ? ctx.onDispose(release)
+        : ctx.onDiscard(release);
     remove = kept;
     if (removed) kept();
     if (failing) throw StateError('fails');
     return 1;
-  })
-    ..ignoreFailure();
+  })..ignoreFailure();
   await job.done;
   return (remove!, WeakReference(payload), WeakReference(job));
 }
@@ -297,17 +295,18 @@ Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
 /// A job ended by hand by its engine while the body still waits at [gate],
 /// with the remover of an `onDispose` that never ran kept outside.
 Future<(void Function(), WeakReference<Payload>, WeakReference<ProbeJob<int>>)>
-    keepRemoverOfAJobEndedByHand(Completer<void> gate) async {
+keepRemoverOfAJobEndedByHand(Completer<void> gate) async {
   final payload = Payload();
   void Function()? remove;
-  final job = ProbeJob<int>((ctx) async {
-    void release() => payload.bytes.length;
-    remove = ctx.onDispose(release);
-    await gate.future;
-    return 1;
-  })
-    ..ignoreFailure()
-    ..launch();
+  final job =
+      ProbeJob<int>((ctx) async {
+          void release() => payload.bytes.length;
+          remove = ctx.onDispose(release);
+          await gate.future;
+          return 1;
+        })
+        ..ignoreFailure()
+        ..launch();
   await Future<void>.microtask(() {});
   job.drop(const Done(1));
   return (remove!, WeakReference(payload), WeakReference(job));
@@ -316,7 +315,7 @@ Future<(void Function(), WeakReference<Payload>, WeakReference<ProbeJob<int>>)>
 /// A branch whose `onDiscard` the group skipped, having taken every value,
 /// with the remover kept outside.
 Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
-    keepRemoverOfABranch() async {
+keepRemoverOfABranch() async {
   final payload = Payload();
   void Function()? remove;
   final branch = Job.deferred<int>((ctx) async {
@@ -333,11 +332,9 @@ Future<(void Function(), WeakReference<Payload>, WeakReference<Job<int>>)>
 /// A branch ended by hand while it unwinds, with the remover of the
 /// `onDiscard` it put aside kept outside.
 Future<
-    (
-      void Function(),
-      WeakReference<Payload>,
-      WeakReference<ProbeJob<String>>
-    )> keepRemoverOfABranchEndedWhileItUnwinds() async {
+  (void Function(), WeakReference<Payload>, WeakReference<ProbeJob<String>>)
+>
+keepRemoverOfABranchEndedWhileItUnwinds() async {
   final payload = Payload();
   final gate = Completer<String>();
   void Function()? remove;
@@ -365,11 +362,9 @@ Future<
 /// A branch ended by hand at the second barrier, with the remover of an
 /// `onDispose` registered there kept outside.
 Future<
-    (
-      void Function(),
-      WeakReference<Payload>,
-      WeakReference<ProbeJob<String>>
-    )> keepRemoverOfABranchEndedAtTheBarrier() async {
+  (void Function(), WeakReference<Payload>, WeakReference<ProbeJob<String>>)
+>
+keepRemoverOfABranchEndedAtTheBarrier() async {
   final payload = Payload();
   final gate = Completer<void>();
   late JobContext context;
@@ -425,7 +420,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the body ran once and will not run again; held on, it keeps '
+      reason:
+          'the body ran once and will not run again; held on, it keeps '
           'everything it captured for as long as anyone keeps the handle',
     );
   });
@@ -437,15 +433,15 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'a listener runs once; held on, it keeps what it captured for '
+      reason:
+          'a listener runs once; held on, it keeps what it captured for '
           'as long as anyone keeps the handle',
     );
   });
 
   for (final kind in ['whenFinished', 'whenCancelled']) {
     for (final removed in [false, true]) {
-      test(
-          'a kept remover of $kind lets go of the listener '
+      test('a kept remover of $kind lets go of the listener '
           '${removed ? 'once called' : 'once the job ends'}', () async {
         final job = Job<int>((ctx) async => 1);
         final (remove, capture) = captureWithRemover(job, kind);
@@ -454,7 +450,8 @@ void main() {
         expect(
           await collected(capture),
           isTrue,
-          reason: 'an owner that keeps its removers until it is disposed '
+          reason:
+              'an owner that keeps its removers until it is disposed '
               'would keep what the listeners captured',
         );
         // Kept alive through the collection.
@@ -470,55 +467,64 @@ void main() {
     ('onDiscard', false, true, 'once the disposer ran'),
     ('onDiscard', false, false, 'skipped on success'),
   ]) {
-    test('a kept remover of $kind lets go of the cleanup and the job $what',
-        () async {
-      final (remove, capture, job) =
-          await keepCleanupRemover(kind, removed: removed, failing: failing);
+    test(
+      'a kept remover of $kind lets go of the cleanup and the job $what',
+      () async {
+        final (remove, capture, job) = await keepCleanupRemover(
+          kind,
+          removed: removed,
+          failing: failing,
+        );
+        expect(
+          await collected(capture),
+          isTrue,
+          reason:
+              'an owner that keeps its removers until it is disposed '
+              'would keep what the disposers captured',
+        );
+        expect(
+          await collected(job),
+          isTrue,
+          reason: 'and the job, with its outcome',
+        );
+        // Kept alive through the collection, and harmless when called late.
+        remove();
+      },
+    );
+  }
+
+  test(
+    'a kept remover lets go of the cleanup and a job ended by hand',
+    () async {
+      final gate = Completer<void>();
+      final (remove, capture, job) = await keepRemoverOfAJobEndedByHand(gate);
+      gate.complete();
+      await Future<void>.delayed(Duration.zero);
       expect(
         await collected(capture),
         isTrue,
-        reason: 'an owner that keeps its removers until it is disposed '
-            'would keep what the disposers captured',
+        reason: 'the engine ended the job, and the cleanup will never run',
       );
-      expect(
-        await collected(job),
-        isTrue,
-        reason: 'and the job, with its outcome',
-      );
-      // Kept alive through the collection, and harmless when called late.
+      expect(await collected(job), isTrue, reason: 'and the job');
       remove();
-    });
-  }
-
-  test('a kept remover lets go of the cleanup and a job ended by hand',
-      () async {
-    final gate = Completer<void>();
-    final (remove, capture, job) = await keepRemoverOfAJobEndedByHand(gate);
-    gate.complete();
-    await Future<void>.delayed(Duration.zero);
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the engine ended the job, and the cleanup will never run',
-    );
-    expect(await collected(job), isTrue, reason: 'and the job');
-    remove();
-  });
-
-  test('a kept remover lets go of the cleanup a group skipped and the branch',
-      () async {
-    final (remove, capture, branch) = await keepRemoverOfABranch();
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the group took every value, and the discard will never run',
-    );
-    expect(await collected(branch), isTrue, reason: 'and the branch');
-    remove();
-  });
+    },
+  );
 
   test(
-      'a kept remover lets go of the discard put aside and a branch ended by '
+    'a kept remover lets go of the cleanup a group skipped and the branch',
+    () async {
+      final (remove, capture, branch) = await keepRemoverOfABranch();
+      expect(
+        await collected(capture),
+        isTrue,
+        reason: 'the group took every value, and the discard will never run',
+      );
+      expect(await collected(branch), isTrue, reason: 'and the branch');
+      remove();
+    },
+  );
+
+  test('a kept remover lets go of the discard put aside and a branch ended by '
       'hand while it unwinds', () async {
     final (remove, capture, branch) =
         await keepRemoverOfABranchEndedWhileItUnwinds();
@@ -531,8 +537,7 @@ void main() {
     remove();
   });
 
-  test(
-      'a kept remover lets go of a cleanup and a branch ended by hand at the '
+  test('a kept remover lets go of a cleanup and a branch ended by hand at the '
       'second barrier', () async {
     final (remove, capture, branch) =
         await keepRemoverOfABranchEndedAtTheBarrier();
@@ -552,7 +557,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'a handle kept for its outcome would otherwise drag the whole '
+      reason:
+          'a handle kept for its outcome would otherwise drag the whole '
           'chain it came out of, up to the root',
     );
   });
@@ -561,18 +567,21 @@ void main() {
     (true, 'after'),
     (false, 'before'),
   ]) {
-    test('a finished child lets go of the child adopted $neighbour it',
-        () async {
-      final (child, capture) = valueOfANeighbour(adoptedFirst: adoptedFirst);
-      await child.done;
-      expect(child.outcome, isA<Done<Object?>>());
-      expect(
-        await collected(capture),
-        isTrue,
-        reason: 'the parent stopped waiting for it; a handle kept for its '
-            'outcome must not hold the children it stood between',
-      );
-    });
+    test(
+      'a finished child lets go of the child adopted $neighbour it',
+      () async {
+        final (child, capture) = valueOfANeighbour(adoptedFirst: adoptedFirst);
+        await child.done;
+        expect(child.outcome, isA<Done<Object?>>());
+        expect(
+          await collected(capture),
+          isTrue,
+          reason:
+              'the parent stopped waiting for it; a handle kept for its '
+              'outcome must not hold the children it stood between',
+        );
+      },
+    );
   }
 
   test('a finished branch lets go of its group', () async {
@@ -582,7 +591,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the group has taken its verdict; one branch handle must not '
+      reason:
+          'the group has taken its verdict; one branch handle must not '
           'hold the coordinator and every sibling in it',
     );
   });
@@ -594,95 +604,109 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the branch was over before the group got to it, and nothing '
+      reason:
+          'the branch was over before the group got to it, and nothing '
           'the group leaves on it is let go of by a finish already behind it',
     );
   });
 
-  test('a job made in unattended work lets go of the job that started it',
-      () async {
-    final (made, capture) = await madeInUnattendedWork();
-    await made.done;
-    expect(made.outcome, isA<Done<int>>());
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the job is not the work and keeps nothing of it; a handle '
-          'kept for its outcome would otherwise hold the job that started '
-          'the work, through the zone it was made in',
-    );
-    // Read after the check, so the handle is held through it by the
-    // language and not by how the VM keeps a suspended frame.
-    expect(made.isFinished, isTrue);
-  });
+  test(
+    'a job made in unattended work lets go of the job that started it',
+    () async {
+      final (made, capture) = await madeInUnattendedWork();
+      await made.done;
+      expect(made.outcome, isA<Done<int>>());
+      expect(
+        await collected(capture),
+        isTrue,
+        reason:
+            'the job is not the work and keeps nothing of it; a handle '
+            'kept for its outcome would otherwise hold the job that started '
+            'the work, through the zone it was made in',
+      );
+      // Read after the check, so the handle is held through it by the
+      // language and not by how the VM keeps a suspended frame.
+      expect(made.isFinished, isTrue);
+    },
+  );
 
   // An error an `Expando` can hold and a record, which it cannot.
   final failures = <String, Object Function(Payload payload)>{
     'an exception': CarryingFailure.new,
     'a record': (payload) => (payload,),
   };
-  test('a finished job keeps nothing its unattended work failed with',
-      () async {
-    final (job, capture, gate, workDone) = failureOfWorkAfterTheJob();
-    await job.done;
-    gate.complete();
-    await workDone;
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the work caught the failure, and nothing of the job holds it',
-    );
-  });
+  test(
+    'a finished job keeps nothing its unattended work failed with',
+    () async {
+      final (job, capture, gate, workDone) = failureOfWorkAfterTheJob();
+      await job.done;
+      gate.complete();
+      await workDone;
+      expect(
+        await collected(capture),
+        isTrue,
+        reason: 'the work caught the failure, and nothing of the job holds it',
+      );
+    },
+  );
 
-  test('a cancelled job keeps nothing its body failed with after the mark',
-      () async {
-    final (job, capture, gate) = failureACancellationCovered();
-    await Future<void>.delayed(Duration.zero);
-    job.cancel().ignore();
-    gate.complete();
-    await job.done;
-    expect(job.outcome, isA<Cancelled>());
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the failure is in no outcome, and the core keeps it only to '
-          'not announce it twice',
-    );
-  });
+  test(
+    'a cancelled job keeps nothing its body failed with after the mark',
+    () async {
+      final (job, capture, gate) = failureACancellationCovered();
+      await Future<void>.delayed(Duration.zero);
+      job.cancel().ignore();
+      gate.complete();
+      await job.done;
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        await collected(capture),
+        isTrue,
+        reason:
+            'the failure is in no outcome, and the core keeps it only to '
+            'not announce it twice',
+      );
+    },
+  );
 
-  test('a job ended by hand keeps nothing its body failed with after it',
-      () async {
-    final (job, capture, gate) = failureAfterAHand();
-    await Future<void>.delayed(Duration.zero);
-    job.drop(const Done(null));
-    gate.complete();
-    await job.done;
-    expect(job.outcome, isA<Done<void>>());
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the failure is in no outcome, and the core keeps it only to '
-          'not announce it twice',
-    );
-  });
+  test(
+    'a job ended by hand keeps nothing its body failed with after it',
+    () async {
+      final (job, capture, gate) = failureAfterAHand();
+      await Future<void>.delayed(Duration.zero);
+      job.drop(const Done(null));
+      gate.complete();
+      await job.done;
+      expect(job.outcome, isA<Done<void>>());
+      expect(
+        await collected(capture),
+        isTrue,
+        reason:
+            'the failure is in no outcome, and the core keeps it only to '
+            'not announce it twice',
+      );
+    },
+  );
 
-  test('a job ended by hand keeps nothing its body returned after it',
-      () async {
-    final (job, capture, gate) = valueAfterAHand();
-    await Future<void>.delayed(Duration.zero);
-    job.drop(const Done(1));
-    gate.complete();
-    await job.done;
-    expect(
-      job.outcome,
-      isA<Done<Object?>>().having((d) => d.value, 'value', 1),
-    );
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the value of the body is in no outcome',
-    );
-  });
+  test(
+    'a job ended by hand keeps nothing its body returned after it',
+    () async {
+      final (job, capture, gate) = valueAfterAHand();
+      await Future<void>.delayed(Duration.zero);
+      job.drop(const Done(1));
+      gate.complete();
+      await job.done;
+      expect(
+        job.outcome,
+        isA<Done<Object?>>().having((d) => d.value, 'value', 1),
+      );
+      expect(
+        await collected(capture),
+        isTrue,
+        reason: 'the value of the body is in no outcome',
+      );
+    },
+  );
 
   for (final MapEntry(key: kind, value: failure) in failures.entries) {
     test('a finished job lets go of $kind it caught', () async {
@@ -692,7 +716,8 @@ void main() {
       expect(
         await collected(capture),
         isTrue,
-        reason: 'the body caught the failure, and nothing of the job holds '
+        reason:
+            'the body caught the failure, and nothing of the job holds '
             'it',
       );
     });
@@ -701,57 +726,61 @@ void main() {
   test('a job finished by hand lets go of the cleanups it never ran', () async {
     final gate = Completer<void>();
     late WeakReference<Payload> capture;
-    final job = ProbeJob<int>((ctx) async {
-      capture = holdInACleanup(ctx);
-      await gate.future;
-      return 1;
-    })
-      ..ignoreFailure()
-      ..launch();
+    final job =
+        ProbeJob<int>((ctx) async {
+            capture = holdInACleanup(ctx);
+            await gate.future;
+            return 1;
+          })
+          ..ignoreFailure()
+          ..launch();
     await Future<void>.microtask(() {});
     job.drop(const Done(1));
     expect(
       await collected(capture),
       isTrue,
-      reason: 'nothing unwinds the stack of a job an engine ended by hand, '
+      reason:
+          'nothing unwinds the stack of a job an engine ended by hand, '
           'and held on, it keeps what each registration captured',
     );
     gate.complete();
   });
 
-  test('a branch ended by hand while it unwinds drops what it put aside',
-      () async {
-    final gate = Completer<String>();
-    late WeakReference<Payload> capture;
-    late final ProbeJob<String> branch;
-    branch = ProbeJob<String>((ctx) async {
-      capture = holdInACleanup(ctx, conditional: true);
-      // On top of the stack, so it unwinds first: the conditional one
-      // under it is put aside, and the branch waits at the second barrier
-      // with an outcome of its own.
-      ctx.onDispose(() => branch.drop(const Cancelled('by hand')));
-      return 'db';
-    });
-    final parent = Job<List<String>>(
-      (ctx) => ctx.runAll([
-        branch,
-        Job.deferred<String>((ctx) => ctx.abandonable(() => gate.future)),
-      ]),
-    )..ignoreFailure();
-    await Future<void>.microtask(() {});
-    gate.complete('other');
-    await parent.done;
-    expect(branch.outcome, isA<Cancelled>());
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the second pass never runs, and what it would have read is '
-          'held for as long as the handle is',
-    );
-  });
-
   test(
-      'a branch ended by hand at the second barrier lets go of what it '
+    'a branch ended by hand while it unwinds drops what it put aside',
+    () async {
+      final gate = Completer<String>();
+      late WeakReference<Payload> capture;
+      late final ProbeJob<String> branch;
+      branch = ProbeJob<String>((ctx) async {
+        capture = holdInACleanup(ctx, conditional: true);
+        // On top of the stack, so it unwinds first: the conditional one
+        // under it is put aside, and the branch waits at the second barrier
+        // with an outcome of its own.
+        ctx.onDispose(() => branch.drop(const Cancelled('by hand')));
+        return 'db';
+      });
+      final parent = Job<List<String>>(
+        (ctx) => ctx.runAll([
+          branch,
+          Job.deferred<String>((ctx) => ctx.abandonable(() => gate.future)),
+        ]),
+      )..ignoreFailure();
+      await Future<void>.microtask(() {});
+      gate.complete('other');
+      await parent.done;
+      expect(branch.outcome, isA<Cancelled>());
+      expect(
+        await collected(capture),
+        isTrue,
+        reason:
+            'the second pass never runs, and what it would have read is '
+            'held for as long as the handle is',
+      );
+    },
+  );
+
+  test('a branch ended by hand at the second barrier lets go of what it '
       'registered there', () async {
     final gate = Completer<void>();
     late JobContext context;
@@ -780,35 +809,38 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the stack is never read again, and what is on it is held for '
+      reason:
+          'the stack is never read again, and what is on it is held for '
           'as long as the handle is',
     );
   });
 
-  test('a cancelled shared handle lets go while its source still runs',
-      () async {
-    final release = Completer<int>();
-    final source = Job<int>((ctx) => ctx.join(() => release.future));
-    final capture = await cancelledShared(source);
-    expect(source.isFinished, isFalse);
-    expect(
-      await collected(capture),
-      isTrue,
-      reason: 'the handle has ended and waits for nothing; held by the '
-          'source, every screen that left keeps its observer for as long '
-          'as the source runs',
-    );
-    release.complete(1);
-    await source.done;
-  });
+  test(
+    'a cancelled shared handle lets go while its source still runs',
+    () async {
+      final release = Completer<int>();
+      final source = Job<int>((ctx) => ctx.join(() => release.future));
+      final capture = await cancelledShared(source);
+      expect(source.isFinished, isFalse);
+      expect(
+        await collected(capture),
+        isTrue,
+        reason:
+            'the handle has ended and waits for nothing; held by the '
+            'source, every screen that left keeps its observer for as long '
+            'as the source runs',
+      );
+      release.complete(1);
+      await source.done;
+    },
+  );
 
   // The handle waits for its source in its own zone, and a zone can put a
   // closure of its own around what it is given to wait with. The three
   // below are the zones a handle is made in outside a test: one of tooling
   // that wraps every callback, as `Chain.capture` of `stack_trace` does,
   // one of `runZonedGuarded`, and the one of unattended work.
-  test(
-      'a cancelled shared handle lets go under a zone that wraps every '
+  test('a cancelled shared handle lets go under a zone that wraps every '
       'callback', () async {
     final release = Completer<int>();
     final source = Job<int>((ctx) => ctx.join(() => release.future));
@@ -820,7 +852,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the wrapper holds what it was given to wait with, and that '
+      reason:
+          'the wrapper holds what it was given to wait with, and that '
           'must not be the handle',
     );
     release.complete(1);
@@ -839,7 +872,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'a guarded zone is where an app runs; the handle made there '
+      reason:
+          'a guarded zone is where an app runs; the handle made there '
           'must let go as it does in the root zone',
     );
     release.complete(1);
@@ -859,7 +893,8 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the handle waits in the zone of the work it was made in, '
+      reason:
+          'the handle waits in the zone of the work it was made in, '
           'and that zone is not one to keep it in either',
     );
     release.complete(1);
@@ -871,13 +906,10 @@ void main() {
 /// registers, the way tooling that records where a callback came from
 /// does.
 ZoneSpecification wrappingEveryCallback() => ZoneSpecification(
-      registerCallback: <R>(self, parent, zone, f) =>
-          parent.registerCallback(zone, () => f()),
-      registerUnaryCallback: <R, T>(self, parent, zone, f) =>
-          parent.registerUnaryCallback(zone, (arg) => f(arg)),
-      registerBinaryCallback: <R, T1, T2>(self, parent, zone, f) =>
-          parent.registerBinaryCallback(
-        zone,
-        (arg1, arg2) => f(arg1, arg2),
-      ),
-    );
+  registerCallback: <R>(self, parent, zone, f) =>
+      parent.registerCallback(zone, () => f()),
+  registerUnaryCallback: <R, T>(self, parent, zone, f) =>
+      parent.registerUnaryCallback(zone, (arg) => f(arg)),
+  registerBinaryCallback: <R, T1, T2>(self, parent, zone, f) =>
+      parent.registerBinaryCallback(zone, (arg1, arg2) => f(arg1, arg2)),
+);

@@ -17,16 +17,16 @@ import 'support/probe_job.dart';
 void main() {
   for (final group in [false, true]) {
     final name = group ? 'runAll' : 'run';
-    test('$name the body walked away from keeps the parent out of the zone',
-        () {
-      // The body ends without awaiting the future; the parent is cancelled
-      // while it waits for a child that refuses the cascade and ends with a
-      // value. Nobody is left to hear the future, so it must not throw the
-      // parent's cancellation into the zone.
-      final zone = <Object>[];
-      Outcome<void>? parent;
-      runZonedGuarded(
-        () {
+    test(
+      '$name the body walked away from keeps the parent out of the zone',
+      () {
+        // The body ends without awaiting the future; the parent is cancelled
+        // while it waits for a child that refuses the cascade and ends with a
+        // value. Nobody is left to hear the future, so it must not throw the
+        // parent's cancellation into the zone.
+        final zone = <Object>[];
+        Outcome<void>? parent;
+        runZonedGuarded(() {
           fakeAsync((async) {
             final job = Job<void>((ctx) async {
               final child = Job.deferred<int>(cancellable: false, (ctx) async {
@@ -44,12 +44,11 @@ void main() {
             async.flushTimers();
             parent = job.outcome;
           });
-        },
-        (error, stackTrace) => zone.add(error),
-      );
-      expect(parent, isA<Cancelled>());
-      expect(zone, isEmpty);
-    });
+        }, (error, stackTrace) => zone.add(error));
+        expect(parent, isA<Cancelled>());
+        expect(zone, isEmpty);
+      },
+    );
   }
 
   test('the values come back in the order of the list', () {
@@ -88,8 +87,7 @@ void main() {
           }
         });
         await ctx.abandonable(() => delay(50));
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 10));
       expect(values, isEmpty);
       expect(fromUnattended, isA<StateError>());
@@ -234,9 +232,12 @@ void main() {
       Object? thrown;
       Job<void>((ctx) async {
         try {
-          await ctx.runAll(
-            [first, repeated, Job.deferred((ctx) async => 3), repeated],
-          );
+          await ctx.runAll([
+            first,
+            repeated,
+            Job.deferred((ctx) async => 3),
+            repeated,
+          ]);
         } on Object catch (error) {
           thrown = error;
         }
@@ -275,10 +276,7 @@ void main() {
       repeated.start();
       late.cancel().ignore();
       async.flushTimers();
-      expect(settled, [
-        'late Cancelled(manual)',
-        'repeated Done(1)',
-      ]);
+      expect(settled, ['late Cancelled(manual)', 'repeated Done(1)']);
     });
   });
 
@@ -314,8 +312,7 @@ void main() {
   });
 
   for (final escapes in [false, true]) {
-    test(
-        'a real failure beats a cancellation, whenever it arrives, '
+    test('a real failure beats a cancellation, whenever it arrives, '
         'escapes: $escapes', () {
       fakeAsync((async) {
         final journal = JobJournal();
@@ -324,30 +321,24 @@ void main() {
           await ctx.abandonable(() => delay(1000));
           return 2;
         });
-        final failing = Job.deferred<int>(
-          key: 'a',
-          cancellable: false,
-          (ctx) async {
-            await ctx.abandonable(() => delay(50));
-            throw selected;
-          },
-        );
+        final failing = Job.deferred<int>(key: 'a', cancellable: false, (
+          ctx,
+        ) async {
+          await ctx.abandonable(() => delay(50));
+          throw selected;
+        });
         Object? thrown;
-        final parent = Job<void>(
-          key: 'parent',
-          observer: journal,
-          (ctx) async {
-            if (escapes) {
-              await ctx.runAll([failing, cancelled]);
-              return;
-            }
-            try {
-              await ctx.runAll([failing, cancelled]);
-            } on Object catch (error) {
-              thrown = error;
-            }
-          },
-        )..ignoreFailure();
+        final parent = Job<void>(key: 'parent', observer: journal, (ctx) async {
+          if (escapes) {
+            await ctx.runAll([failing, cancelled]);
+            return;
+          }
+          try {
+            await ctx.runAll([failing, cancelled]);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        })..ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         cancelled.cancel().ignore();
         async.flushTimers();
@@ -365,7 +356,8 @@ void main() {
                   '[parent] error Bad state: selected',
                 ]
               : ['> [a] error Bad state: selected'],
-          reason: 'the branch tells the observer, and the group never '
+          reason:
+              'the branch tells the observer, and the group never '
               'retells what the caller received',
         );
       });
@@ -379,40 +371,37 @@ void main() {
     Object? thrown;
     Outcome<int>? acceptingOutcome;
     Outcome<int>? foreignOutcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final accepting = Job.deferred<int>(key: 'a', (ctx) async {
-            try {
-              await ctx.abandonable(() => delay(1000));
-              return 1;
-            } finally {
-              // The point of the run: a failure after the mark leaves the
-              // outcome to the cancellation the branch accepted.
-              // ignore: throw_in_finally
-              throw covered;
-            }
-          });
-          final foreign = Job.deferred<int>(key: 'b', (ctx) async {
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final accepting = Job.deferred<int>(key: 'a', (ctx) async {
+          try {
             await ctx.abandonable(() => delay(1000));
-            return 2;
-          });
-          Job<void>(key: 'parent', observer: journal, (ctx) async {
-            try {
-              await ctx.runAll([accepting, foreign]);
-            } on Object catch (error) {
-              thrown = error;
-            }
-          }).ignoreFailure();
-          async.elapse(const Duration(milliseconds: 10));
-          foreign.cancel().ignore();
-          async.flushTimers();
-          acceptingOutcome = accepting.outcome;
-          foreignOutcome = foreign.outcome;
+            return 1;
+          } finally {
+            // The point of the run: a failure after the mark leaves the
+            // outcome to the cancellation the branch accepted.
+            // ignore: throw_in_finally
+            throw covered;
+          }
         });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+        final foreign = Job.deferred<int>(key: 'b', (ctx) async {
+          await ctx.abandonable(() => delay(1000));
+          return 2;
+        });
+        Job<void>(key: 'parent', observer: journal, (ctx) async {
+          try {
+            await ctx.runAll([accepting, foreign]);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        }).ignoreFailure();
+        async.elapse(const Duration(milliseconds: 10));
+        foreign.cancel().ignore();
+        async.flushTimers();
+        acceptingOutcome = accepting.outcome;
+        foreignOutcome = foreign.outcome;
+      });
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone, every one of them: an `expect` that fails
     // inside it is caught by the handler, added to `zone`, and never fails
     // the test.
@@ -426,15 +415,14 @@ void main() {
       reason: 'the cancellation the branch accepted is its outcome',
     );
     expect(thrown, same(foreignOutcome));
-    expect(
-      journal.take().where((line) => line.contains('error')).toList(),
-      ['> [a] error Bad state: covered'],
-      reason: 'the observer hears it once, from the branch',
-    );
+    expect(journal.take().where((line) => line.contains('error')).toList(), [
+      '> [a] error Bad state: covered',
+    ], reason: 'the observer hears it once, from the branch');
     expect(
       zone,
       [same(covered)],
-      reason: 'the outcome does not carry it, so the branch answers for it, '
+      reason:
+          'the outcome does not carry it, so the branch answers for it, '
           'and ignoreFailure on the parent does not reach the branch',
     );
   });
@@ -489,11 +477,12 @@ void main() {
         await ctx.abandonable(() => delay(1000));
         return 1;
       });
-      final parent = Job<void>(key: 'parent', (ctx) async {
-        await ctx.runAll([branch]);
-      })
-        ..ignoreFailure()
-        ..whenCancelled((_) => heardCancelled++);
+      final parent =
+          Job<void>(key: 'parent', (ctx) async {
+              await ctx.runAll([branch]);
+            })
+            ..ignoreFailure()
+            ..whenCancelled((_) => heardCancelled++);
       async.elapse(const Duration(milliseconds: 10));
       branch.cancel(reason: const TestCancelReason('outside')).ignore();
       async.flushTimers();
@@ -521,20 +510,16 @@ void main() {
 
   for (final listOrder in ['ab', 'ba']) {
     for (final finishOrder in ['ab', 'ba']) {
-      test(
-          'the first outcome to arrive wins, whatever the list order, '
+      test('the first outcome to arrive wins, whatever the list order, '
           'listOrder: $listOrder, finishOrder: $finishOrder', () {
         fakeAsync((async) {
           final gates = {'a': Completer<void>(), 'b': Completer<void>()};
           final errors = {'a': StateError('a'), 'b': StateError('b')};
-          ChildJob<int> branch(String name) => Job.deferred<int>(
-                key: name,
-                cancellable: false,
-                (ctx) async {
-                  ctx.onDispose(() => gates[name]!.future);
-                  throw errors[name]!;
-                },
-              );
+          ChildJob<int> branch(String name) =>
+              Job.deferred<int>(key: name, cancellable: false, (ctx) async {
+                ctx.onDispose(() => gates[name]!.future);
+                throw errors[name]!;
+              });
 
           final a = branch('a');
           final b = branch('b');
@@ -629,45 +614,38 @@ void main() {
     Outcome<int>? foreignOutcome;
     var stoppedFinishedFirst = false;
     var foreignStillHeldUp = false;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final tail = Completer<void>();
-          // The branch the group stops finishes first; the branch somebody
-          // else cancelled finishes last. Without the filter the first one
-          // would be chosen.
-          final stopped = Job.deferred<int>(key: 'a', (ctx) async {
-            await ctx.abandonable(() => delay(1000));
-            return 1;
-          });
-          final foreign = Job.deferred<int>(key: 'b', (ctx) async {
-            ctx.onDispose(() => tail.future);
-            await ctx.abandonable(() => delay(1000));
-            return 2;
-          });
-          Job<void>(
-            key: 'parent',
-            observer: ErrorObserver(errors),
-            (ctx) async {
-              try {
-                await ctx.runAll([stopped, foreign]);
-              } on Object catch (error) {
-                thrown = error;
-              }
-            },
-          ).ignoreFailure();
-          async.elapse(const Duration(milliseconds: 10));
-          foreign.cancel(reason: const TestCancelReason('outside')).ignore();
-          async.elapse(const Duration(milliseconds: 10));
-          stoppedFinishedFirst = stopped.isFinished;
-          foreignStillHeldUp = !foreign.isFinished;
-          tail.complete();
-          async.flushTimers();
-          foreignOutcome = foreign.outcome;
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final tail = Completer<void>();
+        // The branch the group stops finishes first; the branch somebody
+        // else cancelled finishes last. Without the filter the first one
+        // would be chosen.
+        final stopped = Job.deferred<int>(key: 'a', (ctx) async {
+          await ctx.abandonable(() => delay(1000));
+          return 1;
         });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+        final foreign = Job.deferred<int>(key: 'b', (ctx) async {
+          ctx.onDispose(() => tail.future);
+          await ctx.abandonable(() => delay(1000));
+          return 2;
+        });
+        Job<void>(key: 'parent', observer: ErrorObserver(errors), (ctx) async {
+          try {
+            await ctx.runAll([stopped, foreign]);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        }).ignoreFailure();
+        async.elapse(const Duration(milliseconds: 10));
+        foreign.cancel(reason: const TestCancelReason('outside')).ignore();
+        async.elapse(const Duration(milliseconds: 10));
+        stoppedFinishedFirst = stopped.isFinished;
+        foreignStillHeldUp = !foreign.isFinished;
+        tail.complete();
+        async.flushTimers();
+        foreignOutcome = foreign.outcome;
+      });
+    }, (error, stackTrace) => zone.add(error));
     expect(stoppedFinishedFirst, isTrue, reason: 'ours arrives first');
     expect(foreignStillHeldUp, isTrue, reason: 'the other is held up');
     expect(thrown, same(foreignOutcome));
@@ -739,21 +717,17 @@ void main() {
         await ctx.abandonable(() => delay(10));
         throw StateError('boom');
       });
-      group = Job<void>(
-        key: 'group',
-        observer: ErrorObserver(<Object>[]),
-        (ctx) async {
-          await ctx.runAll([taker, bad]);
-        },
-      )..ignoreFailure();
+      group = Job<void>(key: 'group', observer: ErrorObserver(<Object>[]), (
+        ctx,
+      ) async {
+        await ctx.runAll([taker, bad]);
+      })..ignoreFailure();
       async.flushTimers();
     });
     expect(group.outcome, isA<Failed>());
-    expect(
-      closed,
-      ['db'],
-      reason: 'the branch closed it once, and before the group returned',
-    );
+    expect(closed, [
+      'db',
+    ], reason: 'the branch closed it once, and before the group returned');
   });
 
   test('a branch the group stopped never gives the group its outcome', () {
@@ -809,8 +783,7 @@ void main() {
   });
 
   for (final dropOrder in ['ab', 'ba']) {
-    test(
-        'between two cancellations the first one to arrive wins, '
+    test('between two cancellations the first one to arrive wins, '
         'dropOrder: $dropOrder', () {
       fakeAsync((async) {
         // Two branches are ended by hand while they stand at the second
@@ -838,8 +811,11 @@ void main() {
         Object? thrown;
         Job<void>(key: 'parent', (ctx) async {
           try {
-            await ctx
-                .runAll(<ChildJob<int>>[dropped['a']!, dropped['b']!, slow]);
+            await ctx.runAll(<ChildJob<int>>[
+              dropped['a']!,
+              dropped['b']!,
+              slow,
+            ]);
           } on Object catch (error) {
             thrown = error;
           }
@@ -879,14 +855,10 @@ void main() {
         try {
           await ctx.runAll([
             Job.deferred<int>(key: 'a', (ctx) async => throw chosen),
-            Job.deferred<int>(
-              key: 'b',
-              cancellable: false,
-              (ctx) async {
-                await ctx.abandonable(() => delay(50));
-                throw other;
-              },
-            ),
+            Job.deferred<int>(key: 'b', cancellable: false, (ctx) async {
+              await ctx.abandonable(() => delay(50));
+              throw other;
+            }),
           ]);
         } on Object catch (_) {
           // Checked through the journal below.
@@ -896,93 +868,86 @@ void main() {
       expect(
         journal.take().where((line) => line.contains('error')).toList(),
         ['> [a] error Bad state: chosen', '> [b] error Bad state: other'],
-        reason: 'each branch announces its own failure once, and the group '
+        reason:
+            'each branch announces its own failure once, and the group '
             'announces neither',
       );
     });
     final zone = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final chosen = StateError('chosen');
-          final other = StateError('other');
-          Job<void>(key: 'parent', (ctx) async {
-            try {
-              await ctx.runAll([
-                Job.deferred<int>(key: 'a', (ctx) async => throw chosen),
-                Job.deferred<int>(
-                  key: 'b',
-                  cancellable: false,
-                  (ctx) async {
-                    await ctx.abandonable(() => delay(50));
-                    throw other;
-                  },
-                ),
-              ]);
-            } on Object catch (_) {
-              // Checked through the zone below.
-            }
-          }).ignoreFailure();
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final chosen = StateError('chosen');
+        final other = StateError('other');
+        Job<void>(key: 'parent', (ctx) async {
+          try {
+            await ctx.runAll([
+              Job.deferred<int>(key: 'a', (ctx) async => throw chosen),
+              Job.deferred<int>(key: 'b', cancellable: false, (ctx) async {
+                await ctx.abandonable(() => delay(50));
+                throw other;
+              }),
+            ]);
+          } on Object catch (_) {
+            // Checked through the zone below.
+          }
+        }).ignoreFailure();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone: an `expect` that fails inside it lands in
     // the handler and is counted as a zone error instead of failing.
     expect(
       zone.map((error) => '$error').toList(),
       ['Bad state: other'],
-      reason: 'with nobody watching, the one nobody received goes to the '
+      reason:
+          'with nobody watching, the one nobody received goes to the '
           'zone, once',
     );
   });
 
   for (final withObserver in [false, true]) {
-    test(
-        'a failure that never went through a body is not lost either, '
+    test('a failure that never went through a body is not lost either, '
         'withObserver: $withObserver', () {
       final zone = <Object>[];
       final heard = <Object>[];
       final chosen = StateError('chosen');
       final other = StateError('other');
-      runZonedGuarded(
-        () {
-          fakeAsync((async) {
-            // An engine may end a branch by hand while it stands at a barrier.
-            // Such a failure went through no body, so nobody announced it: the
-            // group is the last one holding it.
-            final gate = Completer<void>();
-            final dropped = {
-              for (final name in ['a', 'b'])
-                name: ProbeJob<int>(key: name, (ctx) async => 1),
-            };
-            final slow = Job.deferred<int>(key: 'slow', (ctx) async {
-              ctx.onDispose(() => gate.future);
-              return 3;
-            });
-            Job<void>(
-              key: 'parent',
-              observer: withObserver ? ErrorObserver(heard) : null,
-              (ctx) async {
-                try {
-                  await ctx.runAll(
-                    <ChildJob<int>>[dropped['a']!, dropped['b']!, slow],
-                  );
-                } on Object catch (_) {
-                  // Which one comes out is settled by the arrival order.
-                }
-              },
-            ).ignoreFailure();
-            async.flushMicrotasks();
-            dropped['a']!.drop(Failed(chosen, StackTrace.current));
-            dropped['b']!.drop(Failed(other, StackTrace.current));
-            gate.complete();
-            async.flushTimers();
+      runZonedGuarded(() {
+        fakeAsync((async) {
+          // An engine may end a branch by hand while it stands at a barrier.
+          // Such a failure went through no body, so nobody announced it: the
+          // group is the last one holding it.
+          final gate = Completer<void>();
+          final dropped = {
+            for (final name in ['a', 'b'])
+              name: ProbeJob<int>(key: name, (ctx) async => 1),
+          };
+          final slow = Job.deferred<int>(key: 'slow', (ctx) async {
+            ctx.onDispose(() => gate.future);
+            return 3;
           });
-        },
-        (error, stackTrace) => zone.add(error),
-      );
+          Job<void>(
+            key: 'parent',
+            observer: withObserver ? ErrorObserver(heard) : null,
+            (ctx) async {
+              try {
+                await ctx.runAll(<ChildJob<int>>[
+                  dropped['a']!,
+                  dropped['b']!,
+                  slow,
+                ]);
+              } on Object catch (_) {
+                // Which one comes out is settled by the arrival order.
+              }
+            },
+          ).ignoreFailure();
+          async.flushMicrotasks();
+          dropped['a']!.drop(Failed(chosen, StackTrace.current));
+          dropped['b']!.drop(Failed(other, StackTrace.current));
+          gate.complete();
+          async.flushTimers();
+        });
+      }, (error, stackTrace) => zone.add(error));
       // Outside the guarded zone: a failing `expect` inside it would be
       // swallowed by the handler and never fail the test.
       expect(
@@ -993,7 +958,8 @@ void main() {
       expect(
         zone.where((error) => identical(error, other)).length,
         1,
-        reason: 'an observer that only watches answers for nothing: '
+        reason:
+            'an observer that only watches answers for nothing: '
             'observer: $withObserver',
       );
     });
@@ -1010,7 +976,8 @@ final parent = Job<void>((ctx) async {
   await ctx.runAll(branches);
 });
 ''');
-      const refusal = "The argument type 'List<Job<int>>' can't be assigned to "
+      const refusal =
+          "The argument type 'List<Job<int>>' can't be assigned to "
           "the parameter type 'Iterable<ChildJob<dynamic>>'.";
       expect(errors, [refusal]);
     },
@@ -1155,19 +1122,16 @@ final parent = Job<void>((ctx) async {
       final refused = UnadoptableJob<int>(key: 'c', (ctx) async => 3);
       Object? thrown;
       final zone = <Object>[];
-      runZonedGuarded(
-        () {
-          Job<void>((ctx) async {
-            try {
-              await ctx.runAll([...started, refused]);
-            } on Object catch (error) {
-              thrown = error;
-            }
-          }).ignoreFailure();
-          async.flushTimers();
-        },
-        (error, stackTrace) => zone.add(error),
-      );
+      runZonedGuarded(() {
+        Job<void>((ctx) async {
+          try {
+            await ctx.runAll([...started, refused]);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        }).ignoreFailure();
+        async.flushTimers();
+      }, (error, stackTrace) => zone.add(error));
       expect(thrown, isA<ArgumentError>());
       for (final branch in started) {
         expect(
@@ -1184,36 +1148,31 @@ final parent = Job<void>((ctx) async {
     final zone = <Object>[];
     Object? refusal;
     Outcome<int>? stubbornOutcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          // A branch that refuses the stop and then fails: the refusal of
-          // admission is still what comes out, and the failure is not lost.
-          final other = StateError('other');
-          final stubborn = Job.deferred<int>(
-            key: 'a',
-            cancellable: false,
-            (ctx) async {
-              await ctx.abandonable(() => delay(50));
-              throw other;
-            },
-          );
-          final refused = UnadoptableJob<int>(key: 'c', (ctx) async => 3);
-          Object? thrown;
-          Job<void>((ctx) async {
-            try {
-              await ctx.runAll([stubborn, refused]);
-            } on Object catch (error) {
-              thrown = error;
-            }
-          }).ignoreFailure();
-          async.flushTimers();
-          refusal = thrown;
-          stubbornOutcome = stubborn.outcome;
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        // A branch that refuses the stop and then fails: the refusal of
+        // admission is still what comes out, and the failure is not lost.
+        final other = StateError('other');
+        final stubborn = Job.deferred<int>(key: 'a', cancellable: false, (
+          ctx,
+        ) async {
+          await ctx.abandonable(() => delay(50));
+          throw other;
         });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+        final refused = UnadoptableJob<int>(key: 'c', (ctx) async => 3);
+        Object? thrown;
+        Job<void>((ctx) async {
+          try {
+            await ctx.runAll([stubborn, refused]);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        }).ignoreFailure();
+        async.flushTimers();
+        refusal = thrown;
+        stubbornOutcome = stubborn.outcome;
+      });
+    }, (error, stackTrace) => zone.add(error));
     expect(refusal, isA<ArgumentError>());
     expect(stubbornOutcome, isA<Failed>());
     expect(zone.map((error) => '$error').toList(), ['Bad state: other']);
@@ -1231,13 +1190,14 @@ final parent = Job<void>((ctx) async {
           }),
       ];
       Cancelled? accepted;
-      final parent = Job<void>(
-        key: 'parent',
-        observer: ErrorObserver(errors),
-        (ctx) async => ctx.runAll(branches),
-      )
-        ..ignoreFailure()
-        ..whenCancelled((cancelled) => accepted = cancelled);
+      final parent =
+          Job<void>(
+              key: 'parent',
+              observer: ErrorObserver(errors),
+              (ctx) async => ctx.runAll(branches),
+            )
+            ..ignoreFailure()
+            ..whenCancelled((cancelled) => accepted = cancelled);
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
       async.flushTimers();
@@ -1292,8 +1252,7 @@ final parent = Job<void>((ctx) async {
             ),
         ]);
         await ctx.abandonable(() => delay(1000));
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       expect(values, ['a', 'b']);
       parent.cancel().ignore();
@@ -1304,8 +1263,7 @@ final parent = Job<void>((ctx) async {
   });
 
   for (final trigger in ['cancel', 'rules', 'reentrant']) {
-    test(
-        'the group checks the parent before it commits, and reads again, '
+    test('the group checks the parent before it commits, and reads again, '
         'trigger: $trigger', () {
       fakeAsync((async) {
         var continued = false;
@@ -1314,17 +1272,15 @@ final parent = Job<void>((ctx) async {
         Object? thrown;
         final stubborn = [
           for (final key in ['a', 'b'])
-            Job.deferred<int>(
-              key: key,
-              cancellable: trigger == 'reentrant',
-              (ctx) async {
-                await ctx.abandonable(() => delay(50));
-                // A resource taken for the caller: on every one of these
-                // paths the caller gets an error instead, so the branch
-                // has to close it itself.
-                return ctx.abandonable(() async => 1, discard: (_) => closes++);
-              },
-            ),
+            Job.deferred<int>(key: key, cancellable: trigger == 'reentrant', (
+              ctx,
+            ) async {
+              await ctx.abandonable(() => delay(50));
+              // A resource taken for the caller: on every one of these
+              // paths the caller gets an error instead, so the branch
+              // has to close it itself.
+              return ctx.abandonable(() async => 1, discard: (_) => closes++);
+            }),
         ];
         late CheckingContext context;
         final parent = CheckingJob<void>(key: 'parent', (ctx) async {
@@ -1335,8 +1291,7 @@ final parent = Job<void>((ctx) async {
           } on Object catch (error) {
             thrown = error;
           }
-        })
-          ..launch();
+        })..launch();
         switch (trigger) {
           case 'cancel':
             // The parent is already cancelled, and both branches refused
@@ -1366,8 +1321,8 @@ final parent = Job<void>((ctx) async {
           reason: trigger == 'reentrant'
               ? 'both branches took the stop and closed what they held'
               : 'both refused the stop and hand their values over through '
-                  'their own `value`: the named boundary of cancellable '
-                  'false',
+                    'their own `value`: the named boundary of cancellable '
+                    'false',
         );
       });
     });
@@ -1550,11 +1505,9 @@ final parent = Job<void>((ctx) async {
         groupReturned = true;
       }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 100));
-      expect(
-        order,
-        ['second-start'],
-        reason: 'the last registration unwinds first, and it is awaited',
-      );
+      expect(order, [
+        'second-start',
+      ], reason: 'the last registration unwinds first, and it is awaited');
       expect(groupReturned, isFalse, reason: 'the group waits for it');
       slow.complete();
       async.flushTimers();
@@ -1709,8 +1662,7 @@ final parent = Job<void>((ctx) async {
   });
 
   for (final path in ['success', 'branch-error', 'parent-cancel']) {
-    test(
-        'a branch is held before it unwinds, and let go on every path, '
+    test('a branch is held before it unwinds, and let go on every path, '
         'path: $path', () {
       fakeAsync((async) {
         final slow = Completer<void>();
@@ -1769,8 +1721,7 @@ final parent = Job<void>((ctx) async {
   }
 
   for (final barrier in ['first', 'second']) {
-    test(
-        'a group whose own code throws at a barrier leaves nothing held, '
+    test('a group whose own code throws at a barrier leaves nothing held, '
         'barrier: $barrier', () {
       fakeAsync((async) {
         // The code of the group itself throws while branches stand at a
@@ -1829,15 +1780,15 @@ final parent = Job<void>((ctx) async {
         expect(
           discarded,
           1,
-          reason: 'the branch that could be stopped was stopped, not merely '
+          reason:
+              'the branch that could be stopped was stopped, not merely '
               'released: $barrier',
         );
       });
     });
   }
 
-  test(
-      'a refusal of admission after part of the list has started stops the '
+  test('a refusal of admission after part of the list has started stops the '
       'started branch and discards what it took', () {
     fakeAsync((async) {
       // A refusal of admission after part of the list has started: only an
@@ -1872,8 +1823,7 @@ final parent = Job<void>((ctx) async {
   });
 
   for (final trigger in ['branch', 'parent']) {
-    test(
-        'the second barrier catches what the first one would have missed, '
+    test('the second barrier catches what the first one would have missed, '
         'trigger: $trigger', () {
       fakeAsync((async) {
         // Both branches took a resource for the caller and returned. The
@@ -1881,16 +1831,14 @@ final parent = Job<void>((ctx) async {
         // asynchronous disposer, and a cancellation arrives there.
         final closes = {'a': 0, 'b': 0};
         final unwinding = Completer<void>();
-        ChildJob<String> holder(String key) => Job.deferred<String>(
-              key: key,
-              (ctx) async {
-                if (key == 'b') ctx.onDispose(() => unwinding.future);
-                return ctx.abandonable(
-                  () async => key,
-                  discard: (_) => closes[key] = closes[key]! + 1,
-                );
-              },
-            );
+        ChildJob<String> holder(String key) =>
+            Job.deferred<String>(key: key, (ctx) async {
+              if (key == 'b') ctx.onDispose(() => unwinding.future);
+              return ctx.abandonable(
+                () async => key,
+                discard: (_) => closes[key] = closes[key]! + 1,
+              );
+            });
 
         final a = holder('a');
         final b = holder('b');
@@ -1901,8 +1849,7 @@ final parent = Job<void>((ctx) async {
           } on Object catch (error) {
             thrown = error;
           }
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         expect(closes, {'a': 0, 'b': 0}, reason: 'nothing is decided yet');
         if (trigger == 'branch') {
@@ -1918,8 +1865,7 @@ final parent = Job<void>((ctx) async {
     });
   }
 
-  test(
-      'a cancellation from the finish of a sibling comes after the commit '
+  test('a cancellation from the finish of a sibling comes after the commit '
       'and is turned away', () {
     fakeAsync((async) {
       // A cancellation that arrives from the finish of a sibling, in the
@@ -1967,8 +1913,7 @@ final parent = Job<void>((ctx) async {
   // already be marked as handed over when it does.
   for (final from in ['Job.debug', 'describe']) {
     for (final target in ['the branch', 'a sibling', 'the parent']) {
-      test(
-          'a cancellation of $target from $from on the line of the commit '
+      test('a cancellation of $target from $from on the line of the commit '
           'finds the values handed over', () {
         fakeAsync((async) {
           addTearDown(() => Job.debug = null);
@@ -2017,8 +1962,7 @@ final parent = Job<void>((ctx) async {
               ..onCancel(() => heard.add('b onCancel'))
               ..onDiscard(() => closed.add('b'));
             return 'b';
-          })
-            ..whenCancelled((_) => heard.add('b whenCancelled'));
+          })..whenCancelled((_) => heard.add('b whenCancelled'));
           Job.debug = (line) {
             if (line.contains('handed its value over')) {
               armed = true;
@@ -2030,8 +1974,7 @@ final parent = Job<void>((ctx) async {
           List<String>? values;
           parent = Job<void>(key: 'parent', (ctx) async {
             values = await ctx.runAll([a, b]);
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
           async.flushTimers();
           expect(fired, isTrue, reason: 'the trigger has to run');
           expect(values, ['a', 'b']);
@@ -2062,8 +2005,7 @@ final parent = Job<void>((ctx) async {
       List<String>? values;
       final parent = Job<void>(key: 'parent', (ctx) async {
         values = await ctx.runAll([slow, bare]);
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushMicrotasks();
       Timer.run(() {
         // Registered at the second barrier and not in the body: a tail
@@ -2089,53 +2031,52 @@ final parent = Job<void>((ctx) async {
     });
   });
 
-  test('a branch whose value the group handed over is not cancelled after it',
-      () {
-    // The parent took the list inside a section that held its cancellation.
-    // The section closes, the cancellation lands and cascades -- onto a
-    // branch that has not ended yet, with its value already in the body.
-    // `run` in the same place ends its child [Done]: the value comes after
-    // the child's end. A branch turns the cascade away for the same reason.
-    final closed = <String>[];
-    final finished = <String>[];
-    late final ChildJob<String> branch;
-    late final Job<String> parent;
-    List<String>? held;
-    bool? branchOverThen;
-    fakeAsync((async) {
-      branch = Job.deferred<String>(
-        key: 'branch',
-        (ctx) => ctx.join(
-          () async {
+  test(
+    'a branch whose value the group handed over is not cancelled after it',
+    () {
+      // The parent took the list inside a section that held its cancellation.
+      // The section closes, the cancellation lands and cascades -- onto a
+      // branch that has not ended yet, with its value already in the body.
+      // `run` in the same place ends its child [Done]: the value comes after
+      // the child's end. A branch turns the cascade away for the same reason.
+      final closed = <String>[];
+      final finished = <String>[];
+      late final ChildJob<String> branch;
+      late final Job<String> parent;
+      List<String>? held;
+      bool? branchOverThen;
+      fakeAsync((async) {
+        branch = Job.deferred<String>(
+          key: 'branch',
+          (ctx) => ctx.join(() async {
             await delay(30);
 
             return 'db';
-          },
-          discard: closed.add,
-        ),
-      );
-      parent = Job<String>(
-        key: 'parent',
-        observer: FinishHook((job) => finished.add('$job ${job.outcome}')),
-        (ctx) async {
-          held = await ctx.uncancellable(() => ctx.runAll([branch]));
-          branchOverThen = branch.isFinished;
+          }, discard: closed.add),
+        );
+        parent = Job<String>(
+          key: 'parent',
+          observer: FinishHook((job) => finished.add('$job ${job.outcome}')),
+          (ctx) async {
+            held = await ctx.uncancellable(() => ctx.runAll([branch]));
+            branchOverThen = branch.isFinished;
 
-          return held!.single;
-        },
-      )..ignoreFailure();
-      async.elapse(const Duration(milliseconds: 10));
-      parent.cancel().ignore();
-      async.flushTimers();
-    });
-    expect(held, ['db'], reason: 'the value reached the body');
-    expect(branchOverThen, isFalse, reason: 'and the branch had not ended');
-    expect(parent.outcome, isA<Cancelled>());
-    expect(branch.outcome, isA<Done<String>>());
-    expect(branch.isCancelled, isFalse);
-    expect(closed, isEmpty, reason: "the value is the body's to close");
-    expect(finished, contains('Job(branch) Done(db)'));
-  });
+            return held!.single;
+          },
+        )..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 10));
+        parent.cancel().ignore();
+        async.flushTimers();
+      });
+      expect(held, ['db'], reason: 'the value reached the body');
+      expect(branchOverThen, isFalse, reason: 'and the branch had not ended');
+      expect(parent.outcome, isA<Cancelled>());
+      expect(branch.outcome, isA<Done<String>>());
+      expect(branch.isCancelled, isFalse);
+      expect(closed, isEmpty, reason: "the value is the body's to close");
+      expect(finished, contains('Job(branch) Done(db)'));
+    },
+  );
 
   test('a branch whose value the group handed over refuses a cancellation', () {
     // The same window, reached from outside: a cancellation of the branch
@@ -2160,8 +2101,7 @@ final parent = Job<void>((ctx) async {
   });
 
   for (final path in ['success', 'accepted', 'late-cancel', 'refused']) {
-    test(
-        'what a branch registers while it waits follows the verdict, '
+    test('what a branch registers while it waits follows the verdict, '
         'path: $path', () {
       fakeAsync((async) {
         var disposed = 0;
@@ -2242,7 +2182,8 @@ final parent = Job<void>((ctx) async {
         expect(
           discarded,
           path == 'accepted' ? 1 : 0,
-          reason: 'only a branch that took the cancellation gives up its '
+          reason:
+              'only a branch that took the cancellation gives up its '
               'value: $path',
         );
         if (path == 'success') {
@@ -2285,11 +2226,9 @@ final parent = Job<void>((ctx) async {
           isA<SiblingCancelReason>(),
         ),
       );
-      expect(
-        journal.take().where((line) => line.contains('error')).toList(),
-        ['> [b] error Bad state: no context'],
-        reason: 'a refusal of admission is announced once, on the branch',
-      );
+      expect(journal.take().where((line) => line.contains('error')).toList(), [
+        '> [b] error Bad state: no context',
+      ], reason: 'a refusal of admission is announced once, on the branch');
     });
   });
 
@@ -2406,7 +2345,8 @@ final parent = Job<void>((ctx) async {
       expect(
         ran,
         isEmpty,
-        reason: 'the stop is what this member is for, and a body that throws '
+        reason:
+            'the stop is what this member is for, and a body that throws '
             'before its first await is still a branch going wrong',
       );
       expect(
@@ -2438,14 +2378,10 @@ final parent = Job<void>((ctx) async {
     // Cancelled on its own, not through the parent: its body ends there
     // and then, and that is as much an early word as a failure. `slow`,
     // still in its body, is what the others would otherwise wait for.
-    'cancellation': [
-      '20: late cancelled',
-      '20: early disposed',
-    ],
+    'cancellation': ['20: late cancelled', '20: early disposed'],
   };
   for (final path in unwinding.keys) {
-    test(
-        'a branch unwinds once every body is over, or one ended without a '
+    test('a branch unwinds once every body is over, or one ended without a '
         'value, path: $path', () {
       fakeAsync((async) {
         final trace = <String>[];
@@ -2490,8 +2426,7 @@ final parent = Job<void>((ctx) async {
   }
 
   for (final through in ['join', 'bare await', 'abandonable']) {
-    test(
-        'a lock the branches share through dispose hangs the group, '
+    test('a lock the branches share through dispose hangs the group, '
         'through: $through', () {
       fakeAsync((async) {
         final trace = <String>[];
@@ -2557,8 +2492,7 @@ final parent = Job<void>((ctx) async {
   // same way: three branches for two slots, or two branches for two slots
   // of which the parent already holds one.
   for (final parentHolds in [false, true]) {
-    test(
-        'a pool the branches share through dispose hangs the group, '
+    test('a pool the branches share through dispose hangs the group, '
         'parentHolds: $parentHolds', () {
       fakeAsync((async) {
         final trace = <String>[];
@@ -2581,8 +2515,7 @@ final parent = Job<void>((ctx) async {
             dispose: (_) => pool.release('parent'),
           );
           return ctx.runAll([branch('a'), branch('b')]);
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.elapse(const Duration(seconds: 1));
         expect(
           trace,
@@ -2600,155 +2533,162 @@ final parent = Job<void>((ctx) async {
     });
   }
 
-  group('a cancellation unties the hang only by ending what a branch waits for',
-      () {
-    // `a` takes the lock and ends its body; `b`, or a child `b` starts and
-    // does not await, waits for the lock the way the case says. What is
-    // cancelled, and what the waiting goes through, decide whether something
-    // a branch still waits for ends, and with it the hang.
-    const cases = {
-      // case: untied
-      'parent; b joins an acquire that hears ctx.onCancel': true,
-      'parent; b joins, a third branch waits through ctx.abandonable': true,
-      "parent; b's body is over, its child waits through ctx.abandonable": true,
-      "parent; b's body is over, its child awaits bare": false,
-      'parent; b is cancellable: false and waits through ctx.abandonable':
-          false,
-      'parent; b waits through ctx.abandonable inside ctx.uncancellable': false,
-      'b itself; b waits through ctx.abandonable': true,
-      'b itself; b joins': false,
-      'a, which holds the lock; b waits through ctx.abandonable': false,
-    };
-    for (final MapEntry(key: name, value: untied) in cases.entries) {
-      test(name, () {
-        fakeAsync((async) {
-          final trace = <String>[];
-          final lock = SharedSlots(trace);
-          if (name.contains('hears ctx.onCancel')) {
-            _stopsAreCancellations();
-          }
-          Future<int> waitForLock(JobContext ctx, String who) async {
+  group(
+    'a cancellation unties the hang only by ending what a branch waits for',
+    () {
+      // `a` takes the lock and ends its body; `b`, or a child `b` starts and
+      // does not await, waits for the lock the way the case says. What is
+      // cancelled, and what the waiting goes through, decide whether something
+      // a branch still waits for ends, and with it the hang.
+      const cases = {
+        // case: untied
+        'parent; b joins an acquire that hears ctx.onCancel': true,
+        'parent; b joins, a third branch waits through ctx.abandonable': true,
+        "parent; b's body is over, its child waits through ctx.abandonable":
+            true,
+        "parent; b's body is over, its child awaits bare": false,
+        'parent; b is cancellable: false and waits through ctx.abandonable':
+            false,
+        'parent; b waits through ctx.abandonable inside ctx.uncancellable':
+            false,
+        'b itself; b waits through ctx.abandonable': true,
+        'b itself; b joins': false,
+        'a, which holds the lock; b waits through ctx.abandonable': false,
+      };
+      for (final MapEntry(key: name, value: untied) in cases.entries) {
+        test(name, () {
+          fakeAsync((async) {
+            final trace = <String>[];
+            final lock = SharedSlots(trace);
             if (name.contains('hears ctx.onCancel')) {
-              ctx.onCancel(() => lock.giveUp(who));
+              _stopsAreCancellations();
             }
-            if (name.contains('bare')) {
-              await lock.acquire(who);
-            } else if (name.contains('joins')) {
-              await ctx.join(
-                () => lock.acquire(who),
-                dispose: (_) => lock.release(who),
-              );
-            } else if (name.contains('uncancellable')) {
-              await ctx.uncancellable(
-                () => ctx.abandonable(
+            Future<int> waitForLock(JobContext ctx, String who) async {
+              if (name.contains('hears ctx.onCancel')) {
+                ctx.onCancel(() => lock.giveUp(who));
+              }
+              if (name.contains('bare')) {
+                await lock.acquire(who);
+              } else if (name.contains('joins')) {
+                await ctx.join(
                   () => lock.acquire(who),
                   dispose: (_) => lock.release(who),
-                ),
-              );
-            } else {
-              await ctx.abandonable(
-                () => lock.acquire(who),
-                dispose: (_) => lock.release(who),
-              );
-            }
-            return 2;
-          }
-
-          final holder = Job.deferred<int>(key: 'a', (ctx) async {
-            await ctx.join(
-              () => lock.acquire('a'),
-              dispose: (_) => lock.release('a'),
-            );
-            return 1;
-          });
-          final waiter = Job.deferred<int>(
-            key: 'b',
-            cancellable: !name.contains('cancellable: false'),
-            (ctx) async {
-              if (name.contains('its child')) {
-                ctx
-                    .run(
-                      Job.deferred<int>(
-                        key: 'b-child',
-                        (ctx) => waitForLock(ctx, 'b-child'),
-                      ),
-                    )
-                    .ignore();
-                return 2;
+                );
+              } else if (name.contains('uncancellable')) {
+                await ctx.uncancellable(
+                  () => ctx.abandonable(
+                    () => lock.acquire(who),
+                    dispose: (_) => lock.release(who),
+                  ),
+                );
+              } else {
+                await ctx.abandonable(
+                  () => lock.acquire(who),
+                  dispose: (_) => lock.release(who),
+                );
               }
-              return waitForLock(ctx, 'b');
-            },
-          );
-          final third = Job.deferred<int>(key: 'c', (ctx) async {
-            await ctx.abandonable(() => delay(60000));
-            return 3;
+              return 2;
+            }
+
+            final holder = Job.deferred<int>(key: 'a', (ctx) async {
+              await ctx.join(
+                () => lock.acquire('a'),
+                dispose: (_) => lock.release('a'),
+              );
+              return 1;
+            });
+            final waiter = Job.deferred<int>(
+              key: 'b',
+              cancellable: !name.contains('cancellable: false'),
+              (ctx) async {
+                if (name.contains('its child')) {
+                  ctx
+                      .run(
+                        Job.deferred<int>(
+                          key: 'b-child',
+                          (ctx) => waitForLock(ctx, 'b-child'),
+                        ),
+                      )
+                      .ignore();
+                  return 2;
+                }
+                return waitForLock(ctx, 'b');
+              },
+            );
+            final third = Job.deferred<int>(key: 'c', (ctx) async {
+              await ctx.abandonable(() => delay(60000));
+              return 3;
+            });
+            final parent = Job<List<int>>(
+              (ctx) => ctx.runAll([
+                holder,
+                waiter,
+                if (name.contains('third branch')) third,
+              ]),
+            )..ignoreFailure();
+            async.elapse(const Duration(seconds: 1));
+            expect(parent.isFinished, isFalse, reason: 'hung before: $name');
+            if (name.startsWith('parent')) {
+              parent.cancel().ignore();
+            } else if (name.startsWith('b')) {
+              waiter.cancel().ignore();
+            } else {
+              holder.cancel().ignore();
+            }
+            async.elapse(const Duration(seconds: 1));
+            expect(parent.isFinished, untied, reason: name);
+            expect(
+              trace.contains('a releases'),
+              untied,
+              reason: 'the lock goes back only when the group unties: $name',
+            );
           });
-          final parent = Job<List<int>>(
-            (ctx) => ctx.runAll([
-              holder,
-              waiter,
-              if (name.contains('third branch')) third,
-            ]),
-          )..ignoreFailure();
-          async.elapse(const Duration(seconds: 1));
-          expect(parent.isFinished, isFalse, reason: 'hung before: $name');
-          if (name.startsWith('parent')) {
-            parent.cancel().ignore();
-          } else if (name.startsWith('b')) {
-            waiter.cancel().ignore();
-          } else {
-            holder.cancel().ignore();
-          }
-          async.elapse(const Duration(seconds: 1));
-          expect(parent.isFinished, untied, reason: name);
-          expect(
-            trace.contains('a releases'),
-            untied,
-            reason: 'the lock goes back only when the group unties: $name',
-          );
         });
-      });
-    }
-  });
+      }
+    },
+  );
 
   for (final form in ['child of the branch', '.wait']) {
     test(
-        'a lock two branches share is free in a child of each, or under .wait, '
-        'form: $form', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final lock = SharedSlots(trace);
-        Future<int> underLock(JobContext ctx, String name) async {
-          await ctx.join(
-            () => lock.acquire(name),
-            dispose: (_) => lock.release(name),
-          );
-          await ctx.abandonable(() => delay(10));
-          return 1;
-        }
+      'a lock two branches share is free in a child of each, or under .wait, '
+      'form: $form',
+      () {
+        fakeAsync((async) {
+          final trace = <String>[];
+          final lock = SharedSlots(trace);
+          Future<int> underLock(JobContext ctx, String name) async {
+            await ctx.join(
+              () => lock.acquire(name),
+              dispose: (_) => lock.release(name),
+            );
+            await ctx.abandonable(() => delay(10));
+            return 1;
+          }
 
-        ChildJob<int> branch(String name) => form == '.wait'
-            ? Job.deferred<int>(key: name, (ctx) => underLock(ctx, name))
-            : Job.deferred<int>(
-                key: name,
-                (ctx) => ctx.run(
-                  Job.deferred<int>((ctx) => underLock(ctx, name)),
-                ),
-              );
-        final parent = Job<List<int>>(
-          (ctx) => form == '.wait'
-              ? [ctx.run(branch('a')), ctx.run(branch('b'))].wait
-              : ctx.runAll([branch('a'), branch('b')]),
-        )..ignoreFailure();
-        async.flushTimers();
-        expect(parent.outcome, isA<Done<List<int>>>(), reason: form);
-        expect(
-          trace,
-          ['a holds', 'b waits', 'a releases', 'b holds', 'b releases'],
-          reason: form,
-        );
-      });
-    });
+          ChildJob<int> branch(String name) => form == '.wait'
+              ? Job.deferred<int>(key: name, (ctx) => underLock(ctx, name))
+              : Job.deferred<int>(
+                  key: name,
+                  (ctx) =>
+                      ctx.run(Job.deferred<int>((ctx) => underLock(ctx, name))),
+                );
+          final parent = Job<List<int>>(
+            (ctx) => form == '.wait'
+                ? [ctx.run(branch('a')), ctx.run(branch('b'))].wait
+                : ctx.runAll([branch('a'), branch('b')]),
+          )..ignoreFailure();
+          async.flushTimers();
+          expect(parent.outcome, isA<Done<List<int>>>(), reason: form);
+          expect(trace, [
+            'a holds',
+            'b waits',
+            'a releases',
+            'b holds',
+            'b releases',
+          ], reason: form);
+        });
+      },
+    );
   }
 
   group('a branch awaiting a sibling hangs until the group can decide', () {
@@ -2770,11 +2710,14 @@ final parent = Job<void>((ctx) async {
           false,
       'parent; b waits through ctx.abandonable inside ctx.uncancellable': false,
       'parent; b awaits a.value bare, a third branch waits through '
-          'ctx.abandonable': true,
+              'ctx.abandonable':
+          true,
       'c fails; b awaits a.value bare, a third branch waits through '
-          'ctx.abandonable': true,
+              'ctx.abandonable':
+          true,
       'c itself; b awaits a.value bare, a third branch waits through '
-          'ctx.abandonable': true,
+              'ctx.abandonable':
+          true,
       'b itself; b awaits a.value bare': false,
       'b itself; b waits for a.value through ctx.abandonable': true,
       'a itself; b waits for a.value through ctx.abandonable': false,
@@ -2844,25 +2787,26 @@ final parent = Job<void>((ctx) async {
 
   // An engine may end a branch by hand wherever it stands. The group must
   // count such a branch as done at either barrier, or it waits for good.
-  test('a branch an engine ends with a value in its body does not hang',
-      () async {
-    final slow = Completer<void>();
-    final branches = [
-      ProbeJob<int>((c) async {
-        await slow.future;
-        return 0;
-      }),
-      ProbeJob<int>((c) async => 1),
-    ];
-    final job = Job<List<int>>((ctx) => ctx.runAll(branches));
-    await _hops(5);
-    branches[0].drop(const Done(100));
-    slow.complete();
-    expect(await job.value.timeout(const Duration(seconds: 2)), [100, 1]);
-  });
-
   test(
-      'a branch an engine ends with a value at the first barrier does not '
+    'a branch an engine ends with a value in its body does not hang',
+    () async {
+      final slow = Completer<void>();
+      final branches = [
+        ProbeJob<int>((c) async {
+          await slow.future;
+          return 0;
+        }),
+        ProbeJob<int>((c) async => 1),
+      ];
+      final job = Job<List<int>>((ctx) => ctx.runAll(branches));
+      await _hops(5);
+      branches[0].drop(const Done(100));
+      slow.complete();
+      expect(await job.value.timeout(const Duration(seconds: 2)), [100, 1]);
+    },
+  );
+
+  test('a branch an engine ends with a value at the first barrier does not '
       'hang', () async {
     final slow = Completer<void>();
     final branches = [
@@ -2879,8 +2823,7 @@ final parent = Job<void>((ctx) async {
     expect(await job.value.timeout(const Duration(seconds: 2)), [100, 1]);
   });
 
-  test(
-      'a branch an engine ends at the second barrier no longer reads as '
+  test('a branch an engine ends at the second barrier no longer reads as '
       'disposing', () async {
     final slow = Completer<void>();
     late JobContext leaked;
@@ -2910,48 +2853,45 @@ final parent = Job<void>((ctx) async {
     expect(leaked.check, returnsNormally);
   });
 
-  test(
-    'branches that end one a turn are gathered in linear time',
-    () async {
-      // The group looks at the barriers of its branches each time one of them
-      // moves. Looked at from the first branch every time, the walk passes
-      // all the ones already there, and branches ending one a turn cost the
-      // square of their number. Measured on this test, 160 000 branches:
-      // about 24 s from the first branch; on from where the last look
-      // stopped, about 2 s alone and 3 s under the load of the whole suite.
-      // The bound sits between the two with room for a machine some times
-      // slower, as the runners of the gate are.
-      //
-      // The timeout of this file cannot guard this: the branches end in
-      // microtasks, one after another, and no timer of the runner gets a
-      // turn until the group is over. Hence a watch of our own, and a timeout
-      // of its own that leaves the verdict to it.
-      const count = 160000;
-      final turns = [for (var i = 0; i <= count; i++) Completer<void>()];
-      final watch = Stopwatch()..start();
-      final job = Job<List<int>>(
-        (ctx) => ctx.runAll([
-          for (var i = 0; i < count; i++)
-            Job.deferred<int>((ctx) async {
-              await turns[i].future;
-              turns[i + 1].complete();
-              return i;
-            }),
-        ]),
-      );
-      turns.first.complete();
-      final values = await job.value;
-      watch.stop();
-      expect(values, [for (var i = 0; i < count; i++) i]);
-      expect(
-        watch.elapsedMilliseconds,
-        lessThan(14000),
-        reason: 'a look at the barriers goes on from where the last one '
-            'stopped',
-      );
-    },
-    timeout: const Timeout(Duration(minutes: 1)),
-  );
+  test('branches that end one a turn are gathered in linear time', () async {
+    // The group looks at the barriers of its branches each time one of them
+    // moves. Looked at from the first branch every time, the walk passes
+    // all the ones already there, and branches ending one a turn cost the
+    // square of their number. Measured on this test, 160 000 branches:
+    // about 24 s from the first branch; on from where the last look
+    // stopped, about 2 s alone and 3 s under the load of the whole suite.
+    // The bound sits between the two with room for a machine some times
+    // slower, as the runners of the gate are.
+    //
+    // The timeout of this file cannot guard this: the branches end in
+    // microtasks, one after another, and no timer of the runner gets a
+    // turn until the group is over. Hence a watch of our own, and a timeout
+    // of its own that leaves the verdict to it.
+    const count = 160000;
+    final turns = [for (var i = 0; i <= count; i++) Completer<void>()];
+    final watch = Stopwatch()..start();
+    final job = Job<List<int>>(
+      (ctx) => ctx.runAll([
+        for (var i = 0; i < count; i++)
+          Job.deferred<int>((ctx) async {
+            await turns[i].future;
+            turns[i + 1].complete();
+            return i;
+          }),
+      ]),
+    );
+    turns.first.complete();
+    final values = await job.value;
+    watch.stop();
+    expect(values, [for (var i = 0; i < count; i++) i]);
+    expect(
+      watch.elapsedMilliseconds,
+      lessThan(14000),
+      reason:
+          'a look at the barriers goes on from where the last one '
+          'stopped',
+    );
+  }, timeout: const Timeout(Duration(minutes: 1)));
 
   // Last: the tests of a file share the isolate, and a filter left behind
   // would silence the failures of every test after it.

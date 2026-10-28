@@ -32,10 +32,10 @@ final class Ready extends CameraState {
   const Ready({this.free = 8, this.paused = false, this.zoom = 1});
 
   Ready copyWith({int? free, bool? paused, int? zoom}) => Ready(
-        free: free ?? this.free,
-        paused: paused ?? this.paused,
-        zoom: zoom ?? this.zoom,
-      );
+    free: free ?? this.free,
+    paused: paused ?? this.paused,
+    zoom: zoom ?? this.zoom,
+  );
 
   @override
   String toString() => 'Ready(free: $free, paused: $paused, zoom: $zoom)';

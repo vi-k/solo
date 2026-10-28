@@ -67,75 +67,67 @@ final class _Any extends Solo<Object> {
   /// context.
   Job<String> afterLeavingW(
     FutureOr<void> Function(SoloContext<Object, String> ctx) step,
-  ) =>
-      enqueue<String, String>((ctx) async {
-        ctx.emit(42);
-        await step(ctx);
-        return 'went on';
-      });
+  ) => enqueue<String, String>((ctx) async {
+    ctx.emit(42);
+    await step(ctx);
+    return 'went on';
+  });
 
   /// Leaves `W` with its last step.
   Job<String> leavesWLast() => enqueue<String, String>(
-        canStart: (state) {
-          canStartAsked++;
-          return true;
-        },
-        (ctx) async {
-          ctx.emit(42);
-          return 'done';
-        },
-      );
+    canStart: (state) {
+      canStartAsked++;
+      return true;
+    },
+    (ctx) async {
+      ctx.emit(42);
+      return 'done';
+    },
+  );
 
   Job<int> readsAsInt() =>
       enqueue<Object, int>((ctx) async => ctx.stateAs<int>());
 
   /// Waits on a plain `await`, where nothing is checked.
-  Job<String> plainAwait(Completer<void> gate) => enqueue<String, String>(
-        keepWhile: _notBlocked,
-        (ctx) async {
-          await gate.future;
-          trace.add('walked on, cancelled: ${ctx.job.isCancelled}');
-          return 'done';
-        },
-      );
+  Job<String> plainAwait(Completer<void> gate) =>
+      enqueue<String, String>(keepWhile: _notBlocked, (ctx) async {
+        await gate.future;
+        trace.add('walked on, cancelled: ${ctx.job.isCancelled}');
+        return 'done';
+      });
 
   /// Comes back from an uncancellable section, then asks.
-  Job<String> section(Completer<void> gate) => enqueue<String, String>(
-        keepWhile: _notBlocked,
-        (ctx) async {
-          await ctx.uncancellable(() => gate.future);
-          trace.add('the section returned, cancelled: ${ctx.job.isCancelled}');
-          ctx.check();
-          trace.add('past the check');
-          return 'done';
-        },
-      );
+  Job<String> section(Completer<void> gate) =>
+      enqueue<String, String>(keepWhile: _notBlocked, (ctx) async {
+        await ctx.uncancellable(() => gate.future);
+        trace.add('the section returned, cancelled: ${ctx.job.isCancelled}');
+        ctx.check();
+        trace.add('past the check');
+        return 'done';
+      });
 
   /// Publishes `'preparing'`, which [onChange] may correct on the spot.
   Job<String> initialize() => enqueue<String, String>(
-        keepWhile: (state) => state != 'working',
-        (ctx) async {
-          try {
-            ctx.emit('preparing');
-          } on Cancelled catch (cancelled) {
-            trace.add('emit threw $cancelled over $currentState');
-            rethrow;
-          }
-          return 'went on';
-        },
-      );
+    keepWhile: (state) => state != 'working',
+    (ctx) async {
+      try {
+        ctx.emit('preparing');
+      } on Cancelled catch (cancelled) {
+        trace.add('emit threw $cancelled over $currentState');
+        rethrow;
+      }
+      return 'went on';
+    },
+  );
 
   /// Ends its body at once and leaves a child and a cleanup behind.
   Job<String> endsEarly(Completer<void> child, Completer<void> cleanup) =>
-      enqueue<String, String>(
-        keepWhile: _notBlocked,
-        (ctx) async {
-          ctx
-            ..run(job<Object, void>((c) => child.future)).ignore()
-            ..onDispose(() => cleanup.future);
-          return 'body ended';
-        },
-      );
+      enqueue<String, String>(keepWhile: _notBlocked, (ctx) async {
+        ctx
+          ..run(job<Object, void>((c) => child.future)).ignore()
+          ..onDispose(() => cleanup.future);
+        return 'body ended';
+      });
 
   /// A parent whose [child] ends its body at once and leaves a cleanup
   /// behind.
@@ -151,81 +143,76 @@ final class _Any extends Solo<Object> {
 
   /// Watches the state until [gate] opens.
   Job<void> watch(Completer<void> gate) => enqueue<String, void>(
-        keepWhile: _notBlocked,
-        (ctx) => ctx.abandonable(() => gate.future),
-      );
+    keepWhile: _notBlocked,
+    (ctx) => ctx.abandonable(() => gate.future),
+  );
 
   /// A parent whose child writes `'blocked'` while the parent waits on a
   /// plain `await`, where nothing is checked. The child is one of `each`:
   /// `run` would check the parent itself once the child's value arrived.
-  Job<String> parentOfWriter(Completer<void> gate) => enqueue<String, String>(
-        keepWhile: _notBlocked,
-        (ctx) async {
-          ctx.each(Stream.value(1), (child, _) => child.emit('blocked'));
-          await gate.future;
-          return 'went on';
-        },
-      );
+  Job<String> parentOfWriter(Completer<void> gate) =>
+      enqueue<String, String>(keepWhile: _notBlocked, (ctx) async {
+        ctx.each(Stream.value(1), (child, _) => child.emit('blocked'));
+        await gate.future;
+        return 'went on';
+      });
 
   /// Writes `'blocked'` itself and goes on without a checkpoint.
-  Job<String> writesItself() => enqueue<String, String>(
-        keepWhile: _notBlocked,
-        (ctx) async {
-          ctx.emit('blocked');
-          return 'went on';
-        },
-      );
+  Job<String> writesItself() =>
+      enqueue<String, String>(keepWhile: _notBlocked, (ctx) async {
+        ctx.emit('blocked');
+        return 'went on';
+      });
 
   /// The `catch` of the first attempt, saying what its `emit` did.
-  Job<void> emitsInCatch(Completer<void> gate) => enqueue<Object, void>(
-        (ctx) async {
+  Job<void> emitsInCatch(Completer<void> gate) =>
+      enqueue<Object, void>((ctx) async {
+        try {
+          await ctx.abandonable(() => gate.future);
+        } on Object {
+          trace.add('the catch ran');
           try {
-            await ctx.abandonable(() => gate.future);
-          } on Object {
-            trace.add('the catch ran');
-            try {
-              ctx.emit('written by the catch');
-            } on Cancelled catch (cancelled) {
-              trace.add('emit threw $cancelled');
-            }
-            rethrow;
+            ctx.emit('written by the catch');
+          } on Cancelled catch (cancelled) {
+            trace.add('emit threw $cancelled');
           }
-        },
-      );
+          rethrow;
+        }
+      });
 
   /// Fails with a child still running and a cleanup registered.
   Job<void> failsLeavingWork() => enqueue<Object, void>(
-        key: 'first',
-        ifFailed: (state, error, stackTrace) {
-          trace.add('ifFailed: state $state, $error, ${current?.outcome}');
-          return 'corrected';
-        },
-        (ctx) async {
-          ctx
-            ..each(
-              Stream<int>.fromFuture(
-                Future<int>.delayed(const Duration(milliseconds: 10), () => 1),
-              ),
-              (child, event) => trace.add('child'),
-            )
-            ..onDispose(() => trace.add('cleanup'));
-          trace.add('body');
-          throw StateError('boom');
-        },
-      );
+    key: 'first',
+    ifFailed: (state, error, stackTrace) {
+      trace.add('ifFailed: state $state, $error, ${current?.outcome}');
+      return 'corrected';
+    },
+    (ctx) async {
+      ctx
+        ..each(
+          Stream<int>.fromFuture(
+            Future<int>.delayed(const Duration(milliseconds: 10), () => 1),
+          ),
+          (child, event) => trace.add('child'),
+        )
+        ..onDispose(() => trace.add('cleanup'));
+      trace.add('body');
+      throw StateError('boom');
+    },
+  );
 
   Job<void> cancelledWithHandler(Completer<void> gate) => enqueue<Object, void>(
-        ifCancelled: (state, cancelled) {
-          trace.add('ifCancelled: state $state, $cancelled');
-          return 'corrected';
-        },
-        (ctx) => ctx.abandonable(() => gate.future),
-      );
+    ifCancelled: (state, cancelled) {
+      trace.add('ifCancelled: state $state, $cancelled');
+      return 'corrected';
+    },
+    (ctx) => ctx.abandonable(() => gate.future),
+  );
 
   Job<void> next() => enqueue<Object, void>(
-        key: 'next',
-        (ctx) async => trace.add('the next job in $currentState'),
-      );
+    key: 'next',
+    (ctx) async => trace.add('the next job in $currentState'),
+  );
 }
 
 /// [_Any] with a report of its own for a listener that throws.
@@ -275,7 +262,7 @@ final class _Order extends Solo<String> {
   var _inNestedWrite = false;
 
   _Order({this.keep = _keepAll, this.blockOnC = false, this.corrects = false})
-      : super('A') {
+    : super('A') {
     addListener(() {
       final seen = currentState;
       trace.add('    listeners of $seen');
@@ -299,16 +286,16 @@ final class _Order extends Solo<String> {
   void set(String next) => externalSetState(next);
 
   Job<void> watch() => enqueue<String, void>(
-        keepWhile: (state) {
-          final indent = _inNestedWrite ? ' ' * 12 : ' ' * 4;
-          trace.add('${indent}rules, against $state');
-          final kept = keep(this, state);
-          answers.add('$state: ${kept ? 'keep' : 'reject'}');
-          return kept;
-        },
-        ifCancelled: corrects ? (state, cancelled) => 'corrected' : null,
-        (ctx) => ctx.abandonable(() => Completer<void>().future),
-      );
+    keepWhile: (state) {
+      final indent = _inNestedWrite ? ' ' * 12 : ' ' * 4;
+      trace.add('${indent}rules, against $state');
+      final kept = keep(this, state);
+      answers.add('$state: ${kept ? 'keep' : 'reject'}');
+      return kept;
+    },
+    ifCancelled: corrects ? (state, cancelled) => 'corrected' : null,
+    (ctx) => ctx.abandonable(() => Completer<void>().future),
+  );
 }
 
 /// The page's `Logged` over numbers, with a way to write and a job to
@@ -319,9 +306,9 @@ final class _LoggedNumbers extends page.Logged<int> {
   void set(int value) => externalSetState(value);
 
   Job<void> watch() => enqueue<int, void>(
-        keepWhile: (state) => state < 5,
-        (ctx) => ctx.abandonable(() => Completer<void>().future),
-      );
+    keepWhile: (state) => state < 5,
+    (ctx) => ctx.abandonable(() => Completer<void>().future),
+  );
 }
 
 /// A delivery that lets its failure out, against the advice of the page.
@@ -366,31 +353,30 @@ final class _Leaky extends Solo<int> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      trace.add('ifFailed: $error');
+  }) => trace.add('ifFailed: $error');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
       trace.add('onUnanswered: $error');
 
   Job<void> watch() => enqueue<int, void>(
-        keepWhile: (state) => state < 5,
-        (ctx) => ctx.abandonable(() => Completer<void>().future),
-      );
+    keepWhile: (state) => state < 5,
+    (ctx) => ctx.abandonable(() => Completer<void>().future),
+  );
 
   Job<String> emitter() => enqueue<int, String>((ctx) async {
-        try {
-          ctx.emit(3);
-          return 'emit returned';
-        } on Object catch (error) {
-          return 'emit threw: $error';
-        }
-      });
+    try {
+      ctx.emit(3);
+      return 'emit returned';
+    } on Object catch (error) {
+      return 'emit threw: $error';
+    }
+  });
 
   Job<void> corrected(Completer<void> gate) => enqueue<int, void>(
-        ifCancelled: (state, cancelled) => 4,
-        (ctx) => ctx.abandonable(() => gate.future),
-      );
+    ifCancelled: (state, cancelled) => 4,
+    (ctx) => ctx.abandonable(() => gate.future),
+  );
 
   /// A job its rules keep while the state is under 5, and a child of it
   /// that writes 9, keeps in [heard] what its `emit` and the checkpoint
@@ -400,37 +386,34 @@ final class _Leaky extends Solo<int> {
   /// rules itself, and so does the end of a child the parent ran, and a job
   /// cancelled there would hide whether the write asked them.
   Job<void> watchWhileChildWrites(List<String> heard, Completer<void> gate) =>
-      enqueue<int, void>(
-        keepWhile: (state) => state < 5,
-        (ctx) async {
-          ctx.run(
-            job<int, void>((ctx) async {
-              try {
-                ctx.emit(9);
-              } on Object catch (error) {
-                heard.add('emit threw: $error');
-              }
-              try {
-                ctx.check();
-              } on Cancelled catch (cancelled) {
-                heard.add('check threw: $cancelled');
-              }
-              await gate.future;
-            }),
-          ).ignore();
-          await gate.future;
-        },
-      );
+      enqueue<int, void>(keepWhile: (state) => state < 5, (ctx) async {
+        ctx
+            .run(
+              job<int, void>((ctx) async {
+                try {
+                  ctx.emit(9);
+                } on Object catch (error) {
+                  heard.add('emit threw: $error');
+                }
+                try {
+                  ctx.check();
+                } on Cancelled catch (cancelled) {
+                  heard.add('check threw: $cancelled');
+                }
+                await gate.future;
+              }),
+            )
+            .ignore();
+        await gate.future;
+      });
 
   /// A job its rules keep while the state is under 5, that logs once and
   /// waits for [gate] without a checkpoint after the message.
-  Job<void> logWhileUnder5(Completer<void> gate) => enqueue<int, void>(
-        keepWhile: (state) => state < 5,
-        (ctx) async {
-          ctx.log('hello');
-          await gate.future;
-        },
-      );
+  Job<void> logWhileUnder5(Completer<void> gate) =>
+      enqueue<int, void>(keepWhile: (state) => state < 5, (ctx) async {
+        ctx.log('hello');
+        await gate.future;
+      });
 
   /// A job its rules keep while the state is under 5, and a child of it
   /// whose state handler answers a cancellation with `9`. Returns both.
@@ -442,13 +425,12 @@ final class _Leaky extends Solo<int> {
       ifCancelled: (state, cancelled) => 9,
       (ctx) => ctx.abandonable(() => gate.future),
     );
-    final parent = enqueue<int, void>(
-      keepWhile: (state) => state < 5,
-      (ctx) async {
-        ctx.run(child).ignore();
-        await gate.future;
-      },
-    );
+    final parent = enqueue<int, void>(keepWhile: (state) => state < 5, (
+      ctx,
+    ) async {
+      ctx.run(child).ignore();
+      await gate.future;
+    });
     return (parent, child);
   }
 
@@ -456,9 +438,9 @@ final class _Leaky extends Solo<int> {
   /// [depth] children, each run by the one above it. [bottom] completes
   /// once the last of them has started.
   Job<void> deep(int depth, Completer<void> bottom) => enqueue<int, void>(
-        keepWhile: (state) => state < 5,
-        (ctx) => _down(ctx, depth, bottom),
-      );
+    keepWhile: (state) => state < 5,
+    (ctx) => _down(ctx, depth, bottom),
+  );
 
   Future<void> _down(
     SoloContext<int, int> ctx,
@@ -531,8 +513,7 @@ final class _Eligible extends Solo<String> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      trace.add('onError of ${job.key}: $error');
+  }) => trace.add('onError of ${job.key}: $error');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -549,26 +530,25 @@ final class _Eligible extends Solo<String> {
     Completer<void> gate, {
     Completer<void>? child,
     Completer<void>? cleanup,
-  }) =>
-      enqueue<String, String>(
-        key: 'guarded',
-        keepWhile: _keep,
-        ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
-        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
-        (ctx) async {
-          if (child != null) {
-            ctx.run(job<String, void>((c) => child.future)).ignore();
-          }
-          if (cleanup != null) {
-            ctx.onDispose(() async {
-              await cleanup.future;
-              trace.add('cleanup ran');
-            });
-          }
-          await ctx.abandonable(() => gate.future);
-          return 'done';
-        },
-      );
+  }) => enqueue<String, String>(
+    key: 'guarded',
+    keepWhile: _keep,
+    ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
+    ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
+    (ctx) async {
+      if (child != null) {
+        ctx.run(job<String, void>((c) => child.future)).ignore();
+      }
+      if (cleanup != null) {
+        ctx.onDispose(() async {
+          await cleanup.future;
+          trace.add('cleanup ran');
+        });
+      }
+      await ctx.abandonable(() => gate.future);
+      return 'done';
+    },
+  );
 
   /// A parent with a rule; its child has a handler and no rule.
   Job<void> parent(Completer<void> gate, {bool handlers = false}) =>
@@ -591,48 +571,44 @@ final class _Eligible extends Solo<String> {
   /// A parent with a rule and a handler, whose child writes a state the
   /// rule turns down.
   Job<void> parentOfWriter() => enqueue<String, void>(
-        key: 'parent',
-        keepWhile: _keep,
-        ifCancelled: (state, cancelled) => 'parent corrected',
-        (ctx) async {
-          await ctx.run(
-            job<String, void>((c) async => c.emit('bad from the child')),
-          );
-          await ctx.abandonable(() => Completer<void>().future);
-        },
+    key: 'parent',
+    keepWhile: _keep,
+    ifCancelled: (state, cancelled) => 'parent corrected',
+    (ctx) async {
+      await ctx.run(
+        job<String, void>((c) async => c.emit('bad from the child')),
       );
+      await ctx.abandonable(() => Completer<void>().future);
+    },
+  );
 
   /// A parent that writes a state the rule of its child turns down; the
   /// child has a handler.
-  Job<void> writingParent() => enqueue<String, void>(
-        key: 'parent',
-        (ctx) async {
-          final watcher = _watcher();
-          final watching = ctx.run(watcher)..ignore();
-          await Future<void>.delayed(const Duration(milliseconds: 1));
-          ctx.emit('bad from the parent');
-          await watching.then<void>((_) {}, onError: (Object _) {});
-        },
-      );
+  Job<void> writingParent() =>
+      enqueue<String, void>(key: 'parent', (ctx) async {
+        final watcher = _watcher();
+        final watching = ctx.run(watcher)..ignore();
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+        ctx.emit('bad from the parent');
+        await watching.then<void>((_) {}, onError: (Object _) {});
+      });
 
   /// Two children: one writes a state the rule of the other turns down.
-  Job<void> writingSibling() => enqueue<String, void>(
-        key: 'parent',
-        (ctx) async {
-          final watching = ctx.run(_watcher())..ignore();
-          await ctx.run(
-            job<String, void>((c) async => c.emit('bad from the sibling')),
-          );
-          await watching.then<void>((_) {}, onError: (Object _) {});
-        },
-      );
+  Job<void> writingSibling() =>
+      enqueue<String, void>(key: 'parent', (ctx) async {
+        final watching = ctx.run(_watcher())..ignore();
+        await ctx.run(
+          job<String, void>((c) async => c.emit('bad from the sibling')),
+        );
+        await watching.then<void>((_) {}, onError: (Object _) {});
+      });
 
   SoloJob<void> _watcher() => watcher = job<String, void>(
-        key: 'watcher',
-        keepWhile: _keep,
-        ifCancelled: (state, cancelled) => 'watcher corrected',
-        (c) => c.abandonable(() => Completer<void>().future),
-      );
+    key: 'watcher',
+    keepWhile: _keep,
+    ifCancelled: (state, cancelled) => 'watcher corrected',
+    (c) => c.abandonable(() => Completer<void>().future),
+  );
 
   /// Writes a state its own rule turns down, waits on a plain `await`,
   /// then reads the state if [thenReads] and fails otherwise.
@@ -653,54 +629,54 @@ final class _Eligible extends Solo<String> {
   /// The rule and both handlers of [guarded], with a body that reads the
   /// state once [gate] opens.
   Job<String> readsAfter(Completer<void> gate) => enqueue<String, String>(
-        key: 'reader',
-        keepWhile: _keep,
-        ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
-        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
-        (ctx) async {
-          await gate.future;
-          return ctx.state;
-        },
-      );
+    key: 'reader',
+    keepWhile: _keep,
+    ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
+    ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
+    (ctx) async {
+      await gate.future;
+      return ctx.state;
+    },
+  );
 
   Job<void> stateAsMismatch() => enqueue<String, void>(
-        key: 'stateAs',
-        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
-        (ctx) async {
-          ctx
-            ..emit('loading')
-            ..stateAs<Never>();
-        },
-      );
+    key: 'stateAs',
+    ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
+    (ctx) async {
+      ctx
+        ..emit('loading')
+        ..stateAs<Never>();
+    },
+  );
 
   Job<void> handlerThrows(Completer<void> gate) => enqueue<String, void>(
-        key: 'thrower',
-        ifCancelled: (state, cancelled) => throw StateError('handler boom'),
-        (ctx) => ctx.abandonable(() => gate.future),
-      );
+    key: 'thrower',
+    ifCancelled: (state, cancelled) => throw StateError('handler boom'),
+    (ctx) => ctx.abandonable(() => gate.future),
+  );
 
   Job<void> next() => enqueue<String, void>(
-        key: 'next',
-        (ctx) async => trace.add('the next job ran in $currentState'),
-      );
+    key: 'next',
+    (ctx) async => trace.add('the next job ran in $currentState'),
+  );
 
   Job<String> droppable(Completer<void> gate) => enqueue<String, String>(
-        key: 'droppable',
-        policy: Policy.droppable,
-        ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
-        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
-        (ctx) async {
-          await ctx.abandonable(() => gate.future);
-          return 'done';
-        },
-      );
+    key: 'droppable',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
+    ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
+    (ctx) async {
+      await ctx.abandonable(() => gate.future);
+      return 'done';
+    },
+  );
 
   Job<String> refused() => enqueue<String, String>(
-        key: 'refused',
-        canStart: (state) => false,
-        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
-        (ctx) async => 'done',
-      );
+    key: 'refused',
+    canStart: (state) => false,
+    ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
+    (ctx) async => 'done',
+  );
 
   /// A handler that writes a fact itself before it returns its result.
   Job<void> writesFromHandler(Completer<void> gate, {required bool rule}) =>
@@ -719,9 +695,9 @@ String _page() => File('doc/state.md').readAsStringSync();
 
 /// The outcome of [job], with `started` where it is a cancellation.
 String _ended(Job<Object?> job) => switch (job.outcome) {
-      final Cancelled cancelled => '$cancelled, started: ${cancelled.started}',
-      final outcome => '$outcome',
-    };
+  final Cancelled cancelled => '$cancelled, started: ${cancelled.started}',
+  final outcome => '$outcome',
+};
 
 /// Runs [body] under fake time in a zone of its own and returns what
 /// reached that zone uncaught. Expectations go after the call: inside the
@@ -739,54 +715,56 @@ void main() {
   setUp(() => camera.stage = camera.Stage());
 
   group('State and rules', () {
-    test('the first attempt stores on after the pause, and holds the close',
-        () {
-      fakeAsync((async) {
-        final device = camera.Device();
-        final cam = first.Camera(device);
-        final job = cam.record();
-        async.flushMicrotasks();
-        device.frame(1);
-        async.flushMicrotasks();
-        cam.reflect(const camera.Ready(paused: true));
-        device
-          ..frame(2)
-          ..frame(3);
-        async.flushMicrotasks();
+    test(
+      'the first attempt stores on after the pause, and holds the close',
+      () {
+        fakeAsync((async) {
+          final device = camera.Device();
+          final cam = first.Camera(device);
+          final job = cam.record();
+          async.flushMicrotasks();
+          device.frame(1);
+          async.flushMicrotasks();
+          cam.reflect(const camera.Ready(paused: true));
+          device
+            ..frame(2)
+            ..frame(3);
+          async.flushMicrotasks();
 
-        expect(
-          camera.stage.trace,
-          [
+          expect(camera.stage.trace, [
             'store 1 begins',
             'store 1 ends',
             'store 2 begins',
             'store 2 ends',
             'store 3 begins',
             'store 3 ends',
-          ],
-          reason: 'the check does not come back',
-        );
-        expect(job.isCancelled, isFalse);
-        expect(job.isFinished, isFalse, reason: 'and the job does not end');
+          ], reason: 'the check does not come back');
+          expect(job.isCancelled, isFalse);
+          expect(job.isFinished, isFalse, reason: 'and the job does not end');
 
-        // `await for` is no checkpoint: the body never hears the
-        // cancellation `close` sends it.
-        var closed = false;
-        cam.close().then((_) => closed = true);
-        async.flushMicrotasks();
-        expect(job.isCancelled, isTrue);
-        expect(closed, isFalse, reason: 'close waits for a body that goes on');
-        device.frame(4);
-        async.flushMicrotasks();
-        expect(camera.stage.trace.last, 'store 4 ends');
+          // `await for` is no checkpoint: the body never hears the
+          // cancellation `close` sends it.
+          var closed = false;
+          cam.close().then((_) => closed = true);
+          async.flushMicrotasks();
+          expect(job.isCancelled, isTrue);
+          expect(
+            closed,
+            isFalse,
+            reason: 'close waits for a body that goes on',
+          );
+          device.frame(4);
+          async.flushMicrotasks();
+          expect(camera.stage.trace.last, 'store 4 ends');
 
-        device.endFrames();
-        async.flushMicrotasks();
-        expect(closed, isTrue, reason: 'only the stream ending lets it go');
-        expect(_ended(job), 'Cancelled(closed), started: true');
-        device.dispose();
-      });
-    });
+          device.endFrames();
+          async.flushMicrotasks();
+          expect(closed, isTrue, reason: 'only the stream ending lets it go');
+          expect(_ended(job), 'Cancelled(closed), started: true');
+          device.dispose();
+        });
+      },
+    );
 
     test('the rules stop the recording when the device reports the pause', () {
       fakeAsync((async) {
@@ -953,87 +931,97 @@ void main() {
         final job = cam.zoomIn();
         async.flushMicrotasks();
         expect('${job.outcome}', 'Done(null)');
-        expect(
-          '${cam.currentState}',
-          'Ready(free: 3, paused: false, zoom: 5)',
-        );
+        expect('${cam.currentState}', 'Ready(free: 3, paused: false, zoom: 5)');
         cam.close().ignore();
         device.dispose();
         async.flushTimers();
       });
     });
 
-    test('switchOn reads Ready again and keeps what changed during the wait',
-        () {
-      fakeAsync((async) {
-        final device = camera.Device();
-        final cam = page.Camera(device)..reflect(const camera.Off());
-        final job = cam.switchOn(3);
-        async
-          ..flushMicrotasks()
-          ..elapse(const Duration(milliseconds: 20));
-        expect('${cam.currentState}', 'Ready(free: 8, paused: false, zoom: 1)');
-
-        cam.reflect(const camera.Ready(free: 2));
-        async.elapse(const Duration(milliseconds: 40));
-        expect(camera.stage.trace, [
-          'power up begins',
-          'power up ends',
-          'zoom 3 begins',
-          'zoom 3 ends',
-        ]);
-        expect('${job.outcome}', 'Done(null)');
-        expect('${cam.currentState}', 'Ready(free: 2, paused: false, zoom: 3)');
-        cam.close().ignore();
-        device.dispose();
-        async.flushTimers();
-      });
-    });
-
-    test('switchOn ends Cancelled(rules) when the device drops at either wait',
-        () {
-      fakeAsync((async) {
-        // When the drop comes, and the step whose read ends the job.
-        const drops = {5: 'Off', 20: 'Ready'};
-        for (final MapEntry(key: ms, value: needed) in drops.entries) {
-          final at = Duration(milliseconds: ms);
-          camera.stage = camera.Stage();
+    test(
+      'switchOn reads Ready again and keeps what changed during the wait',
+      () {
+        fakeAsync((async) {
           final device = camera.Device();
           final cam = page.Camera(device)..reflect(const camera.Off());
           final job = cam.switchOn(3);
           async
             ..flushMicrotasks()
-            ..elapse(at);
+            ..elapse(const Duration(milliseconds: 20));
+          expect(
+            '${cam.currentState}',
+            'Ready(free: 8, paused: false, zoom: 1)',
+          );
 
-          device.drop();
-          async.flushMicrotasks();
+          cam.reflect(const camera.Ready(free: 2));
+          async.elapse(const Duration(milliseconds: 40));
+          expect(camera.stage.trace, [
+            'power up begins',
+            'power up ends',
+            'zoom 3 begins',
+            'zoom 3 ends',
+          ]);
+          expect('${job.outcome}', 'Done(null)');
           expect(
-            job.isCancelled,
-            isFalse,
-            reason: 'W is CameraState: the drop breaks no rule of the job',
-          );
-          async.elapse(const Duration(milliseconds: 60));
-          expect(
-            _ended(job),
-            'Cancelled(rules: is not $needed), started: true',
-            reason: 'a drop after $at',
-          );
-          expect((job.outcome! as Cancelled).reason, isA<RulesCancelReason>());
-          expect(
-            cam.currentState,
-            isA<camera.Disconnected>(),
-            reason: 'no Ready over a camera that is gone',
-          );
-          expect(
-            camera.stage.trace.contains('zoom 3 begins'),
-            needed == 'Ready',
+            '${cam.currentState}',
+            'Ready(free: 2, paused: false, zoom: 3)',
           );
           cam.close().ignore();
           device.dispose();
           async.flushTimers();
-        }
-      });
-    });
+        });
+      },
+    );
+
+    test(
+      'switchOn ends Cancelled(rules) when the device drops at either wait',
+      () {
+        fakeAsync((async) {
+          // When the drop comes, and the step whose read ends the job.
+          const drops = {5: 'Off', 20: 'Ready'};
+          for (final MapEntry(key: ms, value: needed) in drops.entries) {
+            final at = Duration(milliseconds: ms);
+            camera.stage = camera.Stage();
+            final device = camera.Device();
+            final cam = page.Camera(device)..reflect(const camera.Off());
+            final job = cam.switchOn(3);
+            async
+              ..flushMicrotasks()
+              ..elapse(at);
+
+            device.drop();
+            async.flushMicrotasks();
+            expect(
+              job.isCancelled,
+              isFalse,
+              reason: 'W is CameraState: the drop breaks no rule of the job',
+            );
+            async.elapse(const Duration(milliseconds: 60));
+            expect(
+              _ended(job),
+              'Cancelled(rules: is not $needed), started: true',
+              reason: 'a drop after $at',
+            );
+            expect(
+              (job.outcome! as Cancelled).reason,
+              isA<RulesCancelReason>(),
+            );
+            expect(
+              cam.currentState,
+              isA<camera.Disconnected>(),
+              reason: 'no Ready over a camera that is gone',
+            );
+            expect(
+              camera.stage.trace.contains('zoom 3 begins'),
+              needed == 'Ready',
+            );
+            cam.close().ignore();
+            device.dispose();
+            async.flushTimers();
+          }
+        });
+      },
+    );
 
     test('switchOn is refused unless the camera is off', () {
       fakeAsync((async) {
@@ -1054,21 +1042,21 @@ void main() {
       Future<void> action() async => started++;
       final giveUp =
           <String, FutureOr<void> Function(SoloContext<Object, String>)>{
-        'state': (ctx) => ctx.state,
-        'stateAs': (ctx) => ctx.stateAs<String>(),
-        'check': (ctx) => ctx.check(),
-        'abandonable': (ctx) => ctx.abandonable(action),
-        'join': (ctx) => ctx.join(action),
-        'uncancellable': (ctx) => ctx.uncancellable(action),
-        'pause': (ctx) => ctx.pause(),
-      };
+            'state': (ctx) => ctx.state,
+            'stateAs': (ctx) => ctx.stateAs<String>(),
+            'check': (ctx) => ctx.check(),
+            'abandonable': (ctx) => ctx.abandonable(action),
+            'join': (ctx) => ctx.join(action),
+            'uncancellable': (ctx) => ctx.uncancellable(action),
+            'pause': (ctx) => ctx.pause(),
+          };
       final goOn =
           <String, FutureOr<void> Function(SoloContext<Object, String>)>{
-        'emit': (ctx) => ctx.emit(43),
-        'log': (ctx) => ctx.log('a line'),
-        'onDispose': (ctx) => ctx.onDispose(() {}),
-        'a plain await': (ctx) => Future<void>.delayed(Duration.zero),
-      };
+            'emit': (ctx) => ctx.emit(43),
+            'log': (ctx) => ctx.log('a line'),
+            'onDispose': (ctx) => ctx.onDispose(() {}),
+            'a plain await': (ctx) => Future<void>.delayed(Duration.zero),
+          };
       fakeAsync((async) {
         for (final MapEntry(key: member, value: step) in giveUp.entries) {
           final any = _Any();
@@ -1094,19 +1082,21 @@ void main() {
       });
     });
 
-    test('an emit outside W as the last step ends Done, canStart not asked',
-        () {
-      fakeAsync((async) {
-        final any = _Any();
-        final job = any.leavesWLast();
-        async.flushTimers();
-        expect('${job.outcome}', 'Done(done)');
-        expect(any.currentState, 42);
-        expect(any.canStartAsked, 1);
-        any.close().ignore();
-        async.flushTimers();
-      });
-    });
+    test(
+      'an emit outside W as the last step ends Done, canStart not asked',
+      () {
+        fakeAsync((async) {
+          final any = _Any();
+          final job = any.leavesWLast();
+          async.flushTimers();
+          expect('${job.outcome}', 'Done(done)');
+          expect(any.currentState, 42);
+          expect(any.canStartAsked, 1);
+          any.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('a stateAs mismatch cancels the job by the rules', () {
       fakeAsync((async) {
@@ -1171,11 +1161,9 @@ void main() {
         final job = any.initialize();
         async.flushTimers();
 
-        expect(
-          any.trace,
-          ['emit threw Cancelled(rules: keepWhile) over working'],
-          reason: 'the emit wrote, and then threw the cancellation',
-        );
+        expect(any.trace, [
+          'emit threw Cancelled(rules: keepWhile) over working',
+        ], reason: 'the emit wrote, and then threw the cancellation');
         expect(_ended(job), 'Cancelled(rules: keepWhile), started: true');
 
         final plain = _Any();
@@ -1253,55 +1241,58 @@ void main() {
   });
 
   group('Observing state', () {
-    test('the block prints the read, each change at once, each event later',
-        () {
-      final lines = <String>[];
-      runZoned(
-        () => fakeAsync((async) {
-          final device = camera.Device();
-          final cam = page.Camera(device)..reflect(const camera.Ready(zoom: 2));
-          async.flushMicrotasks();
+    test(
+      'the block prints the read, each change at once, each event later',
+      () {
+        final lines = <String>[];
+        runZoned(
+          () => fakeAsync((async) {
+            final device = camera.Device();
+            final cam = page.Camera(device)
+              ..reflect(const camera.Ready(zoom: 2));
+            async.flushMicrotasks();
 
-          final subscription = page.observing(cam);
-          async.flushMicrotasks();
-          lines.add('subscribed, nothing replayed');
+            final subscription = page.observing(cam);
+            async.flushMicrotasks();
+            lines.add('subscribed, nothing replayed');
 
-          cam.reflect(const camera.Ready(zoom: 3));
-          lines.add('the next line of the writer');
-          async.flushMicrotasks();
+            cam.reflect(const camera.Ready(zoom: 3));
+            lines.add('the next line of the writer');
+            async.flushMicrotasks();
 
-          cam.reflect(const camera.Ready(zoom: 3));
-          lines.add('the next line of the writer');
-          cam.reflect(const camera.Ready(zoom: 4));
-          lines.add('the next line of the writer');
-          async.flushMicrotasks();
+            cam.reflect(const camera.Ready(zoom: 3));
+            lines.add('the next line of the writer');
+            cam.reflect(const camera.Ready(zoom: 4));
+            lines.add('the next line of the writer');
+            async.flushMicrotasks();
 
-          subscription.cancel().ignore();
-          cam.close().ignore();
-          device.dispose();
-          async.flushTimers();
-        }),
-        zoneSpecification: ZoneSpecification(
-          print: (self, parent, zone, line) => lines.add(line),
-        ),
-      );
+            subscription.cancel().ignore();
+            cam.close().ignore();
+            device.dispose();
+            async.flushTimers();
+          }),
+          zoneSpecification: ZoneSpecification(
+            print: (self, parent, zone, line) => lines.add(line),
+          ),
+        );
 
-      expect(lines, [
-        'Ready(free: 8, paused: false, zoom: 2)',
-        'subscribed, nothing replayed',
-        'Ready(free: 8, paused: false, zoom: 3)',
-        'the next line of the writer',
-        'Ready(free: 8, paused: false, zoom: 3)',
-        // An equal state is a change and an event all the same, and both
-        // events come on a microtask, in order.
-        'Ready(free: 8, paused: false, zoom: 3)',
-        'the next line of the writer',
-        'Ready(free: 8, paused: false, zoom: 4)',
-        'the next line of the writer',
-        'Ready(free: 8, paused: false, zoom: 3)',
-        'Ready(free: 8, paused: false, zoom: 4)',
-      ]);
-    });
+        expect(lines, [
+          'Ready(free: 8, paused: false, zoom: 2)',
+          'subscribed, nothing replayed',
+          'Ready(free: 8, paused: false, zoom: 3)',
+          'the next line of the writer',
+          'Ready(free: 8, paused: false, zoom: 3)',
+          // An equal state is a change and an event all the same, and both
+          // events come on a microtask, in order.
+          'Ready(free: 8, paused: false, zoom: 3)',
+          'the next line of the writer',
+          'Ready(free: 8, paused: false, zoom: 4)',
+          'the next line of the writer',
+          'Ready(free: 8, paused: false, zoom: 3)',
+          'Ready(free: 8, paused: false, zoom: 4)',
+        ]);
+      },
+    );
 
     test('a stream event may be older than currentState when it arrives', () {
       fakeAsync((async) {
@@ -1395,28 +1386,32 @@ void main() {
       });
     });
 
-    test('a rule of the state alone is not asked again once it has refused',
-        () {
-      fakeAsync((async) {
-        final order = _Order(keep: (_, state) => state != 'C');
-        final job = order.watch();
-        async.flushMicrotasks();
-        order.answers.clear();
+    test(
+      'a rule of the state alone is not asked again once it has refused',
+      () {
+        fakeAsync((async) {
+          final order = _Order(keep: (_, state) => state != 'C');
+          final job = order.watch();
+          async.flushMicrotasks();
+          order.answers.clear();
 
-        order.set('B');
-        async.flushMicrotasks();
+          order.set('B');
+          async.flushMicrotasks();
 
-        expect(order.answers, ['C: reject']);
-        expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
-        order.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect(order.answers, ['C: reject']);
+          expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
+          order.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('only the second question hears what the listeners of C set', () {
       fakeAsync((async) {
-        final order =
-            _Order(keep: (order, _) => !order.blocked, blockOnC: true);
+        final order = _Order(
+          keep: (order, _) => !order.blocked,
+          blockOnC: true,
+        );
         final job = order.watch();
         async.flushMicrotasks();
         order.answers.clear();
@@ -1431,35 +1426,44 @@ void main() {
       });
     });
 
-    test('a job with handlers is asked about B, and a refused B disables them',
-        () {
-      fakeAsync((async) {
-        final order = _Order(keep: (_, state) => state != 'B', corrects: true);
-        final job = order.watch();
-        async.flushMicrotasks();
-        order.answers.clear();
+    test(
+      'a job with handlers is asked about B, and a refused B disables them',
+      () {
+        fakeAsync((async) {
+          final order = _Order(
+            keep: (_, state) => state != 'B',
+            corrects: true,
+          );
+          final job = order.watch();
+          async.flushMicrotasks();
+          order.answers.clear();
 
-        order.set('B');
+          order.set('B');
 
-        expect(
-          order.answers.first,
-          'B: reject',
-          reason: 'asked about B at the write itself, before any listener',
-        );
-        expect(order.currentState, 'C');
-        expect(job.isCancelled, isFalse, reason: 'the question cancels nobody');
+          expect(
+            order.answers.first,
+            'B: reject',
+            reason: 'asked about B at the write itself, before any listener',
+          );
+          expect(order.currentState, 'C');
+          expect(
+            job.isCancelled,
+            isFalse,
+            reason: 'the question cancels nobody',
+          );
 
-        job.cancel().ignore();
-        async.flushMicrotasks();
-        expect(
-          order.currentState,
-          'C',
-          reason: 'the handler no longer corrects, though B was gone at once',
-        );
-        order.close().ignore();
-        async.flushTimers();
-      });
-    });
+          job.cancel().ignore();
+          async.flushMicrotasks();
+          expect(
+            order.currentState,
+            'C',
+            reason: 'the handler no longer corrects, though B was gone at once',
+          );
+          order.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('without B the same handler corrects the state', () {
       fakeAsync((async) {
@@ -1530,8 +1534,10 @@ void main() {
     test('the listeners go when closing finishes, and so does the write', () {
       expect(
         _page().replaceAll(RegExp(r'\s+'), ' '),
-        contains('drops the listeners for good when closing finishes, the '
-            'moment `isFinished` turns true, and not when `close()` is called'),
+        contains(
+          'drops the listeners for good when closing finishes, the '
+          'moment `isFinished` turns true, and not when `close()` is called',
+        ),
       );
       fakeAsync((async) {
         final any = _Any();
@@ -1606,34 +1612,36 @@ void main() {
       expect(zone, ['Bad state: disk full']);
     });
 
-    test('publish is protected in the engine and in the override of the page',
-        () {
-      // Annotations are the analyzer's to read, so the sources are read here.
-      expect(
-        File('lib/src/solo.dart').readAsStringSync(),
-        contains(
-          RegExp(
-            r'@protected\s+@mustCallSuper\s+'
-            r'void publish\(S previous, S current\)',
+    test(
+      'publish is protected in the engine and in the override of the page',
+      () {
+        // Annotations are the analyzer's to read, so the sources are read here.
+        expect(
+          File('lib/src/solo.dart').readAsStringSync(),
+          contains(
+            RegExp(
+              r'@protected\s+@mustCallSuper\s+'
+              r'void publish\(S previous, S current\)',
+            ),
           ),
-        ),
-      );
-      expect(
-        File('lib/src/solo_stream.dart').readAsStringSync(),
-        contains(
-          RegExp(
-            r'@protected\s+@override\s+'
-            r'void publish\(S previous, S current\)',
+        );
+        expect(
+          File('lib/src/solo_stream.dart').readAsStringSync(),
+          contains(
+            RegExp(
+              r'@protected\s+@override\s+'
+              r'void publish\(S previous, S current\)',
+            ),
           ),
-        ),
-      );
-      // The check of the code would not miss the line: a piece of the page
-      // that lost it is still a run of lines of the support file.
-      expect(
-        _page(),
-        contains('  @protected\n  @override\n  void publish(S previous, '),
-      );
-    });
+        );
+        // The check of the code would not miss the line: a piece of the page
+        // that lost it is still a run of lines of the support file.
+        expect(
+          _page(),
+          contains('  @protected\n  @override\n  void publish(S previous, '),
+        );
+      },
+    );
 
     test('called from outside, publish delivers a state nobody wrote', () {
       fakeAsync((async) {
@@ -1655,37 +1663,42 @@ void main() {
       });
     });
 
-    test('a failure let out of publish leaves the rules asked all the same',
-        () {
-      fakeAsync((async) {
-        final leaky = _Leaky();
-        final job = leaky.watch();
-        async.flushMicrotasks();
-
-        expect(
-          () => leaky.set(9),
-          throwsA(
-            isA<StateError>()
-                .having((e) => e.message, 'message', 'delivery boom on 9'),
-          ),
-          reason: 'out of externalSetState, to whoever called it',
-        );
-        expect(job.isCancelled, isTrue, reason: 'within the write');
-        async.flushMicrotasks();
-        expect(leaky.currentState, 9);
-        expect(
-          '${job.outcome}',
-          'Cancelled(rules: keepWhile)',
-          reason: 'the state has changed, and a delivery that failed does '
-              'not spare the job the cancellation the new state owes it',
-        );
-        leaky.close().ignore();
-        async.flushTimers();
-      });
-    });
-
     test(
-        'a failure let out of publish into a body leaves the rules of the '
+      'a failure let out of publish leaves the rules asked all the same',
+      () {
+        fakeAsync((async) {
+          final leaky = _Leaky();
+          final job = leaky.watch();
+          async.flushMicrotasks();
+
+          expect(
+            () => leaky.set(9),
+            throwsA(
+              isA<StateError>().having(
+                (e) => e.message,
+                'message',
+                'delivery boom on 9',
+              ),
+            ),
+            reason: 'out of externalSetState, to whoever called it',
+          );
+          expect(job.isCancelled, isTrue, reason: 'within the write');
+          async.flushMicrotasks();
+          expect(leaky.currentState, 9);
+          expect(
+            '${job.outcome}',
+            'Cancelled(rules: keepWhile)',
+            reason:
+                'the state has changed, and a delivery that failed does '
+                'not spare the job the cancellation the new state owes it',
+          );
+          leaky.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
+
+    test('a failure let out of publish into a body leaves the rules of the '
         'others asked', () {
       fakeAsync((async) {
         final leaky = _Leaky();
@@ -1700,7 +1713,8 @@ void main() {
             'emit threw: Bad state: delivery boom on 9',
             'check threw: Cancelled(parent)',
           ],
-          reason: 'the parent took its writing child down with it, and the '
+          reason:
+              'the parent took its writing child down with it, and the '
               'failed delivery comes first: it is what emit throws, and the '
               'cancellation waits for the next checkpoint',
         );
@@ -1718,21 +1732,23 @@ void main() {
       });
     });
 
-    test('a failure let out of publish goes into the body that called emit',
-        () {
-      fakeAsync((async) {
-        final leaky = _Leaky();
-        final job = leaky.emitter();
-        async.flushTimers();
-        expect(
-          '${job.outcome}',
-          'Done(emit threw: Bad state: delivery boom on 3)',
-        );
-        expect(leaky.currentState, 3);
-        leaky.close().ignore();
-        async.flushTimers();
-      });
-    });
+    test(
+      'a failure let out of publish goes into the body that called emit',
+      () {
+        fakeAsync((async) {
+          final leaky = _Leaky();
+          final job = leaky.emitter();
+          async.flushTimers();
+          expect(
+            '${job.outcome}',
+            'Done(emit threw: Bad state: delivery boom on 3)',
+          );
+          expect(leaky.currentState, 3);
+          leaky.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('a failure let out of publish reaches the zone from a hook', () {
       late _Leaky leaky;
@@ -1750,11 +1766,10 @@ void main() {
       expect(returned, isTrue, reason: 'the write that ran the hook returns');
       expect(leaky.trace, isEmpty, reason: 'the hook was thrown out of');
       expect(leaky.currentState, 9);
-      expect(
-        zone,
-        ['Bad state: delivery boom on 9', 'Bad state: delivery boom on 1'],
-        reason: 'the second failure at once, the first through the hook',
-      );
+      expect(zone, [
+        'Bad state: delivery boom on 9',
+        'Bad state: delivery boom on 1',
+      ], reason: 'the second failure at once, the first through the hook');
     });
 
     test('a failure let out of publish over a handler result is reported', () {
@@ -1799,15 +1814,15 @@ void main() {
       expect(
         cancelledAtOnce,
         isTrue,
-        reason: 'the write of the hook asked the rules, and no checkpoint '
+        reason:
+            'the write of the hook asked the rules, and no checkpoint '
             'came after it',
       );
       expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
       expect(zone, ['Bad state: delivery boom on 9']);
     });
 
-    test(
-        'a failure let out of publish over a handler result leaves the rules '
+    test('a failure let out of publish over a handler result leaves the rules '
         'asked', () {
       late _Leaky leaky;
       late Job<void> parent;
@@ -1841,20 +1856,20 @@ void main() {
       expect(zone, isEmpty, reason: 'onUnanswered answered for it');
     });
 
-    test('a failure of the rules after a failed delivery goes to the zone',
-        () async {
-      // Deep enough that the cancellation the new state owes the root runs
-      // out of stack on its way down the chain, as in the core's
-      // cascade_depth_test.dart. The rules fail after the delivery, and
-      // the delivery failed first.
-      const depth = 50000;
-      final leaky = _Leaky();
-      final bottom = Completer<void>();
-      final zone = <Object>[];
-      late Job<void> root;
-      Object? thrown;
-      await runZonedGuarded(
-        () async {
+    test(
+      'a failure of the rules after a failed delivery goes to the zone',
+      () async {
+        // Deep enough that the cancellation the new state owes the root runs
+        // out of stack on its way down the chain, as in the core's
+        // cascade_depth_test.dart. The rules fail after the delivery, and
+        // the delivery failed first.
+        const depth = 50000;
+        final leaky = _Leaky();
+        final bottom = Completer<void>();
+        final zone = <Object>[];
+        late Job<void> root;
+        Object? thrown;
+        await runZonedGuarded(() async {
           root = leaky.deep(depth, bottom);
           await bottom.future;
           try {
@@ -1862,23 +1877,23 @@ void main() {
           } on Object catch (error) {
             thrown = error;
           }
-        },
-        (error, stackTrace) => zone.add(error),
-      );
+        }, (error, stackTrace) => zone.add(error));
 
-      expect(
-        '$thrown',
-        'Bad state: delivery boom on 9',
-        reason: 'the first failure goes back to whoever wrote the state',
-      );
-      expect(
-        zone.first,
-        isA<StackOverflowError>(),
-        reason: 'the second goes where the second failure of a delivery '
-            'goes',
-      );
-      expect(root.isCancelled, isTrue);
-    });
+        expect(
+          '$thrown',
+          'Bad state: delivery boom on 9',
+          reason: 'the first failure goes back to whoever wrote the state',
+        );
+        expect(
+          zone.first,
+          isA<StackOverflowError>(),
+          reason:
+              'the second goes where the second failure of a delivery '
+              'goes',
+        );
+        expect(root.isCancelled, isTrue);
+      },
+    );
 
     test('the changes behind the failed one are published all the same', () {
       // A mixin of somebody else in the same `with` can throw whatever the
@@ -1896,83 +1911,88 @@ void main() {
       delivery.close().ignore();
     });
 
-    test('of several failures the first is thrown, the rest go to the zone',
-        () {
-      String? escaped;
-      final zone = _zone((async) {
-        final delivery = _Delivery()
-          ..writeFromFirst = ['c', 'd']
-          ..bombAt = {'c', 'd'};
-        try {
-          delivery.set('b');
-        } on Object catch (error) {
-          escaped = '$error';
-        }
-        delivery.close().ignore();
-        async.flushTimers();
-      });
+    test(
+      'of several failures the first is thrown, the rest go to the zone',
+      () {
+        String? escaped;
+        final zone = _zone((async) {
+          final delivery = _Delivery()
+            ..writeFromFirst = ['c', 'd']
+            ..bombAt = {'c', 'd'};
+          try {
+            delivery.set('b');
+          } on Object catch (error) {
+            escaped = '$error';
+          }
+          delivery.close().ignore();
+          async.flushTimers();
+        });
 
-      expect(escaped, 'Bad state: delivery boom on c');
-      expect(zone, ['Bad state: delivery boom on d']);
-    });
+        expect(escaped, 'Bad state: delivery boom on c');
+        expect(zone, ['Bad state: delivery boom on d']);
+      },
+    );
 
-    test('SoloStream closes after the engine; a paused subscription holds it',
-        () {
-      fakeAsync((async) {
-        final device = camera.Device();
-        final cam = page.Camera(device);
-        final subscription = cam.stream.listen((_) {})..pause();
-        var closed = false;
-        cam.close().then((_) => closed = true);
-        async.elapse(const Duration(hours: 1));
+    test(
+      'SoloStream closes after the engine; a paused subscription holds it',
+      () {
+        fakeAsync((async) {
+          final device = camera.Device();
+          final cam = page.Camera(device);
+          final subscription = cam.stream.listen((_) {})..pause();
+          var closed = false;
+          cam.close().then((_) => closed = true);
+          async.elapse(const Duration(hours: 1));
 
-        expect(cam.isFinished, isTrue, reason: 'the engine has finished');
-        expect(closed, isFalse, reason: 'close() is held by the stream');
-        expect(cam.pending, isA<SoloPendingStream>());
+          expect(cam.isFinished, isTrue, reason: 'the engine has finished');
+          expect(closed, isFalse, reason: 'close() is held by the stream');
+          expect(cam.pending, isA<SoloPendingStream>());
 
-        subscription.resume();
-        async.flushMicrotasks();
-        expect(closed, isTrue);
-        expect(cam.pending, isNull);
-        subscription.cancel().ignore();
-        device.dispose();
-        async.flushTimers();
-      });
-    });
+          subscription.resume();
+          async.flushMicrotasks();
+          expect(closed, isTrue);
+          expect(cam.pending, isNull);
+          subscription.cancel().ignore();
+          device.dispose();
+          async.flushTimers();
+        });
+      },
+    );
   });
 
   group('External state', () {
-    test('queued as a job, even first, the fact waits behind the running job',
-        () {
-      fakeAsync((async) {
-        final device = camera.Device();
-        final cam = first.Camera(device);
-        final waiting = cam.waitForAnswer();
-        async.flushMicrotasks();
-        cam.later();
-        final asked = cam.ruleAsked;
-        device.drop();
-        async.elapse(const Duration(hours: 1));
+    test(
+      'queued as a job, even first, the fact waits behind the running job',
+      () {
+        fakeAsync((async) {
+          final device = camera.Device();
+          final cam = first.Camera(device);
+          final waiting = cam.waitForAnswer();
+          async.flushMicrotasks();
+          cam.later();
+          final asked = cam.ruleAsked;
+          device.drop();
+          async.elapse(const Duration(hours: 1));
 
-        expect(
-          cam.queued,
-          ['disconnect', 'later'],
-          reason: 'first: true puts the fact ahead of everything waiting',
-        );
-        expect(cam.currentState, isA<camera.Ready>());
-        expect(cam.ruleAsked, asked, reason: 'no change, so no question');
-        expect(waiting.isFinished, isFalse, reason: 'and nothing frees it');
+          expect(cam.queued, [
+            'disconnect',
+            'later',
+          ], reason: 'first: true puts the fact ahead of everything waiting');
+          expect(cam.currentState, isA<camera.Ready>());
+          expect(cam.ruleAsked, asked, reason: 'no change, so no question');
+          expect(waiting.isFinished, isFalse, reason: 'and nothing frees it');
 
-        // The answer the device was never going to give.
-        device.answer.complete();
-        async.flushMicrotasks();
-        expect('${waiting.outcome}', 'Done(null)');
-        expect(cam.currentState, isA<camera.Disconnected>());
-        cam.close().ignore();
-        device.dispose();
-        async.flushTimers();
-      });
-    });
+          // The answer the device was never going to give.
+          device.answer.complete();
+          async.flushMicrotasks();
+          expect('${waiting.outcome}', 'Done(null)');
+          expect(cam.currentState, isA<camera.Disconnected>());
+          cam.close().ignore();
+          device.dispose();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('reflected at once, the fact cancels the job that needs the link', () {
       fakeAsync((async) {
@@ -1986,11 +2006,10 @@ void main() {
 
         expect(cam.currentState, isA<camera.Disconnected>());
         expect(_ended(job), 'Cancelled(rules: is not Ready), started: true');
-        expect(
-          camera.stage.trace,
-          ['the body resumed', 'the next job started'],
-          reason: 'abandonable lets go of the call at once',
-        );
+        expect(camera.stage.trace, [
+          'the body resumed',
+          'the next job started',
+        ], reason: 'abandonable lets go of the call at once');
         cam.close().ignore();
         device.dispose();
         async.flushTimers();
@@ -2013,10 +2032,10 @@ void main() {
 
         device.answer.complete();
         async.flushMicrotasks();
-        expect(
-          camera.stage.trace,
-          ['the body resumed', 'the next job started'],
-        );
+        expect(camera.stage.trace, [
+          'the body resumed',
+          'the next job started',
+        ]);
         expect(_ended(job), 'Cancelled(rules: is not Ready), started: true');
         cam.close().ignore();
         device.dispose();
@@ -2072,11 +2091,9 @@ void main() {
         job.cancel().ignore();
         async.elapse(const Duration(hours: 1));
 
-        expect(
-          heard,
-          ['Loading'],
-          reason: 'the emit in the catch wrote nothing',
-        );
+        expect(heard, [
+          'Loading',
+        ], reason: 'the emit in the catch wrote nothing');
         expect(stubs.describe(controller.currentState), 'Loading');
         expect('${job.outcome}', 'Cancelled(manual)');
         controller.close().ignore();
@@ -2139,11 +2156,12 @@ void main() {
         api.answer('Ada');
         async.flushMicrotasks();
 
-        expect(
-          heard,
-          ['Loading', 'Initial', 'Loading', 'Loaded(Ada)'],
-          reason: 'the replaced job writes its resting state in between',
-        );
+        expect(heard, [
+          'Loading',
+          'Initial',
+          'Loading',
+          'Loaded(Ada)',
+        ], reason: 'the replaced job writes its resting state in between');
         expect('${first.outcome}', 'Cancelled(replaced)');
         expect('${second.outcome}', 'Done(Ada)');
         asking.close().ignore();
@@ -2157,11 +2175,11 @@ void main() {
         api.answer('Ada');
         async.flushMicrotasks();
 
-        expect(
-          heard,
-          ['Loading', 'Loading', 'Loaded(Ada)'],
-          reason: 'the handler handed back Loading, which publishes nothing',
-        );
+        expect(heard, [
+          'Loading',
+          'Loading',
+          'Loaded(Ada)',
+        ], reason: 'the handler handed back Loading, which publishes nothing');
         expect('${replaced.outcome}', 'Cancelled(replaced)');
         expect('${newer.outcome}', 'Done(Ada)');
 
@@ -2196,57 +2214,59 @@ void main() {
       });
     });
 
-    test('the handlers: a failure leaves Loading and still reaches the zone',
-        () {
-      late Job<String> job;
-      late List<String> states;
-      final zone = _zone((async) {
-        final controller = byHandlers();
-        states = heard;
-        job = controller.loadWithHandlers();
-        async.flushMicrotasks();
-        api.fail(StateError('offline'));
-        async.flushMicrotasks();
-        controller.close().ignore();
-        async.flushTimers();
-      });
+    test(
+      'the handlers: a failure leaves Loading and still reaches the zone',
+      () {
+        late Job<String> job;
+        late List<String> states;
+        final zone = _zone((async) {
+          final controller = byHandlers();
+          states = heard;
+          job = controller.loadWithHandlers();
+          async.flushMicrotasks();
+          api.fail(StateError('offline'));
+          async.flushMicrotasks();
+          controller.close().ignore();
+          async.flushTimers();
+        });
 
-      expect(states, ['Loading', 'Failure(Bad state: offline)']);
-      expect(
-        '${job.outcome}',
-        'Failed(Bad state: offline)',
-        reason: 'not Done',
-      );
-      expect(
-        zone,
-        ['Bad state: offline'],
-        reason: 'the handler does not observe the outcome',
-      );
-    });
+        expect(states, ['Loading', 'Failure(Bad state: offline)']);
+        expect(
+          '${job.outcome}',
+          'Failed(Bad state: offline)',
+          reason: 'not Done',
+        );
+        expect(zone, [
+          'Bad state: offline',
+        ], reason: 'the handler does not observe the outcome');
+      },
+    );
 
-    test('a handler runs after body, children and cleanup, the outcome fixed',
-        () {
-      late _Any any;
-      final zone = _zone((async) {
-        any = _Any()
-          ..failsLeavingWork()
-          ..next();
-        async.flushTimers();
-        any.close().ignore();
-        async.flushTimers();
-      });
+    test(
+      'a handler runs after body, children and cleanup, the outcome fixed',
+      () {
+        late _Any any;
+        final zone = _zone((async) {
+          any = _Any()
+            ..failsLeavingWork()
+            ..next();
+          async.flushTimers();
+          any.close().ignore();
+          async.flushTimers();
+        });
 
-      expect(any.trace, [
-        'body',
-        'child',
-        'cleanup',
-        'ifFailed: state initial, Bad state: boom, Failed(Bad state: boom)',
-        'onFinish of first in corrected',
-        'the next job in corrected',
-        'onFinish of next in corrected',
-      ]);
-      expect(zone, ['Bad state: boom']);
-    });
+        expect(any.trace, [
+          'body',
+          'child',
+          'cleanup',
+          'ifFailed: state initial, Bad state: boom, Failed(Bad state: boom)',
+          'onFinish of first in corrected',
+          'the next job in corrected',
+          'onFinish of next in corrected',
+        ]);
+        expect(zone, ['Bad state: boom']);
+      },
+    );
 
     test('ifCancelled is handed the current state and the cancellation', () {
       fakeAsync((async) {
@@ -2257,10 +2277,9 @@ void main() {
         job.cancel().ignore();
         async.flushMicrotasks();
 
-        expect(
-          any.trace,
-          ['ifCancelled: state changed meanwhile, Cancelled(manual)'],
-        );
+        expect(any.trace, [
+          'ifCancelled: state changed meanwhile, Cancelled(manual)',
+        ]);
         expect(any.currentState, 'corrected');
         any.close().ignore();
         async.flushTimers();
@@ -2360,10 +2379,11 @@ void main() {
         api.fail(StateError('offline'));
         async.flushMicrotasks();
 
-        expect(
-          heard,
-          ['Loading', 'Disconnected', 'Failure(Bad state: offline)'],
-        );
+        expect(heard, [
+          'Loading',
+          'Disconnected',
+          'Failure(Bad state: offline)',
+        ]);
         expect(job.outcome, isA<Failed>());
         controller.close().ignore();
         async.flushTimers();
@@ -2388,20 +2408,16 @@ void main() {
       });
 
       expect(_ended(job), 'Cancelled(rules: keepWhile), started: true');
-      expect(
-        states,
-        ['Loading', 'Disconnected'],
-        reason: 'neither Initial nor Failure replaces the fact',
-      );
-      expect(
-        zone,
-        ['Bad state: offline'],
-        reason: 'the late failure of a call the job let go of',
-      );
+      expect(states, [
+        'Loading',
+        'Disconnected',
+      ], reason: 'neither Initial nor Failure replaces the fact');
+      expect(zone, [
+        'Bad state: offline',
+      ], reason: 'the late failure of a call the job let go of');
     });
 
-    test(
-        'the rules: cancelled in a compatible state, ifCancelled still '
+    test('the rules: cancelled in a compatible state, ifCancelled still '
         'corrects', () {
       fakeAsync((async) {
         final controller = withRule();
@@ -2442,54 +2458,56 @@ void main() {
   });
 
   group('Handler eligibility and errors', () {
-    test('an incompatible external update disables them, whenever it arrives',
-        () {
-      fakeAsync((async) {
-        for (final phase in ['the body', 'the children', 'the cleanup']) {
+    test(
+      'an incompatible external update disables them, whenever it arrives',
+      () {
+        fakeAsync((async) {
+          for (final phase in ['the body', 'the children', 'the cleanup']) {
+            final eligible = _Eligible();
+            final gate = Completer<void>();
+            final child = Completer<void>();
+            final cleanup = Completer<void>();
+            final job = eligible.guarded(gate, child: child, cleanup: cleanup);
+            async.flushMicrotasks();
+
+            void fact() => eligible
+              ..reflect('bad')
+              ..reflect('ok again');
+
+            if (phase == 'the body') fact();
+            gate.complete();
+            async.flushMicrotasks();
+            if (phase == 'the children') fact();
+            child.complete();
+            async.flushMicrotasks();
+            if (phase == 'the cleanup') fact();
+            job.cancel().ignore();
+            cleanup.complete();
+            async.flushMicrotasks();
+
+            expect(job.outcome, isA<Cancelled>(), reason: phase);
+            expect(
+              eligible.currentState,
+              'ok again',
+              reason: '$phase: a compatible update does not bring them back',
+            );
+            expect(eligible.trace, ['cleanup ran'], reason: phase);
+            eligible.close().ignore();
+          }
+
+          // The same cancellation with no incompatible update before it.
           final eligible = _Eligible();
-          final gate = Completer<void>();
-          final child = Completer<void>();
-          final cleanup = Completer<void>();
-          final job = eligible.guarded(gate, child: child, cleanup: cleanup);
+          final job = eligible.guarded(Completer<void>());
           async.flushMicrotasks();
-
-          void fact() => eligible
-            ..reflect('bad')
-            ..reflect('ok again');
-
-          if (phase == 'the body') fact();
-          gate.complete();
-          async.flushMicrotasks();
-          if (phase == 'the children') fact();
-          child.complete();
-          async.flushMicrotasks();
-          if (phase == 'the cleanup') fact();
+          eligible.reflect('ok again');
           job.cancel().ignore();
-          cleanup.complete();
           async.flushMicrotasks();
-
-          expect(job.outcome, isA<Cancelled>(), reason: phase);
-          expect(
-            eligible.currentState,
-            'ok again',
-            reason: '$phase: a compatible update does not bring them back',
-          );
-          expect(eligible.trace, ['cleanup ran'], reason: phase);
+          expect(eligible.currentState, 'corrected by ifCancelled');
           eligible.close().ignore();
-        }
-
-        // The same cancellation with no incompatible update before it.
-        final eligible = _Eligible();
-        final job = eligible.guarded(Completer<void>());
-        async.flushMicrotasks();
-        eligible.reflect('ok again');
-        job.cancel().ignore();
-        async.flushMicrotasks();
-        expect(eligible.currentState, 'corrected by ifCancelled');
-        eligible.close().ignore();
-        async.flushTimers();
-      });
-    });
+          async.flushTimers();
+        });
+      },
+    );
 
     test('so does an emit of a child, of the parent or of a sibling', () {
       fakeAsync((async) {
@@ -2512,75 +2530,80 @@ void main() {
       });
     });
 
-    test('a parent that loses its permission blocks the handlers of children',
-        () {
-      fakeAsync((async) {
-        String after({required bool early, required bool handlers}) {
-          final eligible = _Eligible()..parentEndsEarly = early;
-          final job = eligible.parent(Completer<void>(), handlers: handlers);
+    test(
+      'a parent that loses its permission blocks the handlers of children',
+      () {
+        fakeAsync((async) {
+          String after({required bool early, required bool handlers}) {
+            final eligible = _Eligible()..parentEndsEarly = early;
+            final job = eligible.parent(Completer<void>(), handlers: handlers);
+            async.flushMicrotasks();
+            eligible
+              ..reflect('bad')
+              ..reflect('ok again');
+            job.cancel().ignore();
+            async.flushMicrotasks();
+            final state = eligible.currentState;
+            eligible.close().ignore();
+            return state;
+          }
+
+          expect(
+            after(early: false, handlers: false),
+            'ok again',
+            reason:
+                'the rules cancelled the parent, the child corrects nothing',
+          );
+          expect(
+            after(early: true, handlers: true),
+            'ok again',
+            reason: 'a parent with handlers is asked after its body as well',
+          );
+          expect(
+            after(early: true, handlers: false),
+            'child corrected',
+            reason: 'a parent without handlers stops asking when its body ends',
+          );
+          async.flushTimers();
+        });
+      },
+    );
+
+    test(
+      'success, a duplicate and a body that never started run no handler',
+      () {
+        fakeAsync((async) {
+          final eligible = _Eligible();
+          final heard = <String>[];
+          eligible.addListener(() => heard.add(eligible.currentState));
+
+          final gate = Completer<void>();
+          final running = eligible.droppable(gate);
           async.flushMicrotasks();
-          eligible
-            ..reflect('bad')
-            ..reflect('ok again');
-          job.cancel().ignore();
+          final duplicate = eligible.droppable(gate);
+          expect(identical(duplicate, running), isTrue);
+          gate.complete();
           async.flushMicrotasks();
-          final state = eligible.currentState;
+          expect('${running.outcome}', 'Done(done)');
+
+          final refused = eligible.refused();
+          final queued = eligible.droppable(Completer<void>());
+          queued.cancel().ignore();
+          async.flushMicrotasks();
+          expect(_ended(refused), 'Cancelled(rules: canStart), started: false');
+          expect(_ended(queued), 'Cancelled(manual), started: false');
+
           eligible.close().ignore();
-          return state;
-        }
+          async.flushMicrotasks();
+          final late = eligible.droppable(Completer<void>());
+          async.flushMicrotasks();
+          expect(_ended(late), 'Cancelled(closed), started: false');
 
-        expect(
-          after(early: false, handlers: false),
-          'ok again',
-          reason: 'the rules cancelled the parent, the child corrects nothing',
-        );
-        expect(
-          after(early: true, handlers: true),
-          'ok again',
-          reason: 'a parent with handlers is asked after its body as well',
-        );
-        expect(
-          after(early: true, handlers: false),
-          'child corrected',
-          reason: 'a parent without handlers stops asking when its body ends',
-        );
-        async.flushTimers();
-      });
-    });
-
-    test('success, a duplicate and a body that never started run no handler',
-        () {
-      fakeAsync((async) {
-        final eligible = _Eligible();
-        final heard = <String>[];
-        eligible.addListener(() => heard.add(eligible.currentState));
-
-        final gate = Completer<void>();
-        final running = eligible.droppable(gate);
-        async.flushMicrotasks();
-        final duplicate = eligible.droppable(gate);
-        expect(identical(duplicate, running), isTrue);
-        gate.complete();
-        async.flushMicrotasks();
-        expect('${running.outcome}', 'Done(done)');
-
-        final refused = eligible.refused();
-        final queued = eligible.droppable(Completer<void>());
-        queued.cancel().ignore();
-        async.flushMicrotasks();
-        expect(_ended(refused), 'Cancelled(rules: canStart), started: false');
-        expect(_ended(queued), 'Cancelled(manual), started: false');
-
-        eligible.close().ignore();
-        async.flushMicrotasks();
-        final late = eligible.droppable(Completer<void>());
-        async.flushMicrotasks();
-        expect(_ended(late), 'Cancelled(closed), started: false');
-
-        expect(heard, isEmpty);
-        async.flushTimers();
-      });
-    });
+          expect(heard, isEmpty);
+          async.flushTimers();
+        });
+      },
+    );
 
     test("the job's own emit does not disable its handlers", () {
       fakeAsync((async) {
@@ -2631,27 +2654,29 @@ void main() {
       });
     });
 
-    test('a handler that throws is reported; outcome and queue are untouched',
-        () {
-      fakeAsync((async) {
-        final eligible = _Eligible();
-        final job = eligible.handlerThrows(Completer<void>());
-        eligible.next();
-        async.flushMicrotasks();
-        job.cancel().ignore();
-        async.flushTimers();
+    test(
+      'a handler that throws is reported; outcome and queue are untouched',
+      () {
+        fakeAsync((async) {
+          final eligible = _Eligible();
+          final job = eligible.handlerThrows(Completer<void>());
+          eligible.next();
+          async.flushMicrotasks();
+          job.cancel().ignore();
+          async.flushTimers();
 
-        expect('${job.outcome}', 'Cancelled(manual)');
-        expect(eligible.currentState, 'ok');
-        expect(eligible.trace, [
-          'onError of thrower: Bad state: handler boom',
-          'onUnanswered of thrower: Bad state: handler boom',
-          'the next job ran in ok',
-        ]);
-        eligible.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect('${job.outcome}', 'Cancelled(manual)');
+          expect(eligible.currentState, 'ok');
+          expect(eligible.trace, [
+            'onError of thrower: Bad state: handler boom',
+            'onUnanswered of thrower: Bad state: handler boom',
+            'the next job ran in ok',
+          ]);
+          eligible.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('a rule that throws while eligibility is checked disables them', () {
       fakeAsync((async) {
@@ -2674,15 +2699,11 @@ void main() {
 
         expect('${job.outcome}', 'Cancelled(manual)');
         expect(eligible.currentState, 'ok still', reason: 'no handler ran');
-        expect(
-          eligible.trace,
-          [
-            'onError of guarded: Bad state: rule boom',
-            'onUnanswered of guarded: Bad state: rule boom',
-            'cleanup ran',
-          ],
-          reason: 'reported once, and the cleanup still runs',
-        );
+        expect(eligible.trace, [
+          'onError of guarded: Bad state: rule boom',
+          'onUnanswered of guarded: Bad state: rule boom',
+          'cleanup ran',
+        ], reason: 'reported once, and the cleanup still runs');
         eligible.close().ignore();
         async.flushTimers();
       });
@@ -2711,26 +2732,32 @@ void main() {
       });
     });
 
-    test('a write from inside a handler: accepted, the result lands on top',
-        () {
-      fakeAsync((async) {
-        final eligible = _Eligible();
-        final job = eligible.writesFromHandler(Completer<void>(), rule: false);
-        async.flushMicrotasks();
-        final heard = <String>[];
-        eligible.addListener(() => heard.add(eligible.currentState));
-        job.cancel().ignore();
-        async.flushMicrotasks();
+    test(
+      'a write from inside a handler: accepted, the result lands on top',
+      () {
+        fakeAsync((async) {
+          final eligible = _Eligible();
+          final job = eligible.writesFromHandler(
+            Completer<void>(),
+            rule: false,
+          );
+          async.flushMicrotasks();
+          final heard = <String>[];
+          eligible.addListener(() => heard.add(eligible.currentState));
+          job.cancel().ignore();
+          async.flushMicrotasks();
 
-        expect(
-          heard,
-          ['bad fact', 'corrected from ok'],
-          reason: 'computed from the state before the write, the fact is lost',
-        );
-        eligible.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect(
+            heard,
+            ['bad fact', 'corrected from ok'],
+            reason:
+                'computed from the state before the write, the fact is lost',
+          );
+          eligible.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('a write from inside a handler: refused, the result is dropped', () {
       fakeAsync((async) {
@@ -2752,9 +2779,10 @@ void main() {
 
   group('The page', () {
     test('five sections open with a first attempt', () {
-      final attempts = RegExp(r'^#{3,4} The first attempt$', multiLine: true)
-          .allMatches(_page())
-          .length;
+      final attempts = RegExp(
+        r'^#{3,4} The first attempt$',
+        multiLine: true,
+      ).allMatches(_page()).length;
       expect(attempts, 5);
     });
 
@@ -2805,23 +2833,25 @@ void main() {
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom(
-          'doc/state.md',
-          answers,
-          alsoIn: [
-            profileAnswers,
-            firstAttempts,
-            profileStates,
-            noticeFirst,
-            noticeSecond,
-            noticeAnswer,
-          ],
-        ),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom(
+            'doc/state.md',
+            answers,
+            alsoIn: [
+              profileAnswers,
+              firstAttempts,
+              profileStates,
+              noticeFirst,
+              noticeSecond,
+              noticeAnswer,
+            ],
+          ),
+          isEmpty,
+        );
+      },
+    );
   });
 }

@@ -120,13 +120,13 @@ void main() {
     group("the parent's ctx in the callback", () {
       late Job<void> child;
       Job<void> savingWithTheParentsCtx() => Job<void>((ctx) async {
-            child = ctx.each(stubs.messages, (childCtx, message) async {
-              await ctx.join(() => stubs.store.saveBody(message));
-              await ctx.join(() => stubs.store.saveAttachments(message));
-            });
-            ctx.onDispose(() => trace().add('parent cleanup'));
-            await child.value;
-          });
+        child = ctx.each(stubs.messages, (childCtx, message) async {
+          await ctx.join(() => stubs.store.saveBody(message));
+          await ctx.join(() => stubs.store.saveAttachments(message));
+        });
+        ctx.onDispose(() => trace().add('parent cleanup'));
+        await child.value;
+      });
 
       test("stops the steps for the parent's cancellation", () {
         fakeAsync((async) {
@@ -237,18 +237,14 @@ void main() {
           ..add('m1')
           ..add('m2');
         async.flushTimers();
-        expect(
-          trace(),
-          [
-            'm1: draft opened',
-            'm1: writing',
-            'm1: written',
-            'm2: draft opened',
-            'm2: writing',
-            'm2: written',
-          ],
-          reason: 'two messages in, neither draft is closed',
-        );
+        expect(trace(), [
+          'm1: draft opened',
+          'm1: writing',
+          'm1: written',
+          'm2: draft opened',
+          'm2: writing',
+          'm2: written',
+        ], reason: 'two messages in, neither draft is closed');
         stubs.stage.messages.close().ignore();
         async.flushTimers();
         expect(trace().sublist(6), ['m2: draft closed', 'm1: draft closed']);
@@ -484,11 +480,13 @@ void main() {
           if (line.endsWith('started')) started.add(line);
         };
         addTearDown(() => Job.debug = null);
-        page.saveAll(messages.stream, (message) async {
-          stubs.stage.trace.add('$message begins');
-          await delay(10);
-          stubs.stage.trace.add('$message saved');
-        }).then((_) => over = true);
+        page
+            .saveAll(messages.stream, (message) async {
+              stubs.stage.trace.add('$message begins');
+              await delay(10);
+              stubs.stage.trace.add('$message saved');
+            })
+            .then((_) => over = true);
         expect(started, ['Job(each) started'], reason: 'one job, in the call');
         expect(messages.hasListener, isTrue, reason: 'inside the call');
         messages

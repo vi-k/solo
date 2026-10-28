@@ -65,10 +65,10 @@ faults. This is what happens:
 
 ```dart
 // The first attempt with eagerError: the same race, the same leak.
-final sources = await Future.wait(
-  [ctx.run(rows), ctx.run(images)],
-  eagerError: true,
-);
+final sources = await Future.wait([
+  ctx.run(rows),
+  ctx.run(images),
+], eagerError: true);
 ```
 
 It changes only when the body wakes: at the first error, not after the last
@@ -298,10 +298,14 @@ registers the release with:
 
 ```dart
 Job.deferred<Source>((ctx) async {
-  final cache =
-      await ctx.abandonable(openCache, dispose: (cache) => cache.close());
-  final rows =
-      await ctx.abandonable(openRows, discard: (source) => source.close());
+  final cache = await ctx.abandonable(
+    openCache,
+    dispose: (cache) => cache.close(),
+  );
+  final rows = await ctx.abandonable(
+    openRows,
+    discard: (source) => source.close(),
+  );
   await ctx.join(() => cache.warm(rows));
 
   return rows;

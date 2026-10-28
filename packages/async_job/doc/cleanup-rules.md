@@ -24,10 +24,8 @@ goes. The migration fails:
 // The first attempt: discard stays with connect, and the database leaks.
 final connect = Job.deferred<Database>(
   key: 'connect',
-  (ctx) => ctx.abandonable(
-    Database.open,
-    discard: (database) => database.close(),
-  ),
+  (ctx) =>
+      ctx.abandonable(Database.open, discard: (database) => database.close()),
 );
 
 final ready = Job.deferred<Database>((ctx) async {

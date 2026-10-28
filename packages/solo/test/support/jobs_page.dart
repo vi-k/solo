@@ -44,11 +44,11 @@ final class Assembling extends Solo<CameraState>
 
   // Or both at once, which is what a controller method normally does.
   Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-        key: _Op.zoom,
-        // Lazy, and only for diagnostics: built when a log asks for it.
-        describe: () => 'zoom: $zoom',
-        (ctx) => ctx.join(() => camera.zoom(zoom)),
-      );
+    key: _Op.zoom,
+    // Lazy, and only for diagnostics: built when a log asks for it.
+    describe: () => 'zoom: $zoom',
+    (ctx) => ctx.join(() => camera.zoom(zoom)),
+  );
 }
 
 /// The policies, the record key, `stop()` and the pause that works.
@@ -62,51 +62,48 @@ final class CameraController extends Solo<CameraState>
 
   // droppable: a second load of the same profile returns the first job.
   Job<Profile> load(String id) => enqueue<Ready, Profile>(
-        key: (_Op.load, id),
-        policy: Policy.droppable,
-        (ctx) => ctx.abandonable(() => api.load(id)),
-      );
+    key: (_Op.load, id),
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
 
   // replace: the queued zoom goes, a running one is left alone.
   Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-        key: _Op.zoom,
-        policy: Policy.replace,
-        (ctx) => ctx.join(() => camera.zoom(zoom)),
-      );
+    key: _Op.zoom,
+    policy: Policy.replace,
+    (ctx) => ctx.join(() => camera.zoom(zoom)),
+  );
 
   // restart: the same, and the running one is asked to stop as well.
-  Job<void> seek(Duration position) => enqueue<Ready, void>(
-        key: _Op.seek,
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          // Wait for the device to stop before the next seek starts.
-          await ctx.join(() => camera.seek(position, cancelToken: token));
-        },
-      );
+  Job<void> seek(Duration position) =>
+      enqueue<Ready, void>(key: _Op.seek, policy: Policy.restart, (ctx) async {
+        final token = CancelToken();
+        ctx.onCancel(token.cancel);
+        // Wait for the device to stop before the next seek starts.
+        await ctx.join(() => camera.seek(position, cancelToken: token));
+      });
 
   /// Not on the page: the seek the page warns about, a `join` around a call
   /// the request cannot reach.
   Job<void> seekWithoutToken(Duration position) => enqueue<Ready, void>(
-        key: _Op.seek,
-        policy: Policy.restart,
-        (ctx) => ctx.join(() => camera.seek(position)),
-      );
+    key: _Op.seek,
+    policy: Policy.restart,
+    (ctx) => ctx.join(() => camera.seek(position)),
+  );
 
   /// Not on the page: the other way in the page names, `ctx.abandonable`.
   Job<void> seekLetGo(Duration position) => enqueue<Ready, void>(
-        key: _Op.seek,
-        policy: Policy.restart,
-        (ctx) => ctx.abandonable(() => camera.seek(position)),
-      );
+    key: _Op.seek,
+    policy: Policy.restart,
+    (ctx) => ctx.abandonable(() => camera.seek(position)),
+  );
 
   /// Not on the page: a seek that refuses to be cancelled.
   Job<void> seekToTheEnd(Duration position) => enqueue<Ready, void>(
-        key: _Op.seek,
-        cancellable: false,
-        (ctx) => ctx.join(() => camera.seek(position)),
-      );
+    key: _Op.seek,
+    cancellable: false,
+    (ctx) => ctx.join(() => camera.seek(position)),
+  );
 
   Job<void> stop() {
     // What is waiting right now.

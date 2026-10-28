@@ -70,8 +70,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Load'), findsOneWidget);
-    expect(find.byType(SnackBar), findsNothing,
-        reason: 'Cancelled says nothing');
+    expect(
+      find.byType(SnackBar),
+      findsNothing,
+      reason: 'Cancelled says nothing',
+    );
 
     // The call the job gave up on still answers, to nobody.
     await tester.pump(_fetch);
@@ -80,9 +83,7 @@ void main() {
     expect(api.calls, 1);
   });
 
-  testWidgets('a tap while the load runs gets the running job', (
-    tester,
-  ) async {
+  testWidgets('a tap while the load runs gets the running job', (tester) async {
     final api = await _open(tester);
     await tester.tap(find.text('Load'));
     await tester.pump();
@@ -125,8 +126,11 @@ void main() {
 
     expect(find.text('Alice'), findsNothing);
     expect(find.text('Load'), findsOneWidget);
-    expect(find.byType(SnackBar), findsNothing,
-        reason: 'the closed controller cancelled its load');
+    expect(
+      find.byType(SnackBar),
+      findsNothing,
+      reason: 'the closed controller cancelled its load',
+    );
 
     await _loadWith(tester, find.text('Load'));
     expect(find.text('Bob'), findsOneWidget);

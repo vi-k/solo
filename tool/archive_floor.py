@@ -40,13 +40,15 @@ there, and the style is the business of the gate on stable.
 
 Two things differ between the layout and the archive, both of them about
 development only. `lints` and `flutter_lints` are dropped from
-`dev_dependencies`: they want an SDK above the floor, and without them the
-rest resolves. And a package that carries a `pubspec_overrides.yaml` in
-the tree gets it in the layout too, where its paths lead to the layouts
-next door instead of the tree: the package below is not published yet.
-While those files live, the constraints between the packages are not
-proved here. Once a release takes them out, the same run resolves the
-package below from pub.dev by the constraint in the archive.
+`dev_dependencies`: they promise the user nothing, and a release of them
+that wants an SDK above the floor would turn the floor red for a style
+the gate on stable already checks. And a package that carries a
+`pubspec_overrides.yaml` in the tree gets it in the layout too, where
+its paths lead to the layouts next door instead of the tree: the package
+below is not published yet. While those files live, the constraints
+between the packages are not proved here. Once a release takes them out,
+the same run resolves the package below from pub.dev by the constraint
+in the archive.
 """
 
 import pathlib

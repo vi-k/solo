@@ -63,8 +63,7 @@ final class _Watcher extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      errors.add('$job: $error');
+  }) => errors.add('$job: $error');
 }
 
 /// A reason of the caller's own.
@@ -106,9 +105,9 @@ final class _Windows extends Solo<CameraState> with OpenSolo<CameraState> {
   SoloJob<void> query(String text) => _queries.add(text);
 
   SoloJob<void> ready() => enqueue<Ready, void>(
-        key: 'ready',
-        (ctx) async => stage.trace.add('ready runs'),
-      );
+    key: 'ready',
+    (ctx) async => stage.trace.add('ready runs'),
+  );
 }
 
 String _page() => File('doc/jobs.md').readAsStringSync();
@@ -336,21 +335,17 @@ void main() {
         });
       });
 
-      for (final (name, access, handled) in <(
-        String,
-        void Function(Job<void> job),
-        bool,
-      )>[
-        ('done', (job) => job.done.ignore(), true),
-        ('value', (job) => job.value.ignore(), true),
-        ('ignoreFailure()', (job) => job.ignoreFailure(), true),
-        ('outcome', (job) => job.outcome, false),
-        ('whenCancelled', (job) => job.whenCancelled((_) {}), false),
-        ('whenFinished', (job) => job.whenFinished((_) {}), false),
-        ('nothing at all', (job) {}, false),
-      ]) {
-        test(
-            'a failure accessed through $name '
+      for (final (name, access, handled)
+          in <(String, void Function(Job<void> job), bool)>[
+            ('done', (job) => job.done.ignore(), true),
+            ('value', (job) => job.value.ignore(), true),
+            ('ignoreFailure()', (job) => job.ignoreFailure(), true),
+            ('outcome', (job) => job.outcome, false),
+            ('whenCancelled', (job) => job.whenCancelled((_) {}), false),
+            ('whenFinished', (job) => job.whenFinished((_) {}), false),
+            ('nothing at all', (job) {}, false),
+          ]) {
+        test('a failure accessed through $name '
             '${handled ? 'stays out of' : 'reaches'} the zone', () {
           late page.CameraController camera;
           final zone = _zone((async) {
@@ -476,37 +471,32 @@ void main() {
     });
 
     test(
-        'the zone is the one the job was created in, not the one of enqueueJob',
-        () {
-      final created = <String>[];
-      final added = <String>[];
-      fakeAsync((async) {
-        late page.CameraController camera;
-        late SoloJob<void> job;
-        runZonedGuarded(
-          () {
+      'the zone is the one the job was created in, not the one of enqueueJob',
+      () {
+        final created = <String>[];
+        final added = <String>[];
+        fakeAsync((async) {
+          late page.CameraController camera;
+          late SoloJob<void> job;
+          runZonedGuarded(() {
             camera = page.CameraController();
             job = camera.job<Ready, void>(
               key: 'made',
               (ctx) async => throw StateError('made failed'),
             );
-          },
-          (error, stackTrace) => created.add('$error'),
-        );
-        runZonedGuarded(
-          () {
+          }, (error, stackTrace) => created.add('$error'));
+          runZonedGuarded(() {
             camera.enqueueJob(job);
             async.flushTimers();
-          },
-          (error, stackTrace) => added.add('$error'),
-        );
-        camera.close().ignore();
-        async.flushTimers();
-      });
+          }, (error, stackTrace) => added.add('$error'));
+          camera.close().ignore();
+          async.flushTimers();
+        });
 
-      expect(created, ['Bad state: made failed']);
-      expect(added, isEmpty);
-    });
+        expect(created, ['Bad state: made failed']);
+        expect(added, isEmpty);
+      },
+    );
 
     test('an access after the job has ended comes too late', () {
       Outcome<void>? late;
@@ -526,8 +516,7 @@ void main() {
   });
 
   group('Creating and scheduling jobs', () {
-    test(
-        'job assembles, enqueueJob queues, and the job held on to is the one '
+    test('job assembles, enqueueJob queues, and the job held on to is the one '
         'queued', () {
       fakeAsync((async) {
         final assembling = page.Assembling();
@@ -543,10 +532,12 @@ void main() {
         async.flushTimers();
         expect('${first.outcome}', 'Done(null)');
         expect('${second.outcome}', 'Done(null)');
-        expect(
-          stage.trace,
-          ['save begins', 'save ends', 'save begins', 'save ends'],
-        );
+        expect(stage.trace, [
+          'save begins',
+          'save ends',
+          'save begins',
+          'save ends',
+        ]);
         assembling.close().ignore();
         async.flushTimers();
       });
@@ -568,8 +559,7 @@ void main() {
       });
     });
 
-    test(
-        'job, enqueueJob and enqueue are protected, and so are collect and '
+    test('job, enqueueJob and enqueue are protected, and so are collect and '
         'accumulate', () {
       // Only the analyzer sees the annotation: a call from outside the
       // class is reported as `invalid_use_of_protected_member`.
@@ -690,32 +680,38 @@ void main() {
       });
     });
 
-    test('droppable: a second load of the same profile returns the first job',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController()..work('running');
-        async.flushMicrotasks();
-        final queued = camera.load('ada');
+    test(
+      'droppable: a second load of the same profile returns the first job',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController()..work('running');
+          async.flushMicrotasks();
+          final queued = camera.load('ada');
 
-        expect(queued.isQueued, isTrue);
-        expect(camera.load('ada'), same(queued), reason: 'while it is queued');
+          expect(queued.isQueued, isTrue);
+          expect(
+            camera.load('ada'),
+            same(queued),
+            reason: 'while it is queued',
+          );
 
-        async.elapse(const Duration(milliseconds: 150));
-        expect(queued.isRunning, isTrue);
-        expect(camera.load('ada'), same(queued), reason: 'while it runs');
+          async.elapse(const Duration(milliseconds: 150));
+          expect(queued.isRunning, isTrue);
+          expect(camera.load('ada'), same(queued), reason: 'while it runs');
 
-        async.flushTimers();
-        expect(
-          stage.trace.where((line) => line.startsWith('load')),
-          ['load ada begins', 'load ada ends'],
-        );
-        final later = camera.load('ada');
-        expect(later, isNot(same(queued)), reason: 'once that load is over');
-        async.flushTimers();
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          async.flushTimers();
+          expect(stage.trace.where((line) => line.startsWith('load')), [
+            'load ada begins',
+            'load ada ends',
+          ]);
+          final later = camera.load('ada');
+          expect(later, isNot(same(queued)), reason: 'once that load is over');
+          async.flushTimers();
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('replace: the queued zoom goes, a running one is left alone', () {
       fakeAsync((async) {
@@ -767,7 +763,8 @@ void main() {
         expect(
           seen,
           ['k'],
-          reason: 'as the page and the dartdoc say: the cancellation of the '
+          reason:
+              'as the page and the dartdoc say: the cancellation of the '
               'old job already sees the new one queued',
         );
         expect(
@@ -804,11 +801,10 @@ void main() {
         async.flushTimers();
         expect('${kept.outcome}', 'Done(null)');
         expect('${replacement.outcome}', 'Done(null)');
-        expect(
-          stage.trace.skip(2),
-          ['kept runs', 'replacement runs'],
-          reason: 'the new job is enqueued behind it',
-        );
+        expect(stage.trace.skip(2), [
+          'kept runs',
+          'replacement runs',
+        ], reason: 'the new job is enqueued behind it');
         camera.close().ignore();
         async.flushTimers();
       });
@@ -853,52 +849,54 @@ void main() {
       });
     });
 
-    test('a root job holds the queue through its children, cleanup and handler',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final holder = camera.enqueue<Ready, void>(
-          key: 'holder',
-          ifFailed: (state, error, stackTrace) {
-            stage.trace.add('the state handler runs');
-            return state;
-          },
-          (ctx) async {
-            ctx
-              ..onDispose(() async {
-                stage.trace.add('the cleanup begins');
-                await Future<void>.delayed(const Duration(milliseconds: 50));
-                stage.trace.add('the cleanup ends');
-              })
-              ..run(
-                camera.job<Ready, void>(key: 'child', (child) async {
-                  stage.trace.add('the child begins');
-                  await child.pause(const Duration(milliseconds: 100));
-                  stage.trace.add('the child ends');
-                }),
-              ).ignore();
-            stage.trace.add('the body ends');
-            throw StateError('failed');
-          },
-        )..ignoreFailure();
-        camera.work('next');
-        async.flushTimers();
+    test(
+      'a root job holds the queue through its children, cleanup and handler',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final holder = camera.enqueue<Ready, void>(
+            key: 'holder',
+            ifFailed: (state, error, stackTrace) {
+              stage.trace.add('the state handler runs');
+              return state;
+            },
+            (ctx) async {
+              ctx
+                ..onDispose(() async {
+                  stage.trace.add('the cleanup begins');
+                  await Future<void>.delayed(const Duration(milliseconds: 50));
+                  stage.trace.add('the cleanup ends');
+                })
+                ..run(
+                  camera.job<Ready, void>(key: 'child', (child) async {
+                    stage.trace.add('the child begins');
+                    await child.pause(const Duration(milliseconds: 100));
+                    stage.trace.add('the child ends');
+                  }),
+                ).ignore();
+              stage.trace.add('the body ends');
+              throw StateError('failed');
+            },
+          )..ignoreFailure();
+          camera.work('next');
+          async.flushTimers();
 
-        expect('${holder.outcome}', 'Failed(Bad state: failed)');
-        expect(stage.trace, [
-          'the child begins',
-          'the body ends',
-          'the child ends',
-          'the cleanup begins',
-          'the cleanup ends',
-          'the state handler runs',
-          'next starts',
-          'next ends',
-        ]);
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect('${holder.outcome}', 'Failed(Bad state: failed)');
+          expect(stage.trace, [
+            'the child begins',
+            'the body ends',
+            'the child ends',
+            'the cleanup begins',
+            'the cleanup ends',
+            'the state handler runs',
+            'next starts',
+            'next ends',
+          ]);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     for (final policy in [Policy.droppable, Policy.replace, Policy.restart]) {
       test('${policy.name} does not see a child with the same key', () {
@@ -936,24 +934,26 @@ void main() {
       });
     }
 
-    test('droppable: a running job that has been cancelled is no duplicate',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final cancelled = camera.load('ada');
-        async.flushMicrotasks();
-        camera.cancelAll().ignore();
-        final again = camera.load('ada');
+    test(
+      'droppable: a running job that has been cancelled is no duplicate',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final cancelled = camera.load('ada');
+          async.flushMicrotasks();
+          camera.cancelAll().ignore();
+          final again = camera.load('ada');
 
-        expect(again, isNot(same(cancelled)));
-        expect(again.isQueued, isTrue, reason: 'a job of its own');
-        async.flushTimers();
-        expect('${cancelled.outcome}', 'Cancelled(manual)');
-        expect('${again.outcome}', 'Done(Profile(ada))');
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect(again, isNot(same(cancelled)));
+          expect(again.isQueued, isTrue, reason: 'a job of its own');
+          async.flushTimers();
+          expect('${cancelled.outcome}', 'Cancelled(manual)');
+          expect('${again.outcome}', 'Done(Profile(ada))');
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('restart: the new job waits at the tail, behind what was queued', () {
       fakeAsync((async) {
@@ -1004,120 +1004,133 @@ void main() {
       });
     });
 
-    test('a join around a call the request cannot reach waits the call out',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final replaced = camera.seekWithoutToken(const Duration(seconds: 1));
-        async.elapse(const Duration(milliseconds: 200));
-        final next = camera.seekWithoutToken(const Duration(seconds: 2));
+    test(
+      'a join around a call the request cannot reach waits the call out',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final replaced = camera.seekWithoutToken(const Duration(seconds: 1));
+          async.elapse(const Duration(milliseconds: 200));
+          final next = camera.seekWithoutToken(const Duration(seconds: 2));
 
-        async.elapse(const Duration(milliseconds: 790));
-        expect(replaced.outcome, isNull, reason: '990 ms: the call goes on');
-        expect(next.isRunning, isFalse);
+          async.elapse(const Duration(milliseconds: 790));
+          expect(replaced.outcome, isNull, reason: '990 ms: the call goes on');
+          expect(next.isRunning, isFalse);
 
-        async.flushTimers();
-        expect('${replaced.outcome}', 'Cancelled(replaced)');
-        expect(stage.trace, [
-          'seek 1 begins',
-          'seek 1 ends',
-          'seek 2 begins',
-          'seek 2 ends',
-        ]);
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          async.flushTimers();
+          expect('${replaced.outcome}', 'Cancelled(replaced)');
+          expect(stage.trace, [
+            'seek 1 begins',
+            'seek 1 ends',
+            'seek 2 begins',
+            'seek 2 ends',
+          ]);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
-    test('ctx.abandonable lets go of an operation that finishes on its own',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final replaced = camera.seekLetGo(const Duration(seconds: 1));
-        async.elapse(const Duration(milliseconds: 200));
-        final next = camera.seekLetGo(const Duration(seconds: 2));
-        async.flushMicrotasks();
+    test(
+      'ctx.abandonable lets go of an operation that finishes on its own',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final replaced = camera.seekLetGo(const Duration(seconds: 1));
+          async.elapse(const Duration(milliseconds: 200));
+          final next = camera.seekLetGo(const Duration(seconds: 2));
+          async.flushMicrotasks();
 
-        expect('${replaced.outcome}', 'Cancelled(replaced)', reason: 'at once');
-        expect(next.isRunning, isTrue);
-        async.flushTimers();
-        // The first seek ran to its end on the device, beside the second.
-        expect(stage.trace, [
-          'seek 1 begins',
-          'seek 2 begins',
-          'seek 1 ends',
-          'seek 2 ends',
-        ]);
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect(
+            '${replaced.outcome}',
+            'Cancelled(replaced)',
+            reason: 'at once',
+          );
+          expect(next.isRunning, isTrue);
+          async.flushTimers();
+          // The first seek ran to its end on the device, beside the second.
+          expect(stage.trace, [
+            'seek 1 begins',
+            'seek 2 begins',
+            'seek 1 ends',
+            'seek 2 ends',
+          ]);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
   });
 
   group('A key for each request', () {
-    test('the first attempt: a second load of the same profile shares the job',
-        () {
-      fakeAsync((async) {
-        final camera = first.SharedKeyController();
-        final ada = camera.load('ada');
+    test(
+      'the first attempt: a second load of the same profile shares the job',
+      () {
+        fakeAsync((async) {
+          final camera = first.SharedKeyController();
+          final ada = camera.load('ada');
 
-        expect(camera.load('ada'), same(ada), reason: 'as meant');
-        async.flushTimers();
-        expect(stage.trace, ['load ada begins', 'load ada ends']);
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect(camera.load('ada'), same(ada), reason: 'as meant');
+          async.flushTimers();
+          expect(stage.trace, ['load ada begins', 'load ada ends']);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
-    test('the first attempt: a load of another profile is handed that job too',
-        () {
-      fakeAsync((async) {
-        final camera = first.SharedKeyController();
-        final ada = camera.load('ada');
-        async.flushMicrotasks();
-        final grace = camera.load('grace');
+    test(
+      'the first attempt: a load of another profile is handed that job too',
+      () {
+        fakeAsync((async) {
+          final camera = first.SharedKeyController();
+          final ada = camera.load('ada');
+          async.flushMicrotasks();
+          final grace = camera.load('grace');
 
-        expect(grace, same(ada), reason: 'a duplicate, to the policy');
+          expect(grace, same(ada), reason: 'a duplicate, to the policy');
 
-        Object? got;
-        grace.value.then((profile) => got = profile).ignore();
-        async.flushTimers();
-        expect('$got', 'Profile(ada)', reason: 'the caller asked for grace');
-        expect(
-          stage.trace,
-          ['load ada begins', 'load ada ends'],
-          reason: 'no request for grace',
-        );
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          Object? got;
+          grace.value.then((profile) => got = profile).ignore();
+          async.flushTimers();
+          expect('$got', 'Profile(ada)', reason: 'the caller asked for grace');
+          expect(stage.trace, [
+            'load ada begins',
+            'load ada ends',
+          ], reason: 'no request for grace');
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
-    test('the record key: the same profile shares a load, another one loads',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final ada = camera.load('ada');
-        async.flushMicrotasks();
-        final grace = camera.load('grace');
+    test(
+      'the record key: the same profile shares a load, another one loads',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final ada = camera.load('ada');
+          async.flushMicrotasks();
+          final grace = camera.load('grace');
 
-        expect(camera.load('ada'), same(ada));
-        expect(grace, isNot(same(ada)));
+          expect(camera.load('ada'), same(ada));
+          expect(grace, isNot(same(ada)));
 
-        Object? got;
-        grace.value.then((profile) => got = profile).ignore();
-        async.flushTimers();
-        expect('$got', 'Profile(grace)');
-        expect(stage.trace, [
-          'load ada begins',
-          'load ada ends',
-          'load grace begins',
-          'load grace ends',
-        ]);
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          Object? got;
+          grace.value.then((profile) => got = profile).ignore();
+          async.flushTimers();
+          expect('$got', 'Profile(grace)');
+          expect(stage.trace, [
+            'load ada begins',
+            'load ada ends',
+            'load grace begins',
+            'load grace ends',
+          ]);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('a key is any object, compared with ==', () {
       fakeAsync((async) {
@@ -1189,34 +1202,36 @@ void main() {
       });
     });
 
-    test('a key held by another result type throws before the job is taken',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final held = camera.enqueue<Ready, String>(
-          key: 'k',
-          policy: Policy.droppable,
-          (ctx) async => 'held',
-        );
-        final other = camera.job<Ready, int>(key: 'k', (ctx) async => 1);
+    test(
+      'a key held by another result type throws before the job is taken',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final held = camera.enqueue<Ready, String>(
+            key: 'k',
+            policy: Policy.droppable,
+            (ctx) async => 'held',
+          );
+          final other = camera.job<Ready, int>(key: 'k', (ctx) async => 1);
 
-        expect(
-          () => camera.enqueueJob(other, policy: Policy.droppable),
-          throwsArgumentError,
-        );
-        expect(camera.waiting, ['k'], reason: 'nothing was queued');
-        expect(held.isCancelled, isFalse, reason: 'nothing was cancelled');
-        expect(other.outcome, isNull, reason: 'the handle is untouched');
+          expect(
+            () => camera.enqueueJob(other, policy: Policy.droppable),
+            throwsArgumentError,
+          );
+          expect(camera.waiting, ['k'], reason: 'nothing was queued');
+          expect(held.isCancelled, isFalse, reason: 'nothing was cancelled');
+          expect(other.outcome, isNull, reason: 'the handle is untouched');
 
-        // The same handle, under Policy.sequential.
-        expect(camera.enqueueJob(other), same(other));
-        async.flushTimers();
-        expect('${held.outcome}', 'Done(held)');
-        expect('${other.outcome}', 'Done(1)');
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          // The same handle, under Policy.sequential.
+          expect(camera.enqueueJob(other), same(other));
+          async.flushTimers();
+          expect('${held.outcome}', 'Done(held)');
+          expect('${other.outcome}', 'Done(1)');
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('the refused handle can be added later, once the key is free', () {
       fakeAsync((async) {
@@ -1267,39 +1282,41 @@ void main() {
   });
 
   group('Working the queue directly', () {
-    test('stop() counts what waits, drops the queued zooms, jumps the line',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final running = camera.setZoom(1);
-        async.flushMicrotasks();
-        final save = camera.save();
-        final queued = camera.setZoom(2);
-        late Job<void> stop;
-        final lines = _printed(() => stop = camera.stop());
+    test(
+      'stop() counts what waits, drops the queued zooms, jumps the line',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final running = camera.setZoom(1);
+          async.flushMicrotasks();
+          final save = camera.save();
+          final queued = camera.setZoom(2);
+          late Job<void> stop;
+          final lines = _printed(() => stop = camera.stop());
 
-        expect(lines, ['2'], reason: 'a save and a zoom were waiting');
-        expect('${queued.outcome}', 'Cancelled(manual)');
-        expect(camera.waiting, ['_Op.stop', '_Op.save']);
-        // The zoom that runs is neither removed nor interrupted.
-        expect(running.isCancelled, isFalse);
+          expect(lines, ['2'], reason: 'a save and a zoom were waiting');
+          expect('${queued.outcome}', 'Cancelled(manual)');
+          expect(camera.waiting, ['_Op.stop', '_Op.save']);
+          // The zoom that runs is neither removed nor interrupted.
+          expect(running.isCancelled, isFalse);
 
-        async.flushTimers();
-        expect('${running.outcome}', 'Done(null)');
-        expect('${stop.outcome}', 'Done(null)');
-        expect('${save.outcome}', 'Done(null)');
-        expect(stage.trace, [
-          'zoom 1.0 begins',
-          'zoom 1.0 ends',
-          'stop begins',
-          'stop ends',
-          'save begins',
-          'save ends',
-        ]);
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          async.flushTimers();
+          expect('${running.outcome}', 'Done(null)');
+          expect('${stop.outcome}', 'Done(null)');
+          expect('${save.outcome}', 'Done(null)');
+          expect(stage.trace, [
+            'zoom 1.0 begins',
+            'zoom 1.0 ends',
+            'stop begins',
+            'stop ends',
+            'save begins',
+            'save ends',
+          ]);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('queue shows jobs, length, isEmpty and isNotEmpty', () {
       fakeAsync((async) {
@@ -1321,23 +1338,25 @@ void main() {
       });
     });
 
-    test('lastJobWhere: the last queued job that passes, else the running one',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final running = camera.work('a');
-        async.flushMicrotasks();
+    test(
+      'lastJobWhere: the last queued job that passes, else the running one',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final running = camera.work('a');
+          async.flushMicrotasks();
 
-        expect(camera.lastJobWhere((job) => job.key == 'a'), same(running));
+          expect(camera.lastJobWhere((job) => job.key == 'a'), same(running));
 
-        camera.work('a');
-        final last = camera.work('a');
-        expect(camera.lastJobWhere((job) => job.key == 'a'), same(last));
-        expect(camera.lastJobWhere((job) => job.key == 'none'), isNull);
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          camera.work('a');
+          final last = camera.work('a');
+          expect(camera.lastJobWhere((job) => job.key == 'a'), same(last));
+          expect(camera.lastJobWhere((job) => job.key == 'none'), isNull);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('remove, removeWhere and clear touch queued jobs only', () {
       fakeAsync((async) {
@@ -1406,23 +1425,25 @@ void main() {
       });
     });
 
-    test('cancelAll clears the queue, cancels the running job, takes a reason',
-        () {
-      fakeAsync((async) {
-        final camera = page.CameraController();
-        final running = camera.work('running');
-        async.flushMicrotasks();
-        final queued = camera.work('queued');
-        camera.cancelAll(reason: const _Obsolete()).ignore();
-        async.flushTimers();
+    test(
+      'cancelAll clears the queue, cancels the running job, takes a reason',
+      () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          final running = camera.work('running');
+          async.flushMicrotasks();
+          final queued = camera.work('queued');
+          camera.cancelAll(reason: const _Obsolete()).ignore();
+          async.flushTimers();
 
-        expect('${running.outcome}', 'Cancelled(obsolete)');
-        expect('${queued.outcome}', 'Cancelled(obsolete)');
-        expect(stage.trace, ['running starts'], reason: 'neither went on');
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect('${running.outcome}', 'Cancelled(obsolete)');
+          expect('${queued.outcome}', 'Cancelled(obsolete)');
+          expect(stage.trace, ['running starts'], reason: 'neither went on');
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('the head of jobs is not always what starts next', () {
       fakeAsync((async) {
@@ -1577,13 +1598,11 @@ void main() {
         });
       });
 
-      for (final (name, take) in <(
-        String,
-        void Function(first.BodyGateController camera),
-      )>[
-        ('queue.clear()', (camera) => camera.queue.clear()),
-        ('cancelAll()', (camera) => camera.cancelAll().ignore()),
-      ]) {
+      for (final (name, take)
+          in <(String, void Function(first.BodyGateController camera))>[
+            ('queue.clear()', (camera) => camera.queue.clear()),
+            ('cancelAll()', (camera) => camera.cancelAll().ignore()),
+          ]) {
         test('$name while the gate waits its turn leaves the field set', () {
           fakeAsync((async) {
             final camera = first.BodyGateController()..work('running');
@@ -1728,16 +1747,19 @@ void main() {
 
   group('The page', () {
     test('three sections open with a first attempt', () {
-      final attempts = RegExp(r'^#### The first attempt$', multiLine: true)
-          .allMatches(_page())
-          .length;
+      final attempts = RegExp(
+        r'^#### The first attempt$',
+        multiLine: true,
+      ).allMatches(_page()).length;
       expect(attempts, 3);
     });
 
     test('two of them go on to a second attempt', () {
       expect(
-        RegExp(r'^#### The second attempt$', multiLine: true)
-            .allMatches(_page()),
+        RegExp(
+          r'^#### The second attempt$',
+          multiLine: true,
+        ).allMatches(_page()),
         hasLength(2),
       );
     });
@@ -1763,20 +1785,19 @@ void main() {
     };
     for (final MapEntry(key: heading, value: holder) in holders.entries) {
       test('the code under "$heading" is a run of lines of $holder', () {
-        expect(
-          codeMissingFrom('doc/jobs.md', holder, under: heading),
-          isEmpty,
-        );
+        expect(codeMissingFrom('doc/jobs.md', holder, under: heading), isEmpty);
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom('doc/jobs.md', answers, alsoIn: [firstAttempts]),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom('doc/jobs.md', answers, alsoIn: [firstAttempts]),
+          isEmpty,
+        );
+      },
+    );
 
     test('every heading with code under it is held to a file', () {
       final withCode = [

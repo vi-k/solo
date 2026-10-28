@@ -27,16 +27,13 @@
 
 ```dart
 // Первая попытка: состояние проверяется один раз, на старте.
-Job<void> record() => enqueue<CameraState, void>(
-      key: 'record',
-      (ctx) async {
-        final state = ctx.state;
-        if (state is! Ready || state.free == 0 || state.paused) return;
-        await for (final frame in device.frames) {
-          await store(frame);
-        }
-      },
-    );
+Job<void> record() => enqueue<CameraState, void>(key: 'record', (ctx) async {
+  final state = ctx.state;
+  if (state is! Ready || state.free == 0 || state.paused) return;
+  await for (final frame in device.frames) {
+    await store(frame);
+  }
+});
 ```
 
 Вот что происходит:
@@ -53,13 +50,13 @@ Job<void> record() => enqueue<CameraState, void>(
 
 ```dart
 Job<void> record() => enqueue<Ready, void>(
-      key: 'record',
-      canStart: (state) => state.free > 0,
-      keepWhile: (state) => !state.paused,
-      (ctx) => ctx.each(device.frames, (child, frame) async {
-        await child.join(() => store(frame));
-      }).value,
-    );
+  key: 'record',
+  canStart: (state) => state.free > 0,
+  keepWhile: (state) => !state.paused,
+  (ctx) => ctx.each(device.frames, (child, frame) async {
+    await child.join(() => store(frame));
+  }).value,
+);
 ```
 
 Правила задаются параметрами, и движок проверяет их за задачу. Рабочий тип
@@ -106,15 +103,13 @@ Job<void> record() => enqueue<Ready, void>(
 ### Чтение и изменение состояния
 
 ```dart
-Job<void> zoomIn() => enqueue<Ready, void>(
-      (ctx) async {
-        // Чтение служит контрольной точкой: проверяются отмена и правила.
-        final state = ctx.state;
+Job<void> zoomIn() => enqueue<Ready, void>((ctx) async {
+  // Чтение служит контрольной точкой: проверяются отмена и правила.
+  final state = ctx.state;
 
-        // Другого способа записи у тела нет, и эта запись синхронная.
-        ctx.emit(state.copyWith(zoom: state.zoom + 1));
-      },
-    );
+  // Другого способа записи у тела нет, и эта запись синхронная.
+  ctx.emit(state.copyWith(zoom: state.zoom + 1));
+});
 ```
 
 `ctx.state`, `ctx.stateAs<T>()` и `ctx.check()` проверяют отмену и правила
@@ -127,18 +122,18 @@ Job<void> zoomIn() => enqueue<Ready, void>(
 
 ```dart
 Job<void> switchOn(int zoom) => enqueue<CameraState, void>(
-      canStart: (state) => state is Off,
-      (ctx) async {
-        // W включает все состояния, поэтому после каждого ожидания тело
-        // называет то, которое ему нужно.
-        await ctx.join(device.powerUp);
-        ctx.stateAs<Off>();
-        ctx.emit(const Ready());
+  canStart: (state) => state is Off,
+  (ctx) async {
+    // W включает все состояния, поэтому после каждого ожидания тело
+    // называет то, которое ему нужно.
+    await ctx.join(device.powerUp);
+    ctx.stateAs<Off>();
+    ctx.emit(const Ready());
 
-        await ctx.join(() => device.setZoom(zoom));
-        ctx.emit(ctx.stateAs<Ready>().copyWith(zoom: zoom));
-      },
-    );
+    await ctx.join(() => device.setZoom(zoom));
+    ctx.emit(ctx.stateAs<Ready>().copyWith(zoom: zoom));
+  },
+);
 ```
 
 `switchOn` начинает в `Off` и продолжает в `Ready`, который сам записывает. Его
@@ -485,9 +480,9 @@ final class Saved extends CameraState {
 }
 
 Job<void> shoot() => enqueue<Ready, void>((ctx) async {
-      final photo = await ctx.join(device.shoot);
-      ctx.emit(Saved(photo));
-    });
+  final photo = await ctx.join(device.shoot);
+  ctx.emit(Saved(photo));
+});
 
 Job<void> accept() =>
     enqueue<Saved, void>((ctx) async => ctx.emit(const Ready()));
@@ -511,9 +506,9 @@ Job<void> accept() =>
 ```dart
 // Вторая попытка: приёмка ждёт за записью.
 Job<void> shoot() => enqueue<Ready, void>((ctx) async {
-      final photo = await ctx.join(device.shoot);
-      ctx.emit(ctx.state.withNotice(photo));
-    });
+  final photo = await ctx.join(device.shoot);
+  ctx.emit(ctx.state.withNotice(photo));
+});
 
 Job<void> accept() =>
     enqueue<Ready, void>((ctx) async => ctx.emit(ctx.state.withNotice(null)));
@@ -554,9 +549,9 @@ final class Notices extends Solo<NoticeBoard> {
       enqueue<NoticeBoard, void>((ctx) async => ctx.emit(NoticeBoard(notice)));
 
   Job<void> accept(Notice notice) => enqueue<NoticeBoard, void>((ctx) async {
-        // Только то уведомление, которое показал экран: новое остаётся.
-        if (identical(ctx.state.notice, notice)) ctx.emit(const NoticeBoard());
-      });
+    // Только то уведомление, которое показал экран: новое остаётся.
+    if (identical(ctx.state.notice, notice)) ctx.emit(const NoticeBoard());
+  });
 }
 ```
 
@@ -564,9 +559,9 @@ final class Notices extends Solo<NoticeBoard> {
 
 ```dart
 Job<void> shoot() => enqueue<Ready, void>((ctx) async {
-      final photo = await ctx.join(device.shoot);
-      notices.post(Notice(photo));
-    });
+  final photo = await ctx.join(device.shoot);
+  notices.post(Notice(photo));
+});
 ```
 
 Уведомления живут в своём контроллере. Его очередь держит только короткие
@@ -624,19 +619,17 @@ README пакета публикует `Loading` до того, как его з
 
 ```dart
 // Первая попытка: отмена оставляет состояние в Loading.
-enqueue<ProfileState, String>(
-  (ctx) async {
-    ctx.emit(const Loading());
-    try {
-      final name = await ctx.abandonable(api.fetchName);
-      ctx.emit(Loaded(name));
-      return name;
-    } on Object {
-      ctx.emit(const Initial());
-      rethrow;
-    }
-  },
-);
+enqueue<ProfileState, String>((ctx) async {
+  ctx.emit(const Loading());
+  try {
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  } on Object {
+    ctx.emit(const Initial());
+    rethrow;
+  }
+});
 ```
 
 Вот что происходит:
@@ -697,17 +690,17 @@ final class Disconnected extends ProfileState {
 }
 
 Job<String> load() => enqueue<ProfileState, String>(
-      key: 'load',
-      policy: Policy.droppable,
-      ifFailed: (state, error, stackTrace) => Failure(error),
-      ifCancelled: (state, cancelled) => const Initial(),
-      (ctx) async {
-        ctx.emit(const Loading());
-        final name = await ctx.abandonable(api.fetchName);
-        ctx.emit(Loaded(name));
-        return name;
-      },
-    );
+  key: 'load',
+  policy: Policy.droppable,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  ifCancelled: (state, cancelled) => const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
 ```
 
 Здесь ничто не говорит, что у загрузки есть мнение о `Disconnected`, поэтому
@@ -724,18 +717,18 @@ Job<String> load() => enqueue<ProfileState, String>(
 
 ```dart
 Job<String> load() => enqueue<ProfileState, String>(
-      key: 'load',
-      policy: Policy.droppable,
-      keepWhile: (state) => state is! Disconnected,
-      ifFailed: (state, error, stackTrace) => Failure(error),
-      ifCancelled: (state, cancelled) => const Initial(),
-      (ctx) async {
-        ctx.emit(const Loading());
-        final name = await ctx.abandonable(api.fetchName);
-        ctx.emit(Loaded(name));
-        return name;
-      },
-    );
+  key: 'load',
+  policy: Policy.droppable,
+  keepWhile: (state) => state is! Disconnected,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  ifCancelled: (state, cancelled) => const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
 ```
 
 Под работающей загрузкой пропадает связь, и контроллер публикует `Disconnected`
@@ -785,19 +778,19 @@ Job<String> load() => enqueue<ProfileState, String>(
 
 ```dart
 Job<String> reload() => enqueue<ProfileState, String>(
-      key: 'load',
-      policy: Policy.restart,
-      ifFailed: (state, error, stackTrace) => Failure(error),
-      // Новая загрузка публикует своё состояние сама.
-      ifCancelled: (state, cancelled) =>
-          cancelled.reason is ReplacedCancelReason ? state : const Initial(),
-      (ctx) async {
-        ctx.emit(const Loading());
-        final name = await ctx.abandonable(api.fetchName);
-        ctx.emit(Loaded(name));
-        return name;
-      },
-    );
+  key: 'load',
+  policy: Policy.restart,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  // Новая загрузка публикует своё состояние сама.
+  ifCancelled: (state, cancelled) =>
+      cancelled.reason is ReplacedCancelReason ? state : const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
 ```
 
 Отменённая иначе, руками или через `close()`, перезагрузка по-прежнему

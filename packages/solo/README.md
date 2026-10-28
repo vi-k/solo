@@ -67,10 +67,8 @@ application's API client:
 
 ```dart
 class ProfileApi {
-  Future<String> fetchName() => Future.delayed(
-        const Duration(milliseconds: 20),
-        () => 'Ada Lovelace',
-      );
+  Future<String> fetchName() =>
+      Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
 }
 
 final class ProfileController extends Solo<ProfileState> {
@@ -79,17 +77,17 @@ final class ProfileController extends Solo<ProfileState> {
   ProfileController(this.api) : super(const Initial());
 
   Job<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.droppable,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 }
 ```
 
@@ -214,45 +212,45 @@ final class Player extends Solo<PlayerState> {
   /// A job on the controller's queue. Root jobs run one at a time, and
   /// this one ends when the track starts: the device plays it on its own.
   Job<Track> play(String id) => enqueue<PlayerState, Track>(
-        // Any object is a key. This one keys the operation, not a track.
-        key: _Op.play,
-        // A new play cancels the one running under the same key.
-        policy: Policy.restart,
-        // A rule: asked before the start, and on every change of state
-        // while the body runs, except one the body makes with `ctx.emit`.
-        keepWhile: (state) => state is! Disconnected,
-        // The state to publish when the job fails or is cancelled. If the
-        // job is cancelled by the rule, nothing is published and
-        // `Disconnected` stays. A play replaced by a newer one hands back
-        // the state it was given, which publishes nothing.
-        ifFailed: (state, error, stackTrace) => const Idle(),
-        ifCancelled: (state, cancelled) =>
-            cancelled.reason is ReplacedCancelReason ? state : const Idle(),
-        (ctx) async {
-          // The body's way to change state. There is no setter outside.
-          ctx.emit(const Loading());
-          // Waited out whatever happens: the track playing now stops
-          // before another one loads.
-          await ctx.join(device.stop);
-          // Cancellation ends this wait at once; the request may go on.
-          final track = await ctx.abandonable(() => api.fetch(id));
-          // Waited out as well. `dispose` closes the download when the
-          // job ends, or as soon as the call returns if the job was
-          // cancelled meanwhile.
-          final download = await ctx.join(
-            () => api.download(track),
-            dispose: (download) => download.close(),
-          );
-          // A child job: the device reads the download in, and its stream
-          // ends when the track starts. The body awaits its `value` and
-          // goes on once the track plays.
-          await ctx.each(device.load(download), (childCtx, percent) {
-            childCtx.emit(Buffering(track, percent));
-          }).value;
-          ctx.emit(Playing(track));
-          return track;
-        },
+    // Any object is a key. This one keys the operation, not a track.
+    key: _Op.play,
+    // A new play cancels the one running under the same key.
+    policy: Policy.restart,
+    // A rule: asked before the start, and on every change of state
+    // while the body runs, except one the body makes with `ctx.emit`.
+    keepWhile: (state) => state is! Disconnected,
+    // The state to publish when the job fails or is cancelled. If the
+    // job is cancelled by the rule, nothing is published and
+    // `Disconnected` stays. A play replaced by a newer one hands back
+    // the state it was given, which publishes nothing.
+    ifFailed: (state, error, stackTrace) => const Idle(),
+    ifCancelled: (state, cancelled) =>
+        cancelled.reason is ReplacedCancelReason ? state : const Idle(),
+    (ctx) async {
+      // The body's way to change state. There is no setter outside.
+      ctx.emit(const Loading());
+      // Waited out whatever happens: the track playing now stops
+      // before another one loads.
+      await ctx.join(device.stop);
+      // Cancellation ends this wait at once; the request may go on.
+      final track = await ctx.abandonable(() => api.fetch(id));
+      // Waited out as well. `dispose` closes the download when the
+      // job ends, or as soon as the call returns if the job was
+      // cancelled meanwhile.
+      final download = await ctx.join(
+        () => api.download(track),
+        dispose: (download) => download.close(),
       );
+      // A child job: the device reads the download in, and its stream
+      // ends when the track starts. The body awaits its `value` and
+      // goes on once the track plays.
+      await ctx.each(device.load(download), (childCtx, percent) {
+        childCtx.emit(Buffering(track, percent));
+      }).value;
+      ctx.emit(Playing(track));
+      return track;
+    },
+  );
 
   /// Events that share one queued job: only the last volume matters.
   late final _volume = accumulate<PlayerState, double, void>(
@@ -305,20 +303,18 @@ the field `session`. The profile API now takes the user: `fetchName(user)`. A
 method that reloads a loaded profile:
 
 ```dart
-Job<String> reload() => enqueue<Loaded, String>(
-      (ctx) async {
-        // Another controller's snapshot: a plain read, and the name says
-        // as much.
-        final user = session.currentState.user;
-        final name = await ctx.abandonable(() => api.fetchName(user));
-        // This job's own state: a checkpoint that throws `Cancelled` if
-        // the job has been cancelled or the state is no longer `Loaded`.
-        if (ctx.state.name != name) {
-          ctx.emit(Loaded(name));
-        }
-        return name;
-      },
-    );
+Job<String> reload() => enqueue<Loaded, String>((ctx) async {
+  // Another controller's snapshot: a plain read, and the name says
+  // as much.
+  final user = session.currentState.user;
+  final name = await ctx.abandonable(() => api.fetchName(user));
+  // This job's own state: a checkpoint that throws `Cancelled` if
+  // the job has been cancelled or the state is no longer `Loaded`.
+  if (ctx.state.name != name) {
+    ctx.emit(Loaded(name));
+  }
+  return name;
+});
 ```
 
 A job body is a closure inside a method of the controller, so every member of

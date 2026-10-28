@@ -51,15 +51,14 @@ abstract interface class Job<T> {
     bool cancellable = true,
     Duration? timeout,
     JobObserver? observer,
-  }) =>
-      _AutoJob<T>(
-        body,
-        key: key,
-        describe: describe,
-        cancellable: cancellable,
-        timeout: timeout,
-        observer: observer,
-      );
+  }) => _AutoJob<T>(
+    body,
+    key: key,
+    describe: describe,
+    cancellable: cancellable,
+    timeout: timeout,
+    observer: observer,
+  );
 
   /// Creates a job that waits to be told to start.
   ///
@@ -82,15 +81,14 @@ abstract interface class Job<T> {
     bool cancellable = true,
     Duration? timeout,
     JobObserver? observer,
-  }) =>
-      _DeferredJob<T>(
-        body,
-        key: key,
-        describe: describe,
-        cancellable: cancellable,
-        timeout: timeout,
-        observer: observer,
-      );
+  }) => _DeferredJob<T>(
+    body,
+    key: key,
+    describe: describe,
+    cancellable: cancellable,
+    timeout: timeout,
+    observer: observer,
+  );
 
   /// Creates a root job that follows [stream], one event at a time.
   ///
@@ -125,14 +123,13 @@ abstract interface class Job<T> {
     String Function()? describe,
     bool cancellable = true,
     JobObserver? observer,
-  }) =>
-      _EachJob(
-        (ctx) => ctx._followStream(stream, (event) => onData(ctx, event)),
-        key: key,
-        describe: describe ?? () => 'each',
-        cancellable: cancellable,
-        observer: observer,
-      )..start();
+  }) => _EachJob(
+    (ctx) => ctx._followStream(stream, (event) => onData(ctx, event)),
+    key: key,
+    describe: describe ?? () => 'each',
+    cancellable: cancellable,
+    observer: observer,
+  )..start();
 
   /// Tracing of the job lifecycle for debugging; `null` by default.
   ///
@@ -213,13 +210,12 @@ abstract interface class Job<T> {
     StackTrace stackTrace, {
     required void Function(Object error, StackTrace stackTrace) onFailure,
     void Function(Cancelled cancelled, StackTrace stackTrace)? onCancelled,
-  }) =>
-      _visitErrors(
-        error,
-        stackTrace,
-        onFailure: onFailure,
-        onCancelled: onCancelled,
-      );
+  }) => _visitErrors(
+    error,
+    stackTrace,
+    onFailure: onFailure,
+    onCancelled: onCancelled,
+  );
 
   /// The key given at creation.
   ///

@@ -134,8 +134,7 @@ void main() {
       final job = Job.each(controller.stream, (ctx, event) {
         calls++;
         throw StateError('onData');
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       controller
         ..add(1)
         ..add(2);
@@ -349,16 +348,13 @@ void main() {
           Job<void>(
             (ctx) async {
               ctx.unattended(() {
-                runZoned(
-                  () {
-                    Job.each(controller.stream, (ctx, event) {
-                      tag = Zone.current[#tag];
-                      fork = Zone.current[#fork];
-                      throw StateError('inner');
-                    });
-                  },
-                  zoneValues: {#fork: true},
-                );
+                runZoned(() {
+                  Job.each(controller.stream, (ctx, event) {
+                    tag = Zone.current[#tag];
+                    fork = Zone.current[#fork];
+                    throw StateError('inner');
+                  });
+                }, zoneValues: {#fork: true});
               });
             },
             key: 'outer',

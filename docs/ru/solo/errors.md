@@ -116,8 +116,7 @@ final class ProfileController extends Solo<ProfileState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      reportCrash(error, stackTrace);
+  }) => reportCrash(error, stackTrace);
 }
 ```
 
@@ -171,8 +170,7 @@ final class Failures extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      reportCrash(error, stackTrace);
+  }) => reportCrash(error, stackTrace);
 }
 ```
 
@@ -379,7 +377,7 @@ try {
 ```dart
 // Первая попытка: отмена дожидается конца задержек.
 ctx.emit(const Loading());
-for (var attempt = 1;; attempt++) {
+for (var attempt = 1; ; attempt++) {
   final String name;
   try {
     name = await ctx.abandonable(api.fetchName);
@@ -413,7 +411,7 @@ for (var attempt = 1;; attempt++) {
 
 ```dart
 ctx.emit(const Loading());
-for (var attempt = 1;; attempt++) {
+for (var attempt = 1; ; attempt++) {
   final String name;
   try {
     name = await ctx.abandonable(api.fetchName);
@@ -450,7 +448,7 @@ for (var attempt = 1;; attempt++) {
 
 ```dart
 Future<Outcome<String>> loadWithRetries(ProfileController profile) async {
-  for (var attempt = 1;; attempt++) {
+  for (var attempt = 1; ; attempt++) {
     final outcome = await profile.load().done;
     if (outcome is! Failed || attempt == 3) return outcome;
     await Future<void>.delayed(Duration(seconds: attempt));

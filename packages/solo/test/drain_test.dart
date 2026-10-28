@@ -8,13 +8,11 @@ import 'support/run_solo.dart';
 import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
-SoloJob<void> step(TestSolo solo, String name) => solo.enqueue<TestState, void>(
-      key: name,
-      (ctx) async {
-        await delay(50);
-        ctx.emit(const Preparing());
-      },
-    );
+SoloJob<void> step(TestSolo solo, String name) =>
+    solo.enqueue<TestState, void>(key: name, (ctx) async {
+      await delay(50);
+      ctx.emit(const Preparing());
+    });
 
 void main() {
   test('a drain runs what was already queued', () {
@@ -68,10 +66,7 @@ void main() {
       solo.enqueue<TestState, void>(key: 'job', (ctx) async {
         ctx.onDispose(() => ctx.log('cleaned'));
         await ctx.run(
-          solo.job<TestState, void>(
-            key: 'child',
-            (childCtx) => delay(30),
-          ),
+          solo.job<TestState, void>(key: 'child', (childCtx) => delay(30)),
         );
       });
       async.flushMicrotasks();
@@ -199,10 +194,7 @@ void main() {
 
       expect(closed, isTrue, reason: 'the drain has nothing left to drain');
       expect(solo.isDraining, isFalse);
-      expect(journal.take(), [
-        '[metrics] dropped Cancelled(manual)',
-        'closed',
-      ]);
+      expect(journal.take(), ['[metrics] dropped Cancelled(manual)', 'closed']);
     });
   });
 
@@ -225,10 +217,7 @@ void main() {
       async.flushTimers();
 
       expect(closed, isTrue);
-      expect(journal.take(), [
-        '[metrics] dropped Cancelled(manual)',
-        'closed',
-      ]);
+      expect(journal.take(), ['[metrics] dropped Cancelled(manual)', 'closed']);
     });
   });
 
@@ -252,7 +241,8 @@ void main() {
       expect(
         async.pendingTimers,
         isEmpty,
-        reason: 'an interval timer outliving the controller holds the '
+        reason:
+            'an interval timer outliving the controller holds the '
             'accumulator, and the accumulator holds the controller',
       );
       expect(journal.take(), [
@@ -281,43 +271,41 @@ void main() {
     });
   });
 
-  test('a droppable call during a drain gets back the job that holds its key',
-      () {
-    runSolo((solo, journal, async) {
-      SoloJob<void> keyed(String key, Policy policy) =>
-          solo.enqueue<TestState, void>(
-            key: key,
-            policy: policy,
-            (ctx) async {
+  test(
+    'a droppable call during a drain gets back the job that holds its key',
+    () {
+      runSolo((solo, journal, async) {
+        SoloJob<void> keyed(String key, Policy policy) => solo
+            .enqueue<TestState, void>(key: key, policy: policy, (ctx) async {
               await delay(50);
               ctx.emit(const Preparing());
-            },
-          );
-      final running = keyed('running', Policy.droppable);
-      final queued = keyed('queued', Policy.droppable);
-      async.flushMicrotasks();
-      solo.close(mode: SoloCloseMode.drain).ignore();
-      expect(identical(keyed('running', Policy.droppable), running), isTrue);
-      expect(identical(keyed('queued', Policy.droppable), queued), isTrue);
-      final fresh = keyed('fresh', Policy.droppable);
-      async.flushTimers();
-      expect(running.outcome, isA<Done<void>>());
-      expect(queued.outcome, isA<Done<void>>());
-      expect(fresh.outcome, isA<Cancelled>());
-      expect(journal.take(), [
-        '[running] started',
-        '[running] dropped Cancelled(duplicate)',
-        '[queued] dropped Cancelled(duplicate)',
-        '[fresh] dropped Cancelled(closed)',
-        'state: Preparing(progress: 0)',
-        '[running] finished Done(null)',
-        '[queued] started',
-        'state: Preparing(progress: 0)',
-        '[queued] finished Done(null)',
-        'closed',
-      ]);
-    });
-  });
+            });
+        final running = keyed('running', Policy.droppable);
+        final queued = keyed('queued', Policy.droppable);
+        async.flushMicrotasks();
+        solo.close(mode: SoloCloseMode.drain).ignore();
+        expect(identical(keyed('running', Policy.droppable), running), isTrue);
+        expect(identical(keyed('queued', Policy.droppable), queued), isTrue);
+        final fresh = keyed('fresh', Policy.droppable);
+        async.flushTimers();
+        expect(running.outcome, isA<Done<void>>());
+        expect(queued.outcome, isA<Done<void>>());
+        expect(fresh.outcome, isA<Cancelled>());
+        expect(journal.take(), [
+          '[running] started',
+          '[running] dropped Cancelled(duplicate)',
+          '[queued] dropped Cancelled(duplicate)',
+          '[fresh] dropped Cancelled(closed)',
+          'state: Preparing(progress: 0)',
+          '[running] finished Done(null)',
+          '[queued] started',
+          'state: Preparing(progress: 0)',
+          '[queued] finished Done(null)',
+          'closed',
+        ]);
+      });
+    },
+  );
 
   // The other policies with a key bring new work, and a drain takes none:
   // the queued job is neither replaced nor restarted.
@@ -325,13 +313,13 @@ void main() {
     test('a $policy call during a drain is refused and leaves the queue', () {
       runSolo((solo, journal, async) {
         SoloJob<void> keyed() => solo.enqueue<TestState, void>(
-              key: 'k',
-              policy: policy,
-              (ctx) async {
-                await delay(50);
-                ctx.emit(const Preparing());
-              },
-            );
+          key: 'k',
+          policy: policy,
+          (ctx) async {
+            await delay(50);
+            ctx.emit(const Preparing());
+          },
+        );
         final running = keyed();
         async.flushMicrotasks();
         solo.close(mode: SoloCloseMode.drain).ignore();

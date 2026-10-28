@@ -198,8 +198,7 @@ void main() {
     });
 
     for (final waiting in [false, true]) {
-      test(
-          'cancelAll() while the gate '
+      test('cancelAll() while the gate '
           '${waiting ? 'waits its turn' : 'runs'}: the queue moves on', () {
         fakeAsync((async) {
           final camera = CameraController();
@@ -254,24 +253,26 @@ void main() {
       });
     });
 
-    test('a gate whose turn comes outside Ready begins the pause all the same',
-        () {
-      fakeAsync((async) {
-        final camera = CameraController()..work('running');
-        async.flushMicrotasks();
-        camera
-          ..pause()
-          ..externalSetState(const Disconnected());
-        final job = camera.work('in any state');
-        async.elapse(const Duration(seconds: 1));
+    test(
+      'a gate whose turn comes outside Ready begins the pause all the same',
+      () {
+        fakeAsync((async) {
+          final camera = CameraController()..work('running');
+          async.flushMicrotasks();
+          camera
+            ..pause()
+            ..externalSetState(const Disconnected());
+          final job = camera.work('in any state');
+          async.elapse(const Duration(seconds: 1));
 
-        expect(camera.runningKey, '_Op.pause');
-        expect(camera.isPaused, isTrue);
-        expect(job.outcome, isNull);
-        camera.close().ignore();
-        async.flushTimers();
-      });
-    });
+          expect(camera.runningKey, '_Op.pause');
+          expect(camera.isPaused, isTrue);
+          expect(job.outcome, isNull);
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      },
+    );
   });
 
   group('the handle of the gate', () {

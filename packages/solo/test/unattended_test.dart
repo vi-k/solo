@@ -30,8 +30,7 @@ final class _Recorder extends Solo<TestState> with OpenSolo<TestState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      lines.add('$name.onError [${job.key}] $error');
+  }) => lines.add('$name.onError [${job.key}] $error');
   // A recorder of a test: it answers for the errors here, so nothing
   // reaches the handler or the zone.
   @override
@@ -198,32 +197,34 @@ void main() {
     expect(lines, isEmpty);
   });
 
-  test('a fresh Cancelled(rules) from a leaked context reaches the observer',
-      () {
-    final lines = <String>[];
-    fakeAsync((async) {
-      final solo = _Recorder('solo', lines)
-        ..enqueue<TestState, void>(
-          key: 'j',
-          keepWhile: (state) => state is! Working,
-          (ctx) async {
-            ctx.unattended(() async {
-              await delay(30);
-              // The job is long over and the state has left the rule:
-              // this read builds a cancellation of its own, and the
-              // filter lets it through — there is nobody left to cancel.
-              ctx.state;
-            });
-          },
-        );
-      async.elapse(const Duration(milliseconds: 10));
-      solo.set(const Working());
-      async.flushTimers();
-      solo.close();
-      async.flushTimers();
-    });
-    expect(lines, ['solo.onError [j] Cancelled(rules: keepWhile)']);
-  });
+  test(
+    'a fresh Cancelled(rules) from a leaked context reaches the observer',
+    () {
+      final lines = <String>[];
+      fakeAsync((async) {
+        final solo = _Recorder('solo', lines)
+          ..enqueue<TestState, void>(
+            key: 'j',
+            keepWhile: (state) => state is! Working,
+            (ctx) async {
+              ctx.unattended(() async {
+                await delay(30);
+                // The job is long over and the state has left the rule:
+                // this read builds a cancellation of its own, and the
+                // filter lets it through — there is nobody left to cancel.
+                ctx.state;
+              });
+            },
+          );
+        async.elapse(const Duration(milliseconds: 10));
+        solo.set(const Working());
+        async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
+      expect(lines, ['solo.onError [j] Cancelled(rules: keepWhile)']);
+    },
+  );
 }
 
 final class _Watched extends Solo<TestState> with OpenSolo<TestState> {
@@ -241,8 +242,7 @@ final class _Watched extends Solo<TestState> with OpenSolo<TestState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      lines.add('error ${job.key} $error');
+  }) => lines.add('error ${job.key} $error');
   // A recorder of a test: it reads the errors and answers for them here,
   // so nothing reaches the handler or the zone.
   @override

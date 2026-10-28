@@ -128,8 +128,9 @@ void main() {
   test('remove skips a cancellable: false job unless forced', () {
     runSolo((solo, journal, async) {
       solo.enqueueJob(slow(solo, 'a'));
-      final stubborn =
-          solo.enqueueJob(slow(solo, 'stubborn', cancellable: false));
+      final stubborn = solo.enqueueJob(
+        slow(solo, 'stubborn', cancellable: false),
+      );
       expect(solo.queue.remove(stubborn), isFalse);
       expect(solo.queue.isNotEmpty, isTrue);
       expect(solo.queue.remove(stubborn, force: true), isTrue);
@@ -179,9 +180,9 @@ void main() {
             removed = switch (how) {
               'remove' => solo.queue.remove(b) ? 1 : 0,
               'removeWhere' => solo.queue.removeWhere((job) {
-                  asked.add(job.key);
-                  return job.key == 'b';
-                }),
+                asked.add(job.key);
+                return job.key == 'b';
+              }),
               _ => solo.queue.clear(),
             };
             return true;
@@ -282,10 +283,7 @@ void main() {
       solo.cancelAll().then((_) => done = true);
       async.flushMicrotasks();
       expect(done, isFalse);
-      expect(journal.take(), [
-        '[a] started',
-        '[b] dropped Cancelled(manual)',
-      ]);
+      expect(journal.take(), ['[a] started', '[b] dropped Cancelled(manual)']);
       async.elapse(const Duration(milliseconds: 50));
       expect(done, isTrue);
       expect(journal.take(), [

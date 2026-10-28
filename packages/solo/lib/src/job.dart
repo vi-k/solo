@@ -60,12 +60,12 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     required super.observer,
     S Function(S, Object, StackTrace)? ifFailed,
     S Function(S, Cancelled)? ifCancelled,
-  })  : _body = body,
-        _canStart = canStart,
-        _keepWhile = keepWhile,
-        _ifFailed = ifFailed,
-        _ifCancelled = ifCancelled,
-        _hasStateHandlers = ifFailed != null || ifCancelled != null;
+  }) : _body = body,
+       _canStart = canStart,
+       _keepWhile = keepWhile,
+       _ifFailed = ifFailed,
+       _ifCancelled = ifCancelled,
+       _hasStateHandlers = ifFailed != null || ifCancelled != null;
 
   @override
   bool get isQueued => _solo._queue._jobs.contains(this);
@@ -172,19 +172,18 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     required bool closing,
     required bool draining,
     required List<Job<Object?>> queued,
-  }) =>
-      SoloPendingJob(
-        job: this,
-        phase: _phase,
-        cancellation: pendingCancel,
-        heldCancellation: heldCancel,
-        children: children.length,
-        inUncancellableSection: inUncancellableSection,
-        cancellable: cancellable,
-        closing: closing,
-        draining: draining,
-        queued: queued,
-      );
+  }) => SoloPendingJob(
+    job: this,
+    phase: _phase,
+    cancellation: pendingCancel,
+    heldCancellation: heldCancel,
+    children: children.length,
+    inUncancellableSection: inUncancellableSection,
+    cancellable: cancellable,
+    closing: closing,
+    draining: draining,
+    queued: queued,
+  );
 
   SoloPhase get _phase {
     if (isDisposing) {

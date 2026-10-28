@@ -43,22 +43,22 @@ final class Listening extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('$job: $error');
+  }) => heard.add('$job: $error');
 }
 
 /// The lines of every `text` block of the page, block by block.
 List<List<String>> quotedOutputs() => [
-      for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .allMatches(File('doc/groups.md').readAsStringSync()))
-        block.group(1)!.split('\n'),
-    ];
+  for (final block in RegExp(
+    r'```text\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(File('doc/groups.md').readAsStringSync()))
+    block.group(1)!.split('\n'),
+];
 
 void main() {
   group('Waiting for several children', () {
     for (final observed in [true, false]) {
-      test(
-          'Future.wait: an observer of the parent is the one that hears it, '
+      test('Future.wait: an observer of the parent is the one that hears it, '
           'observed: $observed', () {
         final observer = Listening();
         final zone = <String>[];
@@ -125,10 +125,9 @@ void main() {
 
         final envelope =
             caught! as ParallelWaitError<List<Source?>, List<AsyncError?>>;
-        expect(
-          envelope.errors.whereType<AsyncError>().map((a) => a.error),
-          [isA<Cancelled>()],
-        );
+        expect(envelope.errors.whereType<AsyncError>().map((a) => a.error), [
+          isA<Cancelled>(),
+        ]);
         expect(envelope.values.whereType<Source>().map((s) => s.name), [
           'rows',
         ]);
@@ -168,32 +167,36 @@ void main() {
         (ctx) =>
             ctx.abandonable(openImages, discard: (source) => source.close()),
       );
-      final parent = closeTheEnvelope
-          ? Job<void>((ctx) async {
-              try {
-                final sources = await [
-                  ctx.run(rows, dispose: (source) => source.close()),
-                  ctx.run(images, dispose: (source) => source.close()),
-                ].wait;
-                await ctx.join(() => writeArchive(sources));
-              } on Object catch (error) {
-                if (error
-                    is ParallelWaitError<List<Source?>, List<AsyncError?>>) {
-                  for (final source in error.values.whereType<Source>()) {
-                    source.close();
-                  }
-                }
-                rethrow;
-              }
-            })
-          : Job<void>((ctx) async {
-              final sources = await [
-                ctx.run(rows, dispose: (source) => source.close()),
-                ctx.run(images, dispose: (source) => source.close()),
-              ].wait;
-              await ctx.join(() => writeArchive(sources));
-            })
-        ..ignoreFailure();
+      final parent =
+          closeTheEnvelope
+                ? Job<void>((ctx) async {
+                    try {
+                      final sources = await [
+                        ctx.run(rows, dispose: (source) => source.close()),
+                        ctx.run(images, dispose: (source) => source.close()),
+                      ].wait;
+                      await ctx.join(() => writeArchive(sources));
+                    } on Object catch (error) {
+                      if (error
+                          is ParallelWaitError<
+                            List<Source?>,
+                            List<AsyncError?>
+                          >) {
+                        for (final source in error.values.whereType<Source>()) {
+                          source.close();
+                        }
+                      }
+                      rethrow;
+                    }
+                  })
+                : Job<void>((ctx) async {
+                    final sources = await [
+                      ctx.run(rows, dispose: (source) => source.close()),
+                      ctx.run(images, dispose: (source) => source.close()),
+                    ].wait;
+                    await ctx.join(() => writeArchive(sources));
+                  })
+            ..ignoreFailure();
       return (parent, rows, images);
     }
 
@@ -224,8 +227,7 @@ void main() {
             ctx.run(rows, dispose: (source) => source.close()),
             ctx.run(images, dispose: (source) => source.close()),
           ]);
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
 
         async.flushTimers();
         // The registration closes what the first attempt lost; what
@@ -285,8 +287,7 @@ void main() {
           });
           final parent = Job<void>((ctx) async {
             await [ctx.run(fails), ctx.run(stops)].wait;
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
 
           async.elapse(Duration(milliseconds: failureFirst ? 40 : 30));
           stops.cancel().ignore();
@@ -317,8 +318,7 @@ void main() {
     // one a branch registers after running it, and the values come out
     // before the branches end; on failure every branch to its end.
     for (final fails in [false, true]) {
-      test(
-          'on ${fails ? 'failure' : 'success'} the group comes out after the '
+      test('on ${fails ? 'failure' : 'success'} the group comes out after the '
           'cleanup, ${fails ? 'after' : 'before'} the end of the branches', () {
         fakeAsync((async) {
           final trace = <String>[];
@@ -338,9 +338,9 @@ void main() {
           }
 
           String ended() => [
-                for (final job in branches)
-                  if (job.isFinished) 'ended' else 'not',
-              ].join(' ');
+            for (final job in branches)
+              if (job.isFinished) 'ended' else 'not',
+          ].join(' ');
           Job<void>((ctx) async {
             try {
               await ctx.runAll([branch('a'), branch('b', failing: fails)]);
@@ -362,8 +362,7 @@ void main() {
       });
     }
 
-    test(
-        'a cleanup a branch registers after its own has run comes after the '
+    test('a cleanup a branch registers after its own has run comes after the '
         'values', () {
       fakeAsync((async) {
         final trace = <String>[];
@@ -501,17 +500,17 @@ void main() {
     setUp(() => closed = []);
 
     Job<void> onDisposeOnTheNextLine() => Job<void>((ctx) async {
-          final sources = await ctx.runAll([
-            Job.deferred<Source>((ctx) async => Source('rows', closed)),
-          ]);
-          ctx.onDispose(() {
-            for (final source in sources) {
-              source.close();
-            }
-          });
-          await ctx.join(() => delay(50));
-          throw StateError('disk');
-        });
+      final sources = await ctx.runAll([
+        Job.deferred<Source>((ctx) async => Source('rows', closed)),
+      ]);
+      ctx.onDispose(() {
+        for (final source in sources) {
+          source.close();
+        }
+      });
+      await ctx.join(() => delay(50));
+      throw StateError('disk');
+    });
 
     test('onDispose on the next line closes the list on a stop', () {
       fakeAsync((async) {
@@ -553,37 +552,41 @@ void main() {
       });
     });
 
-    test('Future.wait: the cancellation that came first decides it instead',
-        () {
-      fakeAsync((async) {
-        stubs.stage
-          ..rowsTake = 40
-          ..rowsError = StateError('disk')
-          ..imagesTake = 20
-          ..imagesError = stubs.selfCancel();
-        final parent = attempts.exportWithFutureWait()..ignoreFailure();
-        async.flushTimers();
-        // The failure of `rows` is nowhere in the outcome.
-        expect(parent.outcome, isA<Cancelled>());
-        expect(
-          (parent.outcome! as Cancelled).reason,
-          isA<HandlerCancelReason>(),
-        );
-      });
-    });
+    test(
+      'Future.wait: the cancellation that came first decides it instead',
+      () {
+        fakeAsync((async) {
+          stubs.stage
+            ..rowsTake = 40
+            ..rowsError = StateError('disk')
+            ..imagesTake = 20
+            ..imagesError = stubs.selfCancel();
+          final parent = attempts.exportWithFutureWait()..ignoreFailure();
+          async.flushTimers();
+          // The failure of `rows` is nowhere in the outcome.
+          expect(parent.outcome, isA<Cancelled>());
+          expect(
+            (parent.outcome! as Cancelled).reason,
+            isA<HandlerCancelReason>(),
+          );
+        });
+      },
+    );
 
-    test('Future.wait: nobody closes the source of the branch that succeeded',
-        () {
-      fakeAsync((async) {
-        stubs.stage
-          ..imagesTake = 20
-          ..imagesError = StateError('disk');
-        final parent = attempts.exportWithFutureWait()..ignoreFailure();
-        async.flushTimers();
-        expect(parent.outcome, isA<Failed>());
-        expect(trace(), isEmpty);
-      });
-    });
+    test(
+      'Future.wait: nobody closes the source of the branch that succeeded',
+      () {
+        fakeAsync((async) {
+          stubs.stage
+            ..imagesTake = 20
+            ..imagesError = StateError('disk');
+          final parent = attempts.exportWithFutureWait()..ignoreFailure();
+          async.flushTimers();
+          expect(parent.outcome, isA<Failed>());
+          expect(trace(), isEmpty);
+        });
+      },
+    );
 
     test('eagerError wakes the body and changes nothing else', () {
       fakeAsync((async) {
@@ -601,8 +604,7 @@ void main() {
       });
     });
 
-    test(
-        'eagerError: a branch that ends Cancelled first cancels the job '
+    test('eagerError: a branch that ends Cancelled first cancels the job '
         'and the other branch', () {
       fakeAsync((async) {
         stubs.stage
@@ -623,10 +625,10 @@ void main() {
               discard: (source) => source.close(),
             ),
           );
-          final sources = await Future.wait(
-            [ctx.run(rows), ctx.run(images)],
-            eagerError: true,
-          );
+          final sources = await Future.wait([
+            ctx.run(rows),
+            ctx.run(images),
+          ], eagerError: true);
           await ctx.join(() => stubs.writeArchive(sources));
         });
 
@@ -665,8 +667,7 @@ void main() {
       });
     });
 
-    test(
-        '.wait: a branch cancelling itself ends the parent '
+    test('.wait: a branch cancelling itself ends the parent '
         'with that cancellation', () {
       fakeAsync((async) {
         stubs.stage.imagesError = stubs.selfCancel();
@@ -677,18 +678,20 @@ void main() {
       });
     });
 
-    test('.wait: both are closed when the parent is cancelled while writing',
-        () {
-      fakeAsync((async) {
-        final parent = page.exportWithWait();
-        async.elapse(const Duration(milliseconds: 30));
-        parent.cancel().ignore();
-        async.flushTimers();
-        // `join` waits the step out, and the cancellation comes after it.
-        expect(parent.outcome, isA<Cancelled>());
-        expect(trace(), ['archive of 2', 'images closed', 'rows closed']);
-      });
-    });
+    test(
+      '.wait: both are closed when the parent is cancelled while writing',
+      () {
+        fakeAsync((async) {
+          final parent = page.exportWithWait();
+          async.elapse(const Duration(milliseconds: 30));
+          parent.cancel().ignore();
+          async.flushTimers();
+          // `join` waits the step out, and the cancellation comes after it.
+          expect(parent.outcome, isA<Cancelled>());
+          expect(trace(), ['archive of 2', 'images closed', 'rows closed']);
+        });
+      },
+    );
 
     test('the page quotes what the export and the lock scenes report', () {
       List<String> run(Job<Object?> Function() start) {
@@ -754,8 +757,7 @@ void main() {
       });
     });
 
-    test(
-        'a branch that gets its source from a child closes it when the '
+    test('a branch that gets its source from a child closes it when the '
         'group fails', () {
       fakeAsync((async) {
         final fails = Job.deferred<stubs.Source>((ctx) async {
@@ -764,16 +766,14 @@ void main() {
         });
         final parent = Job<void>((ctx) async {
           await ctx.runAll<stubs.Source>([page.openingBranch(), fails]);
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), ['rows closed']);
       });
     });
 
-    test(
-        'a branch that gets its source from a child hands it over open when '
+    test('a branch that gets its source from a child hands it over open when '
         'the group succeeds', () {
       fakeAsync((async) {
         final parent = Job<void>((ctx) async {
@@ -789,8 +789,7 @@ void main() {
       });
     });
 
-    test(
-        'a branch with cancellable: false ends Done under a failed group, '
+    test('a branch with cancellable: false ends Done under a failed group, '
         'and the body closes its value through the job it passed', () {
       fakeAsync((async) {
         stubs.stage.imagesError = StateError('disk');
@@ -853,12 +852,11 @@ void main() {
     });
 
     List<ChildJob<stubs.Source>> branches() => [
-          Job.deferred<stubs.Source>((ctx) async => stubs.Source('rows')),
-          Job.deferred<stubs.Source>((ctx) async => stubs.Source('images')),
-        ];
+      Job.deferred<stubs.Source>((ctx) async => stubs.Source('rows')),
+      Job.deferred<stubs.Source>((ctx) async => stubs.Source('images')),
+    ];
 
-    test(
-        'the first attempt of the group closes the list when nothing '
+    test('the first attempt of the group closes the list when nothing '
         'interrupts it', () {
       fakeAsync((async) {
         final parent = attempts.groupFirstAttempt(branches());
@@ -868,8 +866,7 @@ void main() {
       });
     });
 
-    test(
-        'the first attempt of the group leaks the list on a stop during '
+    test('the first attempt of the group leaks the list on a stop during '
         'the archive', () {
       fakeAsync((async) {
         final parent = attempts.groupFirstAttempt(branches())..ignoreFailure();
@@ -883,16 +880,19 @@ void main() {
       });
     });
 
-    test('the first attempt of the group leaks the list on a failing archive',
-        () {
-      fakeAsync((async) {
-        stubs.stage.archiveError = StateError('disk');
-        final parent = attempts.groupFirstAttempt(branches())..ignoreFailure();
-        async.flushTimers();
-        expect(parent.outcome, isA<Failed>());
-        expect(trace(), isEmpty);
-      });
-    });
+    test(
+      'the first attempt of the group leaks the list on a failing archive',
+      () {
+        fakeAsync((async) {
+          stubs.stage.archiveError = StateError('disk');
+          final parent = attempts.groupFirstAttempt(branches())
+            ..ignoreFailure();
+          async.flushTimers();
+          expect(parent.outcome, isA<Failed>());
+          expect(trace(), isEmpty);
+        });
+      },
+    );
 
     test('the try closes the list on a stop during the archive', () {
       fakeAsync((async) {
@@ -1018,8 +1018,7 @@ void main() {
       });
     });
 
-    test(
-        'onDiscard closes the other source of a list taken away when one '
+    test('onDiscard closes the other source of a list taken away when one '
         'throws', () {
       final zone = <Object>[];
       late Job<void> parent;

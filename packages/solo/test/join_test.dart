@@ -160,13 +160,10 @@ void main() {
   test('discard takes the value when a rule stopped holding', () {
     runSolo((solo, journal, async) {
       solo.enqueue<NotDisposed, void>(key: 'job', (ctx) async {
-        await ctx.join(
-          () async {
-            await delay(100);
-            return 7;
-          },
-          discard: (value) => ctx.log('disposed $value'),
-        );
+        await ctx.join(() async {
+          await delay(100);
+          return 7;
+        }, discard: (value) => ctx.log('disposed $value'));
         ctx.emit(const Preparing());
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -194,15 +191,12 @@ void main() {
           return true;
         },
         (ctx) async {
-          await ctx.join(
-            () async {
-              await delay(100);
-              explode = true;
+          await ctx.join(() async {
+            await delay(100);
+            explode = true;
 
-              return 7;
-            },
-            discard: (value) => ctx.log('disposed $value'),
-          );
+            return 7;
+          }, discard: (value) => ctx.log('disposed $value'));
           ctx.emit(const Preparing());
         },
       )..ignoreFailure();
@@ -223,21 +217,15 @@ void main() {
   test('discard is not called when the action comes back in time', () {
     runSolo((solo, journal, async) {
       final job = solo.enqueue<TestState, int>(key: 'job', (ctx) async {
-        final value = await ctx.join(
-          () async {
-            await delay(50);
-            return 7;
-          },
-          discard: (value) => ctx.log('disposed $value'),
-        );
+        final value = await ctx.join(() async {
+          await delay(50);
+          return 7;
+        }, discard: (value) => ctx.log('disposed $value'));
         return value;
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<int>>().having((o) => o.value, 'value', 7));
-      expect(journal.take(), [
-        '[job] started',
-        '[job] finished Done(7)',
-      ]);
+      expect(journal.take(), ['[job] started', '[job] finished Done(7)']);
     });
   });
 
@@ -275,13 +263,10 @@ void main() {
   test('an error from discard goes to onError', () {
     runSolo((solo, journal, async) {
       final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
-        await ctx.join(
-          () async {
-            await delay(100);
-            return 7;
-          },
-          discard: (value) => throw StateError('cannot dispose $value'),
-        );
+        await ctx.join(() async {
+          await delay(100);
+          return 7;
+        }, discard: (value) => throw StateError('cannot dispose $value'));
       });
       async.elapse(const Duration(milliseconds: 50));
       job.cancel();
@@ -299,13 +284,10 @@ void main() {
   test('discard is not called when the action fails', () {
     runSolo((solo, journal, async) {
       final job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
-        await ctx.join<int>(
-          () async {
-            await delay(100);
-            throw const FormatException('the device said no');
-          },
-          discard: (value) => ctx.log('disposed $value'),
-        );
+        await ctx.join<int>(() async {
+          await delay(100);
+          throw const FormatException('the device said no');
+        }, discard: (value) => ctx.log('disposed $value'));
       });
       async.elapse(const Duration(milliseconds: 50));
       job.cancel();
@@ -323,14 +305,11 @@ void main() {
   test('a lazy rule is seen by the join that comes after the emit', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
       var reached = false;
-      final job = solo.enqueue<Preparing, void>(
-        key: 'job',
-        (ctx) async {
-          ctx.emit(const Working());
-          await ctx.join(() => delay(10));
-          reached = true;
-        },
-      );
+      final job = solo.enqueue<Preparing, void>(key: 'job', (ctx) async {
+        ctx.emit(const Working());
+        await ctx.join(() => delay(10));
+        reached = true;
+      });
       async.flushTimers();
       expect(reached, isFalse);
       expect(job.outcome, isA<Cancelled>());

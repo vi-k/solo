@@ -33,8 +33,11 @@ final _inRepository = Directory('../../docs/ru').existsSync();
 /// line of the code of a mistake, in the language of a page.
 typedef _Words = ({String dont, String doThis, String wrong});
 
-const _english =
-    (dont: "Don't do this:", doThis: 'Do this:', wrong: '// Wrong: ');
+const _english = (
+  dont: "Don't do this:",
+  doThis: 'Do this:',
+  wrong: '// Wrong: ',
+);
 const _russian = (
   dont: 'Так не делайте:',
   doThis: 'Делайте так:',
@@ -86,10 +89,7 @@ const _sources = <String, _Source>{
     attemptHolder: 'test/support/children_first_attempts.dart',
     answer: '### Two children in a row',
     answerHolder: 'test/support/children_page.dart',
-    links: [
-      'children.md#steps-in-a-row',
-      'cancellation.md#closing-from-a-job',
-    ],
+    links: ['children.md#steps-in-a-row', 'cancellation.md#closing-from-a-job'],
   ),
   '## Answering for every failure': (
     pairs: 1,
@@ -119,9 +119,9 @@ const _sources = <String, _Source>{
 
 /// The parts of [text] that open with a heading, by the heading line.
 Map<String, String> _sections(String text) => {
-      for (final part in text.split(RegExp('^(?=#)', multiLine: true)))
-        part.split('\n').first: part,
-    };
+  for (final part in text.split(RegExp('^(?=#)', multiLine: true)))
+    part.split('\n').first: part,
+};
 
 /// The anchor of [heading], as `tool/check_links.py` makes it.
 String _slug(String heading) => heading
@@ -175,10 +175,9 @@ List<String> _shapeMissing(String section, _Words words, int pairs) {
 /// The lines of [code] that are code, trimmed: no blank lines and no
 /// comments, which an attempt and its answer each word their own way.
 List<String> _code(String code) => [
-      for (final line in code.split('\n'))
-        if (line.trim().isNotEmpty && !line.trim().startsWith('//'))
-          line.trim(),
-    ];
+  for (final line in code.split('\n'))
+    if (line.trim().isNotEmpty && !line.trim().startsWith('//')) line.trim(),
+];
 
 /// Where [run] starts in [lines] as a run of whole lines, or -1.
 int _runAt(List<String> lines, List<String> run) {
@@ -196,13 +195,13 @@ int _runAt(List<String> lines, List<String> run) {
 
 /// The `dart` blocks of [text], each with the line in front of it.
 List<({String label, String code})> _blocks(String text) => [
-      for (final match in RegExp(
-        r'^([^\n]*)\n\n```dart\n(.*?)\n```',
-        multiLine: true,
-        dotAll: true,
-      ).allMatches(text))
-        (label: match.group(1)!, code: match.group(2)!),
-    ];
+  for (final match in RegExp(
+    r'^([^\n]*)\n\n```dart\n(.*?)\n```',
+    multiLine: true,
+    dotAll: true,
+  ).allMatches(text))
+    (label: match.group(1)!, code: match.group(2)!),
+];
 
 /// The section of the page [link] leads to, with the deeper headings in it.
 String _linked(String link) {
@@ -221,8 +220,9 @@ String _linked(String link) {
 void main() {
   final text = File(_page).readAsStringSync();
   final sections = _sections(text);
-  final translation =
-      _inRepository ? File(_translation).readAsStringSync() : null;
+  final translation = _inRepository
+      ? File(_translation).readAsStringSync()
+      : null;
   const outside = 'the translation is not in the archive of the package';
   late Directory scratch;
 
@@ -238,13 +238,10 @@ void main() {
   });
 
   test('has the sections below, in their order', () {
-    expect(
-      [
-        for (final heading in sections.keys)
-          if (heading.startsWith('## ')) heading,
-      ],
-      _sources.keys,
-    );
+    expect([
+      for (final heading in sections.keys)
+        if (heading.startsWith('## ')) heading,
+    ], _sources.keys);
   });
 
   test(
@@ -252,8 +249,9 @@ void main() {
     skip: translation == null ? outside : null,
     () {
       final parts = [
-        for (final MapEntry(key: heading, value: part)
-            in _sections(translation ?? '').entries)
+        for (final MapEntry(key: heading, value: part) in _sections(
+          translation ?? '',
+        ).entries)
           if (heading.startsWith('## ')) (heading, part),
       ];
       expect(parts, hasLength(_sources.length));
@@ -283,23 +281,24 @@ void main() {
           for (final line in code.split('\n'))
             if (line.trim().isNotEmpty) line,
         ].join('\n');
-        return (File('${scratch.path}/$name.md')
-              ..writeAsStringSync('```dart\n$whole\n```\n'))
-            .path;
+        return (File(
+          '${scratch.path}/$name.md',
+        )..writeAsStringSync('```dart\n$whole\n```\n')).path;
       }
 
       // The code under [subheading] of the linked section.
       String under(String subheading) => [
-            for (final block in RegExp(r'```dart\n(.*?)\n```', dotAll: true)
-                .allMatches(_under(_linked(link), subheading)))
-              block.group(1)!,
-          ].join('\n');
+        for (final block in RegExp(
+          r'```dart\n(.*?)\n```',
+          dotAll: true,
+        ).allMatches(_under(_linked(link), subheading)))
+          block.group(1)!,
+      ].join('\n');
 
       // [under] in a file of its own, for the page helper.
-      String held(String name, String subheading) =>
-          (File('${scratch.path}/$name.dart')
-                ..writeAsStringSync(under(subheading)))
-              .path;
+      String held(String name, String subheading) => (File(
+        '${scratch.path}/$name.dart',
+      )..writeAsStringSync(under(subheading))).path;
 
       // The pairs of the section: the code of the mistake without its
       // mark, then the code of the right way.

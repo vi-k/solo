@@ -18,10 +18,10 @@ final class SharedKeyController extends Solo<CameraState>
   SharedKeyController() : super(const Ready());
 
   Job<Profile> load(String id) => enqueue<Ready, Profile>(
-        key: _Op.load,
-        policy: Policy.droppable,
-        (ctx) => ctx.abandonable(() => api.load(id)),
-      );
+    key: _Op.load,
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
 }
 
 /// The first attempt of "Pausing the queue": the gate goes where `enqueue` puts
@@ -85,13 +85,11 @@ final class QueuedCountdownController extends Solo<CameraState>
   QueuedCountdownController() : super(const Ready());
 
   // The first attempt: the countdown holds the queue.
-  Job<void> shootIn(Duration delay) => enqueue<Ready, void>(
-        key: _Op.shoot,
-        (ctx) async {
-          await ctx.pause(delay);
-          await ctx.join(camera.shoot);
-        },
-      );
+  Job<void> shootIn(Duration delay) =>
+      enqueue<Ready, void>(key: _Op.shoot, (ctx) async {
+        await ctx.pause(delay);
+        await ctx.join(camera.shoot);
+      });
 }
 
 /// The second attempt of "A delayed start": the countdown is a timer.

@@ -27,7 +27,7 @@ releases the resource and when:
     ..emit(Ready(db));
 
   return file;
-}
+},
 ```
 
 | Member | What it releases, and when |
@@ -51,16 +51,13 @@ point, it must leave no database open.
 
 ```dart
 // The first attempt: a cancellation fits between open and onDispose.
-Job<void> load() => enqueue<Idle, void>(
-      key: 'load',
-      (ctx) async {
-        final db = await ctx.join(Database.open);
-        ctx.onDispose(db.close);
+Job<void> load() => enqueue<Idle, void>(key: 'load', (ctx) async {
+  final db = await ctx.join(Database.open);
+  ctx.onDispose(db.close);
 
-        final rows = await ctx.join(db.readAll);
-        ctx.emit(Loaded(rows));
-      },
-    );
+  final rows = await ctx.join(db.readAll);
+  ctx.emit(Loaded(rows));
+});
 ```
 
 `onDispose` is the member for a resource the job releases whatever happens, and
@@ -80,18 +77,12 @@ Cancel this job while `Database.open` is in flight. This is what happens:
 ### The release travels with the call
 
 ```dart
-Job<void> load() => enqueue<Idle, void>(
-      key: 'load',
-      (ctx) async {
-        final db = await ctx.join(
-          Database.open,
-          dispose: (db) => db.close(),
-        );
+Job<void> load() => enqueue<Idle, void>(key: 'load', (ctx) async {
+  final db = await ctx.join(Database.open, dispose: (db) => db.close());
 
-        final rows = await ctx.join(db.readAll);
-        ctx.emit(Loaded(rows));
-      },
-    );
+  final rows = await ctx.join(db.readAll);
+  ctx.emit(Loaded(rows));
+});
 ```
 
 `abandonable` and `join` take a `dispose` callback for a resource that belongs
@@ -146,17 +137,11 @@ from then on.
 
 ```dart
 // The first attempt: success closes the database it hands out.
-Job<Database> open() => enqueue<Idle, Database>(
-      key: 'open',
-      (ctx) async {
-        final db = await ctx.join(
-          Database.open,
-          dispose: (db) => db.close(),
-        );
-        await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
-        return db;
-      },
-    );
+Job<Database> open() => enqueue<Idle, Database>(key: 'open', (ctx) async {
+  final db = await ctx.join(Database.open, dispose: (db) => db.close());
+  await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
+  return db;
+});
 ```
 
 The database is still this job's to release if the job falls over, so the
@@ -176,17 +161,11 @@ database, and only a test that uses the result afterwards sees it.
 ### Discard, for a value that leaves
 
 ```dart
-Job<Database> open() => enqueue<Idle, Database>(
-      key: 'open',
-      (ctx) async {
-        final db = await ctx.join(
-          Database.open,
-          discard: (db) => db.close(),
-        );
-        await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
-        return db;
-      },
-    );
+Job<Database> open() => enqueue<Idle, Database>(key: 'open', (ctx) async {
+  final db = await ctx.join(Database.open, discard: (db) => db.close());
+  await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
+  return db;
+});
 ```
 
 `discard` runs only when the job does not end `Done`: cancelled, or failed. The
@@ -225,10 +204,7 @@ there the database is the controller's to close, not the job's.
 
 ```dart
 // The first attempt: dispose closes the database the state holds.
-final db = await ctx.join(
-  Database.open,
-  dispose: (db) => db.close(),
-);
+final db = await ctx.join(Database.open, dispose: (db) => db.close());
 await ctx.uncancellable(db.migrate);
 ctx.emit(Ready(db));
 ```

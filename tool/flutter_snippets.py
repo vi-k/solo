@@ -83,8 +83,8 @@ PUBSPEC = """name: flutter_check
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
-  flutter: '>=3.27.0'
+  sdk: ^3.10.0
+  flutter: '>=3.38.1'
 
 dependencies:
   flutter:
@@ -199,8 +199,13 @@ def split_imports(block):
 
 
 def wrap(name, block, parameter='Session session'):
-    """A widget expression from the document, as a function that returns it."""
-    return f'Widget {name}({parameter}) =>\n    {block.strip()};\n'
+    """A widget expression from the document, as a function that returns it.
+
+    The document ends the expression with `),`, as an argument of a tree
+    would; the function ends it with `);`.
+    """
+    body = block.strip().removesuffix(',')
+    return f'Widget {name}({parameter}) =>\n    {body};\n'
 
 
 # The states the README of flutter_solo declares under Usage, which the

@@ -24,17 +24,17 @@ final class ProfileController extends Solo<ProfileState> {
   // ...the jobs from the quick start...
   /// Not on the page: the job of the quick start in the README.
   Job<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.droppable,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 
   @override
   void onError(
@@ -42,8 +42,7 @@ final class ProfileController extends Solo<ProfileState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      reportCrash(error, stackTrace);
+  }) => reportCrash(error, stackTrace);
 }
 
 /// "Watching every controller".
@@ -67,11 +66,12 @@ void main() {
 /// "What is holding the controller". Not on the page: the function around
 /// the statement.
 void closeWithTimeout(Solo<Object> controller) {
-  unawaited(controller.close().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => log('closing is held by ${controller.pending}'),
-        // ignore: require_trailing_commas
-      ));
+  unawaited(
+    controller.close().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => log('closing is held by ${controller.pending}'),
+    ),
+  );
 }
 
 final class Hangs extends SoloObserver {
@@ -80,9 +80,9 @@ final class Hangs extends SoloObserver {
 
   @override
   void onStart(Solo<Object> solo, Job<Object?> job) => _timers[job] = Timer(
-        const Duration(seconds: 5),
-        () => log('${job.key} is still running: ${solo.pending}'),
-      );
+    const Duration(seconds: 5),
+    () => log('${job.key} is still running: ${solo.pending}'),
+  );
 
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
@@ -118,11 +118,11 @@ final class StuckCancellations extends SoloObserver {
 
   @override
   void onStart(Solo<Object> solo, Job<Object?> job) => job.whenCancelled(
-        (_) => _timers[job] = Timer(
-          const Duration(seconds: 5),
-          () => log('${job.key} has not stopped: ${solo.pending}'),
-        ),
-      );
+    (_) => _timers[job] = Timer(
+      const Duration(seconds: 5),
+      () => log('${job.key} has not stopped: ${solo.pending}'),
+    ),
+  );
 
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
@@ -152,27 +152,24 @@ final class Camera extends Solo<CameraState>
   Camera(this.hw) : super(const Closed());
 
   /// Not on the page: the method around the statements.
-  SoloJob<void> open(double zoom) => enqueue<CameraState, void>(
-        key: 'open',
-        (ctx) async {
-          try {
-            await ctx.join(hw.open);
-            await ctx.join(() => hw.setZoom(zoom));
-          } on Object catch (error) {
-            ctx.check();
-            await hw.reset();
-            ctx.emit(Broken(error));
-            rethrow;
-          }
-        },
-      );
+  SoloJob<void> open(double zoom) =>
+      enqueue<CameraState, void>(key: 'open', (ctx) async {
+        try {
+          await ctx.join(hw.open);
+          await ctx.join(() => hw.setZoom(zoom));
+        } on Object catch (error) {
+          ctx.check();
+          await hw.reset();
+          ctx.emit(Broken(error));
+          rethrow;
+        }
+      });
 
   /// Not on the page: a job around [sendZoom], [logZoom] or [logLazily].
   SoloJob<void> zoomTo(
     double zoom,
     void Function(JobContext ctx, double zoom) then,
-  ) =>
-      enqueue<CameraState, void>(key: 'zoom', (ctx) async => then(ctx, zoom));
+  ) => enqueue<CameraState, void>(key: 'zoom', (ctx) async => then(ctx, zoom));
 
   @override
   void onLog(Job<Object?> job, Object? message) {
@@ -191,30 +188,30 @@ class RetryingProfile extends Solo<ProfileState>
 
   /// Not on the page: the job around the statements.
   SoloJob<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          for (var attempt = 1;; attempt++) {
-            final String name;
-            try {
-              name = await ctx.abandonable(api.fetchName);
-            } on Object {
-              if (attempt == 3) rethrow;
-              await ctx.pause(Duration(seconds: attempt));
-              continue;
-            }
-            ctx.emit(Loaded(name));
-            return name;
-          }
-        },
-      );
+    key: 'load',
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      for (var attempt = 1; ; attempt++) {
+        final String name;
+        try {
+          name = await ctx.abandonable(api.fetchName);
+        } on Object {
+          if (attempt == 3) rethrow;
+          await ctx.pause(Duration(seconds: attempt));
+          continue;
+        }
+        ctx.emit(Loaded(name));
+        return name;
+      }
+    },
+  );
 }
 
 /// "Retrying from the caller".
 Future<Outcome<String>> loadWithRetries(ProfileController profile) async {
-  for (var attempt = 1;; attempt++) {
+  for (var attempt = 1; ; attempt++) {
     final outcome = await profile.load().done;
     if (outcome is! Failed || attempt == 3) return outcome;
     await Future<void>.delayed(Duration(seconds: attempt));
@@ -258,12 +255,11 @@ final class Pool extends Solo<Slots> with OpenSolo<Slots>, Desk<Slots> {
   /// the tests to see whether it runs.
   SoloJob<void> take({
     Slots Function(Slots state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      enqueue<Slots, void>(
-        key: 'take',
-        // A rule answers; it does not throw to refuse.
-        canStart: (state) => state.free > 0,
-        ifCancelled: ifCancelled,
-        (ctx) async => stage.trace.add('take ran'),
-      );
+  }) => enqueue<Slots, void>(
+    key: 'take',
+    // A rule answers; it does not throw to refuse.
+    canStart: (state) => state.free > 0,
+    ifCancelled: ifCancelled,
+    (ctx) async => stage.trace.add('take ran'),
+  );
 }

@@ -80,17 +80,17 @@ Job<Database> timerOnTheJob() {
 
 /// The job of the first attempt, without its timer.
 Job<Database> migration() => Job<Database>(observer: printing, (ctx) async {
-      final database = await ctx.join(
-        Database.open,
-        discard: (database) => database.close(),
-      );
-      final stop = CancelToken();
-      ctx.onCancel(stop.cancel);
+  final database = await ctx.join(
+    Database.open,
+    discard: (database) => database.close(),
+  );
+  final stop = CancelToken();
+  ctx.onCancel(stop.cancel);
 
-      await ctx.join(() => database.migrate(stop));
+  await ctx.join(() => database.migrate(stop));
 
-      return database;
-    });
+  return database;
+});
 
 /// The second attempt: the timer is cancelled when the job ends.
 Job<Database> timerCancelledAtTheEnd() {

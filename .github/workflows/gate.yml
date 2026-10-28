@@ -4,14 +4,13 @@ name: gate
 # commands the regimen asks for before a commit, on the latest stable,
 # which is what `docs/conventions.md` says is installed locally.
 #
-# Not on the floor the packages declare. `sdk: ^3.6.0` is a promise to
-# whoever depends on them, and it cannot be the toolchain here: `pub get`
-# in a package's own directory resolves its dev dependencies too, and
-# `lints ^6.1.0` and `flutter_lints ^6.0.0` want 3.8.0 and up. The first
-# run of this workflow said so on both jobs, and nothing but a run would
-# have. The floor has a job of its own, `floor`, and it does not look at
-# the tree: it takes what would be published, without the lint packages,
-# and runs that on an SDK pinned to the floor.
+# Not on the floor the packages declare. `sdk: ^3.10.0` is a promise to
+# whoever depends on them, not the toolchain here: `pub get` in a
+# package's own directory resolves its dev dependencies too, at the newest
+# versions the constraints allow, and a lint package may want an SDK above
+# the floor. The floor has a job of its own, `floor`, and it does not look
+# at the tree: it takes what would be published, without the lint
+# packages, and runs that on an SDK pinned to the floor.
 #
 # Following stable means a release of Dart or Flutter can turn this red
 # without a commit. That is the same news the maintainer would get on the
@@ -31,7 +30,7 @@ name: gate
 # What `floor` proves is what the other four cannot. They resolve the tree:
 # every file in it, the dev dependencies along with the rest, the newest
 # versions the constraints allow. A user gets the archive, without the dev
-# dependencies, and may be on Dart 3.6.0 with `meta` 1.15.0. An annotation
+# dependencies, and may be on Dart 3.10.0 with `meta` 1.17.0. An annotation
 # that came with a later `meta`, a widget that came with a later Flutter, a
 # library file kept out of the archive by `.pubignore`, a library that
 # imports a dev dependency — each of those is green in the four and red
@@ -267,13 +266,14 @@ jobs:
       # For the script alone: what it runs comes from the artifact.
       - uses: actions/checkout@v7
 
-      # The floor of both: Flutter 3.27.0 carries Dart 3.6.0, the `sdk`
-      # the three pubspecs declare. The script reads the pubspecs and
-      # refuses any other SDK, so a floor raised in a pubspec and not here
-      # is a red job, not a check of the wrong thing.
+      # The floor of both: Flutter 3.38.1 carries Dart 3.10.0, the `sdk`
+      # the three pubspecs declare. Not 3.38.0, which carries a beta build
+      # of 3.10.0 that `^3.10.0` does not admit. The script reads the
+      # pubspecs and refuses any other SDK, so a floor raised in a pubspec
+      # and not here is a red job, not a check of the wrong thing.
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.27.0
+          flutter-version: 3.38.1
           cache: true
 
       - uses: actions/cache@v6

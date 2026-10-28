@@ -34,8 +34,7 @@ final class Bench extends Solo<Profile> with SoloListenable {
     Future<T> Function(SoloContext<Profile, W> ctx) body, {
     bool Function(W state)? keepWhile,
     bool cancellable = true,
-  }) =>
-      enqueue<W, T>(body, keepWhile: keepWhile, cancellable: cancellable);
+  }) => enqueue<W, T>(body, keepWhile: keepWhile, cancellable: cancellable);
 
   @override
   void addListener(void Function() listener) {
@@ -135,15 +134,13 @@ final class Handlerless extends Solo<Profile> with SoloListenable {
   Handlerless(this.api) : super(Empty());
 
   /// Loads the profile and leaves the state where the body left it.
-  Job<String> load() => enqueue<Profile, String>(
-        (ctx) async {
-          ctx.emit(Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
+  Job<String> load() => enqueue<Profile, String>((ctx) async {
+    ctx.emit(Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
 
-          return name;
-        },
-      );
+    return name;
+  });
 }
 
 /// A controller whose job hands failing work to `ctx.unattended`.
@@ -159,11 +156,11 @@ final class Background extends Solo<Profile> with SoloListenable {
 
   /// A job that ends `Done` and leaves work behind that fails.
   Job<void> ping() => enqueue<Profile, void>((ctx) async {
-        ctx.unattended(() async {
-          await Future<void>.delayed(const Duration(milliseconds: 5));
-          throw StateError('the ping failed');
-        });
-      });
+    ctx.unattended(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      throw StateError('the ping failed');
+    });
+  });
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
@@ -187,8 +184,7 @@ final class Watching extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add(error);
+  }) => seen.add(error);
 }
 
 /// A listenable that refuses to let a listener go.
@@ -233,17 +229,19 @@ class StuckSaveButton extends StatefulWidget {
 }
 
 class _StuckSaveButtonState extends State<StuckSaveButton> {
-  late final canSave =
-      SoloSelection(widget.controller, (state) => state.canSave);
+  late final canSave = SoloSelection(
+    widget.controller,
+    (state) => state.canSave,
+  );
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
-        valueListenable: canSave,
-        builder: (context, enabled, _) => ElevatedButton(
-          onPressed: enabled ? widget.controller.save : null,
-          child: const Text('Save'),
-        ),
-      );
+    valueListenable: canSave,
+    builder: (context, enabled, _) => ElevatedButton(
+      onPressed: enabled ? widget.controller.save : null,
+      child: const Text('Save'),
+    ),
+  );
 }
 
 /// A `State` whose source can be replaced: it cancels its group in

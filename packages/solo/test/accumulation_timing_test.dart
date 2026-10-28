@@ -17,9 +17,7 @@ void main() {
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('A:$values'),
-        timing: AccumulationTiming.debounce(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
       );
 
       // Calls are interleaved with clock changes, so a cascade is misleading.
@@ -52,9 +50,7 @@ void main() {
       final events = solo.accumulate<int, int, void>(
         (ctx, value) async => calls.add('${async.elapsed}:$value'),
         merge: (previous, incoming) => previous,
-        timing: AccumulationTiming.debounce(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
       );
 
       // Calls are interleaved with clock changes, so a cascade is misleading.
@@ -83,9 +79,7 @@ void main() {
           if (incoming == 99) throw error;
           return previous + incoming;
         },
-        timing: AccumulationTiming.debounce(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
       );
 
       // Calls are interleaved with clock changes, so a cascade is misleading.
@@ -109,9 +103,7 @@ void main() {
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:${values.length}'),
-        timing: AccumulationTiming.debounce(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
       );
 
       for (var event = 0; event < 20; event++) {
@@ -141,9 +133,7 @@ void main() {
       solo.enqueue<int, void>((ctx) => ctx.join(() => gate.future));
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
-        timing: AccumulationTiming.debounce(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
       );
 
       async.flushMicrotasks();
@@ -158,10 +148,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 199));
       expect(calls, ['0:00:00.200000:[1]']);
       async.elapse(const Duration(milliseconds: 1));
-      expect(
-        calls,
-        ['0:00:00.200000:[1]', '0:00:00.400000:[2, 3]'],
-      );
+      expect(calls, ['0:00:00.200000:[1]', '0:00:00.400000:[2, 3]']);
 
       solo.close();
       async.flushMicrotasks();
@@ -174,9 +161,7 @@ void main() {
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:A$values'),
-        timing: AccumulationTiming.throttle(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.throttle(const Duration(milliseconds: 200)),
       );
 
       // Calls are interleaved with clock changes, so a cascade is misleading.
@@ -188,22 +173,17 @@ void main() {
       events.add(2);
       async.elapse(const Duration(milliseconds: 60));
       events.add(3);
-      solo.enqueue<int, void>(
-        (ctx) async => calls.add('${async.elapsed}:B'),
-      );
+      solo.enqueue<int, void>((ctx) async => calls.add('${async.elapsed}:B'));
       async.flushMicrotasks();
       expect(calls, ['0:00:00.000000:A[1]', '0:00:00.120000:B']);
       async.elapse(const Duration(milliseconds: 79));
       expect(calls, ['0:00:00.000000:A[1]', '0:00:00.120000:B']);
       async.elapse(const Duration(milliseconds: 1));
-      expect(
-        calls,
-        [
-          '0:00:00.000000:A[1]',
-          '0:00:00.120000:B',
-          '0:00:00.200000:A[2, 3]',
-        ],
-      );
+      expect(calls, [
+        '0:00:00.000000:A[1]',
+        '0:00:00.120000:B',
+        '0:00:00.200000:A[2, 3]',
+      ]);
       async.elapse(const Duration(milliseconds: 200));
       expect(calls.length, 3);
 
@@ -219,9 +199,7 @@ void main() {
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:A$values'),
-        timing: AccumulationTiming.throttle(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.throttle(const Duration(milliseconds: 200)),
       );
 
       // Calls are interleaved with clock changes, so a cascade is misleading.
@@ -244,14 +222,11 @@ void main() {
       expect(calls, ['0:00:00.000000:A[1]', '0:00:00.150000:B']);
       gate.complete();
       async.flushMicrotasks();
-      expect(
-        calls,
-        [
-          '0:00:00.000000:A[1]',
-          '0:00:00.150000:B',
-          '0:00:00.500000:A[2]',
-        ],
-      );
+      expect(calls, [
+        '0:00:00.000000:A[1]',
+        '0:00:00.150000:B',
+        '0:00:00.500000:A[2]',
+      ]);
       events.add(3);
       async.elapse(const Duration(milliseconds: 199));
       expect(calls.length, 3);
@@ -296,17 +271,16 @@ void main() {
       final solo = PlainSolo<int>(0);
       final events = solo.collect<int, int, void>(
         (ctx, values) async {},
-        timing: AccumulationTiming.throttle(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.throttle(const Duration(milliseconds: 200)),
       );
 
       // Keep the accumulator visible for the timing-specific setup above.
       // ignore: cascade_invocations
       events.add(1);
       async.flushMicrotasks();
-      final pumpsAfterFinish =
-          debug.where((message) => message == 'queue has no ready jobs').length;
+      final pumpsAfterFinish = debug
+          .where((message) => message == 'queue has no ready jobs')
+          .length;
       expect(pumpsAfterFinish, 1);
 
       async.elapse(const Duration(milliseconds: 200));
@@ -331,9 +305,7 @@ void main() {
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
-        timing: AccumulationTiming.throttle(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.throttle(const Duration(milliseconds: 200)),
       );
 
       // Keep the accumulator visible for the timing-specific setup above.
@@ -358,9 +330,7 @@ void main() {
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
-        timing: AccumulationTiming.throttle(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.throttle(const Duration(milliseconds: 200)),
       );
 
       // The microtask between the additions is the shape under test.
@@ -389,9 +359,7 @@ void main() {
       solo.enqueue<int, void>((ctx) => ctx.join(() => gate.future));
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
-        timing: AccumulationTiming.throttle(
-          const Duration(milliseconds: 200),
-        ),
+        timing: AccumulationTiming.throttle(const Duration(milliseconds: 200)),
       );
 
       async.flushMicrotasks();
@@ -544,15 +512,11 @@ void main() {
 
   test('negative timing is rejected and zero preserves queue order', () {
     expect(
-      () => AccumulationTiming.debounce(
-        const Duration(microseconds: -1),
-      ),
+      () => AccumulationTiming.debounce(const Duration(microseconds: -1)),
       throwsArgumentError,
     );
     expect(
-      () => AccumulationTiming.throttle(
-        const Duration(microseconds: -1),
-      ),
+      () => AccumulationTiming.throttle(const Duration(microseconds: -1)),
       throwsArgumentError,
     );
 
@@ -586,8 +550,7 @@ void main() {
   // arms an interval. Its start renews that interval in the same turn, and
   // a group its rule refuses leaves the accumulator idle indeed.
   for (final allow in [true, false]) {
-    test(
-        'startAtOnce false: an event from the rule of a group being started '
+    test('startAtOnce false: an event from the rule of a group being started '
         'waits one interval (${allow ? 'started' : 'refused'})', () {
       fakeAsync((async) {
         final solo = PlainSolo<int>(0);

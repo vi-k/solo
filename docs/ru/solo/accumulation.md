@@ -84,13 +84,11 @@ final class QueuedSearch extends Solo<SearchState> {
 
   QueuedSearch(this.api) : super(const SearchState.idle());
 
-  Job<void> query(String text) => enqueue<SearchState, void>(
-        key: 'query',
-        (ctx) async {
-          final results = await ctx.abandonable(() => api.search(text));
-          ctx.emit(SearchState.results(results));
-        },
-      );
+  Job<void> query(String text) =>
+      enqueue<SearchState, void>(key: 'query', (ctx) async {
+        final results = await ctx.abandonable(() => api.search(text));
+        ctx.emit(SearchState.results(results));
+      });
 }
 ```
 
@@ -119,13 +117,13 @@ at 400 ms the screen shows [hits for solo]
 ```dart
 // Вторая попытка: к серверу всё равно четыре запроса.
 Job<void> query(String text) => enqueue<SearchState, void>(
-      key: 'query',
-      policy: Policy.restart,
-      (ctx) async {
-        final results = await ctx.abandonable(() => api.search(text));
-        ctx.emit(SearchState.results(results));
-      },
-    );
+  key: 'query',
+  policy: Policy.restart,
+  (ctx) async {
+    final results = await ctx.abandonable(() => api.search(text));
+    ctx.emit(SearchState.results(results));
+  },
+);
 ```
 
 ```text
@@ -210,23 +208,19 @@ class SettingsPatch {
   final String? theme;
   final String? language;
 
-  const SettingsPatch({
-    this.notifications,
-    this.theme,
-    this.language,
-  });
+  const SettingsPatch({this.notifications, this.theme, this.language});
 
   SettingsPatch merge(SettingsPatch incoming) => SettingsPatch(
-        notifications: incoming.notifications ?? notifications,
-        theme: incoming.theme ?? theme,
-        language: incoming.language ?? language,
-      );
+    notifications: incoming.notifications ?? notifications,
+    theme: incoming.theme ?? theme,
+    language: incoming.language ?? language,
+  );
 
   Settings apply(Settings current) => Settings(
-        notifications: notifications ?? current.notifications,
-        theme: theme ?? current.theme,
-        language: language ?? current.language,
-      );
+    notifications: notifications ?? current.notifications,
+    theme: theme ?? current.theme,
+    language: language ?? current.language,
+  );
 }
 
 abstract interface class SettingsApi {
@@ -247,14 +241,12 @@ final class EagerSettingsController extends Solo<Settings> {
 
   EagerSettingsController(this._api, Settings initial) : super(initial);
 
-  Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
-        key: 'settings',
-        (ctx) async {
-          final next = patch.apply(ctx.state);
-          await ctx.join(() => _api.save(next));
-          ctx.emit(next);
-        },
-      );
+  Job<void> update(SettingsPatch patch) =>
+      enqueue<Settings, void>(key: 'settings', (ctx) async {
+        final next = patch.apply(ctx.state);
+        await ctx.join(() => _api.save(next));
+        ctx.emit(next);
+      });
 }
 ```
 
@@ -282,14 +274,14 @@ the screen ends up with notifications: true, theme: dark, language: ru
 ```dart
 // Вторая попытка: перезапуск затирает изменение, которое заменил.
 Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
-      key: 'settings',
-      policy: Policy.restart,
-      (ctx) async {
-        final next = patch.apply(ctx.state);
-        await ctx.join(() => _api.save(next));
-        ctx.emit(next);
-      },
-    );
+  key: 'settings',
+  policy: Policy.restart,
+  (ctx) async {
+    final next = patch.apply(ctx.state);
+    await ctx.join(() => _api.save(next));
+    ctx.emit(next);
+  },
+);
 ```
 
 ```text
@@ -329,9 +321,9 @@ final class SettingsController extends Solo<Settings> {
   Job<void> update(SettingsPatch patch) => _updates.add(patch);
 
   Job<void> reload() => enqueue<Settings, void>(
-        key: 'reload',
-        (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
-      );
+    key: 'reload',
+    (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
+  );
 }
 ```
 
@@ -363,9 +355,7 @@ the screen ends up with notifications: true, theme: dark, language: ru
 Future<void> changeSettings(SettingsApi api, Settings initial) async {
   final controller = SettingsController(api, initial);
   try {
-    final first = controller.update(
-      const SettingsPatch(notifications: true),
-    );
+    final first = controller.update(const SettingsPatch(notifications: true));
     final second = controller.update(const SettingsPatch(theme: 'dark'));
     final third = controller.update(const SettingsPatch(language: 'ru'));
 
@@ -426,13 +416,11 @@ final class EagerLogController extends Solo<int> {
 
   EagerLogController(this._api) : super(0);
 
-  Job<void> logEvent(LogEntry entry) => enqueue<int, void>(
-        key: 'logs',
-        (ctx) async {
-          await ctx.join(() => _api.send([entry]));
-          ctx.emit(ctx.state + 1);
-        },
-      );
+  Job<void> logEvent(LogEntry entry) =>
+      enqueue<int, void>(key: 'logs', (ctx) async {
+        await ctx.join(() => _api.send([entry]));
+        ctx.emit(ctx.state + 1);
+      });
 }
 ```
 
@@ -565,21 +553,16 @@ final class QueuedPlayer extends Solo<Playback> {
 
   QueuedPlayer(this.device) : super(const Paused());
 
-  Job<void> resume() => enqueue<Playback, void>(
-        key: Command.resume,
-        (ctx) async {
-          await ctx.join(device.resume);
-          ctx.emit(const Playing());
-        },
-      );
+  Job<void> resume() =>
+      enqueue<Playback, void>(key: Command.resume, (ctx) async {
+        await ctx.join(device.resume);
+        ctx.emit(const Playing());
+      });
 
-  Job<void> pause() => enqueue<Playback, void>(
-        key: Command.pause,
-        (ctx) async {
-          await ctx.join(device.pause);
-          ctx.emit(const Paused());
-        },
-      );
+  Job<void> pause() => enqueue<Playback, void>(key: Command.pause, (ctx) async {
+    await ctx.join(device.pause);
+    ctx.emit(const Paused());
+  });
 }
 ```
 

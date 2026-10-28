@@ -42,9 +42,7 @@ const quoted = [
     'database closed',
     'outcome: Cancelled(timeout)',
   ],
-  [
-    'outcome: Done(page without a thumbnail after 15 ms)',
-  ],
+  ['outcome: Done(page without a thumbnail after 15 ms)'],
 ];
 
 /// When the user cancels in "Letting time pass": the page's "500 ms in",
@@ -203,8 +201,9 @@ void main() {
       final timer = measured.timerLeftFor == 0
           ? 'none'
           : 'for ${measured.timerLeftFor} ms more';
-      final zone =
-          measured.zone.isEmpty ? 'reaches no zone' : 'reaches the zone';
+      final zone = measured.zone.isEmpty
+          ? 'reaches no zone'
+          : 'reaches the zone';
       return '| $how | $timer | $zone |';
     }
 
@@ -214,8 +213,8 @@ void main() {
     /// What the prose of the page quotes after [before], up to the closing
     /// backtick.
     String quotedAfter(String before) => RegExp(
-          '${before.replaceAll(' ', r'\s+')}\\s+`([^`]+)`',
-        ).firstMatch(text)!.group(1)!;
+      '${before.replaceAll(' ', r'\s+')}\\s+`([^`]+)`',
+    ).firstMatch(text)!.group(1)!;
 
     test('a timer cancels the job still running, as the user does', () {
       expect(watch(page.timerOnTheJob), quoted[0]);
@@ -238,13 +237,15 @@ void main() {
       ]);
     });
 
-    test('the timer lives until the limit, and the failure reaches the zone',
-        () {
-      final measured = failingUnderALimit(page.timerOnTheJob);
-      expect(measured.timerLeftFor, page.limit.inMilliseconds);
-      expect(measured.zone, ['FormatException: bad schema']);
-      expect(lines, contains(row('`Timer(limit, job.cancel)`', measured)));
-    });
+    test(
+      'the timer lives until the limit, and the failure reaches the zone',
+      () {
+        final measured = failingUnderALimit(page.timerOnTheJob);
+        expect(measured.timerLeftFor, page.limit.inMilliseconds);
+        expect(measured.zone, ['FormatException: bad schema']);
+        expect(lines, contains(row('`Timer(limit, job.cancel)`', measured)));
+      },
+    );
 
     test('cancelling the timer when the job ends observes the outcome', () {
       final measured = failingUnderALimit(page.timerCancelledAtTheEnd);
@@ -272,15 +273,19 @@ void main() {
       expect(printed, isEmpty);
     });
 
-    test('with a timer cancelled at the end, a running job is still cancelled',
-        () {
-      expect(watch(page.timerCancelledAtTheEnd), quoted[0]);
-    });
+    test(
+      'with a timer cancelled at the end, a running job is still cancelled',
+      () {
+        expect(watch(page.timerCancelledAtTheEnd), quoted[0]);
+      },
+    );
 
-    test('a deadline of the job stops it the same way, with its own reason',
-        () {
-      expect(watch(page.deadlineOfTheJob), quoted[1]);
-    });
+    test(
+      'a deadline of the job stops it the same way, with its own reason',
+      () {
+        expect(watch(page.deadlineOfTheJob), quoted[1]);
+      },
+    );
 
     test('a deadline leaves no timer and lets the failure reach the zone', () {
       final measured = failingUnderALimit(page.deadlineOfTheJob);
@@ -357,29 +362,31 @@ void main() {
       });
     });
 
-    test('the children hear the deadline as the cause of their cancellation',
-        () {
-      fakeAsync((async) {
-        final child = Job.deferred<void>((ctx) => ctx.pause(page.limit * 2));
-        final job = Job<void>(timeout: page.limit, (ctx) => ctx.run(child));
-        async.flushTimers();
+    test(
+      'the children hear the deadline as the cause of their cancellation',
+      () {
+        fakeAsync((async) {
+          final child = Job.deferred<void>((ctx) => ctx.pause(page.limit * 2));
+          final job = Job<void>(timeout: page.limit, (ctx) => ctx.run(child));
+          async.flushTimers();
 
-        expect('${job.outcome}', 'Cancelled(timeout)');
-        final reason = (child.outcome! as Cancelled).reason;
-        expect(
-          reason,
-          isA<ParentCancelReason>().having(
-            (reason) => reason.cause?.reason,
-            'cause',
-            isA<TimeoutCancelReason>().having(
-              (reason) => reason.timeout,
-              'timeout',
-              page.limit,
+          expect('${job.outcome}', 'Cancelled(timeout)');
+          final reason = (child.outcome! as Cancelled).reason;
+          expect(
+            reason,
+            isA<ParentCancelReason>().having(
+              (reason) => reason.cause?.reason,
+              'cause',
+              isA<TimeoutCancelReason>().having(
+                (reason) => reason.timeout,
+                'timeout',
+                page.limit,
+              ),
             ),
-          ),
-        );
-      });
-    });
+          );
+        });
+      },
+    );
 
     test('the deadline does not reach the cleanup stack', () {
       fakeAsync((async) {
@@ -406,11 +413,8 @@ void main() {
         );
       }
       expect(
-        () => Job<void>(
-          timeout: page.limit,
-          cancellable: false,
-          (ctx) async {},
-        ),
+        () =>
+            Job<void>(timeout: page.limit, cancellable: false, (ctx) async {}),
         throwsArgumentError,
       );
     });
@@ -429,15 +433,14 @@ void main() {
     test('a request a section holds past the body goes with the timer', () {
       late final String outcome;
       fakeAsync((async) {
-        final job = Job<int>(
-          timeout: const Duration(milliseconds: 10),
-          (ctx) async {
-            ctx.onDispose(() => delay(200));
-            unawaited(ctx.uncancellable(() => delay(100)));
-            await ctx.run(Job.deferred((ctx) => delay(50)));
-            return 1;
-          },
-        );
+        final job = Job<int>(timeout: const Duration(milliseconds: 10), (
+          ctx,
+        ) async {
+          ctx.onDispose(() => delay(200));
+          unawaited(ctx.uncancellable(() => delay(100)));
+          await ctx.run(Job.deferred((ctx) => delay(50)));
+          return 1;
+        });
         async.flushTimers();
         outcome = '${job.outcome}';
       });
@@ -445,10 +448,12 @@ void main() {
       expect(outcome, 'Done(1)');
       expect(
         text.replaceAll(RegExp(r'\s+'), ' '),
-        contains('Only a body that went on without awaiting the section can be '
-            'over while the section still holds the request: then the request '
-            'goes with the timer, and the job ends with what the body '
-            'returned.'),
+        contains(
+          'Only a body that went on without awaiting the section can be '
+          'over while the section still holds the request: then the request '
+          'goes with the timer, and the job ends with what the body '
+          'returned.',
+        ),
       );
     });
 
@@ -456,13 +461,10 @@ void main() {
       late final String outcome;
       var discarded = false;
       fakeAsync((async) {
-        final job = Job<int>(
-          timeout: const Duration(milliseconds: 100),
-          (ctx) {
-            ctx.onDiscard(() => discarded = true);
-            return ctx.uncancellable(() => delay(300).then((_) => 7));
-          },
-        );
+        final job = Job<int>(timeout: const Duration(milliseconds: 100), (ctx) {
+          ctx.onDiscard(() => discarded = true);
+          return ctx.uncancellable(() => delay(300).then((_) => 7));
+        });
         async.flushTimers();
         outcome = '${job.outcome}';
       });
@@ -471,10 +473,12 @@ void main() {
       expect(discarded, isTrue);
       expect(
         text.replaceAll(RegExp(r'\s+'), ' '),
-        contains('a body that ends with `return ctx.uncancellable(...)` ends '
-            '`Cancelled(timeout)`, the value of the section reaches neither '
-            'the outcome nor `value`, and the registrations of `onDiscard` '
-            'run.'),
+        contains(
+          'a body that ends with `return ctx.uncancellable(...)` ends '
+          '`Cancelled(timeout)`, the value of the section reaches neither '
+          'the outcome nor `value`, and the registrations of `onDiscard` '
+          'run.',
+        ),
       );
     });
 
@@ -486,40 +490,42 @@ void main() {
     });
 
     for (final key in ['thumbnail', null]) {
-      test('let out, the deadline of the child ends the parent (key: $key)',
-          () {
-        late final String outcome;
-        fakeAsync((async) {
-          final job = Job<String>((ctx) async {
-            final thumbnail = Job.deferred<String>(
-              renderThumbnail,
-              key: key,
-              timeout: const Duration(milliseconds: 15),
-            );
-            return 'page with ${await ctx.run(thumbnail)}';
+      test(
+        'let out, the deadline of the child ends the parent (key: $key)',
+        () {
+          late final String outcome;
+          fakeAsync((async) {
+            final job = Job<String>((ctx) async {
+              final thumbnail = Job.deferred<String>(
+                renderThumbnail,
+                key: key,
+                timeout: const Duration(milliseconds: 15),
+              );
+              return 'page with ${await ctx.run(thumbnail)}';
+            });
+            async.flushTimers();
+            outcome = '${job.outcome}';
           });
-          async.flushTimers();
-          outcome = '${job.outcome}';
-        });
 
-        final child = key == null ? 'Job()' : 'Job($key)';
-        expect(outcome, 'Cancelled(handler: $child: Cancelled(timeout))');
-        if (key == null) {
-          expect(quotedAfter('a child without one prints as'), child);
-        } else {
-          expect(quotedAfter('deadline ends the parent'), outcome);
-        }
-      });
+          final child = key == null ? 'Job()' : 'Job($key)';
+          expect(outcome, 'Cancelled(handler: $child: Cancelled(timeout))');
+          if (key == null) {
+            expect(quotedAfter('a child without one prints as'), child);
+          } else {
+            expect(quotedAfter('deadline ends the parent'), outcome);
+          }
+        },
+      );
     }
   });
 
   group('The page', () {
     test('quotes what its code prints', () {
       final text = File('doc/time.md').readAsStringSync();
-      final blocks = RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .allMatches(text)
-          .map((match) => match.group(1)!.split('\n'))
-          .toList();
+      final blocks = RegExp(
+        r'```text\n(.*?)\n```',
+        dotAll: true,
+      ).allMatches(text).map((match) => match.group(1)!.split('\n')).toList();
 
       expect(blocks, quoted);
     });
@@ -527,9 +533,8 @@ void main() {
     test('names the durations its code takes', () {
       final text = File('doc/time.md').readAsStringSync();
       List<String?> after(String pattern) => [
-            for (final match in RegExp(pattern).allMatches(text))
-              match.group(1),
-          ];
+        for (final match in RegExp(pattern).allMatches(text)) match.group(1),
+      ];
 
       expect(after(r'reads\s+the\s+rows\s+in\s+(\d+)\s+ms'), ['$readMs']);
       expect(after(r'three\s+steps\s+of\s+(\d+)\s+ms'), ['$stepMs']);

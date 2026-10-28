@@ -12,19 +12,21 @@ import 'support/test_state.dart';
 void main() {
   tearDown(() => Solo.observer = null);
 
-  test('external state is accepted before close and rejected after it',
-      () async {
-    final solo = _ExposedSolo()..set(const Preparing(progress: 1));
-    expect(solo.currentState, const Preparing(progress: 1));
+  test(
+    'external state is accepted before close and rejected after it',
+    () async {
+      final solo = _ExposedSolo()..set(const Preparing(progress: 1));
+      expect(solo.currentState, const Preparing(progress: 1));
 
-    await solo.close();
+      await solo.close();
 
-    expect(
-      () => solo.set(const Preparing(progress: 2)),
-      throwsA(isA<StateError>()),
-    );
-    expect(solo.currentState, const Preparing(progress: 1));
-  });
+      expect(
+        () => solo.set(const Preparing(progress: 2)),
+        throwsA(isA<StateError>()),
+      );
+      expect(solo.currentState, const Preparing(progress: 1));
+    },
+  );
 
   test('rejected external state calls neither change hook', () async {
     final solo = _CountingSolo();
@@ -94,71 +96,72 @@ void main() {
     await closing;
   });
 
-  test('external state from onClose is synchronous but not from its microtask',
-      () async {
-    final solo = _ExposedSolo();
-    final heard = <String>[];
-    solo.addListener(() => heard.add('existing:${solo.currentState}'));
+  test(
+    'external state from onClose is synchronous but not from its microtask',
+    () async {
+      final solo = _ExposedSolo();
+      final heard = <String>[];
+      solo.addListener(() => heard.add('existing:${solo.currentState}'));
 
-    var finishedInHook = true;
-    var listenersInMicrotask = true;
-    Object? microtaskError;
-    Solo.observer = _CloseObserver((base) {
-      final controller = base as _ExposedSolo;
-      finishedInHook = controller.isFinished;
-      controller.addListener(
-        () => heard.add('late:${controller.currentState}'),
-      );
-      controller.set(const Preparing(progress: 8));
-      scheduleMicrotask(() {
-        listenersInMicrotask = controller.hasListeners;
-        try {
-          controller.set(const Preparing(progress: 9));
-        } on Object catch (error) {
-          microtaskError = error;
-        }
+      var finishedInHook = true;
+      var listenersInMicrotask = true;
+      Object? microtaskError;
+      Solo.observer = _CloseObserver((base) {
+        final controller = base as _ExposedSolo;
+        finishedInHook = controller.isFinished;
+        controller.addListener(
+          () => heard.add('late:${controller.currentState}'),
+        );
+        controller.set(const Preparing(progress: 8));
+        scheduleMicrotask(() {
+          listenersInMicrotask = controller.hasListeners;
+          try {
+            controller.set(const Preparing(progress: 9));
+          } on Object catch (error) {
+            microtaskError = error;
+          }
+        });
       });
-    });
 
-    await solo.close();
-    await Future<void>.delayed(Duration.zero);
+      await solo.close();
+      await Future<void>.delayed(Duration.zero);
 
-    expect(finishedInHook, isFalse);
-    expect(heard, [
-      'existing:Preparing(progress: 8)',
-      'late:Preparing(progress: 8)',
-    ]);
-    expect(listenersInMicrotask, isFalse);
-    expect(microtaskError, isA<StateError>());
-    expect(solo.currentState, const Preparing(progress: 8));
-  });
+      expect(finishedInHook, isFalse);
+      expect(heard, [
+        'existing:Preparing(progress: 8)',
+        'late:Preparing(progress: 8)',
+      ]);
+      expect(listenersInMicrotask, isFalse);
+      expect(microtaskError, isA<StateError>());
+      expect(solo.currentState, const Preparing(progress: 8));
+    },
+  );
 
-  test('a non-cancellable job emits its final state before close finishes',
-      () async {
-    final solo = _ExposedSolo();
-    final started = Completer<void>();
-    final release = Completer<void>();
+  test(
+    'a non-cancellable job emits its final state before close finishes',
+    () async {
+      final solo = _ExposedSolo();
+      final started = Completer<void>();
+      final release = Completer<void>();
 
-    solo.enqueue<TestState, void>(
-      cancellable: false,
-      (ctx) async {
+      solo.enqueue<TestState, void>(cancellable: false, (ctx) async {
         started.complete();
         ctx.emit(const Preparing(progress: 1));
         await release.future;
         ctx.emit(const Working(a: 2));
-      },
-    );
-    await started.future;
+      });
+      await started.future;
 
-    var closeDone = false;
-    final closing = solo.close().then((_) => closeDone = true);
-    expect(closeDone, isFalse);
-    release.complete();
-    await closing;
+      var closeDone = false;
+      final closing = solo.close().then((_) => closeDone = true);
+      expect(closeDone, isFalse);
+      release.complete();
+      await closing;
 
-    expect(solo.currentState, const Working(a: 2));
-    expect(closeDone, isTrue);
-  });
+      expect(solo.currentState, const Working(a: 2));
+      expect(closeDone, isTrue);
+    },
+  );
 
   test('repeated close returns one future and calls onClose once', () async {
     final solo = _ExposedSolo();
@@ -176,27 +179,29 @@ void main() {
     expect(closeCalls, 1);
   });
 
-  test('engine finishes before a paused Solo stream lets close finish',
-      () async {
-    final solo = _ExposedStreamSolo();
-    final subscription = solo.stream.listen((_) {})..pause();
-    var closeDone = false;
-    final closing = solo.close().then((_) => closeDone = true);
+  test(
+    'engine finishes before a paused Solo stream lets close finish',
+    () async {
+      final solo = _ExposedStreamSolo();
+      final subscription = solo.stream.listen((_) {})..pause();
+      var closeDone = false;
+      final closing = solo.close().then((_) => closeDone = true);
 
-    try {
-      await Future<void>.delayed(Duration.zero);
-      expect(solo.isFinished, isTrue);
-      expect(closeDone, isFalse);
-      expect(
-        () => solo.set(const Preparing(progress: 3)),
-        throwsA(isA<StateError>()),
-      );
-    } finally {
-      subscription.resume();
-      await subscription.cancel();
-    }
-    await closing;
-  });
+      try {
+        await Future<void>.delayed(Duration.zero);
+        expect(solo.isFinished, isTrue);
+        expect(closeDone, isFalse);
+        expect(
+          () => solo.set(const Preparing(progress: 3)),
+          throwsA(isA<StateError>()),
+        );
+      } finally {
+        subscription.resume();
+        await subscription.cancel();
+      }
+      await closing;
+    },
+  );
 
   test('a disposer of the job close waits for still writes', () async {
     final solo = _ExposedSolo();
@@ -214,8 +219,9 @@ void main() {
         }
       });
       started.complete();
-      await ctx
-          .abandonable(() => Future<void>.delayed(const Duration(seconds: 10)));
+      await ctx.abandonable(
+        () => Future<void>.delayed(const Duration(seconds: 10)),
+      );
     });
     await started.future;
 
@@ -225,10 +231,7 @@ void main() {
     expect(solo.currentState, const Working(a: 5));
     // The other half of the same input: once the engine is done, the very
     // same write is refused.
-    expect(
-      () => solo.set(const Working(a: 6)),
-      throwsA(isA<StateError>()),
-    );
+    expect(() => solo.set(const Working(a: 6)), throwsA(isA<StateError>()));
   });
 
   test('overriding isFinished cannot reopen external state', () async {
@@ -272,10 +275,7 @@ final class _CountingObserver extends SoloObserver {
   int changes = 0;
 
   @override
-  void onChange(
-    Solo<Object> solo,
-    SoloTransition<Object> transition,
-  ) {
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) {
     changes++;
   }
 }

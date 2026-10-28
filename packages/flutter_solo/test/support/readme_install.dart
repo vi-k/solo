@@ -29,5 +29,4 @@ const arrivesWithOneImport = <Type>[
   SoloBuilder<Object> builder,
   SoloSelector<Object, Object> selector,
   SoloSelection<Object, Object> selection,
-) =>
-    (controller, [builder, selector], selection);
+) => (controller, [builder, selector], selection);

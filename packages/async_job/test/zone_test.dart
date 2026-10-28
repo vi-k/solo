@@ -15,29 +15,23 @@ import 'support/probe_job.dart';
 void main() {
   test('an unobserved failure goes to the zone that created the job', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>((ctx) async => throw StateError('boom'));
-          async.flushMicrotasks();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>((ctx) async => throw StateError('boom'));
+        async.flushMicrotasks();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught.map((error) => '$error').toList(), ['Bad state: boom']);
   });
 
   test('a failure someone observed stays out of the zone', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>((ctx) async => throw StateError('boom')).ignoreFailure();
-          async.flushMicrotasks();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>((ctx) async => throw StateError('boom')).ignoreFailure();
+        async.flushMicrotasks();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught, isEmpty);
   });
 
@@ -48,53 +42,45 @@ void main() {
   test('a child of each that fails after the body goes to the zone', () {
     final caught = <Object>[];
     Outcome<void>? parentOutcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final source = StreamController<int>();
-          final parent = Job<void>((ctx) async {
-            ctx.each(source.stream, (_, event) {});
-          });
-          async.flushMicrotasks();
-          source.addError(StateError('stream boom'));
-          async.flushMicrotasks();
-          parentOutcome = parent.outcome;
-          source.close().ignore();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final source = StreamController<int>();
+        final parent = Job<void>((ctx) async {
+          ctx.each(source.stream, (_, event) {});
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.flushMicrotasks();
+        source.addError(StateError('stream boom'));
+        async.flushMicrotasks();
+        parentOutcome = parent.outcome;
+        source.close().ignore();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(parentOutcome, isA<Done<void>>());
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Bad state: stream boom'],
-    );
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: stream boom',
+    ]);
   });
 
   test('a child an engine started and nobody looked at goes to the zone', () {
     final caught = <Object>[];
     Outcome<void>? parentOutcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final gate = Completer<void>();
-          final parent = ProbeJob<void>((ctx) async {
-            (ctx as ProbeContext).adopt(
-              Job.deferred<void>((ctx) async {
-                await gate.future;
-                throw StateError('late');
-              }),
-            );
-          })
-            ..launch();
-          async.flushMicrotasks();
-          gate.complete();
-          async.flushMicrotasks();
-          parentOutcome = parent.outcome;
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final gate = Completer<void>();
+        final parent = ProbeJob<void>((ctx) async {
+          (ctx as ProbeContext).adopt(
+            Job.deferred<void>((ctx) async {
+              await gate.future;
+              throw StateError('late');
+            }),
+          );
+        })..launch();
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+        parentOutcome = parent.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(parentOutcome, isA<Done<void>>());
     expect(caught.map((error) => '$error').toList(), ['Bad state: late']);
   });
@@ -102,19 +88,16 @@ void main() {
   test('the body error reaches the observer once, not the zone twice', () {
     final journal = JobJournal();
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>(
-            key: 'job',
-            observer: journal,
-            (ctx) async => throw StateError('boom'),
-          ).ignoreFailure();
-          async.flushMicrotasks();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>(
+          key: 'job',
+          observer: journal,
+          (ctx) async => throw StateError('boom'),
+        ).ignoreFailure();
+        async.flushMicrotasks();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(journal.take(), [
       '[job] started',
       '[job] error Bad state: boom',
@@ -129,26 +112,23 @@ void main() {
 
   test('the homeless errors go to the zone without an observer', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>((ctx) async {
-            ctx.onCancel(() => throw StateError('onCancel'));
-            unawaited(
-              ctx.abandonable(() async {
-                await delay(20);
-                throw StateError('late action');
-              }),
-            );
-            await ctx.abandonable(() => delay(100));
-          });
-          async.elapse(const Duration(milliseconds: 5));
-          job.cancel().ignore();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          ctx.onCancel(() => throw StateError('onCancel'));
+          unawaited(
+            ctx.abandonable(() async {
+              await delay(20);
+              throw StateError('late action');
+            }),
+          );
+          await ctx.abandonable(() => delay(100));
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(
       caught.map((error) => '$error').toList(),
       const <String>[
@@ -166,332 +146,277 @@ void main() {
     );
   });
 
-  test(
-      'the same errors go to the observer when there is one, and on to the '
+  test('the same errors go to the observer when there is one, and on to the '
       'zone', () {
     final journal = JobJournal();
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(
-            key: 'job',
-            observer: journal,
-            (ctx) async {
-              ctx.onCancel(() => throw StateError('onCancel'));
-              // `ignore`, so the Cancelled thrown into the abandoned
-              // future does not reach the zone on its own account.
-              ctx.abandonable(() async {
-                await delay(20);
-                throw StateError('late action');
-              }).ignore();
-              await ctx.abandonable(() => delay(100));
-            },
-          );
-          async.elapse(const Duration(milliseconds: 5));
-          job.cancel().ignore();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(key: 'job', observer: journal, (ctx) async {
+          ctx.onCancel(() => throw StateError('onCancel'));
+          // `ignore`, so the Cancelled thrown into the abandoned
+          // future does not reach the zone on its own account.
+          ctx.abandonable(() async {
+            await delay(20);
+            throw StateError('late action');
+          }).ignore();
+          await ctx.abandonable(() => delay(100));
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      journal.take(),
-      const <String>[
-        '[job] started',
-        '[job] error Bad state: onCancel',
-        '[job] finished Cancelled(manual)',
-        '[job] error Bad state: late action',
-      ],
-    );
-    expect(
-      caught.map((error) => '$error'),
-      ['Bad state: onCancel', 'Bad state: late action'],
-      reason: 'an observer that only watches answers for nothing',
-    );
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
+    expect(journal.take(), const <String>[
+      '[job] started',
+      '[job] error Bad state: onCancel',
+      '[job] finished Cancelled(manual)',
+      '[job] error Bad state: late action',
+    ]);
+    expect(caught.map((error) => '$error'), [
+      'Bad state: onCancel',
+      'Bad state: late action',
+    ], reason: 'an observer that only watches answers for nothing');
   });
   test('an error a late cancellation covers still reaches the zone', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>((ctx) async {
-            ctx
-                .run(
-                  Job.deferred<void>(
-                    key: 'child',
-                    (child) => child.abandonable(() => delay(50)),
-                  ),
-                )
-                .ignore();
-            throw StateError('boom');
-          });
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.elapse(const Duration(milliseconds: 100));
-          expect(job.outcome, isA<Cancelled>());
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (child) => child.abandonable(() => delay(50)),
+                ),
+              )
+              .ignore();
+          throw StateError('boom');
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.elapse(const Duration(milliseconds: 100));
+        expect(job.outcome, isA<Cancelled>());
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught.map((error) => '$error').toList(), ['Bad state: boom']);
   });
 
   test('an error a late cancellation covers is told once and answered', () {
     final journal = JobJournal();
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(
-            key: 'job',
-            observer: journal,
-            (ctx) async {
-              ctx
-                  .run(
-                    Job.deferred<void>(
-                      key: 'child',
-                      (child) => child.abandonable(() => delay(50)),
-                    ),
-                  )
-                  .ignore();
-              throw StateError('boom');
-            },
-          );
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.elapse(const Duration(milliseconds: 100));
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(key: 'job', observer: journal, (ctx) async {
+          ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (child) => child.abandonable(() => delay(50)),
+                ),
+              )
+              .ignore();
+          throw StateError('boom');
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.elapse(const Duration(milliseconds: 100));
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: boom'],
-      reason: 'the outcome carries the cancellation, and an observer that '
+      reason:
+          'the outcome carries the cancellation, and an observer that '
           'only watches answers for the failure with the zone',
     );
-    expect(
-      journal.lines.where((line) => line.contains('error')).toList(),
-      ['[job] error Bad state: boom'],
-      reason: 'and the observer hears once, not twice',
-    );
+    expect(journal.lines.where((line) => line.contains('error')).toList(), [
+      '[job] error Bad state: boom',
+    ], reason: 'and the observer hears once, not twice');
   });
   test('a join the body walked away from puts no cancellation in the zone', () {
     final caught = <Object>[];
     final closed = <String>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>((ctx) async {
-            unawaited(
-              ctx.join<String>(
-                () => delay(50).then((_) => 'db'),
-                discard: closed.add,
-              ),
-            );
-            throw const Cancelled('enough');
-          }).ignoreFailure();
-          async.elapse(const Duration(milliseconds: 200));
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>((ctx) async {
+          unawaited(
+            ctx.join<String>(
+              () => delay(50).then((_) => 'db'),
+              discard: closed.add,
+            ),
+          );
+          throw const Cancelled('enough');
+        }).ignoreFailure();
+        async.elapse(const Duration(milliseconds: 200));
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught, isEmpty);
     expect(closed, ['db'], reason: 'the value is still cleaned up');
   });
   test("a run Future nobody handles reports the child's failure", () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>((ctx) async {
-            // Intentionally unhandled: this test checks the returned
-            // Future's error reporting contract.
-            // ignore: unawaited_futures
-            ctx.run(
-              Job.deferred<void>(key: 'child', (child) async {
-                // Outlives the body, so the parent really waits for it: a
-                // child that finished earlier is not on the waiting list
-                // at all.
-                await child.abandonable(() => delay(20));
-                throw StateError('child boom');
-              }),
-            );
-            await ctx.abandonable(() => delay(10));
-          }).ignoreFailure();
-          async.elapse(const Duration(milliseconds: 50));
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Bad state: child boom'],
-      reason: 'run observes the child and its own Future owns the error',
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>((ctx) async {
+          // Intentionally unhandled: this test checks the returned
+          // Future's error reporting contract.
+          // ignore: unawaited_futures
+          ctx.run(
+            Job.deferred<void>(key: 'child', (child) async {
+              // Outlives the body, so the parent really waits for it: a
+              // child that finished earlier is not on the waiting list
+              // at all.
+              await child.abandonable(() => delay(20));
+              throw StateError('child boom');
+            }),
+          );
+          await ctx.abandonable(() => delay(10));
+        }).ignoreFailure();
+        async.elapse(const Duration(milliseconds: 50));
+      });
+    }, (error, stackTrace) => caught.add(error));
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: child boom',
+    ], reason: 'run observes the child and its own Future owns the error');
   });
 
   test('ignoring the child does not silence the Future run returned', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>((ctx) async {
-            final child = Job.deferred<void>(key: 'child', (child) async {
-              await child.abandonable(() => delay(20));
-              throw StateError('child boom');
-              // Quenching the job says nothing about the Future below: it
-              // is the report of an unobserved outcome that this turns
-              // off, and run observes the child anyway.
-            })
-              ..ignoreFailure();
-            // ignore: unawaited_futures
-            ctx.run(child);
-            await ctx.abandonable(() => delay(10));
-          }).ignoreFailure();
-          async.elapse(const Duration(milliseconds: 50));
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Bad state: child boom'],
-      reason: 'the same failure arrives as with no ignoreFailure at all',
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>((ctx) async {
+          final child = Job.deferred<void>(key: 'child', (child) async {
+            await child.abandonable(() => delay(20));
+            throw StateError('child boom');
+            // Quenching the job says nothing about the Future below: it
+            // is the report of an unobserved outcome that this turns
+            // off, and run observes the child anyway.
+          })..ignoreFailure();
+          // ignore: unawaited_futures
+          ctx.run(child);
+          await ctx.abandonable(() => delay(10));
+        }).ignoreFailure();
+        async.elapse(const Duration(milliseconds: 50));
+      });
+    }, (error, stackTrace) => caught.add(error));
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: child boom',
+    ], reason: 'the same failure arrives as with no ignoreFailure at all');
   });
 
   test('ignoring that Future is what silences the failure of the child', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>((ctx) async {
-            ctx
-                .run(
-                  Job.deferred<void>(key: 'child', (child) async {
-                    await child.abandonable(() => delay(20));
-                    throw StateError('child boom');
-                  }),
-                )
-                .ignore();
-            await ctx.abandonable(() => delay(10));
-          }).ignoreFailure();
-          async.elapse(const Duration(milliseconds: 50));
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>((ctx) async {
+          ctx
+              .run(
+                Job.deferred<void>(key: 'child', (child) async {
+                  await child.abandonable(() => delay(20));
+                  throw StateError('child boom');
+                }),
+              )
+              .ignore();
+          await ctx.abandonable(() => delay(10));
+        }).ignoreFailure();
+        async.elapse(const Duration(milliseconds: 50));
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught, isEmpty, reason: 'the error is handled where it arrives');
   });
 
   test('a run Future nobody handles reports a cancelled child too', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>((ctx) async {
-            final child = Job.deferred<void>(key: 'child', (child) async {
-              await child.abandonable(() => delay(20));
-            })
-              ..ignoreFailure();
-            // ignore: unawaited_futures
-            ctx.run(child);
-            await ctx.abandonable(() => delay(5));
-            child.cancel().ignore();
-            await ctx.abandonable(() => delay(10));
-          }).ignoreFailure();
-          async.elapse(const Duration(milliseconds: 50));
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>((ctx) async {
+          final child = Job.deferred<void>(key: 'child', (child) async {
+            await child.abandonable(() => delay(20));
+          })..ignoreFailure();
+          // ignore: unawaited_futures
+          ctx.run(child);
+          await ctx.abandonable(() => delay(5));
+          child.cancel().ignore();
+          await ctx.abandonable(() => delay(10));
+        }).ignoreFailure();
+        async.elapse(const Duration(milliseconds: 50));
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(
       caught,
       [isA<Cancelled>()],
-      reason: 'ignoreFailure has no effect on a cancellation, '
+      reason:
+          'ignoreFailure has no effect on a cancellation, '
           'the Future carries it',
     );
   });
 
   test('cancelling a job does not silence the failure it ends with', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(cancellable: false, (ctx) async {
-            await ctx.abandonable(() => delay(10));
-            throw StateError('boom');
-          });
-          async.elapse(const Duration(milliseconds: 5));
-          job.cancel().ignore();
-          async.elapse(const Duration(milliseconds: 50));
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(cancellable: false, (ctx) async {
+          await ctx.abandonable(() => delay(10));
+          throw StateError('boom');
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Bad state: boom'],
-      reason: 'the waiting of an engine is not observation',
-    );
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.elapse(const Duration(milliseconds: 50));
+      });
+    }, (error, stackTrace) => caught.add(error));
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: boom',
+    ], reason: 'the waiting of an engine is not observation');
   });
 
   test('a listener that arrives one microtask later still counts', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          late Job<void> job;
-          job = Job<void>(
-            observer: _TouchAfterFinish(() => job.done.ignore()),
-            (ctx) async => throw StateError('boom'),
-          );
-          async.flushMicrotasks();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        late Job<void> job;
+        job = Job<void>(
+          observer: _TouchAfterFinish(() => job.done.ignore()),
+          (ctx) async => throw StateError('boom'),
+        );
+        async.flushMicrotasks();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught, isEmpty, reason: 'one microtask of grace, as Dart gives');
   });
   for (final checksFirst in [false, true]) {
-    test(
-        'a body that turns its cancellation into an error, '
+    test('a body that turns its cancellation into an error, '
         'checking first: $checksFirst', () {
       // No observer: the zone is the only place such an error could land.
       final caught = <Object>[];
       late Job<void> job;
-      runZonedGuarded(
-        () {
-          fakeAsync((async) {
-            job = Job<void>((ctx) async {
-              try {
-                await ctx.abandonable(() => delay(100));
-              } on Cancelled {
-                if (checksFirst) {
-                  ctx.check();
-                }
-                // The device said no in its own words, as a real one does
-                // through the token it was handed.
-                throw StateError('device aborted');
+      runZonedGuarded(() {
+        fakeAsync((async) {
+          job = Job<void>((ctx) async {
+            try {
+              await ctx.abandonable(() => delay(100));
+            } on Cancelled {
+              if (checksFirst) {
+                ctx.check();
               }
-            });
-            async.elapse(const Duration(milliseconds: 10));
-            job.cancel().ignore();
-            async.flushTimers();
+              // The device said no in its own words, as a real one does
+              // through the token it was handed.
+              throw StateError('device aborted');
+            }
           });
-        },
-        (error, stackTrace) => caught.add(error),
-      );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      }, (error, stackTrace) => caught.add(error));
       expect(
         caught.map((error) => '$error'),
         checksFirst ? isEmpty : ['Bad state: device aborted'],
         reason: checksFirst
             ? 'the check throws the cancellation of the job, and the body '
-                'ends with it'
+                  'ends with it'
             : 'the job ends Cancelled, and the error its body threw is in '
-                'no outcome: it is answered for',
+                  'no outcome: it is answered for',
       );
       expect(job.outcome, isA<Cancelled>());
     });
@@ -499,68 +424,62 @@ void main() {
 
   test('ignoreFailure silences a failure a late cancellation covered', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>((ctx) async {
-            ctx
-                .run(
-                  Job.deferred<void>(
-                    key: 'child',
-                    (child) => child.abandonable(() => delay(50)),
-                  ),
-                )
-                .ignore();
-            throw StateError('boom');
-          })
-            ..ignoreFailure();
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (child) => child.abandonable(() => delay(50)),
+                ),
+              )
+              .ignore();
+          throw StateError('boom');
+        })..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught, isEmpty);
   });
 
   test('a cancellation with nowhere to go stays out of the zone', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>((ctx) async {
-            ctx
-              ..onDispose(() {
-                throw const Cancelled('disposer');
-              })
-              ..onCancel(() {
-                throw const Cancelled('onCancel');
-              })
-              ..unattended(() async {
-                await delay(10);
-                throw const Cancelled('unattended');
-              })
-              // `ignore`, so the cancellation the abandoned future itself
-              // carries does not reach the zone on its own account: that
-              // one is Dart's doing, not the engine's.
-              ..abandonable(() async {
-                await delay(20);
-                throw const Cancelled('late action');
-              }).ignore();
-            await ctx.abandonable(() => delay(100));
-          });
-          async.elapse(const Duration(milliseconds: 5));
-          job.cancel().ignore();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          ctx
+            ..onDispose(() {
+              throw const Cancelled('disposer');
+            })
+            ..onCancel(() {
+              throw const Cancelled('onCancel');
+            })
+            ..unattended(() async {
+              await delay(10);
+              throw const Cancelled('unattended');
+            })
+            // `ignore`, so the cancellation the abandoned future itself
+            // carries does not reach the zone on its own account: that
+            // one is Dart's doing, not the engine's.
+            ..abandonable(() async {
+              await delay(20);
+              throw const Cancelled('late action');
+            }).ignore();
+          await ctx.abandonable(() => delay(100));
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(
       caught,
       isEmpty,
-      reason: 'a cancellation is a decision somebody made, not a failure, '
+      reason:
+          'a cancellation is a decision somebody made, not a failure, '
           'and the engine hands one to nobody',
     );
   });
@@ -568,38 +487,31 @@ void main() {
   test('the same cancellations reach the observer when there is one', () {
     final journal = JobJournal();
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(
-            key: 'job',
-            observer: journal,
-            (ctx) async {
-              ctx
-                ..onDispose(() {
-                  throw const Cancelled('disposer');
-                })
-                ..onCancel(() {
-                  throw const Cancelled('onCancel');
-                })
-                ..unattended(() async {
-                  await delay(10);
-                  throw const Cancelled('unattended');
-                })
-                ..abandonable(() async {
-                  await delay(20);
-                  throw const Cancelled('late action');
-                }).ignore();
-              await ctx.abandonable(() => delay(100));
-            },
-          );
-          async.elapse(const Duration(milliseconds: 5));
-          job.cancel().ignore();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(key: 'job', observer: journal, (ctx) async {
+          ctx
+            ..onDispose(() {
+              throw const Cancelled('disposer');
+            })
+            ..onCancel(() {
+              throw const Cancelled('onCancel');
+            })
+            ..unattended(() async {
+              await delay(10);
+              throw const Cancelled('unattended');
+            })
+            ..abandonable(() async {
+              await delay(20);
+              throw const Cancelled('late action');
+            }).ignore();
+          await ctx.abandonable(() => delay(100));
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(
       journal.lines.where((line) => line.contains('error')).toList(),
       const <String>[
@@ -615,65 +527,56 @@ void main() {
 
   test('the zone route of an engine refuses a cancellation', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = ProbeJob<void>((ctx) async {})..launch();
-          async.flushMicrotasks();
-          job
-            ..report(const Cancelled('by hand'), StackTrace.empty)
-            ..report(StateError('boom'), StackTrace.empty);
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Bad state: boom'],
-      reason: 'the rule holds at the door an engine uses too',
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = ProbeJob<void>((ctx) async {})..launch();
+        async.flushMicrotasks();
+        job
+          ..report(const Cancelled('by hand'), StackTrace.empty)
+          ..report(StateError('boom'), StackTrace.empty);
+      });
+    }, (error, stackTrace) => caught.add(error));
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: boom',
+    ], reason: 'the rule holds at the door an engine uses too');
   });
 
-  test('an unobserved failure carrying a cancellation still reaches the zone',
-      () {
-    final caught = <Object>[];
-    runZonedGuarded(
-      () {
+  test(
+    'an unobserved failure carrying a cancellation still reaches the zone',
+    () {
+      final caught = <Object>[];
+      runZonedGuarded(() {
         fakeAsync((async) {
           // The outcome decides here, not the object it holds: somebody
           // made this a failure on purpose, and a failure nobody looked at
           // goes to the zone whatever is inside it.
-          ProbeJob<void>((ctx) async {}).drop(
-            const Failed(Cancelled('as a failure'), StackTrace.empty),
-          );
+          ProbeJob<void>(
+            (ctx) async {},
+          ).drop(const Failed(Cancelled('as a failure'), StackTrace.empty));
           async.flushMicrotasks();
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Cancelled(handler: as a failure)'],
-    );
-  });
+      }, (error, stackTrace) => caught.add(error));
+      expect(caught.map((error) => '$error').toList(), [
+        'Cancelled(handler: as a failure)',
+      ]);
+    },
+  );
 
   test('an observer that cancels from onError does not hide the failure', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>(key: 'job', observer: _CancelOnError(), (ctx) async {
-            throw StateError('boom');
-          });
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>(key: 'job', observer: _CancelOnError(), (ctx) async {
+          throw StateError('boom');
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: boom'],
-      reason: 'the body failed first, and the cancellation that decided '
+      reason:
+          'the body failed first, and the cancellation that decided '
           'afterwards leaves it an error no outcome carries, answered with '
           'the zone',
     );
@@ -681,48 +584,44 @@ void main() {
 
   test('ignoreFailure from onFinish still silences a covered error', () {
     final order = <String>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(
-            key: 'job',
-            observer: _IgnoreOnFinish(order),
-            (ctx) async {
-              ctx
-                  .run(
-                    Job.deferred<void>(
-                      key: 'child',
-                      // An observer of its own: the child would inherit the
-                      // parent's, and its finish would take the outcome of the
-                      // parent through the closure long before this is about.
-                      observer: _Quiet(),
-                      (child) => child.abandonable(() => delay(50)),
-                    ),
-                  )
-                  .ignore();
-              throw StateError('boom');
-            },
-          );
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(key: 'job', observer: _IgnoreOnFinish(order), (
+          ctx,
+        ) async {
+          ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  // An observer of its own: the child would inherit the
+                  // parent's, and its finish would take the outcome of the
+                  // parent through the closure long before this is about.
+                  observer: _Quiet(),
+                  (child) => child.abandonable(() => delay(50)),
+                ),
+              )
+              .ignore();
+          throw StateError('boom');
         });
-      },
-      (error, stackTrace) => order.add('zone'),
-    );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => order.add('zone'));
     expect(
       order,
       ['onFinish job'],
-      reason: 'an engine calling ignoreFailure at finish is in time: '
+      reason:
+          'an engine calling ignoreFailure at finish is in time: '
           'the answer follows onFinish',
     );
   });
 
-  test('a reader a microtask after finish does not keep a covered error back',
-      () {
-    final caught = <Object>[];
-    runZonedGuarded(
-      () {
+  test(
+    'a reader a microtask after finish does not keep a covered error back',
+    () {
+      final caught = <Object>[];
+      runZonedGuarded(() {
         fakeAsync((async) {
           late Job<void> job;
           job = Job<void>(
@@ -745,54 +644,52 @@ void main() {
           job.cancel().ignore();
           async.flushTimers();
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Bad state: boom'],
-      reason: 'the reader gets the cancellation, not the failure, and the '
-          'failure is answered as the job ends',
-    );
-  });
+      }, (error, stackTrace) => caught.add(error));
+      expect(
+        caught.map((error) => '$error').toList(),
+        ['Bad state: boom'],
+        reason:
+            'the reader gets the cancellation, not the failure, and the '
+            'failure is answered as the job ends',
+      );
+    },
+  );
 
   test('a step that failed under a held cancellation is not silenced', () {
     final caught = <Object>[];
     Outcome<void>? outcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>((ctx) async {
-            await ctx.uncancellable(() async {
-              await delay(20);
-              throw StateError('the step failed');
-            });
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          await ctx.uncancellable(() async {
+            await delay(20);
+            throw StateError('the step failed');
           });
-          async.elapse(const Duration(milliseconds: 5));
-          // Held, not refused: it lands the moment the section closes --
-          // and the section closes on the way out of the failure, before
-          // the error has travelled to the body.
-          job.cancel().ignore();
-          async.flushTimers();
-          outcome = job.outcome;
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 5));
+        // Held, not refused: it lands the moment the section closes --
+        // and the section closes on the way out of the failure, before
+        // the error has travelled to the body.
+        job.cancel().ignore();
+        async.flushTimers();
+        outcome = job.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(outcome, isA<Cancelled>());
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: the step failed'],
-      reason: 'the step that cannot be rolled back is the one whose failure '
+      reason:
+          'the step that cannot be rolled back is the one whose failure '
           'costs most to lose, and the cancellation arrived after it',
     );
   });
 
-  test('a step a rule stopped while the section held a stop is answered for',
-      () {
-    final caught = <Object>[];
-    runZonedGuarded(
-      () {
+  test(
+    'a step a rule stopped while the section held a stop is answered for',
+    () {
+      final caught = <Object>[];
+      runZonedGuarded(() {
         fakeAsync((async) {
           late RulesContext rules;
           final job = RulesJob<void>((ctx) async {
@@ -802,79 +699,77 @@ void main() {
               () => stopped.completeError(StateError('stopped by a rule')),
             );
             await ctx.uncancellable(() => stopped.future);
-          })
-            ..launch();
+          })..launch();
           async.elapse(const Duration(milliseconds: 5));
           job.cancel().ignore();
           async.elapse(const Duration(milliseconds: 5));
           rules.breakRule('a rule');
           async.flushTimers();
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      caught.map((error) => '$error'),
-      ['Bad state: stopped by a rule'],
-      reason: 'the rule marked the job before the step failed, and the job '
-          'ends Cancelled: the failure of its body goes on all the same',
-    );
-  });
+      }, (error, stackTrace) => caught.add(error));
+      expect(
+        caught.map((error) => '$error'),
+        ['Bad state: stopped by a rule'],
+        reason:
+            'the rule marked the job before the step failed, and the job '
+            'ends Cancelled: the failure of its body goes on all the same',
+      );
+    },
+  );
 
   test('a join the body walked away from sends its late error to the zone', () {
     final caught = <Object>[];
     final errors = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>(observer: ErrorObserver(errors), (ctx) async {
-            // Not awaited, against the doctrine of the member, and this is
-            // what that costs. `join` has no future of its own to quieten
-            // -- it is the future -- so the error goes where Dart sends an
-            // unawaited one. Pinned as the boundary it is; `abandonable`, which
-            // holds a completer, announces this case to the observer.
-            unawaited(
-              ctx.join<void>(() async {
-                await delay(50);
-                throw StateError('the step failed');
-              }),
-            );
-            await ctx.abandonable(() => delay(10));
-          }).ignoreFailure();
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>(observer: ErrorObserver(errors), (ctx) async {
+          // Not awaited, against the doctrine of the member, and this is
+          // what that costs. `join` has no future of its own to quieten
+          // -- it is the future -- so the error goes where Dart sends an
+          // unawaited one. Pinned as the boundary it is; `abandonable`, which
+          // holds a completer, announces this case to the observer.
+          unawaited(
+            ctx.join<void>(() async {
+              await delay(50);
+              throw StateError('the step failed');
+            }),
+          );
+          await ctx.abandonable(() => delay(10));
+        }).ignoreFailure();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(errors, isEmpty, reason: 'the observer is not on this path');
     expect(caught.map((error) => '$error').toList(), [
       'Bad state: the step failed',
     ]);
   });
 
-  test('a job starts in its zone under a scheduler that runs callbacks raw',
-      () async {
-    // A microtask handler that keeps the callback as it came and runs it
-    // later from somewhere else, the way `fake_async` before 1.3.3 did:
-    // the start must not depend on the handler binding it.
-    final pending = <void Function()>[];
-    Object? seen;
-    runZoned(
-      () => runZoned(
-        () => Job<void>((ctx) async => seen = Zone.current[#mine]),
-        zoneValues: {#mine: 'mine'},
-      ),
-      zoneSpecification: ZoneSpecification(
-        scheduleMicrotask: (self, parent, zone, callback) =>
-            pending.add(callback),
-      ),
-    );
-    for (final callback in pending.toList()) {
-      callback();
-    }
-    await pumpEventQueue();
-    expect(seen, 'mine');
-  });
+  test(
+    'a job starts in its zone under a scheduler that runs callbacks raw',
+    () async {
+      // A microtask handler that keeps the callback as it came and runs it
+      // later from somewhere else, the way `fake_async` before 1.3.3 did:
+      // the start must not depend on the handler binding it.
+      final pending = <void Function()>[];
+      Object? seen;
+      runZoned(
+        () => runZoned(
+          () => Job<void>((ctx) async => seen = Zone.current[#mine]),
+          zoneValues: {#mine: 'mine'},
+        ),
+        zoneSpecification: ZoneSpecification(
+          scheduleMicrotask: (self, parent, zone, callback) =>
+              pending.add(callback),
+        ),
+      );
+      for (final callback in pending.toList()) {
+        callback();
+      }
+      await pumpEventQueue();
+      expect(seen, 'mine');
+    },
+  );
 }
 
 /// Touches the outcome one microtask after the job finished.
@@ -896,8 +791,7 @@ final class _CancelOnError extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      job.cancel().ignore();
+  }) => job.cancel().ignore();
 }
 
 /// Takes the outcome the moment the job finishes, the way an engine that routes

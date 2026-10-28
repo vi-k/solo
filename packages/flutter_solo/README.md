@@ -110,25 +110,25 @@ final class ProfileController extends Solo<Profile> {
   ProfileController(this.api) : super(Empty());
 
   Job<String> load() => enqueue<Profile, String>(
-        key: 'load',
-        policy: Policy.droppable, // a second tap returns the first job
-        (ctx) async {
-          ctx.emit(Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
+    key: 'load',
+    policy: Policy.droppable, // a second tap returns the first job
+    (ctx) async {
+      ctx.emit(Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
 
-          return name;
-        },
-        // Without these a load that fails or is cancelled leaves the state
-        // on Loading: a spinner, and nothing on the screen to tap.
-        ifFailed: (state, error, stackTrace) => Empty(),
-        ifCancelled: (state, cancelled) => Empty(),
-      );
+      return name;
+    },
+    // Without these a load that fails or is cancelled leaves the state
+    // on Loading: a spinner, and nothing on the screen to tap.
+    ifFailed: (state, error, stackTrace) => Empty(),
+    ifCancelled: (state, cancelled) => Empty(),
+  );
 
   Job<void> save() => enqueue<Loaded, void>(
-        key: 'save',
-        (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
-      );
+    key: 'save',
+    (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
+  );
 }
 
 class ProfileView extends StatelessWidget {
@@ -138,16 +138,16 @@ class ProfileView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SoloBuilder<Profile>(
-        solo: controller,
-        builder: (context, state, _) => switch (state) {
-          Empty() => TextButton(
-              onPressed: () => controller.load().ignoreFailure(),
-              child: const Text('Load'),
-            ),
-          Loading() => const CircularProgressIndicator(),
-          Loaded(:final name) => Text(name),
-        },
-      );
+    solo: controller,
+    builder: (context, state, _) => switch (state) {
+      Empty() => TextButton(
+        onPressed: () => controller.load().ignoreFailure(),
+        child: const Text('Load'),
+      ),
+      Loading() => const CircularProgressIndicator(),
+      Loaded(:final name) => Text(name),
+    },
+  );
 }
 ```
 
@@ -204,14 +204,12 @@ it is:
 ```dart
 ValueListenableBuilder<Profile>(
   valueListenable: controller,
-  builder: (context, state, _) => Text(
-    switch (state) {
-      Empty() => 'no profile',
-      Loading() => 'loading',
-      Loaded(:final name) => name,
-    },
-  ),
-)
+  builder: (context, state, _) => Text(switch (state) {
+    Empty() => 'no profile',
+    Loading() => 'loading',
+    Loaded(:final name) => name,
+  }),
+),
 ```
 
 `ListenableBuilder` and `AnimatedBuilder` take it the same way, and
@@ -224,7 +222,7 @@ ListenableBuilder(
   builder: (context, _) => Text(
     left.value.canSave && right.value.canSave ? 'both loaded' : 'waiting',
   ),
-)
+),
 ```
 
 `SoloBuilder` goes on taking it, as it takes any controller: with the mixin,
@@ -257,7 +255,7 @@ SoloSelector<Profile, bool>(
     onPressed: canSave ? controller.save : null,
     child: const Text('Save'),
   ),
-)
+),
 ```
 
 The button drops the job that `save` hands back, on purpose, and so does
@@ -308,12 +306,12 @@ class _SaveButtonState extends State<SaveButton> {
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
-        valueListenable: canSave,
-        builder: (context, enabled, _) => ElevatedButton(
-          onPressed: enabled ? widget.controller.save : null,
-          child: const Text('Save'),
-        ),
-      );
+    valueListenable: canSave,
+    builder: (context, enabled, _) => ElevatedButton(
+      onPressed: enabled ? widget.controller.save : null,
+      child: const Text('Save'),
+    ),
+  );
 }
 ```
 
@@ -544,7 +542,7 @@ ScopeModel<ProfileController>(
   builder: (context) => ProfileView(
     controller: ScopeModel.of<ProfileController>(context, listen: false),
   ),
-)
+),
 ```
 
 That `dispose` is synchronous, as in a `State`, and nothing waits for the
@@ -566,7 +564,7 @@ AsyncDataScope<ProfileController>(
   progressBuilder: (context, _) => const CircularProgressIndicator(),
   errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
   builder: (context, controller) => ProfileView(controller: controller),
-)
+),
 ```
 
 The scope is ready once the profile is loaded: until then it shows

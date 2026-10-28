@@ -48,16 +48,13 @@ void main() {
       final seen = <SoloTransition<TestState>>[];
       Solo.observer = _TransitionObserver(seen);
       late final Job<void> child;
-      final root = solo.enqueue<TestState, void>(
-        key: 'root',
-        (ctx) async {
-          child = ctx.each<int>(
-            Stream<int>.fromIterable([1]),
-            (childCtx, event) => childCtx.emit(Preparing(progress: event)),
-          );
-          await child.done;
-        },
-      );
+      final root = solo.enqueue<TestState, void>(key: 'root', (ctx) async {
+        child = ctx.each<int>(
+          Stream<int>.fromIterable([1]),
+          (childCtx, event) => childCtx.emit(Preparing(progress: event)),
+        );
+        await child.done;
+      });
       async.flushTimers();
       expect(seen, hasLength(1));
       expect(identical(seen.single.job, child), isTrue);
@@ -82,7 +79,8 @@ void main() {
       expect(
         identical(seen.single.job, job),
         isTrue,
-        reason: 'the body emitted nothing and had ended; the change is '
+        reason:
+            'the body emitted nothing and had ended; the change is '
             "still the job's own",
       );
       Solo.observer = journal;
@@ -91,16 +89,14 @@ void main() {
 
   test('revisions grow by one, nested change included', () {
     final solo = _Nested()..set(const Preparing());
-    expect(
-      solo.seen.map((transition) => transition.revision).toList(),
-      [1, 2],
-      reason: 'the outer change is #1 and the one nested in it is #2',
-    );
-    expect(
-      solo.seen.map((transition) => '${transition.current}').toList(),
-      ['$Preparing(progress: 0)', '$Disposed()'],
-      reason: 'the nested change is seen after the one it grew from',
-    );
+    expect(solo.seen.map((transition) => transition.revision).toList(), [
+      1,
+      2,
+    ], reason: 'the outer change is #1 and the one nested in it is #2');
+    expect(solo.seen.map((transition) => '${transition.current}').toList(), [
+      '$Preparing(progress: 0)',
+      '$Disposed()',
+    ], reason: 'the nested change is seen after the one it grew from');
   });
 
   test('toString says the revision, the source and both states', () {

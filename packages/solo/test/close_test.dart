@@ -72,14 +72,12 @@ void main() {
 
   test('close waits for a cancellable: false job without cancelling', () {
     runSolo((solo, journal, async) {
-      solo.enqueue<TestState, void>(
-        key: 'stubborn',
-        cancellable: false,
-        (ctx) async {
-          await delay(100);
-          ctx.emit(const Preparing());
-        },
-      );
+      solo.enqueue<TestState, void>(key: 'stubborn', cancellable: false, (
+        ctx,
+      ) async {
+        await delay(100);
+        ctx.emit(const Preparing());
+      });
       async.elapse(const Duration(milliseconds: 50));
       solo.close();
       async.elapse(const Duration(milliseconds: 50));
@@ -193,11 +191,7 @@ void main() {
         stateAfterEmit = solo.currentState;
       });
       async.flushMicrotasks();
-      expect(
-        stateAfterEmit,
-        const Preparing(),
-        reason: 'listener not yet run',
-      );
+      expect(stateAfterEmit, const Preparing(), reason: 'listener not yet run');
       expect(seen, [const Preparing(), const Working()]);
       expect(solo.currentState, const Working());
     });

@@ -53,8 +53,11 @@ final class FakeSettingsApi implements SettingsApi {
 
   /// What the server has finished writing, and when.
   final landedAt = <int>[];
-  Settings stored =
-      const Settings(notifications: false, theme: 'light', language: 'en');
+  Settings stored = const Settings(
+    notifications: false,
+    theme: 'light',
+    language: 'en',
+  );
 
   /// Writes the server has not finished.
   int writing = 0;
@@ -191,14 +194,14 @@ final class JoiningPlayer extends Solo<Playback> {
   SoloJob<void> pause() => _transport.add(Command.pause);
 
   SoloJob<void> busy() => enqueue<Playback, void>(
-        key: 'busy',
-        (ctx) => ctx.abandonable(() => Future<void>.delayed(ms(50))),
-      );
+    key: 'busy',
+    (ctx) => ctx.abandonable(() => Future<void>.delayed(ms(50))),
+  );
 
   SoloJob<void> chime() => enqueue<Playback, void>(
-        key: 'chime',
-        (ctx) async => device.note('chime'),
-      );
+    key: 'chime',
+    (ctx) async => device.note('chime'),
+  );
 }
 
 /// The two commands as ordinary jobs under one of the queue's own
@@ -211,25 +214,25 @@ final class KeyedPlayer extends Solo<Playback> {
   final bool oneKey;
 
   KeyedPlayer(this.device, this.policy, {required this.oneKey})
-      : super(const Paused());
+    : super(const Paused());
 
   SoloJob<void> resume() => enqueue<Playback, void>(
-        key: oneKey ? 'transport' : Command.resume,
-        policy: policy,
-        (ctx) async {
-          await ctx.join(device.resume);
-          ctx.emit(const Playing());
-        },
-      );
+    key: oneKey ? 'transport' : Command.resume,
+    policy: policy,
+    (ctx) async {
+      await ctx.join(device.resume);
+      ctx.emit(const Playing());
+    },
+  );
 
   SoloJob<void> pause() => enqueue<Playback, void>(
-        key: oneKey ? 'transport' : Command.pause,
-        policy: policy,
-        (ctx) async {
-          await ctx.join(device.pause);
-          ctx.emit(const Paused());
-        },
-      );
+    key: oneKey ? 'transport' : Command.pause,
+    policy: policy,
+    (ctx) async {
+      await ctx.join(device.pause);
+      ctx.emit(const Paused());
+    },
+  );
 }
 
 /// A controller for what the page says of the engine: accumulators that
@@ -250,30 +253,26 @@ final class Bench extends Solo<int> with OpenSolo<int> {
     bool Function(int state)? canStart,
     bool cancellable = true,
     Object? key,
-  }) =>
-      collect<int, String, void>(
-        (ctx, events) async {
-          ran.add('$name$events at ${now()} ms');
-          if (work > 0) {
-            await ctx.join(() => Future<void>.delayed(ms(work)));
-          }
-        },
-        key: key ?? name,
-        policy: policy,
-        timing: timing,
-        canStart: canStart,
-        cancellable: cancellable,
-      );
+  }) => collect<int, String, void>(
+    (ctx, events) async {
+      ran.add('$name$events at ${now()} ms');
+      if (work > 0) {
+        await ctx.join(() => Future<void>.delayed(ms(work)));
+      }
+    },
+    key: key ?? name,
+    policy: policy,
+    timing: timing,
+    canStart: canStart,
+    cancellable: cancellable,
+  );
 
   /// An ordinary job that takes [work] ms.
   SoloJob<void> busy(String name, int work, {Object? key}) =>
-      enqueue<int, void>(
-        key: key ?? name,
-        (ctx) async {
-          ran.add('$name at ${now()} ms');
-          await ctx.join(() => Future<void>.delayed(ms(work)));
-        },
-      );
+      enqueue<int, void>(key: key ?? name, (ctx) async {
+        ran.add('$name at ${now()} ms');
+        await ctx.join(() => Future<void>.delayed(ms(work)));
+      });
 
   /// The keys of the queued jobs, in order.
   List<Object?> get queued => [for (final job in queue.jobs) job.key];
@@ -297,9 +296,9 @@ final class Defaults extends Solo<int> {
   );
 
   SoloJob<void> busy(String name, int work) => enqueue<int, void>(
-        key: name,
-        (ctx) => ctx.join(() => Future<void>.delayed(ms(work))),
-      );
+    key: name,
+    (ctx) => ctx.join(() => Future<void>.delayed(ms(work))),
+  );
 
   /// The keys of the queued jobs, in order.
   List<Object?> get queued => [for (final job in queue.jobs) job.key];
@@ -323,12 +322,11 @@ final class CancelsOnStart extends Solo<int> with OpenSolo<int> {
   SoloAccumulator<String, void> collector(
     String name, {
     AccumulationTiming? timing,
-  }) =>
-      collect<int, String, void>(
-        (ctx, events) async => ran.add('$name$events at ${now()} ms'),
-        key: name,
-        timing: timing,
-      );
+  }) => collect<int, String, void>(
+    (ctx, events) async => ran.add('$name$events at ${now()} ms'),
+    key: name,
+    timing: timing,
+  );
 }
 
 /// Adds to its own accumulator from `canStart` and from `onStart`.
@@ -380,12 +378,13 @@ final class Typed extends Solo<Screen> {
 
   final ran = <String>[];
 
-  late final SoloAccumulator<String, void> items = collect<On, String, void>(
-    (ctx, events) async {
-      ran.add('$events on ${ctx.state.count}');
-      ctx.emit(On(ctx.state.count + events.length));
-    },
-  );
+  late final SoloAccumulator<String, void> items = collect<On, String, void>((
+    ctx,
+    events,
+  ) async {
+    ran.add('$events on ${ctx.state.count}');
+    ctx.emit(On(ctx.state.count + events.length));
+  });
 
   SoloJob<void> turnOn() =>
       enqueue<Screen, void>((ctx) async => ctx.emit(const On(0)));

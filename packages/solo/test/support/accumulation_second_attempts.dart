@@ -12,13 +12,13 @@ final class RestartingSearch extends Solo<SearchState> {
   RestartingSearch(this.api) : super(const SearchState.idle());
 
   Job<void> query(String text) => enqueue<SearchState, void>(
-        key: 'query',
-        policy: Policy.restart,
-        (ctx) async {
-          final results = await ctx.abandonable(() => api.search(text));
-          ctx.emit(SearchState.results(results));
-        },
-      );
+    key: 'query',
+    policy: Policy.restart,
+    (ctx) async {
+      final results = await ctx.abandonable(() => api.search(text));
+      ctx.emit(SearchState.results(results));
+    },
+  );
 }
 
 /// Not on the page: the second attempt with `ctx.join` in place of
@@ -29,13 +29,13 @@ final class JoiningSearch extends Solo<SearchState> {
   JoiningSearch(this.api) : super(const SearchState.idle());
 
   Job<void> query(String text) => enqueue<SearchState, void>(
-        key: 'query',
-        policy: Policy.restart,
-        (ctx) async {
-          final results = await ctx.join(() => api.search(text));
-          ctx.emit(SearchState.results(results));
-        },
-      );
+    key: 'query',
+    policy: Policy.restart,
+    (ctx) async {
+      final results = await ctx.join(() => api.search(text));
+      ctx.emit(SearchState.results(results));
+    },
+  );
 }
 
 /// The second attempt of the settings recipe.
@@ -45,12 +45,12 @@ final class RestartingSettingsController extends Solo<Settings> {
   RestartingSettingsController(this._api, Settings initial) : super(initial);
 
   Job<void> update(SettingsPatch patch) => enqueue<Settings, void>(
-        key: 'settings',
-        policy: Policy.restart,
-        (ctx) async {
-          final next = patch.apply(ctx.state);
-          await ctx.join(() => _api.save(next));
-          ctx.emit(next);
-        },
-      );
+    key: 'settings',
+    policy: Policy.restart,
+    (ctx) async {
+      final next = patch.apply(ctx.state);
+      await ctx.join(() => _api.save(next));
+      ctx.emit(next);
+    },
+  );
 }

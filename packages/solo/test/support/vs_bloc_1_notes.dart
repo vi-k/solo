@@ -48,9 +48,9 @@ final class NotesState {
   final bool uploading;
 
   NotesState copyWith({List<Note>? notes, bool? uploading}) => NotesState(
-        notes: notes ?? this.notes,
-        uploading: uploading ?? this.uploading,
-      );
+    notes: notes ?? this.notes,
+    uploading: uploading ?? this.uploading,
+  );
 
   @override
   String toString() => 'NotesState($notes, uploading: $uploading)';
@@ -63,27 +63,20 @@ final class NotesController extends Solo<NotesState> {
 
   NotesController(this._api) : super(const NotesState());
 
-  Job<void> upload(Note note) => enqueue<NotesState, void>(
-        key: 'upload',
-        (ctx) async {
-          ctx.emit(ctx.state.copyWith(uploading: true));
-          await ctx.join(() => _api.upload(note));
-          ctx.emit(
-            ctx.state.copyWith(
-              notes: [...ctx.state.notes, note],
-              uploading: false,
-            ),
-          );
-        },
-      );
+  Job<void> upload(Note note) => enqueue<NotesState, void>(key: 'upload', (
+    ctx,
+  ) async {
+    ctx.emit(ctx.state.copyWith(uploading: true));
+    await ctx.join(() => _api.upload(note));
+    ctx.emit(
+      ctx.state.copyWith(notes: [...ctx.state.notes, note], uploading: false),
+    );
+  });
 
-  Job<void> refresh() => enqueue<NotesState, void>(
-        key: 'refresh',
-        (ctx) async {
-          final serverNotes = await ctx.abandonable(_api.list);
-          ctx.emit(ctx.state.copyWith(notes: serverNotes));
-        },
-      );
+  Job<void> refresh() => enqueue<NotesState, void>(key: 'refresh', (ctx) async {
+    final serverNotes = await ctx.abandonable(_api.list);
+    ctx.emit(ctx.state.copyWith(notes: serverNotes));
+  });
 }
 
 // What the test adds.
@@ -102,7 +95,7 @@ final class TracedNotesController extends NotesController {
     api.trace.add(
       '${transition.job?.key} emits ${next.notes}'
       '${next.uploading == previous.uploading ? '' : ', '
-          'uploading: ${next.uploading}'}',
+                'uploading: ${next.uploading}'}',
     );
   }
 }
@@ -114,27 +107,20 @@ final class AbandoningNotesController extends Solo<NotesState> {
 
   final Api _api;
 
-  Job<void> upload(Note note) => enqueue<NotesState, void>(
-        key: 'upload',
-        (ctx) async {
-          ctx.emit(ctx.state.copyWith(uploading: true));
-          await ctx.abandonable(() => _api.upload(note));
-          ctx.emit(
-            ctx.state.copyWith(
-              notes: [...ctx.state.notes, note],
-              uploading: false,
-            ),
-          );
-        },
-      );
+  Job<void> upload(Note note) => enqueue<NotesState, void>(key: 'upload', (
+    ctx,
+  ) async {
+    ctx.emit(ctx.state.copyWith(uploading: true));
+    await ctx.abandonable(() => _api.upload(note));
+    ctx.emit(
+      ctx.state.copyWith(notes: [...ctx.state.notes, note], uploading: false),
+    );
+  });
 
-  Job<void> refresh() => enqueue<NotesState, void>(
-        key: 'refresh',
-        (ctx) async {
-          final serverNotes = await ctx.abandonable(_api.list);
-          ctx.emit(ctx.state.copyWith(notes: serverNotes));
-        },
-      );
+  Job<void> refresh() => enqueue<NotesState, void>(key: 'refresh', (ctx) async {
+    final serverNotes = await ctx.abandonable(_api.list);
+    ctx.emit(ctx.state.copyWith(notes: serverNotes));
+  });
 }
 
 /// Bodies the page describes without showing: a plain `await` where the
@@ -148,44 +134,35 @@ final class PlainNotesController extends Solo<NotesState> {
   /// What each body went through, in order.
   final met = <String>[];
 
-  Job<void> upload(Note note) => enqueue<NotesState, void>(
-        key: 'upload',
-        (ctx) async {
-          await _api.upload(note);
-          met.add('the await returned');
-          try {
-            ctx.emit(ctx.state.copyWith(notes: [note]));
-            met.add('emitted');
-          } on Cancelled {
-            met.add('emit threw Cancelled');
-            rethrow;
-          }
-        },
-      );
+  Job<void> upload(Note note) =>
+      enqueue<NotesState, void>(key: 'upload', (ctx) async {
+        await _api.upload(note);
+        met.add('the await returned');
+        try {
+          ctx.emit(ctx.state.copyWith(notes: [note]));
+          met.add('emitted');
+        } on Cancelled {
+          met.add('emit threw Cancelled');
+          rethrow;
+        }
+      });
 
   Job<void> mark(String name) => enqueue<NotesState, void>(
-        key: name,
-        (ctx) async => met.add('$name started'),
-      );
+    key: name,
+    (ctx) async => met.add('$name started'),
+  );
 
-  Job<void> detached() => enqueue<NotesState, void>(
-        key: 'detached',
-        (ctx) async {
-          unawaited(tick(100).then((_) => met.add('detached work ended')));
-        },
-      );
+  Job<void> detached() =>
+      enqueue<NotesState, void>(key: 'detached', (ctx) async {
+        unawaited(tick(100).then((_) => met.add('detached work ended')));
+      });
 
-  Job<void> withChild() => enqueue<NotesState, void>(
-        key: 'withChild',
-        (ctx) async {
-          final child = job<NotesState, void>(
-            key: 'child',
-            (childCtx) async {
-              await childCtx.join(() => tick(100));
-              met.add('child work ended');
-            },
-          );
-          ctx.run(child).ignore();
-        },
-      );
+  Job<void> withChild() =>
+      enqueue<NotesState, void>(key: 'withChild', (ctx) async {
+        final child = job<NotesState, void>(key: 'child', (childCtx) async {
+          await childCtx.join(() => tick(100));
+          met.add('child work ended');
+        });
+        ctx.run(child).ignore();
+      });
 }

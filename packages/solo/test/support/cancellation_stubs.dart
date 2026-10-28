@@ -85,9 +85,9 @@ final class Ready extends AppState {
   const Ready({this.position = Duration.zero, this.receipt});
 
   Ready copyWith({Duration? position, String? receipt}) => Ready(
-        position: position ?? this.position,
-        receipt: receipt ?? this.receipt,
-      );
+    position: position ?? this.position,
+    receipt: receipt ?? this.receipt,
+  );
 
   @override
   String toString() => 'Ready(${position.inSeconds} s, $receipt)';
@@ -172,9 +172,9 @@ mixin Desk on Solo<AppState> {
 
   /// Work that waits out a call named [name], in `Ready`.
   SoloJob<void> work(String name) => enqueue<Ready, void>(
-        key: name,
-        (ctx) => ctx.join(() => stage.start<void>(name, null)),
-      );
+    key: name,
+    (ctx) => ctx.join(() => stage.start<void>(name, null)),
+  );
 
   @override
   void onError(
@@ -182,8 +182,7 @@ mixin Desk on Solo<AppState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add(error);
+  }) => heard.add(error);
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {

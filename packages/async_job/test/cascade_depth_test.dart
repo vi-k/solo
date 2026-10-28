@@ -52,7 +52,8 @@ void main() {
     expect(
       silent,
       isEmpty,
-      reason: '$marked jobs were marked and ${silent.length} of them were '
+      reason:
+          '$marked jobs were marked and ${silent.length} of them were '
           'never told to stop; first of those: ${silent.take(3)}',
     );
   });
@@ -60,20 +61,17 @@ void main() {
   test('a body cancelling itself reports a cascade out of stack', () async {
     final chain = _Chain(depth);
     final errors = <Object>[];
-    final root = Job<void>(
-      (ctx) async {
-        ctx.run(chain.deferred()).ignore();
-        await chain.bottom.future;
-        // The body cancels itself, the way one does when it catches a
-        // cancellation of somebody else: the children go from inside the
-        // engine, and there is no caller to hand a failure of that to.
-        throw Cancelled.by(
-          reason: const TestCancelReason('handler'),
-          stackTrace: StackTrace.current,
-        );
-      },
-      observer: ErrorObserver.answering(errors),
-    );
+    final root = Job<void>((ctx) async {
+      ctx.run(chain.deferred()).ignore();
+      await chain.bottom.future;
+      // The body cancels itself, the way one does when it catches a
+      // cancellation of somebody else: the children go from inside the
+      // engine, and there is no caller to hand a failure of that to.
+      throw Cancelled.by(
+        reason: const TestCancelReason('handler'),
+        stackTrace: StackTrace.current,
+      );
+    }, observer: ErrorObserver.answering(errors));
 
     for (var attempt = 0; errors.isEmpty && attempt < 100; attempt++) {
       await delay(1);
@@ -89,7 +87,8 @@ void main() {
     expect(
       silent,
       isEmpty,
-      reason: '${chain.marked} jobs were marked and ${silent.length} of '
+      reason:
+          '${chain.marked} jobs were marked and ${silent.length} of '
           'them were never told to stop',
     );
   });
@@ -99,17 +98,14 @@ void main() {
     final errors = <Object>[];
     final zone = <Object>[];
     runZonedGuarded(
-      () => Job<void>(
-        (ctx) async {
-          ctx.run(chain.deferred()).ignore();
-          await chain.bottom.future;
-          throw Cancelled.by(
-            reason: const TestCancelReason('handler'),
-            stackTrace: StackTrace.current,
-          );
-        },
-        observer: ErrorObserver(errors),
-      ),
+      () => Job<void>((ctx) async {
+        ctx.run(chain.deferred()).ignore();
+        await chain.bottom.future;
+        throw Cancelled.by(
+          reason: const TestCancelReason('handler'),
+          stackTrace: StackTrace.current,
+        );
+      }, observer: ErrorObserver(errors)),
       (error, stackTrace) => zone.add(error),
     );
 
@@ -172,28 +168,25 @@ void main() {
     final ready = Completer<void>();
     var leafTold = false;
     late final ProbeJob<void> parent;
-    parent = ProbeJob<void>(
-      (ctx) async {
-        final leaf = Job.deferred<void>((ctx) async {
-          ctx.onCancel(() {
-            leafTold = true;
-            parent.drop(
-              Cancelled.by(
-                reason: const TestCancelReason('rules'),
-                stackTrace: StackTrace.current,
-              ),
-            );
-          });
-          await never.future;
+    parent = ProbeJob<void>((ctx) async {
+      final leaf = Job.deferred<void>((ctx) async {
+        ctx.onCancel(() {
+          leafTold = true;
+          parent.drop(
+            Cancelled.by(
+              reason: const TestCancelReason('rules'),
+              stackTrace: StackTrace.current,
+            ),
+          );
         });
-        ctx.run(leaf).ignore();
-        await null;
-        ctx.run(chain.deferred()).ignore();
-        ready.complete();
         await never.future;
-      },
-      observer: ErrorObserver.answering(errors),
-    );
+      });
+      ctx.run(leaf).ignore();
+      await null;
+      ctx.run(chain.deferred()).ignore();
+      ready.complete();
+      await never.future;
+    }, observer: ErrorObserver.answering(errors));
     parent.launch();
     await ready.future;
     await chain.bottom.future;
@@ -227,17 +220,14 @@ void main() {
       await never.future;
     });
     var second = false;
-    final root = Job<void>(
-      (ctx) async {
-        ctx.run(head).ignore();
-        await chain.bottom.future;
-        throw Cancelled.by(
-          reason: const TestCancelReason('handler'),
-          stackTrace: StackTrace.current,
-        );
-      },
-      observer: ErrorObserver.answering(errors),
-    );
+    final root = Job<void>((ctx) async {
+      ctx.run(head).ignore();
+      await chain.bottom.future;
+      throw Cancelled.by(
+        reason: const TestCancelReason('handler'),
+        stackTrace: StackTrace.current,
+      );
+    }, observer: ErrorObserver.answering(errors));
     for (var attempt = 0; errors.isEmpty && attempt < 100; attempt++) {
       await delay(1);
     }
@@ -283,106 +273,110 @@ void main() {
     expect(errors.single, isA<StackOverflowError>());
   });
 
-  test('a callback that runs out of stack on its own is still its own',
-      () async {
-    // No cascade and no depth: one job, a listener with a bug of its
-    // own. What the engine lets through while it unwinds its own
-    // overflow it must not let through here.
-    final errors = <Object>[];
-    var second = false;
-    final job = Job<void>(
-      (ctx) async {
-        await null;
-        throw Cancelled.by(
-          reason: const TestCancelReason('probe'),
-          stackTrace: StackTrace.current,
-        );
-      },
-      observer: ErrorObserver.answering(errors),
-    )
-      ..whenCancelled((_) => _forever(0))
-      ..whenCancelled((_) => second = true);
+  test(
+    'a callback that runs out of stack on its own is still its own',
+    () async {
+      // No cascade and no depth: one job, a listener with a bug of its
+      // own. What the engine lets through while it unwinds its own
+      // overflow it must not let through here.
+      final errors = <Object>[];
+      var second = false;
+      final job =
+          Job<void>((ctx) async {
+              await null;
+              throw Cancelled.by(
+                reason: const TestCancelReason('probe'),
+                stackTrace: StackTrace.current,
+              );
+            }, observer: ErrorObserver.answering(errors))
+            ..whenCancelled((_) => _forever(0))
+            ..whenCancelled((_) => second = true);
 
-    expect(
-      await job.done.timeout(const Duration(seconds: 5)),
-      isA<Cancelled>(),
-    );
-    expect(second, isTrue, reason: 'the listener after it still runs');
-    expect(errors.single, isA<StackOverflowError>());
-  });
+      expect(
+        await job.done.timeout(const Duration(seconds: 5)),
+        isA<Cancelled>(),
+      );
+      expect(second, isTrue, reason: 'the listener after it still runs');
+      expect(errors.single, isA<StackOverflowError>());
+    },
+  );
 
-  test('an onCancel that runs out of stack does not take the rest with it',
-      () async {
-    final errors = <Object>[];
-    var second = false;
-    final job = Job<void>(
-      (ctx) async {
+  test(
+    'an onCancel that runs out of stack does not take the rest with it',
+    () async {
+      final errors = <Object>[];
+      var second = false;
+      final job = Job<void>((ctx) async {
         ctx
           ..onCancel(() => _forever(0))
           ..onCancel(() => second = true);
         await ctx.abandonable(() => Completer<void>().future);
-      },
-      observer: ErrorObserver.answering(errors),
-    );
-    await delay(1);
+      }, observer: ErrorObserver.answering(errors));
+      await delay(1);
 
-    await job.cancel().timeout(const Duration(seconds: 5));
-    expect(job.outcome, isA<Cancelled>());
-    expect(second, isTrue, reason: 'the callback after it still runs');
-    expect(errors.single, isA<StackOverflowError>());
-  });
+      await job.cancel().timeout(const Duration(seconds: 5));
+      expect(job.outcome, isA<Cancelled>());
+      expect(second, isTrue, reason: 'the callback after it still runs');
+      expect(errors.single, isA<StackOverflowError>());
+    },
+  );
 
-  test('a callback that runs out of stack is not a callback that failed',
-      () async {
-    final chain = _Chain(depth, framesPerCallback: 400);
-    final errors = <Object>[];
-    final root = chain.start(observer: ErrorObserver(errors));
-    await chain.bottom.future;
+  test(
+    'a callback that runs out of stack is not a callback that failed',
+    () async {
+      final chain = _Chain(depth, framesPerCallback: 400);
+      final errors = <Object>[];
+      final root = chain.start(observer: ErrorObserver(errors));
+      await chain.bottom.future;
 
-    try {
-      root.cancel().ignore();
-    } on Object catch (_) {
-      // The cascade running out of stack is the point of the run.
-    }
+      try {
+        root.cancel().ignore();
+      } on Object catch (_) {
+        // The cascade running out of stack is the point of the run.
+      }
 
-    // The deepest callbacks ask for frames that are no longer there: that
-    // is what makes this run different from the first one, and without it
-    // the test would prove nothing.
-    expect(
-      chain.interrupted,
-      greaterThan(0),
-      reason: 'no callback was cut short, so nothing here was tested',
-    );
-    expect(
-      errors,
-      isEmpty,
-      reason: 'an overflow of the cascade is not a failure of the callback '
-          'it landed in, and must not be announced as one',
-    );
-  });
+      // The deepest callbacks ask for frames that are no longer there: that
+      // is what makes this run different from the first one, and without it
+      // the test would prove nothing.
+      expect(
+        chain.interrupted,
+        greaterThan(0),
+        reason: 'no callback was cut short, so nothing here was tested',
+      );
+      expect(
+        errors,
+        isEmpty,
+        reason:
+            'an overflow of the cascade is not a failure of the callback '
+            'it landed in, and must not be announced as one',
+      );
+    },
+  );
 
-  test('a listener that runs out of stack is not a listener that failed',
-      () async {
-    // The same run with the frames asked for by `whenCancelled` listeners,
-    // which go through the guard `whenFinished` shares.
-    final chain = _Chain(depth, framesPerCallback: 400, listeners: true);
-    final errors = <Object>[];
-    final root = chain.start(observer: ErrorObserver(errors));
-    await chain.bottom.future;
+  test(
+    'a listener that runs out of stack is not a listener that failed',
+    () async {
+      // The same run with the frames asked for by `whenCancelled` listeners,
+      // which go through the guard `whenFinished` shares.
+      final chain = _Chain(depth, framesPerCallback: 400, listeners: true);
+      final errors = <Object>[];
+      final root = chain.start(observer: ErrorObserver(errors));
+      await chain.bottom.future;
 
-    try {
-      root.cancel().ignore();
-    } on Object catch (_) {
-      // The cascade running out of stack is the point of the run.
-    }
+      try {
+        root.cancel().ignore();
+      } on Object catch (_) {
+        // The cascade running out of stack is the point of the run.
+      }
 
-    expect(
-      chain.interrupted,
-      greaterThan(0),
-      reason: 'no listener was cut short, so nothing here was tested',
-    );
-    expect(errors, isEmpty);
-  });
+      expect(
+        chain.interrupted,
+        greaterThan(0),
+        reason: 'no listener was cut short, so nothing here was tested',
+      );
+      expect(errors, isEmpty);
+    },
+  );
 }
 
 /// A chain of nested jobs, one child per level, as deep as asked.
@@ -411,7 +405,7 @@ final class _Chain {
   final _never = Completer<void>();
 
   _Chain(this.depth, {this.framesPerCallback = 0, this.listeners = false})
-      : toldToStop = List<bool>.filled(depth + 1, false);
+    : toldToStop = List<bool>.filled(depth + 1, false);
 
   /// The head of the chain, started the way any root is.
   Job<void> start({JobObserver? observer}) {

@@ -31,7 +31,7 @@ final class _DebounceCamera extends Solo<CameraState>
 
   late final _shot = accumulate<Ready, void, void>(
     (ctx, _) => ctx.join(camera.shoot),
-    merge: (_, __) {},
+    merge: (_, _) {},
     timing: AccumulationTiming.debounce(_second * 10),
   );
 
@@ -47,14 +47,11 @@ final class _DebounceCamera extends Solo<CameraState>
 ) {
   late final Completer<void> signal;
   late final Job<T> countdown;
-  runZonedGuarded(
-    () {
-      signal = Completer<void>();
-      countdown = Job<T>((ctx) => ctx.abandonable(() => wait(signal.future)))
-        ..ignoreFailure();
-    },
-    (error, _) => errors.add(error),
-  );
+  runZonedGuarded(() {
+    signal = Completer<void>();
+    countdown = Job<T>((ctx) => ctx.abandonable(() => wait(signal.future)))
+      ..ignoreFailure();
+  }, (error, _) => errors.add(error));
   return (signal, countdown);
 }
 
@@ -309,24 +306,26 @@ void main() {
   });
 
   group('a countdown on a signal', () {
-    test('a failure after the cancel reaches the zone past ignoreFailure()',
-        () async {
-      final errors = <Object>[];
-      final (signal, countdown) = _onSignal(errors, (signal) => signal);
-      await _settle();
-      await countdown.cancel();
-      signal.completeError(StateError('offline'));
-      await _settle();
+    test(
+      'a failure after the cancel reaches the zone past ignoreFailure()',
+      () async {
+        final errors = <Object>[];
+        final (signal, countdown) = _onSignal(errors, (signal) => signal);
+        await _settle();
+        await countdown.cancel();
+        signal.completeError(StateError('offline'));
+        await _settle();
 
-      expect('${countdown.outcome}', 'Cancelled(manual)');
-      expect(errors, [isStateError]);
-    });
+        expect('${countdown.outcome}', 'Cancelled(manual)');
+        expect(errors, [isStateError]);
+      },
+    );
 
     test('a failure caught inside the call reaches nobody', () async {
       final errors = <Object>[];
       final (signal, countdown) = _onSignal(
         errors,
-        (signal) => signal.then((_) => true, onError: (_, __) => false),
+        (signal) => signal.then((_) => true, onError: (_, _) => false),
       );
       await _settle();
       await countdown.cancel();
@@ -337,19 +336,21 @@ void main() {
       expect(errors, isEmpty);
     });
 
-    test('a failure caught in time ends the countdown with the value',
-        () async {
-      final errors = <Object>[];
-      final (signal, countdown) = _onSignal(
-        errors,
-        (signal) => signal.then((_) => true, onError: (_, __) => false),
-      );
-      await _settle();
-      signal.completeError(StateError('offline'));
-      await _settle();
+    test(
+      'a failure caught in time ends the countdown with the value',
+      () async {
+        final errors = <Object>[];
+        final (signal, countdown) = _onSignal(
+          errors,
+          (signal) => signal.then((_) => true, onError: (_, _) => false),
+        );
+        await _settle();
+        signal.completeError(StateError('offline'));
+        await _settle();
 
-      expect('${countdown.outcome}', 'Done(false)');
-      expect(errors, isEmpty);
-    });
+        expect('${countdown.outcome}', 'Done(false)');
+        expect(errors, isEmpty);
+      },
+    );
   });
 }

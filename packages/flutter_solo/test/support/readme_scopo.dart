@@ -9,14 +9,12 @@
 // declared a `listen` on `Listenable`, as the second import of this package
 // does, and a library that imported both could call neither.
 //
-// A widget expression of the page ends with `)` on a line of its own; it
+// A widget expression of the page ends with `),` on a line of its own; it
 // stands as the one element of a list, as in `readme_widgets.dart`.
 //
 // The page builds its API with `ProfileApi()`, and here that is the fake of
 // `readme_profile.dart` as [ProfileApi.next] says: a test sets what the
 // next API does before the page's code builds it.
-//
-// ignore_for_file: require_trailing_commas
 
 import 'dart:async';
 
@@ -42,34 +40,34 @@ class ProfileApi extends profile.ProfileApi {
 
 /// The scope that owns the controller of one screen.
 Widget screenScope() => [
-      ScopeModel<ProfileController>(
-        create: (context) {
-          final controller = ProfileController(ProfileApi());
-          controller.load().ignoreFailure();
+  ScopeModel<ProfileController>(
+    create: (context) {
+      final controller = ProfileController(ProfileApi());
+      controller.load().ignoreFailure();
 
-          return controller;
-        },
-        dispose: (controller) => unawaited(controller.close()),
-        builder: (context) => ProfileView(
-          controller: ScopeModel.of<ProfileController>(context, listen: false),
-        ),
-      )
-    ].single;
+      return controller;
+    },
+    dispose: (controller) => unawaited(controller.close()),
+    builder: (context) => ProfileView(
+      controller: ScopeModel.of<ProfileController>(context, listen: false),
+    ),
+  ),
+].single;
 
 /// The scope that loads a shared controller and waits for its close.
 Widget sharedScope() => [
-      AsyncDataScope<ProfileController>(
-        initData: (context, ctx) async {
-          final controller = ProfileController(ProfileApi());
-          final unregister = ctx.onDiscard(controller.close);
-          await ctx.abandonable(() => controller.load().value);
-          unregister(); // from here on, disposeData closes it
+  AsyncDataScope<ProfileController>(
+    initData: (context, ctx) async {
+      final controller = ProfileController(ProfileApi());
+      final unregister = ctx.onDiscard(controller.close);
+      await ctx.abandonable(() => controller.load().value);
+      unregister(); // from here on, disposeData closes it
 
-          return controller;
-        },
-        disposeData: (controller) => controller.close(),
-        progressBuilder: (context, _) => const CircularProgressIndicator(),
-        errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
-        builder: (context, controller) => ProfileView(controller: controller),
-      )
-    ].single;
+      return controller;
+    },
+    disposeData: (controller) => controller.close(),
+    progressBuilder: (context, _) => const CircularProgressIndicator(),
+    errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
+    builder: (context, controller) => ProfileView(controller: controller),
+  ),
+].single;

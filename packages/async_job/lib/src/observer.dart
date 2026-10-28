@@ -72,10 +72,10 @@ abstract mixin class JobObserver {
       [] => _AllObservers(all),
       [final answerer] => _AllObserversAnswering(all, answerer),
       _ => throw ArgumentError.value(
-          observers,
-          'observers',
-          'more than one answers: ${answerers.join(', ')}',
-        ),
+        observers,
+        'observers',
+        'more than one answers: ${answerers.join(', ')}',
+      ),
     };
   }
 
@@ -247,8 +247,7 @@ final class _AllObservers with JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      _each((o) => o.onError(job, error, stackTrace, answer: answer));
+  }) => _each((o) => o.onError(job, error, stackTrace, answer: answer));
 
   @override
   void onLog(Job<Object?> job, Object? message) =>

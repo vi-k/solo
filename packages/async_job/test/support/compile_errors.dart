@@ -31,17 +31,20 @@ Future<List<String>> _analyze(
         jsonDecode(await config.readAsString()) as Map<String, Object?>;
     final packages = json['packages']! as List<Object?>;
     for (final package in packages.cast<Map<String, Object?>>()) {
-      package['rootUri'] =
-          config.parent.uri.resolve(package['rootUri']! as String).toString();
+      package['rootUri'] = config.parent.uri
+          .resolve(package['rootUri']! as String)
+          .toString();
     }
     await Directory('${directory.path}/.dart_tool').create();
-    await File('${directory.path}/.dart_tool/package_config.json')
-        .writeAsString(jsonEncode(json));
+    await File(
+      '${directory.path}/.dart_tool/package_config.json',
+    ).writeAsString(jsonEncode(json));
     await File('${directory.path}/attempt.dart').writeAsString(code);
-    final result = await Process.run(
-      Platform.resolvedExecutable,
-      ['analyze', '--format=machine', directory.path],
-    );
+    final result = await Process.run(Platform.resolvedExecutable, [
+      'analyze',
+      '--format=machine',
+      directory.path,
+    ]);
     // A line of the machine format: severity, type, code, file, line,
     // column, length and the message, set apart by `|`; a `|` of the message
     // comes escaped.
@@ -58,8 +61,10 @@ Future<List<String>> _analyze(
     // show.
     if (result.exitCode > 3 ||
         severity == 'ERROR' && found.isEmpty && result.exitCode > 2) {
-      throw StateError('dart analyze exited with ${result.exitCode}: '
-          '${result.stderr}${result.stdout}');
+      throw StateError(
+        'dart analyze exited with ${result.exitCode}: '
+        '${result.stderr}${result.stdout}',
+      );
     }
     return found;
   } finally {

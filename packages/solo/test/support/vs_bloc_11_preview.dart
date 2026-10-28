@@ -82,16 +82,16 @@ final class PreviewController extends Solo<PreviewState> {
   PreviewController(this._decoder) : super(const NoPreview());
 
   Job<void> open(Clip clip) => enqueue<PreviewState, void>(
-        key: 'preview',
-        policy: Policy.restart,
-        (ctx) async {
-          final buffer = await ctx.abandonable(
-            () => _decoder.open(clip),
-            dispose: (buffer) => buffer.release(),
-          );
-          ctx.emit(Preview(buffer.waveform()));
-        },
+    key: 'preview',
+    policy: Policy.restart,
+    (ctx) async {
+      final buffer = await ctx.abandonable(
+        () => _decoder.open(clip),
+        dispose: (buffer) => buffer.release(),
       );
+      ctx.emit(Preview(buffer.waveform()));
+    },
+  );
 }
 
 // What the test adds.
@@ -105,26 +105,26 @@ final class OtherPreviewController extends Solo<PreviewState> {
   final Decoder _decoder;
 
   Job<void> openDiscarding(Clip clip) => enqueue<PreviewState, void>(
-        key: 'preview',
-        policy: Policy.restart,
-        (ctx) async {
-          final buffer = await ctx.abandonable(
-            () => _decoder.open(clip),
-            discard: (buffer) => buffer.release(),
-          );
-          ctx.emit(Preview(buffer.waveform()));
-        },
+    key: 'preview',
+    policy: Policy.restart,
+    (ctx) async {
+      final buffer = await ctx.abandonable(
+        () => _decoder.open(clip),
+        discard: (buffer) => buffer.release(),
       );
+      ctx.emit(Preview(buffer.waveform()));
+    },
+  );
 
   Job<void> openJoining(Clip clip) => enqueue<PreviewState, void>(
-        key: 'preview',
-        policy: Policy.restart,
-        (ctx) async {
-          final buffer = await ctx.join(
-            () => _decoder.open(clip),
-            dispose: (buffer) => buffer.release(),
-          );
-          ctx.emit(Preview(buffer.waveform()));
-        },
+    key: 'preview',
+    policy: Policy.restart,
+    (ctx) async {
+      final buffer = await ctx.join(
+        () => _decoder.open(clip),
+        dispose: (buffer) => buffer.release(),
       );
+      ctx.emit(Preview(buffer.waveform()));
+    },
+  );
 }

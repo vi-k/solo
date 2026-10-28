@@ -35,10 +35,7 @@ void main() {
       expect(errorFrom(leaked.join(action), async), isStateError);
       expect(errorFrom(leaked.uncancellable(action), async), isStateError);
       expect(began, isFalse, reason: 'none of them begins the action');
-      expect(journal.take(), [
-        '[job] started',
-        '[job] finished Done(null)',
-      ]);
+      expect(journal.take(), ['[job] started', '[job] finished Done(null)']);
     });
   });
 

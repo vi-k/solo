@@ -13,8 +13,7 @@ import 'support/test_state.dart';
 // `ctx.run`, and the outcome of the child stays with whoever holds it.
 
 void main() {
-  test(
-      'a child the rules turn away ends Cancelled(rules), and nothing is '
+  test('a child the rules turn away ends Cancelled(rules), and nothing is '
       'said of it', () {
     runSolo((solo, journal, async) {
       late SoloJob<void> child;
@@ -35,34 +34,35 @@ void main() {
     });
   });
 
-  test('a canStart that throws throws from start, and the child ends Failed',
-      () {
-    runSolo((solo, journal, async) {
-      late SoloJob<void> child;
-      Object? thrown;
-      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
-        child = solo.job<TestState, void>(
-          key: 'child',
-          canStart: (state) => throw StateError('rule broke'),
-          (ctx) async {},
-        );
-        try {
-          ctx.start(child);
-        } on Object catch (error) {
-          thrown = error;
-        }
-      });
-      async.flushTimers();
-      expect('$thrown', 'Bad state: rule broke');
-      expect('${child.outcome}', 'Failed(Bad state: rule broke)');
-      final lines = journal.take();
-      expect(lines, contains('[parent] finished Done(null)'));
-      expect(lines.where((line) => line.contains('unanswered')), isEmpty);
-    });
-  });
-
   test(
-      'a failure of the child goes to the unanswered handler, and the '
+    'a canStart that throws throws from start, and the child ends Failed',
+    () {
+      runSolo((solo, journal, async) {
+        late SoloJob<void> child;
+        Object? thrown;
+        solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
+          child = solo.job<TestState, void>(
+            key: 'child',
+            canStart: (state) => throw StateError('rule broke'),
+            (ctx) async {},
+          );
+          try {
+            ctx.start(child);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        });
+        async.flushTimers();
+        expect('$thrown', 'Bad state: rule broke');
+        expect('${child.outcome}', 'Failed(Bad state: rule broke)');
+        final lines = journal.take();
+        expect(lines, contains('[parent] finished Done(null)'));
+        expect(lines.where((line) => line.contains('unanswered')), isEmpty);
+      });
+    },
+  );
+
+  test('a failure of the child goes to the unanswered handler, and the '
       'parent ends Done', () {
     runSolo((solo, journal, async) {
       solo.enqueue<TestState, void>(key: 'parent', (ctx) async {

@@ -37,13 +37,10 @@ void main() {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<void>((ctx) async {
-        await ctx.abandonable(
-          () async {
-            await delay(100);
-            return 'db';
-          },
-          discard: closed.add,
-        );
+        await ctx.abandonable(() async {
+          await delay(100);
+          return 'db';
+        }, discard: closed.add);
       });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
@@ -52,40 +49,30 @@ void main() {
     });
   });
 
-  test(
-      'a late error of an abandoned action goes to the observer, then the '
+  test('a late error of an abandoned action goes to the observer, then the '
       'zone', () {
     final journal = JobJournal();
     final zone = <Object>[];
     late final Job<void> job;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          job = Job<void>(
-            key: 'job',
-            observer: journal,
-            (ctx) async {
-              await ctx.abandonable(() async {
-                await delay(100);
-                throw StateError('late');
-              });
-            },
-          );
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        job = Job<void>(key: 'job', observer: journal, (ctx) async {
+          await ctx.abandonable(() async {
+            await delay(100);
+            throw StateError('late');
+          });
         });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone: an `expect` that fails inside it lands in
     // the handler and is counted as a zone error instead of failing.
     expect(journal.take(), contains('[job] error Bad state: late'));
-    expect(
-      zone.map((error) => '$error'),
-      ['Bad state: late'],
-      reason: 'an observer that only watches answers for nothing',
-    );
+    expect(zone.map((error) => '$error'), [
+      'Bad state: late',
+    ], reason: 'an observer that only watches answers for nothing');
     expect(job.outcome, isA<Cancelled>());
   });
 
@@ -168,13 +155,10 @@ void main() {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<void>((ctx) async {
-        await ctx.join(
-          () async {
-            await delay(100);
-            return 'db';
-          },
-          discard: closed.add,
-        );
+        await ctx.join(() async {
+          await delay(100);
+          return 'db';
+        }, discard: closed.add);
       });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
@@ -208,22 +192,18 @@ void main() {
         final errors = <Object>[];
         final zone = <Object>[];
         late Job<void> job;
-        runZonedGuarded(
-          () {
-            job = Job<void>(
-              observer: observed ? ErrorObserver(errors) : null,
-              (ctx) async {
-                ctx.onCancel(() {
-                  calls.add('first');
-                  ctx.onCancel(() => calls.add('too late'));
-                  calls.add('past the second registration');
-                });
-                await ctx.abandonable(() => delay(100));
-              },
-            );
-          },
-          (error, stackTrace) => zone.add(error),
-        );
+        runZonedGuarded(() {
+          job = Job<void>(observer: observed ? ErrorObserver(errors) : null, (
+            ctx,
+          ) async {
+            ctx.onCancel(() {
+              calls.add('first');
+              ctx.onCancel(() => calls.add('too late'));
+              calls.add('past the second registration');
+            });
+            await ctx.abandonable(() => delay(100));
+          });
+        }, (error, stackTrace) => zone.add(error));
         async.elapse(const Duration(milliseconds: 10));
         job.cancel().ignore();
         async.flushTimers();
@@ -232,7 +212,8 @@ void main() {
         expect(
           errors,
           observed ? [isA<Cancelled>()] : isEmpty,
-          reason: 'only onError hears it, as a Cancelled thrown outside the '
+          reason:
+              'only onError hears it, as a Cancelled thrown outside the '
               'body',
         );
         expect(zone, isEmpty);
@@ -295,8 +276,7 @@ void main() {
           return delay(100).then((_) => seen.add('value'));
         });
         seen.add('after');
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 1));
       expect(job.outcome, isA<Cancelled>());
       async.flushTimers();
@@ -304,20 +284,16 @@ void main() {
     });
   });
 
-  test(
-      'an action that cancels the job and answers at once hands the body '
+  test('an action that cancels the job and answers at once hands the body '
       'nothing', () {
     final ran = <String>[];
     fakeAsync((async) {
       Job<void>((ctx) async {
         try {
-          final value = await ctx.abandonable(
-            () {
-              ctx.job.cancel().ignore();
-              return 'db';
-            },
-            discard: (value) => ran.add('discarded $value'),
-          );
+          final value = await ctx.abandonable(() {
+            ctx.job.cancel().ignore();
+            return 'db';
+          }, discard: (value) => ran.add('discarded $value'));
           ran.add('continued: $value');
         } on Cancelled {
           ran.add('cancelled');
@@ -328,7 +304,8 @@ void main() {
     expect(
       ran,
       ['discarded db', 'cancelled'],
-      reason: 'a value produced after the mark is one the body must not see, '
+      reason:
+          'a value produced after the mark is one the body must not see, '
           'and the answer does not turn on whether the action was '
           'synchronous',
     );
@@ -337,20 +314,17 @@ void main() {
   test('the job giving up does not reach the observer as an error', () {
     fakeAsync((async) {
       final errors = <Object>[];
-      final job = Job<void>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          // A helper that took the context and walked back into it. After
-          // the mark the call throws this job's own cancellation, and the
-          // body is long gone from the wait.
-          Future<void> helper() async {
-            await delay(50);
-            ctx.check();
-          }
+      final job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
+        // A helper that took the context and walked back into it. After
+        // the mark the call throws this job's own cancellation, and the
+        // body is long gone from the wait.
+        Future<void> helper() async {
+          await delay(50);
+          ctx.check();
+        }
 
-          await ctx.abandonable(helper);
-        },
-      );
+        await ctx.abandonable(helper);
+      });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -358,7 +332,8 @@ void main() {
       expect(
         errors,
         isEmpty,
-        reason: 'the job giving up is not an error, and the abandoned call '
+        reason:
+            'the job giving up is not an error, and the abandoned call '
             'throwing that very cancellation says nothing new',
       );
     });

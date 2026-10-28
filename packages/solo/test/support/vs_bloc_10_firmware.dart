@@ -72,16 +72,16 @@ final class FirmwareController extends Solo<FirmwareState> {
   FirmwareController(this._ble) : super(const Idle());
 
   Job<void> flash(List<Chunk> chunks) => enqueue<NotBroken, void>(
-        key: 'flash',
-        policy: Policy.restart,
-        (ctx) async {
-          var written = 0;
-          for (final chunk in chunks) {
-            await ctx.join(() => _ble.write(chunk));
-            ctx.emit(Flashing(++written, chunks.length));
-          }
-        },
-      );
+    key: 'flash',
+    policy: Policy.restart,
+    (ctx) async {
+      var written = 0;
+      for (final chunk in chunks) {
+        await ctx.join(() => _ble.write(chunk));
+        ctx.emit(Flashing(++written, chunks.length));
+      }
+    },
+  );
 }
 
 // What the test adds.
@@ -97,37 +97,33 @@ final class ParentController extends Solo<FirmwareState> {
 
   final seen = <String>[];
 
-  Job<void> withChild() => enqueue<FirmwareState, void>(
-        key: 'parent',
-        (ctx) async {
-          final child = job<FirmwareState, void>((childCtx) async {
-            childCtx.onDispose(() async {
-              await tick(20);
-              seen.add('the cleanup of the child ended');
-            });
-            await childCtx.abandonable(() => tick(30));
-            seen.add('the body of the child ended');
+  Job<void> withChild() =>
+      enqueue<FirmwareState, void>(key: 'parent', (ctx) async {
+        final child = job<FirmwareState, void>((childCtx) async {
+          childCtx.onDispose(() async {
+            await tick(20);
+            seen.add('the cleanup of the child ended');
           });
-          unawaited(ctx.run(child));
-          seen.add('the body of the parent ended');
-        },
-      );
+          await childCtx.abandonable(() => tick(30));
+          seen.add('the body of the child ended');
+        });
+        unawaited(ctx.run(child));
+        seen.add('the body of the parent ended');
+      });
 
-  Job<void> withUnattended() => enqueue<FirmwareState, void>(
-        key: 'upload',
-        (ctx) async {
-          ctx.unattended(() async {
-            await tick(50);
-            throw StateError('the unattended work failed');
-          });
-          seen.add('the body ended');
-        },
-      );
+  Job<void> withUnattended() =>
+      enqueue<FirmwareState, void>(key: 'upload', (ctx) async {
+        ctx.unattended(() async {
+          await tick(50);
+          throw StateError('the unattended work failed');
+        });
+        seen.add('the body ended');
+      });
 
   Job<void> mark() => enqueue<FirmwareState, void>(
-        key: 'mark',
-        (ctx) async => seen.add('the next job started'),
-      );
+    key: 'mark',
+    (ctx) async => seen.add('the next job started'),
+  );
 
   @override
   void onError(
@@ -135,6 +131,5 @@ final class ParentController extends Solo<FirmwareState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('onError of ${job.key}: $error');
+  }) => seen.add('onError of ${job.key}: $error');
 }

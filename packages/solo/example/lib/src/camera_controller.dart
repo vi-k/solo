@@ -70,18 +70,18 @@ final class CameraController extends Solo<CameraState> {
   /// cancels the opening, and a job its rules cancelled leaves the reported
   /// [Broken] alone.
   Job<void> init() => enqueue<NotDisposed, void>(
-        key: CameraKey.init,
-        policy: Policy.droppable,
-        canStart: (state) => state is Initial,
-        keepWhile: (state) => state is! Broken,
-        ifFailed: (state, error, stackTrace) => Broken(error),
-        ifCancelled: (state, cancelled) => Broken(cancelled),
-        (ctx) async {
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          ctx.emit(const Ready());
-        },
-      );
+    key: CameraKey.init,
+    policy: Policy.droppable,
+    canStart: (state) => state is Initial,
+    keepWhile: (state) => state is! Broken,
+    ifFailed: (state, error, stackTrace) => Broken(error),
+    ifCancelled: (state, cancelled) => Broken(cancelled),
+    (ctx) async {
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      ctx.emit(const Ready());
+    },
+  );
 
   /// Closes and reopens the hardware, restoring the zoom. The close runs as
   /// a `cancellable: false` child: once started it always completes. A
@@ -121,38 +121,38 @@ final class CameraController extends Solo<CameraState> {
   }
 
   SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
-        key: CameraKey.closeCamera,
-        cancellable: false,
-        (ctx) async => hw.close(),
-      );
+    key: CameraKey.closeCamera,
+    cancellable: false,
+    (ctx) async => hw.close(),
+  );
 
   /// Pauses the preview; a paused camera takes no commands.
   Job<void> pause() => enqueue<Ready, void>(
-        key: CameraKey.pause,
-        policy: Policy.droppable,
-        canStart: (state) => !state.paused,
-        (ctx) async => ctx.emit(ctx.state.copyWith(paused: true)),
-      );
+    key: CameraKey.pause,
+    policy: Policy.droppable,
+    canStart: (state) => !state.paused,
+    (ctx) async => ctx.emit(ctx.state.copyWith(paused: true)),
+  );
 
   /// Resumes the preview.
   Job<void> resume() => enqueue<Ready, void>(
-        key: CameraKey.resume,
-        policy: Policy.droppable,
-        canStart: (state) => state.paused,
-        (ctx) async => ctx.emit(ctx.state.copyWith(paused: false)),
-      );
+    key: CameraKey.resume,
+    policy: Policy.droppable,
+    canStart: (state) => state.paused,
+    (ctx) async => ctx.emit(ctx.state.copyWith(paused: false)),
+  );
 
   /// Only the last requested zoom matters: `replace` drops queued ones.
   Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-        key: CameraKey.setZoom,
-        policy: Policy.replace,
-        describe: () => 'zoom: $zoom',
-        canStart: (state) => !state.paused,
-        (ctx) async {
-          await ctx.join(() => hw.setZoom(zoom));
-          ctx.emit(ctx.state.copyWith(zoom: zoom));
-        },
-      );
+    key: CameraKey.setZoom,
+    policy: Policy.replace,
+    describe: () => 'zoom: $zoom',
+    canStart: (state) => !state.paused,
+    (ctx) async {
+      await ctx.join(() => hw.setZoom(zoom));
+      ctx.emit(ctx.state.copyWith(zoom: zoom));
+    },
+  );
 
   /// Replaces queued focus jobs of both kinds: a group of keys, so the
   /// queue is managed directly instead of through a policy.
@@ -188,16 +188,16 @@ final class CameraController extends Solo<CameraState> {
 
   /// One shot at a time; requests queued during the shot are dropped.
   Job<Photo> takePhoto() => enqueue<Ready, Photo>(
-        key: CameraKey.takePhoto,
-        policy: Policy.droppable,
-        canStart: (state) => !state.paused,
-        (ctx) async {
-          final photo = await ctx.join(hw.capture);
-          queue.clear();
-          ctx.log('captured $photo');
-          return photo;
-        },
-      );
+    key: CameraKey.takePhoto,
+    policy: Policy.droppable,
+    canStart: (state) => !state.paused,
+    (ctx) async {
+      final photo = await ctx.join(hw.capture);
+      queue.clear();
+      ctx.log('captured $photo');
+      return photo;
+    },
+  );
 
   /// Clears the way: drops the queued commands, cancels the current job,
   /// closes the hardware. Await it, then call [close] to release the

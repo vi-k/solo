@@ -542,8 +542,7 @@ abstract class JobContextBase implements JobContext {
     Future<void> Function(JobContext ctx) body, {
     Object? key,
     String Function()? describe,
-  }) =>
-      child<void>(body, key: key, describe: describe);
+  }) => child<void>(body, key: key, describe: describe);
 
   @override
   @useResult
@@ -552,8 +551,7 @@ abstract class JobContextBase implements JobContext {
     Object? key,
     String Function()? describe,
     Duration? timeout,
-  }) =>
-      Job.deferred<T>(body, key: key, describe: describe, timeout: timeout);
+  }) => Job.deferred<T>(body, key: key, describe: describe, timeout: timeout);
 
   @override
   Job<void> each<T>(
@@ -1409,9 +1407,9 @@ abstract class JobContextBase implements JobContext {
       throw StateError(
         child.status == JobStatus.running
             ? '$child is already running; a child is started by the call '
-                'that takes it, and not before'
+                  'that takes it, and not before'
             : '$child has already finished; a job runs once, and a child '
-                'needs a new Job.deferred',
+                  'needs a new Job.deferred',
       );
     }
   }

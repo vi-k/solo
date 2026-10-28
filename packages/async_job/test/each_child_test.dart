@@ -198,10 +198,9 @@ void main() {
     expect(finishedBeforeTheFailure, isFalse);
     expect(listening.outcome, isA<Cancelled>());
     expect(parent.outcome, isA<Done<void>>());
-    expect(
-      journal.lines.where((line) => line.contains('error')),
-      ['> [null: each] error Bad state: handler'],
-    );
+    expect(journal.lines.where((line) => line.contains('error')), [
+      '> [null: each] error Bad state: handler',
+    ]);
     expect(zone, ['Bad state: handler']);
   });
 
@@ -231,35 +230,32 @@ void main() {
   for (final early in [false, true]) {
     test('a cancelled handler fails without an observer, early=$early', () {
       final zone = <Object>[];
-      runZonedGuarded(
-        () {
-          fakeAsync((async) {
-            final active = Completer<void>();
-            late StreamController<int> source;
-            source = StreamController<int>.broadcast(
-              sync: true,
-              onListen: early ? () => source.add(1) : null,
-            );
-            late Job<void> listening;
-            final parent = Job<void>((ctx) async {
-              listening = ctx.each(source.stream, (_, event) => active.future)
-                ..ignoreFailure();
-            });
-            async.flushMicrotasks();
-            if (!early) source.add(1);
-            async.flushMicrotasks();
-            listening.cancel().ignore();
-            async.flushMicrotasks();
-            expect(listening.isFinished, isFalse);
-            active.completeError(StateError('after cancellation'));
-            async.flushMicrotasks();
-            expect(listening.outcome, isA<Cancelled>());
-            expect(parent.outcome, isA<Done<void>>());
-            source.close().ignore();
+      runZonedGuarded(() {
+        fakeAsync((async) {
+          final active = Completer<void>();
+          late StreamController<int> source;
+          source = StreamController<int>.broadcast(
+            sync: true,
+            onListen: early ? () => source.add(1) : null,
+          );
+          late Job<void> listening;
+          final parent = Job<void>((ctx) async {
+            listening = ctx.each(source.stream, (_, event) => active.future)
+              ..ignoreFailure();
           });
-        },
-        (error, stack) => zone.add(error),
-      );
+          async.flushMicrotasks();
+          if (!early) source.add(1);
+          async.flushMicrotasks();
+          listening.cancel().ignore();
+          async.flushMicrotasks();
+          expect(listening.isFinished, isFalse);
+          active.completeError(StateError('after cancellation'));
+          async.flushMicrotasks();
+          expect(listening.outcome, isA<Cancelled>());
+          expect(parent.outcome, isA<Done<void>>());
+          source.close().ignore();
+        });
+      }, (error, stack) => zone.add(error));
       expect(zone, isEmpty);
     });
   }

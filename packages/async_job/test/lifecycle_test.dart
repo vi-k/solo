@@ -75,11 +75,13 @@ void main() {
       async.flushMicrotasks();
       expect(errors, [
         equals(
-            'Bad state: Job(early) is already running; a child is started by '
-            'the call that takes it, and not before'),
+          'Bad state: Job(early) is already running; a child is started by '
+          'the call that takes it, and not before',
+        ),
         equals(
-            'Bad state: Job(done) has already finished; a job runs once, and a '
-            'child needs a new Job.deferred'),
+          'Bad state: Job(done) has already finished; a job runs once, and a '
+          'child needs a new Job.deferred',
+        ),
       ]);
       expect(parent.outcome, isA<Done<void>>());
       early.cancel().ignore();
@@ -110,8 +112,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      })
-        ..launch();
+      })..launch();
       async.flushMicrotasks();
       expect(thrown, isA<ArgumentError>());
       expect(orphan.isChild, isFalse);
@@ -130,11 +131,10 @@ void main() {
       async.flushMicrotasks();
       // `ignoreFailure` before the microtasks run: an unobserved Failed would
       // otherwise reach the zone and fail the test on its own.
-      final parent = ProbeJob<void>(
-        (ctx) async => (ctx as ProbeContext).adopt(early),
-      )
-        ..ignoreFailure()
-        ..launch();
+      final parent =
+          ProbeJob<void>((ctx) async => (ctx as ProbeContext).adopt(early))
+            ..ignoreFailure()
+            ..launch();
       async.flushMicrotasks();
       expect(parent.outcome, isA<Failed>());
       // The same answer as in the stripe above: which of the two got
@@ -146,11 +146,8 @@ void main() {
   test('finish on a job that has already finished does nothing', () {
     fakeAsync((async) {
       final journal = JobJournal();
-      final job = ProbeJob<int>(
-        key: 'job',
-        observer: journal,
-        (ctx) async => 1,
-      )..launch();
+      final job = ProbeJob<int>(key: 'job', observer: journal, (ctx) async => 1)
+        ..launch();
       async.flushMicrotasks();
       expect((job.outcome! as Done<int>).value, 1);
       journal.take();
@@ -173,8 +170,7 @@ void main() {
         await ctx.abandonable(
           () => Future<void>.delayed(const Duration(seconds: 1)),
         );
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 10));
       // An engine ended the job itself: the outcome is not ours, nobody waited
       // for the children, and the stack stays where it is — as the dartdoc of
@@ -213,8 +209,10 @@ void main() {
         reason: 'a job without a key prints no null',
       );
       expect(
-        Job.deferred<void>(describe: () => 'what it does', (ctx) async {})
-            .toString(),
+        Job.deferred<void>(
+          describe: () => 'what it does',
+          (ctx) async {},
+        ).toString(),
         'Job(what it does)',
         reason: 'a description stands in for the key it has not got',
       );
@@ -244,26 +242,20 @@ void main() {
       async.flushMicrotasks();
     });
     expect(bodyZone, 'starter', reason: 'the body runs where it was started');
-    expect(
-      caught,
-      ['creator'],
-      reason: 'an unobserved failure goes where the job was made',
-    );
+    expect(caught, [
+      'creator',
+    ], reason: 'an unobserved failure goes where the job was made');
   });
 
   test('an outcome is not replaced by whatever the body returns later', () {
     fakeAsync((async) {
       final journal = JobJournal();
-      final job = ProbeJob<int>(
-        key: 'job',
-        observer: journal,
-        (ctx) async {
-          await ctx.abandonable(
-            () => Future<void>.delayed(const Duration(milliseconds: 50)),
-          );
-          return 1;
-        },
-      )..launch();
+      final job = ProbeJob<int>(key: 'job', observer: journal, (ctx) async {
+        await ctx.abandonable(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        return 1;
+      })..launch();
       async.elapse(const Duration(milliseconds: 10));
       // An engine ends the job while its body is still going.
       job.drop(const Done(99));
@@ -291,10 +283,9 @@ void main() {
       async.flushMicrotasks();
       expect(done, isTrue);
       expect(job.outcome, isA<Done<int>>());
-      expect(
-        journal.lines.where((line) => line.contains('error')).toList(),
-        ['[job] error Bad state: hook failed'],
-      );
+      expect(journal.lines.where((line) => line.contains('error')).toList(), [
+        '[job] error Bad state: hook failed',
+      ]);
     });
   });
   test('the lifecycle hooks bracket the body', () {
@@ -303,8 +294,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
 
         return 1;
-      })
-        ..launch();
+      })..launch();
       async.flushTimers();
       expect(job.hooks, ['started', 'finished']);
     });

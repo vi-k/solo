@@ -64,11 +64,8 @@ final class _AwaitingCamera extends Solo<camera.CameraState> {
   final trace = <String>[];
   late final StreamSubscription<bool> _link;
 
-  _AwaitingCamera(
-    this.device,
-    this.reason, {
-    required this.checksAfterTheAwait,
-  }) : super(const camera.Ready()) {
+  _AwaitingCamera(this.device, this.reason, {required this.checksAfterTheAwait})
+    : super(const camera.Ready()) {
     _link = device.connection.listen((connected) async {
       if (connected) {
         return;
@@ -192,33 +189,35 @@ void main() {
     });
   });
 
-  test('once onClose has run the callback is not called, and nothing throws',
-      () {
-    late page.Camera cam;
-    late camera.Device device;
-    final zone = _zone((async) {
-      device = camera.Device();
-      cam = page.Camera(device);
-      // One report with the close, one right behind it, one after the end.
-      cam.close().ignore();
-      device.drop();
-      scheduleMicrotask(device.drop);
-      async.flushMicrotasks();
-      device.drop();
-      async.flushMicrotasks();
-      device.dispose();
-      async.flushTimers();
-    });
+  test(
+    'once onClose has run the callback is not called, and nothing throws',
+    () {
+      late page.Camera cam;
+      late camera.Device device;
+      final zone = _zone((async) {
+        device = camera.Device();
+        cam = page.Camera(device);
+        // One report with the close, one right behind it, one after the end.
+        cam.close().ignore();
+        device.drop();
+        scheduleMicrotask(device.drop);
+        async.flushMicrotasks();
+        device.drop();
+        async.flushMicrotasks();
+        device.dispose();
+        async.flushTimers();
+      });
 
-    expect(cam.isFinished, isTrue);
-    expect(device.isListened, isFalse);
-    expect(
-      cam.currentState,
-      isA<camera.Ready>(),
-      reason: 'the state a controller stops at is the state it keeps',
-    );
-    expect(zone, isEmpty, reason: 'no write arrived after the end');
-  });
+      expect(cam.isFinished, isTrue);
+      expect(device.isListened, isFalse);
+      expect(
+        cam.currentState,
+        isA<camera.Ready>(),
+        reason: 'the state a controller stops at is the state it keeps',
+      );
+      expect(zone, isEmpty, reason: 'no write arrived after the end');
+    },
+  );
 
   test('stopping the source at the call costs the drain', () {
     fakeAsync((async) {

@@ -186,12 +186,14 @@ void main() {
       Object? thrown;
       final job = Job<void>((ctx) async {
         ctx.onCancel(() {
-          ctx.pause(second).then<void>(
-            (_) {},
-            onError: (Object error) {
-              thrown = error;
-            },
-          );
+          ctx
+              .pause(second)
+              .then<void>(
+                (_) {},
+                onError: (Object error) {
+                  thrown = error;
+                },
+              );
         });
         await ctx.abandonable(() => Completer<void>().future);
       });

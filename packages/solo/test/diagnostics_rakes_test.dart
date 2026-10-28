@@ -74,9 +74,9 @@ final class _Journal extends Solo<int> with OpenSolo<int> {
 
   @override
   void onChange(SoloTransition<int> transition) => changes.add(
-        '#${transition.revision} ${transition.job?.key ?? 'external'}: '
-        '${transition.previous} -> ${transition.current}',
-      );
+    '#${transition.revision} ${transition.job?.key ?? 'external'}: '
+    '${transition.previous} -> ${transition.current}',
+  );
 
   @override
   void onFinish(Job<Object?> job) => read.add('onFinish: $pending');
@@ -102,9 +102,9 @@ SoloJob<void> _ignores(Bench bench, String key) =>
 
 /// A job that waits on a call named `op` inside an uncancellable section.
 SoloJob<void> _holds(Bench bench, String key) => bench.enqueue<int, void>(
-      key: key,
-      (ctx) => ctx.uncancellable(() => stage.start<void>('op', null)),
-    );
+  key: key,
+  (ctx) => ctx.uncancellable(() => stage.start<void>('op', null)),
+);
 
 void main() {
   setUp(() => stage = Stage());
@@ -148,9 +148,7 @@ void main() {
     });
 
     test('the lazy line of the page, with the logger at INFO', () {
-      _says(
-        'Everywhere else the message stays a closure that nobody called',
-      );
+      _says('Everywhere else the message stays a closure that nobody called');
       _says('`ctx.log` calls nothing on the way either');
       final watching = <Object?>[];
       runFaked((async) {
@@ -196,8 +194,7 @@ void main() {
             ..emit(1)
             ..onDispose(() async => throw StateError('disposer'));
           await ctx.abandonable(() => stage.start<void>('op', null));
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -222,19 +219,19 @@ void main() {
 
     test('one channel alone: the queue without the jobs, and the reverse', () {
       List<String> printedWith(void Function() install) => runFaked((async) {
-            install();
-            Bench().enqueue<int, void>(key: 'zoom', (ctx) async {});
-          }).printed;
+        install();
+        Bench().enqueue<int, void>(key: 'zoom', (ctx) async {});
+      }).printed;
 
-      expect(
-        printedWith(page.traceTheEngine),
-        ['enqueue Job(zoom)', 'queue has no ready jobs'],
-      );
+      expect(printedWith(page.traceTheEngine), [
+        'enqueue Job(zoom)',
+        'queue has no ready jobs',
+      ]);
       Solo.debug = null;
-      expect(
-        printedWith(page.traceTheCore),
-        ['Job(zoom) started', 'Job(zoom) finished: Done(null)'],
-      );
+      expect(printedWith(page.traceTheCore), [
+        'Job(zoom) started',
+        'Job(zoom) finished: Done(null)',
+      ]);
     });
   });
 
@@ -258,27 +255,32 @@ void main() {
       expect('${job.outcome}', 'Done(Ada Lovelace)');
     });
 
-    test('the observer of the page on a change from outside and on a child',
-        () {
-      final ran = runFaked((async) {
-        page.main();
-        final bench = Bench()..reflect(1);
-        bench.enqueue<int, void>(key: 'root', (ctx) async {
-          await ctx.run(
-            bench.job<int, void>(key: 'child', (child) async => child.emit(7)),
-          );
+    test(
+      'the observer of the page on a change from outside and on a child',
+      () {
+        final ran = runFaked((async) {
+          page.main();
+          final bench = Bench()..reflect(1);
+          bench.enqueue<int, void>(key: 'root', (ctx) async {
+            await ctx.run(
+              bench.job<int, void>(
+                key: 'child',
+                (child) async => child.emit(7),
+              ),
+            );
+          });
         });
-      });
 
-      expect(ran.printed, [
-        'external: 1',
-        'Job(root) started',
-        'Job(child) started',
-        'Job(child): 7',
-        'Job(child) finished Done(null)',
-        'Job(root) finished Done(null)',
-      ]);
-    });
+        expect(ran.printed, [
+          'external: 1',
+          'Job(root) started',
+          'Job(child) started',
+          'Job(child): 7',
+          'Job(child) finished Done(null)',
+          'Job(root) finished Done(null)',
+        ]);
+      },
+    );
 
     test('what the observer is told, and what stays with the controller', () {
       _says(
@@ -329,69 +331,69 @@ void main() {
       expect(ran.errors, isEmpty);
     });
 
-    test('the job of a transition: an emit, a child, a handler, the outside',
-        () {
-      _says(
-        'The `job` is the one whose `emit` made the change or whose '
-        'state handler returned it. It is `null` for an '
-        '`externalSetState`, and it is a child of the running job when '
-        'the child made the change, not the root the child belongs to',
-      );
-      late _Journal journal;
-      runFaked((async) {
-        journal = _Journal()..externalSetState(1);
-        journal.enqueue<int, void>(
-          key: 'root',
-          ifFailed: (state, error, stackTrace) => -1,
-          (ctx) async {
-            ctx.emit(2);
-            await ctx.run(
-              journal.job<int, void>(
-                key: 'child',
-                (child) async => child.emit(3),
-              ),
-            );
-            throw StateError('the body');
-          },
-        ).ignoreFailure();
-        final cancelled = journal.enqueue<int, void>(
-          key: 'cancelled',
-          ifCancelled: (state, cancelled) => -2,
-          (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
-        )..ignoreFailure();
-        async.flushMicrotasks();
-        unawaited(cancelled.cancel());
-      });
+    test(
+      'the job of a transition: an emit, a child, a handler, the outside',
+      () {
+        _says(
+          'The `job` is the one whose `emit` made the change or whose '
+          'state handler returned it. It is `null` for an '
+          '`externalSetState`, and it is a child of the running job when '
+          'the child made the change, not the root the child belongs to',
+        );
+        late _Journal journal;
+        runFaked((async) {
+          journal = _Journal()..externalSetState(1);
+          journal.enqueue<int, void>(
+            key: 'root',
+            ifFailed: (state, error, stackTrace) => -1,
+            (ctx) async {
+              ctx.emit(2);
+              await ctx.run(
+                journal.job<int, void>(
+                  key: 'child',
+                  (child) async => child.emit(3),
+                ),
+              );
+              throw StateError('the body');
+            },
+          ).ignoreFailure();
+          final cancelled = journal.enqueue<int, void>(
+            key: 'cancelled',
+            ifCancelled: (state, cancelled) => -2,
+            (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+          )..ignoreFailure();
+          async.flushMicrotasks();
+          unawaited(cancelled.cancel());
+        });
 
-      expect(journal.changes, [
-        '#1 external: 0 -> 1',
-        '#2 root: 1 -> 2',
-        '#3 child: 2 -> 3',
-        '#4 root: 3 -> -1',
-        '#5 cancelled: -1 -> -2',
-      ]);
-    });
+        expect(journal.changes, [
+          '#1 external: 0 -> 1',
+          '#2 root: 1 -> 2',
+          '#3 child: 2 -> 3',
+          '#4 root: 3 -> -1',
+          '#5 cancelled: -1 -> -2',
+        ]);
+      },
+    );
 
-    test('a hook that changes the state again from inside the first change',
-        () {
-      _says(
-        'a `revision` that grows by one per change. The revision keeps '
-        'two transitions in order even when a hook changed the state '
-        'again from inside the first',
-      );
-      final nesting = _Nesting()..externalSetState(1);
+    test(
+      'a hook that changes the state again from inside the first change',
+      () {
+        _says(
+          'a `revision` that grows by one per change. The revision keeps '
+          'two transitions in order even when a hook changed the state '
+          'again from inside the first',
+        );
+        final nesting = _Nesting()..externalSetState(1);
 
-      expect(nesting.order, ['in #1', 'in #2', 'out #2', 'out #1']);
-      expect(nesting.currentState, 2);
-    });
+        expect(nesting.order, ['in #1', 'in #2', 'out #2', 'out #1']);
+        expect(nesting.currentState, 2);
+      },
+    );
 
     for (final thrower in ['observer', 'controller']) {
       test('the $thrower hook throws', () {
-        errorsRow(
-          'An error a hook throws',
-          'Nobody',
-          'The current zone',
-        );
+        errorsRow('An error a hook throws', 'Nobody', 'The current zone');
         _says(
           'Each call stands on its own: a controller hook that leaves out '
           '`super` does not switch the observer off',
@@ -444,8 +446,10 @@ void main() {
       late Job<void> job;
       final ran = runFaked((async) {
         Solo.observer = _GivingUp();
-        job = _GivingUpController()
-            .enqueue<int, void>(key: 'job', (ctx) async {});
+        job = _GivingUpController().enqueue<int, void>(
+          key: 'job',
+          (ctx) async {},
+        );
       });
 
       expect('${job.outcome}', 'Done(null)');
@@ -504,9 +508,7 @@ void main() {
     });
 
     test('the line of the page: close() on a job that has not stopped', () {
-      _says(
-        '`close()` waits for the running job, and a job can take its time',
-      );
+      _says('`close()` waits for the running job, and a job can take its time');
       var closed = false;
       runFaked((async) {
         final bench = Bench();
@@ -544,7 +546,9 @@ void main() {
         async.flushMicrotasks();
         withoutClose = bench.pending;
         unawaited(
-          bench.close(mode: SoloCloseMode.drain).timeout(
+          bench
+              .close(mode: SoloCloseMode.drain)
+              .timeout(
                 const Duration(seconds: 5),
                 onTimeout: () => log('closing is held by ${bench.pending}'),
               ),
@@ -555,10 +559,9 @@ void main() {
 
       expect(stage.lines, [_quoted()[0][1]]);
       expect(pending, isA<SoloPendingQueue>());
-      expect(
-        (pending! as SoloPendingQueue).jobs.map((job) => job.key),
-        ['group'],
-      );
+      expect((pending! as SoloPendingQueue).jobs.map((job) => job.key), [
+        'group',
+      ]);
       expect(withoutClose, isNull, reason: 'nothing is closing yet');
       expect(ranAfter, isTrue, reason: 'the drain ran it in the end');
     });
@@ -717,8 +720,9 @@ void main() {
                   .run(
                     bench.job<int, void>(
                       key: name,
-                      (child) => child
-                          .abandonable(() => stage.start<void>(name, null)),
+                      (child) => child.abandonable(
+                        () => stage.start<void>(name, null),
+                      ),
                     ),
                   )
                   .ignore();
@@ -742,10 +746,11 @@ void main() {
           expect(oneLeft.children, 1);
           expect(cleaning.phase, SoloPhase.cleanup);
           expect(cleaning.children, 0);
-          expect(
-            SoloPhase.values.map((phase) => phase.name),
-            ['body', 'children', 'cleanup'],
-          );
+          expect(SoloPhase.values.map((phase) => phase.name), [
+            'body',
+            'children',
+            'cleanup',
+          ]);
           _says('what it is doing: `body`, `children`, `cleanup`');
         });
       });
@@ -773,47 +778,51 @@ void main() {
       });
     });
 
-    test('null: an idle controller, and the hooks in the middle of a close',
-        () {
-      _says('`null` says that nothing the controller knows of holds the close');
-      _says(
-        'A timer reads `pending` between the steps of a close, and a '
-        'synchronous hook reads it in the middle of one: `onFinish` of '
-        'the last job and `onClose` read `null`, though `close()` has '
-        'not come back yet',
-      );
-      fakeAsync((async) {
-        final journal = _Journal()
-          ..enqueue<int, void>(
-            key: 'last',
-            cancellable: false,
-            (ctx) => stage.start<void>('op', null),
-          );
-        async.flushMicrotasks();
-        var back = false;
-        journal.close().then((_) => back = true);
-        String? atTheTimer;
-        Timer(
-          const Duration(seconds: 1),
-          () => atTheTimer = '${journal.pending}',
+    test(
+      'null: an idle controller, and the hooks in the middle of a close',
+      () {
+        _says(
+          '`null` says that nothing the controller knows of holds the close',
         );
-        async.elapse(const Duration(seconds: 2));
-        journal.read.add('close() is back: $back');
-        endCall(async, 'op');
+        _says(
+          'A timer reads `pending` between the steps of a close, and a '
+          'synchronous hook reads it in the middle of one: `onFinish` of '
+          'the last job and `onClose` read `null`, though `close()` has '
+          'not come back yet',
+        );
+        fakeAsync((async) {
+          final journal = _Journal()
+            ..enqueue<int, void>(
+              key: 'last',
+              cancellable: false,
+              (ctx) => stage.start<void>('op', null),
+            );
+          async.flushMicrotasks();
+          var back = false;
+          journal.close().then((_) => back = true);
+          String? atTheTimer;
+          Timer(
+            const Duration(seconds: 1),
+            () => atTheTimer = '${journal.pending}',
+          );
+          async.elapse(const Duration(seconds: 2));
+          journal.read.add('close() is back: $back');
+          endCall(async, 'op');
 
-        const held =
-            'SoloPending([last] in its body, closing, created cancellable: '
-            'false)';
-        expect(atTheTimer, held);
-        expect(journal.read, [
-          'close() is back: false',
-          'onFinish: null',
-          'onClose: null',
-        ]);
-        expect(back, isTrue);
-        expect(Bench().pending, isNull, reason: 'an idle controller');
-      });
-    });
+          const held =
+              'SoloPending([last] in its body, closing, created cancellable: '
+              'false)';
+          expect(atTheTimer, held);
+          expect(journal.read, [
+            'close() is back: false',
+            'onFinish: null',
+            'onClose: null',
+          ]);
+          expect(back, isTrue);
+          expect(Bench().pending, isNull, reason: 'an idle controller');
+        });
+      },
+    );
 
     group('Hangs:', () {
       test('a job that never ends, as the page quotes it', () {
@@ -841,9 +850,7 @@ void main() {
       });
 
       test('a job that ends in time', () {
-        _says(
-          'A job that ends in time disarms its own timer and says nothing',
-        );
+        _says('A job that ends in time disarms its own timer and says nothing');
         var timers = -1;
         runFaked((async) {
           Solo.observer = page.Hangs();
@@ -896,21 +903,23 @@ void main() {
         });
 
         const snapshot = 'SoloPending([stuck] in its body, 1 queued: [queued])';
-        expect(
-          stage.lines,
-          ['stuck is still running: $snapshot'],
-          reason: 'onStart has not come for the queued one',
-        );
+        expect(stage.lines, [
+          'stuck is still running: $snapshot',
+        ], reason: 'onStart has not come for the queued one');
       });
 
       test('Hangs only reports, and a deadline stops the job', () {
         _says('`Hangs` only reports: the job it names goes on running');
-        _says('A job that must stop at its limit takes the limit itself, '
-            '`enqueue(timeout: ...)`. The limit cancels the job, and the job '
-            'ends `Cancelled(timeout)` when its body reaches a checkpoint or '
-            'returns');
-        _says('`ctx.abandonable` around the call ends the wait and leaves '
-            'the call running');
+        _says(
+          'A job that must stop at its limit takes the limit itself, '
+          '`enqueue(timeout: ...)`. The limit cancels the job, and the job '
+          'ends `Cancelled(timeout)` when its body reaches a checkpoint or '
+          'returns',
+        );
+        _says(
+          '`ctx.abandonable` around the call ends the wait and leaves '
+          'the call running',
+        );
         late SoloJob<void> reported;
         late SoloJob<void> limited;
         var runningAtSix = false;
@@ -932,10 +941,9 @@ void main() {
           callRunsOn = limited.isFinished && stage.isRunning('op');
         });
 
-        expect(
-          stage.lines,
-          ['stuck is still running: SoloPending([stuck] in its body)'],
-        );
+        expect(stage.lines, [
+          'stuck is still running: SoloPending([stuck] in its body)',
+        ]);
         expect(runningAtSix, isTrue);
         expect('${reported.outcome}', 'Done(null)');
         expect('${limited.outcome}', 'Cancelled(timeout)');
@@ -943,8 +951,10 @@ void main() {
       });
 
       test('a deadline does not stop a body that awaits a call bare', () {
-        _says('A body that awaits a call bare reaches none until the call '
-            'returns, and the queue and `close()` wait for it all that time');
+        _says(
+          'A body that awaits a call bare reaches none until the call '
+          'returns, and the queue and `close()` wait for it all that time',
+        );
         late SoloJob<void> deaf;
         late SoloJob<void> queued;
         late bool cancelledAtSix;
@@ -1038,10 +1048,9 @@ void main() {
         endCall(async, 'release');
       });
 
-      expect(
-        stage.lines,
-        ['slow is still running: SoloPending([slow] in its cleanup)'],
-      );
+      expect(stage.lines, [
+        'slow is still running: SoloPending([slow] in its cleanup)',
+      ]);
     });
   });
 
@@ -1080,8 +1089,10 @@ void main() {
           Solo.observer = first.SlowJobs();
           final bench = Bench()
             ..enqueue<int, void>(key: 'quick', (ctx) => _delay(40));
-          final queued =
-              bench.enqueue<int, void>(key: 'queued', (ctx) async {});
+          final queued = bench.enqueue<int, void>(
+            key: 'queued',
+            (ctx) async {},
+          );
           async.flushMicrotasks();
           unawaited(queued.cancel());
           async.elapse(const Duration(seconds: 1));
@@ -1110,9 +1121,10 @@ void main() {
         );
         runFaked((async) {
           Solo.observer = page.SlowCancellations();
-          final job = Bench()
-              .enqueue<int, void>(key: 'bare', (ctx) => _delay(300))
-            ..ignoreFailure();
+          final job = Bench().enqueue<int, void>(
+            key: 'bare',
+            (ctx) => _delay(300),
+          )..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(job.cancel());
           async.elapse(const Duration(seconds: 1));
@@ -1221,8 +1233,7 @@ void main() {
                 )
                 .ignore();
             await ctx.abandonable(() => _delay(1000));
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(job.cancel());
           async.elapse(const Duration(seconds: 2));
@@ -1250,8 +1261,10 @@ void main() {
               key: 'runs',
               (ctx) => ctx.abandonable(() => _delay(9)),
             );
-          queued =
-              bench.enqueue<int, void>(key: 'queued', (ctx) => _delay(300));
+          queued = bench.enqueue<int, void>(
+            key: 'queued',
+            (ctx) => _delay(300),
+          );
           refused = bench.enqueue<int, void>(
             key: 'refused',
             canStart: (state) => false,
@@ -1310,9 +1323,7 @@ void main() {
       });
 
       test('a job nobody cancelled, one that holds, one that stops', () {
-        _says(
-          'A job nobody cancelled arms nothing here, however long it runs',
-        );
+        _says('A job nobody cancelled arms nothing here, however long it runs');
         _says(
           'A `ctx.uncancellable` section holds back a cancellation that '
           'comes while it is open, and `whenCancelled` fires when the '
@@ -1346,16 +1357,13 @@ void main() {
       });
 
       test('the five seconds are counted from the close of the section', () {
-        _says(
-          'The five seconds count from there',
-        );
+        _says('The five seconds count from there');
         runFaked((async) {
           Solo.observer = page.StuckCancellations();
           final holds = Bench().enqueue<int, void>(key: 'holds', (ctx) async {
             await ctx.uncancellable(() => stage.start<void>('held', null));
             await stage.start<void>('after', null);
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           unawaited(holds.cancel());
           async.elapse(const Duration(seconds: 20));
@@ -1387,8 +1395,7 @@ void main() {
                 (child) => stage.start<void>('op', null),
               ),
             );
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           unawaited(job.cancel());
           async.elapse(const Duration(seconds: 6));
@@ -1412,9 +1419,10 @@ void main() {
         );
         final ran = runFaked((async) {
           page.installAll();
-          final bare = Bench()
-              .enqueue<int, void>(key: 'bare', (ctx) => _delay(300))
-            ..ignoreFailure();
+          final bare = Bench().enqueue<int, void>(
+            key: 'bare',
+            (ctx) => _delay(300),
+          )..ignoreFailure();
           final stuck = _ignores(Bench(), 'ignores')..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(bare.cancel());
@@ -1423,7 +1431,8 @@ void main() {
           endCall(async, 'op');
         });
 
-        const pending = 'SoloPending([ignores] in its body, cancelled by '
+        const pending =
+            'SoloPending([ignores] in its body, cancelled by '
             'Cancelled(manual))';
         expect(stage.lines, [
           'bare ran 290 ms past its cancellation',
@@ -1518,13 +1527,15 @@ void main() {
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom('doc/diagnostics.md', answers, alsoIn: [attempts]),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom('doc/diagnostics.md', answers, alsoIn: [attempts]),
+          isEmpty,
+        );
+      },
+    );
 
     test('every heading with code under it is held to a file', () {
       final withCode = [

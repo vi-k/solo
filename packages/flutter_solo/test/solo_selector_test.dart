@@ -100,10 +100,8 @@ final class _StuckController extends Solo<_Screen> {
       throw StateError('this one does not let go');
 }
 
-Widget _wrap(Widget child) => Directionality(
-      textDirection: TextDirection.ltr,
-      child: child,
-    );
+Widget _wrap(Widget child) =>
+    Directionality(textDirection: TextDirection.ltr, child: child);
 
 void main() {
   testWidgets('a change that leaves the pick alone rebuilds nothing', (
@@ -173,7 +171,7 @@ void main() {
           builder: (context, name, child) {
             handed.add(child);
 
-            return Column(children: [Text(name), if (child != null) child]);
+            return Column(children: [Text(name), ?child]);
           },
           child: kept,
         ),
@@ -230,17 +228,17 @@ void main() {
 
       final built = <int>[];
       Widget tree() => _wrap(
-            SoloSelector<_Screen, int>(
-              solo: controller,
-              selector: pickProgress,
-              changed: movedByTwo,
-              builder: (context, progress, _) {
-                built.add(progress);
+        SoloSelector<_Screen, int>(
+          solo: controller,
+          selector: pickProgress,
+          changed: movedByTwo,
+          builder: (context, progress, _) {
+            built.add(progress);
 
-                return Text('$progress');
-              },
-            ),
-          );
+            return Text('$progress');
+          },
+        ),
+      );
 
       await tester.pumpWidget(tree());
       expect(built, [0]);
@@ -261,7 +259,8 @@ void main() {
       expect(
         built,
         [0, 0, 2],
-        reason: 'two away from the 0 announced before the rebuild; a '
+        reason:
+            'two away from the 0 announced before the rebuild; a '
             'selection made again would have announced 1 and missed this',
       );
       expect(find.text('2'), findsOneWidget);
@@ -277,17 +276,17 @@ void main() {
       final built = <int>[];
       // New closures on every call, the way a `build` writes them.
       Widget tree() => _wrap(
-            SoloSelector<_Screen, int>(
-              solo: controller,
-              selector: (state) => state.progress,
-              changed: (previous, current) => (current - previous).abs() >= 2,
-              builder: (context, progress, _) {
-                built.add(progress);
+        SoloSelector<_Screen, int>(
+          solo: controller,
+          selector: (state) => state.progress,
+          changed: (previous, current) => (current - previous).abs() >= 2,
+          builder: (context, progress, _) {
+            built.add(progress);
 
-                return Text('$progress');
-              },
-            ),
-          );
+            return Text('$progress');
+          },
+        ),
+      );
 
       await tester.pumpWidget(tree());
       controller.set(const _Screen(progress: 1));
@@ -295,11 +294,10 @@ void main() {
       expect(built, [0]);
 
       await tester.pumpWidget(tree());
-      expect(
-        built,
-        [0, 0],
-        reason: 'the parent rebuilt, and 1 is still no change from 0',
-      );
+      expect(built, [
+        0,
+        0,
+      ], reason: 'the parent rebuilt, and 1 is still no change from 0');
 
       controller.set(const _Screen(progress: 2));
       await tester.pump();
@@ -307,20 +305,18 @@ void main() {
     },
   );
 
-  testWidgets('closures written in place move no subscription', (
-    tester,
-  ) async {
+  testWidgets('closures written in place move no subscription', (tester) async {
     final controller = _CountingController();
     addTearDown(controller.close);
 
     Widget tree() => _wrap(
-          SoloSelector<int, bool>(
-            solo: controller,
-            selector: (state) => state > 0,
-            changed: (previous, current) => previous != current,
-            builder: (context, positive, _) => Text('$positive'),
-          ),
-        );
+      SoloSelector<int, bool>(
+        solo: controller,
+        selector: (state) => state > 0,
+        changed: (previous, current) => previous != current,
+        builder: (context, positive, _) => Text('$positive'),
+      ),
+    );
 
     await tester.pumpWidget(tree());
     await tester.pumpWidget(tree());
@@ -353,13 +349,13 @@ void main() {
     }
 
     Widget tree() => _wrap(
-          SoloSelector<_Screen, String>(
-            solo: controller,
-            selector: pickName,
-            changed: differs,
-            builder: (context, name, _) => Text(name),
-          ),
-        );
+      SoloSelector<_Screen, String>(
+        solo: controller,
+        selector: pickName,
+        changed: differs,
+        builder: (context, name, _) => Text(name),
+      ),
+    );
 
     await tester.pumpWidget(tree());
     expect((picks, asked), (1, 0), reason: 'the mount picks and asks nothing');
@@ -385,24 +381,25 @@ void main() {
 
     final built = <int>[];
     Widget tree(Solo<_Screen> controller) => _wrap(
-          SoloSelector<_Screen, int>(
-            solo: controller,
-            selector: pickProgress,
-            changed: movedByTwo,
-            builder: (context, progress, _) {
-              built.add(progress);
+      SoloSelector<_Screen, int>(
+        solo: controller,
+        selector: pickProgress,
+        changed: movedByTwo,
+        builder: (context, progress, _) {
+          built.add(progress);
 
-              return Text('$progress');
-            },
-          ),
-        );
+          return Text('$progress');
+        },
+      ),
+    );
 
     await tester.pumpWidget(tree(first));
     await tester.pumpWidget(tree(second));
     expect(
       built,
       [0, 1],
-      reason: 'the 1 is the first value of another controller, and changed '
+      reason:
+          'the 1 is the first value of another controller, and changed '
           'is not asked about it',
     );
   });
@@ -414,12 +411,12 @@ void main() {
     addTearDown(controller.close);
 
     Widget tree(String Function(_Screen state) selector) => _wrap(
-          SoloSelector<_Screen, String>(
-            solo: controller,
-            selector: selector,
-            builder: (context, picked, _) => Text(picked),
-          ),
-        );
+      SoloSelector<_Screen, String>(
+        solo: controller,
+        selector: selector,
+        builder: (context, picked, _) => Text(picked),
+      ),
+    );
 
     await tester.pumpWidget(tree((state) => state.name));
     expect(find.text('Ada'), findsOneWidget);
@@ -478,16 +475,16 @@ void main() {
       final built = <String>[];
 
       Widget tree(Solo<_Screen> controller) => _wrap(
-            SoloSelector<_Screen, String>(
-              solo: controller,
-              selector: pickName,
-              builder: (context, name, _) {
-                built.add(name);
+        SoloSelector<_Screen, String>(
+          solo: controller,
+          selector: pickName,
+          builder: (context, name, _) {
+            built.add(name);
 
-                return Text(name);
-              },
-            ),
-          );
+            return Text(name);
+          },
+        ),
+      );
 
       await tester.pumpWidget(tree(first));
       expect(built, ['Ada']);
@@ -516,16 +513,16 @@ void main() {
 
     // A new closure on every call, so the rebuild has to pick with it.
     Widget tree() => _wrap(
-          SoloSelector<_Screen, String>(
-            solo: controller,
-            selector: (state) {
-              picks++;
+      SoloSelector<_Screen, String>(
+        solo: controller,
+        selector: (state) {
+          picks++;
 
-              return state.name;
-            },
-            builder: (context, name, _) => Text(name),
-          ),
-        );
+          return state.name;
+        },
+        builder: (context, name, _) => Text(name),
+      ),
+    );
 
     await tester.pumpWidget(tree());
     expect(picks, 1, reason: 'mount');
@@ -641,17 +638,17 @@ void main() {
       Future<int> liveAfter({required bool selectorThrows}) async {
         final controller = _CountingController();
         Widget tree({required bool throws}) => _wrap(
-              SoloSelector<int, String>(
-                solo: controller,
-                selector: (state) => throws && selectorThrows
-                    ? throw StateError('no pick')
-                    : '$state',
-                changed: (previous, current) => throws && !selectorThrows
-                    ? throw StateError('no answer')
-                    : previous != current,
-                builder: (context, label, _) => Text(label),
-              ),
-            );
+          SoloSelector<int, String>(
+            solo: controller,
+            selector: (state) => throws && selectorThrows
+                ? throw StateError('no pick')
+                : '$state',
+            changed: (previous, current) => throws && !selectorThrows
+                ? throw StateError('no answer')
+                : previous != current,
+            builder: (context, label, _) => Text(label),
+          ),
+        );
 
         await tester.pumpWidget(tree(throws: false));
         expect(controller.live, 1);
@@ -680,12 +677,12 @@ void main() {
       // A new closure on every call, so every parent rebuild picks with a
       // new selector; the listener is not moved for it.
       Widget tree(int seed) => _wrap(
-            SoloSelector<int, String>(
-              solo: controller,
-              selector: (state) => '$state/$seed',
-              builder: (context, label, _) => Text(label),
-            ),
-          );
+        SoloSelector<int, String>(
+          solo: controller,
+          selector: (state) => '$state/$seed',
+          builder: (context, label, _) => Text(label),
+        ),
+      );
 
       await tester.pumpWidget(tree(1));
       expect(controller.live, 1);

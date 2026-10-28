@@ -88,14 +88,14 @@ final class Disposed extends CameraState {
 ```dart
 // Первая попытка: первый emit выводит из рабочего типа.
 Job<void> init() => enqueue<Initial, void>(
-      key: CameraKey.init,
-      policy: Policy.droppable,
-      (ctx) async {
-        ctx.emit(const Preparing());
-        await ctx.join(hw.open);
-        ctx.emit(const Ready());
-      },
-    );
+  key: CameraKey.init,
+  policy: Policy.droppable,
+  (ctx) async {
+    ctx.emit(const Preparing());
+    await ctx.join(hw.open);
+    ctx.emit(const Ready());
+  },
+);
 ```
 
 ```text
@@ -115,15 +115,15 @@ state: Preparing()
 
 ```dart
 Job<void> init() => enqueue<NotDisposed, void>(
-      key: CameraKey.init,
-      policy: Policy.droppable,
-      canStart: (state) => state is Initial,
-      (ctx) async {
-        ctx.emit(const Preparing());
-        await ctx.join(hw.open);
-        ctx.emit(const Ready());
-      },
-    );
+  key: CameraKey.init,
+  policy: Policy.droppable,
+  canStart: (state) => state is Initial,
+  (ctx) async {
+    ctx.emit(const Preparing());
+    await ctx.join(hw.open);
+    ctx.emit(const Ready());
+  },
+);
 ```
 
 `NotDisposed` нужен телу на всём его протяжении: `Preparing` и `Ready` оба
@@ -184,17 +184,17 @@ state: Preparing()
 
 ```dart
 Job<void> init() => enqueue<NotDisposed, void>(
-      key: CameraKey.init,
-      policy: Policy.droppable,
-      canStart: (state) => state is Initial,
-      ifFailed: (state, error, stackTrace) => Broken(error),
-      ifCancelled: (state, cancelled) => Broken(cancelled),
-      (ctx) async {
-        ctx.emit(const Preparing());
-        await ctx.join(hw.open);
-        ctx.emit(const Ready());
-      },
-    );
+  key: CameraKey.init,
+  policy: Policy.droppable,
+  canStart: (state) => state is Initial,
+  ifFailed: (state, error, stackTrace) => Broken(error),
+  ifCancelled: (state, cancelled) => Broken(cancelled),
+  (ctx) async {
+    ctx.emit(const Preparing());
+    await ctx.join(hw.open);
+    ctx.emit(const Ready());
+  },
+);
 ```
 
 Обработчики вычисляют состояние, когда тело уже закончилось, поэтому отмена
@@ -259,18 +259,18 @@ state: Ready(zoom: 1.0, focusPoint: null, paused: false)
 
 ```dart
 Job<void> init() => enqueue<NotDisposed, void>(
-      key: CameraKey.init,
-      policy: Policy.droppable,
-      canStart: (state) => state is Initial,
-      keepWhile: (state) => state is! Broken,
-      ifFailed: (state, error, stackTrace) => Broken(error),
-      ifCancelled: (state, cancelled) => Broken(cancelled),
-      (ctx) async {
-        ctx.emit(const Preparing());
-        await ctx.join(hw.open);
-        ctx.emit(const Ready());
-      },
-    );
+  key: CameraKey.init,
+  policy: Policy.droppable,
+  canStart: (state) => state is Initial,
+  keepWhile: (state) => state is! Broken,
+  ifFailed: (state, error, stackTrace) => Broken(error),
+  ifCancelled: (state, cancelled) => Broken(cancelled),
+  (ctx) async {
+    ctx.emit(const Preparing());
+    await ctx.join(hw.open);
+    ctx.emit(const Ready());
+  },
+);
 ```
 
 `keepWhile` отвергает то, что пропускает рабочий тип: в `Broken` открытие
@@ -340,13 +340,13 @@ Job<void> reopen() {
 ```dart
 // Первая попытка: каждый зум доходит до объектива.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-      key: CameraKey.setZoom,
-      describe: () => 'zoom: $zoom',
-      (ctx) async {
-        await ctx.join(() => hw.setZoom(zoom));
-        ctx.emit(ctx.state.copyWith(zoom: zoom));
-      },
-    );
+  key: CameraKey.setZoom,
+  describe: () => 'zoom: $zoom',
+  (ctx) async {
+    await ctx.join(() => hw.setZoom(zoom));
+    ctx.emit(ctx.state.copyWith(zoom: zoom));
+  },
+);
 ```
 
 Три вызова в одном такте, `setZoom(2)`, `setZoom(3)` и `setZoom(4)`,
@@ -367,15 +367,15 @@ zoom 4.0: end
 
 ```dart
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-      key: CameraKey.setZoom,
-      policy: Policy.replace,
-      describe: () => 'zoom: $zoom',
-      canStart: (state) => !state.paused,
-      (ctx) async {
-        await ctx.join(() => hw.setZoom(zoom));
-        ctx.emit(ctx.state.copyWith(zoom: zoom));
-      },
-    );
+  key: CameraKey.setZoom,
+  policy: Policy.replace,
+  describe: () => 'zoom: $zoom',
+  canStart: (state) => !state.paused,
+  (ctx) async {
+    await ctx.join(() => hw.setZoom(zoom));
+    ctx.emit(ctx.state.copyWith(zoom: zoom));
+  },
+);
 ```
 
 `replace` ставит в очередь новую задачу и затем отбрасывает ждущую с тем же
@@ -398,16 +398,16 @@ state: Ready(zoom: 4.0, focusPoint: null, paused: false)
 
 ```dart
 Job<Photo> takePhoto() => enqueue<Ready, Photo>(
-      key: CameraKey.takePhoto,
-      policy: Policy.droppable,
-      canStart: (state) => !state.paused,
-      (ctx) async {
-        final photo = await ctx.join(hw.capture);
-        queue.clear();
-        ctx.log('captured $photo');
-        return photo;
-      },
-    );
+  key: CameraKey.takePhoto,
+  policy: Policy.droppable,
+  canStart: (state) => !state.paused,
+  (ctx) async {
+    final photo = await ctx.join(hw.capture);
+    queue.clear();
+    ctx.log('captured $photo');
+    return photo;
+  },
+);
 ```
 
 Съёмка занимает втрое больше других операций, и команды, запрошенные тем
@@ -438,23 +438,23 @@ Job<Photo> takePhoto() => enqueue<Ready, Photo>(
 ```dart
 // Первая попытка: освобождение ждёт в конце очереди.
 Job<void> dispose() => enqueue<CameraState, void>(
-      key: CameraKey.dispose,
-      policy: Policy.droppable,
-      cancellable: false,
-      canStart: (state) => state is! Disposed,
-      (ctx) async {
-        if (ctx.state is! Initial) {
-          await ctx.run(_closeCameraJob());
-        }
-        ctx.emit(const Disposed());
-      },
-    );
+  key: CameraKey.dispose,
+  policy: Policy.droppable,
+  cancellable: false,
+  canStart: (state) => state is! Disposed,
+  (ctx) async {
+    if (ctx.state is! Initial) {
+      await ctx.run(_closeCameraJob());
+    }
+    ctx.emit(const Disposed());
+  },
+);
 
 SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
-      key: CameraKey.closeCamera,
-      cancellable: false,
-      (ctx) async => hw.close(),
-    );
+  key: CameraKey.closeCamera,
+  cancellable: false,
+  (ctx) async => hw.close(),
+);
 ```
 
 Вызванное, пока масштаб выставляется, а за ним ждёт снимок, это освобождение

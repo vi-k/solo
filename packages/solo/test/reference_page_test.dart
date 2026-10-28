@@ -56,13 +56,15 @@ Map<String, Set<String>> _takenBy() {
 /// The table of parameters under [heading] in [text]: each parameter with
 /// the methods its second cell names.
 Map<String, Set<String>> _parameters(String text, String heading) => {
-      for (final row in RegExp(r'^\| `(\w+)` \| ([^|]*) \|', multiLine: true)
-          .allMatches(_under(text, heading)))
-        row.group(1)!: {
-          for (final maker in RegExp(r'`(\w+)`').allMatches(row.group(2)!))
-            maker.group(1)!,
-        },
-    };
+  for (final row in RegExp(
+    r'^\| `(\w+)` \| ([^|]*) \|',
+    multiLine: true,
+  ).allMatches(_under(text, heading)))
+    row.group(1)!: {
+      for (final maker in RegExp(r'`(\w+)`').allMatches(row.group(2)!))
+        maker.group(1)!,
+    },
+};
 
 /// A public member of a class, as the code declares it.
 typedef _Member = ({bool isProtected, bool isStatic, bool isConstructor});
@@ -103,9 +105,9 @@ Map<String, _Member> _members(Type type) {
 
 /// The parts of [text] that open with a heading, by the heading line.
 Map<String, String> _sections(String text) => {
-      for (final part in text.split(RegExp('^(?=#)', multiLine: true)))
-        part.split('\n').first: part,
-    };
+  for (final part in text.split(RegExp('^(?=#)', multiLine: true)))
+    part.split('\n').first: part,
+};
 
 /// The part of [text] under [heading], with the deeper headings in it, up
 /// to the next heading of its level or above.
@@ -127,17 +129,21 @@ String _under(String text, String heading) {
 /// is `debug`, `ctx.stateAs<T>()` is `stateAs`, `Solo(initialState)` is
 /// `Solo`.
 List<String> _rows(String text) => [
-      for (final match
-          in RegExp(r'^\| `(?:\w+\.)?(\w+)', multiLine: true).allMatches(text))
-        match.group(1)!,
-    ];
+  for (final match in RegExp(
+    r'^\| `(?:\w+\.)?(\w+)',
+    multiLine: true,
+  ).allMatches(text))
+    match.group(1)!,
+];
 
 /// The first cells of the table rows of [text], whole.
 List<String> _cells(String text) => [
-      for (final match
-          in RegExp(r'^\| (`[^|]*`) \|', multiLine: true).allMatches(text))
-        match.group(1)!,
-    ];
+  for (final match in RegExp(
+    r'^\| (`[^|]*`) \|',
+    multiLine: true,
+  ).allMatches(text))
+    match.group(1)!,
+];
 
 /// Whether [name] is a member the engine calls for the subclass to
 /// override: a hook, named `on…`, or `publish`.
@@ -146,10 +152,9 @@ bool _isHook(String name) =>
 
 /// The public types `package:solo/solo.dart` exports beside the core's.
 Set<String> _exportedTypes() {
-  final library = currentMirrorSystem()
-      .libraries
-      .values
-      .singleWhere((l) => '${l.uri}' == 'package:solo/solo.dart');
+  final library = currentMirrorSystem().libraries.values.singleWhere(
+    (l) => '${l.uri}' == 'package:solo/solo.dart',
+  );
   final names = <String>{};
   for (final dependency in library.libraryDependencies) {
     final target = dependency.targetLibrary!;
@@ -170,8 +175,10 @@ Set<String> _exportedTypes() {
     final file = File('lib/${target.uri.pathSegments.skip(1).join('/')}');
     final source = file.readAsStringSync();
     final parts = [
-      for (final match
-          in RegExp("^part '([^']+)';", multiLine: true).allMatches(source))
+      for (final match in RegExp(
+        "^part '([^']+)';",
+        multiLine: true,
+      ).allMatches(source))
         File('${file.parent.path}/${match.group(1)}').readAsStringSync(),
     ];
     final declared = RegExp(
@@ -189,8 +196,9 @@ Set<String> _exportedTypes() {
 
 void main() {
   final page = File(_page).readAsStringSync();
-  final translation =
-      _inRepository ? File(_translation).readAsStringSync() : null;
+  final translation = _inRepository
+      ? File(_translation).readAsStringSync()
+      : null;
   const outside = 'the translation is not in the archive of the package';
 
   // The headings of the tables of other types and of parameters, in the

@@ -81,14 +81,11 @@ void main() {
             expect(second.isCancelled, isFalse);
           }
           async.flushMicrotasks();
-          expect(
-            calls,
-            switch (policy) {
-              AccumulationPolicy.adjacent => ['A1', 'B:1', 'A2'],
-              AccumulationPolicy.replace => ['B:', 'A12'],
-              AccumulationPolicy.join => ['A12', 'B:12'],
-            },
-          );
+          expect(calls, switch (policy) {
+            AccumulationPolicy.adjacent => ['A1', 'B:1', 'A2'],
+            AccumulationPolicy.replace => ['B:', 'A12'],
+            AccumulationPolicy.join => ['A12', 'B:12'],
+          });
           expect(
             (second.outcome! as Done<String>).value,
             policy == AccumulationPolicy.adjacent ? '2' : '12',
@@ -103,14 +100,11 @@ void main() {
       fakeAsync((async) {
         final solo = PlainSolo<int>(0);
         final calls = <List<int?>>[];
-        final events = solo.collect<int, int?, int>(
-          (ctx, values) async {
-            calls.add(values);
-            expect(() => values.add(9), throwsUnsupportedError);
-            return values.length;
-          },
-          policy: policy,
-        );
+        final events = solo.collect<int, int?, int>((ctx, values) async {
+          calls.add(values);
+          expect(() => values.add(9), throwsUnsupportedError);
+          return values.length;
+        }, policy: policy);
         final a = events.add(null);
         final b = events.add(1);
         final c = events.add(1);
@@ -164,10 +158,13 @@ void main() {
           ..add(2)
           ..add(null);
         final last = events.add(3);
-        expect(
-          merges,
-          [(null, 99), (null, 98), (null, 2), (2, null), (null, 3)],
-        );
+        expect(merges, [
+          (null, 99),
+          (null, 98),
+          (null, 2),
+          (2, null),
+          (null, 3),
+        ]);
         async.flushMicrotasks();
         expect(calls, [3]);
         expect(last.isFinished, isTrue);
@@ -253,60 +250,58 @@ void main() {
   }
 
   for (final policy in AccumulationPolicy.values) {
-    test('$policy keeps accumulator identities separate despite equal keys',
-        () {
-      fakeAsync((async) {
-        final solo = TestSolo();
-        final calls = <List<int>>[];
-        Future<void> handler(
-          SoloContext<TestState, TestState> ctx,
-          List<int> values,
-        ) async =>
-            calls.add(values);
-        final a = solo.collect<TestState, int, void>(
-          handler,
-          key: 'same',
-          policy: policy,
-        );
-        final b = solo.collect<TestState, int, void>(
-          handler,
-          key: 'same',
-          policy: policy,
-        );
-        final first = a.add(1);
-        final foreign = b.add(10);
-        final last = a.add(2);
-        expect(identical(first, foreign), isFalse);
-        expect(foreign.isQueued, isTrue);
-        expect(foreign.isCancelled, isFalse);
-        expect(
-          solo.queue.length,
-          policy == AccumulationPolicy.adjacent ? 3 : 2,
-        );
-        async.flushMicrotasks();
-        expect(
-          calls,
-          switch (policy) {
+    test(
+      '$policy keeps accumulator identities separate despite equal keys',
+      () {
+        fakeAsync((async) {
+          final solo = TestSolo();
+          final calls = <List<int>>[];
+          Future<void> handler(
+            SoloContext<TestState, TestState> ctx,
+            List<int> values,
+          ) async => calls.add(values);
+          final a = solo.collect<TestState, int, void>(
+            handler,
+            key: 'same',
+            policy: policy,
+          );
+          final b = solo.collect<TestState, int, void>(
+            handler,
+            key: 'same',
+            policy: policy,
+          );
+          final first = a.add(1);
+          final foreign = b.add(10);
+          final last = a.add(2);
+          expect(identical(first, foreign), isFalse);
+          expect(foreign.isQueued, isTrue);
+          expect(foreign.isCancelled, isFalse);
+          expect(
+            solo.queue.length,
+            policy == AccumulationPolicy.adjacent ? 3 : 2,
+          );
+          async.flushMicrotasks();
+          expect(calls, switch (policy) {
             AccumulationPolicy.adjacent => [
-                [1],
-                [10],
-                [2],
-              ],
+              [1],
+              [10],
+              [2],
+            ],
             AccumulationPolicy.replace => [
-                [10],
-                [1, 2],
-              ],
+              [10],
+              [1, 2],
+            ],
             AccumulationPolicy.join => [
-                [1, 2],
-                [10],
-              ],
-          },
-        );
-        expect(last.isFinished, isTrue);
-        solo.close();
-        async.flushMicrotasks();
-      });
-    });
+              [1, 2],
+              [10],
+            ],
+          });
+          expect(last.isFinished, isTrue);
+          solo.close();
+          async.flushMicrotasks();
+        });
+      },
+    );
 
     for (final boundary in ['canStart', 'onStart', 'body']) {
       test('$policy add during $boundary opens the next group', () {
@@ -431,17 +426,14 @@ void main() {
       expect(next.isQueued, isTrue);
       cleanup.complete();
       async.flushMicrotasks();
-      expect(
-        calls,
-        [
-          'body:[1]',
-          'body ended',
-          'child',
-          'cleanup',
-          'cleaned',
-          'body:[2, 3]',
-        ],
-      );
+      expect(calls, [
+        'body:[1]',
+        'body ended',
+        'child',
+        'cleanup',
+        'cleaned',
+        'body:[2, 3]',
+      ]);
       solo.close();
       async.flushMicrotasks();
     });
@@ -534,12 +526,9 @@ void main() {
     fakeAsync((async) {
       final solo = TestSolo();
       final calls = <List<int>>[];
-      final events = solo.collect<TestState, int, void>(
-        (ctx, values) async {
-          calls.add(values);
-        },
-        policy: AccumulationPolicy.adjacent,
-      );
+      final events = solo.collect<TestState, int, void>((ctx, values) async {
+        calls.add(values);
+      }, policy: AccumulationPolicy.adjacent);
       final first = events.add(1);
       final separator = solo.enqueue<TestState, void>((ctx) async {});
       final next = events.add(2);
@@ -561,12 +550,9 @@ void main() {
       fakeAsync((async) {
         final solo = TestSolo();
         final calls = <List<int>>[];
-        final events = solo.collect<TestState, int, void>(
-          (ctx, values) async {
-            calls.add(values);
-          },
-          key: 'events',
-        );
+        final events = solo.collect<TestState, int, void>((ctx, values) async {
+          calls.add(values);
+        }, key: 'events');
         final first = events.add(1);
         switch (operation) {
           case 'cancel':
@@ -724,9 +710,7 @@ void main() {
             case 'throw':
               throw error;
             case 'self cancel':
-              throw const Cancelled.by(
-                reason: ManualCancelReason(),
-              );
+              throw const Cancelled.by(reason: ManualCancelReason());
             case 'cancel then throw':
               unawaited(first.cancel());
               throw error;
@@ -758,20 +742,17 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       final error = StateError('unobserved');
-      runZonedGuarded(
-        () {
-          final solo = TestSolo();
-          solo.collect<TestState, int, void>((ctx, values) async {
+      runZonedGuarded(() {
+        final solo = TestSolo();
+        solo.collect<TestState, int, void>((ctx, values) async {
             throw error;
           })
-            ..add(1)
-            ..add(2);
-          async.flushMicrotasks();
-          solo.close();
-          async.flushMicrotasks();
-        },
-        (error, stack) => errors.add(error),
-      );
+          ..add(1)
+          ..add(2);
+        async.flushMicrotasks();
+        solo.close();
+        async.flushMicrotasks();
+      }, (error, stack) => errors.add(error));
       expect(errors, [error]);
     });
   });
@@ -780,14 +761,11 @@ void main() {
     fakeAsync((async) {
       final solo = TestSolo();
       var starts = 0;
-      final events = solo.collect<TestState, int, int>(
-        (ctx, values) async {
-          starts++;
-          expect(values, List<int>.generate(10000, (index) => index));
-          return values.length;
-        },
-        policy: AccumulationPolicy.replace,
-      );
+      final events = solo.collect<TestState, int, int>((ctx, values) async {
+        starts++;
+        expect(values, List<int>.generate(10000, (index) => index));
+        return values.length;
+      }, policy: AccumulationPolicy.replace);
       late SoloJob<int> last;
       for (var i = 0; i < 10000; i++) {
         last = events.add(i);
@@ -803,47 +781,49 @@ void main() {
 
   for (final collect in [true, false]) {
     for (final ending in ['done', 'failed', 'cancel', 'rules', 'replace']) {
-      test('${collect ? 'collect' : 'accumulate'} releases input after $ending',
-          () {
-        fakeAsync((async) {
-          final solo = TestSolo();
-          final event = Object();
-          Future<void> handler(
-            SoloContext<TestState, TestState> ctx,
-            Object value,
-          ) async {
-            if (ending == 'failed') throw StateError('handler failed');
-          }
+      test(
+        '${collect ? 'collect' : 'accumulate'} releases input after $ending',
+        () {
+          fakeAsync((async) {
+            final solo = TestSolo();
+            final event = Object();
+            Future<void> handler(
+              SoloContext<TestState, TestState> ctx,
+              Object value,
+            ) async {
+              if (ending == 'failed') throw StateError('handler failed');
+            }
 
-          final events = collect
-              ? solo.collect<TestState, Object, void>(
-                  handler,
-                  canStart: (_) => ending != 'rules',
-                  policy: AccumulationPolicy.replace,
-                )
-              : solo.accumulate<TestState, Object, void>(
-                  handler,
-                  merge: (a, b) => b,
-                  canStart: (_) => ending != 'rules',
-                  policy: AccumulationPolicy.replace,
-                );
-          final job = events.add(event)..ignoreFailure();
-          // Inspect ownership directly instead of relying on GC timing.
-          // Retain the former storage itself as well as the completed handle.
-          final storage = _privateField(job, '_accumulation')!;
-          expect(_privateField(storage, '_value'), isNotNull);
-          if (ending == 'cancel') job.cancel();
-          if (ending == 'replace') events.add(Object()).ignoreFailure();
-          async.flushMicrotasks();
-          expect(job.isFinished, isTrue);
-          expect(_privateField(storage, '_value'), isNull);
-          expect(_privateField(job, '_accumulation'), isNull);
-          solo.close();
-          async.flushMicrotasks();
-          final rejected = events.add(event);
-          expect(_privateField(rejected, '_accumulation'), isNull);
-        });
-      });
+            final events = collect
+                ? solo.collect<TestState, Object, void>(
+                    handler,
+                    canStart: (_) => ending != 'rules',
+                    policy: AccumulationPolicy.replace,
+                  )
+                : solo.accumulate<TestState, Object, void>(
+                    handler,
+                    merge: (a, b) => b,
+                    canStart: (_) => ending != 'rules',
+                    policy: AccumulationPolicy.replace,
+                  );
+            final job = events.add(event)..ignoreFailure();
+            // Inspect ownership directly instead of relying on GC timing.
+            // Retain the former storage itself as well as the completed handle.
+            final storage = _privateField(job, '_accumulation')!;
+            expect(_privateField(storage, '_value'), isNotNull);
+            if (ending == 'cancel') job.cancel();
+            if (ending == 'replace') events.add(Object()).ignoreFailure();
+            async.flushMicrotasks();
+            expect(job.isFinished, isTrue);
+            expect(_privateField(storage, '_value'), isNull);
+            expect(_privateField(job, '_accumulation'), isNull);
+            solo.close();
+            async.flushMicrotasks();
+            final rejected = events.add(event);
+            expect(_privateField(rejected, '_accumulation'), isNull);
+          });
+        },
+      );
     }
   }
 
@@ -879,21 +859,21 @@ void main() {
     fakeAsync((async) {
       final solo = PlainSolo<_Settings>(const _Settings(true, 'light', 'en'));
       solo.accumulate<_Settings, _Patch, void>(
-        (ctx, patch) async {
-          ctx.emit(
-            _Settings(
-              patch.notifications ?? ctx.state.notifications,
-              patch.theme ?? ctx.state.theme,
-              patch.language ?? ctx.state.language,
-            ),
-          );
-        },
-        merge: (a, b) => _Patch(
-          notifications: b.notifications ?? a.notifications,
-          theme: b.theme ?? a.theme,
-          language: b.language ?? a.language,
-        ),
-      )
+          (ctx, patch) async {
+            ctx.emit(
+              _Settings(
+                patch.notifications ?? ctx.state.notifications,
+                patch.theme ?? ctx.state.theme,
+                patch.language ?? ctx.state.language,
+              ),
+            );
+          },
+          merge: (a, b) => _Patch(
+            notifications: b.notifications ?? a.notifications,
+            theme: b.theme ?? a.theme,
+            language: b.language ?? a.language,
+          ),
+        )
         ..add(const _Patch(notifications: false))
         ..add(const _Patch(theme: 'dark'))
         ..add(const _Patch(language: 'ru'))
@@ -916,10 +896,10 @@ void main() {
   for (final timing in _defaultTimings.entries) {
     test('a call without a policy, ${timing.key}, behind a running job', () {
       final handles = <SoloJob<void>>[];
-      expect(
-        _defaultTrace(timing: timing.value, handles: handles),
-        ['run[a1+a2]@100', 'other@100'],
-      );
+      expect(_defaultTrace(timing: timing.value, handles: handles), [
+        'run[a1+a2]@100',
+        'other@100',
+      ]);
       expect(identical(handles.first, handles.last), isTrue);
     });
   }
@@ -949,10 +929,11 @@ void main() {
   for (final policy in AccumulationPolicy.values) {
     for (final timing in _zeroTimings.entries) {
       test('$policy with ${timing.key} on a free queue', () {
-        expect(
-          _rulesTrace(policy, timing: timing.value, busy: false),
-          ['run[a1]@0', 'other@0', 'run[a2]@50'],
-        );
+        expect(_rulesTrace(policy, timing: timing.value, busy: false), [
+          'run[a1]@0',
+          'other@0',
+          'run[a2]@50',
+        ]);
       });
 
       test('$policy with ${timing.key} behind a running job', () {
@@ -960,10 +941,10 @@ void main() {
           _rulesTrace(policy, timing: timing.value, busy: true),
           switch (policy) {
             AccumulationPolicy.adjacent => [
-                'run[a1]@100',
-                'other@100',
-                'run[a2]@100',
-              ],
+              'run[a1]@100',
+              'other@100',
+              'run[a2]@100',
+            ],
             AccumulationPolicy.replace => ['other@100', 'run[a1+a2]@100'],
             AccumulationPolicy.join => ['run[a1+a2]@100', 'other@100'],
           },
@@ -976,8 +957,7 @@ void main() {
   // of building a new job and cancelling this one. All five below fail
   // against the rule as it was: it answered every event with a new handle.
   for (final protected in [false, true]) {
-    test(
-        'replace: five events into a busy queue'
+    test('replace: five events into a busy queue'
         '${protected ? ', protected' : ''}', () {
       fakeAsync((async) {
         final solo = TestSolo();
@@ -1400,9 +1380,9 @@ final class _Callbacks extends SoloObserver {
     void Function(Job<Object?>)? onStart,
     void Function(Job<Object?>)? onFinish,
     void Function(Object)? onError,
-  })  : _onStart = onStart,
-        _onFinish = onFinish,
-        _onError = onError;
+  }) : _onStart = onStart,
+       _onFinish = onFinish,
+       _onError = onError;
 
   @override
   void onStart(Solo<Object> solo, Job<Object?> job) => _onStart?.call(job);
@@ -1417,8 +1397,7 @@ final class _Callbacks extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      _onError?.call(error);
+  }) => _onError?.call(error);
 }
 
 Object? _privateField(Object object, String name) {

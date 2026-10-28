@@ -5,27 +5,25 @@ A root job can split its work into child jobs:
 ```dart
 // Made by the controller and started by nobody yet: the queue takes it
 // through `sync` below, a parent takes it through `ctx.run`.
-SoloJob<String> _sync(int item) => job<Ready, String>(
-      key: _Op.sync,
-      (ctx) async {
-        // A stream child: the progress of the upload, which the API
-        // closes when the upload ends. The parent waits for the child
-        // even without an await, and cancelling the parent cancels it.
-        ctx.each(
-          api.progress(item),
-          (childCtx, sent) =>
-              childCtx.emit(childCtx.state.copyWith(sent: sent)),
-        );
+SoloJob<String> _sync(int item) =>
+    job<Ready, String>(key: _Op.sync, (ctx) async {
+      // A stream child: the progress of the upload, which the API
+      // closes when the upload ends. The parent waits for the child
+      // even without an await, and cancelling the parent cancels it.
+      ctx.each(
+        api.progress(item),
+        (childCtx, sent) =>
+            childCtx.emit(childCtx.state.copyWith(sent: sent)),
+      );
 
-        // Created by the controller, started by the parent and outside
-        // the queue: the parent holds the queue while it runs.
-        final upload = job<Ready, String>(
-          key: _Op.upload,
-          (childCtx) => childCtx.join(() => api.push(item)),
-        );
-        return ctx.run(upload);
-      },
-    );
+      // Created by the controller, started by the parent and outside
+      // the queue: the parent holds the queue while it runs.
+      final upload = job<Ready, String>(
+        key: _Op.upload,
+        (childCtx) => childCtx.join(() => api.push(item)),
+      );
+      return ctx.run(upload);
+    });
 
 Job<String> sync(int item) => enqueueJob(_sync(item));
 ```
@@ -71,18 +69,16 @@ and `paused`.
 
 ```dart
 // The parent answers for a failed upload itself.
-Job<bool> trySync(int item) => enqueue<Ready, bool>(
-      key: _Op.trySync,
-      (ctx) async {
-        try {
-          final path = await ctx.run(_sync(item));
-          ctx.emit(ctx.state.copyWith(path: path));
-          return true;
-        } on ApiException {
-          return false;
-        }
-      },
-    );
+Job<bool> trySync(int item) =>
+    enqueue<Ready, bool>(key: _Op.trySync, (ctx) async {
+      try {
+        final path = await ctx.run(_sync(item));
+        ctx.emit(ctx.state.copyWith(path: path));
+        return true;
+      } on ApiException {
+        return false;
+      }
+    });
 ```
 
 `ctx.run(child)` returns a `Future<T>` of the child's result. It waits for the
@@ -105,17 +101,15 @@ errors page shows what that costs and what a broad clause has to do first.
 ## Working beside a child
 
 ```dart
-Job<String> syncAndAnnounce(int item) => enqueue<Ready, String>(
-      key: _Op.syncAndAnnounce,
-      (ctx) async {
-        // Kept, not awaited: the upload runs while the parent goes on.
-        // A failure of the upload is ignored here, and the body fails
-        // with it at the `return`.
-        final uploading = ctx.run(_sync(item))..ignore();
-        await ctx.join(() => analytics.send('started $item'));
-        return uploading;
-      },
-    );
+Job<String> syncAndAnnounce(int item) =>
+    enqueue<Ready, String>(key: _Op.syncAndAnnounce, (ctx) async {
+      // Kept, not awaited: the upload runs while the parent goes on.
+      // A failure of the upload is ignored here, and the body fails
+      // with it at the `return`.
+      final uploading = ctx.run(_sync(item))..ignore();
+      await ctx.join(() => analytics.send('started $item'));
+      return uploading;
+    });
 ```
 
 To work in the parent while a child runs, keep the future `ctx.run` returned
@@ -162,18 +156,16 @@ cancellation page.
 ## A child the rules turn away
 
 ```dart
-Job<String> resend(int item) => enqueue<Ready, String>(
-      key: _Op.resend,
-      (ctx) {
-        // A child with a rule of its own: no upload while paused.
-        final upload = job<Ready, String>(
-          key: _Op.upload,
-          canStart: (state) => !state.paused,
-          (childCtx) => childCtx.join(() => api.push(item)),
-        );
-        return ctx.run(upload);
-      },
-    );
+Job<String> resend(int item) =>
+    enqueue<Ready, String>(key: _Op.resend, (ctx) {
+      // A child with a rule of its own: no upload while paused.
+      final upload = job<Ready, String>(
+        key: _Op.upload,
+        canStart: (state) => !state.paused,
+        (childCtx) => childCtx.join(() => api.push(item)),
+      );
+      return ctx.run(upload);
+    });
 ```
 
 With the state paused, nothing is uploaded and `resend` ends:
@@ -263,9 +255,9 @@ the way `sync` is:
 ```dart
 // The same split as `sync`: the step itself, and the queue's way in.
 SoloJob<void> _recordPath(String path) => job<Ready, void>(
-      key: _Op.record,
-      (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
-    );
+  key: _Op.record,
+  (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
+);
 
 Job<void> recordPath(String path) => enqueueJob(_recordPath(path));
 ```
@@ -293,13 +285,11 @@ path is never recorded, and the continuation ends `Cancelled(closed)`.
 
 ```dart
 // The second attempt: sync waits for this job to end; this job waits for sync.
-Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-      key: _Op.syncAndRecord,
-      (ctx) async {
-        final path = await sync(item).value;
-        await recordPath(path).value;
-      },
-    );
+Job<void> syncAndRecord(int item) =>
+    enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+      final path = await sync(item).value;
+      await recordPath(path).value;
+    });
 ```
 
 One job now holds the queue across both steps, and it calls the methods the
@@ -333,13 +323,11 @@ enqueue Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited 
 // `_sync` and `_recordPath` again, now children. The parent holds the
 // queue until its children are done, so a `save()` queued meanwhile
 // waits for both steps.
-Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-      key: _Op.syncAndRecord,
-      (ctx) async {
-        final path = await ctx.run(_sync(item));
-        await ctx.run(_recordPath(path));
-      },
-    );
+Job<void> syncAndRecord(int item) =>
+    enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+      final path = await ctx.run(_sync(item));
+      await ctx.run(_recordPath(path));
+    });
 ```
 
 A step written as `job(...)` has both ways open: `enqueueJob` gives it a queue

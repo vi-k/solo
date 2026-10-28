@@ -81,13 +81,11 @@ final class ReportController extends Solo<ReportState> with SoloStream {
     _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
-  Job<void> build(Range range) => enqueue<SignedIn, void>(
-        key: 'report',
-        (ctx) async {
-          final report = await ctx.join(() => _reports.build(range));
-          ctx.emit(Ready(report));
-        },
-      );
+  Job<void> build(Range range) =>
+      enqueue<SignedIn, void>(key: 'report', (ctx) async {
+        final report = await ctx.join(() => _reports.build(range));
+        ctx.emit(Ready(report));
+      });
 
   @override
   void onClose() {
@@ -102,7 +100,7 @@ final class ReportController extends Solo<ReportState> with SoloStream {
 final class QueuedRevocationController extends Solo<ReportState>
     with SoloStream {
   QueuedRevocationController(this._reports, Auth auth)
-      : super(const SignedIn()) {
+    : super(const SignedIn()) {
     auth.onRevoked = (reason) {
       enqueue<ReportState, void>((ctx) async => ctx.emit(SignedOut(reason)));
     };
@@ -110,13 +108,11 @@ final class QueuedRevocationController extends Solo<ReportState>
 
   final Reports _reports;
 
-  Job<void> build(Range range) => enqueue<SignedIn, void>(
-        key: 'report',
-        (ctx) async {
-          final report = await ctx.join(() => _reports.build(range));
-          ctx.emit(Ready(report));
-        },
-      );
+  Job<void> build(Range range) =>
+      enqueue<SignedIn, void>(key: 'report', (ctx) async {
+        final report = await ctx.join(() => _reports.build(range));
+        ctx.emit(Ready(report));
+      });
 }
 
 /// The build of the page with one more read after its own `emit`, and with
@@ -156,13 +152,13 @@ final class HandledReportController extends Solo<ReportState> {
 
   /// A job the handlers do stand for: cancelled by hand, nothing external.
   Job<void> stall() => enqueue<SignedIn, void>(
-        key: 'stall',
-        ifCancelled: (state, cancelled) {
-          handlers.add('ifCancelled');
-          return const SignedIn();
-        },
-        (ctx) => ctx.abandonable(() => tick(1000)),
-      );
+    key: 'stall',
+    ifCancelled: (state, cancelled) {
+      handlers.add('ifCancelled');
+      return const SignedIn();
+    },
+    (ctx) => ctx.abandonable(() => tick(1000)),
+  );
 }
 
 /// The controller of the page with its listener left in place, with an
@@ -170,26 +166,24 @@ final class HandledReportController extends Solo<ReportState> {
 /// had got.
 final class UnguardedReportController extends Solo<ReportState> {
   UnguardedReportController(this._reports, Auth auth)
-      : super(const SignedIn()) {
+    : super(const SignedIn()) {
     auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
   final Reports _reports;
   final seen = <String>[];
 
-  Job<void> build(Range range) => enqueue<SignedIn, void>(
-        key: 'report',
-        (ctx) async {
-          final report = await ctx.join(() => _reports.build(range));
-          ctx.emit(Ready(report));
-        },
-      );
+  Job<void> build(Range range) =>
+      enqueue<SignedIn, void>(key: 'report', (ctx) async {
+        final report = await ctx.join(() => _reports.build(range));
+        ctx.emit(Ready(report));
+      });
 
   Job<void> mark() => enqueue<ReportState, void>(
-        key: 'mark',
-        (ctx) async =>
-            seen.add('the next root job starts with ${_reports.built} built'),
-      );
+    key: 'mark',
+    (ctx) async =>
+        seen.add('the next root job starts with ${_reports.built} built'),
+  );
 
   @override
   void onFinish(Job<Object?> job) => seen.add('${job.key} is over');

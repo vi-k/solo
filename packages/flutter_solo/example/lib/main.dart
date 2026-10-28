@@ -46,20 +46,20 @@ final class ProfileController extends Solo<Profile> {
   ProfileController(this.api) : super(Empty());
 
   Job<String> load() => enqueue<Profile, String>(
-        key: 'load',
-        policy: Policy.droppable, // a second tap gets the first job
-        (ctx) async {
-          ctx.emit(Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
+    key: 'load',
+    policy: Policy.droppable, // a second tap gets the first job
+    (ctx) async {
+      ctx.emit(Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
 
-          return name;
-        },
-        // Without these a load that fails or is cancelled leaves the state
-        // on Loading: a spinner, and nothing on the screen to tap.
-        ifFailed: (state, error, stackTrace) => Empty(),
-        ifCancelled: (state, cancelled) => Empty(),
-      );
+      return name;
+    },
+    // Without these a load that fails or is cancelled leaves the state
+    // on Loading: a spinner, and nothing on the screen to tap.
+    ifFailed: (state, error, stackTrace) => Empty(),
+    ifCancelled: (state, cancelled) => Empty(),
+  );
 }
 
 class ProfileScreen extends StatefulWidget {
@@ -116,40 +116,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('flutter_solo'),
-          actions: [
-            // There in every state, so it can be tapped while a load runs:
-            // the policy hands that tap the running job, and both taps hear
-            // the one outcome.
-            IconButton(
-              onPressed: _load,
-              tooltip: 'Reload',
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
+    appBar: AppBar(
+      title: const Text('flutter_solo'),
+      actions: [
+        // There in every state, so it can be tapped while a load runs:
+        // the policy hands that tap the running job, and both taps hear
+        // the one outcome.
+        IconButton(
+          onPressed: _load,
+          tooltip: 'Reload',
+          icon: const Icon(Icons.refresh),
         ),
-        body: Center(
-          child: SoloBuilder<Profile>(
-            solo: controller,
-            builder: (context, state, _) => switch (state) {
-              Empty() => TextButton(
-                  onPressed: _load,
-                  child: const Text('Load'),
-                ),
-              Loading() => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    TextButton(
-                      onPressed: controller.cancelAll,
-                      child: const Text('Cancel'),
-                    ),
-                  ],
-                ),
-              Loaded(:final name) => Text(name),
-            },
+      ],
+    ),
+    body: Center(
+      child: SoloBuilder<Profile>(
+        solo: controller,
+        builder: (context, state, _) => switch (state) {
+          Empty() => TextButton(onPressed: _load, child: const Text('Load')),
+          Loading() => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              TextButton(
+                onPressed: controller.cancelAll,
+                child: const Text('Cancel'),
+              ),
+            ],
           ),
-        ),
-      );
+          Loaded(:final name) => Text(name),
+        },
+      ),
+    ),
+  );
 }

@@ -18,16 +18,13 @@ Future<(Outcome<Object?>?, List<Object>)> _run(
 }) async {
   final zone = <Object>[];
   final done = Completer<Outcome<Object?>?>();
-  runZonedGuarded(
-    () {
-      final job = Job<Object?>(body)..ignoreFailure();
-      if (cancel) {
-        Future<void>.delayed(Duration.zero, () => job.cancel().ignore());
-      }
-      job.done.then((_) => done.complete(job.outcome));
-    },
-    (error, _) => zone.add(error),
-  );
+  runZonedGuarded(() {
+    final job = Job<Object?>(body)..ignoreFailure();
+    if (cancel) {
+      Future<void>.delayed(Duration.zero, () => job.cancel().ignore());
+    }
+    job.done.then((_) => done.complete(job.outcome));
+  }, (error, _) => zone.add(error));
   return (await done.future, zone);
 }
 
@@ -44,16 +41,13 @@ void main() {
 
   test('a cancelled body that throws a Pointer still ends', () async {
     final gate = Completer<void>();
-    final (outcome, _) = await _run(
-      (ctx) async {
-        await Future<void>.delayed(Duration.zero);
-        gate.complete();
-        await Future<void>.delayed(const Duration(milliseconds: 1));
-        // ignore: only_throw_errors
-        throw _pointer();
-      },
-      cancel: true,
-    );
+    final (outcome, _) = await _run((ctx) async {
+      await Future<void>.delayed(Duration.zero);
+      gate.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      // ignore: only_throw_errors
+      throw _pointer();
+    }, cancel: true);
     expect(gate.isCompleted, isTrue);
     expect(outcome, isA<Cancelled>());
   });

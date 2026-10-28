@@ -14,23 +14,23 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
   ProfileController(this.api) : super(Empty());
 
   Job<String> load() => enqueue<Profile, String>(
-        key: 'load',
-        policy: Policy.droppable, // a second tap returns the first job
-        (ctx) async {
-          ctx.emit(Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
+    key: 'load',
+    policy: Policy.droppable, // a second tap returns the first job
+    (ctx) async {
+      ctx.emit(Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
 
-          return name;
-        },
-        // Without these a load that fails or is cancelled leaves the state
-        // on Loading: a spinner, and nothing on the screen to tap.
-        ifFailed: (state, error, stackTrace) => Empty(),
-        ifCancelled: (state, cancelled) => Empty(),
-      );
+      return name;
+    },
+    // Without these a load that fails or is cancelled leaves the state
+    // on Loading: a spinner, and nothing on the screen to tap.
+    ifFailed: (state, error, stackTrace) => Empty(),
+    ifCancelled: (state, cancelled) => Empty(),
+  );
 
   Job<void> save() => enqueue<Loaded, void>(
-        key: 'save',
-        (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
-      );
+    key: 'save',
+    (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
+  );
 }

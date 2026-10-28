@@ -60,26 +60,26 @@ final class MapController extends Solo<MapState> {
   MapController(this._map) : super(const MapState());
 
   Job<void> moveTo(Point<double> point) => enqueue<MapState, void>(
-        key: MapKey.moveTo,
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => _map.moveTo(point, cancelToken: token));
-          ctx.emit(ctx.state.copyWith(center: point));
-        },
-      );
+    key: MapKey.moveTo,
+    policy: Policy.restart,
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => _map.moveTo(point, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(center: point));
+    },
+  );
 
   Job<void> setZoom(double value) => enqueue<MapState, void>(
-        key: MapKey.setZoom,
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => _map.setZoom(value, cancelToken: token));
-          ctx.emit(ctx.state.copyWith(zoom: value));
-        },
-      );
+    key: MapKey.setZoom,
+    policy: Policy.restart,
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => _map.setZoom(value, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(zoom: value));
+    },
+  );
 }
 
 void onMapDrag(MapController map, Point<double> point) => map.moveTo(point);
@@ -91,6 +91,6 @@ final class FailingMapController extends Solo<MapState> {
   FailingMapController() : super(const MapState());
 
   Job<void> fail() => enqueue<MapState, void>(
-        (ctx) async => throw StateError('the map failed'),
-      );
+    (ctx) async => throw StateError('the map failed'),
+  );
 }

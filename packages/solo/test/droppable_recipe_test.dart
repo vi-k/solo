@@ -49,22 +49,17 @@ void main() {
         dropped.outcome,
         isA<Cancelled>()
             .having((c) => c.reason, 'reason', isA<DuplicateCancelReason>())
-            .having(
-              (c) => c.reason,
-              'reason',
-              isNot(isA<ManualCancelReason>()),
-            )
+            .having((c) => c.reason, 'reason', isNot(isA<ManualCancelReason>()))
             .having((c) => '$c', 'text', 'Cancelled(duplicate)')
             .having((c) => c.started, 'started', isFalse),
       );
 
       async.flushTimers();
       expect('${first.outcome}', 'Done(Profile(ada))');
-      expect(
-        stage.trace,
-        ['load ada begins', 'load ada ends'],
-        reason: 'the dropped job never started',
-      );
+      expect(stage.trace, [
+        'load ada begins',
+        'load ada ends',
+      ], reason: 'the dropped job never started');
       camera.close().ignore();
       async.flushTimers();
     });

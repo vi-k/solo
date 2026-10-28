@@ -232,8 +232,7 @@ final class PrintingObserver extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      say('onError: $error');
+  }) => say('onError: $error');
 
   @override
   void onLog(Job<Object?> job, Object? message) => say('log: $message');

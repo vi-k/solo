@@ -52,9 +52,7 @@ final class SoloBuilder<S extends Object> extends StatefulWidget {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(
-      DiagnosticsProperty<Solo<S>>('solo', solo),
-    );
+    properties.add(DiagnosticsProperty<Solo<S>>('solo', solo));
   }
 }
 

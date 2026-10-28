@@ -156,6 +156,5 @@ mixin Workbench on Solo<CameraState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      hookHeard.add('$job: $error');
+  }) => hookHeard.add('$job: $error');
 }

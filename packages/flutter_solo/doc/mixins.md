@@ -82,15 +82,13 @@ class SessionBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => StreamBuilder<SessionState>(
-        stream: session.stream,
-        builder: (context, snapshot) => Text(
-          switch (snapshot.data) {
-            SignedIn(:final name) => 'signed in as $name',
-            SignedOut() => 'signed out',
-            null => 'nothing yet',
-          },
-        ),
-      );
+    stream: session.stream,
+    builder: (context, snapshot) => Text(switch (snapshot.data) {
+      SignedIn(:final name) => 'signed in as $name',
+      SignedOut() => 'signed out',
+      null => 'nothing yet',
+    }),
+  );
 }
 ```
 
@@ -129,13 +127,11 @@ is in is `currentState`:
 StreamBuilder<SessionState>(
   stream: session.stream,
   initialData: session.currentState,
-  builder: (context, snapshot) => Text(
-    switch (snapshot.requireData) {
-      SignedIn(:final name) => 'signed in as $name',
-      SignedOut() => 'signed out',
-    },
-  ),
-)
+  builder: (context, snapshot) => Text(switch (snapshot.requireData) {
+    SignedIn(:final name) => 'signed in as $name',
+    SignedOut() => 'signed out',
+  }),
+),
 ```
 
 The data of a snapshot and `currentState` differ in where they come from. The
@@ -166,13 +162,11 @@ is nothing to pass for the first frame:
 ```dart
 SoloBuilder<SessionState>(
   solo: session,
-  builder: (context, state, _) => Text(
-    switch (state) {
-      SignedIn(:final name) => 'signed in as $name',
-      SignedOut() => 'signed out',
-    },
-  ),
-)
+  builder: (context, state, _) => Text(switch (state) {
+    SignedIn(:final name) => 'signed in as $name',
+    SignedOut() => 'signed out',
+  }),
+),
 ```
 
 ```text

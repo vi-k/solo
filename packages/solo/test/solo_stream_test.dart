@@ -21,33 +21,30 @@ void main() {
     },
   );
 
-  test(
-    'a plain close over a running drain stops it, sharing the future, '
-    'with a stream',
-    () {
-      runSoloStream((solo, journal, async) {
-        solo
-          ..enqueue<TestState, void>(
-            key: 'running',
-            (ctx) async => pause(ctx, 50),
-          )
-          ..enqueue<TestState, void>(key: 'queued', (ctx) async {});
-        async.flushMicrotasks();
-        final first = solo.close(mode: SoloCloseMode.drain);
-        async.elapse(const Duration(milliseconds: 10));
-        final second = solo.close();
-        expect(identical(first, second), isTrue);
-        expect(solo.isDraining, isFalse);
-        async.flushTimers();
-        expect(journal.take(), [
-          '[running] started',
-          '[queued] dropped Cancelled(closed)',
-          '[running] finished Cancelled(closed)',
-          'closed',
-        ]);
-      });
-    },
-  );
+  test('a plain close over a running drain stops it, sharing the future, '
+      'with a stream', () {
+    runSoloStream((solo, journal, async) {
+      solo
+        ..enqueue<TestState, void>(
+          key: 'running',
+          (ctx) async => pause(ctx, 50),
+        )
+        ..enqueue<TestState, void>(key: 'queued', (ctx) async {});
+      async.flushMicrotasks();
+      final first = solo.close(mode: SoloCloseMode.drain);
+      async.elapse(const Duration(milliseconds: 10));
+      final second = solo.close();
+      expect(identical(first, second), isTrue);
+      expect(solo.isDraining, isFalse);
+      async.flushTimers();
+      expect(journal.take(), [
+        '[running] started',
+        '[queued] dropped Cancelled(closed)',
+        '[running] finished Cancelled(closed)',
+        'closed',
+      ]);
+    });
+  });
 
   test('a neighbor above SoloStream still lets the stream see the event', () {
     fakeAsync((async) {

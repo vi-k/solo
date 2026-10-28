@@ -171,14 +171,11 @@ void main() {
   test('uncancellable restores the answer that was in force', () {
     fakeAsync((async) {
       var reached = false;
-      final job = Job<void>(
-        cancellable: false,
-        (ctx) async {
-          await ctx.uncancellable(() => delay(10));
-          await ctx.abandonable(() => delay(50));
-          reached = true;
-        },
-      );
+      final job = Job<void>(cancellable: false, (ctx) async {
+        await ctx.uncancellable(() => delay(10));
+        await ctx.abandonable(() => delay(50));
+        reached = true;
+      });
       async.elapse(const Duration(milliseconds: 20));
       job.cancel().ignore();
       async.flushTimers();
@@ -304,36 +301,38 @@ void main() {
       expect(job.outcome, isA<Cancelled>());
     });
   });
-  test('a cancel callback of a child that cancels the parent is not an error',
-      () {
-    fakeAsync((async) {
-      // The cascade runs the callbacks of the children before the parent is
-      // marked, so a callback that comes back for the parent used to find a
-      // job that still looks uncancelled and mark it a second time.
-      Object? thrown;
-      late Job<void> parent;
-      parent = Job<void>((ctx) async {
-        ctx
-            .run(
-              Job.deferred<void>(key: 'child', (child) async {
-                child.onCancel(() => parent.cancel().ignore());
-                await child.abandonable(() => delay(100));
-              }),
-            )
-            .ignore();
-        await ctx.abandonable(() => delay(100));
+  test(
+    'a cancel callback of a child that cancels the parent is not an error',
+    () {
+      fakeAsync((async) {
+        // The cascade runs the callbacks of the children before the parent is
+        // marked, so a callback that comes back for the parent used to find a
+        // job that still looks uncancelled and mark it a second time.
+        Object? thrown;
+        late Job<void> parent;
+        parent = Job<void>((ctx) async {
+          ctx
+              .run(
+                Job.deferred<void>(key: 'child', (child) async {
+                  child.onCancel(() => parent.cancel().ignore());
+                  await child.abandonable(() => delay(100));
+                }),
+              )
+              .ignore();
+          await ctx.abandonable(() => delay(100));
+        });
+        async.elapse(const Duration(milliseconds: 10));
+        try {
+          parent.cancel().ignore();
+        } on Object catch (error) {
+          thrown = error;
+        }
+        async.elapse(const Duration(milliseconds: 200));
+        expect(thrown, isNull);
+        expect(parent.outcome, isA<Cancelled>());
       });
-      async.elapse(const Duration(milliseconds: 10));
-      try {
-        parent.cancel().ignore();
-      } on Object catch (error) {
-        thrown = error;
-      }
-      async.elapse(const Duration(milliseconds: 200));
-      expect(thrown, isNull);
-      expect(parent.outcome, isA<Cancelled>());
-    });
-  });
+    },
+  );
   test('a child started from a cancel callback is dropped, not run', () {
     fakeAsync((async) {
       // The callbacks of the children run inside the cascade, before the
@@ -362,8 +361,7 @@ void main() {
             )
             .ignore();
         await ctx.abandonable(() => delay(100));
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
       async.flushTimers();
@@ -385,40 +383,42 @@ void main() {
     });
   });
 
-  test('a cancel callback that removes another one does not break the pass',
-      () {
-    fakeAsync((async) {
-      final seen = <String>[];
-      final job = Job<void>((ctx) async {
-        late void Function() removeSecond;
-        ctx.onCancel(() {
-          seen.add('first');
-          removeSecond();
-        });
-        removeSecond = ctx.onCancel(() => seen.add('second'));
-        await ctx.abandonable(() => delay(100));
-      })
-        ..ignoreFailure();
-      async.elapse(const Duration(milliseconds: 10));
-      job.cancel().ignore();
-      async.elapse(const Duration(milliseconds: 10));
-      expect(seen, ['first', 'second'], reason: 'the pass goes by a copy');
-    });
-  });
+  test(
+    'a cancel callback that removes another one does not break the pass',
+    () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final job = Job<void>((ctx) async {
+          late void Function() removeSecond;
+          ctx.onCancel(() {
+            seen.add('first');
+            removeSecond();
+          });
+          removeSecond = ctx.onCancel(() => seen.add('second'));
+          await ctx.abandonable(() => delay(100));
+        })..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.elapse(const Duration(milliseconds: 10));
+        expect(seen, ['first', 'second'], reason: 'the pass goes by a copy');
+      });
+    },
+  );
 
   test('the first cancellation a section holds is the one that lands', () {
     fakeAsync((async) {
       Cancelled held(String description) => Cancelled.by(
-            reason: const ManualCancelReason(),
-            description: description,
-            stackTrace: StackTrace.current,
-          );
-      final job = ProbeJob<void>((ctx) async {
-        await ctx.uncancellable(() => delay(50));
-        await ctx.abandonable(() => delay(50));
-      })
-        ..ignoreFailure()
-        ..launch();
+        reason: const ManualCancelReason(),
+        description: description,
+        stackTrace: StackTrace.current,
+      );
+      final job =
+          ProbeJob<void>((ctx) async {
+              await ctx.uncancellable(() => delay(50));
+              await ctx.abandonable(() => delay(50));
+            })
+            ..ignoreFailure()
+            ..launch();
       async.elapse(const Duration(milliseconds: 10));
       job
         ..cancelBy(held('first'))
@@ -431,15 +431,16 @@ void main() {
   test('the rules of a domain reach a job inside an uncancellable section', () {
     fakeAsync((async) {
       final marks = <bool>[];
-      final job = RulesJob<void>((ctx) async {
-        await ctx.uncancellable(() async {
-          ctx.breakRule('is not Ready');
-          marks.add(ctx.job.isCancelled);
-          await delay(10);
-        });
-      })
-        ..ignoreFailure()
-        ..launch();
+      final job =
+          RulesJob<void>((ctx) async {
+              await ctx.uncancellable(() async {
+                ctx.breakRule('is not Ready');
+                marks.add(ctx.job.isCancelled);
+                await delay(10);
+              });
+            })
+            ..ignoreFailure()
+            ..launch();
       async.flushTimers();
       expect(marks, [true], reason: 'a section holds no rule of a domain');
       expect(job.outcome, isA<Cancelled>());
@@ -448,12 +449,13 @@ void main() {
 
   test('the rules of a domain reach a job that refuses cancellation', () {
     fakeAsync((async) {
-      final job = RulesJob<void>(cancellable: false, (ctx) async {
-        ctx.breakRule('is not Ready');
-        await ctx.abandonable(() => delay(100));
-      })
-        ..ignoreFailure()
-        ..launch();
+      final job =
+          RulesJob<void>(cancellable: false, (ctx) async {
+              ctx.breakRule('is not Ready');
+              await ctx.abandonable(() => delay(100));
+            })
+            ..ignoreFailure()
+            ..launch();
       async.flushTimers();
       expect(job.outcome, isA<Cancelled>());
       expect((job.outcome! as Cancelled).description, 'is not Ready');
@@ -465,27 +467,28 @@ void main() {
       // reaches the engine, which ends the job by hand.
       Object? thrown;
       late ProbeJob<void> parent;
-      parent = ProbeJob<void>((ctx) async {
-        ctx
-            .run(
-              Job.deferred<void>(key: 'child', (child) async {
-                child.onCancel(
-                  () => parent.drop(
-                    Cancelled.by(
-                      reason: const ManualCancelReason(),
-                      description: 'by the engine',
-                      stackTrace: StackTrace.current,
-                    ),
-                  ),
-                );
-                await child.abandonable(() => delay(100));
-              }),
-            )
-            .ignore();
-        await ctx.abandonable(() => delay(100));
-      })
-        ..ignoreFailure()
-        ..launch();
+      parent =
+          ProbeJob<void>((ctx) async {
+              ctx
+                  .run(
+                    Job.deferred<void>(key: 'child', (child) async {
+                      child.onCancel(
+                        () => parent.drop(
+                          Cancelled.by(
+                            reason: const ManualCancelReason(),
+                            description: 'by the engine',
+                            stackTrace: StackTrace.current,
+                          ),
+                        ),
+                      );
+                      await child.abandonable(() => delay(100));
+                    }),
+                  )
+                  .ignore();
+              await ctx.abandonable(() => delay(100));
+            })
+            ..ignoreFailure()
+            ..launch();
       async.elapse(const Duration(milliseconds: 10));
       try {
         parent.cancel().ignore();
@@ -498,8 +501,7 @@ void main() {
     });
   });
 
-  test(
-      'a section nobody awaited can outlive the job and lose the '
+  test('a section nobody awaited can outlive the job and lose the '
       'cancellation', () {
     // The section belongs to the job, not to the future: it opens on the
     // call and holds a cancellation whether the body waits for it or not.
@@ -517,27 +519,26 @@ void main() {
         });
         await ctx.abandonable(() => delay(20));
         order.add('body ends');
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().then((_) => order.add('cancel returned')).ignore();
       async.flushTimers();
     });
-    expect(
-      order,
-      ['body ends', 'cancel returned', 'section ends'],
-      reason: 'the body did not wait for the section and ended under it',
-    );
+    expect(order, [
+      'body ends',
+      'cancel returned',
+      'section ends',
+    ], reason: 'the body did not wait for the section and ended under it');
     expect(
       job.outcome,
       isA<Done<void>>(),
-      reason: 'the cancellation was held past the end of the job and then '
+      reason:
+          'the cancellation was held past the end of the job and then '
           'dropped, and `cancel()` returned saying nothing of it',
     );
   });
 
-  test(
-      'a body that cancelled itself keeps its own cancellation '
+  test('a body that cancelled itself keeps its own cancellation '
       'against a later one', () {
     fakeAsync((async) {
       late ChildJob<void> child;
@@ -563,14 +564,16 @@ void main() {
       expect(
         outcome.reason,
         isA<TestCancelReason>(),
-        reason: 'the body chose first, and a cancellation that arrives while '
+        reason:
+            'the body chose first, and a cancellation that arrives while '
             'the job waits for its children does not replace the accepted one',
       );
       final cause = (child.outcome! as Cancelled).reason;
       expect(
         (cause as ParentCancelReason).cause,
         same(outcome),
-        reason: 'and the children carry the cancellation the parent actually '
+        reason:
+            'and the children carry the cancellation the parent actually '
             'ended with, not one it never had',
       );
     });
@@ -585,7 +588,8 @@ void main() {
       expect(
         answered,
         isTrue,
-        reason: 'before the start there is no body to protect, and whoever '
+        reason:
+            'before the start there is no body to protect, and whoever '
             'cancels must get an answer -- a refusal here leaves the caller '
             'waiting for a job that will never run',
       );
@@ -628,8 +632,7 @@ void main() {
       final job = ProbeJob<int>(key: 'job', (ctx) async {
         await ctx.abandonable(() => delay(100));
         return 1;
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       // An engine racing its own body, with a value in hand. The mark has been
@@ -647,28 +650,25 @@ void main() {
   test('a failure handed in over the mark is not lost', () {
     final caught = <Object>[];
     Outcome<int>? outcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = ProbeJob<int>(key: 'job', (ctx) async {
-            await ctx.abandonable(() => delay(100));
-            return 1;
-          })
-            ..launch();
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          job.drop(Failed(StateError('by hand'), StackTrace.current));
-          async.flushTimers();
-          outcome = job.outcome;
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = ProbeJob<int>(key: 'job', (ctx) async {
+          await ctx.abandonable(() => delay(100));
+          return 1;
+        })..launch();
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        job.drop(Failed(StateError('by hand'), StackTrace.current));
+        async.flushTimers();
+        outcome = job.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(outcome, isA<Cancelled>());
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: by hand'],
-      reason: 'the cancellation decides the outcome, but an error is never '
+      reason:
+          'the cancellation decides the outcome, but an error is never '
           'lost silently: it goes where a failure a cancellation covered '
           'goes',
     );

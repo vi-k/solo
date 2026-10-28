@@ -83,10 +83,7 @@ database is lost. Pass the release to the call that brings the resource.
 Do this:
 
 ```dart
-final db = await ctx.join(
-  Database.open,
-  dispose: (db) => db.close(),
-);
+final db = await ctx.join(Database.open, dispose: (db) => db.close());
 ```
 
 A value that does not reach the body is released on the spot, and a value that
@@ -148,13 +145,11 @@ Don't do this:
 
 ```dart
 // Wrong: sync waits for this job to end; this job waits for sync.
-Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-      key: _Op.syncAndRecord,
-      (ctx) async {
-        final path = await sync(item).value;
-        await recordPath(path).value;
-      },
-    );
+Job<void> syncAndRecord(int item) =>
+    enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+      final path = await sync(item).value;
+      await recordPath(path).value;
+    });
 ```
 
 The current job waits for the new one, and the new one waits for the current
@@ -165,13 +160,11 @@ queue.
 Do this:
 
 ```dart
-Job<void> syncAndRecord(int item) => enqueue<Ready, void>(
-      key: _Op.syncAndRecord,
-      (ctx) async {
-        final path = await ctx.run(_sync(item));
-        await ctx.run(_recordPath(path));
-      },
-    );
+Job<void> syncAndRecord(int item) =>
+    enqueue<Ready, void>(key: _Op.syncAndRecord, (ctx) async {
+      final path = await ctx.run(_sync(item));
+      await ctx.run(_recordPath(path));
+    });
 ```
 
 `Solo.debug` warns of such a wait when the job is queued. Awaiting `close()` or
@@ -198,8 +191,7 @@ final class Failures extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      reportCrash(error, stackTrace);
+  }) => reportCrash(error, stackTrace);
 }
 ```
 
@@ -280,10 +272,10 @@ Don't do this:
 ```dart
 // Wrong: one key for every profile.
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: _Op.load,
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: _Op.load,
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 ```
 
 With one key for `load(id)`, `Policy.droppable` takes `load('grace')`, called
@@ -294,10 +286,10 @@ Do this:
 
 ```dart
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: (_Op.load, id),
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: (_Op.load, id),
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 ```
 
 A key is any object compared with `==`, so a record will do. See

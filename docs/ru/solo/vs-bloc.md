@@ -110,9 +110,7 @@ class SplitNotesBloc extends Bloc<NotesEvent, NotesState> {
     on<UploadNote>((e, emit) async {
       emit(state.copyWith(uploading: true));
       await _api.upload(e.note);
-      emit(
-        state.copyWith(notes: [...state.notes, e.note], uploading: false),
-      );
+      emit(state.copyWith(notes: [...state.notes, e.note], uploading: false));
     }, transformer: sequential());
     on<RefreshList>((e, emit) async {
       final serverNotes = await _api.list();
@@ -182,9 +180,7 @@ class ConcurrentNotesBloc extends Bloc<NotesEvent, NotesState> {
         case UploadNote(:final note):
           emit(state.copyWith(uploading: true));
           await _api.upload(note);
-          emit(
-            state.copyWith(notes: [...state.notes, note], uploading: false),
-          );
+          emit(state.copyWith(notes: [...state.notes, note], uploading: false));
         case RefreshList():
           final serverNotes = await _api.list();
           emit(state.copyWith(notes: serverNotes));
@@ -215,9 +211,7 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
         case UploadNote(:final note):
           emit(state.copyWith(uploading: true));
           await _api.upload(note);
-          emit(
-            state.copyWith(notes: [...state.notes, note], uploading: false),
-          );
+          emit(state.copyWith(notes: [...state.notes, note], uploading: false));
         case RefreshList():
           final serverNotes = await _api.list();
           emit(state.copyWith(notes: serverNotes));
@@ -257,27 +251,20 @@ final class NotesController extends Solo<NotesState> {
 
   NotesController(this._api) : super(const NotesState());
 
-  Job<void> upload(Note note) => enqueue<NotesState, void>(
-        key: 'upload',
-        (ctx) async {
-          ctx.emit(ctx.state.copyWith(uploading: true));
-          await ctx.join(() => _api.upload(note));
-          ctx.emit(
-            ctx.state.copyWith(
-              notes: [...ctx.state.notes, note],
-              uploading: false,
-            ),
-          );
-        },
-      );
+  Job<void> upload(Note note) => enqueue<NotesState, void>(key: 'upload', (
+    ctx,
+  ) async {
+    ctx.emit(ctx.state.copyWith(uploading: true));
+    await ctx.join(() => _api.upload(note));
+    ctx.emit(
+      ctx.state.copyWith(notes: [...ctx.state.notes, note], uploading: false),
+    );
+  });
 
-  Job<void> refresh() => enqueue<NotesState, void>(
-        key: 'refresh',
-        (ctx) async {
-          final serverNotes = await ctx.abandonable(_api.list);
-          ctx.emit(ctx.state.copyWith(notes: serverNotes));
-        },
-      );
+  Job<void> refresh() => enqueue<NotesState, void>(key: 'refresh', (ctx) async {
+    final serverNotes = await ctx.abandonable(_api.list);
+    ctx.emit(ctx.state.copyWith(notes: serverNotes));
+  });
 }
 ```
 
@@ -441,14 +428,11 @@ final class RecorderController extends Solo<RecorderState> {
 
   RecorderController(this._recorder, this._journal) : super(const Idle());
 
-  Job<void> start() => enqueue<RecorderState, void>(
-        key: 'start',
-        (ctx) async {
-          await ctx.join(_recorder.start);
-          ctx.emit(const Recording());
-          _recorder.armMeter();
-        },
-      );
+  Job<void> start() => enqueue<RecorderState, void>(key: 'start', (ctx) async {
+    await ctx.join(_recorder.start);
+    ctx.emit(const Recording());
+    _recorder.armMeter();
+  });
 
   @override
   void onChange(SoloTransition<RecorderState> transition) =>
@@ -508,10 +492,7 @@ class UnguardedChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.withReply(reply));
       add(const MarkReplyRead());
     }, transformer: sequential());
-    on<MarkReplyRead>(
-      (e, emit) => _api.markRead(),
-      transformer: sequential(),
-    );
+    on<MarkReplyRead>((e, emit) => _api.markRead(), transformer: sequential());
   }
 }
 ```
@@ -553,10 +534,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.withReply(reply));
       add(const MarkReplyRead());
     }, transformer: sequential());
-    on<MarkReplyRead>(
-      (e, emit) => _api.markRead(),
-      transformer: sequential(),
-    );
+    on<MarkReplyRead>((e, emit) => _api.markRead(), transformer: sequential());
   }
 }
 ```
@@ -593,14 +571,12 @@ final class ChatController extends Solo<ChatState> {
 
   ChatController(this._api) : super(const ChatState());
 
-  Job<void> send(String text) => enqueue<ChatState, void>(
-        key: 'send',
-        (ctx) async {
-          final reply = await ctx.abandonable(() => _api.send(text));
-          ctx.emit(ctx.state.withReply(reply));
-          markReplyRead();
-        },
-      );
+  Job<void> send(String text) =>
+      enqueue<ChatState, void>(key: 'send', (ctx) async {
+        final reply = await ctx.abandonable(() => _api.send(text));
+        ctx.emit(ctx.state.withReply(reply));
+        markReplyRead();
+      });
 
   Job<void> markReplyRead() =>
       enqueue<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
@@ -712,16 +688,16 @@ final class RefreshController extends Solo<RefreshState> {
   RefreshController(this._api) : super(const Initial());
 
   Job<void> refresh() => enqueue<RefreshState, void>(
-        key: 'refresh',
-        policy: Policy.restart,
-        ifFailed: (state, error, stackTrace) => const Initial(),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          await ctx.abandonable(_api.refresh);
-          ctx.emit(const Initial());
-        },
-      );
+    key: 'refresh',
+    policy: Policy.restart,
+    ifFailed: (state, error, stackTrace) => const Initial(),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      await ctx.abandonable(_api.refresh);
+      ctx.emit(const Initial());
+    },
+  );
 
   Job<void>? cancelRefresh() {
     final refresh = lastJobWhere((job) => job.key == 'refresh');
@@ -924,32 +900,26 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
 
   PlayerController(this._player) : super(Ready());
 
-  Job<void> play() => enqueue<Ready, void>(
-        key: PlayerKey.play,
-        (ctx) async {
-          await ctx.join(_player.play);
-          ctx.emit(ctx.state.copyWith(playing: true));
-        },
-      );
+  Job<void> play() => enqueue<Ready, void>(key: PlayerKey.play, (ctx) async {
+    await ctx.join(_player.play);
+    ctx.emit(ctx.state.copyWith(playing: true));
+  });
 
-  Job<void> pause() => enqueue<Ready, void>(
-        key: PlayerKey.pause,
-        (ctx) async {
-          await ctx.join(_player.pause);
-          ctx.emit(ctx.state.copyWith(playing: false));
-        },
-      );
+  Job<void> pause() => enqueue<Ready, void>(key: PlayerKey.pause, (ctx) async {
+    await ctx.join(_player.pause);
+    ctx.emit(ctx.state.copyWith(playing: false));
+  });
 
   Job<void> seek(Duration position) => enqueue<Ready, void>(
-        key: PlayerKey.seek,
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => _player.seek(position, cancelToken: token));
-          ctx.emit(ctx.state.copyWith(position: position));
-        },
-      );
+    key: PlayerKey.seek,
+    policy: Policy.restart,
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => _player.seek(position, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(position: position));
+    },
+  );
 }
 ```
 
@@ -1030,21 +1000,18 @@ class CommandMapBloc extends Bloc<MapCommand, MapState> {
   final MapApi _map;
 
   CommandMapBloc(this._map) : super(const MapState()) {
-    on<MapCommand>(
-      (command, emit) => command(emit),
-      transformer: sequential(),
-    );
+    on<MapCommand>((command, emit) => command(emit), transformer: sequential());
   }
 
   void moveTo(Point<double> point) => add((emit) async {
-        await _map.moveTo(point);
-        emit(state.copyWith(center: point));
-      });
+    await _map.moveTo(point);
+    emit(state.copyWith(center: point));
+  });
 
   void setZoom(double value) => add((emit) async {
-        await _map.setZoom(value);
-        emit(state.copyWith(zoom: value));
-      });
+    await _map.setZoom(value);
+    emit(state.copyWith(zoom: value));
+  });
 }
 ```
 
@@ -1073,26 +1040,26 @@ final class MapController extends Solo<MapState> {
   MapController(this._map) : super(const MapState());
 
   Job<void> moveTo(Point<double> point) => enqueue<MapState, void>(
-        key: MapKey.moveTo,
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => _map.moveTo(point, cancelToken: token));
-          ctx.emit(ctx.state.copyWith(center: point));
-        },
-      );
+    key: MapKey.moveTo,
+    policy: Policy.restart,
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => _map.moveTo(point, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(center: point));
+    },
+  );
 
   Job<void> setZoom(double value) => enqueue<MapState, void>(
-        key: MapKey.setZoom,
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => _map.setZoom(value, cancelToken: token));
-          ctx.emit(ctx.state.copyWith(zoom: value));
-        },
-      );
+    key: MapKey.setZoom,
+    policy: Policy.restart,
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => _map.setZoom(value, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(zoom: value));
+    },
+  );
 }
 
 void onMapDrag(MapController map, Point<double> point) => map.moveTo(point);
@@ -1239,27 +1206,25 @@ final class DeviceController extends Solo<DeviceState> {
   DeviceController(this._ble) : super(const Offline());
 
   Job<void> connect() => enqueue<Offline, void>(
-        key: DeviceKey.connect,
-        cancellable: false,
-        (ctx) async {
-          await ctx.join(_ble.connect);
-          ctx.emit(const Connected());
-        },
-      );
+    key: DeviceKey.connect,
+    cancellable: false,
+    (ctx) async {
+      await ctx.join(_ble.connect);
+      ctx.emit(const Connected());
+    },
+  );
 
-  Job<void> readBattery() => enqueue<Connected, void>(
-        key: DeviceKey.readBattery,
-        (ctx) async {
-          final battery = await ctx.join(_ble.battery);
-          ctx.emit(ctx.state.copyWith(battery: battery));
-        },
-      );
+  Job<void> readBattery() =>
+      enqueue<Connected, void>(key: DeviceKey.readBattery, (ctx) async {
+        final battery = await ctx.join(_ble.battery);
+        ctx.emit(ctx.state.copyWith(battery: battery));
+      });
 
   Job<void> rename(String name) => enqueue<Connected, void>(
-        key: DeviceKey.rename,
-        cancellable: false,
-        (ctx) => ctx.join(() => _ble.rename(name)),
-      );
+    key: DeviceKey.rename,
+    cancellable: false,
+    (ctx) => ctx.join(() => _ble.rename(name)),
+  );
 
   Job<void> disconnect() {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
@@ -1506,16 +1471,16 @@ final class CheckoutController extends Solo<CheckoutState> {
   CheckoutController(this._api) : super(const Idle());
 
   Job<Receipt> pay(Order order) => enqueue<CheckoutState, Receipt>(
-        key: ('pay', order.id),
-        policy: Policy.droppable,
-        cancellable: false,
-        (ctx) async {
-          ctx.emit(Paying(order.id));
-          final receipt = await _api.pay(order);
-          ctx.emit(Paid(receipt));
-          return receipt;
-        },
-      );
+    key: ('pay', order.id),
+    policy: Policy.droppable,
+    cancellable: false,
+    (ctx) async {
+      ctx.emit(Paying(order.id));
+      final receipt = await _api.pay(order);
+      ctx.emit(Paid(receipt));
+      return receipt;
+    },
+  );
 
   bool withdraw(Order order) =>
       queue.removeWhere((job) => job.key == ('pay', order.id), force: true) > 0;
@@ -1687,13 +1652,11 @@ final class ReportController extends Solo<ReportState> with SoloStream {
     _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
-  Job<void> build(Range range) => enqueue<SignedIn, void>(
-        key: 'report',
-        (ctx) async {
-          final report = await ctx.join(() => _reports.build(range));
-          ctx.emit(Ready(report));
-        },
-      );
+  Job<void> build(Range range) =>
+      enqueue<SignedIn, void>(key: 'report', (ctx) async {
+        final report = await ctx.join(() => _reports.build(range));
+        ctx.emit(Ready(report));
+      });
 
   @override
   void onClose() {
@@ -1867,16 +1830,16 @@ final class FirmwareController extends Solo<FirmwareState> {
   FirmwareController(this._ble) : super(const Idle());
 
   Job<void> flash(List<Chunk> chunks) => enqueue<NotBroken, void>(
-        key: 'flash',
-        policy: Policy.restart,
-        (ctx) async {
-          var written = 0;
-          for (final chunk in chunks) {
-            await ctx.join(() => _ble.write(chunk));
-            ctx.emit(Flashing(++written, chunks.length));
-          }
-        },
-      );
+    key: 'flash',
+    policy: Policy.restart,
+    (ctx) async {
+      var written = 0;
+      for (final chunk in chunks) {
+        await ctx.join(() => _ble.write(chunk));
+        ctx.emit(Flashing(++written, chunks.length));
+      }
+    },
+  );
 }
 ```
 
@@ -1986,16 +1949,16 @@ final class PreviewController extends Solo<PreviewState> {
   PreviewController(this._decoder) : super(const NoPreview());
 
   Job<void> open(Clip clip) => enqueue<PreviewState, void>(
-        key: 'preview',
-        policy: Policy.restart,
-        (ctx) async {
-          final buffer = await ctx.abandonable(
-            () => _decoder.open(clip),
-            dispose: (buffer) => buffer.release(),
-          );
-          ctx.emit(Preview(buffer.waveform()));
-        },
+    key: 'preview',
+    policy: Policy.restart,
+    (ctx) async {
+      final buffer = await ctx.abandonable(
+        () => _decoder.open(clip),
+        dispose: (buffer) => buffer.release(),
       );
+      ctx.emit(Preview(buffer.waveform()));
+    },
+  );
 }
 ```
 

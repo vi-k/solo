@@ -39,6 +39,6 @@ Future<void> refreshToken() async => throw StateError('token expired');
 /// The report of the first section: it takes 50 ms, and the user may
 /// cancel it on the way.
 Job<Report> userReport() => Job<Report>((ctx) async {
-      await ctx.abandonable(() => delay(50));
-      return const Report(Data());
-    });
+  await ctx.abandonable(() => delay(50));
+  return const Report(Data());
+});

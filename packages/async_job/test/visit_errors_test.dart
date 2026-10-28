@@ -37,10 +37,10 @@ ParallelWaitError<Object?, Object?> recordEnvelope(
 }
 
 String nameOf(Object error) => switch (error) {
-      StateError(:final message) => message,
-      Cancelled() => 'cancelled',
-      _ => names[error] ?? '$error',
-    };
+  StateError(:final message) => message,
+  Cancelled() => 'cancelled',
+  _ => names[error] ?? '$error',
+};
 
 /// A list whose elements throw when read.
 final class Unreadable extends ListBase<AsyncError?> {
@@ -77,12 +77,7 @@ final class NoLength extends ListBase<AsyncError?> {
 /// `drops` was read off the core before it walked with [Job.visitErrors], at
 /// 1c2be62: a body throwing `error` ends `Cancelled` exactly when it is
 /// true. So the core of today is held to what it decided before.
-typedef Shape = ({
-  String name,
-  Object error,
-  List<String> calls,
-  bool drops,
-});
+typedef Shape = ({String name, Object error, List<String> calls, bool drops});
 
 List<Shape> shapes() {
   final cycleBranches = <AsyncError?>[branch(cancelled, 'a'), null];
@@ -95,21 +90,18 @@ List<Shape> shapes() {
   loopBranches[1] = branch(loop, 'y');
 
   final shared = envelope([branch(cancelled, 's')]);
-  final sharedTen = recordEnvelope(
-    (
-      branch(cancelled, '1'),
-      branch(cancelled, '2'),
-      branch(cancelled, '3'),
-      branch(cancelled, '4'),
-      branch(cancelled, '5'),
-      branch(cancelled, '6'),
-      branch(cancelled, '7'),
-      branch(cancelled, '8'),
-      branch(cancelled, '9'),
-      branch(cancelled, '10'),
-    ),
-    'ten',
-  );
+  final sharedTen = recordEnvelope((
+    branch(cancelled, '1'),
+    branch(cancelled, '2'),
+    branch(cancelled, '3'),
+    branch(cancelled, '4'),
+    branch(cancelled, '5'),
+    branch(cancelled, '6'),
+    branch(cancelled, '7'),
+    branch(cancelled, '8'),
+    branch(cancelled, '9'),
+    branch(cancelled, '10'),
+  ), 'ten');
 
   var deep = envelope([branch(cancelled, 'bottom')]);
   for (var i = 0; i < 10000; i++) {
@@ -118,8 +110,11 @@ List<Shape> shapes() {
 
   final partlyReadable = ParallelWaitError<Object?, List<AsyncError?>>(
     null,
-    <Object?>[branch(cancelled, 'a'), 'not a branch', branch(failure, 'b')]
-        .cast<AsyncError?>(),
+    <Object?>[
+      branch(cancelled, 'a'),
+      'not a branch',
+      branch(failure, 'b'),
+    ].cast<AsyncError?>(),
   );
   names[partlyReadable] = 'partly readable';
 
@@ -176,9 +171,7 @@ List<Shape> shapes() {
     ),
     (
       name: 'a record of cancellations',
-      error: recordEnvelope(
-        (branch(cancelled, 'a'), branch(cancelled, 'b')),
-      ),
+      error: recordEnvelope((branch(cancelled, 'a'), branch(cancelled, 'b'))),
       calls: ['cancelled @a', 'cancelled @b'],
       drops: true,
     ),
@@ -257,21 +250,13 @@ List<Shape> shapes() {
     (
       name: 'a partly readable list',
       error: partlyReadable,
-      calls: [
-        'cancelled @a',
-        'failure partly readable @root',
-        'failure f @b',
-      ],
+      calls: ['cancelled @a', 'failure partly readable @root', 'failure f @b'],
       drops: false,
     ),
     (
       name: 'a partly readable list, nested',
       error: envelope([branch(partlyReadable, 'n')]),
-      calls: [
-        'cancelled @a',
-        'failure partly readable @n',
-        'failure f @b',
-      ],
+      calls: ['cancelled @a', 'failure partly readable @n', 'failure f @b'],
       drops: false,
     ),
     (
@@ -387,10 +372,9 @@ void main() {
 
   group('the length of a list', () {
     test('that throws hands the envelope over whole', () {
-      expect(
-        walk(recordEnvelope(NoLength(), 'no length')),
-        ['failure no length @root'],
-      );
+      expect(walk(recordEnvelope(NoLength(), 'no length')), [
+        'failure no length @root',
+      ]);
     });
 
     test('that throws ends a job that throws it Failed', () async {
@@ -406,15 +390,12 @@ void main() {
       final zone = <Object>[];
       final outcome = Completer<Outcome<void>>();
       unawaited(
-        runZonedGuarded(
-          () async {
-            final job = Job<void>(observer: _Starting(error), (ctx) async {});
-            final done = await job.done;
-            await Future<void>.delayed(const Duration(milliseconds: 20));
-            outcome.complete(done);
-          },
-          (error, stackTrace) => zone.add(error),
-        ),
+        runZonedGuarded(() async {
+          final job = Job<void>(observer: _Starting(error), (ctx) async {});
+          final done = await job.done;
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          outcome.complete(done);
+        }, (error, stackTrace) => zone.add(error)),
       );
       expect(
         await outcome.future.timeout(const Duration(seconds: 5)),
@@ -423,17 +404,19 @@ void main() {
       expect(zone, [same(error)]);
     });
 
-    test('is read once, and a callback that shortens the list ends the walk',
-        () async {
-      final port = ReceivePort();
-      final isolate = await Isolate.spawn(shrinkWhileWalking, port.sendPort);
-      final calls = await port.first.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => 'the walk never returned',
-      );
-      isolate.kill(priority: Isolate.immediate);
-      expect(calls, ['cancelled', 'failure envelope']);
-    });
+    test(
+      'is read once, and a callback that shortens the list ends the walk',
+      () async {
+        final port = ReceivePort();
+        final isolate = await Isolate.spawn(shrinkWhileWalking, port.sendPort);
+        final calls = await port.first.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => 'the walk never returned',
+        );
+        isolate.kill(priority: Isolate.immediate);
+        expect(calls, ['cancelled', 'failure envelope']);
+      },
+    );
   });
 
   test('a callback that throws ends the walk and reaches the caller', () {
@@ -452,39 +435,34 @@ void main() {
     expect(calls, ['failure @a']);
   });
 
-  test('a Cancelled thrown inside onUnanswered stays out of the zone',
-      () async {
-    final calls = <String>[];
-    final zone = <Object>[];
-    final done = Completer<void>();
-    unawaited(
-      runZonedGuarded(
-        () async {
-          final job = Job<void>(
-            observer: _Answering(calls),
-            (ctx) async {
-              ctx.unattended(
-                () async => throw envelope(
-                  [branch(failure, 'a'), branch(failure, 'b')],
-                ),
-              );
-            },
-          );
+  test(
+    'a Cancelled thrown inside onUnanswered stays out of the zone',
+    () async {
+      final calls = <String>[];
+      final zone = <Object>[];
+      final done = Completer<void>();
+      unawaited(
+        runZonedGuarded(() async {
+          final job = Job<void>(observer: _Answering(calls), (ctx) async {
+            ctx.unattended(
+              () async =>
+                  throw envelope([branch(failure, 'a'), branch(failure, 'b')]),
+            );
+          });
           await job.done;
           await Future<void>.delayed(const Duration(milliseconds: 20));
           done.complete();
-        },
-        (error, stackTrace) => zone.add(error),
-      ),
-    );
-    await done.future;
-    // The job asks about each failure in a call of its own, so the second
-    // answer is not lost with the first.
-    expect(calls, ['failure @a', 'failure @b']);
-    // An answer that throws does not take the failure with it, and the
-    // cancellation it threw is a decision, not a failure.
-    expect(zone, [failure, failure]);
-  });
+        }, (error, stackTrace) => zone.add(error)),
+      );
+      await done.future;
+      // The job asks about each failure in a call of its own, so the second
+      // answer is not lost with the first.
+      expect(calls, ['failure @a', 'failure @b']);
+      // An answer that throws does not take the failure with it, and the
+      // cancellation it threw is a decision, not a failure.
+      expect(zone, [failure, failure]);
+    },
+  );
 }
 
 final class _Starting extends JobObserver {

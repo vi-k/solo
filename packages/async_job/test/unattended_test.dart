@@ -18,21 +18,18 @@ void main() {
   test('a failure of unattended work reaches the observer, then the zone', () {
     final journal = JobJournal();
     final zone = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>(key: 'j', observer: journal, (ctx) async {
-            ctx.unattended(() async {
-              await delay(10);
-              throw StateError('abandoned boom');
-            });
-            await ctx.abandonable(() => delay(1));
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>(key: 'j', observer: journal, (ctx) async {
+          ctx.unattended(() async {
+            await delay(10);
+            throw StateError('abandoned boom');
           });
-          async.flushTimers();
+          await ctx.abandonable(() => delay(1));
         });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone: an `expect` that fails inside it lands in
     // the handler and is counted as a zone error instead of failing.
     expect(journal.take(), [
@@ -40,32 +37,26 @@ void main() {
       '[j] finished Done(null)',
       '[j] error Bad state: abandoned boom',
     ]);
-    expect(
-      zone.map((error) => '$error'),
-      ['Bad state: abandoned boom'],
-      reason: 'an observer that only watches answers for nothing',
-    );
+    expect(zone.map((error) => '$error'), [
+      'Bad state: abandoned boom',
+    ], reason: 'an observer that only watches answers for nothing');
   });
 
-  test(
-      'without an observer the failure goes to the zone that created the '
+  test('without an observer the failure goes to the zone that created the '
       'job', () {
     final caught = <String>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>(key: 'j', (ctx) async {
-            ctx.unattended(() async {
-              await delay(10);
-              throw StateError('abandoned boom');
-            });
-            await ctx.abandonable(() => delay(1));
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>(key: 'j', (ctx) async {
+          ctx.unattended(() async {
+            await delay(10);
+            throw StateError('abandoned boom');
           });
-          async.flushTimers();
+          await ctx.abandonable(() => delay(1));
         });
-      },
-      (error, stackTrace) => caught.add('$error'),
-    );
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add('$error'));
     expect(caught, ['Bad state: abandoned boom']);
   });
 
@@ -86,8 +77,7 @@ void main() {
     });
   });
 
-  test(
-      'a synchronous throw of the action goes to the observer, not to the '
+  test('a synchronous throw of the action goes to the observer, not to the '
       'body', () {
     final journal = JobJournal(answers: true);
     late final Job<void> job;
@@ -156,8 +146,7 @@ void main() {
     ]);
   });
 
-  test(
-      "a child cancelled by this job's cascade is not an error, a child "
+  test("a child cancelled by this job's cascade is not an error, a child "
       'cancelling itself is', () {
     List<String> run({required bool own}) {
       final journal = JobJournal();
@@ -212,10 +201,9 @@ void main() {
       b.cancel();
       async.flushTimers();
     });
-    expect(
-      journalA.take().where((line) => line.contains('error')),
-      ['[a] error Cancelled(parent)'],
-    );
+    expect(journalA.take().where((line) => line.contains('error')), [
+      '[a] error Cancelled(parent)',
+    ]);
   });
 
   test('unattended after the job has finished throws and names itself', () {
@@ -229,8 +217,11 @@ void main() {
     expect(
       () => leaked.unattended(() {}),
       throwsA(
-        isA<StateError>()
-            .having((e) => '$e', 'message', contains('unattended')),
+        isA<StateError>().having(
+          (e) => '$e',
+          'message',
+          contains('unattended'),
+        ),
       ),
     );
   });
@@ -273,8 +264,8 @@ void main() {
     expect(ran, isTrue);
   });
 
-  test('a late failure of a wait made in the work reports as it always does',
-      () {
+  test('a late failure of a wait made in the work '
+      'reports as it always does', () {
     final journal = JobJournal(answers: true);
     fakeAsync((async) {
       final job = Job<void>(key: 'j', observer: journal, (ctx) async {
@@ -322,34 +313,25 @@ void main() {
     // One rule, two paths. Work handed over and an action walked away from
     // both throw this job's own cancellation once it is marked, and
     // neither of them is news: whoever listens took it off the outcome.
-    expect(journal.take(), [
-      '[j] started',
-      '[j] finished Cancelled(manual)',
-    ]);
+    expect(journal.take(), ['[j] started', '[j] finished Cancelled(manual)']);
   });
 
   test('a cancellation the engine finished the job with is not an error', () {
     final journal = JobJournal();
     fakeAsync((async) {
-      final job = ProbeJob<void>(
-        key: 'j',
-        observer: journal,
-        (ctx) async {
-          ctx.unattended(() async {
-            await delay(30);
-            // The job was ended by hand, so it was never marked: the
-            // cancellation lives in the outcome alone. Thrown the way the
-            // core throws an outcome itself, which is also how a test
-            // throws one without tripping `only_throw_errors`.
-            Error.throwWithStackTrace(ctx.job.outcome!, StackTrace.current);
-          });
-          await ctx.abandonable(() => delay(100));
-        },
-      )..launch();
+      final job = ProbeJob<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.unattended(() async {
+          await delay(30);
+          // The job was ended by hand, so it was never marked: the
+          // cancellation lives in the outcome alone. Thrown the way the
+          // core throws an outcome itself, which is also how a test
+          // throws one without tripping `only_throw_errors`.
+          Error.throwWithStackTrace(ctx.job.outcome!, StackTrace.current);
+        });
+        await ctx.abandonable(() => delay(100));
+      })..launch();
       async.elapse(const Duration(milliseconds: 5));
-      job.drop(
-        const Cancelled.by(reason: ManualCancelReason()),
-      );
+      job.drop(const Cancelled.by(reason: ManualCancelReason()));
       async.flushTimers();
     });
     expect(journal.take().where((line) => line.contains('error')), isEmpty);
@@ -358,25 +340,20 @@ void main() {
   test('an outcome that is not a cancellation is an error like any other', () {
     final journal = JobJournal(answers: true);
     fakeAsync((async) {
-      final job = ProbeJob<void>(
-        key: 'j',
-        observer: journal,
-        (ctx) async {
-          ctx.unattended(() async {
-            await delay(30);
-            Error.throwWithStackTrace(ctx.job.outcome!, StackTrace.current);
-          });
-          await ctx.abandonable(() => delay(100));
-        },
-      )..launch();
+      final job = ProbeJob<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.unattended(() async {
+          await delay(30);
+          Error.throwWithStackTrace(ctx.job.outcome!, StackTrace.current);
+        });
+        await ctx.abandonable(() => delay(100));
+      })..launch();
       async.elapse(const Duration(milliseconds: 5));
       job.drop(const Done<void>(null));
       async.flushTimers();
     });
-    expect(
-      journal.take().where((line) => line.contains('error')),
-      ['[j] error Done(null)'],
-    );
+    expect(journal.take().where((line) => line.contains('error')), [
+      '[j] error Done(null)',
+    ]);
   });
 
   test('onCancel may hand an asynchronous stop to unattended work', () {
@@ -398,10 +375,9 @@ void main() {
       async.flushTimers();
     });
     expect(stopped, isTrue);
-    expect(
-      journal.take().where((line) => line.contains('error')),
-      ['[j] error Bad state: device.stop failed'],
-    );
+    expect(journal.take().where((line) => line.contains('error')), [
+      '[j] error Bad state: device.stop failed',
+    ]);
   });
 
   test('unattended work cannot start an each child', () {
@@ -433,9 +409,6 @@ void main() {
       source.close();
       async.flushTimers();
     });
-    expect(journal.take(), [
-      '[j] started',
-      '[j] finished Done(null)',
-    ]);
+    expect(journal.take(), ['[j] started', '[j] finished Done(null)']);
   });
 }

@@ -213,13 +213,15 @@ function `onCancel` returns.
 
 ```dart
 ctx.each(messages, (childCtx, message) {
-  return childCtx.run(Job.deferred<void>((eventCtx) async {
-    final draft = await eventCtx.join(
-      () => store.openDraft(message),
-      dispose: (draft) => draft.close(),
-    );
-    await eventCtx.join(draft.write);
-  }));
+  return childCtx.run(
+    Job.deferred<void>((eventCtx) async {
+      final draft = await eventCtx.join(
+        () => store.openDraft(message),
+        dispose: (draft) => draft.close(),
+      );
+      await eventCtx.join(draft.write);
+    }),
+  );
 });
 ```
 

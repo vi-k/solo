@@ -19,14 +19,14 @@ final class NarrowInit extends Solo<CameraState> with CameraParts {
 
   @override
   Job<void> init() => enqueue<Initial, void>(
-        key: CameraKey.init,
-        policy: Policy.droppable,
-        (ctx) async {
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          ctx.emit(const Ready());
-        },
-      );
+    key: CameraKey.init,
+    policy: Policy.droppable,
+    (ctx) async {
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      ctx.emit(const Ready());
+    },
+  );
 }
 
 /// The first attempt of "An opening that fails": the landing written as a
@@ -40,20 +40,20 @@ final class CatchingInit extends Solo<CameraState> with CameraParts {
 
   @override
   Job<void> init() => enqueue<NotDisposed, void>(
-        key: CameraKey.init,
-        policy: Policy.droppable,
-        canStart: (state) => state is Initial,
-        (ctx) async {
-          ctx.emit(const Preparing());
-          try {
-            await ctx.join(hw.open);
-          } on Object catch (error) {
-            ctx.emit(Broken(error));
-            rethrow;
-          }
-          ctx.emit(const Ready());
-        },
-      );
+    key: CameraKey.init,
+    policy: Policy.droppable,
+    canStart: (state) => state is Initial,
+    (ctx) async {
+      ctx.emit(const Preparing());
+      try {
+        await ctx.join(hw.open);
+      } on Object catch (error) {
+        ctx.emit(Broken(error));
+        rethrow;
+      }
+      ctx.emit(const Ready());
+    },
+  );
 }
 
 /// The first attempt of "A failure reported while opening": the answer of
@@ -70,43 +70,43 @@ final class UncheckedOpening extends Solo<CameraState> with CameraParts {
 
   @override
   Job<void> init() => enqueue<NotDisposed, void>(
-        key: CameraKey.init,
-        policy: Policy.droppable,
-        canStart: (state) => state is Initial,
-        ifFailed: (state, error, stackTrace) => Broken(error),
-        ifCancelled: (state, cancelled) => Broken(cancelled),
-        (ctx) async {
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          ctx.emit(const Ready());
-        },
-      );
+    key: CameraKey.init,
+    policy: Policy.droppable,
+    canStart: (state) => state is Initial,
+    ifFailed: (state, error, stackTrace) => Broken(error),
+    ifCancelled: (state, cancelled) => Broken(cancelled),
+    (ctx) async {
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      ctx.emit(const Ready());
+    },
+  );
 
   @override
   Job<void> reopen() => enqueue<NotDisposed, void>(
-        key: CameraKey.reopen,
-        policy: Policy.droppable,
-        canStart: (state) => state is Ready || state is Broken,
-        ifFailed: (state, error, stackTrace) => Broken(error),
-        ifCancelled: (state, cancelled) => Broken(cancelled),
-        (ctx) async {
-          final zoom = switch (ctx.state) {
-            Ready(:final zoom) => zoom,
-            _ => 1.0,
-          };
-          await ctx.run(_closeCameraJob());
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          await ctx.join(() => hw.setZoom(zoom));
-          ctx.emit(Ready(zoom: zoom));
-        },
-      );
+    key: CameraKey.reopen,
+    policy: Policy.droppable,
+    canStart: (state) => state is Ready || state is Broken,
+    ifFailed: (state, error, stackTrace) => Broken(error),
+    ifCancelled: (state, cancelled) => Broken(cancelled),
+    (ctx) async {
+      final zoom = switch (ctx.state) {
+        Ready(:final zoom) => zoom,
+        _ => 1.0,
+      };
+      await ctx.run(_closeCameraJob());
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      await ctx.join(() => hw.setZoom(zoom));
+      ctx.emit(Ready(zoom: zoom));
+    },
+  );
 
   SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
-        key: CameraKey.closeCamera,
-        cancellable: false,
-        (ctx) async => hw.close(),
-      );
+    key: CameraKey.closeCamera,
+    cancellable: false,
+    (ctx) async => hw.close(),
+  );
 }
 
 /// The first attempt of "Only the last zoom": the default policy.
@@ -118,13 +118,13 @@ final class QueuedZoom extends Solo<CameraState> with CameraParts {
 
   @override
   Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-        key: CameraKey.setZoom,
-        describe: () => 'zoom: $zoom',
-        (ctx) async {
-          await ctx.join(() => hw.setZoom(zoom));
-          ctx.emit(ctx.state.copyWith(zoom: zoom));
-        },
-      );
+    key: CameraKey.setZoom,
+    describe: () => 'zoom: $zoom',
+    (ctx) async {
+      await ctx.join(() => hw.setZoom(zoom));
+      ctx.emit(ctx.state.copyWith(zoom: zoom));
+    },
+  );
 }
 
 /// The first attempt of "Disposing of the camera": a disposal queued like
@@ -136,23 +136,23 @@ base class QueuedDisposal extends Solo<CameraState> with CameraParts {
   QueuedDisposal(this.hw) : super(const Initial());
 
   Job<void> dispose() => enqueue<CameraState, void>(
-        key: CameraKey.dispose,
-        policy: Policy.droppable,
-        cancellable: false,
-        canStart: (state) => state is! Disposed,
-        (ctx) async {
-          if (ctx.state is! Initial) {
-            await ctx.run(_closeCameraJob());
-          }
-          ctx.emit(const Disposed());
-        },
-      );
+    key: CameraKey.dispose,
+    policy: Policy.droppable,
+    cancellable: false,
+    canStart: (state) => state is! Disposed,
+    (ctx) async {
+      if (ctx.state is! Initial) {
+        await ctx.run(_closeCameraJob());
+      }
+      ctx.emit(const Disposed());
+    },
+  );
 
   SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
-        key: CameraKey.closeCamera,
-        cancellable: false,
-        (ctx) async => hw.close(),
-      );
+    key: CameraKey.closeCamera,
+    cancellable: false,
+    (ctx) async => hw.close(),
+  );
 }
 
 /// The second attempt of the same section: the way cleared, `Disposed`

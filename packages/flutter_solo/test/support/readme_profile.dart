@@ -30,25 +30,25 @@ final class ProfileController extends Solo<Profile> {
   ProfileController(this.api) : super(Empty());
 
   Job<String> load() => enqueue<Profile, String>(
-        key: 'load',
-        policy: Policy.droppable, // a second tap returns the first job
-        (ctx) async {
-          ctx.emit(Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
+    key: 'load',
+    policy: Policy.droppable, // a second tap returns the first job
+    (ctx) async {
+      ctx.emit(Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
 
-          return name;
-        },
-        // Without these a load that fails or is cancelled leaves the state
-        // on Loading: a spinner, and nothing on the screen to tap.
-        ifFailed: (state, error, stackTrace) => Empty(),
-        ifCancelled: (state, cancelled) => Empty(),
-      );
+      return name;
+    },
+    // Without these a load that fails or is cancelled leaves the state
+    // on Loading: a spinner, and nothing on the screen to tap.
+    ifFailed: (state, error, stackTrace) => Empty(),
+    ifCancelled: (state, cancelled) => Empty(),
+  );
 
   Job<void> save() => enqueue<Loaded, void>(
-        key: 'save',
-        (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
-      );
+    key: 'save',
+    (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
+  );
 }
 
 class ProfileView extends StatelessWidget {
@@ -58,16 +58,16 @@ class ProfileView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SoloBuilder<Profile>(
-        solo: controller,
-        builder: (context, state, _) => switch (state) {
-          Empty() => TextButton(
-              onPressed: () => controller.load().ignoreFailure(),
-              child: const Text('Load'),
-            ),
-          Loading() => const CircularProgressIndicator(),
-          Loaded(:final name) => Text(name),
-        },
-      );
+    solo: controller,
+    builder: (context, state, _) => switch (state) {
+      Empty() => TextButton(
+        onPressed: () => controller.load().ignoreFailure(),
+        child: const Text('Load'),
+      ),
+      Loading() => const CircularProgressIndicator(),
+      Loaded(:final name) => Text(name),
+    },
+  );
 }
 
 /// The API behind the controller, which the page takes as the
@@ -135,7 +135,7 @@ class FakeApi extends ProfileApi {
 
 /// [state], the way a test writes it down.
 String show(Profile state) => switch (state) {
-      Empty() => 'Empty',
-      Loading() => 'Loading',
-      Loaded(:final name) => 'Loaded($name)',
-    };
+  Empty() => 'Empty',
+  Loading() => 'Loading',
+  Loaded(:final name) => 'Loaded($name)',
+};

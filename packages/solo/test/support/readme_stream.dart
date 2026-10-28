@@ -12,15 +12,15 @@ final class ProfileController extends Solo<ProfileState> with SoloStream {
   ProfileController(this.api) : super(const Initial());
 
   Job<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.droppable,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 }

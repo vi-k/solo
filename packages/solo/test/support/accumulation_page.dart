@@ -53,23 +53,19 @@ class SettingsPatch {
   final String? theme;
   final String? language;
 
-  const SettingsPatch({
-    this.notifications,
-    this.theme,
-    this.language,
-  });
+  const SettingsPatch({this.notifications, this.theme, this.language});
 
   SettingsPatch merge(SettingsPatch incoming) => SettingsPatch(
-        notifications: incoming.notifications ?? notifications,
-        theme: incoming.theme ?? theme,
-        language: incoming.language ?? language,
-      );
+    notifications: incoming.notifications ?? notifications,
+    theme: incoming.theme ?? theme,
+    language: incoming.language ?? language,
+  );
 
   Settings apply(Settings current) => Settings(
-        notifications: notifications ?? current.notifications,
-        theme: theme ?? current.theme,
-        language: language ?? current.language,
-      );
+    notifications: notifications ?? current.notifications,
+    theme: theme ?? current.theme,
+    language: language ?? current.language,
+  );
 }
 
 abstract interface class SettingsApi {
@@ -96,17 +92,15 @@ final class SettingsController extends Solo<Settings> {
   Job<void> update(SettingsPatch patch) => _updates.add(patch);
 
   Job<void> reload() => enqueue<Settings, void>(
-        key: 'reload',
-        (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
-      );
+    key: 'reload',
+    (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
+  );
 }
 
 Future<void> changeSettings(SettingsApi api, Settings initial) async {
   final controller = SettingsController(api, initial);
   try {
-    final first = controller.update(
-      const SettingsPatch(notifications: true),
-    );
+    final first = controller.update(const SettingsPatch(notifications: true));
     final second = controller.update(const SettingsPatch(theme: 'dark'));
     final third = controller.update(const SettingsPatch(language: 'ru'));
 
@@ -203,16 +197,14 @@ final class BusyPlayer extends Player {
   BusyPlayer(super.device, this.note);
 
   Job<void> busy() => enqueue<Playback, void>(
-        key: 'busy',
-        (ctx) => ctx.abandonable(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)),
-        ),
-      );
+    key: 'busy',
+    (ctx) => ctx.abandonable(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    ),
+  );
 
-  Job<void> chime() => enqueue<Playback, void>(
-        key: 'chime',
-        (ctx) async => note('chime'),
-      );
+  Job<void> chime() =>
+      enqueue<Playback, void>(key: 'chime', (ctx) async => note('chime'));
 }
 
 /// "When they are separate jobs after all": the page shows `resume`, and
@@ -236,30 +228,27 @@ final class Transport extends Solo<Playback> {
 
   /// Not on the page.
   Job<void> pause({bool cancellable = true}) => enqueue<Playback, void>(
-        key: Command.pause,
-        cancellable: cancellable,
-        (ctx) async {
-          await ctx.join(device.pause);
-          ctx.emit(const Paused());
-        },
-      );
+    key: Command.pause,
+    cancellable: cancellable,
+    (ctx) async {
+      await ctx.join(device.pause);
+      ctx.emit(const Paused());
+    },
+  );
 
   /// Not on the page: a job of another kind, 50 ms long.
   Job<void> chime() => enqueue<Playback, void>(
-        key: 'chime',
-        (ctx) => ctx.join(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)),
-        ),
-      );
+    key: 'chime',
+    (ctx) =>
+        ctx.join(() => Future<void>.delayed(const Duration(milliseconds: 50))),
+  );
 
   /// Not on the page: what the queue holds, by key.
   List<Object?> get queued => [for (final job in queue.jobs) job.key];
 
   /// Not on the page: the queue's own removal, with `force`.
-  int removePauses({required bool force}) => queue.removeWhere(
-        (job) => job.key == Command.pause,
-        force: force,
-      );
+  int removePauses({required bool force}) =>
+      queue.removeWhere((job) => job.key == Command.pause, force: force);
 }
 
 /// "Choosing where events join": the three lines of the page, and the two

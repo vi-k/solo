@@ -149,8 +149,7 @@ void main() {
           }
           child.emit(Preparing(progress: p));
         }).value;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushMicrotasks();
       events
         ..add(1)
@@ -268,29 +267,32 @@ void main() {
   });
 
   test(
-      'child.abandonable in the callback ends the parent with the cancellation',
-      () {
-    runSolo((solo, journal, async) {
-      final events = StreamController<int>();
-      final parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
-        await ctx.each<int>(events.stream, (child, event) async {
-          await child.abandonable(() => delay(1000));
-        }).value;
+    'child.abandonable in the callback ends the parent with the cancellation',
+    () {
+      runSolo((solo, journal, async) {
+        final events = StreamController<int>();
+        final parent = solo.enqueue<TestState, void>(key: 'parent', (
+          ctx,
+        ) async {
+          await ctx.each<int>(events.stream, (child, event) async {
+            await child.abandonable(() => delay(1000));
+          }).value;
+        });
+        async.elapse(const Duration(milliseconds: 10));
+        events.add(1);
+        async.elapse(const Duration(milliseconds: 40));
+        parent.cancel().ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        expect(
+          parent.outcome,
+          isA<Cancelled>(),
+          reason: 'the wait ends with the cancellation, the delay runs on',
+        );
+        async.flushTimers();
+        events.close();
       });
-      async.elapse(const Duration(milliseconds: 10));
-      events.add(1);
-      async.elapse(const Duration(milliseconds: 40));
-      parent.cancel().ignore();
-      async.elapse(const Duration(milliseconds: 5));
-      expect(
-        parent.outcome,
-        isA<Cancelled>(),
-        reason: 'the wait ends with the cancellation, the delay runs on',
-      );
-      async.flushTimers();
-      events.close();
-    });
-  });
+    },
+  );
 
   test('a cancellation inside the callback comes back through the wait', () {
     fakeAsync((async) {

@@ -41,7 +41,7 @@ PUBSPEC = """name: accumulation_check
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: ^3.10.0
 
 dependencies:
   solo:

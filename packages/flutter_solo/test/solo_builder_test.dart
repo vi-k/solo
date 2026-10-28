@@ -85,41 +85,38 @@ final class _StuckController extends Solo<_Screen> {
       throw StateError('this one does not let go');
 }
 
-Widget _wrap(Widget child) => Directionality(
-      textDirection: TextDirection.ltr,
-      child: child,
-    );
+Widget _wrap(Widget child) =>
+    Directionality(textDirection: TextDirection.ltr, child: child);
 
 void main() {
-  testWidgets(
-    'rebuilds on state change and builder receives the new state',
-    (tester) async {
-      final controller = _Controller(const _Screen(name: 'Ada'));
-      addTearDown(controller.close);
-      final built = <String>[];
+  testWidgets('rebuilds on state change and builder receives the new state', (
+    tester,
+  ) async {
+    final controller = _Controller(const _Screen(name: 'Ada'));
+    addTearDown(controller.close);
+    final built = <String>[];
 
-      await tester.pumpWidget(
-        _wrap(
-          SoloBuilder<_Screen>(
-            solo: controller,
-            builder: (context, state, _) {
-              built.add(state.name);
+    await tester.pumpWidget(
+      _wrap(
+        SoloBuilder<_Screen>(
+          solo: controller,
+          builder: (context, state, _) {
+            built.add(state.name);
 
-              return Text(state.name);
-            },
-          ),
+            return Text(state.name);
+          },
         ),
-      );
-      expect(built, ['Ada']);
-      expect(find.text('Ada'), findsOneWidget);
+      ),
+    );
+    expect(built, ['Ada']);
+    expect(find.text('Ada'), findsOneWidget);
 
-      controller.set(const _Screen(name: 'Grace'));
-      await tester.pump();
+    controller.set(const _Screen(name: 'Grace'));
+    await tester.pump();
 
-      expect(built, ['Ada', 'Grace']);
-      expect(find.text('Grace'), findsOneWidget);
-    },
-  );
+    expect(built, ['Ada', 'Grace']);
+    expect(find.text('Grace'), findsOneWidget);
+  });
 
   testWidgets(
     'a change before subscription is visible on the very first build',
@@ -158,15 +155,15 @@ void main() {
 
       final built = <String>[];
       Widget tree(_Controller controller) => _wrap(
-            SoloBuilder<_Screen>(
-              solo: controller,
-              builder: (context, state, _) {
-                built.add(state.name);
+        SoloBuilder<_Screen>(
+          solo: controller,
+          builder: (context, state, _) {
+            built.add(state.name);
 
-                return Text(state.name);
-              },
-            ),
-          );
+            return Text(state.name);
+          },
+        ),
+      );
 
       await tester.pumpWidget(tree(first));
       expect(built, ['Ada']);
@@ -303,37 +300,34 @@ void main() {
     },
   );
 
-  testWidgets(
-    'child is handed back to builder untouched and not recreated',
-    (tester) async {
-      final controller = _Controller(const _Screen(name: 'Ada'));
-      addTearDown(controller.close);
-      const kept = Text('kept');
-      final handed = <Widget?>[];
+  testWidgets('child is handed back to builder untouched and not recreated', (
+    tester,
+  ) async {
+    final controller = _Controller(const _Screen(name: 'Ada'));
+    addTearDown(controller.close);
+    const kept = Text('kept');
+    final handed = <Widget?>[];
 
-      await tester.pumpWidget(
-        _wrap(
-          SoloBuilder<_Screen>(
-            solo: controller,
-            builder: (context, state, child) {
-              handed.add(child);
+    await tester.pumpWidget(
+      _wrap(
+        SoloBuilder<_Screen>(
+          solo: controller,
+          builder: (context, state, child) {
+            handed.add(child);
 
-              return Column(
-                children: [Text(state.name), if (child != null) child],
-              );
-            },
-            child: kept,
-          ),
+            return Column(children: [Text(state.name), ?child]);
+          },
+          child: kept,
         ),
-      );
+      ),
+    );
 
-      controller.set(const _Screen(name: 'Grace'));
-      await tester.pump();
+    controller.set(const _Screen(name: 'Grace'));
+    await tester.pump();
 
-      expect(handed, [same(kept), same(kept)]);
-      expect(find.text('kept'), findsOneWidget);
-    },
-  );
+    expect(handed, [same(kept), same(kept)]);
+    expect(find.text('kept'), findsOneWidget);
+  });
 
   testWidgets(
     'switching to a controller that is merely equal still switches the '
@@ -348,15 +342,15 @@ void main() {
 
       final built = <String>[];
       Widget tree(Solo<_Screen> controller) => _wrap(
-            SoloBuilder<_Screen>(
-              solo: controller,
-              builder: (context, state, _) {
-                built.add(state.name);
+        SoloBuilder<_Screen>(
+          solo: controller,
+          builder: (context, state, _) {
+            built.add(state.name);
 
-                return Text(state.name);
-              },
-            ),
-          );
+            return Text(state.name);
+          },
+        ),
+      );
 
       await tester.pumpWidget(tree(first));
       await tester.pumpWidget(tree(second));
@@ -373,72 +367,69 @@ void main() {
     },
   );
 
-  testWidgets(
-    'takes a plain Solo, which no ValueListenableBuilder would',
-    (tester) async {
-      final controller = _PlainController(const _Screen(name: 'Ada'));
-      addTearDown(controller.close);
+  testWidgets('takes a plain Solo, which no ValueListenableBuilder would', (
+    tester,
+  ) async {
+    final controller = _PlainController(const _Screen(name: 'Ada'));
+    addTearDown(controller.close);
 
-      await tester.pumpWidget(
-        _wrap(
-          SoloBuilder<_Screen>(
-            solo: controller,
-            builder: (context, state, _) => Text(state.name),
-          ),
+    await tester.pumpWidget(
+      _wrap(
+        SoloBuilder<_Screen>(
+          solo: controller,
+          builder: (context, state, _) => Text(state.name),
         ),
-      );
-      expect(find.text('Ada'), findsOneWidget);
+      ),
+    );
+    expect(find.text('Ada'), findsOneWidget);
 
-      controller.set(const _Screen(name: 'Grace'));
-      await tester.pump();
-      expect(find.text('Grace'), findsOneWidget);
-    },
-  );
+    controller.set(const _Screen(name: 'Grace'));
+    await tester.pump();
+    expect(find.text('Grace'), findsOneWidget);
+  });
 
   // The framework drops a `State` that threw in `initState` or in
   // `didUpdateWidget` without disposing of it, so a listener left on the
   // controller would stay for as long as the controller does.
-  testWidgets(
-    'a controller that throws on mounting keeps no listener',
-    (tester) async {
-      final controller = _FailingController();
-      addTearDown(controller.close);
+  testWidgets('a controller that throws on mounting keeps no listener', (
+    tester,
+  ) async {
+    final controller = _FailingController();
+    addTearDown(controller.close);
 
-      await tester.pumpWidget(
-        _wrap(
-          SoloBuilder<_Screen>(
-            solo: controller,
-            builder: (context, state, _) => Text(state.name),
-          ),
+    await tester.pumpWidget(
+      _wrap(
+        SoloBuilder<_Screen>(
+          solo: controller,
+          builder: (context, state, _) => Text(state.name),
         ),
-      );
-      expect(tester.takeException(), isStateError);
-      await tester.pumpWidget(_wrap(const SizedBox()));
-      expect(controller.live, 0);
-    },
-  );
+      ),
+    );
+    expect(tester.takeException(), isStateError);
+    await tester.pumpWidget(_wrap(const SizedBox()));
+    expect(controller.live, 0);
+  });
 
-  testWidgets(
-    'a controller that throws when handed in keeps no listener',
-    (tester) async {
-      final first = _Controller();
-      final next = _FailingController();
-      addTearDown(first.close);
-      addTearDown(next.close);
-      Widget tree(Solo<_Screen> controller) => _wrap(
-            SoloBuilder<_Screen>(
-              solo: controller,
-              builder: (context, state, _) => Text(state.name),
-            ),
-          );
+  testWidgets('a controller that throws when handed in keeps no listener', (
+    tester,
+  ) async {
+    final first = _Controller();
+    final next = _FailingController();
+    addTearDown(first.close);
+    addTearDown(next.close);
+    Widget tree(Solo<_Screen> controller) => _wrap(
+      SoloBuilder<_Screen>(
+        solo: controller,
+        builder: (context, state, _) => Text(state.name),
+      ),
+    );
 
-      await tester.pumpWidget(tree(first));
-      await tester.pumpWidget(tree(next));
-      expect(tester.takeException(), isStateError);
-      await tester.pumpWidget(_wrap(const SizedBox()));
-      expect(next.live, 0);
-    },
-  );
+    await tester.pumpWidget(tree(first));
+    await tester.pumpWidget(tree(next));
+    expect(tester.takeException(), isStateError);
+    await tester.pumpWidget(_wrap(const SizedBox()));
+    expect(next.live, 0);
+  });
 
   // The framework disposes of the `State` all the same, and a listener
   // the controller kept would rebuild an element that is gone.

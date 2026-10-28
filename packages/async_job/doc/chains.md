@@ -8,9 +8,11 @@ and a context of its own:
 ```dart
 final loaded = Job<String>((ctx) => ctx.join(loadText));
 final parsed = loaded.then<int>((ctx, text) => int.parse(text));
-final saved = parsed.then<void>((ctx, number) => ctx.join(
-      () => saveNumber(number),
-    ));
+final saved = parsed.then<void>(
+  (ctx, number) => ctx.join(
+    () => saveNumber(number),
+  ),
+);
 
 await saved.value;
 ```
@@ -388,8 +390,9 @@ continuation off another, and no link of it is a child.
 
 ```dart
 final parent = Job<void>((ctx) async {
-  final rows =
-      await ctx.run(Job.deferred<int>((ctx) => ctx.abandonable(load)));
+  final rows = await ctx.run(
+    Job.deferred<int>((ctx) => ctx.abandonable(load)),
+  );
   await ctx.run(Job.deferred<void>((ctx) => ctx.join(() => report(rows))));
 });
 ```

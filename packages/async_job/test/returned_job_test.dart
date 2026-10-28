@@ -28,27 +28,23 @@ final class _Errors extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add(error);
+  }) => heard.add(error);
 }
 
 Matcher _neverStarted([String job = 'Job()']) => isA<ArgumentError>().having(
-      (error) => error.message,
-      'message',
-      allOf(
-        startsWith('$job returned Job('),
-        endsWith(
-          ', a deferred job that never started; '
-          'run it with ctx.run or start it',
-        ),
-      ),
-    );
+  (error) => error.message,
+  'message',
+  allOf(
+    startsWith('$job returned Job('),
+    endsWith(
+      ', a deferred job that never started; '
+      'run it with ctx.run or start it',
+    ),
+  ),
+);
 
-Matcher _failedNeverStarted([String job = 'Job()']) => isA<Failed>().having(
-      (failed) => failed.error,
-      'error',
-      _neverStarted(job),
-    );
+Matcher _failedNeverStarted([String job = 'Job()']) =>
+    isA<Failed>().having((failed) => failed.error, 'error', _neverStarted(job));
 
 void main() {
   group('a job of void that ends with a job never started fails', () {
@@ -75,8 +71,9 @@ void main() {
       fakeAsync((async) {
         var ran = false;
         final saving = Job.deferred<void>((ctx) async => ran = true);
-        final stored =
-            Job<int>((ctx) async => 21).then<void>((ctx, number) => saving);
+        final stored = Job<int>(
+          (ctx) async => 21,
+        ).then<void>((ctx, number) => saving);
         Outcome<void>? outcome;
         stored.done.then((done) => outcome = done).ignore();
 
@@ -173,8 +170,7 @@ void main() {
                   : (child, event) => saving,
             );
             await child.value;
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
 
           async.flushTimers();
 
@@ -209,8 +205,10 @@ void main() {
           return saving;
         }
 
-        Job<void>((ctx) async => cleanedUp(ctx), observer: _Errors(heard))
-            .ignoreFailure();
+        Job<void>(
+          (ctx) async => cleanedUp(ctx),
+          observer: _Errors(heard),
+        ).ignoreFailure();
 
         async.flushTimers();
 

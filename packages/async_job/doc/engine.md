@@ -286,8 +286,7 @@ final job = MyJob<void>(observer: printer, (ctx) async {
   print('downloaded $rows rows');
   await ctx.join(() => save(rows));
   print('saved');
-})
-  .._launch();
+}).._launch();
 ```
 
 Cancelled while the download runs, the job closes the connection and ends
@@ -408,11 +407,11 @@ each job it runs, with a `Cancelled` built for each:
 
 ```dart
 account.onSignOut = () => job._stop(
-      Cancelled.by(
-        reason: const SignedOutReason(),
-        stackTrace: StackTrace.current,
-      ),
-    );
+  Cancelled.by(
+    reason: const SignedOutReason(),
+    stackTrace: StackTrace.current,
+  ),
+);
 ```
 
 ```text

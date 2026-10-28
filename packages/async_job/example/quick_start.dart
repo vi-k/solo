@@ -30,9 +30,9 @@ class Database {
 
   /// Reads the rows, in a tenth of a second.
   Future<List<String>> readAll() => Future<List<String>>.delayed(
-        const Duration(milliseconds: 100),
-        () => const ['row'],
-      );
+    const Duration(milliseconds: 100),
+    () => const ['row'],
+  );
 
   /// Closes the database.
   Future<void> close() async => print('database closed');

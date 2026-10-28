@@ -19,15 +19,12 @@ final class AbandoningPlayer extends Solo<AppState>
 
   AbandoningPlayer() : super(const Ready());
 
-  Job<void> seek(Duration position) => enqueue<Ready, void>(
-        key: 'seek',
-        policy: Policy.restart,
-        (ctx) async {
-          // Ends the moment the next seek cancels this one.
-          await ctx.abandonable(() => _player.seek(position));
-          ctx.emit(ctx.state.copyWith(position: position));
-        },
-      );
+  Job<void> seek(Duration position) =>
+      enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+        // Ends the moment the next seek cancels this one.
+        await ctx.abandonable(() => _player.seek(position));
+        ctx.emit(ctx.state.copyWith(position: position));
+      });
 }
 
 /// The second attempt of the same section: the waiting method that waits
@@ -37,15 +34,12 @@ final class JoiningPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   JoiningPlayer() : super(const Ready());
 
-  Job<void> seek(Duration position) => enqueue<Ready, void>(
-        key: 'seek',
-        policy: Policy.restart,
-        (ctx) async {
-          // Waited out, so the device never runs two seeks at once.
-          await ctx.join(() => _player.seek(position));
-          ctx.emit(ctx.state.copyWith(position: position));
-        },
-      );
+  Job<void> seek(Duration position) =>
+      enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+        // Waited out, so the device never runs two seeks at once.
+        await ctx.join(() => _player.seek(position));
+        ctx.emit(ctx.state.copyWith(position: position));
+      });
 }
 
 /// The first attempt of "Protecting a step or a whole job": each call waited
@@ -54,12 +48,12 @@ final class JoiningTill extends Solo<AppState> with OpenSolo<AppState>, Desk {
   JoiningTill() : super(const Ready());
 
   Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-        // Each call waited out, whatever happens.
-        // ignore: unnecessary_lambdas
-        final receipt = await ctx.join(() => payment.commit());
-        ctx.emit(ctx.state.copyWith(receipt: receipt));
-        await ctx.join(() => journal.write(entry));
-      });
+    // Each call waited out, whatever happens.
+    // ignore: unnecessary_lambdas
+    final receipt = await ctx.join(() => payment.commit());
+    ctx.emit(ctx.state.copyWith(receipt: receipt));
+    await ctx.join(() => journal.write(entry));
+  });
 }
 
 /// The second attempt of the same section: one join around the whole step.
@@ -67,13 +61,13 @@ final class OneJoinTill extends Solo<AppState> with OpenSolo<AppState>, Desk {
   OneJoinTill() : super(const Ready());
 
   Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-        // The whole step waited out as one call.
-        await ctx.join(() async {
-          final receipt = await payment.commit();
-          ctx.emit(ctx.state.copyWith(receipt: receipt));
-          await journal.write(entry);
-        });
-      });
+    // The whole step waited out as one call.
+    await ctx.join(() async {
+      final receipt = await payment.commit();
+      ctx.emit(ctx.state.copyWith(receipt: receipt));
+      await journal.write(entry);
+    });
+  });
 }
 
 /// The first attempt of "Ordinary await and context lifetime": each wait is
@@ -83,15 +77,15 @@ final class InvertedUploader extends Solo<AppState>
   InvertedUploader() : super(const Ready());
 
   Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
-        ctx.onDispose(() async {
-          // The flush must finish before the queue moves on.
-          // ignore: unnecessary_lambdas
-          await ctx.join(() => device.flush());
-        });
-        for (final chunk in chunks) {
-          await device.write(chunk);
-        }
-      });
+    ctx.onDispose(() async {
+      // The flush must finish before the queue moves on.
+      // ignore: unnecessary_lambdas
+      await ctx.join(() => device.flush());
+    });
+    for (final chunk in chunks) {
+      await device.write(chunk);
+    }
+  });
 }
 
 /// The first attempt of "Cancelling and closing a controller": the screen
@@ -115,9 +109,9 @@ final class SelfClosingSession extends Solo<AppState>
   SelfClosingSession() : super(const Ready());
 
   Job<void> logout() => enqueue<Ready, void>((ctx) async {
-        await ctx.join(api.logout);
-        await close();
-      });
+    await ctx.join(api.logout);
+    await close();
+  });
 }
 
 /// The second attempt of the same subsection: the job first, the closing

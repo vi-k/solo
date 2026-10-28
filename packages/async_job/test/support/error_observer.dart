@@ -21,8 +21,7 @@ final class ErrorObserver extends JobObserver with JobAnswerer {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      errors.add(error);
+  }) => errors.add(error);
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {

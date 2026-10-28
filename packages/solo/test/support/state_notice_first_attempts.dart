@@ -36,9 +36,9 @@ final class Camera extends Solo<CameraState> {
   Camera(this.device) : super(const Ready());
 
   Job<void> shoot() => enqueue<Ready, void>((ctx) async {
-        final photo = await ctx.join(device.shoot);
-        ctx.emit(Saved(photo));
-      });
+    final photo = await ctx.join(device.shoot);
+    ctx.emit(Saved(photo));
+  });
 
   Job<void> accept() =>
       enqueue<Saved, void>((ctx) async => ctx.emit(const Ready()));
@@ -46,20 +46,20 @@ final class Camera extends Solo<CameraState> {
   /// Not on the page: the variant the prose names, which writes the notice
   /// and takes it back at once.
   Job<void> shootAndPass() => enqueue<Ready, void>((ctx) async {
-        final photo = await ctx.join(device.shoot);
-        ctx
-          ..emit(Saved(photo))
-          ..emit(const Ready());
-      });
+    final photo = await ctx.join(device.shoot);
+    ctx
+      ..emit(Saved(photo))
+      ..emit(const Ready());
+  });
 
   /// Not on the page: the recording of "The rules", less its `canStart`
   /// and `keepWhile`: it runs for as long as the frames come.
   Job<void> record() => enqueue<Ready, void>(
-        key: 'record',
-        (ctx) => ctx.each(device.frames, (child, frame) async {
-          await child.join(() => store(frame));
-        }).value,
-      );
+    key: 'record',
+    (ctx) => ctx.each(device.frames, (child, frame) async {
+      await child.join(() => store(frame));
+    }).value,
+  );
 
   /// Not on the page: the zoom, set at once.
   Job<void> zoomTo(int zoom) =>

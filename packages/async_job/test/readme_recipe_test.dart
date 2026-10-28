@@ -88,11 +88,11 @@ final class Database {
   }
 
   ChildJob<void> readyFlag() => Job.deferred(
-        (ctx) => ctx.join(() async {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-          events.add('ready flag written');
-        }),
-      );
+    (ctx) => ctx.join(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      events.add('ready flag written');
+    }),
+  );
 
   Future<void> close() async => events.add('closed');
 }
@@ -123,8 +123,7 @@ final class Listening with JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('onError: $error');
+  }) => heard.add('onError: $error');
 }
 
 /// Hears it as well, and answers for what has nowhere else to go.
@@ -258,8 +257,10 @@ String quotedAfter(String page, String code) {
 /// The outputs [page] quotes: the Quick start's, then the example's.
 List<String> quotedOutputs(String page) {
   final outputs = [
-    for (final match
-        in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(read(page)))
+    for (final match in RegExp(
+      r'```text\n(.*?)\n```',
+      dotAll: true,
+    ).allMatches(read(page)))
       match.group(1)!,
   ];
   expect(outputs, hasLength(2), reason: page);
@@ -292,7 +293,8 @@ List<String> contextMembers() {
     if (code == '@useResult') {
       continue;
     }
-    final name = RegExp(r'get (\w+);').firstMatch(code)?.group(1) ??
+    final name =
+        RegExp(r'get (\w+);').firstMatch(code)?.group(1) ??
         RegExp(r' (\w+)(?:<[^(]*>)?\(')
             .allMatches(code)
             .map((match) => match.group(1)!)
@@ -320,16 +322,15 @@ List<String> contextMembers() {
 /// A member with two rows throws: in a map the second would hide the first.
 Map<String, List<String>> contextTable(String page) {
   final rows = <String, List<String>>{};
-  for (final match
-      in RegExp(r'^\| `ctx\.(\w+)[^`]*` \|(.*)\|$', multiLine: true)
-          .allMatches(read(page))) {
+  for (final match in RegExp(
+    r'^\| `ctx\.(\w+)[^`]*` \|(.*)\|$',
+    multiLine: true,
+  ).allMatches(read(page))) {
     final member = match.group(1)!;
     if (rows.containsKey(member)) {
       throw StateError('two rows for $member on $page');
     }
-    rows[member] = [
-      for (final cell in match.group(2)!.split('|')) cell.trim(),
-    ];
+    rows[member] = [for (final cell in match.group(2)!.split('|')) cell.trim()];
   }
   return rows;
 }
@@ -484,7 +485,8 @@ void main() {
     expect(
       closedAt,
       const Duration(milliseconds: 120),
-      reason: 'the body was entered and the database opened; `join` waited '
+      reason:
+          'the body was entered and the database opened; `join` waited '
           'for the read it had already asked for, and the registration '
           'closed the database on the way out',
     );
@@ -561,40 +563,33 @@ void main() {
 
         final answering = observer is Answering;
         final kind = answering ? 'answering' : 'listening';
-        expect(
-          observer.heard,
-          [
-            'onError: Bad state: read failed',
-            if (answering) 'onUnanswered: Bad state: read failed',
-          ],
-          reason: kind,
-        );
-        expect(
-          zone,
-          [if (!answering) 'Bad state: read failed'],
-          reason: kind,
-        );
-      }
-    });
-
-    test('accessing done or value, or calling ignoreFailure(), observes it',
-        () {
-      final ways = <String, void Function(Job<void> job)>{
-        'done': (job) => job.done.ignore(),
-        'value': (job) => job.value.ignore(),
-        'ignoreFailure()': (job) => job.ignoreFailure(),
-      };
-      for (final MapEntry(key: way, value: observe) in ways.entries) {
-        final zone = zoneErrorsOf((async) {
-          observe(Job<void>((ctx) async => throw StateError('read failed')));
-        });
-
-        expect(zone, isEmpty, reason: way);
+        expect(observer.heard, [
+          'onError: Bad state: read failed',
+          if (answering) 'onUnanswered: Bad state: read failed',
+        ], reason: kind);
+        expect(zone, [if (!answering) 'Bad state: read failed'], reason: kind);
       }
     });
 
     test(
-        'a cleanup error goes to the zone, outcome observed or not, unless '
+      'accessing done or value, or calling ignoreFailure(), observes it',
+      () {
+        final ways = <String, void Function(Job<void> job)>{
+          'done': (job) => job.done.ignore(),
+          'value': (job) => job.value.ignore(),
+          'ignoreFailure()': (job) => job.ignoreFailure(),
+        };
+        for (final MapEntry(key: way, value: observe) in ways.entries) {
+          final zone = zoneErrorsOf((async) {
+            observe(Job<void>((ctx) async => throw StateError('read failed')));
+          });
+
+          expect(zone, isEmpty, reason: way);
+        }
+      },
+    );
+
+    test('a cleanup error goes to the zone, outcome observed or not, unless '
         'the observer answers for it', () {
       for (final observer in [null, Listening(), Answering()]) {
         final zone = zoneErrorsOf((async) {
@@ -620,52 +615,53 @@ void main() {
     });
 
     test(
-        'an open that fails after the cancellation is answered for: the '
-        'observer hears it, and then the zone, unless the observer answers',
-        () {
-      final heard = {
-        null: (zone: ['Bad state: database locked'], heard: null),
-        Listening(): (
-          zone: ['Bad state: database locked'],
-          heard: ['onError: Bad state: database locked'],
-        ),
-        Answering(): (
-          zone: <String>[],
-          heard: [
-            'onError: Bad state: database locked',
-            'onUnanswered: Bad state: database locked',
-          ],
-        ),
-      };
-      for (final MapEntry(key: observer, value: expected) in heard.entries) {
-        Database.openError = StateError('database locked');
-        Outcome<Database>? ended;
-        Object? thrown;
-        final zone = zoneErrorsOf((async) {
-          final job = Job<Database>(observer: observer, (ctx) async {
-            try {
-              return await ctx.join(
-                Database.open,
-                discard: (db) => db.close(),
-              );
-            } catch (error) {
-              thrown = error;
-              rethrow;
-            }
+      'an open that fails after the cancellation is answered for: the '
+      'observer hears it, and then the zone, unless the observer answers',
+      () {
+        final heard = {
+          null: (zone: ['Bad state: database locked'], heard: null),
+          Listening(): (
+            zone: ['Bad state: database locked'],
+            heard: ['onError: Bad state: database locked'],
+          ),
+          Answering(): (
+            zone: <String>[],
+            heard: [
+              'onError: Bad state: database locked',
+              'onUnanswered: Bad state: database locked',
+            ],
+          ),
+        };
+        for (final MapEntry(key: observer, value: expected) in heard.entries) {
+          Database.openError = StateError('database locked');
+          Outcome<Database>? ended;
+          Object? thrown;
+          final zone = zoneErrorsOf((async) {
+            final job = Job<Database>(observer: observer, (ctx) async {
+              try {
+                return await ctx.join(
+                  Database.open,
+                  discard: (db) => db.close(),
+                );
+              } catch (error) {
+                thrown = error;
+                rethrow;
+              }
+            });
+            async.elapse(const Duration(milliseconds: 10));
+            job.cancel().ignore();
+            async.flushTimers();
+            ended = job.outcome;
           });
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
-          ended = job.outcome;
-        });
 
-        // `join` throws the open's own error, not `Cancelled`.
-        expect('$thrown', 'Bad state: database locked');
-        expect('$ended', 'Cancelled(manual)');
-        expect(zone, expected.zone);
-        expect(observer?.heard, expected.heard);
-      }
-    });
+          // `join` throws the open's own error, not `Cancelled`.
+          expect('$thrown', 'Bad state: database locked');
+          expect('$ended', 'Cancelled(manual)');
+          expect(zone, expected.zone);
+          expect(observer?.heard, expected.heard);
+        }
+      },
+    );
   });
 
   group('the checkpoints', () {
@@ -709,8 +705,7 @@ void main() {
       }
     });
 
-    test(
-        'inside an action passed to the context, and in cleanup, a direct '
+    test('inside an action passed to the context, and in cleanup, a direct '
         'await waits each step out', () {
       fakeAsync((async) {
         Future<void> step(String name) async {
@@ -743,8 +738,7 @@ void main() {
       });
     });
 
-    test(
-        'one join keeps a step of plain code whole, and not a step that '
+    test('one join keeps a step of plain code whole, and not a step that '
         'takes the token', () {
       for (final takesToken in [false, true]) {
         fakeAsync((async) {
@@ -778,23 +772,23 @@ void main() {
   });
 
   group('what Dart already has', () {
-    test('Future.timeout stops the waiting, and a late database stays open',
-        () {
-      fakeAsync((async) {
-        Object? error;
-        Database.open().timeout(const Duration(milliseconds: 10)).then<void>(
-              (_) {},
-              onError: (Object e) => error = e,
-            );
-        async.flushTimers();
-
-        expect(error, isA<TimeoutException>());
-        expect(Database.events, ['opened']);
-      });
-    });
-
     test(
-        'CancelableOperation runs its onCancel, and a late database stays '
+      'Future.timeout stops the waiting, and a late database stays open',
+      () {
+        fakeAsync((async) {
+          Object? error;
+          Database.open()
+              .timeout(const Duration(milliseconds: 10))
+              .then<void>((_) {}, onError: (Object e) => error = e);
+          async.flushTimers();
+
+          expect(error, isA<TimeoutException>());
+          expect(Database.events, ['opened']);
+        });
+      },
+    );
+
+    test('CancelableOperation runs its onCancel, and a late database stays '
         'open', () {
       fakeAsync((async) {
         final operation = CancelableOperation.fromFuture(
@@ -824,8 +818,7 @@ void main() {
       });
     });
 
-    test(
-        'the same onCancel covers one wait: once the database is handed '
+    test('the same onCancel covers one wait: once the database is handed '
         'over, cancel() does nothing and the read runs on', () {
       fakeAsync((async) {
         final operation = lateOpenCaught();
@@ -853,15 +846,13 @@ void main() {
       });
     });
 
-    test(
-        'the registration of ctx.join covers the rest of the job: an '
+    test('the registration of ctx.join covers the rest of the job: an '
         'error after it closes the database too', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) async {
           await ctx.join(Database.open, dispose: (db) => db.close());
           throw StateError('the read failed');
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.flushTimers();
 
         expect(Database.events, ['opened', 'closed']);
@@ -869,8 +860,7 @@ void main() {
       });
     });
 
-    test(
-        'ctx.join hands a database that opens after the cancellation to '
+    test('ctx.join hands a database that opens after the cancellation to '
         'its dispose, and the job ends once the database is closed', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) async {
@@ -885,8 +875,7 @@ void main() {
       });
     });
 
-    test(
-        'ctx.abandonable stops the waiting as they do, and still hands that '
+    test('ctx.abandonable stops the waiting as they do, and still hands that '
         'database to its dispose after the job has ended', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) async {
@@ -901,8 +890,7 @@ void main() {
       });
     });
 
-    test(
-        'Job(body, timeout: limit) cancels a job still running once the '
+    test('Job(body, timeout: limit) cancels a job still running once the '
         'limit has run out, and leaves no timer behind', () {
       for (final page in readmes) {
         expect(read(page), contains('`Job(body, timeout: limit)`'));
@@ -920,8 +908,10 @@ void main() {
         expect(Database.events, ['opened', 'read', 'closed']);
       });
       fakeAsync((async) {
-        final quick =
-            Job<int>(timeout: const Duration(hours: 1), (ctx) async => 1);
+        final quick = Job<int>(
+          timeout: const Duration(hours: 1),
+          (ctx) async => 1,
+        );
         async.flushMicrotasks();
 
         expect(quick.outcome.toString(), 'Done(1)');
@@ -936,23 +926,22 @@ void main() {
 
       expect(Database.events, ['opened', 'closed']);
       for (final page in readmes) {
-        expect(
-          printed,
-          [quotedAfter(page, 'final outcome = await job.done;')],
-          reason: page,
-        );
+        expect(printed, [
+          quotedAfter(page, 'final outcome = await job.done;'),
+        ], reason: page);
       }
     });
 
-    test(
-        'a cancellation the section held lands as the section closes, and '
+    test('a cancellation the section held lands as the section closes, and '
         'the body goes on to return', () {
       fakeAsync((async) {
         final job = Job<Database>((ctx) async {
           // Not the fuller example's own lines, so that the check of the
           // README finds those in `fullerExample` alone.
-          final database =
-              await ctx.join(Database.open, discard: (db) => db.close());
+          final database = await ctx.join(
+            Database.open,
+            discard: (db) => db.close(),
+          );
           ctx.onCancel(() => Database.events.add('onCancel'));
           await ctx.uncancellable(() async {
             await database.writeVersion();
@@ -978,21 +967,23 @@ void main() {
       });
     });
 
-    test(
-        'a client that stops by throwing sends the stop to the zone on every '
+    test('a client that stops by throwing sends the stop to the zone on every '
         'cancellation, unless the app names it', () {
       Database.stopThrows = true;
       for (final named in [false, true]) {
-        Job.isCancellationError =
-            named ? (error) => error is DatabaseStopped : null;
+        Job.isCancellationError = named
+            ? (error) => error is DatabaseStopped
+            : null;
         final heard = Listening();
         Outcome<Database>? ended;
         final zone = zoneErrorsOf((async) {
           // Not the fuller example's own lines, as above; the steps after the
           // migration are left out, since the cancellation comes during it.
           final job = Job<Database>(observer: heard, (ctx) async {
-            final database =
-                await ctx.join(Database.open, discard: (db) => db.close());
+            final database = await ctx.join(
+              Database.open,
+              discard: (db) => db.close(),
+            );
             final token = CancelToken();
             ctx.onCancel(token.cancel);
             await ctx.join(() => database.migrate(token));
@@ -1006,42 +997,43 @@ void main() {
         });
 
         expect('$ended', 'Cancelled(manual)');
-        expect(
-          Database.events,
-          ['opened', 'migration stopped', 'closed'],
-          reason: 'named: $named',
-        );
-        expect(
-          heard.heard,
-          ['onError: DatabaseStopped'],
-          reason: 'named: $named',
-        );
+        expect(Database.events, [
+          'opened',
+          'migration stopped',
+          'closed',
+        ], reason: 'named: $named');
+        expect(heard.heard, [
+          'onError: DatabaseStopped',
+        ], reason: 'named: $named');
         expect(zone, named ? isEmpty : ['DatabaseStopped']);
         Database.events.clear();
       }
     });
 
     test(
-        'the fuller example names that filter and the page that takes it apart',
-        () {
-      for (final page in readmes) {
-        final item = RegExp(
-          r'- \*\*`ctx\.join\(\(\) => database\.migrate\(stop\)\)`\*\*(.*?)\n- ',
-          dotAll: true,
-        ).firstMatch(read(page))!.group(1)!;
-        expect(item, contains('`Job.isCancellationError`'), reason: page);
-        // The anchor is the page's own; `tool/check_links.py` holds it.
-        expect(item, contains('errors.md#'), reason: page);
-      }
-    });
+      'the fuller example names that filter and the page that takes it apart',
+      () {
+        for (final page in readmes) {
+          final item = RegExp(
+            r'- \*\*`ctx\.join\(\(\) => database\.migrate\(stop\)\)`\*\*(.*?)\n- ',
+            dotAll: true,
+          ).firstMatch(read(page))!.group(1)!;
+          expect(item, contains('`Job.isCancellationError`'), reason: page);
+          // The anchor is the page's own; `tool/check_links.py` holds it.
+          expect(item, contains('errors.md#'), reason: page);
+        }
+      },
+    );
 
     test('without the section a cancellation comes between the two', () {
       fakeAsync((async) {
         Object? thrown;
         ChildJob<void>? flag;
         final job = Job<void>((ctx) async {
-          final database =
-              await ctx.join(Database.open, dispose: (db) => db.close());
+          final database = await ctx.join(
+            Database.open,
+            dispose: (db) => db.close(),
+          );
           await ctx.join(() async {
             await database.writeVersion();
             flag = database.readyFlag();
@@ -1076,16 +1068,10 @@ void main() {
 
     // The README counts the runs in a word, and each run opens with a
     // heading of its own.
-    const numbers = {
-      'two': 2,
-      'three': 3,
-      'four': 4,
-      'five': 5,
-      'six': 6,
-    };
-    final said = RegExp(r'runs the job\s+(\w+)\s+times')
-        .firstMatch(read('README.md'))!
-        .group(1);
+    const numbers = {'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6};
+    final said = RegExp(
+      r'runs the job\s+(\w+)\s+times',
+    ).firstMatch(read('README.md'))!.group(1);
     expect(printed.where((line) => line.endsWith(':')).length, numbers[said]);
   });
 
@@ -1129,8 +1115,9 @@ void main() {
       };
       expect(calls.keys.toList()..sort(), contextMembers()..sort());
       for (final page in readmes) {
-        for (final MapEntry(key: member, value: cells)
-            in contextTable(page).entries) {
+        for (final MapEntry(key: member, value: cells) in contextTable(
+          page,
+        ).entries) {
           expect(
             onCancelledJob(calls[member]!),
             said[cells[1]],
@@ -1320,19 +1307,17 @@ void main() {
           await ctx.pause(const Duration(milliseconds: 100));
           return null;
         }),
-        [
-          'cancel at 10',
-          'threw Cancelled(manual) at 10',
-          'work ended at 100',
-        ],
+        ['cancel at 10', 'threw Cancelled(manual) at 10', 'work ended at 100'],
       );
     });
 
     test('the notes say what the cells of check and each leave out', () {
       // The cells name the member; the line under the table says the rest.
-      const check = '`ctx.check()` is the checkpoint for a place where there '
+      const check =
+          '`ctx.check()` is the checkpoint for a place where there '
           'is no call to wrap.';
-      const each = '`ctx.each` hands the events of the stream to its callback '
+      const each =
+          '`ctx.each` hands the events of the stream to its callback '
           'one at a time.';
       final said = {
         'README.md': [check, each],
@@ -1352,7 +1337,8 @@ void main() {
     test('the errors of unattended work go to onError, then to the answer', () {
       // Said under the table, in a line of its own on each page.
       final said = {
-        'README.md': 'The errors of the work of `ctx.unattended` go to '
+        'README.md':
+            'The errors of the work of `ctx.unattended` go to '
             '`onError`, then are answered for.',
         'README.ru.md':
             'Ошибки работы `ctx.unattended` идут в `onError`, затем к ответу.',
@@ -1441,8 +1427,9 @@ void main() {
       for (final page in readmes) {
         expect(
           [
-            for (final MapEntry(key: member, value: cells)
-                in contextTable(page).entries)
+            for (final MapEntry(key: member, value: cells) in contextTable(
+              page,
+            ).entries)
               if (cells[2].isEmpty) member,
           ],
           [
@@ -1464,14 +1451,15 @@ void main() {
 
   group('what the README says of the package', () {
     test('it depends on the one package the README names', () {
-      final named = RegExp(r'depends only on `(\w+)`')
-          .firstMatch(read('README.md'))!
-          .group(1);
+      final named = RegExp(
+        r'depends only on `(\w+)`',
+      ).firstMatch(read('README.md'))!.group(1);
       final pubspec = File('pubspec.yaml').readAsLinesSync();
       final dependencies = [
-        for (final line in pubspec
-            .skip(pubspec.indexOf('dependencies:') + 1)
-            .takeWhile((line) => line.isEmpty || line.startsWith(' ')))
+        for (final line
+            in pubspec
+                .skip(pubspec.indexOf('dependencies:') + 1)
+                .takeWhile((line) => line.isEmpty || line.startsWith(' ')))
           if (RegExp(r'^  (\w+):').firstMatch(line) case final match?)
             match.group(1),
       ];
@@ -1479,12 +1467,12 @@ void main() {
       expect(dependencies, [named]);
     });
 
-    test(
-        'the core imports dart:async, dart:collection and meta alone, so it '
+    test('the core imports dart:async, dart:collection and meta alone, so it '
         'is pure Dart and runs wherever Dart does', () {
       final imported = {
-        for (final file
-            in Directory('lib').listSync(recursive: true).whereType<File>())
+        for (final file in Directory(
+          'lib',
+        ).listSync(recursive: true).whereType<File>())
           for (final match in RegExp(
             "^(?:import|export) '([^']+)'",
             multiLine: true,
@@ -1496,15 +1484,17 @@ void main() {
     });
 
     test('the one block the checks do not run installs this package', () {
-      final name = RegExp(r'^name: (\w+)$', multiLine: true)
-          .firstMatch(read('pubspec.yaml'))!
-          .group(1);
+      final name = RegExp(
+        r'^name: (\w+)$',
+        multiLine: true,
+      ).firstMatch(read('pubspec.yaml'))!.group(1);
       for (final page in readmes) {
         expect(strayFences(page), ['```sh'], reason: page);
         expect(
-          RegExp(r'```sh\n(.*?)\n```', dotAll: true)
-              .firstMatch(read(page))!
-              .group(1),
+          RegExp(
+            r'```sh\n(.*?)\n```',
+            dotAll: true,
+          ).firstMatch(read(page))!.group(1),
           'dart pub add $name',
           reason: page,
         );
@@ -1529,53 +1519,54 @@ void main() {
     // two pieces, would pass it. Between the marks, each copy is its block
     // of the README and nothing else; an import stays at the top.
     List<String> code(Iterable<String> lines) => [
-          for (final line in lines)
-            if (line.trim().isNotEmpty &&
-                !line.trim().startsWith('// ignore:') &&
-                !line.startsWith('import '))
-              line.trim(),
-        ];
+      for (final line in lines)
+        if (line.trim().isNotEmpty &&
+            !line.trim().startsWith('// ignore:') &&
+            !line.startsWith('import '))
+          line.trim(),
+    ];
     List<List<String>> blocks(String pattern, String file) => [
-          for (final match in RegExp(pattern, dotAll: true)
-              .allMatches(File(file).readAsStringSync()))
-            code(match.group(1)!.split('\n')),
-        ];
+      for (final match in RegExp(
+        pattern,
+        dotAll: true,
+      ).allMatches(File(file).readAsStringSync()))
+        code(match.group(1)!.split('\n')),
+    ];
 
     // The Quick start is the first block, and its copy is the program of
     // `example/quick_start.dart`.
     const marks = r'// README: begin\n(.*?)\n\s*// README: end';
-    expect(
-      [
-        ...blocks(marks, 'example/quick_start.dart'),
-        ...blocks(marks, 'test/readme_recipe_test.dart'),
-      ],
-      blocks(r'```dart\n(.*?)\n```', 'README.md'),
-    );
+    expect([
+      ...blocks(marks, 'example/quick_start.dart'),
+      ...blocks(marks, 'test/readme_recipe_test.dart'),
+    ], blocks(r'```dart\n(.*?)\n```', 'README.md'));
   });
 
-  test('the example runs the job of the fuller example as the README writes it',
-      () {
-    // Comments aside: the example explains the body in its own comments,
-    // and the README in the list under the block.
-    List<String> code(Iterable<String> lines) => [
-          for (final line in lines)
-            if (line.trim().isNotEmpty && !line.trim().startsWith('//'))
-              line.trim(),
-        ];
+  test(
+    'the example runs the job of the fuller example as the README writes it',
+    () {
+      // Comments aside: the example explains the body in its own comments,
+      // and the README in the list under the block.
+      List<String> code(Iterable<String> lines) => [
+        for (final line in lines)
+          if (line.trim().isNotEmpty && !line.trim().startsWith('//'))
+            line.trim(),
+      ];
 
-    final block = RegExp(r'```dart\n(.*?)\n```', dotAll: true)
-        .allMatches(File('README.md').readAsStringSync())
-        .map((match) => match.group(1)!)
-        .singleWhere((block) => block.contains('Job<Database>'));
-    final lines = block.split('\n');
-    final start = lines.indexWhere((line) => line.contains('Job<Database>('));
-    final body = code(lines.sublist(start, lines.indexOf('});', start) + 1));
+      final block = RegExp(r'```dart\n(.*?)\n```', dotAll: true)
+          .allMatches(File('README.md').readAsStringSync())
+          .map((match) => match.group(1)!)
+          .singleWhere((block) => block.contains('Job<Database>'));
+      final lines = block.split('\n');
+      final start = lines.indexWhere((line) => line.contains('Job<Database>('));
+      final body = code(lines.sublist(start, lines.indexOf('});', start) + 1));
 
-    final source = code(File('example/example.dart').readAsLinesSync());
-    final at = source.indexWhere(
-      (line) => line.endsWith(body.first.replaceFirst('final job = ', '')),
-    );
-    expect(at, isNot(-1), reason: 'the example builds no such job');
-    expect(source.sublist(at + 1, at + body.length), body.sublist(1));
-  });
+      final source = code(File('example/example.dart').readAsLinesSync());
+      final at = source.indexWhere(
+        (line) => line.endsWith(body.first.replaceFirst('final job = ', '')),
+      );
+      expect(at, isNot(-1), reason: 'the example builds no such job');
+      expect(source.sublist(at + 1, at + body.length), body.sublist(1));
+    },
+  );
 }

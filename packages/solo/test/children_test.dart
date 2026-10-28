@@ -57,11 +57,11 @@ void main() {
       );
       async.flushTimers();
       expect(async.elapsed, const Duration(milliseconds: 400));
-      expect(
-        childAtRun,
-        (level: 1, isChild: true, isRunning: true),
-        reason: 'the child starts synchronously, one level deeper',
-      );
+      expect(childAtRun, (
+        level: 1,
+        isChild: true,
+        isRunning: true,
+      ), reason: 'the child starts synchronously, one level deeper');
       expect(test3.level, 2);
       expect(test1.level, 0);
       expect(journal.take(), [
@@ -113,7 +113,8 @@ void main() {
         await ctx.run(child);
       });
       async.flushTimers();
-      const parentOutcome = '[parent] finished Cancelled(handler: Job(child): '
+      const parentOutcome =
+          '[parent] finished Cancelled(handler: Job(child): '
           'Cancelled(rules: is not Working))';
       expect(journal.take(), [
         '[parent] started',
@@ -148,13 +149,12 @@ void main() {
     runSolo((solo, journal, async) {
       solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
-          final grandchild = solo.job<TestState, void>(
-            key: 'grandchild',
-            (ctx) async {
-              await delay(100);
-              ctx.check();
-            },
-          );
+          final grandchild = solo.job<TestState, void>(key: 'grandchild', (
+            ctx,
+          ) async {
+            await delay(100);
+            ctx.check();
+          });
           ctx.run(grandchild).ignore();
           await grandchild.done;
           ctx.check();
@@ -186,14 +186,13 @@ void main() {
         ctx.job.whenCancelled((_) => marked.add('parent'));
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           ctx.job.whenCancelled((_) => marked.add('child'));
-          final grandchild = solo.job<TestState, void>(
-            key: 'grandchild',
-            (ctx) async {
-              ctx.job.whenCancelled((_) => marked.add('grandchild'));
-              await delay(100);
-              ctx.check();
-            },
-          );
+          final grandchild = solo.job<TestState, void>(key: 'grandchild', (
+            ctx,
+          ) async {
+            ctx.job.whenCancelled((_) => marked.add('grandchild'));
+            await delay(100);
+            ctx.check();
+          });
           ctx.run(grandchild).ignore();
           await grandchild.done;
           ctx.check();
@@ -235,7 +234,8 @@ void main() {
       async.elapse(const Duration(milliseconds: 50));
       solo.externalSetState(const Preparing(progress: 50));
       async.elapse(const Duration(milliseconds: 50));
-      const parentOutcome = '[parent] finished Cancelled(handler: Job(child): '
+      const parentOutcome =
+          '[parent] finished Cancelled(handler: Job(child): '
           'Cancelled(rules: keepWhile))';
       expect(journal.take(), [
         '[parent] started',
@@ -278,12 +278,13 @@ void main() {
 
   test('a failed child reports onError and fails the parent via run', () {
     runSolo((solo, journal, async) {
-      solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
-        final child = solo.job<TestState, void>(key: 'child', (ctx) async {
-          throw StateError('boom');
-        });
-        await ctx.run(child);
-      })
+      solo
+          .enqueue<TestState, void>(key: 'parent', (ctx) async {
+            final child = solo.job<TestState, void>(key: 'child', (ctx) async {
+              throw StateError('boom');
+            });
+            await ctx.run(child);
+          })
           // The journal below is the whole assertion; keep the parent's
           // failure out of the zone.
           .ignoreFailure();
@@ -333,14 +334,13 @@ void main() {
   test("a child's emit outside the parent's W cancels the parent", () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
       solo.enqueue<Preparing, void>(key: 'parent', (ctx) async {
-        final child = solo.job<PreparingAndWorking, void>(
-          key: 'child',
-          (ctx) async {
-            ctx.emit(const Working());
-            await delay(10);
-            ctx.check();
-          },
-        );
+        final child = solo.job<PreparingAndWorking, void>(key: 'child', (
+          ctx,
+        ) async {
+          ctx.emit(const Working());
+          await delay(10);
+          ctx.check();
+        });
         ctx.run(child).ignore();
         await child.done;
         ctx.check();
@@ -419,10 +419,7 @@ void main() {
   test('run reevaluates parent rules after a successful child', () {
     runSolo((solo, journal, async) {
       var continued = false;
-      final child = solo.job<TestState, int>(
-        key: 'child',
-        (ctx) async => 7,
-      );
+      final child = solo.job<TestState, int>(key: 'child', (ctx) async => 7);
       final parent = solo.enqueue<Initial, void>(key: 'parent', (ctx) async {
         ctx.emit(const Working());
         await ctx.run(child);
@@ -448,20 +445,18 @@ void main() {
     runSolo((solo, journal, async) {
       final order = <String>[];
       int? childValue;
-      final child = solo.job<TestState, int>(
-        key: 'child',
-        cancellable: false,
-        (ctx) async {
-          ctx.onDispose(() async {
-            order.add('cleanup starts');
-            await delay(50);
-            order.add('cleanup ends');
-          });
+      final child = solo.job<TestState, int>(key: 'child', cancellable: false, (
+        ctx,
+      ) async {
+        ctx.onDispose(() async {
+          order.add('cleanup starts');
           await delay(50);
-          order.add('child body ends');
-          return 7;
-        },
-      );
+          order.add('cleanup ends');
+        });
+        await delay(50);
+        order.add('child body ends');
+        return 7;
+      });
       child.value.then((value) => childValue = value).ignore();
       final parent = solo.enqueue<Initial, void>(key: 'parent', (ctx) async {
         await ctx.run(child);
@@ -532,20 +527,19 @@ void main() {
 
   test('a queued job cannot be run as a child', () {
     runSolo((solo, journal, async) {
-      final queued =
-          solo.enqueue<TestState, void>(key: 'queued', (ctx) async {});
+      final queued = solo.enqueue<TestState, void>(
+        key: 'queued',
+        (ctx) async {},
+      );
       Object? thrown;
       solo.enqueueJob(
-        solo.job<TestState, void>(
-          key: 'parent',
-          (ctx) async {
-            try {
-              ctx.run(queued).ignore();
-            } on Object catch (error) {
-              thrown = error;
-            }
-          },
-        ),
+        solo.job<TestState, void>(key: 'parent', (ctx) async {
+          try {
+            ctx.run(queued).ignore();
+          } on Object catch (error) {
+            thrown = error;
+          }
+        }),
         first: true,
       );
       async.flushTimers();
@@ -579,12 +573,9 @@ void main() {
   test('solo refuses a job of the core as a child', () {
     runSolo((solo, journal, async) {
       var foreignRan = false;
-      final parent = solo.enqueue<TestState, void>(
-        key: 'parent',
-        (ctx) async {
-          ctx.run(ForeignJob<void>((_) async => foreignRan = true)).ignore();
-        },
-      )..ignoreFailure();
+      final parent = solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
+        ctx.run(ForeignJob<void>((_) async => foreignRan = true)).ignore();
+      })..ignoreFailure();
       async.flushTimers();
       expect(foreignRan, isFalse);
       expect(parent.outcome, isA<Failed>());
@@ -628,10 +619,7 @@ void attempt(SoloJob<void> job) => job.start();
         }
       }).ignoreFailure();
       async.flushTimers();
-      expect(refusals, [
-        _notCreatedHere,
-        _notCreatedHere,
-      ]);
+      expect(refusals, [_notCreatedHere, _notCreatedHere]);
     });
   });
 
@@ -644,17 +632,13 @@ void attempt(SoloJob<void> job) => job.start();
       parent = ForeignJob<void>((ctx) async {
         for (var i = 0; i < 3; i++) {
           await ctx.run(
-            ForeignJob<void>(
-              key: 'child$i',
-              (ctx) async {
-                await ctx.abandonable(() => delay(10));
-              },
-            ),
+            ForeignJob<void>(key: 'child$i', (ctx) async {
+              await ctx.abandonable(() => delay(10));
+            }),
           );
           counts.add(parent.childCount);
         }
-      })
-        ..launch();
+      })..launch();
       async.flushTimers();
       expect(parent.outcome, isA<Done<void>>());
       expect(counts, [0, 0, 0], reason: 'each child leaves as it finishes');
@@ -663,12 +647,9 @@ void attempt(SoloJob<void> job) => job.start();
 
   test('a child without a key still shows in the parent outcome', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      final parent = solo.enqueue<Preparing, void>(
-        key: 'parent',
-        (ctx) async {
-          await ctx.run(solo.job<Working, void>((ctx) async {}));
-        },
-      );
+      final parent = solo.enqueue<Preparing, void>(key: 'parent', (ctx) async {
+        await ctx.run(solo.job<Working, void>((ctx) async {}));
+      });
       async.flushTimers();
       expect(
         parent.outcome.toString(),
@@ -736,8 +717,8 @@ void attempt(SoloJob<void> job) => job.start();
       expect(thrown, isA<StateError>());
       expect(
         journal.take().where(
-              (line) => line == '> [child] error Bad state: rule boom',
-            ),
+          (line) => line == '> [child] error Bad state: rule boom',
+        ),
         hasLength(1),
       );
     });
@@ -808,11 +789,12 @@ void attempt(SoloJob<void> job) => job.start();
           )
           .ignoreFailure();
       async.flushTimers();
-      expect(
-        order,
-        ['sync', 'save', 'then', 'record'],
-        reason: 'the source freed the slot, and save was already waiting',
-      );
+      expect(order, [
+        'sync',
+        'save',
+        'then',
+        'record',
+      ], reason: 'the source freed the slot, and save was already waiting');
     });
   });
 
@@ -825,7 +807,9 @@ void attempt(SoloJob<void> job) => job.start();
           (childCtx) async {},
         );
         unawaited(
-          ctx.run(child).then<void>(
+          ctx
+              .run(child)
+              .then<void>(
                 (_) => fromTheFuture = 'done',
                 onError: (Object error) => fromTheFuture = error,
               ),
@@ -839,35 +823,37 @@ void attempt(SoloJob<void> job) => job.start();
 
   // Inherited from `async_job`, whose changelog names the change: a
   // controller's job reads the envelope the way the core does.
-  test('a child cancelled under [...].wait takes the parent to ifCancelled',
-      () {
-    runSolo((solo, journal, async) {
-      final handled = <String>[];
-      final a = solo.job<TestState, void>(key: 'a', (ctx) => pause(ctx, 100));
-      final b = solo.job<TestState, void>(key: 'b', (ctx) => pause(ctx, 100));
-      solo.enqueue<TestState, void>(
-        key: 'parent',
-        (ctx) async => [ctx.run(a), ctx.run(b)].wait,
-        ifFailed: (state, error, stackTrace) {
-          handled.add('ifFailed ${error.runtimeType}');
-          return state;
-        },
-        ifCancelled: (state, cancelled) {
-          handled.add('ifCancelled $cancelled');
-          return state;
-        },
-      );
-      async.flushMicrotasks();
-      a.cancel();
-      async.flushTimers();
+  test(
+    'a child cancelled under [...].wait takes the parent to ifCancelled',
+    () {
+      runSolo((solo, journal, async) {
+        final handled = <String>[];
+        final a = solo.job<TestState, void>(key: 'a', (ctx) => pause(ctx, 100));
+        final b = solo.job<TestState, void>(key: 'b', (ctx) => pause(ctx, 100));
+        solo.enqueue<TestState, void>(
+          key: 'parent',
+          (ctx) async => [ctx.run(a), ctx.run(b)].wait,
+          ifFailed: (state, error, stackTrace) {
+            handled.add('ifFailed ${error.runtimeType}');
+            return state;
+          },
+          ifCancelled: (state, cancelled) {
+            handled.add('ifCancelled $cancelled');
+            return state;
+          },
+        );
+        async.flushMicrotasks();
+        a.cancel();
+        async.flushTimers();
 
-      expect(handled, [
-        'ifCancelled Cancelled(handler: Job(a): Cancelled(manual))',
-      ]);
-      expect(
-        journal.take(),
-        anyElement(startsWith('[parent] finished Cancelled')),
-      );
-    });
-  });
+        expect(handled, [
+          'ifCancelled Cancelled(handler: Job(a): Cancelled(manual))',
+        ]);
+        expect(
+          journal.take(),
+          anyElement(startsWith('[parent] finished Cancelled')),
+        );
+      });
+    },
+  );
 }

@@ -39,22 +39,18 @@ void main() {
   test('the parent finishes after its children', () {
     fakeAsync((async) {
       final journal = JobJournal();
-      Job<void>(
-        key: 'parent',
-        observer: journal,
-        (ctx) async {
-          // Not awaited: the parent still waits for the child before it
-          // can finish.
-          ctx
-              .run(
-                Job.deferred<void>(
-                  key: 'child',
-                  (ctx) => ctx.abandonable(() => delay(50)),
-                ),
-              )
-              .ignore();
-        },
-      ).ignoreFailure();
+      Job<void>(key: 'parent', observer: journal, (ctx) async {
+        // Not awaited: the parent still waits for the child before it
+        // can finish.
+        ctx
+            .run(
+              Job.deferred<void>(
+                key: 'child',
+                (ctx) => ctx.abandonable(() => delay(50)),
+              ),
+            )
+            .ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(journal.take(), [
         '[parent] started',
@@ -68,23 +64,19 @@ void main() {
   test('cancelling a parent cascades to its children, last one first', () {
     fakeAsync((async) {
       final journal = JobJournal();
-      final parent = Job<void>(
-        key: 'parent',
-        observer: journal,
-        (ctx) async {
-          for (var i = 0; i < 2; i++) {
-            ctx
-                .run(
-                  Job.deferred<void>(
-                    key: 'child$i',
-                    (ctx) => ctx.abandonable(() => delay(100)),
-                  ),
-                )
-                .ignore();
-          }
-          await ctx.abandonable(() => delay(100));
-        },
-      );
+      final parent = Job<void>(key: 'parent', observer: journal, (ctx) async {
+        for (var i = 0; i < 2; i++) {
+          ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child$i',
+                  (ctx) => ctx.abandonable(() => delay(100)),
+                ),
+              )
+              .ignore();
+        }
+        await ctx.abandonable(() => delay(100));
+      });
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
       async.flushTimers();
@@ -105,14 +97,12 @@ void main() {
       late final ChildJob<void> child;
       var childEndedAt = Duration.zero;
       final parent = Job<void>((ctx) async {
-        child = Job.deferred<void>(
-          key: 'child',
-          cancellable: false,
-          (ctx) async {
-            await ctx.abandonable(() => delay(50));
-            childEndedAt = async.elapsed;
-          },
-        );
+        child = Job.deferred<void>(key: 'child', cancellable: false, (
+          ctx,
+        ) async {
+          await ctx.abandonable(() => delay(50));
+          childEndedAt = async.elapsed;
+        });
         ctx.run(child).ignore();
         await ctx.abandonable(() => delay(100));
       });
@@ -230,12 +220,14 @@ void main() {
           await delay(10);
           order.add('cleanup');
         });
-        ctx.run(
-          Job.deferred<void>((grandchild) async {
-            await grandchild.abandonable(() => delay(20));
-            order.add('grandchild');
-          }),
-        ).ignore();
+        ctx
+            .run(
+              Job.deferred<void>((grandchild) async {
+                await grandchild.abandonable(() => delay(20));
+                order.add('grandchild');
+              }),
+            )
+            .ignore();
         return 7;
       });
       final parent = Job<void>((ctx) async {
@@ -327,8 +319,9 @@ void main() {
   test('a child without a key still shows in the parent outcome', () {
     fakeAsync((async) {
       final parent = Job<void>((ctx) async {
-        final child =
-            Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
+        final child = Job.deferred<void>(
+          (ctx) => ctx.abandonable(() => delay(50)),
+        );
         final result = ctx.run(child);
         child.cancel().ignore();
         await result;
@@ -345,8 +338,7 @@ void main() {
     ('thumbnail', 'Job(thumbnail: page 3)'),
     (null, 'Job(page 3)'),
   ]) {
-    test(
-        'the parent outcome names the child as the child prints itself: '
+    test('the parent outcome names the child as the child prints itself: '
         '$named', () {
       fakeAsync((async) {
         late final ChildJob<void> child;
@@ -428,10 +420,7 @@ void main() {
     );
     List<Object> zoneOf(void Function(FakeAsync async) scenario) {
       final zone = <Object>[];
-      runZonedGuarded(
-        () => fakeAsync(scenario),
-        (error, _) => zone.add(error),
-      );
+      runZonedGuarded(() => fakeAsync(scenario), (error, _) => zone.add(error));
       return zone;
     }
 
@@ -479,7 +468,8 @@ void main() {
       expect(
         [a.outcome, b.outcome],
         [same(shared), same(shared)],
-        reason: 'the routine of b went all the way: nothing was thrown '
+        reason:
+            'the routine of b went all the way: nothing was thrown '
             'through it',
       );
       expect(zone, [reported]);
@@ -519,26 +509,22 @@ void main() {
       final zone = zoneOf((async) {
         a = slow('a');
         b = slow('b');
-        parent = RefusingParentJob<void>(
-          (ctx) async {
-            for (final child in [a, b]) {
-              try {
-                await ctx.run(child);
-              } on Object catch (error) {
-                refused.add(error);
-              }
+        parent = RefusingParentJob<void>((ctx) async {
+          for (final child in [a, b]) {
+            try {
+              await ctx.run(child);
+            } on Object catch (error) {
+              refused.add(error);
             }
-          },
-          refusal: refusal,
-        )..launch();
+          }
+        }, refusal: refusal)..launch();
         async.flushTimers();
       });
       expect([a.outcome, b.outcome], [same(refusal), same(refusal)]);
-      expect(
-        refused,
-        [same(refusal), same(refusal)],
-        reason: 'the body hears the refusal of b, and not the report',
-      );
+      expect(refused, [
+        same(refusal),
+        same(refusal),
+      ], reason: 'the body hears the refusal of b, and not the report');
       expect(parent.outcome, isA<Done<void>>());
       expect(zone, [reported]);
     });
@@ -565,7 +551,8 @@ void main() {
       expect(
         zone,
         [reported, isStateError],
-        reason: 'the failure the cancellation covered is answered for after '
+        reason:
+            'the failure the cancellation covered is answered for after '
             '`finish`, by the routine the report must not cut short',
       );
     });
@@ -601,23 +588,17 @@ void main() {
           context = ctx;
           return ctx.abandonable(() => delay(50));
         }).launch();
-        runZonedGuarded(
-          () {
-            a = slow('a');
-            b = slow('b');
-          },
-          (error, _) => created.add(error),
-        );
+        runZonedGuarded(() {
+          a = slow('a');
+          b = slow('b');
+        }, (error, _) => created.add(error));
         context.run(a).ignore();
         context.run(b).ignore();
         async.flushMicrotasks();
-        runZonedGuarded(
-          () {
-            a.drop(shared);
-            b.drop(shared);
-          },
-          (error, _) => ended.add(error),
-        );
+        runZonedGuarded(() {
+          a.drop(shared);
+          b.drop(shared);
+        }, (error, _) => ended.add(error));
         async.flushTimers();
       });
       expect(created, [reported]);
@@ -656,8 +637,7 @@ void main() {
           );
           counts.add(parent.childCount);
         }
-      })
-        ..launch();
+      })..launch();
       async.flushTimers();
       expect(parent.outcome, isA<Done<void>>());
       expect(counts, [0, 0, 0]);
@@ -672,8 +652,7 @@ void main() {
       final parent = ProbeJob<void>((ctx) {
         context = ctx;
         return ctx.abandonable(() => Completer<void>().future);
-      })
-        ..launch();
+      })..launch();
       void adopt(String key) {
         final gate = gates[key] = Completer<void>();
         final child = Job.deferred<void>(key: key, (ctx) {
@@ -688,8 +667,9 @@ void main() {
         async.flushMicrotasks();
       }
 
-      List<Object?> waitedFor() =>
-          [for (final child in parent.childrenList) child.key];
+      List<Object?> waitedFor() => [
+        for (final child in parent.childrenList) child.key,
+      ];
 
       ['a', 'b', 'c', 'd', 'e'].forEach(adopt);
       expect(waitedFor(), ['a', 'b', 'c', 'd', 'e']);
@@ -759,10 +739,8 @@ void main() {
     });
   });
 
-  test(
-    'a child has no start of its own: a DeferredJob adds it',
-    () async {
-      final errors = await compileErrors('''
+  test('a child has no start of its own: a DeferredJob adds it', () async {
+    final errors = await compileErrors('''
 import 'package:async_job/async_job.dart';
 
 void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
@@ -770,12 +748,10 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
   deferred.start();
 }
 ''');
-      expect(errors, [
-        "The method 'start' isn't defined for the type 'ChildJob'.",
-      ]);
-    },
-    timeout: const Timeout(Duration(minutes: 1)),
-  );
+    expect(errors, [
+      "The method 'start' isn't defined for the type 'ChildJob'.",
+    ]);
+  }, timeout: const Timeout(Duration(minutes: 1)));
 
   test('an implementation of ChildJob that is not of this core is refused', () {
     fakeAsync((async) {
@@ -813,25 +789,20 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
     fakeAsync((async) {
       final parentJournal = JobJournal();
       final childJournal = JobJournal();
-      Job<void>(
-        key: 'parent',
-        observer: parentJournal,
-        (ctx) async {
-          await ctx.run(
-            Job.deferred<void>(
-              key: 'child',
-              observer: childJournal,
-              (ctx) async {},
-            ),
-          );
-        },
-      ).ignoreFailure();
+      Job<void>(key: 'parent', observer: parentJournal, (ctx) async {
+        await ctx.run(
+          Job.deferred<void>(
+            key: 'child',
+            observer: childJournal,
+            (ctx) async {},
+          ),
+        );
+      }).ignoreFailure();
       async.flushMicrotasks();
-      expect(
-        parentJournal.take(),
-        ['[parent] started', '[parent] finished Done(null)'],
-        reason: 'the child never reported to the parent observer',
-      );
+      expect(parentJournal.take(), [
+        '[parent] started',
+        '[parent] finished Done(null)',
+      ], reason: 'the child never reported to the parent observer');
       expect(childJournal.take(), [
         '> [child] started',
         '> [child] finished Done(null)',
@@ -842,28 +813,24 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
   test('the cascade goes all the way down, deepest first', () {
     fakeAsync((async) {
       final journal = JobJournal();
-      final root = Job<void>(
-        key: 'root',
-        observer: journal,
-        (ctx) async {
-          ctx
-              .run(
-                Job.deferred<void>(key: 'child', (ctx) async {
-                  ctx
-                      .run(
-                        Job.deferred<void>(
-                          key: 'grandchild',
-                          (ctx) => ctx.abandonable(() => delay(100)),
-                        ),
-                      )
-                      .ignore();
-                  await ctx.abandonable(() => delay(100));
-                }),
-              )
-              .ignore();
-          await ctx.abandonable(() => delay(100));
-        },
-      );
+      final root = Job<void>(key: 'root', observer: journal, (ctx) async {
+        ctx
+            .run(
+              Job.deferred<void>(key: 'child', (ctx) async {
+                ctx
+                    .run(
+                      Job.deferred<void>(
+                        key: 'grandchild',
+                        (ctx) => ctx.abandonable(() => delay(100)),
+                      ),
+                    )
+                    .ignore();
+                await ctx.abandonable(() => delay(100));
+              }),
+            )
+            .ignore();
+        await ctx.abandonable(() => delay(100));
+      });
       async.elapse(const Duration(milliseconds: 10));
       root.cancel().ignore();
       async.flushTimers();
@@ -888,8 +855,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
         } on Object catch (error) {
           thrown = error;
         }
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushMicrotasks();
       expect(thrown, isA<ArgumentError>());
       expect(child.statusNow, JobStatus.created);
@@ -910,28 +876,22 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
       final journal = JobJournal();
       late final Job<void> handle;
       final child = Job.deferred<void>(key: 'child', (ctx) async {});
-      final parent = RefusingParentJob<void>(
-        key: 'parent',
-        observer: journal,
-        (ctx) async {
-          handle = child;
-          ctx.run(child).ignore();
-        },
-      )..launch();
+      final parent = RefusingParentJob<void>(key: 'parent', observer: journal, (
+        ctx,
+      ) async {
+        handle = child;
+        ctx.run(child).ignore();
+      })..launch();
       async.flushMicrotasks();
       expect(identical(handle, child), isTrue, reason: 'the original handle');
       expect(child.level, 1, reason: 'adopted before it was turned away');
       expect((child.outcome! as Cancelled).description, 'not now');
       expect(parent.outcome, isA<Done<void>>());
-      expect(
-        journal.take(),
-        [
-          '[parent] started',
-          '> [child] dropped Cancelled(rules: not now)',
-          '[parent] finished Done(null)',
-        ],
-        reason: 'finished without a started of its own',
-      );
+      expect(journal.take(), [
+        '[parent] started',
+        '> [child] dropped Cancelled(rules: not now)',
+        '[parent] finished Done(null)',
+      ], reason: 'finished without a started of its own');
     });
   });
   test('a child whose start throws does not hang the parent', () {
@@ -961,8 +921,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
           caught = error;
         }
         return 7;
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 10));
       expect(caught, isA<StateError>());
       expect(parent.outcome, isA<Done<int>>());
@@ -1026,8 +985,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
         ctx.run(child).ignore();
         await ctx.abandonable(() => delay(10));
         throw StateError('boom');
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 20));
       expect(child.outcome, isNull);
       async.elapse(const Duration(milliseconds: 200));
@@ -1043,17 +1001,18 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
   });
   test('the waiting list a subclass sees is a copy taken at the call', () {
     fakeAsync((async) {
-      final child =
-          Job.deferred<void>((ctx) => ctx.abandonable(() => delay(10)));
-      final later =
-          Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
+      final child = Job.deferred<void>(
+        (ctx) => ctx.abandonable(() => delay(10)),
+      );
+      final later = Job.deferred<void>(
+        (ctx) => ctx.abandonable(() => delay(50)),
+      );
       late final JobContext context;
       final parent = ProbeJob<void>((ctx) async {
         context = ctx;
         ctx.run(child).ignore();
         await ctx.abandonable(() => delay(30));
-      })
-        ..launch();
+      })..launch();
       async.flushMicrotasks();
       final seen = parent.childrenList;
       expect(seen, [same(child)]);
@@ -1063,7 +1022,8 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
       expect(
         seen,
         [same(child)],
-        reason: 'the copy keeps the child that left, and does not take the '
+        reason:
+            'the copy keeps the child that left, and does not take the '
             'one adopted since',
       );
       expect(parent.childrenList, [same(later)]);
@@ -1076,32 +1036,29 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
     fakeAsync((async) {
       final child = Job.deferred<void>((ctx) async {});
       Object? thrown;
-      final parent = ChildEndingRulesJob<void>(
-        (ctx) async {
-          try {
-            await ctx.run(child);
-          } on Object catch (error) {
-            thrown = error;
-          }
-          await delay(50);
-        },
-        letsIn: true,
-      )..launch();
+      final parent = ChildEndingRulesJob<void>((ctx) async {
+        try {
+          await ctx.run(child);
+        } on Object catch (error) {
+          thrown = error;
+        }
+        await delay(50);
+      }, letsIn: true)..launch();
       async.flushMicrotasks();
       expect(thrown, isStateError, reason: 'a job that is over is not started');
       expect(child.outcome, isA<Cancelled>());
       expect(
         parent.childrenList,
         isEmpty,
-        reason: 'the child joined the list on the word of the rule and ended '
+        reason:
+            'the child joined the list on the word of the rule and ended '
             'before that: nothing but the refusal takes it off',
       );
       async.flushTimers();
       expect(parent.outcome, isA<Done<void>>());
     });
   });
-  test(
-      'a child started from a cancel callback of a self-cancelled body is '
+  test('a child started from a cancel callback of a self-cancelled body is '
       'refused', () {
     fakeAsync((async) {
       // The same window as the cascade of an outside cancellation, on the path
@@ -1129,8 +1086,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
             .ignore();
         await ctx.abandonable(() => delay(10));
         throw const Cancelled('enough');
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<StateError>());
       expect(parent.outcome, isA<Cancelled>());
@@ -1156,8 +1112,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
         }
 
         return 7;
-      })
-        ..launch();
+      })..launch();
       async.flushTimers();
       expect(log, ['run threw StateError']);
       expect(child.outcome, isA<Failed>());
@@ -1165,20 +1120,16 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
       // The child's observer hears the failure like any other, and the
       // same error goes to the body by the throw above. The parent
       // swallowed it here, as a `try/catch` of its own would.
-      expect(
-        journal.take(),
-        [
-          '[null] started',
-          '> [ghost] error Bad state: rule failed',
-          '> [ghost] finished Failed(Bad state: rule failed)',
-          '[null] finished Done(7)',
-        ],
-      );
+      expect(journal.take(), [
+        '[null] started',
+        '> [ghost] error Bad state: rule failed',
+        '> [ghost] finished Failed(Bad state: rule failed)',
+        '[null] finished Done(7)',
+      ]);
     });
   });
 
-  test(
-      'a rule that cancels the parent while saying yes still refuses the '
+  test('a rule that cancels the parent while saying yes still refuses the '
       'child', () {
     Outcome<void>? parentOutcome;
     Outcome<void>? childOutcome;
@@ -1196,22 +1147,23 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
         }
         child.done.then((outcome) => childOutcome = outcome).ignore();
         await ctx.abandonable(() => delay(50));
-      })
-        ..launch();
+      })..launch();
       parent.done.then((outcome) => parentOutcome = outcome).ignore();
       async.elapse(const Duration(milliseconds: 100));
     });
     expect(
       thrown,
       isA<Cancelled>(),
-      reason: 'the mark reaches the body as a throw, as it does before the '
+      reason:
+          'the mark reaches the body as a throw, as it does before the '
           'rule is asked at all',
     );
     expect(childOutcome, isA<Cancelled>());
     expect(
       parentOutcome,
       isA<Cancelled>(),
-      reason: 'and the parent ends on its own cancellation, not after the '
+      reason:
+          'and the parent ends on its own cancellation, not after the '
           'child it never waited for',
     );
   });
@@ -1233,16 +1185,13 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
         ctx.onDispose(() => parentCleaned = true);
         ctx.run(slow).ignore();
         await ctx.run(fast);
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 50));
       expect(fast.isFinished, isTrue);
       expect(slow.isFinished, isFalse, reason: 'its cleanup still holds');
-      expect(
-        parent.childrenList,
-        [same(slow)],
-        reason: 'the fast twin left, the slow one stayed',
-      );
+      expect(parent.childrenList, [
+        same(slow),
+      ], reason: 'the fast twin left, the slow one stayed');
       expect(
         parent.isFinished,
         isFalse,
@@ -1271,8 +1220,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
         } on Object catch (error) {
           refusal = error;
         }
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 20));
       expect(refusal, isA<StateError>());
       expect(parent.childrenList, [same(live)]);
@@ -1305,8 +1253,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
         } on Object catch (error) {
           refusal = error;
         }
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 20));
       expect(refusal, isA<StateError>());
       expect(parent.childrenList, [same(live)]);
@@ -1322,8 +1269,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
     });
   });
 
-  test(
-      'a parent already giving up turns a child away without asking the '
+  test('a parent already giving up turns a child away without asking the '
       'rules', () {
     fakeAsync((async) {
       Object? caught;
@@ -1342,8 +1288,7 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
           }
         }
         return 7;
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
       async.flushTimers();

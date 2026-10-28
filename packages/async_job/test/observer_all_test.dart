@@ -27,8 +27,7 @@ class Recording with JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('$name onError: $error');
+  }) => seen.add('$name onError: $error');
 
   @override
   void onLog(Job<Object?> job, Object? message) =>
@@ -89,42 +88,39 @@ List<String> heard(JobObserver Function(List<String> seen) observer) {
 }
 
 void main() {
-  test('every hook goes to each observer in order, the answer after onError',
-      () {
-    expect(
-      heard(
-        (seen) => JobObserver.all([
-          Recording('a', seen),
-          Answering('b', seen),
-          Recording('c', seen),
-        ]),
-      ),
-      [
-        'a onStart',
-        'b onStart',
-        'c onStart',
-        'a onLog: hello',
-        'b onLog: hello',
-        'c onLog: hello',
-        'a onError: Bad state: late',
-        'b onError: Bad state: late',
-        'c onError: Bad state: late',
-        'b onUnanswered: Bad state: late',
-        'a onFinish',
-        'b onFinish',
-        'c onFinish',
-      ],
-    );
-  });
+  test(
+    'every hook goes to each observer in order, the answer after onError',
+    () {
+      expect(
+        heard(
+          (seen) => JobObserver.all([
+            Recording('a', seen),
+            Answering('b', seen),
+            Recording('c', seen),
+          ]),
+        ),
+        [
+          'a onStart',
+          'b onStart',
+          'c onStart',
+          'a onLog: hello',
+          'b onLog: hello',
+          'c onLog: hello',
+          'a onError: Bad state: late',
+          'b onError: Bad state: late',
+          'c onError: Bad state: late',
+          'b onUnanswered: Bad state: late',
+          'a onFinish',
+          'b onFinish',
+          'c onFinish',
+        ],
+      );
+    },
+  );
 
   test('a hook that throws switches off none of the others', () {
     expect(
-      heard(
-        (seen) => JobObserver.all([
-          Throwing(),
-          Recording('a', seen),
-        ]),
-      ),
+      heard((seen) => JobObserver.all([Throwing(), Recording('a', seen)])),
       [
         'zone: Bad state: onStart',
         'a onStart',
@@ -157,49 +153,35 @@ void main() {
     final starting = <String>[];
     fakeAsync((async) {
       late final DeferredJob<void> job;
-      runZonedGuarded(
-        () {
-          job = Job.deferred<void>(
-            observer: JobObserver.all([
-              Recording('a', []),
-              Recording('b', []),
-            ]),
-            (ctx) async {
-              ctx
-                ..onDispose(() => throw StateError('cleanup'))
-                ..onDispose(() => throw const Cancelled('cleanup'));
-            },
-          );
-        },
-        (error, stackTrace) => creation.add('$error'),
-      );
+      runZonedGuarded(() {
+        job = Job.deferred<void>(
+          observer: JobObserver.all([Recording('a', []), Recording('b', [])]),
+          (ctx) async {
+            ctx
+              ..onDispose(() => throw StateError('cleanup'))
+              ..onDispose(() => throw const Cancelled('cleanup'));
+          },
+        );
+      }, (error, stackTrace) => creation.add('$error'));
       runZonedGuarded(job.start, (error, stackTrace) => starting.add('$error'));
       async.flushTimers();
     });
-    expect(
-      creation,
-      ['Bad state: cleanup'],
-      reason: 'once, and the cancellation goes nowhere',
-    );
+    expect(creation, [
+      'Bad state: cleanup',
+    ], reason: 'once, and the cancellation goes nowhere');
     expect(starting, isEmpty);
   });
 
   test('made of observers that do not answer, it does not answer', () {
     expect(JobObserver.all([Recording('a', [])]), isNot(isA<JobAnswerer>()));
     expect(JobObserver.all([]), isNot(isA<JobAnswerer>()));
-    expect(
-      JobObserver.all([Answering('a', [])]),
-      isA<JobAnswerer>(),
-    );
+    expect(JobObserver.all([Answering('a', [])]), isA<JobAnswerer>());
   });
 
   test('the answer comes from wherever the answering observer stands', () {
     expect(
       heard(
-        (seen) => JobObserver.all([
-          Answering('a', seen),
-          Recording('b', seen),
-        ]),
+        (seen) => JobObserver.all([Answering('a', seen), Recording('b', seen)]),
       ).where((line) => line.contains('Error') || line.contains('Unanswered')),
       [
         'a onError: Bad state: late',
@@ -278,10 +260,7 @@ void main() {
 
   test('it names its observers', () {
     final a = Recording('a', []);
-    expect(
-      JobObserver.all([a]).toString(),
-      'JobObserver.all([$a])',
-    );
+    expect(JobObserver.all([a]).toString(), 'JobObserver.all([$a])');
     expect(
       JobObserver.all([Answering('b', [])]).toString(),
       startsWith('JobObserver.all(['),

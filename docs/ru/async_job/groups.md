@@ -66,10 +66,10 @@ final parent = Job<void>((ctx) async {
 
 ```dart
 // Первая попытка с eagerError: та же гонка и та же утечка.
-final sources = await Future.wait(
-  [ctx.run(rows), ctx.run(images)],
-  eagerError: true,
-);
+final sources = await Future.wait([
+  ctx.run(rows),
+  ctx.run(images),
+], eagerError: true);
 ```
 
 Он меняет только то, когда просыпается тело: на первой ошибке, а не после
@@ -299,10 +299,14 @@ outcome: Done([21, 21])
 
 ```dart
 Job.deferred<Source>((ctx) async {
-  final cache =
-      await ctx.abandonable(openCache, dispose: (cache) => cache.close());
-  final rows =
-      await ctx.abandonable(openRows, discard: (source) => source.close());
+  final cache = await ctx.abandonable(
+    openCache,
+    dispose: (cache) => cache.close(),
+  );
+  final rows = await ctx.abandonable(
+    openRows,
+    discard: (source) => source.close(),
+  );
   await ctx.join(() => cache.warm(rows));
 
   return rows;

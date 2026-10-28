@@ -40,7 +40,7 @@ final class Opening extends Solo<AppState> with OpenSolo<AppState>, Desk {
           ..emit(Ready(db));
 
         return file;
-      }
+      },
     ];
 
     return enqueue<Idle, TempFile>(key: 'opening', bodies.single);
@@ -51,18 +51,12 @@ final class Opening extends Solo<AppState> with OpenSolo<AppState>, Desk {
 final class Loader extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Loader() : super(const Idle());
 
-  Job<void> load() => enqueue<Idle, void>(
-        key: 'load',
-        (ctx) async {
-          final db = await ctx.join(
-            Database.open,
-            dispose: (db) => db.close(),
-          );
+  Job<void> load() => enqueue<Idle, void>(key: 'load', (ctx) async {
+    final db = await ctx.join(Database.open, dispose: (db) => db.close());
 
-          final rows = await ctx.join(db.readAll);
-          ctx.emit(Loaded(rows));
-        },
-      );
+    final rows = await ctx.join(db.readAll);
+    ctx.emit(Loaded(rows));
+  });
 }
 
 /// The creation that rides on a call, under the same heading.
@@ -71,34 +65,26 @@ final class Watcher extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   /// Not on the page: a body around the statement, after a step named
   /// [step] that a cancellation waits out.
-  Job<void> watch(String step) => enqueue<Idle, void>(
-        key: 'watch',
-        (ctx) async {
-          await ctx.uncancellable(() => stage.start<void>(step, null));
-          // ignore: unused_local_variable
-          final sub = await ctx.join(
-            () => device.events.listen(onEvent),
-            dispose: (sub) => sub.cancel(),
-          );
-        },
-      );
+  Job<void> watch(String step) =>
+      enqueue<Idle, void>(key: 'watch', (ctx) async {
+        await ctx.uncancellable(() => stage.start<void>(step, null));
+        // ignore: unused_local_variable
+        final sub = await ctx.join(
+          () => device.events.listen(onEvent),
+          dispose: (sub) => sub.cancel(),
+        );
+      });
 }
 
 /// "Discard, for a value that leaves".
 final class Opener extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Opener() : super(const Idle());
 
-  Job<Database> open() => enqueue<Idle, Database>(
-        key: 'open',
-        (ctx) async {
-          final db = await ctx.join(
-            Database.open,
-            discard: (db) => db.close(),
-          );
-          await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
-          return db;
-        },
-      );
+  Job<Database> open() => enqueue<Idle, Database>(key: 'open', (ctx) async {
+    final db = await ctx.join(Database.open, discard: (db) => db.close());
+    await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
+    return db;
+  });
 }
 
 /// "Check, disown, emit", and the asynchronous hand-over under it.
@@ -107,39 +93,28 @@ final class Handover extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   /// Not on the page: the method and the call that opens the database,
   /// which the page shows in the first attempt.
-  Job<void> hand() => enqueue<Idle, void>(
-        key: 'hand',
-        (ctx) async {
-          final db = await ctx.join(
-            Database.open,
-            dispose: (db) => db.close(),
-          );
-          await ctx.uncancellable(db.migrate);
-          ctx
-            ..check()
-            ..disown(db)
-            ..emit(Ready(db));
-        },
-      );
+  Job<void> hand() => enqueue<Idle, void>(key: 'hand', (ctx) async {
+    final db = await ctx.join(Database.open, dispose: (db) => db.close());
+    await ctx.uncancellable(db.migrate);
+    ctx
+      ..check()
+      ..disown(db)
+      ..emit(Ready(db));
+  });
 
   /// Not on the page: the method, the call that makes the file, and a step
   /// named [step] before the section, when the test wants one.
-  Job<void> store({String? step}) => enqueue<Idle, void>(
-        key: 'store',
-        (ctx) async {
-          final file = await ctx.join(
-            openTemp,
-            dispose: (file) => file.delete(),
-          );
-          if (step != null) {
-            await ctx.uncancellable(() => stage.start<void>(step, null));
-          }
-          await ctx.uncancellable(() async {
-            await archive.take(file);
-            ctx.disown(file);
-          });
-        },
-      );
+  Job<void> store({String? step}) =>
+      enqueue<Idle, void>(key: 'store', (ctx) async {
+        final file = await ctx.join(openTemp, dispose: (file) => file.delete());
+        if (step != null) {
+          await ctx.uncancellable(() => stage.start<void>(step, null));
+        }
+        await ctx.uncancellable(() async {
+          await archive.take(file);
+          ctx.disown(file);
+        });
+      });
 }
 
 /// "The wait that stays with it".
@@ -147,11 +122,8 @@ final class TempKeeper extends Solo<AppState> with OpenSolo<AppState>, Desk {
   TempKeeper() : super(const Idle());
 
   /// Not on the page: the method around the statement.
-  Job<void> write() => enqueue<Idle, void>(
-        key: 'temp',
-        (ctx) async {
-          // Deleted before the next job starts and before close() comes back.
-          await ctx.join(openTemp, dispose: (file) => file.delete());
-        },
-      );
+  Job<void> write() => enqueue<Idle, void>(key: 'temp', (ctx) async {
+    // Deleted before the next job starts and before close() comes back.
+    await ctx.join(openTemp, dispose: (file) => file.delete());
+  });
 }

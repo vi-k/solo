@@ -19,8 +19,10 @@ void main() {
     final traces = <String>[];
     Job.debug = traces.add;
     fakeAsync((async) {
-      final job =
-          Job<void>(key: 'job', (ctx) => ctx.abandonable(() => delay(50)));
+      final job = Job<void>(
+        key: 'job',
+        (ctx) => ctx.abandonable(() => delay(50)),
+      );
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -61,53 +63,41 @@ void main() {
   test('an error is traced on both paths, observer or none', () {
     final traces = <String>[];
     Job.debug = traces.add;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(
-            key: 'job',
-            (ctx) async {
-              ctx.onCancel(() => throw StateError('onCancel'));
-              await ctx.abandonable(() => delay(50));
-            },
-          )..ignoreFailure();
-          async.elapse(const Duration(milliseconds: 10));
-          // No observer here, so the error of the callback goes to the
-          // zone — and the trace has to show it all the same.
-          job.cancel().ignore();
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) {},
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(key: 'job', (ctx) async {
+          ctx.onCancel(() => throw StateError('onCancel'));
+          await ctx.abandonable(() => delay(50));
+        })..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 10));
+        // No observer here, so the error of the callback goes to the
+        // zone — and the trace has to show it all the same.
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) {});
     expect(traces, contains('Job(job) error: Bad state: onCancel'));
   });
 
-  test(
-      'the same error is traced when an observer hears it, and on to its '
+  test('the same error is traced when an observer hears it, and on to its '
       'answer', () {
     final traces = <String>[];
     final seen = <String>[];
     final zone = <Object>[];
     Job.debug = traces.add;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(
-            key: 'job',
-            observer: _RecordingObserver(seen),
-            (ctx) async {
-              ctx.onCancel(() => throw StateError('onCancel'));
-              await ctx.abandonable(() => delay(50));
-            },
-          );
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(key: 'job', observer: _RecordingObserver(seen), (
+          ctx,
+        ) async {
+          ctx.onCancel(() => throw StateError('onCancel'));
+          await ctx.abandonable(() => delay(50));
         });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone: an `expect` that fails inside it lands in
     // the handler and is counted as a zone error instead of failing.
     expect(
@@ -119,30 +109,27 @@ void main() {
       ]),
     );
     expect(seen, ['Bad state: onCancel']);
-    expect(
-      zone.map((error) => '$error'),
-      ['Bad state: onCancel'],
-      reason: 'an observer that only watches answers for nothing',
-    );
+    expect(zone.map((error) => '$error'), [
+      'Bad state: onCancel',
+    ], reason: 'an observer that only watches answers for nothing');
   });
 
   test('a deadline a section held is traced as dropped with its timer', () {
     final traces = <String>[];
     Job.debug = traces.add;
     fakeAsync((async) {
-      Job<int>(
-        key: 'job',
-        timeout: const Duration(milliseconds: 10),
-        (ctx) async {
-          // Not awaited, which is the mistake: the body ends before the step.
-          ctx.uncancellable(() => delay(50)).ignore();
-          await delay(20);
-          return 1;
-        },
-      );
+      Job<int>(key: 'job', timeout: const Duration(milliseconds: 10), (
+        ctx,
+      ) async {
+        // Not awaited, which is the mistake: the body ends before the step.
+        ctx.uncancellable(() => delay(50)).ignore();
+        await delay(20);
+        return 1;
+      });
       async.flushTimers();
     });
-    const dropped = 'Job(job) drops the deadline a section held, along with '
+    const dropped =
+        'Job(job) drops the deadline a section held, along with '
         'its timer: Cancelled(timeout)';
     expect(traces, [
       'Job(job) started',
@@ -165,7 +152,8 @@ void main() {
       job.cancel().ignore();
       async.flushTimers();
     });
-    const dropped = 'Job(job) ends with a held cancellation, which is '
+    const dropped =
+        'Job(job) ends with a held cancellation, which is '
         'dropped: Cancelled(manual)';
     expect(traces, [
       'Job(job) started',
@@ -183,8 +171,7 @@ void main() {
       final job = ProbeJob<void>((ctx) async {
         ctx.onDispose(() {});
         await ctx.abandonable(() => delay(1000));
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 10));
       // An engine ended the job itself: the children were not waited for and
       // the stack was not unwound, so a line about the cleanups left behind is
@@ -205,19 +192,22 @@ void main() {
     Job.debug = lines.add;
     final released = <String>[];
     fakeAsync((async) {
-      final job = ProbeJob<void>((ctx) async {
-        ctx
-            .run(
-              Job.deferred<void>((ctx) => ctx.uncancellable(() => delay(30))),
-            )
-            .ignore();
-        await ctx.abandonable(
-          () => delay(10).then((_) => 'db'),
-          dispose: released.add,
-        );
-      })
-        ..launch()
-        ..ignoreFailure();
+      final job =
+          ProbeJob<void>((ctx) async {
+              ctx
+                  .run(
+                    Job.deferred<void>(
+                      (ctx) => ctx.uncancellable(() => delay(30)),
+                    ),
+                  )
+                  .ignore();
+              await ctx.abandonable(
+                () => delay(10).then((_) => 'db'),
+                dispose: released.add,
+              );
+            })
+            ..launch()
+            ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.elapse(const Duration(milliseconds: 15));
@@ -230,7 +220,8 @@ void main() {
     expect(
       lines.where((line) => line.contains('cleanups pending')),
       isEmpty,
-      reason: 'the wait for a release that is over is off the stack, and '
+      reason:
+          'the wait for a release that is over is off the stack, and '
           'nothing is left behind',
     );
   });
@@ -252,14 +243,11 @@ void main() {
       }).ignoreFailure();
       async.flushTimers();
     });
-    expect(
-      traces.where((line) => line.startsWith('Job(opener)')),
-      [
-        'Job(opener) started',
-        'Job(opener) finished: Done(db)',
-        'Job(opener) handed its value over: 1 conditional cleanup dropped',
-      ],
-    );
+    expect(traces.where((line) => line.startsWith('Job(opener)')), [
+      'Job(opener) started',
+      'Job(opener) finished: Done(db)',
+      'Job(opener) handed its value over: 1 conditional cleanup dropped',
+    ]);
   });
 
   test('a cancellation from the channel on that line finds the job over', () {
@@ -302,8 +290,10 @@ void main() {
           return 'opens db';
         },
         (ctx) async {
-          final db =
-              await ctx.abandonable(() => 'db', discard: (db) => closed++);
+          final db = await ctx.abandonable(
+            () => 'db',
+            discard: (db) => closed++,
+          );
           cancelOnNextLine = true;
           return db;
         },
@@ -322,9 +312,10 @@ void main() {
     // speak of the same one.
     final heard = <String>[];
     fakeAsync((async) {
-      final job =
-          Job<void>(key: 'job', (ctx) => ctx.abandonable(() => delay(50)))
-            ..whenCancelled((cancelled) => heard.add(cancelled.reason.name));
+      final job = Job<void>(
+        key: 'job',
+        (ctx) => ctx.abandonable(() => delay(50)),
+      )..whenCancelled((cancelled) => heard.add(cancelled.reason.name));
       async.elapse(const Duration(milliseconds: 10));
       var reentered = false;
       Job.debug = (message) {
@@ -408,20 +399,21 @@ void main() {
     final closed = <String>[];
     late ProbeJob<String> job;
     fakeAsync((async) {
-      job = ProbeJob<String>(key: 'j', (ctx) async {
-        final db = await ctx.abandonable(() => 'db', discard: closed.add);
-        // The unwinding is inside this disposer when an engine ends the job, so
-        // the loop carries on with an outcome that is no longer the one it is
-        // reading.
-        ctx.onDispose(() async {
-          job.drop(const Cancelled('by hand'));
-          await delay(5);
-        });
+      job =
+          ProbeJob<String>(key: 'j', (ctx) async {
+              final db = await ctx.abandonable(() => 'db', discard: closed.add);
+              // The unwinding is inside this disposer when an engine ends
+              // the job, so the loop carries on with an outcome that is no
+              // longer the one it is reading.
+              ctx.onDispose(() async {
+                job.drop(const Cancelled('by hand'));
+                await delay(5);
+              });
 
-        return db;
-      })
-        ..launch()
-        ..ignoreFailure();
+              return db;
+            })
+            ..launch()
+            ..ignoreFailure();
       async.flushTimers();
     });
     expect(job.outcome, isA<Cancelled>());
@@ -458,14 +450,16 @@ void main() {
     expect(
       traces.where((line) => line.contains('handed its value over')),
       ['Job(branch) handed its value over: 1 conditional cleanup dropped'],
-      reason: 'the values reached the caller, and so did what they hold; '
+      reason:
+          'the values reached the caller, and so did what they hold; '
           'once: the commit took the put-aside registrations away, and the '
           'branch has nothing left to name at the end of its unwinding',
     );
   });
 
   group('a value the job did not hand over', () {
-    const kept = 'Job(open) ended Done(null) without the value of 1 '
+    const kept =
+        'Job(open) ended Done(null) without the value of 1 '
         'conditional cleanup (db): unless it is inside the result, nothing '
         'will dispose of it';
 
@@ -522,7 +516,8 @@ void main() {
     });
 
     test('a value inside the result is named too: the line says unless', () {
-      const inside = 'Job(open) ended Done((db, 1)) without the value of 1 '
+      const inside =
+          'Job(open) ended Done((db, 1)) without the value of 1 '
           'conditional cleanup (db): unless it is inside the result, nothing '
           'will dispose of it';
       expect(
@@ -555,7 +550,8 @@ void main() {
     });
 
     test('a value equal to the result but another object is named', () {
-      const equal = 'Job(open) ended Done(db) without the value of 1 '
+      const equal =
+          'Job(open) ended Done(db) without the value of 1 '
           'conditional cleanup (db): unless it is inside the result, nothing '
           'will dispose of it';
       expect(
@@ -570,21 +566,23 @@ void main() {
     });
 
     test('a job finished by hand while it unwinds says that instead', () {
-      const aside = 'Job(open) was finished as Cancelled(handler: by hand) '
+      const aside =
+          'Job(open) was finished as Cancelled(handler: by hand) '
           'with 1 conditional cleanup left aside';
       late ProbeJob<String?> job;
       expect(
         tracesOf(() {
-          job = ProbeJob<String?>(key: 'open', (ctx) async {
-            await ctx.abandonable(() => 'db', discard: (db) {});
-            ctx.onDispose(() async {
-              job.drop(const Cancelled('by hand'));
-              await delay(5);
-            });
-            return null;
-          })
-            ..launch()
-            ..ignoreFailure();
+          job =
+              ProbeJob<String?>(key: 'open', (ctx) async {
+                  await ctx.abandonable(() => 'db', discard: (db) {});
+                  ctx.onDispose(() async {
+                    job.drop(const Cancelled('by hand'));
+                    await delay(5);
+                  });
+                  return null;
+                })
+                ..launch()
+                ..ignoreFailure();
         }),
         [aside],
       );
@@ -633,7 +631,8 @@ void main() {
     expect(
       closed,
       isEmpty,
-      reason: 'the engine finished the branch by hand while the group held '
+      reason:
+          'the engine finished the branch by hand while the group held '
           'it: the value went nowhere, the group ends cancelled, and the '
           'discard put aside for the group to settle is never run',
     );
@@ -652,20 +651,19 @@ void main() {
     var doneSeen = false;
     Outcome<void>? outcome;
     Job.debug = (message) => throw StateError('logger: $message');
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job =
-              Job<void>(key: 'job', (ctx) => ctx.abandonable(() => delay(10)));
-          job.done.then((result) {
-            doneSeen = true;
-            outcome = result;
-          }).ignore();
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(
+          key: 'job',
+          (ctx) => ctx.abandonable(() => delay(10)),
+        );
+        job.done.then((result) {
+          doneSeen = true;
+          outcome = result;
+        }).ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(doneSeen, isTrue, reason: 'the job finished and said so');
     expect(outcome, isA<Done<void>>());
     expect(
@@ -681,20 +679,17 @@ void main() {
     final caught = <Object>[];
     var doneSeen = false;
     Job.debug = traces.add;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(
-            key: 'job',
-            describe: () => throw StateError('describe'),
-            (ctx) => ctx.abandonable(() => delay(10)),
-          );
-          job.done.then((_) => doneSeen = true).ignore();
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(
+          key: 'job',
+          describe: () => throw StateError('describe'),
+          (ctx) => ctx.abandonable(() => delay(10)),
+        );
+        job.done.then((_) => doneSeen = true).ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(doneSeen, isTrue, reason: 'building the message is guarded too');
     expect(
       caught.map((error) => '$error').toList(),
@@ -706,7 +701,8 @@ void main() {
         'Job(job: <describe threw StateError>) started',
         'Job(job: <describe threw StateError>) finished: Done(null)',
       ],
-      reason: 'the line is printed with a mark, and the error goes to the '
+      reason:
+          'the line is printed with a mark, and the error goes to the '
           'zone once for each line',
     );
     expect(caught, hasLength(2));
@@ -740,9 +736,9 @@ void main() {
         Job<void>(
           key: 'outer',
           describe: () {
-            Job.deferred<void>((ctx) async {})
-                .cancel(reason: const _BrokenReason())
-                .ignore();
+            Job.deferred<void>(
+              (ctx) async {},
+            ).cancel(reason: const _BrokenReason()).ignore();
             throw StateError('outer failed');
           },
           (ctx) async {},
@@ -784,15 +780,11 @@ void main() {
           () => job.cancel(reason: const _BrokenReason()).ignore(),
         );
       });
-      expect(
-        lines.where((line) => line.startsWith('zone:')).take(3),
-        [
-          'zone: Bad state: describe',
-          'zone: Bad state: describe',
-          'zone: Bad state: name failed',
-        ],
-        reason: 'started, then the cancellation: its mark, then its throw',
-      );
+      expect(lines.where((line) => line.startsWith('zone:')).take(3), [
+        'zone: Bad state: describe',
+        'zone: Bad state: describe',
+        'zone: Bad state: name failed',
+      ], reason: 'started, then the cancellation: its mark, then its throw');
     });
 
     test('an error whose type cannot be read is still a mark', () {
@@ -837,8 +829,7 @@ final class _RecordingObserver extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      _seen.add('$error');
+  }) => _seen.add('$error');
 
   @override
   void onStart(Job<Object?> job) {}

@@ -37,8 +37,7 @@ final class _Watching extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add(error);
+  }) => heard.add(error);
 }
 
 /// What whoever awaited `value` of a job got, and what had happened by then.
@@ -85,10 +84,10 @@ Map<String, String> _rows(String header) {
 /// says, so a page that stops saying it leaves the test with nothing to
 /// stand for.
 void _says(String phrase) => expect(
-      _prose(),
-      contains(phrase),
-      reason: 'doc/resources.md no longer says this',
-    );
+  _prose(),
+  contains(phrase),
+  reason: 'doc/resources.md no longer says this',
+);
 
 /// Runs [body] under fake time, in a zone of its own, and returns the errors
 /// that reached that zone uncaught. Nothing is asserted inside: an `expect`
@@ -143,22 +142,17 @@ SoloJob<void> _take(
   String call, {
   FutureOr<void> Function(Database db)? dispose,
   FutureOr<void> Function(Database db)? discard,
-}) =>
-    bench.enqueue<Idle, void>(key: 'take', (ctx) async {
-      switch (call) {
-        case 'ctx.abandonable':
-          await ctx.abandonable(
-            Database.open,
-            dispose: dispose,
-            discard: discard,
-          );
-        case 'ctx.join':
-          await ctx.join(Database.open, dispose: dispose, discard: discard);
-        default:
-          await ctx.run(_connect(bench), dispose: dispose, discard: discard);
-      }
-      await ctx.join(() => stage.start<void>('step', null));
-    });
+}) => bench.enqueue<Idle, void>(key: 'take', (ctx) async {
+  switch (call) {
+    case 'ctx.abandonable':
+      await ctx.abandonable(Database.open, dispose: dispose, discard: discard);
+    case 'ctx.join':
+      await ctx.join(Database.open, dispose: dispose, discard: discard);
+    default:
+      await ctx.run(_connect(bench), dispose: dispose, discard: discard);
+  }
+  await ctx.join(() => stage.start<void>('step', null));
+});
 
 /// A job that registers the release of a database through `ctx.onDispose` or
 /// `ctx.onDiscard`, and then waits out a step named `step`.
@@ -234,35 +228,37 @@ void main() {
       });
     });
 
-    test('cancelled while the file opens: the file goes, then the database',
-        () {
-      fakeAsync((async) {
-        final opening = page.Opening();
-        final job = opening.start();
-        async.flushMicrotasks();
-        _end(async, 'open');
-        unawaited(job.cancel());
-        async.flushMicrotasks();
-        _end(async, 'openTemp');
+    test(
+      'cancelled while the file opens: the file goes, then the database',
+      () {
+        fakeAsync((async) {
+          final opening = page.Opening();
+          final job = opening.start();
+          async.flushMicrotasks();
+          _end(async, 'open');
+          unawaited(job.cancel());
+          async.flushMicrotasks();
+          _end(async, 'openTemp');
 
-        expect('${job.outcome}', 'Cancelled(manual)');
-        expect(_file.deletes, 1, reason: 'it reaches nobody');
-        expect(_db.closes, 1);
-        expect(opening.currentState, isA<Idle>());
-        expect(stage.trace, [
-          'subscription made',
-          'open start',
-          'open end',
-          'openTemp start',
-          'openTemp end',
-          'delete start',
-          'delete end',
-          'close start',
-          'close end',
-          'subscription cancelled',
-        ]);
-      });
-    });
+          expect('${job.outcome}', 'Cancelled(manual)');
+          expect(_file.deletes, 1, reason: 'it reaches nobody');
+          expect(_db.closes, 1);
+          expect(opening.currentState, isA<Idle>());
+          expect(stage.trace, [
+            'subscription made',
+            'open start',
+            'open end',
+            'openTemp start',
+            'openTemp end',
+            'delete start',
+            'delete end',
+            'close start',
+            'close end',
+            'subscription cancelled',
+          ]);
+        });
+      },
+    );
 
     test('a listener cancelling from inside emit: the state keeps it', () {
       fakeAsync((async) {
@@ -297,10 +293,10 @@ void main() {
             'whatever the callback closes, whatever the outcome',
         '`ctx.onDiscard(callback)`':
             'whatever the callback closes, and only if the job ends cancelled '
-                'or failed',
+            'or failed',
         '`ctx.disown(value)`':
             'nothing: it drops the registration one of those three calls '
-                'made for the value',
+            'made for the value',
       });
     });
 
@@ -393,8 +389,10 @@ void main() {
           final job = bench.enqueue<Idle, void>((ctx) async {
             FutureOr<void> close(Database db) => db.close();
             final db = switch (call) {
-              'ctx.abandonable' =>
-                await ctx.abandonable(Database.open, dispose: close),
+              'ctx.abandonable' => await ctx.abandonable(
+                Database.open,
+                dispose: close,
+              ),
               'ctx.join' => await ctx.join(Database.open, dispose: close),
               _ => await ctx.run(_connect(bench), dispose: close),
             };
@@ -476,54 +474,57 @@ void main() {
 
   group('Taking a resource from a call', () {
     group('the first attempt', () {
-      test('cancelled while the database opens, it leaves the database open',
-          () {
-        _says(
-          'Then `join` throws `Cancelled` in place of the value, and the body '
-          'never reaches the line below',
-        );
-        _says(
-          'The cleanup stack is empty: nothing in this job knows that a '
-          'database exists',
-        );
-        fakeAsync((async) {
-          final loader = first.LoaderRegisteringUnder();
-          final job = loader.load();
-          async.flushMicrotasks();
-          unawaited(job.cancel());
-          async.flushMicrotasks();
-          expect(job.outcome, isNull, reason: 'join stays with the call');
-          expect(stage.isRunning('open'), isTrue);
-
-          _end(async, 'open');
-          expect('${job.outcome}', 'Cancelled(manual)');
-          expect(
-            stage.trace,
-            ['open start', 'open end'],
-            reason: 'the body never reached the line below',
+      test(
+        'cancelled while the database opens, it leaves the database open',
+        () {
+          _says(
+            'Then `join` throws `Cancelled` in place of the value, and the '
+            'body never reaches the line below',
           );
-          expect(_db.closed, isFalse);
+          _says(
+            'The cleanup stack is empty: nothing in this job knows that a '
+            'database exists',
+          );
+          fakeAsync((async) {
+            final loader = first.LoaderRegisteringUnder();
+            final job = loader.load();
+            async.flushMicrotasks();
+            unawaited(job.cancel());
+            async.flushMicrotasks();
+            expect(job.outcome, isNull, reason: 'join stays with the call');
+            expect(stage.isRunning('open'), isTrue);
 
-          unawaited(loader.close());
-          async.flushMicrotasks();
-          expect(_db.closed, isFalse, reason: 'nothing knows it exists');
-        });
-      });
+            _end(async, 'open');
+            expect('${job.outcome}', 'Cancelled(manual)');
+            expect(stage.trace, [
+              'open start',
+              'open end',
+            ], reason: 'the body never reached the line below');
+            expect(_db.closed, isFalse);
 
-      test('nobody cancels: the line is reached, and the database is closed',
-          () {
-        fakeAsync((async) {
-          final loader = first.LoaderRegisteringUnder();
-          final job = loader.load();
-          async.flushMicrotasks();
-          _end(async, 'open');
-          _end(async, 'readAll');
+            unawaited(loader.close());
+            async.flushMicrotasks();
+            expect(_db.closed, isFalse, reason: 'nothing knows it exists');
+          });
+        },
+      );
 
-          expect('${job.outcome}', 'Done(null)');
-          expect('${loader.currentState}', 'Loaded([row])');
-          expect(_db.closes, 1);
-        });
-      });
+      test(
+        'nobody cancels: the line is reached, and the database is closed',
+        () {
+          fakeAsync((async) {
+            final loader = first.LoaderRegisteringUnder();
+            final job = loader.load();
+            async.flushMicrotasks();
+            _end(async, 'open');
+            _end(async, 'readAll');
+
+            expect('${job.outcome}', 'Done(null)');
+            expect('${loader.currentState}', 'Loaded([row])');
+            expect(_db.closes, 1);
+          });
+        },
+      );
 
       test('cancelled while the rows are read, it closes the database', () {
         fakeAsync((async) {
@@ -620,19 +621,13 @@ void main() {
     test('a release registered twice closes the same database twice', () {
       _says('would close the same database twice');
       fakeAsync((async) {
-        final job = Bench().enqueue<Idle, void>(
-          key: 'load',
-          (ctx) async {
-            final db = await ctx.join(
-              Database.open,
-              dispose: (db) => db.close(),
-            );
-            ctx.onDispose(db.close);
+        final job = Bench().enqueue<Idle, void>(key: 'load', (ctx) async {
+          final db = await ctx.join(Database.open, dispose: (db) => db.close());
+          ctx.onDispose(db.close);
 
-            final rows = await ctx.join(db.readAll);
-            ctx.emit(Loaded(rows));
-          },
-        );
+          final rows = await ctx.join(db.readAll);
+          ctx.emit(Loaded(rows));
+        });
         async.flushMicrotasks();
         _end(async, 'open');
         _end(async, 'readAll');
@@ -642,12 +637,14 @@ void main() {
       });
     });
 
-    test(
-        'abandonable releases a value that did not reach the body as it '
+    test('abandonable releases a value that did not reach the body as it '
         'arrives', () {
       fakeAsync((async) {
-        final job =
-            _take(Bench(), 'ctx.abandonable', dispose: (db) => db.close());
+        final job = _take(
+          Bench(),
+          'ctx.abandonable',
+          dispose: (db) => db.close(),
+        );
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -680,10 +677,10 @@ void main() {
       /// The pair of the opening block, after a step a cancellation waits
       /// out.
       SoloJob<void> pair(Bench bench) => bench.enqueue<Idle, void>((ctx) async {
-            await ctx.uncancellable(() => stage.start<void>('step', null));
-            final sub = device.events.listen(onEvent);
-            ctx.onDispose(sub.cancel);
-          });
+        await ctx.uncancellable(() => stage.start<void>('step', null));
+        final sub = device.events.listen(onEvent);
+        ctx.onDispose(sub.cancel);
+      });
 
       test('listen with onDispose under it makes the subscription', () {
         fakeAsync((async) {
@@ -722,39 +719,42 @@ void main() {
       });
     });
 
-    test('with nobody cancelling, the call makes it and cancels it at the end',
-        () {
-      fakeAsync((async) {
-        final job = page.Watcher().watch('step');
-        async.flushMicrotasks();
-        _end(async, 'step');
+    test(
+      'with nobody cancelling, the call makes it and cancels it at the end',
+      () {
+        fakeAsync((async) {
+          final job = page.Watcher().watch('step');
+          async.flushMicrotasks();
+          _end(async, 'step');
 
-        expect('${job.outcome}', 'Done(null)');
-        expect(stage.trace, [
-          'step start',
-          'step end',
-          'subscription made',
-          'subscription cancelled',
-        ]);
-      });
-    });
+          expect('${job.outcome}', 'Done(null)');
+          expect(stage.trace, [
+            'step start',
+            'step end',
+            'subscription made',
+            'subscription cancelled',
+          ]);
+        });
+      },
+    );
 
     test(
-        'abandonable takes an action that returns without waiting just as well',
-        () {
-      fakeAsync((async) {
-        final job = Bench().enqueue<Idle, void>((ctx) async {
-          await ctx.abandonable(
-            () => device.events.listen(onEvent),
-            dispose: (sub) => sub.cancel(),
-          );
-        });
-        async.flushMicrotasks();
+      'abandonable takes an action that returns without waiting just as well',
+      () {
+        fakeAsync((async) {
+          final job = Bench().enqueue<Idle, void>((ctx) async {
+            await ctx.abandonable(
+              () => device.events.listen(onEvent),
+              dispose: (sub) => sub.cancel(),
+            );
+          });
+          async.flushMicrotasks();
 
-        expect('${job.outcome}', 'Done(null)');
-        expect(stage.trace, ['subscription made', 'subscription cancelled']);
-      });
-    });
+          expect('${job.outcome}', 'Done(null)');
+          expect(stage.trace, ['subscription made', 'subscription cancelled']);
+        });
+      },
+    );
   });
 
   group('Returning a resource to the caller', () {
@@ -902,41 +902,47 @@ void main() {
     });
 
     for (final call in _calls) {
-      test('both callbacks on $call are an ArgumentError, before it starts',
-          () {
-        fakeAsync((async) {
-          Object? thrown;
-          final bench = Bench();
-          final job = bench.enqueue<Idle, void>((ctx) async {
-            FutureOr<void> close(Database db) => db.close();
-            try {
-              switch (call) {
-                case 'ctx.abandonable':
-                  await ctx.abandonable(
-                    Database.open,
-                    dispose: close,
-                    discard: close,
-                  );
-                case 'ctx.join':
-                  await ctx.join(Database.open, dispose: close, discard: close);
-                default:
-                  await ctx.run(
-                    _connect(bench),
-                    dispose: close,
-                    discard: close,
-                  );
+      test(
+        'both callbacks on $call are an ArgumentError, before it starts',
+        () {
+          fakeAsync((async) {
+            Object? thrown;
+            final bench = Bench();
+            final job = bench.enqueue<Idle, void>((ctx) async {
+              FutureOr<void> close(Database db) => db.close();
+              try {
+                switch (call) {
+                  case 'ctx.abandonable':
+                    await ctx.abandonable(
+                      Database.open,
+                      dispose: close,
+                      discard: close,
+                    );
+                  case 'ctx.join':
+                    await ctx.join(
+                      Database.open,
+                      dispose: close,
+                      discard: close,
+                    );
+                  default:
+                    await ctx.run(
+                      _connect(bench),
+                      dispose: close,
+                      discard: close,
+                    );
+                }
+              } on Object catch (error) {
+                thrown = error;
               }
-            } on Object catch (error) {
-              thrown = error;
-            }
-          });
-          async.flushMicrotasks();
+            });
+            async.flushMicrotasks();
 
-          expect(thrown, isArgumentError);
-          expect(stage.trace, isEmpty, reason: 'nothing was started');
-          expect('${job.outcome}', 'Done(null)');
-        });
-      });
+            expect(thrown, isArgumentError);
+            expect(stage.trace, isEmpty, reason: 'nothing was started');
+            expect('${job.outcome}', 'Done(null)');
+          });
+        },
+      );
     }
 
     group('a parent that takes the database from a child', () {
@@ -966,11 +972,10 @@ void main() {
           _end(async, 'open');
 
           expect('${job.outcome}', 'Cancelled(manual)');
-          expect(
-            stage.trace,
-            ['open start', 'open end'],
-            reason: 'the line under the call was never reached',
-          );
+          expect(stage.trace, [
+            'open start',
+            'open end',
+          ], reason: 'the line under the call was never reached');
           expect(_db.closed, isFalse, reason: 'the value went with the throw');
         });
       });
@@ -989,27 +994,29 @@ void main() {
         });
       });
 
-      test('the checkpoint of ctx.run asks the state rules of the parent too',
-          () {
-        fakeAsync((async) {
-          var holds = true;
-          final bench = Bench();
-          final job = bench.enqueue<Idle, void>(
-            key: 'take',
-            keepWhile: (state) => holds,
-            (ctx) async {
-              final db = await ctx.run(_connect(bench));
-              ctx.onDiscard(db.close);
-            },
-          );
-          async.flushMicrotasks();
-          holds = false;
-          _end(async, 'open');
+      test(
+        'the checkpoint of ctx.run asks the state rules of the parent too',
+        () {
+          fakeAsync((async) {
+            var holds = true;
+            final bench = Bench();
+            final job = bench.enqueue<Idle, void>(
+              key: 'take',
+              keepWhile: (state) => holds,
+              (ctx) async {
+                final db = await ctx.run(_connect(bench));
+                ctx.onDiscard(db.close);
+              },
+            );
+            async.flushMicrotasks();
+            holds = false;
+            _end(async, 'open');
 
-          expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
-          expect(_db.closed, isFalse);
-        });
-      });
+            expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
+            expect(_db.closed, isFalse);
+          });
+        },
+      );
 
       test('nobody cancels before the value: the line under registers it', () {
         fakeAsync((async) {
@@ -1117,8 +1124,8 @@ void main() {
     });
 
     group('check, disown, emit', () {
-      test('cancelled while the migration runs: cleanup closes the database',
-          () {
+      test('cancelled while the migration runs: '
+          'cleanup closes the database', () {
         _says(
           'If `check` throws, which it does first when the job is cancelled or '
           'its rules no longer hold, the database is still registered, and '
@@ -1320,36 +1327,44 @@ void main() {
     });
 
     group('the asynchronous hand-over', () {
-      test('nobody cancels: the archive has the file, and nothing deletes it',
-          () {
-        fakeAsync((async) {
-          final job = page.Handover().store();
-          async.flushMicrotasks();
-          _end(async, 'openTemp');
+      test(
+        'nobody cancels: the archive has the file, and nothing deletes it',
+        () {
+          fakeAsync((async) {
+            final job = page.Handover().store();
+            async.flushMicrotasks();
+            _end(async, 'openTemp');
 
-          expect('${job.outcome}', 'Done(null)');
-          expect(stage.archived, [same(_file)]);
-          expect(_file.deleted, isFalse);
-        });
-      });
+            expect('${job.outcome}', 'Done(null)');
+            expect(stage.archived, [same(_file)]);
+            expect(_file.deleted, isFalse);
+          });
+        },
+      );
 
-      test('cancelled during the transfer: the section hands it over whole',
-          () {
-        fakeAsync((async) {
-          stage.endsByItself.remove('take');
-          final job = page.Handover().store();
-          async.flushMicrotasks();
-          _end(async, 'openTemp');
-          unawaited(job.cancel());
-          async.flushMicrotasks();
-          expect(job.isCancelled, isFalse, reason: 'the section holds it back');
+      test(
+        'cancelled during the transfer: the section hands it over whole',
+        () {
+          fakeAsync((async) {
+            stage.endsByItself.remove('take');
+            final job = page.Handover().store();
+            async.flushMicrotasks();
+            _end(async, 'openTemp');
+            unawaited(job.cancel());
+            async.flushMicrotasks();
+            expect(
+              job.isCancelled,
+              isFalse,
+              reason: 'the section holds it back',
+            );
 
-          _end(async, 'take');
-          expect('${job.outcome}', 'Cancelled(manual)');
-          expect(stage.archived, [same(_file)]);
-          expect(_file.deleted, isFalse);
-        });
-      });
+            _end(async, 'take');
+            expect('${job.outcome}', 'Cancelled(manual)');
+            expect(stage.archived, [same(_file)]);
+            expect(_file.deleted, isFalse);
+          });
+        },
+      );
 
       test('the state rules are asked where the section opens', () {
         _says('are asked where the section opens, before the transfer starts');
@@ -1397,8 +1412,7 @@ void main() {
               ctx.disown(file);
             });
 
-        test(
-            'cancelled during the transfer: cleanup deletes what the '
+        test('cancelled during the transfer: cleanup deletes what the '
             'archive is holding', () {
           fakeAsync((async) {
             stage.endsByItself.remove('take');
@@ -1529,25 +1543,27 @@ void main() {
         expect(errors, ['Bad state: the file is busy']);
       });
 
-      test('with Solo.unansweredHandler set the late error goes there instead',
-          () {
-        final handled = <Object>[];
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add(error);
-        late first.TempAbandoner keeper;
-        final errors = _zone((async) {
-          keeper = first.TempAbandoner();
-          final job = keeper.write();
-          async.flushMicrotasks();
-          unawaited(job.cancel());
-          async.flushMicrotasks();
-          _fail(async, 'openTemp', StateError('the disk is full'));
-        });
+      test(
+        'with Solo.unansweredHandler set the late error goes there instead',
+        () {
+          final handled = <Object>[];
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(error);
+          late first.TempAbandoner keeper;
+          final errors = _zone((async) {
+            keeper = first.TempAbandoner();
+            final job = keeper.write();
+            async.flushMicrotasks();
+            unawaited(job.cancel());
+            async.flushMicrotasks();
+            _fail(async, 'openTemp', StateError('the disk is full'));
+          });
 
-        expect(keeper.heard, [isStateError]);
-        expect(handled, [isStateError]);
-        expect(errors, isEmpty);
-      });
+          expect(keeper.heard, [isStateError]);
+          expect(handled, [isStateError]);
+          expect(errors, isEmpty);
+        },
+      );
     });
 
     group('the wait that stays with it', () {
@@ -1620,7 +1636,8 @@ void main() {
             'runs it last registration first, awaiting each callback',
         'Second pass':
             'runs a `discard` that cancellation has since made necessary',
-        'End': 'gets its outcome, runs its state handler, lets the queue '
+        'End':
+            'gets its outcome, runs its state handler, lets the queue '
             'start the next job',
       });
     });
@@ -1628,29 +1645,26 @@ void main() {
     /// A job with a child that outlives its body, two disposers and a
     /// discard registered last.
     SoloJob<Database> steps(Bench bench) => bench.enqueue<Idle, Database>(
-          key: 'steps',
-          ifCancelled: (state, cancelled) {
-            stage.trace.add('state handler');
+      key: 'steps',
+      ifCancelled: (state, cancelled) {
+        stage.trace.add('state handler');
 
-            return state;
-          },
-          (ctx) async {
-            ctx
-              ..onDispose(() => stage.start<void>('disposer A', null))
-              ..onDispose(() => stage.start<void>('disposer B', null));
-            final db = await ctx.join(
-              Database.open,
-              discard: (db) => db.close(),
-            );
-            final child = bench.job<Idle, void>(
-              cancellable: false,
-              (child) => child.join(() => stage.start<void>('child', null)),
-            );
-            unawaited(ctx.run(child).onError((_, __) {}));
-
-            return db;
-          },
+        return state;
+      },
+      (ctx) async {
+        ctx
+          ..onDispose(() => stage.start<void>('disposer A', null))
+          ..onDispose(() => stage.start<void>('disposer B', null));
+        final db = await ctx.join(Database.open, discard: (db) => db.close());
+        final child = bench.job<Idle, void>(
+          cancellable: false,
+          (child) => child.join(() => stage.start<void>('child', null)),
         );
+        unawaited(ctx.run(child).onError((_, _) {}));
+
+        return db;
+      },
+    );
 
     test('children first, then the stack, last registration first', () {
       fakeAsync((async) {
@@ -1746,43 +1760,44 @@ void main() {
           expect(seen, isA<Failed>());
           expect(seen, same(job.outcome));
           expect('${bench.currentState}', 'Loaded([after the failure])');
-          expect(
-            stage.trace,
-            ['cleanup', 'state handler', 'next job started'],
-          );
+          expect(stage.trace, ['cleanup', 'state handler', 'next job started']);
         });
       });
 
-      test('code that awaits done or value resumes after the next job starts',
-          () {
-        _says('Code that awaits `done` or `value` resumes after that start');
-        fakeAsync((async) {
-          final bench = Bench();
-          final job = bench.enqueue<Idle, int>((ctx) async => 1);
-          bench.next();
-          Future<void> awaitValue() async {
-            await job.value;
-            stage.trace.add('value awaited');
-          }
+      test(
+        'code that awaits done or value resumes after the next job starts',
+        () {
+          _says('Code that awaits `done` or `value` resumes after that start');
+          fakeAsync((async) {
+            final bench = Bench();
+            final job = bench.enqueue<Idle, int>((ctx) async => 1);
+            bench.next();
+            Future<void> awaitValue() async {
+              await job.value;
+              stage.trace.add('value awaited');
+            }
 
-          Future<void> awaitDone() async {
-            await job.done;
-            stage.trace.add('done awaited');
-          }
+            Future<void> awaitDone() async {
+              await job.done;
+              stage.trace.add('done awaited');
+            }
 
-          unawaited(awaitValue());
-          unawaited(awaitDone());
-          async.flushMicrotasks();
+            unawaited(awaitValue());
+            unawaited(awaitDone());
+            async.flushMicrotasks();
 
-          expect(stage.trace.first, 'next job started');
-          expect(
-            stage.trace,
-            unorderedEquals(
-              ['next job started', 'value awaited', 'done awaited'],
-            ),
-          );
-        });
-      });
+            expect(stage.trace.first, 'next job started');
+            expect(
+              stage.trace,
+              unorderedEquals([
+                'next job started',
+                'value awaited',
+                'done awaited',
+              ]),
+            );
+          });
+        },
+      );
     });
 
     group('try/finally', () {
@@ -1881,30 +1896,32 @@ void main() {
         });
       });
 
-      test('registering those releases piles them up to the end of the job',
-          () {
-        _says('pile up one registration per turn');
-        fakeAsync((async) {
-          final job = turns(Bench(), registered: true);
-          async.flushMicrotasks();
-          _end(async, 'turn 1');
-          _end(async, 'turn 2');
-          _end(async, 'turn 3');
+      test(
+        'registering those releases piles them up to the end of the job',
+        () {
+          _says('pile up one registration per turn');
+          fakeAsync((async) {
+            final job = turns(Bench(), registered: true);
+            async.flushMicrotasks();
+            _end(async, 'turn 1');
+            _end(async, 'turn 2');
+            _end(async, 'turn 3');
 
-          expect('${job.outcome}', 'Done(null)');
-          expect(stage.trace, [
-            'turn 1 start',
-            'turn 1 end',
-            'turn 2 start',
-            'turn 2 end',
-            'turn 3 start',
-            'turn 3 end',
-            '3 released',
-            '2 released',
-            '1 released',
-          ]);
-        });
-      });
+            expect('${job.outcome}', 'Done(null)');
+            expect(stage.trace, [
+              'turn 1 start',
+              'turn 1 end',
+              'turn 2 start',
+              'turn 2 end',
+              'turn 3 start',
+              'turn 3 end',
+              '3 released',
+              '2 released',
+              '1 released',
+            ]);
+          });
+        },
+      );
 
       test('does not cover the time while the children finish', () {
         _says(
@@ -1919,7 +1936,7 @@ void main() {
               final child = bench.job<Idle, void>(
                 (child) => child.join(() => stage.start<void>('child', null)),
               );
-              unawaited(ctx.run(child).onError((_, __) {}));
+              unawaited(ctx.run(child).onError((_, _) {}));
             } finally {
               stage.trace.add('finally release');
             }
@@ -1946,46 +1963,50 @@ void main() {
             ctx.onDispose(() async => throw error);
           });
 
-      test('is told to onError and to Solo.observer, then goes to the zone',
-          () {
-        _says(
-          "An error thrown by cleanup is told to the controller's `onError` "
-          'hook and to `Solo.observer`. Then it is handed to '
-          '`Solo.unansweredHandler`, or to the zone when no handler is set',
-        );
-        _says('cleanup that throws leaves a `Done` job `Done`');
-        final watching = _Watching();
-        Solo.observer = watching;
-        late Bench bench;
-        late Job<void> job;
-        final errors = _zone((async) {
-          bench = Bench();
-          job = cleanupThrows(bench, StateError('the cleanup failed'));
-          async.flushMicrotasks();
-        });
+      test(
+        'is told to onError and to Solo.observer, then goes to the zone',
+        () {
+          _says(
+            "An error thrown by cleanup is told to the controller's `onError` "
+            'hook and to `Solo.observer`. Then it is handed to '
+            '`Solo.unansweredHandler`, or to the zone when no handler is set',
+          );
+          _says('cleanup that throws leaves a `Done` job `Done`');
+          final watching = _Watching();
+          Solo.observer = watching;
+          late Bench bench;
+          late Job<void> job;
+          final errors = _zone((async) {
+            bench = Bench();
+            job = cleanupThrows(bench, StateError('the cleanup failed'));
+            async.flushMicrotasks();
+          });
 
-        expect(bench.heard, [isStateError]);
-        expect(watching.heard, [isStateError]);
-        expect(errors, ['Bad state: the cleanup failed']);
-        expect('${job.outcome}', 'Done(null)', reason: 'Done stays Done');
-      });
+          expect(bench.heard, [isStateError]);
+          expect(watching.heard, [isStateError]);
+          expect(errors, ['Bad state: the cleanup failed']);
+          expect('${job.outcome}', 'Done(null)', reason: 'Done stays Done');
+        },
+      );
 
-      test('goes to Solo.unansweredHandler instead of the zone when one is set',
-          () {
-        final handled = <Object>[];
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add(error);
-        late Bench bench;
-        final errors = _zone((async) {
-          bench = Bench();
-          cleanupThrows(bench, StateError('the cleanup failed'));
-          async.flushMicrotasks();
-        });
+      test(
+        'goes to Solo.unansweredHandler instead of the zone when one is set',
+        () {
+          final handled = <Object>[];
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(error);
+          late Bench bench;
+          final errors = _zone((async) {
+            bench = Bench();
+            cleanupThrows(bench, StateError('the cleanup failed'));
+            async.flushMicrotasks();
+          });
 
-        expect(bench.heard, [isStateError]);
-        expect(handled, [isStateError]);
-        expect(errors, isEmpty);
-      });
+          expect(bench.heard, [isStateError]);
+          expect(handled, [isStateError]);
+          expect(errors, isEmpty);
+        },
+      );
 
       test('a Cancelled is told to the same two and goes no further', () {
         _says(
@@ -2009,19 +2030,21 @@ void main() {
         expect('${job.outcome}', 'Done(null)');
       });
 
-      test('a Cancelled stays out of Solo.unansweredHandler when one is set',
-          () {
-        final handled = <Object>[];
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add(error);
-        final errors = _zone((async) {
-          cleanupThrows(Bench(), const Cancelled('from cleanup'));
-          async.flushMicrotasks();
-        });
+      test(
+        'a Cancelled stays out of Solo.unansweredHandler when one is set',
+        () {
+          final handled = <Object>[];
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(error);
+          final errors = _zone((async) {
+            cleanupThrows(Bench(), const Cancelled('from cleanup'));
+            async.flushMicrotasks();
+          });
 
-        expect(handled, isEmpty);
-        expect(errors, isEmpty);
-      });
+          expect(handled, isEmpty);
+          expect(errors, isEmpty);
+        },
+      );
     });
 
     group('a cleanup that waits', () {
@@ -2032,15 +2055,12 @@ void main() {
       ) {
         late final SoloJob<void> self;
 
-        return self = bench.enqueue<Idle, void>(
-          key: 'stuck',
-          (ctx) async {
-            ctx.onDispose(() async {
-              await wait(self);
-              stage.trace.add('the cleanup went on');
-            });
-          },
-        );
+        return self = bench.enqueue<Idle, void>(key: 'stuck', (ctx) async {
+          ctx.onDispose(() async {
+            await wait(self);
+            stage.trace.add('the cleanup went on');
+          });
+        });
       }
 
       final own = <String, Future<Object?> Function(SoloJob<void> self)>{
@@ -2072,8 +2092,10 @@ void main() {
 
       test('for a later job holds the queue while that job stays queued', () {
         _says('holds the queue for as long as that job stays queued');
-        _says('`pending` reports such a job as `in its cleanup`, with the '
-            'later one among those `queued` behind it');
+        _says(
+          '`pending` reports such a job as `in its cleanup`, with the '
+          'later one among those `queued` behind it',
+        );
         fakeAsync((async) {
           final bench = Bench();
           late final SoloJob<void> later;
@@ -2108,8 +2130,10 @@ void main() {
 
     test('one of them goes on to a second attempt', () {
       expect(
-        RegExp(r'^### The second attempt$', multiLine: true)
-            .allMatches(_page()),
+        RegExp(
+          r'^### The second attempt$',
+          multiLine: true,
+        ).allMatches(_page()),
         hasLength(1),
       );
     });
@@ -2140,13 +2164,15 @@ void main() {
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom('doc/resources.md', answers, alsoIn: [attempts]),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom('doc/resources.md', answers, alsoIn: [attempts]),
+          isEmpty,
+        );
+      },
+    );
 
     test('every heading with code under it is held to a file', () {
       final withCode = [

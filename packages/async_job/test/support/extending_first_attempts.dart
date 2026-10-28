@@ -89,8 +89,7 @@ void runDownload(String act) {
     print('downloaded $rows rows');
     await ctx.join(() => save(rows));
     print('saved');
-  })
-    .._launch();
+  }).._launch();
   userDoes(act, job);
 }
 
@@ -106,8 +105,7 @@ Job<void> signOutWithChild(List<String> seen) {
     ctx.onCancel(() => seen.add('parent told to stop'));
     ctx.run(child).ignore();
     await ctx.join(download);
-  })
-    .._launch();
+  }).._launch();
   job.done.then((outcome) => seen.add('outcome: $outcome')).ignore();
   job._untilFinished.ignore();
   return child;

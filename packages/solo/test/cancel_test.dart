@@ -11,8 +11,10 @@ void main() {
   test('cancel of a queued job drops it at once', () {
     runSolo((solo, journal, async) {
       solo.enqueue<TestState, void>(key: 'first', (ctx) async => delay(100));
-      final second =
-          solo.enqueue<TestState, void>(key: 'second', (ctx) async {});
+      final second = solo.enqueue<TestState, void>(
+        key: 'second',
+        (ctx) async {},
+      );
       async.flushMicrotasks();
       var cancelDone = false;
       second.cancel().then((_) => cancelDone = true);
@@ -28,8 +30,10 @@ void main() {
   test('whenCancelled notifies for a job dropped from the queue', () {
     runSolo((solo, journal, async) {
       solo.enqueue<TestState, void>(key: 'first', (ctx) async => delay(100));
-      final second =
-          solo.enqueue<TestState, void>(key: 'second', (ctx) async {});
+      final second = solo.enqueue<TestState, void>(
+        key: 'second',
+        (ctx) async {},
+      );
       async.flushMicrotasks();
       var cancelled = false;
       second
@@ -163,14 +167,12 @@ void main() {
 
   test('rules cancel a cancellable: false job anyway', () {
     runSolo((solo, journal, async) {
-      solo.enqueue<NotDisposed, void>(
-        key: 'stubborn',
-        cancellable: false,
-        (ctx) async {
-          await delay(100);
-          ctx.check();
-        },
-      );
+      solo.enqueue<NotDisposed, void>(key: 'stubborn', cancellable: false, (
+        ctx,
+      ) async {
+        await delay(100);
+        ctx.check();
+      });
       async.elapse(const Duration(milliseconds: 50));
       solo.externalSetState(const Disposed());
       async.elapse(const Duration(milliseconds: 50));
@@ -256,8 +258,10 @@ void main() {
         key: 'running',
         (ctx) => pause(ctx, 100),
       );
-      final queued =
-          solo.enqueue<TestState, void>(key: 'queued', (ctx) async {});
+      final queued = solo.enqueue<TestState, void>(
+        key: 'queued',
+        (ctx) async {},
+      );
       async.flushMicrotasks();
       solo.cancelAll(reason: const _Reset());
       async.flushTimers();

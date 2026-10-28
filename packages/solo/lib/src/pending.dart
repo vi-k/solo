@@ -164,7 +164,7 @@ final class SoloPendingJob extends SoloPending {
     ];
 
     return 'SoloPending(${_name(job)} $what${notes.isEmpty ? '' : ', '
-        '${notes.join(', ')}'})';
+              '${notes.join(', ')}'})';
   }
 }
 
@@ -197,7 +197,8 @@ final class SoloPendingQueue extends SoloPending {
   const SoloPendingQueue(this.jobs);
 
   @override
-  String toString() => 'SoloPending(draining, ${jobs.length} queued: '
+  String toString() =>
+      'SoloPending(draining, ${jobs.length} queued: '
       '${jobs.map(_name).join(', ')})';
 }
 

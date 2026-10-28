@@ -23,50 +23,43 @@ ParallelWaitError<Object?, Object?> _recordEnvelope(Object errors) =>
     ParallelWaitError<Object?, Object?>(null, errors);
 
 Object _recordErrors(List<Object?> values) => switch (values.length) {
-      2 => (values[0], values[1]),
-      3 => (values[0], values[1], values[2]),
-      4 => (values[0], values[1], values[2], values[3]),
-      5 => (values[0], values[1], values[2], values[3], values[4]),
-      6 => (
-          values[0],
-          values[1],
-          values[2],
-          values[3],
-          values[4],
-          values[5],
-        ),
-      7 => (
-          values[0],
-          values[1],
-          values[2],
-          values[3],
-          values[4],
-          values[5],
-          values[6],
-        ),
-      8 => (
-          values[0],
-          values[1],
-          values[2],
-          values[3],
-          values[4],
-          values[5],
-          values[6],
-          values[7],
-        ),
-      9 => (
-          values[0],
-          values[1],
-          values[2],
-          values[3],
-          values[4],
-          values[5],
-          values[6],
-          values[7],
-          values[8],
-        ),
-      _ => throw ArgumentError.value(values.length, 'length'),
-    };
+  2 => (values[0], values[1]),
+  3 => (values[0], values[1], values[2]),
+  4 => (values[0], values[1], values[2], values[3]),
+  5 => (values[0], values[1], values[2], values[3], values[4]),
+  6 => (values[0], values[1], values[2], values[3], values[4], values[5]),
+  7 => (
+    values[0],
+    values[1],
+    values[2],
+    values[3],
+    values[4],
+    values[5],
+    values[6],
+  ),
+  8 => (
+    values[0],
+    values[1],
+    values[2],
+    values[3],
+    values[4],
+    values[5],
+    values[6],
+    values[7],
+  ),
+  9 => (
+    values[0],
+    values[1],
+    values[2],
+    values[3],
+    values[4],
+    values[5],
+    values[6],
+    values[7],
+    values[8],
+  ),
+  _ => throw ArgumentError.value(values.length, 'length'),
+};
 
 Future<Outcome<void>> _run(Future<void> Function() body) async {
   final job = Job<void>((ctx) async => body());
@@ -87,8 +80,7 @@ void main() {
           Future<void>.value(),
           Future<void>.error(cancelled, branchTrace),
         ].wait;
-      })
-        ..whenCancelled((_) => notifications++);
+      })..whenCancelled((_) => notifications++);
 
       final outcome = await job.done;
       expect(outcome, isA<Cancelled>());
@@ -118,101 +110,107 @@ void main() {
     });
 
     fakeAsyncTest(
-        'a child cancellation keeps its child description and cascades',
-        () async {
-      const childThrown = Cancelled('child stopped');
-      late ChildJob<void> child;
-      late ChildJob<void> neighbor;
-      late ChildJob<void> third;
-      var thirdWasRunning = false;
-      final parent = Job<void>((ctx) async {
-        child = Job.deferred<void>((childContext) async {
-          throw childThrown;
+      'a child cancellation keeps its child description and cascades',
+      () async {
+        const childThrown = Cancelled('child stopped');
+        late ChildJob<void> child;
+        late ChildJob<void> neighbor;
+        late ChildJob<void> third;
+        var thirdWasRunning = false;
+        final parent = Job<void>((ctx) async {
+          child = Job.deferred<void>((childContext) async {
+            throw childThrown;
+          });
+          neighbor = Job.deferred<void>((childContext) async {});
+          final thirdGate = Completer<void>();
+          third = Job.deferred<void>((childContext) async {
+            await childContext.abandonable(() => thirdGate.future);
+          });
+          ctx.run(child).ignore();
+          ctx.run(neighbor).ignore();
+          ctx.run(third).ignore();
+          await child.done;
+          await neighbor.done;
+          thirdWasRunning = third.isRunning;
+          final childCancelled = child.outcome! as Cancelled;
+          await [
+            Future<void>.value(),
+            Future<void>.error(childCancelled, childCancelled.stackTrace),
+          ].wait;
         });
-        neighbor = Job.deferred<void>((childContext) async {});
-        final thirdGate = Completer<void>();
-        third = Job.deferred<void>((childContext) async {
-          await childContext.abandonable(() => thirdGate.future);
-        });
-        ctx.run(child).ignore();
-        ctx.run(neighbor).ignore();
-        ctx.run(third).ignore();
-        await child.done;
-        await neighbor.done;
-        thirdWasRunning = third.isRunning;
-        final childCancelled = child.outcome! as Cancelled;
-        await [
-          Future<void>.value(),
-          Future<void>.error(childCancelled, childCancelled.stackTrace),
-        ].wait;
-      });
 
-      final outcome = await parent.done;
-      expect(thirdWasRunning, isTrue);
-      expect(neighbor.outcome, isA<Done<void>>());
-      expect(third.outcome, isA<Cancelled>());
-      expect(outcome, isA<Cancelled>());
-      final result = outcome as Cancelled;
-      expect(result.description, contains('child'));
-      expect((result.reason as HandlerCancelReason).cause, same(child.outcome));
-      expect(
-        (third.outcome! as Cancelled).reason,
-        isA<ParentCancelReason>(),
-      );
-    });
+        final outcome = await parent.done;
+        expect(thirdWasRunning, isTrue);
+        expect(neighbor.outcome, isA<Done<void>>());
+        expect(third.outcome, isA<Cancelled>());
+        expect(outcome, isA<Cancelled>());
+        final result = outcome as Cancelled;
+        expect(result.description, contains('child'));
+        expect(
+          (result.reason as HandlerCancelReason).cause,
+          same(child.outcome),
+        );
+        expect((third.outcome! as Cancelled).reason, isA<ParentCancelReason>());
+      },
+    );
 
-    fakeAsyncTest('a list envelope nested in a list keeps the branch trace',
-        () async {
-      const cancelled = Cancelled('nested');
-      final branchTrace = StackTrace.current;
-      final inner = _listEnvelope([AsyncError(cancelled, branchTrace)]);
-      final outer = _listEnvelope([AsyncError(inner, StackTrace.current)]);
+    fakeAsyncTest(
+      'a list envelope nested in a list keeps the branch trace',
+      () async {
+        const cancelled = Cancelled('nested');
+        final branchTrace = StackTrace.current;
+        final inner = _listEnvelope([AsyncError(cancelled, branchTrace)]);
+        final outer = _listEnvelope([AsyncError(inner, StackTrace.current)]);
 
-      final outcome = await _run(() async => throw outer);
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).description, 'nested');
-      expect(outcome.stackTrace, same(branchTrace));
-    });
+        final outcome = await _run(() async => throw outer);
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).description, 'nested');
+        expect(outcome.stackTrace, same(branchTrace));
+      },
+    );
 
-    fakeAsyncTest('a record envelope nested in a record keeps the branch trace',
-        () async {
-      const cancelled = Cancelled('nested');
-      final branchTrace = StackTrace.current;
-      final inner = _recordEnvelope(
-        (AsyncError(cancelled, branchTrace), null),
-      );
-      final outer = _recordEnvelope(
-        (AsyncError(inner, StackTrace.current), null),
-      );
+    fakeAsyncTest(
+      'a record envelope nested in a record keeps the branch trace',
+      () async {
+        const cancelled = Cancelled('nested');
+        final branchTrace = StackTrace.current;
+        final inner = _recordEnvelope((
+          AsyncError(cancelled, branchTrace),
+          null,
+        ));
+        final outer = _recordEnvelope((
+          AsyncError(inner, StackTrace.current),
+          null,
+        ));
 
-      final outcome = await _run(() async => throw outer);
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).description, 'nested');
-      expect(outcome.stackTrace, same(branchTrace));
-    });
+        final outcome = await _run(() async => throw outer);
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).description, 'nested');
+        expect(outcome.stackTrace, same(branchTrace));
+      },
+    );
 
-    fakeAsyncTest('an unobserved clean envelope stays out of the zone',
-        () async {
-      final zoneErrors = <Object>[];
-      const cancelled = Cancelled('quiet');
-      final trace = StackTrace.current;
-      Outcome<void>? outcome;
-      await runZonedGuarded(
-        () async {
+    fakeAsyncTest(
+      'an unobserved clean envelope stays out of the zone',
+      () async {
+        final zoneErrors = <Object>[];
+        const cancelled = Cancelled('quiet');
+        final trace = StackTrace.current;
+        Outcome<void>? outcome;
+        await runZonedGuarded(() async {
           final job = Job<void>(
             (ctx) async => throw _listEnvelope([AsyncError(cancelled, trace)]),
           );
           await Future<void>.delayed(Duration.zero);
           outcome = job.outcome;
           await Future<void>.delayed(Duration.zero);
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
-      // Out here, and not inside the zone above: an `expect` in there is
-      // an error like any other, and the handler would swallow it.
-      expect(outcome, isA<Cancelled>());
-      expect(zoneErrors, isEmpty);
-    });
+        }, (error, stackTrace) => zoneErrors.add(error));
+        // Out here, and not inside the zone above: an `expect` in there is
+        // an error like any other, and the handler would swallow it.
+        expect(outcome, isA<Cancelled>());
+        expect(zoneErrors, isEmpty);
+      },
+    );
   });
 
   group('forms and traversal', () {
@@ -220,20 +218,22 @@ void main() {
     // named in the report, not hidden among the rest.
     for (var arity = 2; arity <= 9; arity++) {
       for (var position = 0; position < arity; position++) {
-        fakeAsyncTest('a tuple of $arity is parsed at position $position',
-            () async {
-          final cancelled = Cancelled('tuple $arity/$position');
-          final values = List<Object?>.filled(arity, null);
-          values[position] = AsyncError(cancelled, StackTrace.current);
-          final outcome = await _run(
-            () async => throw _recordEnvelope(_recordErrors(values)),
-          );
-          expect(outcome, isA<Cancelled>());
-          expect(
-            (outcome as Cancelled).description,
-            'tuple $arity/$position',
-          );
-        });
+        fakeAsyncTest(
+          'a tuple of $arity is parsed at position $position',
+          () async {
+            final cancelled = Cancelled('tuple $arity/$position');
+            final values = List<Object?>.filled(arity, null);
+            values[position] = AsyncError(cancelled, StackTrace.current);
+            final outcome = await _run(
+              () async => throw _recordEnvelope(_recordErrors(values)),
+            );
+            expect(outcome, isA<Cancelled>());
+            expect(
+              (outcome as Cancelled).description,
+              'tuple $arity/$position',
+            );
+          },
+        );
       }
     }
 
@@ -252,52 +252,55 @@ void main() {
     });
 
     fakeAsyncTest(
-        'an unknown nested form beside cancellation remains a failure',
-        () async {
-      const cancelled = Cancelled('known');
-      final unknown = _recordEnvelope(Object());
-      final envelope = _listEnvelope([
-        AsyncError(cancelled, StackTrace.current),
-        AsyncError(unknown, StackTrace.current),
-      ]);
-      final outcome = await _run(() async => throw envelope);
-      expect(outcome, isA<Failed>());
-      expect((outcome as Failed).error, same(envelope));
-    });
-
-    fakeAsyncTest('a cast list read failure still finishes as a failure',
-        () async {
-      const cancelled = Cancelled('first');
-      final source = <Object?>[
-        AsyncError(cancelled, StackTrace.current),
-        StateError('bad element'),
-      ];
-      final errors = source.cast<AsyncError?>();
-      final envelope = ParallelWaitError<Object?, List<AsyncError?>>(
-        null,
-        errors,
-      );
-      final outcome = await _run(() async => throw envelope);
-      expect(outcome, isA<Failed>());
-      expect((outcome as Failed).error, same(envelope));
-    });
-
-    fakeAsyncTest('a chain of twenty thousand envelopes does not overflow',
-        () async {
-      const cancelled = Cancelled('deep');
-      ParallelWaitError<Object?, Object?> envelope = _listEnvelope([
-        AsyncError(cancelled, StackTrace.current),
-      ]);
-      for (var i = 0; i < 20000; i++) {
-        envelope = _listEnvelope([
-          AsyncError(envelope, StackTrace.empty),
+      'an unknown nested form beside cancellation remains a failure',
+      () async {
+        const cancelled = Cancelled('known');
+        final unknown = _recordEnvelope(Object());
+        final envelope = _listEnvelope([
+          AsyncError(cancelled, StackTrace.current),
+          AsyncError(unknown, StackTrace.current),
         ]);
-      }
+        final outcome = await _run(() async => throw envelope);
+        expect(outcome, isA<Failed>());
+        expect((outcome as Failed).error, same(envelope));
+      },
+    );
 
-      final outcome = await _run(() async => throw envelope);
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).description, 'deep');
-    });
+    fakeAsyncTest(
+      'a cast list read failure still finishes as a failure',
+      () async {
+        const cancelled = Cancelled('first');
+        final source = <Object?>[
+          AsyncError(cancelled, StackTrace.current),
+          StateError('bad element'),
+        ];
+        final errors = source.cast<AsyncError?>();
+        final envelope = ParallelWaitError<Object?, List<AsyncError?>>(
+          null,
+          errors,
+        );
+        final outcome = await _run(() async => throw envelope);
+        expect(outcome, isA<Failed>());
+        expect((outcome as Failed).error, same(envelope));
+      },
+    );
+
+    fakeAsyncTest(
+      'a chain of twenty thousand envelopes does not overflow',
+      () async {
+        const cancelled = Cancelled('deep');
+        ParallelWaitError<Object?, Object?> envelope = _listEnvelope([
+          AsyncError(cancelled, StackTrace.current),
+        ]);
+        for (var i = 0; i < 20000; i++) {
+          envelope = _listEnvelope([AsyncError(envelope, StackTrace.empty)]);
+        }
+
+        final outcome = await _run(() async => throw envelope);
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).description, 'deep');
+      },
+    );
 
     fakeAsyncTest('a shared completed subgraph is not a cycle', () async {
       const cancelled = Cancelled('shared');
@@ -323,50 +326,58 @@ void main() {
       expect((outcome as Failed).error, same(envelope));
     });
 
-    fakeAsyncTest('an envelope that calls itself equal is still not a cycle',
-        () async {
-      // `ParallelWaitError` is not a `final` class, so `==` can say two
-      // distinct envelopes are the same. Nesting must follow identity, or a
-      // nested envelope would be read as a cycle and lose its cancellation.
-      const cancelled = Cancelled('deep');
-      final inner = _EqualEnvelope(
-        const <Object?>[null],
-        <AsyncError?>[AsyncError(cancelled, StackTrace.empty)],
-      );
-      final outer = _EqualEnvelope(
-        const <Object?>[null],
-        <AsyncError?>[AsyncError(inner, StackTrace.empty)],
-      );
-      expect(inner == outer, isTrue, reason: 'the input needs equal envelopes');
+    fakeAsyncTest(
+      'an envelope that calls itself equal is still not a cycle',
+      () async {
+        // `ParallelWaitError` is not a `final` class, so `==` can say two
+        // distinct envelopes are the same. Nesting must follow identity, or a
+        // nested envelope would be read as a cycle and lose its cancellation.
+        const cancelled = Cancelled('deep');
+        final inner = _EqualEnvelope(
+          const <Object?>[null],
+          <AsyncError?>[AsyncError(cancelled, StackTrace.empty)],
+        );
+        final outer = _EqualEnvelope(
+          const <Object?>[null],
+          <AsyncError?>[AsyncError(inner, StackTrace.empty)],
+        );
+        expect(
+          inner == outer,
+          isTrue,
+          reason: 'the input needs equal envelopes',
+        );
 
-      final outcome = await _run(() async => throw outer);
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).description, 'deep');
-    });
+        final outcome = await _run(() async => throw outer);
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).description, 'deep');
+      },
+    );
   });
 
   group('cancellation selection', () {
-    fakeAsyncTest('selection follows position rather than completion time',
-        () async {
-      final first = Completer<void>();
-      final second = Completer<void>();
-      const firstCancelled = Cancelled('first position');
-      const secondCancelled = Cancelled('second position');
-      final job = Job<void>((ctx) async {
-        await [
-          first.future.then<void>((_) => throw firstCancelled),
-          second.future.then<void>((_) => throw secondCancelled),
-        ].wait;
-      });
-      await Future<void>.delayed(Duration.zero);
-      second.complete();
-      first.complete();
+    fakeAsyncTest(
+      'selection follows position rather than completion time',
+      () async {
+        final first = Completer<void>();
+        final second = Completer<void>();
+        const firstCancelled = Cancelled('first position');
+        const secondCancelled = Cancelled('second position');
+        final job = Job<void>((ctx) async {
+          await [
+            first.future.then<void>((_) => throw firstCancelled),
+            second.future.then<void>((_) => throw secondCancelled),
+          ].wait;
+        });
+        await Future<void>.delayed(Duration.zero);
+        second.complete();
+        first.complete();
 
-      final outcome = await job.done;
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).description, 'first position');
-      expect(outcome.reason, isA<HandlerCancelReason>());
-    });
+        final outcome = await job.done;
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).description, 'first position');
+        expect(outcome.reason, isA<HandlerCancelReason>());
+      },
+    );
 
     fakeAsyncTest('a foreign cancellation before a child wins', () async {
       const foreign = Cancelled('foreign first');
@@ -393,164 +404,163 @@ void main() {
       expect(result.description, 'foreign first');
     });
 
-    fakeAsyncTest('the first trace is kept when cancellation repeats',
-        () async {
-      const cancelled = Cancelled('repeated');
-      final firstTrace = StackTrace.current;
-      final secondTrace = StackTrace.current;
-      final envelope = _listEnvelope([
-        AsyncError(cancelled, firstTrace),
-        AsyncError(cancelled, secondTrace),
-      ]);
+    fakeAsyncTest(
+      'the first trace is kept when cancellation repeats',
+      () async {
+        const cancelled = Cancelled('repeated');
+        final firstTrace = StackTrace.current;
+        final secondTrace = StackTrace.current;
+        final envelope = _listEnvelope([
+          AsyncError(cancelled, firstTrace),
+          AsyncError(cancelled, secondTrace),
+        ]);
 
-      final outcome = await _run(() async => throw envelope);
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).stackTrace, same(firstTrace));
-    });
+        final outcome = await _run(() async => throw envelope);
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).stackTrace, same(firstTrace));
+      },
+    );
   });
 
   group('external cancellation and diagnostics', () {
-    fakeAsyncTest('an external cancellation inside wait keeps its identity',
-        () async {
-      final errors = <Object>[];
-      final cancellation = Cancelled.by(
-        reason: const ManualCancelReason(),
-        stackTrace: StackTrace.current,
-      );
-      final job = ProbeJob<void>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          await [ctx.abandonable(Future<void>.value)].wait;
-        },
-      )
-        ..whenCancelled((value) => expect(value, same(cancellation)))
-        ..launch();
-      _cancel(job, cancellation);
+    fakeAsyncTest(
+      'an external cancellation inside wait keeps its identity',
+      () async {
+        final errors = <Object>[];
+        final cancellation = Cancelled.by(
+          reason: const ManualCancelReason(),
+          stackTrace: StackTrace.current,
+        );
+        final job =
+            ProbeJob<void>(observer: ErrorObserver(errors), (ctx) async {
+                await [ctx.abandonable(Future<void>.value)].wait;
+              })
+              ..whenCancelled((value) => expect(value, same(cancellation)))
+              ..launch();
+        _cancel(job, cancellation);
 
-      final outcome = await job.done;
-      expect(outcome, same(cancellation));
-      expect(errors, isEmpty);
-    });
+        final outcome = await job.done;
+        expect(outcome, same(cancellation));
+        expect(errors, isEmpty);
+      },
+    );
 
-    fakeAsyncTest('a clean envelope reaches an observer as cancellation',
-        () async {
-      final errors = <Object>[];
-      const cancelled = Cancelled('observed');
-      final envelope =
-          _listEnvelope([AsyncError(cancelled, StackTrace.current)]);
-      final job = ProbeJob<void>(
-        observer: ErrorObserver(errors),
-        (ctx) async => throw envelope,
-      )..launch();
+    fakeAsyncTest(
+      'a clean envelope reaches an observer as cancellation',
+      () async {
+        final errors = <Object>[];
+        const cancelled = Cancelled('observed');
+        final envelope = _listEnvelope([
+          AsyncError(cancelled, StackTrace.current),
+        ]);
+        final job = ProbeJob<void>(
+          observer: ErrorObserver(errors),
+          (ctx) async => throw envelope,
+        )..launch();
 
-      final outcome = await job.done;
-      expect(outcome, isA<Cancelled>());
-      expect(errors, isEmpty);
-    });
+        final outcome = await job.done;
+        expect(outcome, isA<Cancelled>());
+        expect(errors, isEmpty);
+      },
+    );
 
-    fakeAsyncTest('the zone route filters only a clean cancellation envelope',
-        () async {
-      final caught = <Object>[];
-      final clean = _listEnvelope([
-        AsyncError(const Cancelled('clean route'), StackTrace.current),
-      ]);
-      final mixed = _listEnvelope([
-        AsyncError(StateError('route failure'), StackTrace.current),
-        AsyncError(const Cancelled('route cancellation'), StackTrace.current),
-      ]);
-      await runZonedGuarded(
-        () async {
+    fakeAsyncTest(
+      'the zone route filters only a clean cancellation envelope',
+      () async {
+        final caught = <Object>[];
+        final clean = _listEnvelope([
+          AsyncError(const Cancelled('clean route'), StackTrace.current),
+        ]);
+        final mixed = _listEnvelope([
+          AsyncError(StateError('route failure'), StackTrace.current),
+          AsyncError(const Cancelled('route cancellation'), StackTrace.current),
+        ]);
+        await runZonedGuarded(() async {
           ProbeJob<void>((ctx) async {})
             ..report(clean, StackTrace.current)
             ..report(mixed, StackTrace.current);
           await Future<void>.delayed(Duration.zero);
-        },
-        (error, stackTrace) => caught.add(error),
-      );
-      expect(caught, [same(mixed)]);
-    });
+        }, (error, stackTrace) => caught.add(error));
+        expect(caught, [same(mixed)]);
+      },
+    );
 
-    fakeAsyncTest('unattended cancellation keeps ownership filtering',
-        () async {
-      final ownErrors = <Object>[];
-      final entered = Completer<void>();
-      final own = Job<void>(
-        observer: ErrorObserver(ownErrors),
-        (ctx) async {
+    fakeAsyncTest(
+      'unattended cancellation keeps ownership filtering',
+      () async {
+        final ownErrors = <Object>[];
+        final entered = Completer<void>();
+        final own = Job<void>(observer: ErrorObserver(ownErrors), (ctx) async {
           ctx.unattended(() async {
             await Future<void>.delayed(Duration.zero);
             ctx.check();
           });
           entered.complete();
           await Future<void>.delayed(Duration.zero);
-        },
-      );
-      // Waited for, and the wait is the test. A job cancelled straight
-      // after its constructor never enters its body: there is no
-      // unattended work to filter, and the expectation below then holds
-      // over an empty list for the wrong reason.
-      await entered.future;
-      own.cancel().ignore();
-      await own.done;
-      await Future<void>.delayed(Duration.zero);
-      expect(
-        ownErrors,
-        isEmpty,
-        reason: 'the work threw the cancellation of the very job that owns '
-            'it, and a job giving up is not an error',
-      );
+        });
+        // Waited for, and the wait is the test. A job cancelled straight
+        // after its constructor never enters its body: there is no
+        // unattended work to filter, and the expectation below then holds
+        // over an empty list for the wrong reason.
+        await entered.future;
+        own.cancel().ignore();
+        await own.done;
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          ownErrors,
+          isEmpty,
+          reason:
+              'the work threw the cancellation of the very job that owns '
+              'it, and a job giving up is not an error',
+        );
 
-      final foreignErrors = <Object>[];
-      const foreign = Cancelled('foreign');
-      final job = Job<void>(
-        observer: ErrorObserver(foreignErrors),
-        (ctx) async {
+        final foreignErrors = <Object>[];
+        const foreign = Cancelled('foreign');
+        final job = Job<void>(observer: ErrorObserver(foreignErrors), (
+          ctx,
+        ) async {
           ctx.unattended(() => throw foreign);
           await Future<void>.delayed(Duration.zero);
-        },
-      );
-      await job.done;
-      await Future<void>.delayed(Duration.zero);
-      expect(foreignErrors, [same(foreign)]);
-    });
+        });
+        await job.done;
+        await Future<void>.delayed(Duration.zero);
+        expect(foreignErrors, [same(foreign)]);
+      },
+    );
 
-    fakeAsyncTest('unattended hears a clean envelope but the zone does not',
-        () async {
-      final errors = <Object>[];
-      final zone = <Object>[];
-      const cancelled = Cancelled('unattended-clean');
+    fakeAsyncTest(
+      'unattended hears a clean envelope but the zone does not',
+      () async {
+        final errors = <Object>[];
+        final zone = <Object>[];
+        const cancelled = Cancelled('unattended-clean');
 
-      await runZonedGuarded(
-        () async {
-          final job = Job<void>(
-            observer: ErrorObserver(errors),
-            (ctx) async {
-              ctx.unattended(() async {
-                await [
-                  Future<String>.value('ok'),
-                  Future<String>.error(cancelled, StackTrace.empty),
-                ].wait;
-              });
-              await Future<void>.delayed(Duration.zero);
-            },
-          );
+        await runZonedGuarded(() async {
+          final job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
+            ctx.unattended(() async {
+              await [
+                Future<String>.value('ok'),
+                Future<String>.error(cancelled, StackTrace.empty),
+              ].wait;
+            });
+            await Future<void>.delayed(Duration.zero);
+          });
           await job.done;
           await Future<void>.delayed(Duration.zero);
-        },
-        (error, stackTrace) => zone.add(error),
-      )!;
+        }, (error, stackTrace) => zone.add(error))!;
 
-      expect(errors, [same(cancelled)], reason: 'not the envelope around it');
-      expect(zone, isEmpty);
-    });
+        expect(errors, [same(cancelled)], reason: 'not the envelope around it');
+        expect(zone, isEmpty);
+      },
+    );
 
-    fakeAsyncTest('an unobserved clean envelope from unattended stays silent',
-        () async {
-      final zone = <Object>[];
-      const cancelled = Cancelled('unattended-clean');
+    fakeAsyncTest(
+      'an unobserved clean envelope from unattended stays silent',
+      () async {
+        final zone = <Object>[];
+        const cancelled = Cancelled('unattended-clean');
 
-      await runZonedGuarded(
-        () async {
+        await runZonedGuarded(() async {
           final job = Job<void>((ctx) async {
             ctx.unattended(() async {
               await [
@@ -562,36 +572,31 @@ void main() {
           });
           await job.done;
           await Future<void>.delayed(Duration.zero);
-        },
-        (error, stackTrace) => zone.add(error),
-      )!;
+        }, (error, stackTrace) => zone.add(error))!;
 
-      expect(zone, isEmpty);
-    });
+        expect(zone, isEmpty);
+      },
+    );
 
-    fakeAsyncTest('a mixed envelope from unattended reaches both routes',
-        () async {
-      final errors = <Object>[];
-      final zone = <Object>[];
-      final boom = StateError('unattended-boom');
+    fakeAsyncTest(
+      'a mixed envelope from unattended reaches both routes',
+      () async {
+        final errors = <Object>[];
+        final zone = <Object>[];
+        final boom = StateError('unattended-boom');
 
-      await runZonedGuarded(
-        () async {
-          final observed = Job<void>(
-            observer: ErrorObserver(errors),
-            (ctx) async {
-              ctx.unattended(() async {
-                await [
-                  Future<void>.error(boom, StackTrace.empty),
-                  Future<void>.error(
-                    const Cancelled('mixed'),
-                    StackTrace.empty,
-                  ),
-                ].wait;
-              });
-              await Future<void>.delayed(Duration.zero);
-            },
-          );
+        await runZonedGuarded(() async {
+          final observed = Job<void>(observer: ErrorObserver(errors), (
+            ctx,
+          ) async {
+            ctx.unattended(() async {
+              await [
+                Future<void>.error(boom, StackTrace.empty),
+                Future<void>.error(const Cancelled('mixed'), StackTrace.empty),
+              ].wait;
+            });
+            await Future<void>.delayed(Duration.zero);
+          });
           await observed.done;
           await Future<void>.delayed(Duration.zero);
 
@@ -606,142 +611,137 @@ void main() {
           });
           await unobserved.done;
           await Future<void>.delayed(Duration.zero);
-        },
-        (error, stackTrace) => zone.add(error),
-      )!;
+        }, (error, stackTrace) => zone.add(error))!;
 
-      expect(
-        errors,
-        [same(boom), isA<Cancelled>()],
-        reason: 'each error of the envelope on its own',
-      );
-      expect(
-        zone,
-        hasLength(2),
-        reason: 'with an observer that only watches, and without one',
-      );
-      expect(
-        zone,
-        everyElement(same(boom)),
-        reason: 'the zone hears the failure, not the envelope around it',
-      );
-    });
+        expect(errors, [
+          same(boom),
+          isA<Cancelled>(),
+        ], reason: 'each error of the envelope on its own');
+        expect(
+          zone,
+          hasLength(2),
+          reason: 'with an observer that only watches, and without one',
+        );
+        expect(
+          zone,
+          everyElement(same(boom)),
+          reason: 'the zone hears the failure, not the envelope around it',
+        );
+      },
+    );
 
     fakeAsyncTest(
-        'each turns a handler cancellation into a parent cancellation',
-        () async {
-      final controller = StreamController<int>();
-      const cancelled = Cancelled('handler stopped');
-      final parent = Job<void>((ctx) async {
-        final listening = ctx.each(controller.stream, (child, event) {
-          throw cancelled;
+      'each turns a handler cancellation into a parent cancellation',
+      () async {
+        final controller = StreamController<int>();
+        const cancelled = Cancelled('handler stopped');
+        final parent = Job<void>((ctx) async {
+          final listening = ctx.each(controller.stream, (child, event) {
+            throw cancelled;
+          });
+          await listening.value;
         });
-        await listening.value;
-      });
-      await Future<void>.delayed(Duration.zero);
-      controller.add(1);
+        await Future<void>.delayed(Duration.zero);
+        controller.add(1);
 
-      final outcome = await parent.done;
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).description, contains('handler stopped'));
-      expect(controller.hasListener, isFalse);
-      // Not awaited: the subscription is cancelled by now, and `close` then
-      // hands back a future of the root zone, which fake time does not run.
-      unawaited(controller.close());
-    });
+        final outcome = await parent.done;
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).description, contains('handler stopped'));
+        expect(controller.hasListener, isFalse);
+        // Not awaited: the subscription is cancelled by now, and `close` then
+        // hands back a future of the root zone, which fake time does not run.
+        unawaited(controller.close());
+      },
+    );
 
     fakeAsyncTest(
-        'each finishes its active handler before external cancellation',
-        () async {
-      final controller = StreamController<int>();
-      final started = Completer<void>();
-      final release = Completer<void>();
-      var events = 0;
-      final errors = <Object>[];
-      final parent = Job<void>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
+      'each finishes its active handler before external cancellation',
+      () async {
+        final controller = StreamController<int>();
+        final started = Completer<void>();
+        final release = Completer<void>();
+        var events = 0;
+        final errors = <Object>[];
+        final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
           final listening = ctx.each(controller.stream, (child, event) async {
             events++;
             started.complete();
             await release.future;
           });
           await [listening.value, Future<void>.value()].wait;
-        },
-      );
-      await Future<void>.delayed(Duration.zero);
-      controller.add(1);
-      await started.future;
-      parent.cancel().ignore();
-      controller.add(2);
-      release.complete();
+        });
+        await Future<void>.delayed(Duration.zero);
+        controller.add(1);
+        await started.future;
+        parent.cancel().ignore();
+        controller.add(2);
+        release.complete();
 
-      final outcome = await parent.done;
-      expect(outcome, isA<Cancelled>());
-      expect(events, 1);
-      expect(errors, isEmpty);
-      expect(controller.hasListener, isFalse);
-      // Not awaited: the subscription is cancelled by now, and `close` then
-      // hands back a future of the root zone, which fake time does not run.
-      unawaited(controller.close());
-    });
+        final outcome = await parent.done;
+        expect(outcome, isA<Cancelled>());
+        expect(events, 1);
+        expect(errors, isEmpty);
+        expect(controller.hasListener, isFalse);
+        // Not awaited: the subscription is cancelled by now, and `close` then
+        // hands back a future of the root zone, which fake time does not run.
+        unawaited(controller.close());
+      },
+    );
 
     fakeAsyncTest(
-        'each preserves a handler failure inside its diagnostic envelope',
-        () async {
-      final controller = StreamController<int>();
-      final handlerError = StateError('handler failure');
-      const cancellation = Cancelled('parallel sibling');
-      final errors = <Object>[];
-      late Job<void> parent;
-      // Answering: the child ends `Cancelled` and answers for its handler's
-      // failure, and where that goes is not what this test is about.
-      parent = Job<void>(
-        observer: ErrorObserver.answering(errors),
-        (ctx) async {
-          final listening = ctx.each(
-            controller.stream,
-            (child, event) {
-              child.job.cancel().ignore();
-              throw handlerError;
-            },
-          );
+      'each preserves a handler failure inside its diagnostic envelope',
+      () async {
+        final controller = StreamController<int>();
+        final handlerError = StateError('handler failure');
+        const cancellation = Cancelled('parallel sibling');
+        final errors = <Object>[];
+        late Job<void> parent;
+        // Answering: the child ends `Cancelled` and answers for its handler's
+        // failure, and where that goes is not what this test is about.
+        parent = Job<void>(observer: ErrorObserver.answering(errors), (
+          ctx,
+        ) async {
+          final listening = ctx.each(controller.stream, (child, event) {
+            child.job.cancel().ignore();
+            throw handlerError;
+          });
           await [
             listening.value,
             Future<void>.error(handlerError, StackTrace.current),
             Future<void>.error(cancellation, StackTrace.current),
           ].wait;
-        },
-      );
-      await Future<void>.delayed(Duration.zero);
-      controller.add(1);
-      final outcome = await parent.done;
+        });
+        await Future<void>.delayed(Duration.zero);
+        controller.add(1);
+        final outcome = await parent.done;
 
-      expect(outcome, isA<Failed>());
-      // The child hears its handler fail; the parent hears each error of the
-      // envelope its body threw, the child's cancellation among them.
-      expect(errors, [
-        same(handlerError),
-        isA<Cancelled>(),
-        same(handlerError),
-        same(cancellation),
-      ]);
-      final failure = (outcome as Failed).error;
-      final errorList = (failure as ParallelWaitError<Object?, Object?>).errors!
-          as List<AsyncError?>;
-      expect(
-        errorList.any((error) => identical(error?.error, handlerError)),
-        isTrue,
-      );
-      expect(
-        errorList.any((error) => identical(error?.error, cancellation)),
-        isTrue,
-      );
-      expect(controller.hasListener, isFalse);
-      // Not awaited: the subscription is cancelled by now, and `close` then
-      // hands back a future of the root zone, which fake time does not run.
-      unawaited(controller.close());
-    });
+        expect(outcome, isA<Failed>());
+        // The child hears its handler fail; the parent hears each error of the
+        // envelope its body threw, the child's cancellation among them.
+        expect(errors, [
+          same(handlerError),
+          isA<Cancelled>(),
+          same(handlerError),
+          same(cancellation),
+        ]);
+        final failure = (outcome as Failed).error;
+        final errorList =
+            (failure as ParallelWaitError<Object?, Object?>).errors!
+                as List<AsyncError?>;
+        expect(
+          errorList.any((error) => identical(error?.error, handlerError)),
+          isTrue,
+        );
+        expect(
+          errorList.any((error) => identical(error?.error, cancellation)),
+          isTrue,
+        );
+        expect(controller.hasListener, isFalse);
+        // Not awaited: the subscription is cancelled by now, and `close` then
+        // hands back a future of the root zone, which fake time does not run.
+        unawaited(controller.close());
+      },
+    );
   });
 
   // `[a, b].wait` waits for every branch: when `a` fails and the parent is
@@ -752,10 +752,10 @@ void main() {
         Job.deferred<void>((ctx) async => throw error);
 
     ChildJob<void> runningChild() => Job.deferred<void>(
-          (ctx) => ctx.join(
-            () => Future<void>.delayed(const Duration(milliseconds: 10)),
-          ),
-        );
+      (ctx) => ctx.join(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      ),
+    );
 
     /// A child whose own body throws an envelope at once.
     ChildJob<void> envelopingChild(StateError first, StateError second) =>
@@ -775,17 +775,14 @@ void main() {
     }) async {
       final zone = <Object>[];
       late Outcome<void> outcome;
-      await runZonedGuarded(
-        () async {
-          final parent = Job<void>(observer: observer, body);
-          before?.call(parent);
-          await Future<void>.delayed(Duration.zero);
-          parent.cancel().ignore();
-          outcome = await parent.done;
-          await Future<void>.delayed(Duration.zero);
-        },
-        (error, stackTrace) => zone.add(error),
-      )!;
+      await runZonedGuarded(() async {
+        final parent = Job<void>(observer: observer, body);
+        before?.call(parent);
+        await Future<void>.delayed(Duration.zero);
+        parent.cancel().ignore();
+        outcome = await parent.done;
+        await Future<void>.delayed(Duration.zero);
+      }, (error, stackTrace) => zone.add(error))!;
       return (outcome, zone);
     }
 
@@ -823,42 +820,45 @@ void main() {
     });
 
     fakeAsyncTest(
-        'a failure in it that came after the cancellation goes on too',
-        () async {
-      final early = StateError('early');
-      final late = StateError('late');
-      final heard = <Object>[];
-      final (outcome, zone) = await cancelledAfter(
-        observer: _Answers(heard, null),
-        (ctx) => [
-          ctx.run(failingChild(early)),
-          Future<void>.delayed(
-            const Duration(milliseconds: 10),
-            () => throw late,
-          ),
-        ].wait,
-      );
+      'a failure in it that came after the cancellation goes on too',
+      () async {
+        final early = StateError('early');
+        final late = StateError('late');
+        final heard = <Object>[];
+        final (outcome, zone) = await cancelledAfter(
+          observer: _Answers(heard, null),
+          (ctx) => [
+            ctx.run(failingChild(early)),
+            Future<void>.delayed(
+              const Duration(milliseconds: 10),
+              () => throw late,
+            ),
+          ].wait,
+        );
 
-      expect(outcome, isA<Cancelled>());
-      expect(heard, [same(early), same(late)]);
-      expect(zone, [same(early), same(late)]);
-    });
+        expect(outcome, isA<Cancelled>());
+        expect(heard, [same(early), same(late)]);
+        expect(zone, [same(early), same(late)]);
+      },
+    );
 
-    fakeAsyncTest('two failures in it go on one by one, in branch order',
-        () async {
-      final first = StateError('first');
-      final second = StateError('second');
-      final (outcome, zone) = await cancelledAfter(
-        (ctx) => [
-          ctx.run(failingChild(first)),
-          ctx.run(failingChild(second)),
-          ctx.run(runningChild()),
-        ].wait,
-      );
+    fakeAsyncTest(
+      'two failures in it go on one by one, in branch order',
+      () async {
+        final first = StateError('first');
+        final second = StateError('second');
+        final (outcome, zone) = await cancelledAfter(
+          (ctx) => [
+            ctx.run(failingChild(first)),
+            ctx.run(failingChild(second)),
+            ctx.run(runningChild()),
+          ].wait,
+        );
 
-      expect(outcome, isA<Cancelled>());
-      expect(zone, [same(first), same(second)]);
-    });
+        expect(outcome, isA<Cancelled>());
+        expect(zone, [same(first), same(second)]);
+      },
+    );
 
     fakeAsyncTest('the record form too', () async {
       final early = StateError('early');
@@ -870,251 +870,264 @@ void main() {
       expect(zone, [same(early)]);
     });
 
-    fakeAsyncTest('a child that threw an envelope: each failure inside it',
-        () async {
-      final first = StateError('inner first');
-      final second = StateError('inner second');
-      final (waited, waitedZone) = await cancelledAfter(
-        (ctx) => [
-          ctx.run(envelopingChild(first, second)),
-          ctx.run(runningChild()),
-        ].wait,
-      );
-      final (all, allZone) = await cancelledAfter(
-        (ctx) => Future.wait([
-          ctx.run(envelopingChild(first, second)),
-          ctx.run(runningChild()),
-        ]),
-      );
+    fakeAsyncTest(
+      'a child that threw an envelope: each failure inside it',
+      () async {
+        final first = StateError('inner first');
+        final second = StateError('inner second');
+        final (waited, waitedZone) = await cancelledAfter(
+          (ctx) => [
+            ctx.run(envelopingChild(first, second)),
+            ctx.run(runningChild()),
+          ].wait,
+        );
+        final (all, allZone) = await cancelledAfter(
+          (ctx) => Future.wait([
+            ctx.run(envelopingChild(first, second)),
+            ctx.run(runningChild()),
+          ]),
+        );
 
-      expect(waited, isA<Cancelled>());
-      expect(waitedZone, [same(first), same(second)]);
-      expect(all, isA<Cancelled>());
-      expect(allZone, [same(first), same(second)]);
-    });
+        expect(waited, isA<Cancelled>());
+        expect(waitedZone, [same(first), same(second)]);
+        expect(all, isA<Cancelled>());
+        expect(allZone, [same(first), same(second)]);
+      },
+    );
 
-    fakeAsyncTest('a failure taken out of such a child and thrown again',
-        () async {
-      // Thrown again after the cancellation, it is a failure of the body like
-      // any other.
-      final first = StateError('inner first');
-      final (outcome, zone) = await cancelledAfter((ctx) async {
-        try {
-          await ctx.run(envelopingChild(first, StateError('inner second')));
-        } on Object catch (error) {
-          final envelope =
-              error as ParallelWaitError<Object?, List<AsyncError?>>;
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-          final taken = envelope.errors.first!;
-          Error.throwWithStackTrace(taken.error, taken.stackTrace);
-        }
-      });
+    fakeAsyncTest(
+      'a failure taken out of such a child and thrown again',
+      () async {
+        // Thrown again after the cancellation, it is a failure of the body like
+        // any other.
+        final first = StateError('inner first');
+        final (outcome, zone) = await cancelledAfter((ctx) async {
+          try {
+            await ctx.run(envelopingChild(first, StateError('inner second')));
+          } on Object catch (error) {
+            final envelope =
+                error as ParallelWaitError<Object?, List<AsyncError?>>;
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            final taken = envelope.errors.first!;
+            Error.throwWithStackTrace(taken.error, taken.stackTrace);
+          }
+        });
 
-      expect(outcome, isA<Cancelled>());
-      expect(zone, [same(first)]);
-    });
+        expect(outcome, isA<Cancelled>());
+        expect(zone, [same(first)]);
+      },
+    );
 
-    fakeAsyncTest('ignoreFailure() takes the answer away, not the notice',
-        () async {
-      final early = StateError('early');
-      final heard = <Object>[];
-      final answered = <Object>[];
-      final (outcome, zone) = await cancelledAfter(
-        observer: _Answers(heard, answered),
-        before: (parent) => parent.ignoreFailure(),
-        (ctx) => [ctx.run(failingChild(early)), ctx.run(runningChild())].wait,
-      );
+    fakeAsyncTest(
+      'ignoreFailure() takes the answer away, not the notice',
+      () async {
+        final early = StateError('early');
+        final heard = <Object>[];
+        final answered = <Object>[];
+        final (outcome, zone) = await cancelledAfter(
+          observer: _Answers(heard, answered),
+          before: (parent) => parent.ignoreFailure(),
+          (ctx) => [ctx.run(failingChild(early)), ctx.run(runningChild())].wait,
+        );
 
-      expect(outcome, isA<Cancelled>());
-      expect(heard, [same(early), isA<Cancelled>()]);
-      expect(answered, isEmpty);
-      expect(zone, isEmpty);
-    });
+        expect(outcome, isA<Cancelled>());
+        expect(heard, [same(early), isA<Cancelled>()]);
+        expect(answered, isEmpty);
+        expect(zone, isEmpty);
+      },
+    );
 
-    fakeAsyncTest('asked after onFinish, where an engine may still ignore it',
-        () async {
-      final early = StateError('early');
-      final waited = <Object>[];
-      final all = <Object>[];
-      final (_, waitedZone) = await cancelledAfter(
-        observer: _IgnoresOnFinish(waited),
-        (ctx) => [ctx.run(failingChild(early)), ctx.run(runningChild())].wait,
-      );
-      final (_, allZone) = await cancelledAfter(
-        observer: _IgnoresOnFinish(all),
-        (ctx) => Future.wait([
-          ctx.run(failingChild(early)),
-          ctx.run(runningChild()),
-        ]),
-      );
+    fakeAsyncTest(
+      'asked after onFinish, where an engine may still ignore it',
+      () async {
+        final early = StateError('early');
+        final waited = <Object>[];
+        final all = <Object>[];
+        final (_, waitedZone) = await cancelledAfter(
+          observer: _IgnoresOnFinish(waited),
+          (ctx) => [ctx.run(failingChild(early)), ctx.run(runningChild())].wait,
+        );
+        final (_, allZone) = await cancelledAfter(
+          observer: _IgnoresOnFinish(all),
+          (ctx) => Future.wait([
+            ctx.run(failingChild(early)),
+            ctx.run(runningChild()),
+          ]),
+        );
 
-      expect(waited, isEmpty);
-      expect(waitedZone, isEmpty);
-      expect(all, isEmpty);
-      expect(allZone, isEmpty);
-    });
+        expect(waited, isEmpty);
+        expect(waitedZone, isEmpty);
+        expect(all, isEmpty);
+        expect(allZone, isEmpty);
+      },
+    );
 
-    fakeAsyncTest('an envelope thrown before the cancellation is answered once',
-        () async {
-      // The envelope leaves the body at once, before the cancellation; the
-      // cancellation covers it while a child the body left behind runs.
-      final early = StateError('early');
-      final heard = <Object>[];
-      final answered = <Object>[];
-      final (outcome, zone) = await cancelledAfter(
-        observer: _Answers(heard, answered),
-        (ctx) async {
-          ctx.run(runningChild()).ignore();
-          await [ctx.run(failingChild(early)), Future<void>.value()].wait;
-        },
-      );
+    fakeAsyncTest(
+      'an envelope thrown before the cancellation is answered once',
+      () async {
+        // The envelope leaves the body at once, before the cancellation; the
+        // cancellation covers it while a child the body left behind runs.
+        final early = StateError('early');
+        final heard = <Object>[];
+        final answered = <Object>[];
+        final (outcome, zone) = await cancelledAfter(
+          observer: _Answers(heard, answered),
+          (ctx) async {
+            ctx.run(runningChild()).ignore();
+            await [ctx.run(failingChild(early)), Future<void>.value()].wait;
+          },
+        );
 
-      expect(outcome, isA<Cancelled>());
-      expect(heard, [same(early)]);
-      expect(answered, [same(early)]);
-      expect(zone, isEmpty);
-    });
+        expect(outcome, isA<Cancelled>());
+        expect(heard, [same(early)]);
+        expect(answered, [same(early)]);
+        expect(zone, isEmpty);
+      },
+    );
 
-    fakeAsyncTest('an envelope the body builds itself is read the same way',
-        () async {
-      // The job reads any `ParallelWaitError`, not only one of `.wait`, and
-      // answers for each failure in it.
-      final early = StateError('early');
-      final (outcome, zone) = await cancelledAfter((ctx) async {
-        try {
-          await ctx.run(failingChild(early));
-        } on Object catch (error, stackTrace) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-          throw _listEnvelope([AsyncError(error, stackTrace)]);
-        }
-      });
+    fakeAsyncTest(
+      'an envelope the body builds itself is read the same way',
+      () async {
+        // The job reads any `ParallelWaitError`, not only one of `.wait`, and
+        // answers for each failure in it.
+        final early = StateError('early');
+        final (outcome, zone) = await cancelledAfter((ctx) async {
+          try {
+            await ctx.run(failingChild(early));
+          } on Object catch (error, stackTrace) {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            throw _listEnvelope([AsyncError(error, stackTrace)]);
+          }
+        });
 
-      expect(outcome, isA<Cancelled>());
-      expect(zone, [same(early)]);
-    });
+        expect(outcome, isA<Cancelled>());
+        expect(zone, [same(early)]);
+      },
+    );
   });
 
   group('continuation', () {
-    fakeAsyncTest('a continuation classifies a clean parallel cancellation',
-        () async {
-      const cancelled = Cancelled('continuation stopped');
-      final source = Job<int>((ctx) async => 1);
-      final continuation = source.then<void>((ctx, value) async {
-        await [
-          Future<void>.value(),
-          Future<void>.error(cancelled, StackTrace.current),
-        ].wait;
-      });
+    fakeAsyncTest(
+      'a continuation classifies a clean parallel cancellation',
+      () async {
+        const cancelled = Cancelled('continuation stopped');
+        final source = Job<int>((ctx) async => 1);
+        final continuation = source.then<void>((ctx, value) async {
+          await [
+            Future<void>.value(),
+            Future<void>.error(cancelled, StackTrace.current),
+          ].wait;
+        });
 
-      final outcome = await continuation.done;
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).description, 'continuation stopped');
-      expect(outcome.reason, isA<HandlerCancelReason>());
-    });
+        final outcome = await continuation.done;
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).description, 'continuation stopped');
+        expect(outcome.reason, isA<HandlerCancelReason>());
+      },
+    );
   });
 
   group('invariance guards', () {
-    fakeAsyncTest('a mixed envelope stays a failed object everywhere',
-        () async {
-      final failure = StateError('real failure');
-      const cancelled = Cancelled('mixed cancellation');
-      final values = <Object?>[null, 'value'];
-      final errors = <AsyncError?>[
-        AsyncError(cancelled, StackTrace.current),
-        AsyncError(failure, StackTrace.current),
-      ];
-      final envelope = ParallelWaitError<List<Object?>, List<AsyncError?>>(
-        values,
-        errors,
-      );
-      final outcome = await _run(() async => throw envelope);
+    fakeAsyncTest(
+      'a mixed envelope stays a failed object everywhere',
+      () async {
+        final failure = StateError('real failure');
+        const cancelled = Cancelled('mixed cancellation');
+        final values = <Object?>[null, 'value'];
+        final errors = <AsyncError?>[
+          AsyncError(cancelled, StackTrace.current),
+          AsyncError(failure, StackTrace.current),
+        ];
+        final envelope = ParallelWaitError<List<Object?>, List<AsyncError?>>(
+          values,
+          errors,
+        );
+        final outcome = await _run(() async => throw envelope);
 
-      expect(outcome, isA<Failed>());
-      final result = outcome as Failed;
-      expect(result.error, same(envelope));
-      expect((result.error as ParallelWaitError).errors, same(errors));
-      expect((result.error as ParallelWaitError).values, same(values));
-    });
+        expect(outcome, isA<Failed>());
+        final result = outcome as Failed;
+        expect(result.error, same(envelope));
+        expect((result.error as ParallelWaitError).errors, same(errors));
+        expect((result.error as ParallelWaitError).values, same(values));
+      },
+    );
 
     // Answered for one failure at a time, as any error nobody answered for:
     // the cancellation inside is left out.
     fakeAsyncTest(
-        'an unobserved mixed envelope reaches the zone as its failure alone',
-        () async {
-      final caught = <Object>[];
-      final failure = StateError('mixed zone failure');
-      final envelope = _listEnvelope([
-        AsyncError(failure, StackTrace.current),
-        AsyncError(const Cancelled('mixed'), StackTrace.current),
-      ]);
-      await runZonedGuarded(
-        () async {
+      'an unobserved mixed envelope reaches the zone as its failure alone',
+      () async {
+        final caught = <Object>[];
+        final failure = StateError('mixed zone failure');
+        final envelope = _listEnvelope([
+          AsyncError(failure, StackTrace.current),
+          AsyncError(const Cancelled('mixed'), StackTrace.current),
+        ]);
+        await runZonedGuarded(() async {
           final job = Job<void>((ctx) async => throw envelope);
           await Future<void>.delayed(Duration.zero);
           expect(job.outcome, isA<Failed>());
           await Future<void>.delayed(Duration.zero);
-        },
-        (error, stackTrace) => caught.add(error),
-      );
-      expect(caught, [same(failure)]);
-    });
-
-    fakeAsyncTest('a mixed nested envelope stays as the outer object',
-        () async {
-      final failure = StateError('nested real failure');
-      final inner = _listEnvelope([
-        AsyncError(failure, StackTrace.current),
-        AsyncError(const Cancelled('nested cancel'), StackTrace.current),
-      ]);
-      final outer = _listEnvelope([AsyncError(inner, StackTrace.current)]);
-
-      final outcome = await _run(() async => throw outer);
-      expect(outcome, isA<Failed>());
-      expect((outcome as Failed).error, same(outer));
-    });
+        }, (error, stackTrace) => caught.add(error));
+        expect(caught, [same(failure)]);
+      },
+    );
 
     fakeAsyncTest(
-        'a pending cancellation wins over a mixed envelope with observer',
-        () async {
-      final errors = <Object>[];
-      final failure = StateError('pending failure');
-      final pending = Completer<void>();
-      final cancellation = Cancelled.by(
-        reason: const ManualCancelReason(),
-        stackTrace: StackTrace.current,
-      );
-      // Answering: the job answers for the failure, and the next test says
-      // where it goes without one.
-      final job = ProbeJob<void>(
-        observer: ErrorObserver.answering(errors),
-        (ctx) async {
+      'a mixed nested envelope stays as the outer object',
+      () async {
+        final failure = StateError('nested real failure');
+        final inner = _listEnvelope([
+          AsyncError(failure, StackTrace.current),
+          AsyncError(const Cancelled('nested cancel'), StackTrace.current),
+        ]);
+        final outer = _listEnvelope([AsyncError(inner, StackTrace.current)]);
+
+        final outcome = await _run(() async => throw outer);
+        expect(outcome, isA<Failed>());
+        expect((outcome as Failed).error, same(outer));
+      },
+    );
+
+    fakeAsyncTest(
+      'a pending cancellation wins over a mixed envelope with observer',
+      () async {
+        final errors = <Object>[];
+        final failure = StateError('pending failure');
+        final pending = Completer<void>();
+        final cancellation = Cancelled.by(
+          reason: const ManualCancelReason(),
+          stackTrace: StackTrace.current,
+        );
+        // Answering: the job answers for the failure, and the next test says
+        // where it goes without one.
+        final job = ProbeJob<void>(observer: ErrorObserver.answering(errors), (
+          ctx,
+        ) async {
           await [
             Future<void>.error(failure, StackTrace.current),
             ctx.abandonable(() => pending.future),
           ].wait;
-        },
-      )..launch();
-      await Future<void>.delayed(Duration.zero);
-      _cancel(job, cancellation);
-      final outcome = await job.done;
+        })..launch();
+        await Future<void>.delayed(Duration.zero);
+        _cancel(job, cancellation);
+        final outcome = await job.done;
 
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).reason, isA<ManualCancelReason>());
-      expect(
-        errors,
-        [same(failure)],
-        reason: "the failure alone: the job's own cancellation is not news",
-      );
-      expect(outcome, same(cancellation));
-    });
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).reason, isA<ManualCancelReason>());
+        expect(errors, [
+          same(failure),
+        ], reason: "the failure alone: the job's own cancellation is not news");
+        expect(outcome, same(cancellation));
+      },
+    );
 
     fakeAsyncTest(
-        'a pending cancellation wins over a mixed envelope without observer',
-        () async {
-      final caught = <Object>[];
-      final failure = StateError('pending silent failure');
-      await runZonedGuarded(
-        () async {
+      'a pending cancellation wins over a mixed envelope without observer',
+      () async {
+        final caught = <Object>[];
+        final failure = StateError('pending silent failure');
+        await runZonedGuarded(() async {
           final pending = Completer<void>();
           final cancellation = Cancelled.by(
             reason: const ManualCancelReason(),
@@ -1125,207 +1138,224 @@ void main() {
               Future<void>.error(failure, StackTrace.current),
               ctx.abandonable(() => pending.future),
             ].wait;
-          })
-            ..launch();
+          })..launch();
           await Future<void>.delayed(Duration.zero);
           _cancel(job, cancellation);
           final outcome = await job.done;
           expect(outcome, isA<Cancelled>());
           await Future<void>.delayed(Duration.zero);
-        },
-        (error, stackTrace) => caught.add(error),
-      );
-      expect(caught, [same(failure)]);
-    });
+        }, (error, stackTrace) => caught.add(error));
+        expect(caught, [same(failure)]);
+      },
+    );
 
-    fakeAsyncTest('Future.wait keeps its first completed error behavior',
-        () async {
-      final first = Completer<void>();
-      final second = Completer<void>();
-      final firstFailure = StateError('first future');
-      const secondCancelled = Cancelled('second future');
-      final job = Job<void>((ctx) async {
-        await Future.wait<void>([first.future, second.future]);
-      });
-      await Future<void>.delayed(Duration.zero);
-      second.completeError(secondCancelled, StackTrace.current);
-      first.completeError(firstFailure, StackTrace.current);
+    fakeAsyncTest(
+      'Future.wait keeps its first completed error behavior',
+      () async {
+        final first = Completer<void>();
+        final second = Completer<void>();
+        final firstFailure = StateError('first future');
+        const secondCancelled = Cancelled('second future');
+        final job = Job<void>((ctx) async {
+          await Future.wait<void>([first.future, second.future]);
+        });
+        await Future<void>.delayed(Duration.zero);
+        second.completeError(secondCancelled, StackTrace.current);
+        first.completeError(firstFailure, StackTrace.current);
 
-      final outcome = await job.done;
-      expect(outcome, isA<Cancelled>());
-      expect((outcome as Cancelled).description, 'second future');
-      expect(outcome.reason, isA<HandlerCancelReason>());
-    });
+        final outcome = await job.done;
+        expect(outcome, isA<Cancelled>());
+        expect((outcome as Cancelled).description, 'second future');
+        expect(outcome.reason, isA<HandlerCancelReason>());
+      },
+    );
 
-    fakeAsyncTest('eagerError moves when the body wakes, and nothing else',
-        () async {
-      // What `doc/groups.md` promises about the three forms: only the
-      // moment of waking differs. Either way a body that catches and
-      // returns leaves the job successful with a branch failed, and a value
-      // the slow branch returned is gone -- except under `.wait`, which
-      // keeps it in the envelope for the body to release.
-      Future<
+    fakeAsyncTest(
+      'eagerError moves when the body wakes, and nothing else',
+      () async {
+        // What `doc/groups.md` promises about the three forms: only the
+        // moment of waking differs. Either way a body that catches and
+        // returns leaves the job successful with a branch failed, and a value
+        // the slow branch returned is gone -- except under `.wait`, which
+        // keeps it in the envelope for the body to release.
+        Future<
           ({
             bool wokeEarly,
             Outcome<void> outcome,
             List<String> closed,
-            Object? caught
-          })> form({required bool extension, required bool eager}) async {
-        final slow = Completer<void>();
-        final closed = <String>[];
-        Object? caught;
-        var woke = false;
-        var stillRunning = true;
-        final quick = Job.deferred<String>(
-          (ctx) async => throw StateError('q'),
-        );
-        final late = Job.deferred<String>((ctx) async {
-          await ctx.abandonable(() => slow.future);
+            Object? caught,
+          })
+        >
+        form({required bool extension, required bool eager}) async {
+          final slow = Completer<void>();
+          final closed = <String>[];
+          Object? caught;
+          var woke = false;
+          var stillRunning = true;
+          final quick = Job.deferred<String>(
+            (ctx) async => throw StateError('q'),
+          );
+          final late = Job.deferred<String>((ctx) async {
+            await ctx.abandonable(() => slow.future);
 
-          return ctx.abandonable(() => 'db', discard: closed.add);
-        });
-        final job = Job<void>(observer: ErrorObserver(<Object>[]), (ctx) async {
-          final branches = [ctx.run(quick), ctx.run(late)];
-          try {
-            if (extension) {
-              await branches.wait;
-            } else {
-              await Future.wait(branches, eagerError: eager);
+            return ctx.abandonable(() => 'db', discard: closed.add);
+          });
+          final job = Job<void>(observer: ErrorObserver(<Object>[]), (
+            ctx,
+          ) async {
+            final branches = [ctx.run(quick), ctx.run(late)];
+            try {
+              if (extension) {
+                await branches.wait;
+              } else {
+                await Future.wait(branches, eagerError: eager);
+              }
+            } on Object catch (error) {
+              caught = error;
+              woke = stillRunning;
             }
-          } on Object catch (error) {
-            caught = error;
-            woke = stillRunning;
-          }
-        });
-        unawaited(job.done.then((_) => stillRunning = false));
-        await Future<void>.delayed(Duration.zero);
-        await Future<void>.delayed(Duration.zero);
-        final wokeEarly = woke;
-        slow.complete();
+          });
+          unawaited(job.done.then((_) => stillRunning = false));
+          await Future<void>.delayed(Duration.zero);
+          await Future<void>.delayed(Duration.zero);
+          final wokeEarly = woke;
+          slow.complete();
 
-        return (
-          wokeEarly: wokeEarly,
-          outcome: await job.done,
-          closed: closed,
-          caught: caught,
+          return (
+            wokeEarly: wokeEarly,
+            outcome: await job.done,
+            closed: closed,
+            caught: caught,
+          );
+        }
+
+        final eagerly = await form(extension: false, eager: true);
+        final plainly = await form(extension: false, eager: false);
+        final enveloped = await form(extension: true, eager: false);
+
+        expect(
+          [eagerly.wokeEarly, plainly.wokeEarly, enveloped.wokeEarly],
+          [true, false, false],
+          reason: 'only `eagerError` wakes the body before the last branch',
         );
-      }
-
-      final eagerly = await form(extension: false, eager: true);
-      final plainly = await form(extension: false, eager: false);
-      final enveloped = await form(extension: true, eager: false);
-
-      expect(
-        [eagerly.wokeEarly, plainly.wokeEarly, enveloped.wokeEarly],
-        [true, false, false],
-        reason: 'only `eagerError` wakes the body before the last branch',
-      );
-      expect(
-        [eagerly.outcome, plainly.outcome, enveloped.outcome],
-        everyElement(isA<Done<void>>()),
-        reason: 'the body caught and returned, so every form leaves the job '
-            'successful with a branch failed',
-      );
-      expect(
-        [eagerly.closed, plainly.closed, enveloped.closed],
-        everyElement(isEmpty),
-        reason: 'nobody closed what the slow branch returned',
-      );
-      expect(
-        [eagerly.caught, plainly.caught].map((error) => error.runtimeType),
-        everyElement(isNot(ParallelWaitError)),
-        reason: '`Future.wait` throws the first error, not an envelope',
-      );
-      expect(
-        (enveloped.caught! as _ListEnvelope).values,
-        [null, 'db'],
-        reason: 'and `.wait` is the one that keeps the value for the body',
-      );
-    });
-
-    fakeAsyncTest('an intentional envelope and a nested Failed stay opaque',
-        () async {
-      final failure = StateError('intentional failure');
-      final envelope = _listEnvelope([AsyncError(failure, StackTrace.current)]);
-      final envelopeOutcome = await _run(() async => throw envelope);
-      expect(envelopeOutcome, isA<Failed>());
-      expect((envelopeOutcome as Failed).error, same(envelope));
-
-      final failed = Failed(failure, StackTrace.current);
-      final nestedOutcome = await _run(
-        () async => Future<void>.error(failed, failed.stackTrace),
-      );
-      expect(nestedOutcome, isA<Failed>());
-      expect((nestedOutcome as Failed).error, same(failed));
-    });
-
-    fakeAsyncTest('a continuation forwards a source failure unchanged',
-        () async {
-      final failure = StateError('source failure');
-      var called = false;
-      final source = Job<int>((ctx) async => throw failure);
-      final continuation = source.then<void>((ctx, value) {
-        called = true;
-      });
-
-      final outcome = await continuation.done;
-      expect(outcome, isA<Failed>());
-      expect((outcome as Failed).error, same(failure));
-      expect(called, isFalse);
-    });
-
-    fakeAsyncTest('abandonable disposal runs once before the job finishes',
-        () async {
-      final resource = Object();
-      var closed = 0;
-      const cancelled = Cancelled('dispose');
-      final job = Job<void>((ctx) async {
-        await ctx.abandonable(
-          () async => resource,
-          dispose: (value) {
-            expect(value, same(resource));
-            closed++;
-          },
+        expect(
+          [eagerly.outcome, plainly.outcome, enveloped.outcome],
+          everyElement(isA<Done<void>>()),
+          reason:
+              'the body caught and returned, so every form leaves the job '
+              'successful with a branch failed',
         );
-        throw cancelled;
-      });
+        expect(
+          [eagerly.closed, plainly.closed, enveloped.closed],
+          everyElement(isEmpty),
+          reason: 'nobody closed what the slow branch returned',
+        );
+        expect(
+          [eagerly.caught, plainly.caught].map((error) => error.runtimeType),
+          everyElement(isNot(ParallelWaitError)),
+          reason: '`Future.wait` throws the first error, not an envelope',
+        );
+        expect((enveloped.caught! as _ListEnvelope).values, [
+          null,
+          'db',
+        ], reason: 'and `.wait` is the one that keeps the value for the body');
+      },
+    );
 
-      final outcome = await job.done;
-      expect(outcome, isA<Cancelled>());
-      expect(closed, 1);
-    });
-  });
-
-  test('an envelope whose branches share a node is walked once per node',
+    fakeAsyncTest(
+      'an intentional envelope and a nested Failed stay opaque',
       () async {
-    // Twenty-six levels, two branches each, both pointing at the same node
-    // below: twenty-seven nodes and sixty-seven million paths through them.
-    var node = _listEnvelope([
-      AsyncError(const Cancelled('leaf'), StackTrace.current),
-    ]);
-    for (var level = 0; level < 26; level++) {
-      final shared = node;
-      node = _listEnvelope([
-        AsyncError(shared, StackTrace.current),
-        AsyncError(shared, StackTrace.current),
-      ]);
-    }
-    final watch = Stopwatch()..start();
-    final outcome = await _run(() async => throw node);
-    watch.stop();
-    expect(outcome, isA<Cancelled>());
-    // A clock, and not a `Timeout`: the walk is synchronous, and no timer
-    // of the test framework interrupts a loop that never yields -- a walk
-    // counting paths runs for about seven seconds here and the timeout
-    // notices nothing. One counting nodes takes no measurable time at all,
-    // so a whole second is a margin of seven, not a wager.
-    expect(
-      watch.elapsedMilliseconds,
-      lessThan(1000),
-      reason: 'a node walked once per path instead of once per node turns '
-          'a graph that shares nodes into an exponential one',
+        final failure = StateError('intentional failure');
+        final envelope = _listEnvelope([
+          AsyncError(failure, StackTrace.current),
+        ]);
+        final envelopeOutcome = await _run(() async => throw envelope);
+        expect(envelopeOutcome, isA<Failed>());
+        expect((envelopeOutcome as Failed).error, same(envelope));
+
+        final failed = Failed(failure, StackTrace.current);
+        final nestedOutcome = await _run(
+          () async => Future<void>.error(failed, failed.stackTrace),
+        );
+        expect(nestedOutcome, isA<Failed>());
+        expect((nestedOutcome as Failed).error, same(failed));
+      },
+    );
+
+    fakeAsyncTest(
+      'a continuation forwards a source failure unchanged',
+      () async {
+        final failure = StateError('source failure');
+        var called = false;
+        final source = Job<int>((ctx) async => throw failure);
+        final continuation = source.then<void>((ctx, value) {
+          called = true;
+        });
+
+        final outcome = await continuation.done;
+        expect(outcome, isA<Failed>());
+        expect((outcome as Failed).error, same(failure));
+        expect(called, isFalse);
+      },
+    );
+
+    fakeAsyncTest(
+      'abandonable disposal runs once before the job finishes',
+      () async {
+        final resource = Object();
+        var closed = 0;
+        const cancelled = Cancelled('dispose');
+        final job = Job<void>((ctx) async {
+          await ctx.abandonable(
+            () async => resource,
+            dispose: (value) {
+              expect(value, same(resource));
+              closed++;
+            },
+          );
+          throw cancelled;
+        });
+
+        final outcome = await job.done;
+        expect(outcome, isA<Cancelled>());
+        expect(closed, 1);
+      },
     );
   });
+
+  test(
+    'an envelope whose branches share a node is walked once per node',
+    () async {
+      // Twenty-six levels, two branches each, both pointing at the same node
+      // below: twenty-seven nodes and sixty-seven million paths through them.
+      var node = _listEnvelope([
+        AsyncError(const Cancelled('leaf'), StackTrace.current),
+      ]);
+      for (var level = 0; level < 26; level++) {
+        final shared = node;
+        node = _listEnvelope([
+          AsyncError(shared, StackTrace.current),
+          AsyncError(shared, StackTrace.current),
+        ]);
+      }
+      final watch = Stopwatch()..start();
+      final outcome = await _run(() async => throw node);
+      watch.stop();
+      expect(outcome, isA<Cancelled>());
+      // A clock, and not a `Timeout`: the walk is synchronous, and no timer
+      // of the test framework interrupts a loop that never yields -- a walk
+      // counting paths runs for about seven seconds here and the timeout
+      // notices nothing. One counting nodes takes no measurable time at all,
+      // so a whole second is a margin of seven, not a wager.
+      expect(
+        watch.elapsedMilliseconds,
+        lessThan(1000),
+        reason:
+            'a node walked once per path instead of once per node turns '
+            'a graph that shares nodes into an exponential one',
+      );
+    },
+  );
 }
 
 /// An envelope that reports every other envelope as equal to itself.

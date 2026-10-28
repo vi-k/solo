@@ -20,12 +20,8 @@ final class _SharedJob<T> extends JobBase<T> {
   /// source runs; [_detach] empties the relay instead.
   late final _relay = _SharedRelay<T>(this);
 
-  _SharedJob(
-    JobBase<T> source, {
-    super.key,
-    super.describe,
-    super.observer,
-  }) : _source = source {
+  _SharedJob(JobBase<T> source, {super.key, super.describe, super.observer})
+    : _source = source {
     source._pendingContinuations++;
     // A source that has told its listeners of a cancellation tells a late
     // one at once, which would end the handle inside this call. A finished

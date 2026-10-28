@@ -6,13 +6,10 @@
 // mixes `SoloListenable` into: the fragments that need a `ValueListenable`
 // are handed that one. `test/readme_rakes_test.dart` runs it.
 //
-// A widget expression of the page ends with `)` on a line of its own, where
-// a function that returned it would end with `);`. It stands as the one
-// element of a list instead, which leaves the line as the page has it, and
-// the comma a list would otherwise be asked for is what the rule below is
-// switched off for.
-//
-// ignore_for_file: require_trailing_commas
+// A widget expression of the page ends with `),` on a line of its own, as an
+// argument of a tree would, where a function that returned it would end
+// with `);`. It stands as the one element of a list instead, which leaves
+// the line as the page has it.
 
 import 'dart:async';
 
@@ -34,43 +31,40 @@ Future<void> why(ProfileController controller) async {
 
 /// The builder of "The controller as a `ValueListenable`".
 Widget listenableBuilder(listenable.ProfileController controller) => [
-      ValueListenableBuilder<Profile>(
-        valueListenable: controller,
-        builder: (context, state, _) => Text(
-          switch (state) {
-            Empty() => 'no profile',
-            Loading() => 'loading',
-            Loaded(:final name) => name,
-          },
-        ),
-      )
-    ].single;
+  ValueListenableBuilder<Profile>(
+    valueListenable: controller,
+    builder: (context, state, _) => Text(switch (state) {
+      Empty() => 'no profile',
+      Loading() => 'loading',
+      Loaded(:final name) => name,
+    }),
+  ),
+].single;
 
 /// The merge of "The controller as a `ValueListenable`".
 Widget mergedBuilder(
   listenable.ProfileController left,
   listenable.ProfileController right,
-) =>
-    [
-      ListenableBuilder(
-        listenable: Listenable.merge([left, right]),
-        builder: (context, _) => Text(
-          left.value.canSave && right.value.canSave ? 'both loaded' : 'waiting',
-        ),
-      )
-    ].single;
+) => [
+  ListenableBuilder(
+    listenable: Listenable.merge([left, right]),
+    builder: (context, _) => Text(
+      left.value.canSave && right.value.canSave ? 'both loaded' : 'waiting',
+    ),
+  ),
+].single;
 
 /// The selector of "Selecting one value".
 Widget saveSelector(ProfileController controller) => [
-      SoloSelector<Profile, bool>(
-        solo: controller,
-        selector: (state) => state.canSave,
-        builder: (context, canSave, _) => ElevatedButton(
-          onPressed: canSave ? controller.save : null,
-          child: const Text('Save'),
-        ),
-      )
-    ].single;
+  SoloSelector<Profile, bool>(
+    solo: controller,
+    selector: (state) => state.canSave,
+    builder: (context, canSave, _) => ElevatedButton(
+      onPressed: canSave ? controller.save : null,
+      child: const Text('Save'),
+    ),
+  ),
+].single;
 
 /// The widget whose `State` holds a selection in a field.
 class SaveButton extends StatefulWidget {
@@ -100,12 +94,12 @@ class _SaveButtonState extends State<SaveButton> {
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
-        valueListenable: canSave,
-        builder: (context, enabled, _) => ElevatedButton(
-          onPressed: enabled ? widget.controller.save : null,
-          child: const Text('Save'),
-        ),
-      );
+    valueListenable: canSave,
+    builder: (context, enabled, _) => ElevatedButton(
+      onPressed: enabled ? widget.controller.save : null,
+      child: const Text('Save'),
+    ),
+  );
 }
 
 /// The widget of "Listening without keeping the callback": what its `State`
@@ -137,10 +131,10 @@ class Listening extends StatefulWidget {
       // The switch is the test's: one widget for the versions of the page.
       // ignore: no_logic_in_create_state
       firstAttempt
-          ? _FirstAttemptState()
-          : withMethod
-              ? _MethodState()
-              : _ListeningState();
+      ? _FirstAttemptState()
+      : withMethod
+      ? _MethodState()
+      : _ListeningState();
 }
 
 class _FirstAttemptState extends State<Listening> {
@@ -184,8 +178,10 @@ class _MethodState extends State<Listening> {
 }
 
 class _ListeningState extends State<Listening> {
-  late final canSave =
-      SoloSelection(widget.controller, (state) => state.canSave);
+  late final canSave = SoloSelection(
+    widget.controller,
+    (state) => state.canSave,
+  );
 
   final _listening = SoloSubscriptions();
 
@@ -268,11 +264,7 @@ class LoadButton extends StatefulWidget {
   final List<String> toasts;
 
   /// A Load button over [controller].
-  const LoadButton({
-    required this.controller,
-    required this.toasts,
-    super.key,
-  });
+  const LoadButton({required this.controller, required this.toasts, super.key});
 
   @override
   State<LoadButton> createState() => _LoadButtonState();

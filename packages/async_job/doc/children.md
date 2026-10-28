@@ -16,8 +16,9 @@ right one. Each in its place:
 ```dart
 final job = Job<void>((ctx) async {
   // A child: the body starts it, waits for it, and cancels along with it.
-  final rows =
-      await ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
+  final rows = await ctx.run(
+    Job.deferred<int>((c) => c.abandonable(loadRows)),
+  );
 
   // A stream: one event at a time, in a child of its own.
   final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
@@ -145,8 +146,10 @@ here, and the parent should still end only after it.
 // The first attempt: ignore() drops the failure of the cache.
 final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
   final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
-  final cache =
-      Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+  final cache = Job.deferred<void>(
+    key: 'cache',
+    (c) => c.abandonable(warmCache),
+  );
   ctx.run(cache).ignore();
   final count = ctx.run(rows);
   ctx.log('${await count} rows');
@@ -178,8 +181,10 @@ and `ctx.run` has looked.
 ```dart
 final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
   final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
-  final cache =
-      Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+  final cache = Job.deferred<void>(
+    key: 'cache',
+    (c) => c.abandonable(warmCache),
+  );
   ctx.start(cache);
   final count = ctx.run(rows);
   ctx.log('${await count} rows');

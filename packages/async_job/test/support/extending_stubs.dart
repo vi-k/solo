@@ -44,8 +44,7 @@ final class Printer extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      print('onError: $error');
+  }) => print('onError: $error');
 }
 
 final printer = Printer();

@@ -25,17 +25,17 @@ final class TimedLoad extends Solo<Profile> with SoloListenable {
   TimedLoad(this.api) : super(Empty());
 
   Job<String> load() => enqueue<Profile, String>(
-        key: 'load',
-        timeout: const Duration(seconds: 5),
-        (ctx) async {
-          ctx.emit(Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
+    key: 'load',
+    timeout: const Duration(seconds: 5),
+    (ctx) async {
+      ctx.emit(Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
 
-          return name;
-        },
-        ifCancelled: (state, cancelled) => Empty(),
-      );
+      return name;
+    },
+    ifCancelled: (state, cancelled) => Empty(),
+  );
 }
 
 /// The view of the page with nothing animating while the profile loads.
@@ -48,14 +48,14 @@ class QuietView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SoloBuilder<Profile>(
-        solo: controller,
-        builder: (context, state, _) => switch (state) {
-          Empty() => TextButton(
-              onPressed: () => controller.load().ignoreFailure(),
-              child: const Text('Load'),
-            ),
-          Loading() => const Text('Loading'),
-          Loaded(:final name) => Text(name),
-        },
-      );
+    solo: controller,
+    builder: (context, state, _) => switch (state) {
+      Empty() => TextButton(
+        onPressed: () => controller.load().ignoreFailure(),
+        child: const Text('Load'),
+      ),
+      Loading() => const Text('Loading'),
+      Loaded(:final name) => Text(name),
+    },
+  );
 }

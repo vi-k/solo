@@ -170,14 +170,12 @@ void main() {
     runSolo((solo, journal, async) {
       final errors = <String>[];
       _inZone(errors, () {
-        solo.enqueue<TestState, void>(
-          key: 'job',
-          cancellable: false,
-          (ctx) async {
-            await delay(10);
-            throw StateError('boom');
-          },
-        );
+        solo.enqueue<TestState, void>(key: 'job', cancellable: false, (
+          ctx,
+        ) async {
+          await delay(10);
+          throw StateError('boom');
+        });
       });
       async.flushMicrotasks();
       solo.close();
@@ -198,14 +196,12 @@ void main() {
       final errors = <String>[];
       late Job<void> job;
       _inZone(errors, () {
-        job = solo.enqueue<TestState, void>(
-          key: 'job',
-          cancellable: false,
-          (ctx) async {
-            await delay(10);
-            throw StateError('boom');
-          },
-        );
+        job = solo.enqueue<TestState, void>(key: 'job', cancellable: false, (
+          ctx,
+        ) async {
+          await delay(10);
+          throw StateError('boom');
+        });
       });
       async.flushMicrotasks();
       job.cancel();

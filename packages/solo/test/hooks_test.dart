@@ -75,26 +75,23 @@ void main() {
     var closed = false;
     // The hook's error becomes an unhandled zone error; the zone keeps it
     // out of the test output and lets the assertions below name it.
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Solo.observer = journal;
-          final solo = _ThrowingFinish();
-          try {
-            solo
-                .enqueue<TestState, void>(key: 'job', (ctx) async {})
-                .done
-                .then((value) => outcome = value);
-            async.flushMicrotasks();
-            solo.close().then((_) => closed = true);
-            async.flushTimers();
-          } finally {
-            Solo.observer = null;
-          }
-        });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Solo.observer = journal;
+        final solo = _ThrowingFinish();
+        try {
+          solo
+              .enqueue<TestState, void>(key: 'job', (ctx) async {})
+              .done
+              .then((value) => outcome = value);
+          async.flushMicrotasks();
+          solo.close().then((_) => closed = true);
+          async.flushTimers();
+        } finally {
+          Solo.observer = null;
+        }
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(outcome, isA<Done<void>>());
     expect(closed, isTrue);
     expect(journal.take(), [
@@ -108,21 +105,18 @@ void main() {
   test('a throwing onClose observer still completes close', () {
     final errors = <String>[];
     var closed = false;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Solo.observer = _ThrowingClose();
-          final solo = PlainSolo<TestState>(const Initial());
-          try {
-            solo.close().then((_) => closed = true);
-            async.flushTimers();
-          } finally {
-            Solo.observer = null;
-          }
-        });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Solo.observer = _ThrowingClose();
+        final solo = PlainSolo<TestState>(const Initial());
+        try {
+          solo.close().then((_) => closed = true);
+          async.flushTimers();
+        } finally {
+          Solo.observer = null;
+        }
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(closed, isTrue);
     expect(errors, ['Bad state: onClose']);
   });
@@ -185,28 +179,23 @@ void main() {
 
       expect(solo.isFinished, isTrue);
       expect(solo.currentState, const Preparing());
-      expect(
-        heard,
-        ['Preparing(progress: 0)'],
-        reason: 'the listeners are still there when the hook runs',
-      );
+      expect(heard, [
+        'Preparing(progress: 0)',
+      ], reason: 'the listeners are still there when the hook runs');
     });
   });
 
   test('a throwing onClose hook still completes close', () {
     final errors = <String>[];
     var closed = false;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final solo = _ThrowingCloseHook();
-          solo.close().then((_) => closed = true);
-          async.flushTimers();
-          expect(solo.isFinished, isTrue);
-        });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final solo = _ThrowingCloseHook();
+        solo.close().then((_) => closed = true);
+        async.flushTimers();
+        expect(solo.isFinished, isTrue);
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(closed, isTrue);
     expect(errors, ['Bad state: onClose hook']);
   });
@@ -214,25 +203,22 @@ void main() {
   test('a throwing onFinish does not stall the queue', () {
     final journal = JournalObserver();
     final errors = <String>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Solo.observer = journal;
-          final solo = _ThrowingFinish();
-          try {
-            solo
-              ..enqueue<TestState, void>(key: 'first', (ctx) async {})
-              ..enqueue<TestState, void>(key: 'second', (ctx) async {});
-            async.flushTimers();
-          } finally {
-            solo.close();
-            async.flushTimers();
-            Solo.observer = null;
-          }
-        });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Solo.observer = journal;
+        final solo = _ThrowingFinish();
+        try {
+          solo
+            ..enqueue<TestState, void>(key: 'first', (ctx) async {})
+            ..enqueue<TestState, void>(key: 'second', (ctx) async {});
+          async.flushTimers();
+        } finally {
+          solo.close();
+          async.flushTimers();
+          Solo.observer = null;
+        }
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(journal.take(), [
       '[first] started',
       '[first] finished Done(null)',
@@ -248,29 +234,26 @@ void main() {
     final errors = <String>[];
     final outcomes = <Outcome<void>>[];
     var closed = false;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Solo.observer = journal;
-          final solo = _ThrowingFinish();
-          try {
-            // No pump between the adds and `close`: all three wait in the
-            // queue and are dropped by the drain, one hook throw each.
-            for (final key in ['a', 'b', 'c']) {
-              solo
-                  .enqueue<TestState, void>(key: key, (ctx) async {})
-                  .done
-                  .then(outcomes.add);
-            }
-            solo.close().then((_) => closed = true);
-            async.flushTimers();
-          } finally {
-            Solo.observer = null;
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Solo.observer = journal;
+        final solo = _ThrowingFinish();
+        try {
+          // No pump between the adds and `close`: all three wait in the
+          // queue and are dropped by the drain, one hook throw each.
+          for (final key in ['a', 'b', 'c']) {
+            solo
+                .enqueue<TestState, void>(key: key, (ctx) async {})
+                .done
+                .then(outcomes.add);
           }
-        });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+          solo.close().then((_) => closed = true);
+          async.flushTimers();
+        } finally {
+          Solo.observer = null;
+        }
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(closed, isTrue);
     expect(outcomes, hasLength(3));
     expect(journal.take(), [
@@ -286,32 +269,29 @@ void main() {
     final journal = JournalObserver();
     final errors = <String>[];
     Outcome<void>? parentOutcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Solo.observer = journal;
-          final solo = _ThrowingStart();
-          try {
-            solo
-                .enqueue<TestState, void>(key: 'parent', (ctx) async {
-                  final child = solo.job<TestState, void>(
-                    key: 'child',
-                    (childCtx) async {},
-                  );
-                  await ctx.run(child);
-                })
-                .done
-                .then((value) => parentOutcome = value);
-            async.flushTimers();
-          } finally {
-            solo.close();
-            async.flushTimers();
-            Solo.observer = null;
-          }
-        });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Solo.observer = journal;
+        final solo = _ThrowingStart();
+        try {
+          solo
+              .enqueue<TestState, void>(key: 'parent', (ctx) async {
+                final child = solo.job<TestState, void>(
+                  key: 'child',
+                  (childCtx) async {},
+                );
+                await ctx.run(child);
+              })
+              .done
+              .then((value) => parentOutcome = value);
+          async.flushTimers();
+        } finally {
+          solo.close();
+          async.flushTimers();
+          Solo.observer = null;
+        }
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(parentOutcome, isA<Done<void>>());
     expect(journal.take(), [
       '[parent] started',
@@ -328,32 +308,29 @@ void main() {
     final seen = <TestState>[];
     Outcome<void>? outcome;
     Duration? finishedAt;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final solo = _ThrowingChange();
-          try {
-            solo.stream.listen(seen.add);
-            solo
-                .enqueue<Initial, void>(key: 'job', (ctx) async {
-                  await pause(ctx, 100);
-                })
-                .done
-                .then((value) {
-                  outcome = value;
-                  finishedAt = async.elapsed;
-                });
-            async.flushMicrotasks();
-            solo.externalSetState(const Preparing());
-            async.flushTimers();
-          } finally {
-            solo.close();
-            async.flushTimers();
-          }
-        });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final solo = _ThrowingChange();
+        try {
+          solo.stream.listen(seen.add);
+          solo
+              .enqueue<Initial, void>(key: 'job', (ctx) async {
+                await pause(ctx, 100);
+              })
+              .done
+              .then((value) {
+                outcome = value;
+                finishedAt = async.elapsed;
+              });
+          async.flushMicrotasks();
+          solo.externalSetState(const Preparing());
+          async.flushTimers();
+        } finally {
+          solo.close();
+          async.flushTimers();
+        }
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(seen, [const Preparing()], reason: 'publish ran after the hook');
     expect(outcome, isA<Cancelled>());
     expect(finishedAt, Duration.zero, reason: 'the rules were re-evaluated');
@@ -363,23 +340,20 @@ void main() {
   test('a throwing observer does not switch off the instance hook', () {
     final lines = <String>[];
     final errors = <String>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Solo.observer = _ThrowingObserver();
-          final solo = _Hooked(lines);
-          try {
-            solo.enqueue<TestState, void>(key: 'job', (ctx) async {});
-            async.flushTimers();
-          } finally {
-            solo.close();
-            async.flushTimers();
-            Solo.observer = null;
-          }
-        });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Solo.observer = _ThrowingObserver();
+        final solo = _Hooked(lines);
+        try {
+          solo.enqueue<TestState, void>(key: 'job', (ctx) async {});
+          async.flushTimers();
+        } finally {
+          solo.close();
+          async.flushTimers();
+          Solo.observer = null;
+        }
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(lines, ['hook: start job', 'hook: finish job']);
     expect(errors, [
       'Bad state: observer onStart',
@@ -391,25 +365,22 @@ void main() {
     final lines = <String>[];
     final errors = <String>[];
     late Job<void> job;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final solo = _LazyLog(lines);
-          job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
-            await delay(100);
-            // The line is built where the hook reads it, and the job has
-            // been cancelled by then: reading the state throws.
-            ctx.log(() => 'state ${ctx.state}');
-          });
-          async.flushMicrotasks();
-          job.cancel().ignore();
-          async.flushTimers();
-          solo.close();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final solo = _LazyLog(lines);
+        job = solo.enqueue<TestState, void>(key: 'job', (ctx) async {
+          await delay(100);
+          // The line is built where the hook reads it, and the job has
+          // been cancelled by then: reading the state throws.
+          ctx.log(() => 'state ${ctx.state}');
         });
-      },
-      (error, stackTrace) => errors.add('$error'),
-    );
+        async.flushMicrotasks();
+        job.cancel().ignore();
+        async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => errors.add('$error'));
     expect(lines, ['hook: log'], reason: 'the hook was called');
     expect(errors, isEmpty);
     expect('${job.outcome}', 'Cancelled(manual)');
@@ -418,18 +389,15 @@ void main() {
   test('a hook error is a cancellation only when all of it is', () {
     List<String> zoneOf(Object Function() thrown) {
       final errors = <String>[];
-      runZonedGuarded(
-        () {
-          fakeAsync((async) {
-            final solo = _ThrowingAtStart(thrown)
-              ..enqueue<TestState, void>(key: 'job', (ctx) async {});
-            async.flushTimers();
-            solo.close();
-            async.flushTimers();
-          });
-        },
-        (error, stackTrace) => errors.add('${error.runtimeType}'),
-      );
+      runZonedGuarded(() {
+        fakeAsync((async) {
+          final solo = _ThrowingAtStart(thrown)
+            ..enqueue<TestState, void>(key: 'job', (ctx) async {});
+          async.flushTimers();
+          solo.close();
+          async.flushTimers();
+        });
+      }, (error, stackTrace) => errors.add('${error.runtimeType}'));
       return errors;
     }
 
@@ -463,13 +431,10 @@ void main() {
 
   test('the observer sees start, log, error and finish in order', () {
     runSolo((solo, journal, async) {
-      solo.enqueue<TestState, void>(
-        key: 'job',
-        (ctx) async {
-          ctx.log('hello');
-          throw StateError('boom');
-        },
-      ).ignoreFailure();
+      solo.enqueue<TestState, void>(key: 'job', (ctx) async {
+        ctx.log('hello');
+        throw StateError('boom');
+      }).ignoreFailure();
       async.flushTimers();
       expect(journal.take(), [
         '[job] started',
@@ -608,13 +573,12 @@ void main() {
       runSolo((solo, journal, async) {
         SoloJob<void> sync(
           Future<void> Function(SoloContext<TestState, TestState> ctx) body,
-        ) =>
-            solo.enqueue<TestState, void>(
-              key: 'sync',
-              policy: Policy.droppable,
-              describe: () => 'call ${++describes}',
-              body,
-            );
+        ) => solo.enqueue<TestState, void>(
+          key: 'sync',
+          policy: Policy.droppable,
+          describe: () => 'call ${++describes}',
+          body,
+        );
         sync((ctx) async {
           // Neither is awaited: awaited, each would wait for itself.
           ctx.onDispose(() {
@@ -637,11 +601,11 @@ void main() {
     final names = [
       for (final line in engine)
         if (RegExp(
-          r'^enqueue Job\(sync: call \d+\): '
-          r'duplicate of (Job\(sync: call \d+\)), '
-          r'which is running: if awaited from inside (Job\(sync: call \d+\)), '
-          r'it waits for itself$',
-        ).firstMatch(line)
+              r'^enqueue Job\(sync: call \d+\): '
+              r'duplicate of (Job\(sync: call \d+\)), '
+              r'which is running: if awaited from inside (Job\(sync: call \d+\)), '
+              r'it waits for itself$',
+            ).firstMatch(line)
             case final match?)
           (match[1], match[2]),
     ];
@@ -657,10 +621,10 @@ void main() {
     try {
       runSolo((solo, journal, async) {
         SoloJob<void> load() => solo.enqueue<TestState, void>(
-              key: 'load',
-              policy: Policy.droppable,
-              (ctx) async {},
-            );
+          key: 'load',
+          policy: Policy.droppable,
+          (ctx) async {},
+        );
         solo.enqueue<TestState, void>(key: 'outer', (ctx) async {
           // Not awaited: awaited, it would wait for good.
           load();
@@ -691,13 +655,12 @@ void main() {
         runSolo((solo, journal, async) {
           final gate = Completer<void>();
           SoloJob<void> restart() => solo.enqueue<TestState, void>(
-                key: 'k',
-                policy: Policy.restart,
-                cancellable: cancellable,
-                (ctx) => section
-                    ? ctx.uncancellable(() => gate.future)
-                    : gate.future,
-              );
+            key: 'k',
+            policy: Policy.restart,
+            cancellable: cancellable,
+            (ctx) =>
+                section ? ctx.uncancellable(() => gate.future) : gate.future,
+          );
           restart();
           async.flushMicrotasks();
           restart();
@@ -710,12 +673,12 @@ void main() {
       return engine.where((line) => line.startsWith('restart')).toList();
     }
 
-    const held = 'restart: Job(k) holds the cancellation back until its '
+    const held =
+        'restart: Job(k) holds the cancellation back until its '
         'uncancellable section closes';
-    expect(
-      trace(cancellable: true, section: false),
-      ['restart: cancel Job(k)'],
-    );
+    expect(trace(cancellable: true, section: false), [
+      'restart: cancel Job(k)',
+    ]);
     expect(trace(cancellable: false, section: false), [
       'restart: Job(k) turns the cancellation down: it is not cancellable',
     ]);
@@ -800,7 +763,7 @@ final class _Closing extends Solo<TestState> with OpenSolo<TestState> {
   Future<void>? again;
 
   _Closing(this.lines, {this.closeAgain = false, this.writeOnClose})
-      : super(const Initial());
+    : super(const Initial());
 
   @override
   void onClose() {
@@ -864,8 +827,7 @@ final class _Hooked extends Solo<TestState> with OpenSolo<TestState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      lines.add('hook: error $error');
+  }) => lines.add('hook: error $error');
 
   @override
   void onLog(Job<Object?> job, Object? message) =>

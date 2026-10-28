@@ -32,31 +32,33 @@ void main() {
     });
   });
 
-  test('await cancel() of a queued uncancellable job waits for its whole run',
-      () {
-    runSolo((solo, journal, async) {
-      solo.enqueue<TestState, void>(key: 'first', (ctx) => delay(100));
-      final job = solo.enqueue<TestState, void>(
-        key: 'pay',
-        cancellable: false,
-        (ctx) => delay(100),
-      );
-      var cancelDone = false;
-      job.cancel().then((_) => cancelDone = true);
-      async.elapse(const Duration(milliseconds: 150));
-      expect(job.isQueued, isFalse, reason: 'the job started in its turn');
-      expect(cancelDone, isFalse, reason: 'cancel waits for the job to end');
-      async.elapse(const Duration(milliseconds: 50));
-      expect(cancelDone, isTrue);
-      expect(job.outcome, isA<Done<void>>());
-      expect(journal.take(), [
-        '[first] started',
-        '[first] finished Done(null)',
-        '[pay] started',
-        '[pay] finished Done(null)',
-      ]);
-    });
-  });
+  test(
+    'await cancel() of a queued uncancellable job waits for its whole run',
+    () {
+      runSolo((solo, journal, async) {
+        solo.enqueue<TestState, void>(key: 'first', (ctx) => delay(100));
+        final job = solo.enqueue<TestState, void>(
+          key: 'pay',
+          cancellable: false,
+          (ctx) => delay(100),
+        );
+        var cancelDone = false;
+        job.cancel().then((_) => cancelDone = true);
+        async.elapse(const Duration(milliseconds: 150));
+        expect(job.isQueued, isFalse, reason: 'the job started in its turn');
+        expect(cancelDone, isFalse, reason: 'cancel waits for the job to end');
+        async.elapse(const Duration(milliseconds: 50));
+        expect(cancelDone, isTrue);
+        expect(job.outcome, isA<Done<void>>());
+        expect(journal.take(), [
+          '[first] started',
+          '[first] finished Done(null)',
+          '[pay] started',
+          '[pay] finished Done(null)',
+        ]);
+      });
+    },
+  );
 
   test('cancel works again once the step is over', () {
     runSolo((solo, journal, async) {

@@ -17,17 +17,14 @@ final class TokenPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   TokenPlayer() : super(const Ready());
 
-  Job<void> seek(Duration position) => enqueue<Ready, void>(
-        key: 'seek',
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          // Wait for the device to stop before another seek starts.
-          await ctx.join(() => _player.seek(position, cancelToken: token));
-          ctx.emit(ctx.state.copyWith(position: position));
-        },
-      );
+  Job<void> seek(Duration position) =>
+      enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+        final token = CancelToken();
+        ctx.onCancel(token.cancel);
+        // Wait for the device to stop before another seek starts.
+        await ctx.join(() => _player.seek(position, cancelToken: token));
+        ctx.emit(ctx.state.copyWith(position: position));
+      });
 }
 
 /// "The token": what the app sets once, in `main`, for a player that stops
@@ -45,18 +42,18 @@ final class DeadlinePlayer extends Solo<AppState>
   DeadlinePlayer() : super(const Ready());
 
   Job<void> seek(Duration position) => enqueue<Ready, void>(
-        key: 'seek',
-        policy: Policy.restart,
-        timeout: const Duration(seconds: 2),
-        ifCancelled: (state, cancelled) =>
-            cancelled.reason is TimeoutCancelReason ? const Offline() : state,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => _player.seek(position, cancelToken: token));
-          ctx.emit(ctx.state.copyWith(position: position));
-        },
-      );
+    key: 'seek',
+    policy: Policy.restart,
+    timeout: const Duration(seconds: 2),
+    ifCancelled: (state, cancelled) =>
+        cancelled.reason is TimeoutCancelReason ? const Offline() : state,
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => _player.seek(position, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(position: position));
+    },
+  );
 }
 
 /// "One section for the step" and "A whole job".
@@ -64,19 +61,17 @@ final class Till extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Till() : super(const Ready());
 
   Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-        await ctx.uncancellable(() async {
-          final receipt = await payment.commit();
-          ctx.emit(ctx.state.copyWith(receipt: receipt));
-          await journal.write(entry);
-        });
-        // ...the rest of the job, which cancellation can still stop.
-      });
+    await ctx.uncancellable(() async {
+      final receipt = await payment.commit();
+      ctx.emit(ctx.state.copyWith(receipt: receipt));
+      await journal.write(entry);
+    });
+    // ...the rest of the job, which cancellation can still stop.
+  });
 
   // A job that turns down every request it is allowed to turn down.
-  Job<void> flush() => enqueue<Ready, void>(
-        cancellable: false,
-        (ctx) => device.flush(),
-      );
+  Job<void> flush() =>
+      enqueue<Ready, void>(cancellable: false, (ctx) => device.flush());
 }
 
 /// "Each wait in its place".
@@ -84,16 +79,16 @@ final class Uploader extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Uploader() : super(const Ready());
 
   Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
-        ctx.onDispose(() async {
-          // Cleanup runs after the body, where the waiting methods are
-          // gone: a plain await is the wait that works here.
-          await device.flush();
-        });
-        for (final chunk in chunks) {
-          // Checks before the write and after it.
-          await ctx.join(() => device.write(chunk));
-        }
-      });
+    ctx.onDispose(() async {
+      // Cleanup runs after the body, where the waiting methods are
+      // gone: a plain await is the wait that works here.
+      await device.flush();
+    });
+    for (final chunk in chunks) {
+      // Checks before the write and after it.
+      await ctx.join(() => device.write(chunk));
+    }
+  });
 }
 
 // --- Cancellation details ------------------------------------------------
@@ -122,12 +117,12 @@ final class BoundedPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
   BoundedPlayer() : super(const Ready());
 
   Job<void> seek(Duration position) => enqueue<Ready, void>((ctx) async {
-        if (position > end) {
-          // From inside its body:
-          throw Cancelled.by(reason: OutOfRange(position));
-        }
-        await ctx.join(() => player.seek(position));
-      });
+    if (position > end) {
+      // From inside its body:
+      throw Cancelled.by(reason: OutOfRange(position));
+    }
+    await ctx.join(() => player.seek(position));
+  });
 }
 
 /// The third statement.

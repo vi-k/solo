@@ -15,10 +15,10 @@ import 'support/test_state.dart';
 Duration ms(int milliseconds) => Duration(milliseconds: milliseconds);
 
 Matcher cancelledBy<T>() => isA<Cancelled>().having(
-      (cancelled) => cancelled.reason,
-      'reason',
-      isA<T>(),
-    );
+  (cancelled) => cancelled.reason,
+  'reason',
+  isA<T>(),
+);
 
 void main() {
   test('the child gets a SoloContext with the state and emit', () {
@@ -140,19 +140,18 @@ void main() {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
       final made = <String, SoloJob<void>>{};
       late final SoloContext<TestState, Preparing> leaked;
-      solo.enqueue<Preparing, void>(
-        keepWhile: (state) => state.progress < 50,
-        (ctx) async {
-          leaked = ctx;
-          ctx
-            ..unattended(() async {
-              made['unattended'] = ctx.child((ctx) async {});
-            })
-            ..onDispose(() {
-              made['cleanup'] = ctx.child((ctx) async {});
-            });
-        },
-      );
+      solo.enqueue<Preparing, void>(keepWhile: (state) => state.progress < 50, (
+        ctx,
+      ) async {
+        leaked = ctx;
+        ctx
+          ..unattended(() async {
+            made['unattended'] = ctx.child((ctx) async {});
+          })
+          ..onDispose(() {
+            made['cleanup'] = ctx.child((ctx) async {});
+          });
+      });
       async.flushTimers();
       solo.externalSetState(const Preparing(progress: 60));
       made['finished, its rules broken'] = leaked.child((ctx) async {});

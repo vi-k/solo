@@ -35,8 +35,7 @@ class Heard extends JobObserver with JobAnswerer {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('onError: $error, ${answer.name}');
+  }) => seen.add('onError: $error, ${answer.name}');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -59,8 +58,7 @@ final class HeardByKey extends JobObserver with JobAnswerer {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('${job.key} onError: ${error.runtimeType}, ${answer.name}');
+  }) => seen.add('${job.key} onError: ${error.runtimeType}, ${answer.name}');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -95,8 +93,7 @@ final class Listening extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('onError: $error, ${answer.name}');
+  }) => seen.add('onError: $error, ${answer.name}');
 }
 
 /// What the filter was asked about, in order.
@@ -149,21 +146,20 @@ List<String> stoppedAfterCancel(
   Object error,
   JobObserver observer, {
   bool ignore = false,
-}) =>
-    zoneOf((async) {
-      final stop = Completer<void>();
-      final job = Job<void>(observer: observer, (ctx) async {
-        ctx.onCancel(stop.complete);
-        await stop.future;
-        Error.throwWithStackTrace(error, StackTrace.current);
-      });
-      if (ignore) {
-        job.ignoreFailure();
-      }
-      async.elapse(const Duration(milliseconds: 10));
-      job.cancel().ignore();
-      async.flushTimers();
-    });
+}) => zoneOf((async) {
+  final stop = Completer<void>();
+  final job = Job<void>(observer: observer, (ctx) async {
+    ctx.onCancel(stop.complete);
+    await stop.future;
+    Error.throwWithStackTrace(error, StackTrace.current);
+  });
+  if (ignore) {
+    job.ignoreFailure();
+  }
+  async.elapse(const Duration(milliseconds: 10));
+  job.cancel().ignore();
+  async.flushTimers();
+});
 
 /// Runs [body] under fake time in a zone of its own and returns what
 /// reached that zone, written into [caught] when given one.
@@ -186,23 +182,17 @@ List<String> disposing(
   JobObserver observer, {
   bool cancel = false,
   List<String>? caught,
-}) =>
-    zoneOf(
-      (async) {
-        final job = Job<void>(observer: observer, (ctx) async {
-          ctx.onDispose(
-            () => Error.throwWithStackTrace(error, StackTrace.current),
-          );
-          await ctx.abandonable(() => delay(20));
-        });
-        async.elapse(const Duration(milliseconds: 10));
-        if (cancel) {
-          job.cancel().ignore();
-        }
-        async.flushTimers();
-      },
-      caught,
-    );
+}) => zoneOf((async) {
+  final job = Job<void>(observer: observer, (ctx) async {
+    ctx.onDispose(() => Error.throwWithStackTrace(error, StackTrace.current));
+    await ctx.abandonable(() => delay(20));
+  });
+  async.elapse(const Duration(milliseconds: 10));
+  if (cancel) {
+    job.cancel().ignore();
+  }
+  async.flushTimers();
+}, caught);
 
 /// Runs a child whose body cancels its own job and then overflows before its
 /// start has returned, with nothing to cut the start short; the filter names
@@ -217,25 +207,19 @@ Future<List<String>> overflowedWhole(
   };
   final zone = <String>[];
   late Job<void> root;
-  runZonedGuarded(
-    () {
-      final child = RulesJob<void>(
-        (ctx) {
-          ctx.breakRule('gave up');
-          throw const StackOverflowError();
-        },
-        key: 'child',
-      );
-      root = Job<void>(key: 'root', observer: observer, (ctx) async {
-        try {
-          await ctx.run(child);
-        } on Object {
-          // The child ends cancelled.
-        }
-      });
-    },
-    (error, _) => zone.add('$error'),
-  );
+  runZonedGuarded(() {
+    final child = RulesJob<void>((ctx) {
+      ctx.breakRule('gave up');
+      throw const StackOverflowError();
+    }, key: 'child');
+    root = Job<void>(key: 'root', observer: observer, (ctx) async {
+      try {
+        await ctx.run(child);
+      } on Object {
+        // The child ends cancelled.
+      }
+    });
+  }, (error, _) => zone.add('$error'));
   await root.done.timeout(const Duration(seconds: 5));
   await delay(1);
   return zone;
@@ -257,10 +241,9 @@ void main() {
 
     test('an error of ctx.onDispose with an observer that does not answer', () {
       final listening = Listening();
-      expect(
-        disposing(StateError('disk full'), listening),
-        ['Bad state: disk full'],
-      );
+      expect(disposing(StateError('disk full'), listening), [
+        'Bad state: disk full',
+      ]);
       expect(listening.seen, ['onError: Bad state: disk full, answered']);
     });
 
@@ -319,17 +302,22 @@ void main() {
       expect(heard.seen, ['onError: Stopped, cancellation']);
     });
 
-    test('a failure of a cancelled job the filter does not name, asked once',
-        () {
-      nameTheStop();
-      final heard = Heard();
-      expect(disposing(StateError('disk full'), heard, cancel: true), isEmpty);
-      expect(asked, ['Bad state: disk full']);
-      expect(heard.seen, [
-        'onError: Bad state: disk full, answered',
-        'onUnanswered: Bad state: disk full',
-      ]);
-    });
+    test(
+      'a failure of a cancelled job the filter does not name, asked once',
+      () {
+        nameTheStop();
+        final heard = Heard();
+        expect(
+          disposing(StateError('disk full'), heard, cancel: true),
+          isEmpty,
+        );
+        expect(asked, ['Bad state: disk full']);
+        expect(heard.seen, [
+          'onError: Bad state: disk full, answered',
+          'onUnanswered: Bad state: disk full',
+        ]);
+      },
+    );
 
     test('a ParallelWaitError of cleanup, each error with its own', () {
       nameTheStop();
@@ -361,14 +349,11 @@ void main() {
       final listening = Listening();
       final heard = Heard();
       final zone = zoneOf((async) {
-        Job<void>(
-          observer: JobObserver.all([listening, heard]),
-          (ctx) async {
-            ctx.onDispose(() => throw StateError('disk full'));
-            await delay(10);
-            throw StateError('body');
-          },
-        ).ignoreFailure();
+        Job<void>(observer: JobObserver.all([listening, heard]), (ctx) async {
+          ctx.onDispose(() => throw StateError('disk full'));
+          await delay(10);
+          throw StateError('body');
+        }).ignoreFailure();
         async.flushTimers();
       });
       expect(zone, isEmpty);
@@ -406,22 +391,24 @@ void main() {
       ]);
     });
 
-    test('the error of a filter that throws reaches the zone before onError',
-        () {
-      Job.isCancellationError = (error) => throw StateError('filter broke');
-      final log = <String>[];
-      disposing(
-        StateError('disk full'),
-        Listening(log),
-        cancel: true,
-        caught: log,
-      );
-      expect(log, [
-        'Bad state: filter broke',
-        'onError: Bad state: disk full, answered',
-        'Bad state: disk full',
-      ]);
-    });
+    test(
+      'the error of a filter that throws reaches the zone before onError',
+      () {
+        Job.isCancellationError = (error) => throw StateError('filter broke');
+        final log = <String>[];
+        disposing(
+          StateError('disk full'),
+          Listening(log),
+          cancel: true,
+          caught: log,
+        );
+        expect(log, [
+          'Bad state: filter broke',
+          'onError: Bad state: disk full, answered',
+          'Bad state: disk full',
+        ]);
+      },
+    );
 
     test('an envelope that walks otherwise the second time', () {
       final a = StateError('a');
@@ -493,8 +480,7 @@ void main() {
         final job = ProbeJob<int>(observer: heard, (ctx) async {
           await ctx.abandonable(() => delay(20));
           return 1;
-        })
-          ..launch();
+        })..launch();
         async.elapse(const Duration(milliseconds: 10));
         job.drop(Failed(StateError('by hand'), StackTrace.current));
         async.flushTimers();
@@ -510,10 +496,9 @@ void main() {
     test('a source that fails to stop, the answer right after', () {
       final heard = Heard();
       final zone = zoneOf((async) {
-        UncancellableByBugJob<int>((ctx) async => 1)
-            .then((ctx, value) => value, observer: heard)
-            .cancel()
-            .ignore();
+        UncancellableByBugJob<int>(
+          (ctx) async => 1,
+        ).then((ctx, value) => value, observer: heard).cancel().ignore();
         async.flushTimers();
       });
       expect(zone, isEmpty);
@@ -589,17 +574,22 @@ void main() {
       ]);
     });
 
-    test('a failure of a job that ignores its failure: never, nobody asked',
-        () {
-      nameTheStop();
-      final heard = HeardToTheEnd();
-      expect(
-        stoppedAfterCancel(StateError('disk full'), heard, ignore: true),
-        isEmpty,
-      );
-      expect(asked, isEmpty);
-      expect(heard.seen, ['onError: Bad state: disk full, never', 'onFinish']);
-    });
+    test(
+      'a failure of a job that ignores its failure: never, nobody asked',
+      () {
+        nameTheStop();
+        final heard = HeardToTheEnd();
+        expect(
+          stoppedAfterCancel(StateError('disk full'), heard, ignore: true),
+          isEmpty,
+        );
+        expect(asked, isEmpty);
+        expect(heard.seen, [
+          'onError: Bad state: disk full, never',
+          'onFinish',
+        ]);
+      },
+    );
 
     test('a filter set after onError is not asked: the verdict stands', () {
       nameTheStop();
@@ -703,12 +693,13 @@ void main() {
     test('a Failed handed to a running job that ignores its failure', () {
       final heard = HeardToTheEnd();
       final zone = zoneOf((async) {
-        final job = ProbeJob<int>(observer: heard, (ctx) async {
-          await ctx.abandonable(() => delay(20));
-          return 1;
-        })
-          ..ignoreFailure()
-          ..launch();
+        final job =
+            ProbeJob<int>(observer: heard, (ctx) async {
+                await ctx.abandonable(() => delay(20));
+                return 1;
+              })
+              ..ignoreFailure()
+              ..launch();
         async.elapse(const Duration(milliseconds: 10));
         job.drop(Failed(StateError('by hand'), StackTrace.current));
         async.flushTimers();
@@ -718,18 +709,20 @@ void main() {
     });
   });
 
-  test('notifyObserver, the door of an engine, says later even when ignored',
-      () {
-    final heard = Heard();
-    final zone = zoneOf((async) {
-      ProbeJob<int>(observer: heard, (ctx) async => 1)
-        ..ignoreFailure()
-        ..announce(StateError('engine'), StackTrace.current);
-      async.flushTimers();
-    });
-    expect(zone, isEmpty);
-    expect(heard.seen, ['onError: Bad state: engine, later']);
-  });
+  test(
+    'notifyObserver, the door of an engine, says later even when ignored',
+    () {
+      final heard = Heard();
+      final zone = zoneOf((async) {
+        ProbeJob<int>(observer: heard, (ctx) async => 1)
+          ..ignoreFailure()
+          ..announce(StateError('engine'), StackTrace.current);
+        async.flushTimers();
+      });
+      expect(zone, isEmpty);
+      expect(heard.seen, ['onError: Bad state: engine, later']);
+    },
+  );
 
   test('a torn start of a cancelled job whose body overflowed', () async {
     nameTheStop();
@@ -737,40 +730,34 @@ void main() {
     var scheduled = 0;
     final zone = <String>[];
     late Job<void> root;
-    runZonedGuarded(
-      () {
-        // The body cancels its own job and then overflows, before its first
-        // `await`; the zone has no stack for what the routine waits for
-        // next, and the start is cut short. The core ends such a job
-        // without an answer to the overflow: the body of the parent heard it.
-        final child = RulesJob<void>(
-          (ctx) {
-            ctx.breakRule('gave up');
-            throw const StackOverflowError();
-          },
-          key: 'child',
-        );
-        root = Job<void>(key: 'root', observer: heard, (ctx) async {
-          try {
-            await runZoned(
-              () => ctx.run(child),
-              zoneSpecification: ZoneSpecification(
-                scheduleMicrotask: (self, parent, zone, callback) {
-                  if (scheduled++ == 0) {
-                    throw const StackOverflowError();
-                  }
-                  parent.scheduleMicrotask(zone, callback);
-                },
-              ),
-            );
-          } on Object {
-            // The overflow the start throws.
-          }
-          await delay(1);
-        });
-      },
-      (error, _) => zone.add('$error'),
-    );
+    runZonedGuarded(() {
+      // The body cancels its own job and then overflows, before its first
+      // `await`; the zone has no stack for what the routine waits for
+      // next, and the start is cut short. The core ends such a job
+      // without an answer to the overflow: the body of the parent heard it.
+      final child = RulesJob<void>((ctx) {
+        ctx.breakRule('gave up');
+        throw const StackOverflowError();
+      }, key: 'child');
+      root = Job<void>(key: 'root', observer: heard, (ctx) async {
+        try {
+          await runZoned(
+            () => ctx.run(child),
+            zoneSpecification: ZoneSpecification(
+              scheduleMicrotask: (self, parent, zone, callback) {
+                if (scheduled++ == 0) {
+                  throw const StackOverflowError();
+                }
+                parent.scheduleMicrotask(zone, callback);
+              },
+            ),
+          );
+        } on Object {
+          // The overflow the start throws.
+        }
+        await delay(1);
+      });
+    }, (error, _) => zone.add('$error'));
     await root.done.timeout(const Duration(seconds: 5));
     await delay(1);
     expect(zone, isEmpty);
@@ -792,13 +779,15 @@ void main() {
     ]);
   });
 
-  test('a whole start of a cancelled job whose body overflowed, named',
-      () async {
-    final heard = HeardByKey();
-    expect(await overflowedWhole(heard, named: true), isEmpty);
-    expect(asked, ['StackOverflowError']);
-    expect(heard.seen, ['child onError: StackOverflowError, later']);
-  });
+  test(
+    'a whole start of a cancelled job whose body overflowed, named',
+    () async {
+      final heard = HeardByKey();
+      expect(await overflowedWhole(heard, named: true), isEmpty);
+      expect(asked, ['StackOverflowError']);
+      expect(heard.seen, ['child onError: StackOverflowError, later']);
+    },
+  );
 
   test('the filter of cancellation errors is left as it was found', () {
     expect(Job.isCancellationError, isNull);

@@ -42,8 +42,7 @@ final class Failures extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      reportCrash(error, stackTrace);
+  }) => reportCrash(error, stackTrace);
 }
 
 /// The first attempt of "Catching errors inside a body": one catch for
@@ -55,25 +54,23 @@ final class BroadCamera extends Solo<CameraState>
   BroadCamera(this.hw) : super(const Closed());
 
   /// Not on the page: the method around the statements.
-  SoloJob<void> open(double zoom) => enqueue<CameraState, void>(
-        key: 'open',
-        (ctx) async {
-          try {
-            await ctx.join(hw.open);
-            await ctx.join(() => hw.setZoom(zoom));
-          } on Object catch (error) {
-            await hw.reset();
-            ctx.emit(Broken(error));
-            rethrow;
-          }
-        },
-      );
+  SoloJob<void> open(double zoom) =>
+      enqueue<CameraState, void>(key: 'open', (ctx) async {
+        try {
+          await ctx.join(hw.open);
+          await ctx.join(() => hw.setZoom(zoom));
+        } on Object catch (error) {
+          await hw.reset();
+          ctx.emit(Broken(error));
+          rethrow;
+        }
+      });
 
   /// Not on the page: a job around [sendZoomUnawaited].
   SoloJob<void> zoomTo(double zoom) => enqueue<CameraState, void>(
-        key: 'zoom',
-        (ctx) async => sendZoomUnawaited(),
-      );
+    key: 'zoom',
+    (ctx) async => sendZoomUnawaited(),
+  );
 }
 
 /// The first attempt of "Retrying a failed call": a plain delay between the
@@ -86,25 +83,25 @@ final class DelayingProfile extends Solo<ProfileState>
 
   /// Not on the page: the job around the statements.
   SoloJob<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          for (var attempt = 1;; attempt++) {
-            final String name;
-            try {
-              name = await ctx.abandonable(api.fetchName);
-            } on Object {
-              if (attempt == 3) rethrow;
-              await Future<void>.delayed(Duration(seconds: attempt));
-              continue;
-            }
-            ctx.emit(Loaded(name));
-            return name;
-          }
-        },
-      );
+    key: 'load',
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      for (var attempt = 1; ; attempt++) {
+        final String name;
+        try {
+          name = await ctx.abandonable(api.fetchName);
+        } on Object {
+          if (attempt == 3) rethrow;
+          await Future<void>.delayed(Duration(seconds: attempt));
+          continue;
+        }
+        ctx.emit(Loaded(name));
+        return name;
+      }
+    },
+  );
 }
 
 /// The first attempt of "Background work". Not on the page: the
@@ -122,15 +119,14 @@ final class ThrowingPool extends Solo<Slots> with OpenSolo<Slots>, Desk<Slots> {
   /// the tests to see whether it runs.
   SoloJob<void> take({
     Slots Function(Slots state, Object error, StackTrace stackTrace)? ifFailed,
-  }) =>
-      enqueue<Slots, void>(
-        key: 'take',
-        canStart: (state) {
-          if (state.free == 0) throw StateError('no free slot');
+  }) => enqueue<Slots, void>(
+    key: 'take',
+    canStart: (state) {
+      if (state.free == 0) throw StateError('no free slot');
 
-          return true;
-        },
-        ifFailed: ifFailed,
-        (ctx) async => stage.trace.add('take ran'),
-      );
+      return true;
+    },
+    ifFailed: ifFailed,
+    (ctx) async => stage.trace.add('take ran'),
+  );
 }

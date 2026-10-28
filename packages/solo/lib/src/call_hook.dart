@@ -36,11 +36,7 @@ void callHook(void Function() hook) {
 /// first.
 void reportHookError(Object error, StackTrace stackTrace) {
   var failed = false;
-  Job.visitErrors(
-    error,
-    stackTrace,
-    onFailure: (_, __) => failed = true,
-  );
+  Job.visitErrors(error, stackTrace, onFailure: (_, _) => failed = true);
   if (failed) {
     Zone.current.handleUncaughtError(error, stackTrace);
   }

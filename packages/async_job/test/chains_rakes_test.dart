@@ -25,32 +25,32 @@ import 'support/page_code.dart';
 
 void main() {
   group('Chains', () {
-    test("two children in a row: the parent's cancellation reaches the second",
-        () {
-      fakeAsync((async) {
-        late ChildJob<void> second;
-        final parent = Job<void>((ctx) async {
-          final rows = await ctx.run(Job.deferred<int>((ctx) async => 21));
-          second = Job.deferred<void>(
-            (ctx) => ctx.join(() => delay(80 + rows)),
-          );
-          await ctx.run(second);
-        })
-          ..ignoreFailure();
-
-        async.elapse(const Duration(milliseconds: 10));
-        parent.cancel().ignore();
-        async.flushTimers();
-
-        expect(
-          (second.outcome! as Cancelled).reason,
-          isA<ParentCancelReason>(),
-        );
-      });
-    });
-
     test(
-        "the parent's cancellation reaches a continuation still waiting "
+      "two children in a row: the parent's cancellation reaches the second",
+      () {
+        fakeAsync((async) {
+          late ChildJob<void> second;
+          final parent = Job<void>((ctx) async {
+            final rows = await ctx.run(Job.deferred<int>((ctx) async => 21));
+            second = Job.deferred<void>(
+              (ctx) => ctx.join(() => delay(80 + rows)),
+            );
+            await ctx.run(second);
+          })..ignoreFailure();
+
+          async.elapse(const Duration(milliseconds: 10));
+          parent.cancel().ignore();
+          async.flushTimers();
+
+          expect(
+            (second.outcome! as Cancelled).reason,
+            isA<ParentCancelReason>(),
+          );
+        });
+      },
+    );
+
+    test("the parent's cancellation reaches a continuation still waiting "
         'for its source', () {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async {
@@ -60,8 +60,7 @@ void main() {
         final tail = head.then<void>((ctx, rows) async {})..ignoreFailure();
         final parent = Job<void>((ctx) async {
           await ctx.run(head);
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         parent.cancel().ignore();
@@ -71,8 +70,7 @@ void main() {
       });
     });
 
-    test(
-        "the parent's cancellation does not reach a continuation already "
+    test("the parent's cancellation does not reach a continuation already "
         'running', () {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async => 1);
@@ -82,8 +80,7 @@ void main() {
         final parent = Job<void>((ctx) async {
           await ctx.run(head);
           await ctx.abandonable(() => delay(50));
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         expect(tail.isRunning, isTrue);
@@ -139,8 +136,7 @@ void main() {
         });
         final parent = Job<void>((ctx) async {
           await ctx.run(head);
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 20));
 
@@ -154,21 +150,18 @@ void main() {
       });
     });
 
-    test(
-        'a parent still running stops a running continuation through '
+    test('a parent still running stops a running continuation through '
         'onCancel', () {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async => 1);
         final tail = head.then<void>((ctx, rows) async {
           await ctx.abandonable(() => delay(80));
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         final parent = Job<void>((ctx) async {
           ctx.onCancel(() => tail.cancel().ignore());
           await ctx.run(head);
           await ctx.abandonable(() => delay(50));
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         expect(tail.isRunning, isTrue);
@@ -196,8 +189,7 @@ void main() {
       });
     });
 
-    test(
-        'a deferred job the callback returns never starts, and the '
+    test('a deferred job the callback returns never starts, and the '
         'continuation fails', () {
       fakeAsync((async) {
         var ran = false;
@@ -262,26 +254,28 @@ void main() {
       });
     });
 
-    test('a continuation made in a body is a root the body does not wait for',
-        () {
-      fakeAsync((async) {
-        late final Job<void> tail;
-        final parent = Job<void>((ctx) async {
-          final rows = Job.deferred<int>((ctx) async => 1);
-          tail = rows.then<void>((ctx, value) => ctx.join(() => delay(50)))
-            ..ignoreFailure();
-          await ctx.run(rows);
+    test(
+      'a continuation made in a body is a root the body does not wait for',
+      () {
+        fakeAsync((async) {
+          late final Job<void> tail;
+          final parent = Job<void>((ctx) async {
+            final rows = Job.deferred<int>((ctx) async => 1);
+            tail = rows.then<void>((ctx, value) => ctx.join(() => delay(50)))
+              ..ignoreFailure();
+            await ctx.run(rows);
+          });
+
+          async.elapse(const Duration(milliseconds: 10));
+
+          expect(parent.outcome, isA<Done<void>>());
+          expect(tail.isChild, isFalse);
+          expect(tail.isRunning, isTrue);
+          async.flushTimers();
+          expect(tail.outcome, isA<Done<void>>());
         });
-
-        async.elapse(const Duration(milliseconds: 10));
-
-        expect(parent.outcome, isA<Done<void>>());
-        expect(tail.isChild, isFalse);
-        expect(tail.isRunning, isTrue);
-        async.flushTimers();
-        expect(tail.outcome, isA<Done<void>>());
-      });
-    });
+      },
+    );
 
     test('the continuation closes the source it receives', () {
       fakeAsync((async) {
@@ -296,30 +290,32 @@ void main() {
       });
     });
 
-    test('two branches of shared() that each close the rows close them twice',
-        () {
-      fakeAsync((async) {
-        stubs.stage = stubs.Stage();
-        final opened = Job<stubs.Source>(
-          (ctx) => ctx.abandonable(
-            stubs.openRows,
-            discard: (rows) => rows.close(),
-          ),
-        );
-        final received = <stubs.Source>[];
-        for (var branch = 0; branch < 2; branch++) {
-          opened.shared().then<void>((ctx, rows) {
-            received.add(rows);
-            ctx.onDispose(rows.close);
-          });
-        }
+    test(
+      'two branches of shared() that each close the rows close them twice',
+      () {
+        fakeAsync((async) {
+          stubs.stage = stubs.Stage();
+          final opened = Job<stubs.Source>(
+            (ctx) => ctx.abandonable(
+              stubs.openRows,
+              discard: (rows) => rows.close(),
+            ),
+          );
+          final received = <stubs.Source>[];
+          for (var branch = 0; branch < 2; branch++) {
+            opened.shared().then<void>((ctx, rows) {
+              received.add(rows);
+              ctx.onDispose(rows.close);
+            });
+          }
 
-        async.flushTimers();
+          async.flushTimers();
 
-        expect(identical(received.first, received.last), isTrue);
-        expect(stubs.stage.trace, ['rows closed', 'rows closed']);
-      });
-    });
+          expect(identical(received.first, received.last), isTrue);
+          expect(stubs.stage.trace, ['rows closed', 'rows closed']);
+        });
+      },
+    );
 
     test('the code that waits for both branches closes the rows once', () {
       fakeAsync((async) {
@@ -340,8 +336,7 @@ void main() {
       });
     });
 
-    test(
-        'cancelled while it waited, the continuation never runs, and the '
+    test('cancelled while it waited, the continuation never runs, and the '
         'discard of the source closes what arrives', () {
       fakeAsync((async) {
         stubs.stage = stubs.Stage()..rowsTake = 50;
@@ -360,8 +355,7 @@ void main() {
       });
     });
 
-    test(
-        'a source that refuses the cancellation ends Done with the source '
+    test('a source that refuses the cancellation ends Done with the source '
         'open, and the handle closes it', () {
       fakeAsync((async) {
         stubs.stage = stubs.Stage()..rowsTake = 50;
@@ -425,8 +419,7 @@ void main() {
       });
     });
 
-    test(
-        'a source whose cleanup awaits its continuation never finishes, '
+    test('a source whose cleanup awaits its continuation never finishes, '
         'and cancel() does not return', () {
       fakeAsync((async) {
         late final Job<int> tail;
@@ -506,13 +499,13 @@ void main() {
     /// The output blocks that follow a block ending with the print of
     /// `shown`, in the order of the page.
     List<List<String>> shownQuotes() => [
-          for (final match in RegExp(
-            r"print\('shown: \$\{shown.outcome\}'\);\n```\n\n```text\n"
-            r'(.*?)\n```',
-            dotAll: true,
-          ).allMatches(File('doc/chains.md').readAsStringSync()))
-            match.group(1)!.split('\n'),
-        ];
+      for (final match in RegExp(
+        r"print\('shown: \$\{shown.outcome\}'\);\n```\n\n```text\n"
+        r'(.*?)\n```',
+        dotAll: true,
+      ).allMatches(File('doc/chains.md').readAsStringSync()))
+        match.group(1)!.split('\n'),
+    ];
 
     test('two continuations: the second then throws, as the page quotes', () {
       fakeAsync((async) {
@@ -537,8 +530,7 @@ void main() {
       });
     });
 
-    test(
-        'a handle for each branch: cancelling one leaves the source and '
+    test('a handle for each branch: cancelling one leaves the source and '
         'the other', () {
       final printed = printedBy(page.twoHandles);
       expect(printed, [
@@ -551,8 +543,7 @@ void main() {
     });
 
     for (final answerer in [false, true]) {
-      test(
-          'every branch cancelled before loaded fails: loaded answers for '
+      test('every branch cancelled before loaded fails: loaded answers for '
           'it, answerer: $answerer', () {
         // The source is made in one zone and continued in another, so the
         // zone that gets the failure says who answered for it.
@@ -596,21 +587,22 @@ void main() {
       });
     }
 
-    test('two jobs that wait: cancelling one leaves the source and the other',
-        () {
-      final printed = printedBy(page.twoWaiting);
-      expect(printed, [
-        'parsed: Cancelled(manual)',
-        'loaded: Done(21)',
-        'shown: Done(null)',
-      ]);
-      expect(shownQuotes(), hasLength(2));
-      expect(shownQuotes().last, printed);
-      expect(trace(), ['shown 21']);
-    });
-
     test(
-        'a source that fails after one job left: that job hears it late, '
+      'two jobs that wait: cancelling one leaves the source and the other',
+      () {
+        final printed = printedBy(page.twoWaiting);
+        expect(printed, [
+          'parsed: Cancelled(manual)',
+          'loaded: Done(21)',
+          'shown: Done(null)',
+        ]);
+        expect(shownQuotes(), hasLength(2));
+        expect(shownQuotes().last, printed);
+        expect(trace(), ['shown 21']);
+      },
+    );
+
+    test('a source that fails after one job left: that job hears it late, '
         'the other as its failure', () {
       final zone = <String>[];
       final heard = <String>[];
@@ -663,22 +655,21 @@ void main() {
       (1, ['chain', 'manual', 'chain']),
       (2, ['chain', 'chain', 'manual']),
     ]) {
-      test('the cancel table: cancelling link $cancel while the text loads',
-          () {
-        fakeAsync((async) {
-          final (loaded, parsed, saved) = slowChain();
-          async.elapse(const Duration(milliseconds: 10));
-          [loaded, parsed, saved][cancel].cancel().ignore();
-          async.flushTimers();
-          expect(
-            [
+      test(
+        'the cancel table: cancelling link $cancel while the text loads',
+        () {
+          fakeAsync((async) {
+            final (loaded, parsed, saved) = slowChain();
+            async.elapse(const Duration(milliseconds: 10));
+            [loaded, parsed, saved][cancel].cancel().ignore();
+            async.flushTimers();
+            expect([
               for (final job in [loaded, parsed, saved])
                 (job.outcome! as Cancelled).reason.name,
-            ],
-            expected,
-          );
-        });
-      });
+            ], expected);
+          });
+        },
+      );
     }
 
     test('the cancel table: parsed, made on a handle of loaded', () {
@@ -723,22 +714,24 @@ void main() {
       });
     });
 
-    test('a continuation of a wider type takes a deferred job for its value',
-        () {
-      fakeAsync((async) {
-        final saving = Job.deferred<void>((ctx) async {});
-        final parsed = Job<int>((ctx) async => 21);
-        final stored = parsed.then<Object>((ctx, number) => saving);
-        async.flushTimers();
-        expect(
-          stored.outcome,
-          isA<Done<Object>>().having((done) => done.value, 'value', saving),
-        );
-        expect(saving.isFinished, isFalse);
-        saving.cancel().ignore();
-        async.flushTimers();
-      });
-    });
+    test(
+      'a continuation of a wider type takes a deferred job for its value',
+      () {
+        fakeAsync((async) {
+          final saving = Job.deferred<void>((ctx) async {});
+          final parsed = Job<int>((ctx) async => 21);
+          final stored = parsed.then<Object>((ctx, number) => saving);
+          async.flushTimers();
+          expect(
+            stored.outcome,
+            isA<Done<Object>>().having((done) => done.value, 'value', saving),
+          );
+          expect(saving.isFinished, isFalse);
+          saving.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+    );
 
     test('the first attempt: the continuation takes the job for its value', () {
       fakeAsync((async) {
@@ -747,8 +740,11 @@ void main() {
         async.flushTimers();
         expect(
           stored.outcome,
-          isA<Done<void>>()
-              .having((done) => done.value, 'value', isA<Job<void>>()),
+          isA<Done<void>>().having(
+            (done) => done.value,
+            'value',
+            isA<Job<void>>(),
+          ),
         );
         expect(trace(), ['saved number 21']);
       });
@@ -789,8 +785,7 @@ ${page.adoptedTail}
       });
     });
 
-    test(
-        'a cancelled continuation cancels its running source and the parent, '
+    test('a cancelled continuation cancels its running source and the parent, '
         'as the page quotes', () {
       fakeAsync((async) {
         stubs.stage.loadTake = 50;
@@ -799,8 +794,7 @@ ${page.adoptedTail}
           ..ignoreFailure();
         final parent = Job<void>((ctx) async {
           ctx.log(await ctx.run(child));
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         tail.cancel().ignore();
         async.flushTimers();
@@ -856,8 +850,7 @@ final class _Heard extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('$error');
+  }) => heard.add('$error');
 }
 
 /// Answers for every failure it is asked about and keeps the list.

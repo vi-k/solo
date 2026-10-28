@@ -101,12 +101,8 @@ final class RefusingParentJob<T> extends JobBase<T> implements ChildJob<T> {
 
   /// With [refusal], every child is turned away with that one instance, the
   /// way a rule of a domain that answers with a constant does.
-  RefusingParentJob(
-    this._body, {
-    super.key,
-    super.observer,
-    Cancelled? refusal,
-  }) : _refusal = refusal;
+  RefusingParentJob(this._body, {super.key, super.observer, Cancelled? refusal})
+    : _refusal = refusal;
 
   /// Starts the body the way an engine would.
   void launch() => start();
@@ -447,7 +443,7 @@ final class ChildEndingRulesContext extends JobContextBase {
   final bool _letsIn;
 
   ChildEndingRulesContext(super.owner, {bool letsIn = false})
-      : _letsIn = letsIn;
+    : _letsIn = letsIn;
 
   @override
   Cancelled? beforeChildStart(JobBase<Object?> child) {
@@ -500,12 +496,12 @@ final class RulesContext extends JobContextBase {
 
   /// Cancels the job the way a rule of a domain does.
   void breakRule(String description) => cancelOwnJob(
-        Cancelled.by(
-          reason: const TestCancelReason('rules'),
-          description: description,
-          stackTrace: StackTrace.current,
-        ),
-      );
+    Cancelled.by(
+      reason: const TestCancelReason('rules'),
+      description: description,
+      stackTrace: StackTrace.current,
+    ),
+  );
 }
 
 /// A job of a domain that compares itself by its key.
@@ -540,7 +536,7 @@ class KeyedJob<T> extends JobBase<T> implements ChildJob<T> {
 /// The same job of a domain, with a context that refuses to be built.
 final class UnstartableKeyedJob<T> extends KeyedJob<T> {
   UnstartableKeyedJob({required super.key})
-      : super((_) async => throw StateError('never runs'));
+    : super((_) async => throw StateError('never runs'));
 
   @override
   JobContextBase createContext() => throw StateError('no context');

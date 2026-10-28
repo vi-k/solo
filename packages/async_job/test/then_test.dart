@@ -24,8 +24,7 @@ class _Observer extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      this.error?.call(job, error);
+  }) => this.error?.call(job, error);
 }
 
 /// Continuations that must not run, and did.
@@ -176,16 +175,19 @@ void main() {
       final errors = <Object>[];
       final stacks = <StackTrace>[];
       late Job<int> c;
-      runZonedGuarded(() {
-        final a = Job<int>((ctx) async {
-          Error.throwWithStackTrace(error, stack);
-        });
-        final b = a.then<int>((ctx, value) => mustNotRun('b must not run'));
-        c = b.then<int>((ctx, value) => mustNotRun('c must not run'));
-      }, (error, stack) {
-        errors.add(error);
-        stacks.add(stack);
-      });
+      runZonedGuarded(
+        () {
+          final a = Job<int>((ctx) async {
+            Error.throwWithStackTrace(error, stack);
+          });
+          final b = a.then<int>((ctx, value) => mustNotRun('b must not run'));
+          c = b.then<int>((ctx, value) => mustNotRun('c must not run'));
+        },
+        (error, stack) {
+          errors.add(error);
+          stacks.add(stack);
+        },
+      );
       async.flushMicrotasks();
       expect(errors, [same(error)]);
       expect(stacks, [same(stack)]);
@@ -228,14 +230,17 @@ void main() {
       // stack on the way out.
       final closedByTheSource = <String>[];
       final taking = Job<String>((ctx) async {
-        final db =
-            await ctx.abandonable(() => 'db', discard: closedByTheSource.add);
+        final db = await ctx.abandonable(
+          () => 'db',
+          discard: closedByTheSource.add,
+        );
         await ctx.abandonable(() => Completer<void>().future);
 
         return db;
       });
-      final overTaking =
-          taking.then<void>((ctx, value) => mustNotRun('no receiver'));
+      final overTaking = taking.then<void>(
+        (ctx, value) => mustNotRun('no receiver'),
+      );
       async.flushMicrotasks();
       overTaking.cancel().ignore();
       async.flushMicrotasks();
@@ -246,16 +251,15 @@ void main() {
       // a receiver that is already gone.
       final closedByTheChain = <String>[];
       final gate = Completer<void>();
-      final refusing = Job<String>(
-        cancellable: false,
-        (ctx) async {
-          final db =
-              await ctx.abandonable(() => 'db', discard: closedByTheChain.add);
-          await ctx.abandonable(() => gate.future);
+      final refusing = Job<String>(cancellable: false, (ctx) async {
+        final db = await ctx.abandonable(
+          () => 'db',
+          discard: closedByTheChain.add,
+        );
+        await ctx.abandonable(() => gate.future);
 
-          return db;
-        },
-      );
+        return db;
+      });
       final overRefusing = refusing.then<void>(
         (ctx, value) => mustNotRun('no receiver'),
       );
@@ -287,8 +291,9 @@ void main() {
       final gate = Completer<void>();
       final a = Job<int>((ctx) async => 1);
       final b = a.then<int>((ctx, value) => value + 1);
-      final c =
-          b.then<void>((ctx, value) => ctx.abandonable(() => gate.future));
+      final c = b.then<void>(
+        (ctx, value) => ctx.abandonable(() => gate.future),
+      );
       async.flushMicrotasks();
       final firstOutcome = a.outcome;
       final secondOutcome = b.outcome;
@@ -307,21 +312,18 @@ void main() {
       final errors = <Object>[];
       final error = StateError('source');
       late Job<int> b;
-      runZonedGuarded(
-        () {
-          final observer = _Observer(
-            error: (job, _) {
-              if (identical(job, b)) job.cancel().ignore();
-            },
-          );
-          final a = Job<int>((ctx) async => throw error, observer: observer);
-          b = a.then<int>(
-            (ctx, value) => mustNotRun('must not run'),
-            observer: observer,
-          );
-        },
-        (error, stack) => errors.add(error),
-      );
+      runZonedGuarded(() {
+        final observer = _Observer(
+          error: (job, _) {
+            if (identical(job, b)) job.cancel().ignore();
+          },
+        );
+        final a = Job<int>((ctx) async => throw error, observer: observer);
+        b = a.then<int>(
+          (ctx, value) => mustNotRun('must not run'),
+          observer: observer,
+        );
+      }, (error, stack) => errors.add(error));
       async.flushMicrotasks();
       expect(b.outcome, isA<Cancelled>());
       expect(errors, [same(error)]);
@@ -334,18 +336,15 @@ void main() {
       final error = StateError('source');
       final errors = <Object>[];
       late Job<int> b;
-      runZonedGuarded(
-        () {
-          body = Completer<int>();
-          final a = Job<int>(
-            (ctx) => ctx.join(() => body.future),
-            cancellable: false,
-          );
-          b = a.then<int>((ctx, value) => mustNotRun('must not run'))
-            ..ignoreFailure();
-        },
-        (error, stack) => errors.add(error),
-      );
+      runZonedGuarded(() {
+        body = Completer<int>();
+        final a = Job<int>(
+          (ctx) => ctx.join(() => body.future),
+          cancellable: false,
+        );
+        b = a.then<int>((ctx, value) => mustNotRun('must not run'))
+          ..ignoreFailure();
+      }, (error, stack) => errors.add(error));
       async.flushMicrotasks();
       b.cancel().ignore();
       body.completeError(error);
@@ -356,8 +355,7 @@ void main() {
   });
 
   for (final cancelled in [false, true]) {
-    test(
-        'a continuation attached after the zone heard the failure does not '
+    test('a continuation attached after the zone heard the failure does not '
         'send it again${cancelled ? ', cancelled while hearing it' : ''}', () {
       fakeAsync((async) {
         final error = StateError('source');
@@ -397,8 +395,7 @@ void main() {
   }
 
   for (final early in [false, true]) {
-    test(
-        'nor does a continuation of that continuation, attached '
+    test('nor does a continuation of that continuation, attached '
         '${early ? 'before' : 'after'} it ended', () {
       fakeAsync((async) {
         final error = StateError('source');
@@ -413,13 +410,10 @@ void main() {
           (error, stack) => errors.add(error),
         );
         async.flushMicrotasks();
-        runZonedGuarded(
-          () {
-            b = next(a);
-            if (early) c = next(b);
-          },
-          (error, stack) => errors.add(error),
-        );
+        runZonedGuarded(() {
+          b = next(a);
+          if (early) c = next(b);
+        }, (error, stack) => errors.add(error));
         async.flushMicrotasks();
         if (!early) {
           runZonedGuarded(
@@ -442,39 +436,38 @@ void main() {
       final error = StateError('source');
       final errors = <Object>[];
       Outcome<int>? seen;
-      runZonedGuarded(
-        () {
-          final a = Job<int>((ctx) async => throw error);
-          final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
-          final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
-          unawaited(c.done.then((outcome) => seen = outcome));
-        },
-        (error, stack) => errors.add(error),
-      );
+      runZonedGuarded(() {
+        final a = Job<int>((ctx) async => throw error);
+        final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
+        final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
+        unawaited(c.done.then((outcome) => seen = outcome));
+      }, (error, stack) => errors.add(error));
       async.flushMicrotasks();
       expect((seen! as Failed).error, same(error));
       expect(errors, isEmpty);
     });
   });
 
-  test('a continuation failure skips the next body and preserves its stack',
-      () {
-    fakeAsync((async) {
-      final error = StateError('continuation');
-      final stack = StackTrace.fromString('continuation stack');
-      final a = Job<int>((ctx) async => 1);
-      final b = a.then<int>((ctx, value) {
-        Error.throwWithStackTrace(error, stack);
+  test(
+    'a continuation failure skips the next body and preserves its stack',
+    () {
+      fakeAsync((async) {
+        final error = StateError('continuation');
+        final stack = StackTrace.fromString('continuation stack');
+        final a = Job<int>((ctx) async => 1);
+        final b = a.then<int>((ctx, value) {
+          Error.throwWithStackTrace(error, stack);
+        });
+        final c = b.then<int>((ctx, value) => mustNotRun('must not run'))
+          ..ignoreFailure();
+        async.flushMicrotasks();
+        final failed = c.outcome! as Failed;
+        expect(failed.error, same(error));
+        expect(failed.stackTrace, same(stack));
+        expect(a.outcome, isA<Done<int>>());
       });
-      final c = b.then<int>((ctx, value) => mustNotRun('must not run'))
-        ..ignoreFailure();
-      async.flushMicrotasks();
-      final failed = c.outcome! as Failed;
-      expect(failed.error, same(error));
-      expect(failed.stackTrace, same(stack));
-      expect(a.outcome, isA<Done<int>>());
-    });
-  });
+    },
+  );
 
   test('a continuation that cancels itself cancels its successors too', () {
     fakeAsync((async) {
@@ -510,28 +503,30 @@ void main() {
     });
   });
 
-  test('a cancelled source immediately marks a newly attached continuation',
-      () {
-    fakeAsync((async) {
-      final gate = Completer<int>();
-      final a = Job<int>((ctx) => ctx.join(() => gate.future));
-      async.flushMicrotasks();
-      a.cancel().ignore();
-      final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
-      expect(b.isCancelled, isTrue);
-      expect(b.isFinished, isFalse);
-      final seen = <Cancelled>[];
-      b.whenCancelled(seen.add);
-      expect(seen, hasLength(1));
-      gate.complete(1);
-      async.flushMicrotasks();
-      expect(b.outcome, same(seen.single));
-      final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
-      expect(c.isCancelled, isTrue);
-      async.flushMicrotasks();
-      expect(c.outcome, isA<Cancelled>());
-    });
-  });
+  test(
+    'a cancelled source immediately marks a newly attached continuation',
+    () {
+      fakeAsync((async) {
+        final gate = Completer<int>();
+        final a = Job<int>((ctx) => ctx.join(() => gate.future));
+        async.flushMicrotasks();
+        a.cancel().ignore();
+        final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
+        expect(b.isCancelled, isTrue);
+        expect(b.isFinished, isFalse);
+        final seen = <Cancelled>[];
+        b.whenCancelled(seen.add);
+        expect(seen, hasLength(1));
+        gate.complete(1);
+        async.flushMicrotasks();
+        expect(b.outcome, same(seen.single));
+        final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
+        expect(c.isCancelled, isTrue);
+        async.flushMicrotasks();
+        expect(c.outcome, isA<Cancelled>());
+      });
+    },
+  );
 
   test('a held source cancellation keeps the tail waiting', () {
     fakeAsync((async) {
@@ -620,8 +615,7 @@ void main() {
   // refused with the same words whichever got there first: while it still waits
   // for its source, or once it runs on its own.
   for (final afterTheSource in [false, true]) {
-    test(
-        'an engine cannot adopt a continuation '
+    test('an engine cannot adopt a continuation '
         '${afterTheSource ? 'once it runs' : 'while it waits'}', () {
       fakeAsync((async) {
         Object? thrown;
@@ -639,8 +633,7 @@ void main() {
             thrown = error;
           }
           if (!afterTheSource) probe.adopt(source);
-        })
-          ..launch();
+        })..launch();
         async.flushMicrotasks();
         expect(
           '$thrown',
@@ -676,8 +669,9 @@ void main() {
     fakeAsync((async) {
       final gate = Completer<int>();
       final a = Job<int>((ctx) => ctx.abandonable(() => gate.future));
-      final b =
-          a.shared().then<int>((ctx, value) => mustNotRun('must not run'));
+      final b = a.shared().then<int>(
+        (ctx, value) => mustNotRun('must not run'),
+      );
       final c = a.shared().then<int>((ctx, value) => value + 1);
       async.flushMicrotasks();
       b.cancel().ignore();
@@ -696,10 +690,12 @@ void main() {
     fakeAsync((async) {
       final gate = Completer<int>();
       final a = Job<int>((ctx) => ctx.abandonable(() => gate.future));
-      final b =
-          a.shared().then<int>((ctx, value) => mustNotRun('must not run'));
-      final c =
-          a.shared().then<int>((ctx, value) => mustNotRun('must not run'));
+      final b = a.shared().then<int>(
+        (ctx, value) => mustNotRun('must not run'),
+      );
+      final c = a.shared().then<int>(
+        (ctx, value) => mustNotRun('must not run'),
+      );
       final seen = <bool>[];
       a.whenCancelled((_) => seen.add(b.isCancelled && c.isCancelled));
       async.flushMicrotasks();
@@ -735,8 +731,7 @@ void main() {
   }
 
   for (final cancelContinuation in [false, true]) {
-    test(
-        'attaching to a failed source inside its cancel completion '
+    test('attaching to a failed source inside its cancel completion '
         '${cancelContinuation ? 'then cancelling' : 'then observing'}', () {
       fakeAsync((async) {
         final errors = <Object>[];
@@ -744,26 +739,23 @@ void main() {
         late Completer<int> body;
         late Job<int> source;
         late Job<int> continuation;
-        runZonedGuarded(
-          () {
-            body = Completer<int>();
-            source = Job<int>(
-              (ctx) => ctx.join(() => body.future),
-              cancellable: false,
-            );
-            async.flushMicrotasks();
-            unawaited(
-              source.cancel().then((_) {
-                expect(errors, isEmpty);
-                continuation = source.then<int>(
-                  (ctx, value) => mustNotRun('must not run'),
-                )..ignoreFailure();
-                if (cancelContinuation) continuation.cancel().ignore();
-              }),
-            );
-          },
-          (error, stack) => errors.add(error),
-        );
+        runZonedGuarded(() {
+          body = Completer<int>();
+          source = Job<int>(
+            (ctx) => ctx.join(() => body.future),
+            cancellable: false,
+          );
+          async.flushMicrotasks();
+          unawaited(
+            source.cancel().then((_) {
+              expect(errors, isEmpty);
+              continuation = source.then<int>(
+                (ctx, value) => mustNotRun('must not run'),
+              )..ignoreFailure();
+              if (cancelContinuation) continuation.cancel().ignore();
+            }),
+          );
+        }, (error, stack) => errors.add(error));
         body.completeError(error);
         async.flushMicrotasks();
         if (cancelContinuation) {
@@ -794,7 +786,8 @@ void main() {
       expect(
         started,
         ['a'],
-        reason: 'the source only; the continuation takes an observer of its '
+        reason:
+            'the source only; the continuation takes an observer of its '
             'own or none',
       );
     });
@@ -804,30 +797,25 @@ void main() {
     fakeAsync((async) {
       final heard = <String>[];
       final zone = <String>[];
-      runZonedGuarded(
-        () {
-          Job<int>((ctx) async => 1)
-              .then<int>((ctx, value) {
-                ctx.unattended(() => throw StateError('unattended'));
-                throw StateError('first link');
-              })
-              .then<int>((ctx, value) => value)
-              .then<void>(
-                (ctx, value) {},
-                observer: _Observer(error: (job, error) => heard.add('$error')),
-              )
-              .done
-              .ignore();
-        },
-        (error, stack) => zone.add('$error'),
-      );
+      runZonedGuarded(() {
+        Job<int>((ctx) async => 1)
+            .then<int>((ctx, value) {
+              ctx.unattended(() => throw StateError('unattended'));
+              throw StateError('first link');
+            })
+            .then<int>((ctx, value) => value)
+            .then<void>(
+              (ctx, value) {},
+              observer: _Observer(error: (job, error) => heard.add('$error')),
+            )
+            .done
+            .ignore();
+      }, (error, stack) => zone.add('$error'));
       async.flushMicrotasks();
       expect(heard, ['Bad state: first link']);
-      expect(
-        zone,
-        ['Bad state: unattended'],
-        reason: 'an error with no outcome stays with its link, in its zone',
-      );
+      expect(zone, [
+        'Bad state: unattended',
+      ], reason: 'an error with no outcome stays with its link, in its zone');
     });
   });
 
@@ -835,23 +823,20 @@ void main() {
     fakeAsync((async) {
       final heard = <String>[];
       final zone = <String>[];
-      runZonedGuarded(
-        () {
-          // Whoever made the first link handed it on; the second is someone
-          // else's code.
-          final handedOn = Job<int>((ctx) async => 1).then<int>(
-            (ctx, value) => value,
-            observer: _Observer(error: (job, error) => heard.add('$error')),
-          );
-          handedOn
-              .then<void>((ctx, _) {
-                ctx.unattended(() => throw StateError('someone else'));
-              })
-              .done
-              .ignore();
-        },
-        (error, stack) => zone.add('$error'),
-      );
+      runZonedGuarded(() {
+        // Whoever made the first link handed it on; the second is someone
+        // else's code.
+        final handedOn = Job<int>((ctx) async => 1).then<int>(
+          (ctx, value) => value,
+          observer: _Observer(error: (job, error) => heard.add('$error')),
+        );
+        handedOn
+            .then<void>((ctx, _) {
+              ctx.unattended(() => throw StateError('someone else'));
+            })
+            .done
+            .ignore();
+      }, (error, stack) => zone.add('$error'));
       async.flushMicrotasks();
       expect(heard, isEmpty);
       expect(zone, ['Bad state: someone else']);

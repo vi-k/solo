@@ -127,9 +127,9 @@ final class _Callbacks<F> {
   /// The callbacks registered now, in order: a snapshot, so a callback may
   /// register or remove another while the snapshot is walked.
   List<F> toList() => [
-        for (var entry = _first; entry != null; entry = entry._next)
-          entry.callback!,
-      ];
+    for (var entry = _first; entry != null; entry = entry._next)
+      entry.callback!,
+  ];
 
   void clear() {
     var entry = _first;
@@ -548,12 +548,12 @@ abstract class JobBase<T> implements Job<T> {
     bool cancellable = true,
     Duration? timeout,
     JobObserver? observer,
-  })  : _timeout = _checkTimeout(timeout, cancellable: cancellable),
-        _timeoutTrace = timeout == null ? null : StackTrace.current,
-        _key = key,
-        _describe = describe,
-        _cancellable = cancellable,
-        _observer = observer {
+  }) : _timeout = _checkTimeout(timeout, cancellable: cancellable),
+       _timeoutTrace = timeout == null ? null : StackTrace.current,
+       _key = key,
+       _describe = describe,
+       _cancellable = cancellable,
+       _observer = observer {
     _builtOnCore[this] = true;
   }
 
@@ -644,17 +644,18 @@ abstract class JobBase<T> implements Job<T> {
       ];
       if (kept.isNotEmpty) {
         return () => _debug(
-              () => '$this ended $decided without the value of '
-                  '${cleanups(kept.length)} (${kept.join(', ')}): unless it '
-                  'is inside the result, nothing will dispose of it',
-            );
+          () =>
+              '$this ended $decided without the value of '
+              '${cleanups(kept.length)} (${kept.join(', ')}): unless it '
+              'is inside the result, nothing will dispose of it',
+        );
       }
     }
     return () => _debug(
-          () => finishedAs != null
-              ? '$this was finished as $finishedAs with $count left aside'
-              : '$this handed its value over: $count dropped',
-        );
+      () => finishedAs != null
+          ? '$this was finished as $finishedAs with $count left aside'
+          : '$this handed its value over: $count dropped',
+    );
   }
 
   /// Builds and delivers a diagnostic message, guarded on both halves.
@@ -757,12 +758,14 @@ abstract class JobBase<T> implements Job<T> {
     final outcome = await _done.future;
     return switch (outcome) {
       Done(:final value) => value,
-      Failed(:final error, :final stackTrace) =>
-        Error.throwWithStackTrace(error, stackTrace),
+      Failed(:final error, :final stackTrace) => Error.throwWithStackTrace(
+        error,
+        stackTrace,
+      ),
       Cancelled() => Error.throwWithStackTrace(
-          outcome,
-          outcome.stackTrace ?? StackTrace.current,
-        ),
+        outcome,
+        outcome.stackTrace ?? StackTrace.current,
+      ),
     };
   }
 
@@ -840,23 +843,23 @@ abstract class JobBase<T> implements Job<T> {
 
   /// [callback], with its errors gone where the errors of a listener go.
   void Function(A) _guardListener<A>(void Function(A) callback) => (event) {
-        try {
-          callback(event);
-        } on Object catch (error, stackTrace) {
-          if (error is StackOverflowError && _outOfStack) {
-            // Not `onError`, and above all not the zone. At the bottom of a
-            // cascade that has just run out of stack this is that same
-            // overflow, landing in the first callback to ask for a few
-            // frames more; reporting it would name the callback for
-            // something it did not do, and would format a stack trace with
-            // no stack left to do it on. It leaves with the error that is
-            // already unwinding. Outside that window the callback ran out
-            // of stack on its own, and that is its error like any other.
-            rethrow;
-          }
-          notifyError(error, stackTrace);
-        }
-      };
+    try {
+      callback(event);
+    } on Object catch (error, stackTrace) {
+      if (error is StackOverflowError && _outOfStack) {
+        // Not `onError`, and above all not the zone. At the bottom of a
+        // cascade that has just run out of stack this is that same
+        // overflow, landing in the first callback to ask for a few
+        // frames more; reporting it would name the callback for
+        // something it did not do, and would format a stack trace with
+        // no stack left to do it on. It leaves with the error that is
+        // already unwinding. Outside that window the callback ran out
+        // of stack on its own, and that is its error like any other.
+        rethrow;
+      }
+      notifyError(error, stackTrace);
+    }
+  };
 
   @override
   void Function() whenCancelled(void Function(Cancelled) callback) {
@@ -896,12 +899,7 @@ abstract class JobBase<T> implements Job<T> {
 
   @override
   Future<void> cancel({CancelReason reason = const ManualCancelReason()}) {
-    cancelWith(
-      Cancelled.by(
-        reason: reason,
-        stackTrace: StackTrace.current,
-      ),
-    );
+    cancelWith(Cancelled.by(reason: reason, stackTrace: StackTrace.current));
     // The core's own waiting is not observation, so cancelling a job does
     // not silence its failure.
     return untilFinished;
@@ -1379,12 +1377,7 @@ abstract class JobBase<T> implements Job<T> {
     // it goes out the door `_execute` sends such an error through after a
     // cascade: the observer, else the zone of the job.
     try {
-      cancelWith(
-        Cancelled.by(
-          reason: reason,
-          stackTrace: _timeoutTrace,
-        ),
-      );
+      cancelWith(Cancelled.by(reason: reason, stackTrace: _timeoutTrace));
     } on Object catch (error, stackTrace) {
       notifyError(error, stackTrace);
     }
@@ -1409,7 +1402,8 @@ abstract class JobBase<T> implements Job<T> {
       // The trace said the deadline was held until the step ends, so it says
       // the deadline never landed.
       _debug(
-        () => '$this drops the deadline a section held, along with its timer: '
+        () =>
+            '$this drops the deadline a section held, along with its timer: '
             '$held',
       );
       _heldCancel = _heldBehindTimeout;
@@ -1470,19 +1464,19 @@ abstract class JobBase<T> implements Job<T> {
     // engine ending a job from inside the cascade says how it ended it -- that
     // description is the whole diagnosis it has. The route of the core hands
     // the mark in itself, so nothing here is about it.
-    final decided =
-        outcome is Cancelled ? outcome : (_pendingCancel ?? outcome);
+    final decided = outcome is Cancelled
+        ? outcome
+        : (_pendingCancel ?? outcome);
     final replaced = identical(decided, outcome) ? null : outcome;
     if (replaced != null) {
       _debug(
-        () => '$this was finished as $replaced and ends $decided: '
+        () =>
+            '$this was finished as $replaced and ends $decided: '
             'the cancellation it accepted decides',
       );
     }
     if (_cleanups.isNotEmpty) {
-      _debug(
-        () => '$this finished with ${_cleanups.length} cleanups pending',
-      );
+      _debug(() => '$this finished with ${_cleanups.length} cleanups pending');
     }
     _outcome = decided;
     _status = JobStatus.finished;
@@ -1500,7 +1494,8 @@ abstract class JobBase<T> implements Job<T> {
     final dropped = _heldCancel;
     if (dropped != null) {
       _debug(
-        () => '$this ends with a held cancellation, which is dropped: '
+        () =>
+            '$this ends with a held cancellation, which is dropped: '
             '$dropped',
       );
     }
@@ -1519,13 +1514,10 @@ abstract class JobBase<T> implements Job<T> {
     JobBase<Object?>? endedWithTheSame;
     if (parent != null) {
       if (decided is Cancelled) {
-        assert(
-          () {
-            endedWithTheSame = parent._outcomeChild[decided];
-            return true;
-          }(),
-          'never fails: it reads the entry the next line replaces',
-        );
+        assert(() {
+          endedWithTheSame = parent._outcomeChild[decided];
+          return true;
+        }(), 'never fails: it reads the entry the next line replaces');
         parent._outcomeChild[decided] = this;
       }
     }
@@ -1681,10 +1673,9 @@ abstract class JobBase<T> implements Job<T> {
       Object error,
       StackTrace stackTrace, {
       required JobErrorAnswer answer,
-    }) =>
-        _notify(
-          () => observer.onError(this, error, stackTrace, answer: answer),
-        );
+    }) => _notify(
+      () => observer.onError(this, error, stackTrace, answer: answer),
+    );
     // Verdicts not matched yet; [first] is the earliest of them. The same
     // walk over the same error meets the failures in the order the verdicts
     // were taken in, and then the match is the first one, every time.
@@ -1708,11 +1699,8 @@ abstract class JobBase<T> implements Job<T> {
     _visitErrors(
       error,
       stackTrace,
-      onFailure: (failure, failureStackTrace) => tell(
-        failure,
-        failureStackTrace,
-        answer: answerFor(failure),
-      ),
+      onFailure: (failure, failureStackTrace) =>
+          tell(failure, failureStackTrace, answer: answerFor(failure)),
       onCancelled: (cancelled, cancelledStackTrace) {
         // The job's own cancellation inside an envelope is not news: the
         // outcome says it. One that comes alone was thrown by a callback,
@@ -1832,14 +1820,13 @@ abstract class JobBase<T> implements Job<T> {
     _visitErrors(
       error,
       stackTrace,
-      onFailure: (failure, failureStackTrace) => verdicts.add(
-        (
-          failure: failure,
-          stackTrace: failureStackTrace,
-          answered: isCancellationError == null ||
-              !_askIsCancellationError(isCancellationError, failure),
-        ),
-      ),
+      onFailure: (failure, failureStackTrace) => verdicts.add((
+        failure: failure,
+        stackTrace: failureStackTrace,
+        answered:
+            isCancellationError == null ||
+            !_askIsCancellationError(isCancellationError, failure),
+      )),
     );
     return verdicts;
   }
@@ -1855,7 +1842,8 @@ abstract class JobBase<T> implements Job<T> {
     for (final (:failure, :stackTrace, :answered) in verdicts) {
       if (!answered) {
         _debug(
-          () => '$this kept a cancellation error out of the answer: '
+          () =>
+              '$this kept a cancellation error out of the answer: '
               '$failure',
         );
         continue;
@@ -2554,9 +2542,11 @@ abstract class JobBase<T> implements Job<T> {
     bool Function() passOver,
     FutureOr<void> Function() then,
   ) async {
-    for (var cleanup = _nextCleanup(passOver);
-        cleanup != null;
-        cleanup = _nextCleanup(passOver)) {
+    for (
+      var cleanup = _nextCleanup(passOver);
+      cleanup != null;
+      cleanup = _nextCleanup(passOver)
+    ) {
       await _runCleanup(cleanup);
     }
     return then();

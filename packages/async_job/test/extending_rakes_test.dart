@@ -202,8 +202,7 @@ void runDownload(String act) {
     print('downloaded $rows rows');
     await ctx.join(() => save(rows));
     print('saved');
-  })
-    .._launch();
+  }).._launch();
   userDoes(act, job);
 }
 
@@ -216,15 +215,14 @@ void runAbandonableDownload({required bool engineStops}) {
     print('downloaded $rows rows');
     await ctx.join(() => save(rows));
     print('saved');
-  })
-    .._launch();
+  }).._launch();
   if (engineStops) {
     account.onSignOut = () => job._stop(
-          Cancelled.by(
-            reason: const SignedOutReason(),
-            stackTrace: StackTrace.current,
-          ),
-        );
+      Cancelled.by(
+        reason: const SignedOutReason(),
+        stackTrace: StackTrace.current,
+      ),
+    );
   }
   userDoes('sign out', job);
 }
@@ -241,8 +239,7 @@ Job<void> signOutWithChild(List<String> seen) {
     ctx.onCancel(() => seen.add('parent told to stop'));
     ctx.run(child).ignore();
     await ctx.join(download);
-  })
-    .._launch();
+  }).._launch();
   job.done.then((outcome) => seen.add('outcome: $outcome')).ignore();
   return child;
 }
@@ -331,9 +328,9 @@ final class PatientJob<T> extends MyJob<T> {
 }
 
 Cancelled signedOut() => Cancelled.by(
-      reason: const SignedOutReason(),
-      stackTrace: StackTrace.current,
-    );
+  reason: const SignedOutReason(),
+  stackTrace: StackTrace.current,
+);
 
 /// The answer of an engine that takes the errors it knows and has nobody
 /// to hand the rest to.
@@ -453,30 +450,32 @@ void main() {
       expect(errors, ['Bad state: lost']);
     });
 
-    test("an adopted child takes the engine's observer, its own keeps its own",
-        () {
-      final answer = Answer();
-      final own = Answer();
-      final errors = reachingTheZone(() {
-        MyJob<void>(observer: answer, (ctx) async {
-          await ctx.run(
-            Job.deferred<void>((ctx) async {
-              ctx.unattended(() => throw StateError('plain child'));
-            }),
-          );
-          await ctx.run(
-            Job.deferred<void>(observer: own, (ctx) async {
-              ctx.unattended(() => throw StateError('own child'));
-            }),
-          );
-        })
-          .._launch()
-          ..ignoreFailure();
-      });
-      expect(answer.answered, ['Bad state: plain child']);
-      expect(own.answered, ['Bad state: own child']);
-      expect(errors, isEmpty);
-    });
+    test(
+      "an adopted child takes the engine's observer, its own keeps its own",
+      () {
+        final answer = Answer();
+        final own = Answer();
+        final errors = reachingTheZone(() {
+          MyJob<void>(observer: answer, (ctx) async {
+              await ctx.run(
+                Job.deferred<void>((ctx) async {
+                  ctx.unattended(() => throw StateError('plain child'));
+                }),
+              );
+              await ctx.run(
+                Job.deferred<void>(observer: own, (ctx) async {
+                  ctx.unattended(() => throw StateError('own child'));
+                }),
+              );
+            })
+            .._launch()
+            ..ignoreFailure();
+        });
+        expect(answer.answered, ['Bad state: plain child']);
+        expect(own.answered, ['Bad state: own child']);
+        expect(errors, isEmpty);
+      },
+    );
 
     test('a continuation answers to whoever called then', () {
       final answer = Answer();
@@ -489,28 +488,22 @@ void main() {
           () => job = MyJob<int>(observer: answer, (ctx) async => 1).._launch(),
           (error, stackTrace) => engineZone.add('$error'),
         );
-        runZonedGuarded(
-          () {
-            job
-                .shared()
-                .then<void>((ctx, _) {
-                  ctx.unattended(() => throw StateError('then'));
-                })
-                .done
-                .ignore();
-            job
-                .shared()
-                .then<void>(
-                  (ctx, _) {
-                    ctx.unattended(() => throw StateError('then with its own'));
-                  },
-                  observer: caller,
-                )
-                .done
-                .ignore();
-          },
-          (error, stackTrace) => callerZone.add('$error'),
-        );
+        runZonedGuarded(() {
+          job
+              .shared()
+              .then<void>((ctx, _) {
+                ctx.unattended(() => throw StateError('then'));
+              })
+              .done
+              .ignore();
+          job
+              .shared()
+              .then<void>((ctx, _) {
+                ctx.unattended(() => throw StateError('then with its own'));
+              }, observer: caller)
+              .done
+              .ignore();
+        }, (error, stackTrace) => callerZone.add('$error'));
         async.flushTimers();
       });
       expect(callerZone, ['Bad state: then']);
@@ -549,26 +542,28 @@ void main() {
       expect(reported, isEmpty);
     });
 
-    test('super.onUnanswered sends on the error of a child of another kind',
-        () {
-      final answer = KnownOnly();
-      final errors = reachingTheZone(() {
-        MyJob<void>(observer: answer, (ctx) async {
-          ctx
-            ..unattended(() => throw const FormatException('known'))
-            ..unattended(() => throw StateError('of MyJob'));
-          await ctx.run(
-            Job.deferred<void>((ctx) async {
-              ctx.unattended(() => throw StateError('of a plain child'));
-            }),
-          );
-        })
-          .._launch()
-          ..ignoreFailure();
-      });
-      expect(answer.answered, ['FormatException: known']);
-      expect(errors, ['Bad state: of MyJob', 'Bad state: of a plain child']);
-    });
+    test(
+      'super.onUnanswered sends on the error of a child of another kind',
+      () {
+        final answer = KnownOnly();
+        final errors = reachingTheZone(() {
+          MyJob<void>(observer: answer, (ctx) async {
+              ctx
+                ..unattended(() => throw const FormatException('known'))
+                ..unattended(() => throw StateError('of MyJob'));
+              await ctx.run(
+                Job.deferred<void>((ctx) async {
+                  ctx.unattended(() => throw StateError('of a plain child'));
+                }),
+              );
+            })
+            .._launch()
+            ..ignoreFailure();
+        });
+        expect(answer.answered, ['FormatException: known']);
+        expect(errors, ['Bad state: of MyJob', 'Bad state: of a plain child']);
+      },
+    );
 
     test('the queue starts a job in the zone it was created in', () {
       fakeAsync((async) {
@@ -585,51 +580,51 @@ void main() {
       });
     });
 
-    test('a failing future of the zone a job was created in reaches its body',
-        () {
-      fakeAsync((async) {
-        final screen = <String>[];
-        final app = <String>[];
-        late Completer<void> connected;
-        late MyJob<void> job;
-        runZonedGuarded(
-          () {
+    test(
+      'a failing future of the zone a job was created in reaches its body',
+      () {
+        fakeAsync((async) {
+          final screen = <String>[];
+          final app = <String>[];
+          late Completer<void> connected;
+          late MyJob<void> job;
+          runZonedGuarded(() {
             connected = Completer<void>();
             job = MyJob<void>((_) async {
               await connected.future;
-            })
-              ..ignoreFailure();
-          },
-          (error, stackTrace) => screen.add('$error'),
-        );
-        final next = MyJob<void>((_) async {});
-        final queue = MyQueue()
-          ..add(job)
-          ..add(next);
-        var over = false;
-        runZonedGuarded(
-          () => queue.run().then((_) => over = true).ignore(),
-          (error, stackTrace) => app.add('$error'),
-        );
-        async.flushMicrotasks();
-        expect(job.isRunning, isTrue);
-        connected.completeError(StateError('connection lost'));
-        async.flushTimers();
-        expect(
-          '${job.outcome}',
-          'Failed(Bad state: connection lost)',
-          reason: "started under the queue's runZonedGuarded, the body would "
-              'never hear of the failure and would wait for good',
-        );
-        expect(screen, isEmpty, reason: "the failure is the body's");
-        expect(app, isEmpty);
-        expect(next.outcome, isA<Done<void>>(), reason: 'the queue goes on');
-        expect(over, isTrue);
-      });
-    });
+            })..ignoreFailure();
+          }, (error, stackTrace) => screen.add('$error'));
+          final next = MyJob<void>((_) async {});
+          final queue = MyQueue()
+            ..add(job)
+            ..add(next);
+          var over = false;
+          runZonedGuarded(
+            () => queue.run().then((_) => over = true).ignore(),
+            (error, stackTrace) => app.add('$error'),
+          );
+          async.flushMicrotasks();
+          expect(job.isRunning, isTrue);
+          connected.completeError(StateError('connection lost'));
+          async.flushTimers();
+          expect(
+            '${job.outcome}',
+            'Failed(Bad state: connection lost)',
+            reason:
+                "started under the queue's runZonedGuarded, the body would "
+                'never hear of the failure and would wait for good',
+          );
+          expect(screen, isEmpty, reason: "the failure is the body's");
+          expect(app, isEmpty);
+          expect(next.outcome, isA<Done<void>>(), reason: 'the queue goes on');
+          expect(over, isTrue);
+        });
+      },
+    );
 
     test('every MyJob of the bench launches the way the page shows', () {
-      const opening = '  // `start` and `untilFinished` are protected: '
+      const opening =
+          '  // `start` and `untilFinished` are protected: '
           'the rest of the engine calls';
       for (final file in [
         'test/support/extending_plain.dart',
@@ -638,7 +633,8 @@ void main() {
         expect(
           _declaration(file, opening, ''),
           _declaration('test/extending_rakes_test.dart', opening, ''),
-          reason: 'the page shows the wrappers once, and a piece of the page '
+          reason:
+              'the page shows the wrappers once, and a piece of the page '
               'is found in any one of the files',
         );
       }
@@ -655,7 +651,8 @@ void main() {
         expect(
           await collected(capture),
           isTrue,
-          reason: 'the body ran once; held on, it keeps everything it '
+          reason:
+              'the body ran once; held on, it keeps everything it '
               'captured for as long as anyone keeps the job',
         );
         expect(job, isNotNull, reason: 'the job is kept to the end');
@@ -670,7 +667,8 @@ void main() {
       expect(
         await collected(payload),
         isTrue,
-        reason: 'held for its outcome, the job would hold the queue and the '
+        reason:
+            'held for its outcome, the job would hold the queue and the '
             'job left waiting in it',
       );
       expect(job.outcome, isA<Done<void>>());
@@ -699,13 +697,15 @@ void main() {
       expect(job.outcome, isA<Done<void>>());
     });
 
-    test('the first attempt cancels a waiting job that may not be cancelled',
-        () {
-      expect(printed(() => first.runQueue().ignore()), [
-        'third runs',
-        'second: Cancelled(manual)',
-      ]);
-    });
+    test(
+      'the first attempt cancels a waiting job that may not be cancelled',
+      () {
+        expect(printed(() => first.runQueue().ignore()), [
+          'third runs',
+          'second: Cancelled(manual)',
+        ]);
+      },
+    );
 
     test('a job that refuses while it waits runs when its turn comes', () {
       expect(printed(() => runQueue().ignore()), [
@@ -747,9 +747,9 @@ void main() {
         Object? failure;
         var over = false;
         queue.run().then<void>(
-              (_) => over = true,
-              onError: (Object error) => failure = error,
-            );
+          (_) => over = true,
+          onError: (Object error) => failure = error,
+        );
         async.flushTimers();
         expect(failure, isNull, reason: 'start() of a finished job throws');
         expect(seen, ['next runs']);
@@ -760,8 +760,10 @@ void main() {
     test('the refusal is for a cancellation the job may refuse, no other', () {
       fakeAsync((async) {
         final seen = <String>[];
-        final second =
-            PatientJob<void>(key: 'second', (ctx) async => seen.add('runs'));
+        final second = PatientJob<void>(
+          key: 'second',
+          (ctx) async => seen.add('runs'),
+        );
         final queue = MyQueue()
           ..add(MyJob<void>(key: 'first', (ctx) => ctx.abandonable(upload)))
           ..add(second)
@@ -805,8 +807,7 @@ void main() {
           } on Cancelled catch (error) {
             thrown = error;
           }
-        })
-          .._launch();
+        }).._launch();
         parent.cancel().ignore();
         async.flushTimers();
         expect('$thrown', 'Cancelled(manual)');
@@ -822,10 +823,10 @@ void main() {
       fakeAsync((async) {
         final seen = <String>[];
         MyJob<void> job(String name) => MyJob<void>((ctx) async {
-              seen.add('$name starts');
-              await ctx.abandonable(upload);
-              seen.add('$name ends');
-            });
+          seen.add('$name starts');
+          await ctx.abandonable(upload);
+          seen.add('$name ends');
+        });
         final queue = MyQueue()
           ..add(job('first'))
           ..add(job('second'));
@@ -857,8 +858,10 @@ void main() {
     test('ctx.run turns away a job that waits in the queue', () {
       fakeAsync((async) {
         final seen = <String>[];
-        final queued =
-            MyJob<void>(key: 'queued', (_) async => seen.add('runs'));
+        final queued = MyJob<void>(
+          key: 'queued',
+          (_) async => seen.add('runs'),
+        );
         final queue = MyQueue()
           ..add(
             MyJob<void>((ctx) async {
@@ -897,13 +900,13 @@ void main() {
       );
       // The answer moves the loop into a `try`, one level deeper.
       String loop(String file, String indent) => [
-            for (final line in _declaration(
-              file,
-              '$indent  while (_waiting.isNotEmpty) {',
-              '$indent  }',
-            ).split('\n'))
-              line.trim(),
-          ].join('\n');
+        for (final line in _declaration(
+          file,
+          '$indent  while (_waiting.isNotEmpty) {',
+          '$indent  }',
+        ).split('\n'))
+          line.trim(),
+      ].join('\n');
       expect(
         loop('test/extending_rakes_test.dart', '    '),
         loop('test/support/extending_first_attempts.dart', '  '),
@@ -925,11 +928,10 @@ void main() {
         parent.cancel().ignore();
         expect(child.cancelsAsked, ['Cancelled(parent)']);
         context._stop(signedOut());
-        expect(
-          child.cancelsAsked,
-          ['Cancelled(parent)', 'Cancelled(signed out)'],
-          reason: 'asked again, though the job has accepted the first',
-        );
+        expect(child.cancelsAsked, [
+          'Cancelled(parent)',
+          'Cancelled(signed out)',
+        ], reason: 'asked again, though the job has accepted the first');
         async.flushTimers();
       });
     });
@@ -942,22 +944,24 @@ void main() {
       );
     });
 
-    test('the core finishes a job that has not started, cancellable or not',
-        () {
-      fakeAsync((async) {
-        final waiting = StubbornJob<void>((ctx) async {});
-        waiting.cancel().ignore();
-        async.flushTimers();
-        expect(waiting.outcome, isA<Cancelled>());
+    test(
+      'the core finishes a job that has not started, cancellable or not',
+      () {
+        fakeAsync((async) {
+          final waiting = StubbornJob<void>((ctx) async {});
+          waiting.cancel().ignore();
+          async.flushTimers();
+          expect(waiting.outcome, isA<Cancelled>());
 
-        final running = StubbornJob<void>((ctx) => ctx.abandonable(work))
-          ..launch();
-        async.flushMicrotasks();
-        running.cancel().ignore();
-        async.flushTimers();
-        expect(running.outcome, isA<Done<void>>(), reason: 'once it runs');
-      });
-    });
+          final running = StubbornJob<void>((ctx) => ctx.abandonable(work))
+            ..launch();
+          async.flushMicrotasks();
+          running.cancel().ignore();
+          async.flushTimers();
+          expect(running.outcome, isA<Done<void>>(), reason: 'once it runs');
+        });
+      },
+    );
   });
 
   group('A rule of your own', () {
@@ -1009,10 +1013,7 @@ void main() {
         async.elapse(const Duration(milliseconds: 10));
         account.signedIn = false;
         async.flushTimers();
-        expect(
-          (child.outcome! as Cancelled).reason,
-          isA<ParentCancelReason>(),
-        );
+        expect((child.outcome! as Cancelled).reason, isA<ParentCancelReason>());
       });
       expect(seen, [
         'child told to stop',
@@ -1024,22 +1025,23 @@ void main() {
     test('run asks the rule once the value of the child has arrived', () {
       fakeAsync((async) {
         Object? thrown;
-        final job = MyJob<void>((ctx) async {
-          try {
-            await ctx.run(
-              Job.deferred<int>((child) async {
-                await child.abandonable(work);
-                account.signedIn = false;
-                return 1;
-              }),
-            );
-          } on Cancelled catch (error) {
-            thrown = error;
-            rethrow;
-          }
-        })
-          .._launch()
-          ..ignoreFailure();
+        final job =
+            MyJob<void>((ctx) async {
+                try {
+                  await ctx.run(
+                    Job.deferred<int>((child) async {
+                      await child.abandonable(work);
+                      account.signedIn = false;
+                      return 1;
+                    }),
+                  );
+                } on Cancelled catch (error) {
+                  thrown = error;
+                  rethrow;
+                }
+              })
+              .._launch()
+              ..ignoreFailure();
         async.flushTimers();
         expect('$thrown', 'Cancelled(signed out)');
         expect('${job.outcome}', 'Cancelled(signed out)');
@@ -1049,22 +1051,23 @@ void main() {
     test('runAll asks the rule before it hands the values back', () {
       fakeAsync((async) {
         Object? thrown;
-        final job = MyJob<void>((ctx) async {
-          try {
-            await ctx.runAll([
-              Job.deferred<int>((child) async {
-                await child.abandonable(work);
-                account.signedIn = false;
-                return 1;
-              }),
-            ]);
-          } on Cancelled catch (error) {
-            thrown = error;
-            rethrow;
-          }
-        })
-          .._launch()
-          ..ignoreFailure();
+        final job =
+            MyJob<void>((ctx) async {
+                try {
+                  await ctx.runAll([
+                    Job.deferred<int>((child) async {
+                      await child.abandonable(work);
+                      account.signedIn = false;
+                      return 1;
+                    }),
+                  ]);
+                } on Cancelled catch (error) {
+                  thrown = error;
+                  rethrow;
+                }
+              })
+              .._launch()
+              ..ignoreFailure();
         async.flushTimers();
         expect('$thrown', 'Cancelled(signed out)');
         expect('${job.outcome}', 'Cancelled(signed out)');
@@ -1074,27 +1077,27 @@ void main() {
     test('an uncancellable section does not hold the rule back', () {
       fakeAsync((async) {
         final seen = <String>[];
-        final job = MyJob<void>((ctx) async {
-          ctx.onCancel(() => seen.add('told to stop'));
-          await ctx.uncancellable(() async {
-            account.signedIn = false;
-            try {
-              await ctx.join(work);
-              seen.add('the step went on');
-            } on Cancelled catch (error) {
-              seen.add('the step stopped: $error');
-              rethrow;
-            }
-          });
-        })
-          .._launch()
-          ..ignoreFailure();
+        final job =
+            MyJob<void>((ctx) async {
+                ctx.onCancel(() => seen.add('told to stop'));
+                await ctx.uncancellable(() async {
+                  account.signedIn = false;
+                  try {
+                    await ctx.join(work);
+                    seen.add('the step went on');
+                  } on Cancelled catch (error) {
+                    seen.add('the step stopped: $error');
+                    rethrow;
+                  }
+                });
+              })
+              .._launch()
+              ..ignoreFailure();
         async.flushTimers();
-        expect(
-          seen,
-          ['the step stopped: Cancelled(signed out)', 'told to stop'],
-          reason: 'the step throws, and the body cancels itself after it',
-        );
+        expect(seen, [
+          'the step stopped: Cancelled(signed out)',
+          'told to stop',
+        ], reason: 'the step throws, and the body cancels itself after it');
         expect('${job.outcome}', 'Cancelled(signed out)');
       });
     });
@@ -1102,14 +1105,15 @@ void main() {
     test('nor does cancellable: false', () {
       fakeAsync((async) {
         final seen = <String>[];
-        final job = StubbornJob<void>((ctx) async {
-          ctx.onCancel(() => seen.add('told to stop'));
-          await ctx.abandonable(work);
-          account.signedIn = false;
-          await ctx.join(work);
-        })
-          ..launch()
-          ..ignoreFailure();
+        final job =
+            StubbornJob<void>((ctx) async {
+                ctx.onCancel(() => seen.add('told to stop'));
+                await ctx.abandonable(work);
+                account.signedIn = false;
+                await ctx.join(work);
+              })
+              ..launch()
+              ..ignoreFailure();
         async.flushTimers();
         expect(seen, ['told to stop'], reason: 'given up, not refused');
         expect('${job.outcome}', 'Cancelled(signed out)');
@@ -1119,18 +1123,19 @@ void main() {
     test('a body that catches the rule and goes on is not cancelled', () {
       fakeAsync((async) {
         final seen = <String>[];
-        final job = CountingJob((ctx) async {
-          ctx.onCancel(() => seen.add('told to stop'));
-          account.signedIn = false;
-          try {
-            await ctx.join(work);
-          } on Cancelled catch (error) {
-            seen.add('caught $error');
-          }
-          return 1;
-        })
-          .._launch()
-          ..ignoreFailure();
+        final job =
+            CountingJob((ctx) async {
+                ctx.onCancel(() => seen.add('told to stop'));
+                account.signedIn = false;
+                try {
+                  await ctx.join(work);
+                } on Cancelled catch (error) {
+                  seen.add('caught $error');
+                }
+                return 1;
+              })
+              .._launch()
+              ..ignoreFailure();
         async.flushTimers();
         expect(seen, ['caught Cancelled(signed out)']);
         expect(job.outcome, isA<Done<int>>());
@@ -1140,48 +1145,54 @@ void main() {
 
     test('a body that cancels itself does not come through cancelWith', () {
       fakeAsync((async) {
-        final job = CountingJob((ctx) async {
-          account.signedIn = false;
-          await ctx.join(work);
-          return 1;
-        })
-          .._launch()
-          ..ignoreFailure();
+        final job =
+            CountingJob((ctx) async {
+                account.signedIn = false;
+                await ctx.join(work);
+                return 1;
+              })
+              .._launch()
+              ..ignoreFailure();
         async.flushTimers();
         expect('${job.outcome}', 'Cancelled(signed out)');
         expect(job.cancelsAsked, isEmpty);
       });
     });
 
-    test('a sign-out during a wait is noticed only at the next call that asks',
-        () {
-      fakeAsync((async) {
-        final seen = <String>[];
-        final job = MyJob<void>((ctx) async {
-          await ctx.abandonable(download);
-          seen.add('the wait came back');
-          ctx.check();
-          seen.add('the body went on');
-        })
-          .._launch()
-          ..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 10));
-        account.signedIn = false;
-        async.flushTimers();
-        expect(seen, ['the wait came back']);
-        expect('${job.outcome}', 'Cancelled(signed out)');
-      });
-    });
+    test(
+      'a sign-out during a wait is noticed only at the next call that asks',
+      () {
+        fakeAsync((async) {
+          final seen = <String>[];
+          final job =
+              MyJob<void>((ctx) async {
+                  await ctx.abandonable(download);
+                  seen.add('the wait came back');
+                  ctx.check();
+                  seen.add('the body went on');
+                })
+                .._launch()
+                ..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 10));
+          account.signedIn = false;
+          async.flushTimers();
+          expect(seen, ['the wait came back']);
+          expect('${job.outcome}', 'Cancelled(signed out)');
+        });
+      },
+    );
 
-    test('with abandonable the body goes on with the rows after a sign-out',
-        () {
-      expect(printed(() => runAbandonableDownload(engineStops: false)), [
-        'sign out',
-        'downloaded 42 rows',
-        'close the connection',
-        'outcome: Cancelled(signed out)',
-      ]);
-    });
+    test(
+      'with abandonable the body goes on with the rows after a sign-out',
+      () {
+        expect(printed(() => runAbandonableDownload(engineStops: false)), [
+          'sign out',
+          'downloaded 42 rows',
+          'close the connection',
+          'outcome: Cancelled(signed out)',
+        ]);
+      },
+    );
 
     test('the engine that cancels the job itself stops it at the sign-out', () {
       expect(printed(() => runAbandonableDownload(engineStops: true)), [
@@ -1194,12 +1205,15 @@ void main() {
     test('the job accepts that cancellation inside the sign-out', () {
       fakeAsync((async) {
         final seen = <String>[];
-        final job = MyJob<void>((ctx) async {
-          ctx.onCancel(() => seen.add('${async.elapsed.inMilliseconds} ms'));
-          await ctx.abandonable(download);
-        })
-          .._launch()
-          ..ignoreFailure();
+        final job =
+            MyJob<void>((ctx) async {
+                ctx.onCancel(
+                  () => seen.add('${async.elapsed.inMilliseconds} ms'),
+                );
+                await ctx.abandonable(download);
+              })
+              .._launch()
+              ..ignoreFailure();
         account.onSignOut = () => job._stop(signedOut());
         async.elapse(const Duration(milliseconds: 10));
         account.signOut();
@@ -1221,17 +1235,18 @@ void main() {
           final seen = <String>[];
           late MyContext context;
           String at(String what) => '${async.elapsed.inMilliseconds} ms: $what';
-          final job = StubbornJob<void>((ctx) async {
-            context = ctx;
-            ctx.onCancel(() => seen.add(at('told to stop')));
-            try {
-              await ctx.uncancellable(() => ctx.join(download));
-            } on Cancelled catch (error) {
-              seen.add(at('caught $error'));
-            }
-          })
-            ..launch()
-            ..ignoreFailure();
+          final job =
+              StubbornJob<void>((ctx) async {
+                  context = ctx;
+                  ctx.onCancel(() => seen.add(at('told to stop')));
+                  try {
+                    await ctx.uncancellable(() => ctx.join(download));
+                  } on Cancelled catch (error) {
+                    seen.add(at('caught $error'));
+                  }
+                })
+                ..launch()
+                ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           // The user is still signed in for `check()`: the rule is not what
           // stops the job here.
@@ -1258,12 +1273,13 @@ void main() {
           await ctx.abandonable(work);
           seen.add('child ran to its end');
         });
-        final job = StubbornJob<void>((ctx) async {
-          ctx.onCancel(() => seen.add('told to stop'));
-          await ctx.run(child);
-        })
-          ..launch()
-          ..ignoreFailure();
+        final job =
+            StubbornJob<void>((ctx) async {
+                ctx.onCancel(() => seen.add('told to stop'));
+                await ctx.run(child);
+              })
+              ..launch()
+              ..ignoreFailure();
         async.flushMicrotasks();
         job.end(signedOut());
         expect('${job.outcome}', 'Cancelled(signed out)');
@@ -1277,7 +1293,8 @@ void main() {
       expect(
         File('lib/src/job_context.dart').readAsStringSync(),
         contains('  @override\n  @mustCallSuper\n  void check() {'),
-        reason: 'the page says the analyzer requires the call, and nothing '
+        reason:
+            'the page says the analyzer requires the call, and nothing '
             'else here would notice the annotation gone',
       );
     });
@@ -1301,17 +1318,13 @@ void main() {
       late Zone zone;
       late Completer<void> connected;
       late DeferredJob<void> job;
-      runZonedGuarded(
-        () {
-          zone = Zone.current;
-          connected = Completer<void>();
-          job = Job.deferred<void>((_) async {
-            await connected.future;
-          })
-            ..ignoreFailure();
-        },
-        (error, stackTrace) => made.add('$error'),
-      );
+      runZonedGuarded(() {
+        zone = Zone.current;
+        connected = Completer<void>();
+        job = Job.deferred<void>((_) async {
+          await connected.future;
+        })..ignoreFailure();
+      }, (error, stackTrace) => made.add('$error'));
       runZonedGuarded(
         () => zone.run(job.start),
         (error, stackTrace) => queue.add('$error'),
@@ -1322,7 +1335,8 @@ void main() {
       expect(
         '${job.outcome}',
         'Failed(Bad state: connection lost)',
-        reason: "started by job.start() from the queue's runZonedGuarded, "
+        reason:
+            "started by job.start() from the queue's runZonedGuarded, "
             'the body would never hear of the failure',
       );
       expect(made, isEmpty);
@@ -1352,8 +1366,10 @@ void main() {
     ].map((lines) => lines.join('\n')).toList();
     final quotes = [
       for (final page in pages)
-        for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
-            .allMatches(File(page).readAsStringSync()))
+        for (final block in RegExp(
+          r'```text\n(.*?)\n```',
+          dotAll: true,
+        ).allMatches(File(page).readAsStringSync()))
           block.group(1)!,
     ];
     expect(quotes, prints, reason: 'each quote under the code that prints it');
@@ -1397,8 +1413,7 @@ void main() {
   // it, so the two sections called "The first attempt" stay apart, and its
   // text is the heading of that anchor. A member moved to another section,
   // renamed or added turns this red.
-  test(
-      'the table under "### The whole engine" names every member of this '
+  test('the table under "### The whole engine" names every member of this '
       'file and the section that declares it', () {
     // A declaration at the indentation of a member: a type, `final` or
     // `get` in front of the name, and a parameter list, a value or a `;`
@@ -1409,8 +1424,8 @@ void main() {
       multiLine: true,
     );
     Set<String> declaredIn(String code) => {
-          for (final match in declaration.allMatches(code)) match.group(1)!,
-        };
+      for (final match in declaration.allMatches(code)) match.group(1)!,
+    };
     String body(String type, String path) {
       final file = File(path).readAsStringSync();
       final start = file.indexOf('final class $type');
@@ -1426,9 +1441,9 @@ void main() {
     var table = '';
     for (final page in pages) {
       final file = page.split('/').last;
-      for (final part in File(page)
-          .readAsStringSync()
-          .split(RegExp('^(?=#)', multiLine: true))) {
+      for (final part in File(
+        page,
+      ).readAsStringSync().split(RegExp('^(?=#)', multiLine: true))) {
         final heading = part.split('\n').first;
         final name = heading.replaceFirst(RegExp('^#+ '), '');
         final base = name

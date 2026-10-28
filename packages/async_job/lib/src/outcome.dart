@@ -209,9 +209,9 @@ final class Cancelled extends Outcome<Never> implements Exception {
 
   /// Cancels the current job from its body: `throw Cancelled('why')`.
   const Cancelled([this.description])
-      : reason = const HandlerCancelReason(),
-        started = true,
-        stackTrace = null;
+    : reason = const HandlerCancelReason(),
+      started = true,
+      stackTrace = null;
 
   /// Creates a cancellation with a reason of your own.
   ///

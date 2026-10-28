@@ -73,11 +73,11 @@ enqueueJob(saving);
 
 // Либо всё сразу: так обычно и делает метод контроллера.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-      key: _Op.zoom,
-      // Лениво и только для диагностики: строится, когда спросит лог.
-      describe: () => 'zoom: $zoom',
-      (ctx) => ctx.join(() => camera.zoom(zoom)),
-    );
+  key: _Op.zoom,
+  // Лениво и только для диагностики: строится, когда спросит лог.
+  describe: () => 'zoom: $zoom',
+  (ctx) => ctx.join(() => camera.zoom(zoom)),
+);
 ```
 
 Код этого раздела и следующих принадлежит одному контроллеру камеры,
@@ -127,29 +127,26 @@ Job<void> save() =>
 
 // droppable: повторная загрузка того же профиля вернёт первую Job.
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: (_Op.load, id),
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: (_Op.load, id),
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 
 // replace: ожидающий зум уходит, работающий остаётся нетронутым.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-      key: _Op.zoom,
-      policy: Policy.replace,
-      (ctx) => ctx.join(() => camera.zoom(zoom)),
-    );
+  key: _Op.zoom,
+  policy: Policy.replace,
+  (ctx) => ctx.join(() => camera.zoom(zoom)),
+);
 
 // restart: то же самое, и работающую просят остановиться.
-Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: _Op.seek,
-      policy: Policy.restart,
-      (ctx) async {
-        final token = CancelToken();
-        ctx.onCancel(token.cancel);
-        // Дождаться остановки устройства до следующей перемотки.
-        await ctx.join(() => camera.seek(position, cancelToken: token));
-      },
-    );
+Job<void> seek(Duration position) =>
+    enqueue<Ready, void>(key: _Op.seek, policy: Policy.restart, (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      // Дождаться остановки устройства до следующей перемотки.
+      await ctx.join(() => camera.seek(position, cancelToken: token));
+    });
 ```
 
 | Политика | Когда `Job` с таким ключом уже существует |
@@ -211,10 +208,10 @@ Job<void> seek(Duration position) => enqueue<Ready, void>(
 ```dart
 // Первая попытка: один ключ на все профили.
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: _Op.load,
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: _Op.load,
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 ```
 
 Один член `_Op` на метод, как у `save`, `setZoom` и `seek`, и `droppable`,
@@ -228,10 +225,10 @@ Job<Profile> load(String id) => enqueue<Ready, Profile>(
 
 ```dart
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: (_Op.load, id),
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: (_Op.load, id),
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 ```
 
 Ключом может быть любой объект со сравнением через `==`: запись
@@ -458,13 +455,11 @@ void pause() {
 
 ```dart
 // Первая попытка: отсчёт держит очередь.
-Job<void> shootIn(Duration delay) => enqueue<Ready, void>(
-      key: _Op.shoot,
-      (ctx) async {
-        await ctx.pause(delay);
-        await ctx.join(camera.shoot);
-      },
-    );
+Job<void> shootIn(Duration delay) =>
+    enqueue<Ready, void>(key: _Op.shoot, (ctx) async {
+      await ctx.pause(delay);
+      await ctx.join(camera.shoot);
+    });
 ```
 
 `ctx.pause` — то ожидание, которое ядро даёт задаче, и его кончают

@@ -21,8 +21,7 @@ final class _Telling extends Solo<TestState> with OpenSolo<TestState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('solo: $error ${answer.name}');
+  }) => seen.add('solo: $error ${answer.name}');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -43,8 +42,7 @@ final class _Watching extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('$name: $error ${answer.name}');
+  }) => seen.add('$name: $error ${answer.name}');
 }
 
 final class _Stopped implements Exception {

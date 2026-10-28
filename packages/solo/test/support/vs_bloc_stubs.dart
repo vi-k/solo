@@ -15,6 +15,6 @@ class CancelToken {
 
 /// The plain list of calls a device received, from a start/end trace.
 List<String> callsOf(List<String> trace) => [
-      for (final entry in trace)
-        if (entry.endsWith(' start')) entry.substring(0, entry.length - 6),
-    ];
+  for (final entry in trace)
+    if (entry.endsWith(' start')) entry.substring(0, entry.length - 6),
+];

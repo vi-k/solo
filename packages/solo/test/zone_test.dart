@@ -72,18 +72,16 @@ void main() {
     } finally {
       Solo.observer = null;
     }
-    expect(
-      caught,
-      ['Bad state: abandoned boom'],
-      reason: 'watching is not answering',
-    );
+    expect(caught, [
+      'Bad state: abandoned boom',
+    ], reason: 'watching is not answering');
   });
 
   test('an error handler takes the default route over', () {
     final caught = <String>[];
     final answered = <String>[];
-    Solo.unansweredHandler =
-        (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
+    Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+        answered.add('${job.key}: $error');
     try {
       fakeAsync((async) {
         final solo = TestSolo();
@@ -108,8 +106,8 @@ void main() {
 
   test('an error handler that throws reaches the zone after the error', () {
     final caught = <String>[];
-    Solo.unansweredHandler =
-        (solo, job, error, stackTrace) => throw StateError('handler boom');
+    Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+        throw StateError('handler boom');
     try {
       fakeAsync((async) {
         final solo = TestSolo();
@@ -128,17 +126,16 @@ void main() {
     } finally {
       Solo.unansweredHandler = null;
     }
-    expect(
-      caught,
-      ['Bad state: abandoned boom', 'Bad state: handler boom'],
-      reason: 'a broken channel does not take the error it was handed',
-    );
+    expect(caught, [
+      'Bad state: abandoned boom',
+      'Bad state: handler boom',
+    ], reason: 'a broken channel does not take the error it was handed');
   });
 
   test('a handler that throws a cancellation leaves the error alone', () {
     final caught = <String>[];
-    Solo.unansweredHandler =
-        (solo, job, error, stackTrace) => throw const Cancelled('handler');
+    Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+        throw const Cancelled('handler');
     try {
       fakeAsync((async) {
         final solo = TestSolo();
@@ -160,13 +157,12 @@ void main() {
     expect(caught, ['Bad state: abandoned boom']);
   });
 
-  test(
-      'a handler that throws: the error to the zone of the job, its own to '
+  test('a handler that throws: the error to the zone of the job, its own to '
       'the current one', () {
     final created = <String>[];
     final current = <String>[];
-    Solo.unansweredHandler =
-        (solo, job, error, stackTrace) => throw StateError('handler boom');
+    Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+        throw StateError('handler boom');
     try {
       fakeAsync((async) {
         final solo = TestSolo();
@@ -207,19 +203,18 @@ void main() {
       _answeredBy(
         (solo, job, error, stackTrace) =>
             throw ParallelWaitError<List<Object?>, List<AsyncError?>>(
-          [null, null],
-          [
-            AsyncError(const Cancelled('a'), StackTrace.empty),
-            AsyncError(const Cancelled('b'), StackTrace.empty),
-          ],
-        ),
+              [null, null],
+              [
+                AsyncError(const Cancelled('a'), StackTrace.empty),
+                AsyncError(const Cancelled('b'), StackTrace.empty),
+              ],
+            ),
       ),
       ['Bad state: abandoned boom'],
     );
   });
 
-  test(
-      'an override of onUnanswered that throws reaches the zone after the '
+  test('an override of onUnanswered that throws reaches the zone after the '
       'error', () {
     final caught = <String>[];
     final solo = _Broken();
@@ -276,11 +271,9 @@ void main() {
       async.flushTimers();
     });
     expect(solo.errors, ['Bad state: abandoned boom'], reason: 'it notes');
-    expect(
-      caught,
-      ['Bad state: abandoned boom'],
-      reason: 'and answers for nothing, so the zone still hears',
-    );
+    expect(caught, [
+      'Bad state: abandoned boom',
+    ], reason: 'and answers for nothing, so the zone still hears');
   });
 
   test('an override calling super still hands it to the zone', () {
@@ -626,19 +619,13 @@ void main() {
           () => solo.enqueue<TestState, void>(key: 'A', (ctx) => gate.future),
           (error, stackTrace) => caught['A']!.add('$error'),
         );
-        runZonedGuarded(
-          () {
-            fetch = Completer<int>();
-            solo
-                .enqueue<TestState, int>(
-                  key: 'B',
-                  (ctx) => fetch.future,
-                )
-                .done
-                .then((done) => outcome = done);
-          },
-          (error, stackTrace) => caught['B']!.add('$error'),
-        );
+        runZonedGuarded(() {
+          fetch = Completer<int>();
+          solo
+              .enqueue<TestState, int>(key: 'B', (ctx) => fetch.future)
+              .done
+              .then((done) => outcome = done);
+        }, (error, stackTrace) => caught['B']!.add('$error'));
         async.flushMicrotasks();
         gate.complete();
         async.flushMicrotasks();
@@ -667,8 +654,8 @@ void main() {
     test('in a child of run reaches the error handler behind it', () {
       final caught = <String>[];
       final answered = <String>[];
-      Solo.unansweredHandler =
-          (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
+      Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+          answered.add('${job.key}: $error');
       try {
         fakeAsync((async) => _coveredChild(TestSolo(), async, caught));
       } finally {
@@ -678,16 +665,18 @@ void main() {
       expect(caught, isEmpty, reason: 'the handler answered for it');
     });
 
-    test('in a child of run: the parent catches Cancelled, not the failure',
-        () {
-      final caught = <String>[];
-      final thrown = <String>[];
-      fakeAsync(
-        (async) => _coveredChild(TestSolo(), async, caught, thrown: thrown),
-      );
-      expect(thrown, ['Cancelled']);
-      expect(caught, ['Bad state: child failed first']);
-    });
+    test(
+      'in a child of run: the parent catches Cancelled, not the failure',
+      () {
+        final caught = <String>[];
+        final thrown = <String>[];
+        fakeAsync(
+          (async) => _coveredChild(TestSolo(), async, caught, thrown: thrown),
+        );
+        expect(thrown, ['Cancelled']);
+        expect(caught, ['Bad state: child failed first']);
+      },
+    );
 
     test('in a child of run reaches the zone with neither', () {
       final caught = <String>[];
@@ -699,8 +688,8 @@ void main() {
       final caught = <String>[];
       final answered = <String>[];
       final solo = _Loud();
-      Solo.unansweredHandler =
-          (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
+      Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+          answered.add('${job.key}: $error');
       try {
         fakeAsync((async) => _coveredChild(solo, async, caught, ignored: true));
       } finally {
@@ -713,99 +702,106 @@ void main() {
 
     for (final named in [false, true]) {
       test(
-          named
-              ? 'a step the state stopped while a section held a stop, named '
+        named
+            ? 'a step the state stopped while a section held a stop, named '
                   'a cancellation error, is only told'
-              : 'a step the state stopped while a section held a stop reaches '
-                  'the zone', () {
-        // The section holds the parent's cancellation. The state leaves the
-        // child's working type inside it, and the rule cancels the child at
-        // once: `onCancel` stops the step, and the body fails with that
-        // stop. The child ends `Cancelled`, and the failure of its body goes
-        // to the answer like any other, unless the app named it.
-        if (named) {
-          Job.isCancellationError = (error) => error is _Stopped;
-        }
-        final caught = <String>[];
-        final solo = _Loud();
-        late final SoloJob<int> child;
-        try {
-          fakeAsync((async) {
-            late final Job<void> parent;
-            _inZone(caught, () {
-              parent =
-                  solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
-                await ctx.run(
-                  child = solo.job<Initial, int>(key: 'child', (ctx) async {
-                    final stopped = Completer<void>();
-                    ctx.onCancel(
-                      () => stopped.completeError(const _Stopped()),
-                    );
-                    await ctx.uncancellable<void>(() => stopped.future);
-                    return 1;
-                  }),
-                );
+            : 'a step the state stopped while a section held a stop reaches '
+                  'the zone',
+        () {
+          // The section holds the parent's cancellation. The state leaves the
+          // child's working type inside it, and the rule cancels the child at
+          // once: `onCancel` stops the step, and the body fails with that
+          // stop. The child ends `Cancelled`, and the failure of its body goes
+          // to the answer like any other, unless the app named it.
+          if (named) {
+            Job.isCancellationError = (error) => error is _Stopped;
+          }
+          final caught = <String>[];
+          final solo = _Loud();
+          late final SoloJob<int> child;
+          try {
+            fakeAsync((async) {
+              late final Job<void> parent;
+              _inZone(caught, () {
+                parent = solo.enqueue<TestState, void>(key: 'parent', (
+                  ctx,
+                ) async {
+                  await ctx.run(
+                    child = solo.job<Initial, int>(key: 'child', (ctx) async {
+                      final stopped = Completer<void>();
+                      ctx.onCancel(
+                        () => stopped.completeError(const _Stopped()),
+                      );
+                      await ctx.uncancellable<void>(() => stopped.future);
+                      return 1;
+                    }),
+                  );
+                });
               });
+              async.elapse(const Duration(milliseconds: 5));
+              parent.cancel().ignore();
+              async.elapse(const Duration(milliseconds: 5));
+              solo.set(const Preparing());
+              async.flushTimers();
+              solo.close();
+              async.flushTimers();
             });
-            async.elapse(const Duration(milliseconds: 5));
-            parent.cancel().ignore();
-            async.elapse(const Duration(milliseconds: 5));
-            solo.set(const Preparing());
-            async.flushTimers();
-            solo.close();
-            async.flushTimers();
-          });
-        } finally {
-          Job.isCancellationError = null;
-        }
-        expect('${child.outcome}', 'Cancelled(rules: is not Initial)');
-        expect(solo.errors, ['stopped']);
-        expect(caught, named ? isEmpty : ['stopped']);
-      });
+          } finally {
+            Job.isCancellationError = null;
+          }
+          expect('${child.outcome}', 'Cancelled(rules: is not Initial)');
+          expect(solo.errors, ['stopped']);
+          expect(caught, named ? isEmpty : ['stopped']);
+        },
+      );
     }
 
     for (final read in [false, true]) {
       test(
-          read
-              ? 'in a root whose value is awaited reaches the error handler'
-              : 'in a root nobody reads reaches the error handler', () {
+        read
+            ? 'in a root whose value is awaited reaches the error handler'
+            : 'in a root nobody reads reaches the error handler',
+        () {
+          final caught = <String>[];
+          final answered = <String>[];
+          final readers = <String>[];
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              answered.add('${job.key}: $error');
+          try {
+            fakeAsync(
+              (async) => _coveredRoot(
+                TestSolo(),
+                async,
+                caught,
+                read: read ? readers : null,
+              ),
+            );
+          } finally {
+            Solo.unansweredHandler = null;
+          }
+          expect(answered, ['root: Bad state: root failed first']);
+          expect(caught, isEmpty, reason: 'the handler answered for it');
+          expect(readers, read ? ['Cancelled(manual)'] : isEmpty);
+        },
+      );
+    }
+
+    test(
+      'in a child of each whose value is awaited reaches the error handler',
+      () {
         final caught = <String>[];
         final answered = <String>[];
-        final readers = <String>[];
         Solo.unansweredHandler = (solo, job, error, stackTrace) =>
-            answered.add('${job.key}: $error');
+            answered.add('$error');
         try {
-          fakeAsync(
-            (async) => _coveredRoot(
-              TestSolo(),
-              async,
-              caught,
-              read: read ? readers : null,
-            ),
-          );
+          fakeAsync((async) => _coveredEach(TestSolo(), async, caught));
         } finally {
           Solo.unansweredHandler = null;
         }
-        expect(answered, ['root: Bad state: root failed first']);
+        expect(answered, ['Bad state: each failed first']);
         expect(caught, isEmpty, reason: 'the handler answered for it');
-        expect(readers, read ? ['Cancelled(manual)'] : isEmpty);
-      });
-    }
-
-    test('in a child of each whose value is awaited reaches the error handler',
-        () {
-      final caught = <String>[];
-      final answered = <String>[];
-      Solo.unansweredHandler =
-          (solo, job, error, stackTrace) => answered.add('$error');
-      try {
-        fakeAsync((async) => _coveredEach(TestSolo(), async, caught));
-      } finally {
-        Solo.unansweredHandler = null;
-      }
-      expect(answered, ['Bad state: each failed first']);
-      expect(caught, isEmpty, reason: 'the handler answered for it');
-    });
+      },
+    );
   });
 
   test('the filter of cancellation errors is left as it was found', () {
@@ -990,8 +986,7 @@ final class _Noting extends Solo<TestState> with OpenSolo<TestState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      errors.add('$error');
+  }) => errors.add('$error');
 }
 
 /// What the step of a child throws once its cancellation stops it.

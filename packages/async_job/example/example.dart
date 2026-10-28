@@ -59,27 +59,27 @@ class Database {
 
 /// The job of "A fuller example" in README.md.
 Job<Database> openDatabase() => Job<Database>((ctx) async {
-      // `join` stays with the call: a database half-opened is not left
-      // behind, and `discard` closes the one nobody wants any more.
-      final database = await ctx.join(
-        Database.open,
-        discard: (database) => database.close(),
-      );
+  // `join` stays with the call: a database half-opened is not left
+  // behind, and `discard` closes the one nobody wants any more.
+  final database = await ctx.join(
+    Database.open,
+    discard: (database) => database.close(),
+  );
 
-      final stop = CancelToken();
-      ctx.onCancel(stop.cancel);
+  final stop = CancelToken();
+  ctx.onCancel(stop.cancel);
 
-      // Told to stop the moment the job is cancelled, and waited for.
-      await ctx.join(() => database.migrate(stop));
-      // A cancellation waits for the whole step, and the child it runs is
-      // started all the same: no version is left without its flag.
-      await ctx.uncancellable(() async {
-        await database.writeVersion();
-        await ctx.run(database.readyFlag());
-      });
+  // Told to stop the moment the job is cancelled, and waited for.
+  await ctx.join(() => database.migrate(stop));
+  // A cancellation waits for the whole step, and the child it runs is
+  // started all the same: no version is left without its flag.
+  await ctx.uncancellable(() async {
+    await database.writeVersion();
+    await ctx.run(database.readyFlag());
+  });
 
-      return database;
-    });
+  return database;
+});
 
 /// Runs that job four times: once to the end, and then cancelled at each of
 /// its steps.

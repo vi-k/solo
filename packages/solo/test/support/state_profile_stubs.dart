@@ -34,12 +34,12 @@ final class Disconnected extends ProfileState {
 
 /// A profile state, the way a journal would write it.
 String describe(ProfileState state) => switch (state) {
-      Initial() => 'Initial',
-      Loading() => 'Loading',
-      Loaded(:final name) => 'Loaded($name)',
-      Failure(:final error) => 'Failure($error)',
-      Disconnected() => 'Disconnected',
-    };
+  Initial() => 'Initial',
+  Loading() => 'Loading',
+  Loaded(:final name) => 'Loaded($name)',
+  Failure(:final error) => 'Failure($error)',
+  Disconnected() => 'Disconnected',
+};
 
 /// The API of the quick start, answering when the test says so.
 class ProfileApi {

@@ -17,7 +17,12 @@ void main() {
     ]) {
       expect(
         source,
-        contains(RegExp(r'@protected\s+Solo\w*<[^>]*> ' '$name<')),
+        contains(
+          RegExp(
+            r'@protected\s+Solo\w*<[^>]*> '
+            '$name<',
+          ),
+        ),
         reason: '$name is protected',
       );
     }
@@ -36,7 +41,12 @@ void main() {
     ]) {
       expect(
         source,
-        contains(RegExp(r'@protected\s+void ' '$name\\(')),
+        contains(
+          RegExp(
+            r'@protected\s+void '
+            '$name\\(',
+          ),
+        ),
         reason: '$name is protected',
       );
     }

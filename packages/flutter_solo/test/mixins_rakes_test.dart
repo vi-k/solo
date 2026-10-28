@@ -57,31 +57,33 @@ String _prose() => _page()
 ///
 /// The page is not handed to `expect`: a failure would print all of it.
 void _says(String phrase) => expect(
-      _prose().contains(phrase),
-      isTrue,
-      reason: '$_doc no longer says: $phrase',
-    );
+  _prose().contains(phrase),
+  isTrue,
+  reason: '$_doc no longer says: $phrase',
+);
 
 /// The blocks of the page under [fence], in order.
 List<String> _blocks(String fence) => [
-      for (final block
-          in RegExp('```$fence\n(.*?)\n```', dotAll: true).allMatches(_page()))
-        block[1]!,
-    ];
+  for (final block in RegExp(
+    '```$fence\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(_page()))
+    block[1]!,
+];
 
 /// The lines the page quotes under its code, block by block.
 List<String> _quotes() => _blocks('text');
 
 List<String?> _imports(String file) => [
-      for (final match in RegExp("^import '([^']+)'", multiLine: true)
-          .allMatches(File(file).readAsStringSync()))
-        match[1],
-    ];
+  for (final match in RegExp(
+    "^import '([^']+)'",
+    multiLine: true,
+  ).allMatches(File(file).readAsStringSync()))
+    match[1],
+];
 
-Widget _wrap(Widget child) => Directionality(
-      textDirection: TextDirection.ltr,
-      child: child,
-    );
+Widget _wrap(Widget child) =>
+    Directionality(textDirection: TextDirection.ltr, child: child);
 
 String _shown(WidgetTester tester) =>
     tester.widget<Text>(find.byType(Text).first).data!;
@@ -170,7 +172,8 @@ List<List<String>> _chainRows() {
   ];
 }
 
-const _toBoth = 'AppLog: Bad state: the listener blew up\n'
+const _toBoth =
+    'AppLog: Bad state: the listener blew up\n'
     'FlutterError: Bad state: the listener blew up';
 
 void main() {
@@ -178,7 +181,9 @@ void main() {
   // takes that long to say a wait never ended is one nobody runs.
   (TestWidgetsFlutterBinding.ensureInitialized()
           as AutomatedTestWidgetsFlutterBinding)
-      .defaultTestTimeout = const Timeout(Duration(seconds: 30));
+      .defaultTestTimeout = const Timeout(
+    Duration(seconds: 30),
+  );
 
   group('The page', () {
     test('every piece of its code stands in the files of its heading', () {
@@ -207,7 +212,8 @@ void main() {
       expect(
         _blocks('dart'),
         hasLength(7),
-        reason: 'a new block of the page needs a place in the support files '
+        reason:
+            'a new block of the page needs a place in the support files '
             'and a test that runs it',
       );
       expect(_quotes(), hasLength(6));
@@ -217,15 +223,11 @@ void main() {
       // `flutter_solo` takes the annotation from Flutter; `meta` is a dev
       // dependency of the package so that these two files need not.
       for (final file in [_baseFirst, _base]) {
-        expect(
-          _imports(file),
-          [
-            'package:meta/meta.dart',
-            'package:solo/solo.dart',
-            'mixins_log.dart',
-          ],
-          reason: file,
-        );
+        expect(_imports(file), [
+          'package:meta/meta.dart',
+          'package:solo/solo.dart',
+          'mixins_log.dart',
+        ], reason: file);
       }
       expect(_imports('test/support/mixins_log.dart'), isEmpty);
       _says('can live in a package with no Flutter in it');
@@ -237,8 +239,9 @@ void main() {
       // apart, so the guard reads the code of the page.
       final code = _blocks('dart').join('\n');
       final overrides = RegExp(r'@override\s+void onListenerError\(');
-      final annotated =
-          RegExp(r'@protected\s+@override\s+void onListenerError\(');
+      final annotated = RegExp(
+        r'@protected\s+@override\s+void onListenerError\(',
+      );
       expect(overrides.allMatches(code), hasLength(4));
       expect(annotated.allMatches(code), hasLength(4));
       _says('`@protected` is repeated on every override');
@@ -246,30 +249,34 @@ void main() {
   });
 
   group('A controller with both deliveries', () {
-    test('the listener is inside the change, the event a microtask later',
-        () async {
-      final session = DrivenSession(const SignedOut());
-      addTearDown(session.close);
-      final log = <String>[];
-      session.addListener(() => log.add('the listener'));
-      session.stream.listen((_) => log.add('the event'));
+    test(
+      'the listener is inside the change, the event a microtask later',
+      () async {
+        final session = DrivenSession(const SignedOut());
+        addTearDown(session.close);
+        final log = <String>[];
+        session.addListener(() => log.add('the listener'));
+        session.stream.listen((_) => log.add('the event'));
 
-      scheduleMicrotask(() => log.add('a microtask from before the change'));
-      session.set(const SignedIn('Ada'));
-      log.add('the change is made');
-      scheduleMicrotask(() => log.add('a microtask from after the change'));
-      await Future<void>.delayed(Duration.zero);
+        scheduleMicrotask(() => log.add('a microtask from before the change'));
+        session.set(const SignedIn('Ada'));
+        log.add('the change is made');
+        scheduleMicrotask(() => log.add('a microtask from after the change'));
+        await Future<void>.delayed(Duration.zero);
 
-      expect(log, [
-        'the listener',
-        'the change is made',
-        'a microtask from before the change',
-        'the event',
-        'a microtask from after the change',
-      ]);
-      _says('fires synchronously, inside the change, and the `stream` event '
-          'arrives a microtask later');
-    });
+        expect(log, [
+          'the listener',
+          'the change is made',
+          'a microtask from before the change',
+          'the event',
+          'a microtask from after the change',
+        ]);
+        _says(
+          'fires synchronously, inside the change, and the `stream` event '
+          'arrives a microtask later',
+        );
+      },
+    );
 
     test('one change has two error routes', () async {
       final flutterErrors = <Object>[];
@@ -299,55 +306,66 @@ void main() {
       expect(
         changedIn,
         isEmpty,
-        reason: 'the zone is the one the subscriber subscribed in, not the '
+        reason:
+            'the zone is the one the subscriber subscribed in, not the '
             'one the change was made in',
       );
-      _says("a listener's failure goes to `FlutterError`, and a failure of a "
-          '`stream` subscriber goes to the zone it subscribed in');
+      _says(
+        "a listener's failure goes to `FlutterError`, and a failure of a "
+        '`stream` subscriber goes to the zone it subscribed in',
+      );
     });
 
-    test('an await for over the stream holds close() while its body awaits',
-        () async {
-      final session = Session(const SignedOut());
-      final body = Completer<void>();
-      final loop = () async {
-        await for (final _ in session.stream) {
-          await body.future;
-        }
-      }();
-      await session.signIn('Ada').done;
-      await Future<void>.delayed(Duration.zero);
+    test(
+      'an await for over the stream holds close() while its body awaits',
+      () async {
+        final session = Session(const SignedOut());
+        final body = Completer<void>();
+        final loop = () async {
+          await for (final _ in session.stream) {
+            await body.future;
+          }
+        }();
+        await session.signIn('Ada').done;
+        await Future<void>.delayed(Duration.zero);
 
-      var closed = false;
-      final closing = session.close().then((_) => closed = true);
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(closed, isFalse);
-      expect(session.isFinished, isTrue);
-      expect(session.pending, isA<SoloPendingStream>());
+        var closed = false;
+        final closing = session.close().then((_) => closed = true);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(closed, isFalse);
+        expect(session.isFinished, isTrue);
+        expect(session.pending, isA<SoloPendingStream>());
 
-      body.complete();
-      await closing;
-      await loop;
-      expect(closed, isTrue);
-      expect(session.pending, isNull);
-      _says('an `await for` over the `stream` holds `close()` while its body '
-          'is still awaiting');
-      _says('`pending` is a `SoloPendingStream` all that time');
-    });
+        body.complete();
+        await closing;
+        await loop;
+        expect(closed, isTrue);
+        expect(session.pending, isNull);
+        _says(
+          'an `await for` over the `stream` holds `close()` while its body '
+          'is still awaiting',
+        );
+        _says('`pending` is a `SoloPendingStream` all that time');
+      },
+    );
 
-    test('a controller with SoloListenable alone waits for no listener',
-        () async {
-      final session = _ListenableOnly(const SignedOut())..addListener(() {});
-      await session.signIn('Ada').done;
+    test(
+      'a controller with SoloListenable alone waits for no listener',
+      () async {
+        final session = _ListenableOnly(const SignedOut())..addListener(() {});
+        await session.signIn('Ada').done;
 
-      var closed = false;
-      final closing = session.close().then((_) => closed = true);
-      await Future<void>.delayed(Duration.zero);
-      expect(closed, isTrue);
-      await closing;
-      _says('a controller with `SoloListenable` alone waits for none of its '
-          'listeners');
-    });
+        var closed = false;
+        final closing = session.close().then((_) => closed = true);
+        await Future<void>.delayed(Duration.zero);
+        expect(closed, isTrue);
+        await closing;
+        _says(
+          'a controller with `SoloListenable` alone waits for none of its '
+          'listeners',
+        );
+      },
+    );
 
     test('the order of the two mixins makes no difference', () async {
       final flutterErrors = <Object>[];
@@ -364,20 +382,17 @@ void main() {
         order.add('the listener');
         throw StateError('the listener');
       });
-      runZonedGuarded(
-        () {
-          session.stream.listen((_) {
-            order.add('the event');
-            throw StateError('the subscriber');
-          });
-          loop = () async {
-            await for (final _ in session.stream) {
-              await body.future;
-            }
-          }();
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
+      runZonedGuarded(() {
+        session.stream.listen((_) {
+          order.add('the event');
+          throw StateError('the subscriber');
+        });
+        loop = () async {
+          await for (final _ in session.stream) {
+            await body.future;
+          }
+        }();
+      }, (error, stackTrace) => zoneErrors.add(error));
       await session.signIn('Ada').done;
       await Future<void>.delayed(Duration.zero);
 
@@ -443,8 +458,9 @@ void main() {
       _says('the wait is as long as the next change');
     });
 
-    testWidgets('while currentState holds the state in the same builder',
-        (tester) async {
+    testWidgets('while currentState holds the state in the same builder', (
+      tester,
+    ) async {
       final session = await _signedIn();
       final seen = <String>[];
       await tester.pumpWidget(
@@ -452,9 +468,7 @@ void main() {
           StreamBuilder<SessionState>(
             stream: session.stream,
             builder: (context, snapshot) {
-              seen.add(
-                '${snapshot.data.runtimeType} ${session.currentState}',
-              );
+              seen.add('${snapshot.data.runtimeType} ${session.currentState}');
               return SessionBadge(session);
             },
           ),
@@ -462,12 +476,15 @@ void main() {
       );
       expect(seen, ["Null Instance of 'SignedIn'"]);
       expect(_shown(tester), 'nothing yet');
-      _says('`currentState` holds `SignedIn` in the same builder that renders '
-          '`nothing yet`');
+      _says(
+        '`currentState` holds `SignedIn` in the same builder that renders '
+        '`nothing yet`',
+      );
     });
 
-    testWidgets('a route pushed and a tab switched back build it anew',
-        (tester) async {
+    testWidgets('a route pushed and a tab switched back build it anew', (
+      tester,
+    ) async {
       final session = await _signedIn();
       final navigator = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
@@ -512,7 +529,10 @@ void main() {
             length: 2,
             child: Scaffold(
               appBar: const TabBar(
-                tabs: [Tab(text: 'badge'), Tab(text: 'other')],
+                tabs: [
+                  Tab(text: 'badge'),
+                  Tab(text: 'other'),
+                ],
               ),
               body: TabBarView(
                 children: [SessionBadge(session), const Text('another tab')],
@@ -544,12 +564,15 @@ void main() {
 
       expect(lines.join('\n'), _quotes()[1]);
       expect(session.currentState, isA<SignedIn>());
-      _says('while `currentState` still holds the state the badge never '
-          'showed');
+      _says(
+        'while `currentState` still holds the state the badge never '
+        'showed',
+      );
     });
 
-    testWidgets('the second attempt keeps the data of the old stream',
-        (tester) async {
+    testWidgets('the second attempt keeps the data of the old stream', (
+      tester,
+    ) async {
       final other = await _signedIn('Cy');
       expect(
         await _threeLines(tester, withInitialData, another: other),
@@ -561,8 +584,10 @@ void main() {
       await other.signIn('Dan').done;
       await tester.pump();
       expect(_shown(tester), 'signed in as Dan');
-      _says("the badge shows Bob over Cy's session until that session "
-          'changes');
+      _says(
+        "the badge shows Bob over Cy's session until that session "
+        'changes',
+      );
     });
 
     testWidgets('and a key made of the session repairs it', (tester) async {
@@ -572,8 +597,9 @@ void main() {
       _says('the badge shows Cy at once');
     });
 
-    testWidgets('a builder over the controller needs nothing passed',
-        (tester) async {
+    testWidgets('a builder over the controller needs nothing passed', (
+      tester,
+    ) async {
       final other = await _signedIn('Cy');
       expect(
         await _threeLines(tester, overTheController, another: other),
@@ -592,8 +618,9 @@ void main() {
       );
     });
 
-    testWidgets('and ValueListenableBuilder shows the same three lines',
-        (tester) async {
+    testWidgets('and ValueListenableBuilder shows the same three lines', (
+      tester,
+    ) async {
       expect(await _threeLines(tester, _overTheListenable), _quotes()[3]);
       _says('with `valueListenable: session` it shows the same three lines');
     });
@@ -610,8 +637,10 @@ void main() {
     test('whose override runs where nothing is mixed in', () async {
       final profile = _PlainFirst();
       expect(await _reached(profile, profile.set), _quotes()[5]);
-      _says('so its override wins, with a report through `FlutterError`, and '
-          "the base's override never runs");
+      _says(
+        'so its override wins, with a report through `FlutterError`, and '
+        "the base's override never runs",
+      );
     });
 
     test('super in the leaf is the mixin', () async {
@@ -638,13 +667,17 @@ void main() {
       _says('calls `super.onListenerError` next to `reportListenerError`');
     });
 
-    test('a leaf without the override reports as in the first attempt',
-        () async {
-      final profile = _Forgetful();
-      expect(await _reached(profile, profile.set), _quotes()[4]);
-      _says('a leaf that mixes `SoloListenable` in without it reports through '
-          '`FlutterError` as in the first attempt');
-    });
+    test(
+      'a leaf without the override reports as in the first attempt',
+      () async {
+        final profile = _Forgetful();
+        expect(await _reached(profile, profile.set), _quotes()[4]);
+        _says(
+          'a leaf that mixes `SoloListenable` in without it reports through '
+          '`FlutterError` as in the first attempt',
+        );
+      },
+    );
 
     test('the override of the class between runs in every leaf', () async {
       final profile = shared.DrivenProfile();
@@ -652,26 +685,34 @@ void main() {
       expect(profile, isA<ValueListenable<Profile>>());
       final settings = _Settings();
       expect(await _reached(settings, settings.set), _quotes()[5]);
-      _says('`ProfileController` here reports to `AppLog` and not through '
-          '`FlutterError`');
+      _says(
+        '`ProfileController` here reports to `AppLog` and not through '
+        '`FlutterError`',
+      );
       _says('in every leaf that extends it');
       // The last item of the list at the top of the page names the task.
-      _says("keeps its report of a listener's failure when the controllers "
-          'mix `SoloListenable` in');
+      _says(
+        "keeps its report of a listener's failure when the controllers "
+        'mix `SoloListenable` in',
+      );
     });
 
     test('a base with Flutter in it keeps its own override', () async {
       final profile = _OverFlutterBase();
       expect(await _reached(profile, profile.set), _quotes()[5]);
-      _says('A base with Flutter in it mixes `SoloListenable` in itself and '
-          'keeps its own override the same way');
+      _says(
+        'A base with Flutter in it mixes `SoloListenable` in itself and '
+        'keeps its own override the same way',
+      );
     });
 
     test('mixed in again on a leaf, the mixin silences the override', () async {
       final profile = _Twice();
       expect(await _reached(profile, profile.set), _quotes()[4]);
-      _says('mixed in again on a leaf over such a class, it sits above that '
-          'override and silences it as in the first attempt');
+      _says(
+        'mixed in again on a leaf over such a class, it sits above that '
+        'override and silences it as in the first attempt',
+      );
     });
 
     test('the table of chains is what the four leaves report', () async {
@@ -694,10 +735,7 @@ void main() {
           return _reached(profile, profile.set);
         },
       };
-      final quoted = {
-        '`FlutterError`': _quotes()[4],
-        '`AppLog`': _quotes()[5],
-      };
+      final quoted = {'`FlutterError`': _quotes()[4], '`AppLog`': _quotes()[5]};
       final rows = _chainRows();
       expect(rows.map((row) => row.first), leaves.keys);
       for (final row in rows) {
@@ -730,27 +768,23 @@ final class _ListenableOnly extends Solo<SessionState> with SoloListenable {
 
 /// The second attempt with the key the page names.
 Widget _withInitialDataAndKey(Session session) => StreamBuilder<SessionState>(
-      key: ObjectKey(session),
-      stream: session.stream,
-      initialData: session.currentState,
-      builder: (context, snapshot) => Text(
-        switch (snapshot.requireData) {
-          SignedIn(:final name) => 'signed in as $name',
-          SignedOut() => 'signed out',
-        },
-      ),
-    );
+  key: ObjectKey(session),
+  stream: session.stream,
+  initialData: session.currentState,
+  builder: (context, snapshot) => Text(switch (snapshot.requireData) {
+    SignedIn(:final name) => 'signed in as $name',
+    SignedOut() => 'signed out',
+  }),
+);
 
 /// The builder of the framework the page says `Session` fits as well.
 Widget _overTheListenable(Session session) =>
     ValueListenableBuilder<SessionState>(
       valueListenable: session,
-      builder: (context, state, _) => Text(
-        switch (state) {
-          SignedIn(:final name) => 'signed in as $name',
-          SignedOut() => 'signed out',
-        },
-      ),
+      builder: (context, state, _) => Text(switch (state) {
+        SignedIn(:final name) => 'signed in as $name',
+        SignedOut() => 'signed out',
+      }),
     );
 
 /// A controller of the first attempt's base that mixes nothing in.

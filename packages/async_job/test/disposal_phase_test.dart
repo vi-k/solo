@@ -48,18 +48,15 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       final order = <String>[];
-      Job<int>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          ctx.onDispose(() {
-            ctx
-              ..onDispose(() => order.add('nested'))
-              ..log('cleaning up');
-            order.add('outer');
-          });
-          return 1;
-        },
-      ).ignoreFailure();
+      Job<int>(observer: ErrorObserver(errors), (ctx) async {
+        ctx.onDispose(() {
+          ctx
+            ..onDispose(() => order.add('nested'))
+            ..log('cleaning up');
+          order.add('outer');
+        });
+        return 1;
+      }).ignoreFailure();
       async.flushTimers();
       expect(order, ['outer', 'nested']);
       expect(errors, isEmpty);
@@ -69,18 +66,15 @@ void main() {
   test('a Cancelled thrown by a cleanup is its own error', () {
     fakeAsync((async) {
       final errors = <Object>[];
-      final job = Job<void>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          ctx.onDispose(
-            () => throw Cancelled.by(
-              reason: const ManualCancelReason(),
-              stackTrace: StackTrace.current,
-            ),
-          );
-          await ctx.abandonable(() => delay(10));
-        },
-      )..ignoreFailure();
+      final job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
+        ctx.onDispose(
+          () => throw Cancelled.by(
+            reason: const ManualCancelReason(),
+            stackTrace: StackTrace.current,
+          ),
+        );
+        await ctx.abandonable(() => delay(10));
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.flushTimers();
@@ -93,24 +87,21 @@ void main() {
   test('a cancellation from a child inside a cleanup is its own error', () {
     fakeAsync((async) {
       final errors = <Object>[];
-      final job = Job<int>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          final child = Job.deferred<void>(
-            key: 'child',
-            (ctx) => ctx.abandonable(() => delay(100)),
-          );
-          ctx.run(child).ignore();
-          ctx.onDispose(() async {
-            // The disposer chose to wait for someone else's outcome: the
-            // cascade took the child down, and its cancellation is an
-            // error of this disposer.
-            await child.value;
-          });
-          await ctx.abandonable(() => delay(50));
-          return 1;
-        },
-      )..ignoreFailure();
+      final job = Job<int>(observer: ErrorObserver(errors), (ctx) async {
+        final child = Job.deferred<void>(
+          key: 'child',
+          (ctx) => ctx.abandonable(() => delay(100)),
+        );
+        ctx.run(child).ignore();
+        ctx.onDispose(() async {
+          // The disposer chose to wait for someone else's outcome: the
+          // cascade took the child down, and its cancellation is an
+          // error of this disposer.
+          await child.value;
+        });
+        await ctx.abandonable(() => delay(50));
+        return 1;
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -118,8 +109,7 @@ void main() {
     });
   });
 
-  test(
-      'an action the body walked away from that polls check stops on the '
+  test('an action the body walked away from that polls check stops on the '
       'cancellation while the core cleans up', () {
     fakeAsync((async) {
       final errors = <Object>[];
@@ -154,8 +144,7 @@ void main() {
     });
   });
 
-  test(
-      'a callback that calls check on a cancelled job hands the '
+  test('a callback that calls check on a cancelled job hands the '
       'cancellation to onError alone, and the stack goes on', () {
     fakeAsync((async) {
       final errors = <Object>[];
@@ -193,8 +182,7 @@ void main() {
         // that closes the context: without one the flag is never raised,
         // and this test would say nothing about it being lowered again.
         ctx.onDispose(() {});
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
       expect(job.isFinished, isTrue);
       expect(leaked.check, returnsNormally);
@@ -208,8 +196,7 @@ void main() {
       final job = ProbeJob<void>((ctx) async {
         captured = ctx;
         await ctx.abandonable(() => delay(100));
-      })
-        ..launch();
+      })..launch();
       async.elapse(const Duration(milliseconds: 10));
       job.drop(
         Cancelled.by(

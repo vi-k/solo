@@ -317,9 +317,7 @@ Future<T> runInIsolate<T>(JobContext ctx, T Function() work) async {
       ),
       discard: (isolate) => isolate.kill(priority: Isolate.immediate),
     );
-    unregister = ctx.onCancel(
-      () => isolate.kill(priority: Isolate.immediate),
-    );
+    unregister = ctx.onCancel(() => isolate.kill(priority: Isolate.immediate));
     isolate.resume(isolate.pauseCapability!);
     // The first message is the answer: the value, the error, or the exit of
     // an isolate killed before it answered.
@@ -330,8 +328,10 @@ Future<T> runInIsolate<T>(JobContext ctx, T Function() work) async {
   }
   return switch (message) {
     (final T value,) => value,
-    [final error, final stackTrace] =>
-      throw RemoteError('$error', '$stackTrace'),
+    [final error, final stackTrace] => throw RemoteError(
+      '$error',
+      '$stackTrace',
+    ),
     _ => throw StateError('the isolate ended without an answer'),
   };
 }

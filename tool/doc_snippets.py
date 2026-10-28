@@ -53,7 +53,7 @@ BLOC_PUBSPEC = """name: bloc_check
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: ^3.10.0
 
 dependencies:
   bloc: ^9.0.0
@@ -65,7 +65,7 @@ SOLO_PUBSPEC = """name: solo_check
 publish_to: none
 
 environment:
-  sdk: ^3.6.0
+  sdk: ^3.10.0
 
 dependencies:
   solo:

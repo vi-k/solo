@@ -16,9 +16,11 @@ import 'support/probe_job.dart';
 // compare.
 const _noChild =
     '[j] error Bad state: Job(j) cannot run a child inside unattended work';
-const _noGroup = '[j] error Bad state: Job(j) cannot run a group of children '
+const _noGroup =
+    '[j] error Bad state: Job(j) cannot run a group of children '
     'inside unattended work';
-const _noSection = '[j] error Bad state: Job(j) cannot run an uncancellable '
+const _noSection =
+    '[j] error Bad state: Job(j) cannot run an uncancellable '
     'action inside unattended work';
 
 void main() {
@@ -148,9 +150,7 @@ void main() {
         ctx.unattended(() {
           Job<void>(key: 'b', observer: journal, (inner) async {
             inner
-                .run(
-                  Job.deferred<void>(key: 'c', (c) async => childRan = true),
-                )
+                .run(Job.deferred<void>(key: 'c', (c) async => childRan = true))
                 .ignore();
             await inner.abandonable(() => delay(1));
           });
@@ -201,72 +201,63 @@ void main() {
   test('a job created inside unattended work reports to the body zone', () {
     final journal = JobJournal();
     final caught = <String>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>(key: 'j', observer: journal, (ctx) async {
-            ctx.unattended(() {
-              Job<void>(key: 'stray', (c) async => throw StateError('stray'));
-            });
-            await ctx.abandonable(() => delay(1));
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>(key: 'j', observer: journal, (ctx) async {
+          ctx.unattended(() {
+            Job<void>(key: 'stray', (c) async => throw StateError('stray'));
           });
-          async.flushTimers();
+          await ctx.abandonable(() => delay(1));
         });
-      },
-      (error, stackTrace) => caught.add('$error'),
-    );
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add('$error'));
     expect(caught, ['Bad state: stray']);
     expect(journal.take().where((line) => line.contains('error')), isEmpty);
   });
 
-  test(
-      'a job created inside nested unattended work still reports to the '
+  test('a job created inside nested unattended work still reports to the '
       'body zone', () {
     final journal = JobJournal();
     final caught = <String>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          Job<void>(key: 'j', observer: journal, (ctx) async {
-            ctx.unattended(
-              () => ctx.unattended(() {
-                Job<void>(
-                  key: 'stray',
-                  (c) async => throw StateError('stray'),
-                );
-              }),
-            );
-            await ctx.abandonable(() => delay(1));
-          });
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        Job<void>(key: 'j', observer: journal, (ctx) async {
+          ctx.unattended(
+            () => ctx.unattended(() {
+              Job<void>(key: 'stray', (c) async => throw StateError('stray'));
+            }),
+          );
+          await ctx.abandonable(() => delay(1));
         });
-      },
-      (error, stackTrace) => caught.add('$error'),
-    );
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add('$error'));
     expect(caught, ['Bad state: stray']);
     expect(journal.take().where((line) => line.contains('error')), isEmpty);
   });
 
   for (final continuation in [false, true]) {
     final what = continuation ? 'a continuation' : 'a job';
-    test('the body of $what created inside unattended work runs outside it',
-        () {
-      // Its outcome was already the new job's own; its body is too. A bare
-      // `unawaited` error in it lands in the zone the work was started
-      // from, not at the observer of the job that started the work.
-      final journal = JobJournal();
-      final caught = <String>[];
-      runZonedGuarded(
-        () {
+    test(
+      'the body of $what created inside unattended work runs outside it',
+      () {
+        // Its outcome was already the new job's own; its body is too. A bare
+        // `unawaited` error in it lands in the zone the work was started
+        // from, not at the observer of the job that started the work.
+        final journal = JobJournal();
+        final caught = <String>[];
+        runZonedGuarded(() {
           fakeAsync((async) {
             Job<void>(key: 'j', observer: journal, (ctx) async {
               ctx.unattended(() {
                 Future<void> leak(JobContext c) async =>
                     unawaited(Future<void>.error(StateError('leak')));
                 if (continuation) {
-                  Job<void>(key: 'source', (c) async {}).then<void>(
-                    (c, _) => leak(c),
-                  );
+                  Job<void>(
+                    key: 'source',
+                    (c) async {},
+                  ).then<void>((c, _) => leak(c));
                 } else {
                   Job<void>(key: 'stray', leak);
                 }
@@ -275,12 +266,11 @@ void main() {
             });
             async.flushTimers();
           });
-        },
-        (error, stackTrace) => caught.add('$error'),
-      );
-      expect(caught, ['Bad state: leak']);
-      expect(journal.take().where((line) => line.contains('error')), isEmpty);
-    });
+        }, (error, stackTrace) => caught.add('$error'));
+        expect(caught, ['Bad state: leak']);
+        expect(journal.take().where((line) => line.contains('error')), isEmpty);
+      },
+    );
   }
 
   for (final (made, nested) in [
@@ -289,8 +279,7 @@ void main() {
     ('inside', true),
   ]) {
     final where = nested ? 'nested unattended work' : 'unattended work';
-    test(
-        'the body of a job made $made and started by hand inside $where runs '
+    test('the body of a job made $made and started by hand inside $where runs '
         'outside it', () {
       // Started there, not only made there: `start` is called inside the
       // work, and the body would run in the work's zone. It runs in the
@@ -301,53 +290,48 @@ void main() {
       final journal = JobJournal();
       final caught = <String>[];
       var bodyStarted = false;
-      runZonedGuarded(
-        () {
-          fakeAsync((async) {
-            Job<void>(key: 'j', observer: journal, (ctx) async {
-              Future<void> leak(JobContext c) async {
-                bodyStarted = true;
-                unawaited(Future<void>.error(StateError('leak')));
-              }
+      runZonedGuarded(() {
+        fakeAsync((async) {
+          Job<void>(key: 'j', observer: journal, (ctx) async {
+            Future<void> leak(JobContext c) async {
+              bodyStarted = true;
+              unawaited(Future<void>.error(StateError('leak')));
+            }
 
-              final elsewhere = made == 'elsewhere'
-                  ? runZonedGuarded(
-                      () => Job.deferred<void>(key: 'stray', leak),
-                      (error, stackTrace) => caught.add('made in: $error'),
-                    )
-                  : null;
-              void startIt() {
-                (elsewhere ?? Job.deferred<void>(key: 'stray', leak)).start();
-                expect(bodyStarted, isTrue);
-              }
+            final elsewhere = made == 'elsewhere'
+                ? runZonedGuarded(
+                    () => Job.deferred<void>(key: 'stray', leak),
+                    (error, stackTrace) => caught.add('made in: $error'),
+                  )
+                : null;
+            void startIt() {
+              (elsewhere ?? Job.deferred<void>(key: 'stray', leak)).start();
+              expect(bodyStarted, isTrue);
+            }
 
-              ctx.unattended(
-                nested ? () => ctx.unattended(startIt) : startIt,
-              );
-              await ctx.abandonable(() => delay(1));
-            });
-            async.flushTimers();
+            ctx.unattended(nested ? () => ctx.unattended(startIt) : startIt);
+            await ctx.abandonable(() => delay(1));
           });
-        },
-        (error, stackTrace) => caught.add('$error'),
-      );
+          async.flushTimers();
+        });
+      }, (error, stackTrace) => caught.add('$error'));
       expect(bodyStarted, isTrue);
       expect(caught, ['Bad state: leak']);
       expect(journal.take().where((line) => line.contains('error')), isEmpty);
     });
   }
 
-  test('a job started by hand inside the work of another job starts outside',
-      () {
-    // Forks of two jobs, one inside the other: the job starts where the
-    // outer work was started from, the way a job made in there reports.
-    // Its observer's `onStart` throwing is its own, and reaches neither
-    // observer of the two jobs.
-    final journal = JobJournal();
-    final caught = <String>[];
-    late final JobContext ctxB;
-    runZonedGuarded(
-      () {
+  test(
+    'a job started by hand inside the work of another job starts outside',
+    () {
+      // Forks of two jobs, one inside the other: the job starts where the
+      // outer work was started from, the way a job made in there reports.
+      // Its observer's `onStart` throwing is its own, and reaches neither
+      // observer of the two jobs.
+      final journal = JobJournal();
+      final caught = <String>[];
+      late final JobContext ctxB;
+      runZonedGuarded(() {
         fakeAsync((async) {
           runZonedGuarded(
             () => Job<void>(key: 'b', observer: journal, (ctx) async {
@@ -372,15 +356,14 @@ void main() {
           });
           async.flushTimers();
         });
-      },
-      (error, stackTrace) => caught.add('zone of a: $error'),
-    );
-    expect(caught, [
-      'zone of a: Bad state: onStart of stray',
-      'zone of a: Bad state: leak',
-    ]);
-    expect(journal.take().where((line) => line.contains('error')), isEmpty);
-  });
+      }, (error, stackTrace) => caught.add('zone of a: $error'));
+      expect(caught, [
+        'zone of a: Bad state: onStart of stray',
+        'zone of a: Bad state: leak',
+      ]);
+      expect(journal.take().where((line) => line.contains('error')), isEmpty);
+    },
+  );
 
   test(
     'a nested fork of another job does not lift the ban on uncancellable',
@@ -414,10 +397,7 @@ void main() {
           '[b] error Bad state: Job(a) cannot run an uncancellable action '
           'inside unattended work';
       expect(actionRan, isFalse);
-      expect(
-        journal.take().where((line) => line.contains('error')),
-        [refused],
-      );
+      expect(journal.take().where((line) => line.contains('error')), [refused]);
       expect(a.outcome, isA<Done<void>>());
     },
   );
@@ -426,27 +406,28 @@ void main() {
     fakeAsync((async) {
       Object? thrown;
       var ranTheStep = false;
-      final outer = KeyedJob<void>(key: 'same', (ctx) async {
-        ctx.unattended(() async {
-          // A job of the same domain, started from inside the work: its
-          // body runs in this fork's zone. The two are equal by key, and a
-          // zone looks its keys up by `==`, so without an identity check
-          // the inner job finds itself inside somebody's unattended work
-          // and refuses a step that is perfectly legal.
-          final inner = KeyedJob<void>(key: 'same', (inner) async {
-            await inner.uncancellable(() async => ranTheStep = true);
-          })
-            ..ignoreFailure();
-          try {
-            inner.launch();
-          } on Object catch (error) {
-            thrown = error;
-          }
-        });
-        await ctx.abandonable(() => delay(10));
-      })
-        ..ignoreFailure()
-        ..launch();
+      final outer =
+          KeyedJob<void>(key: 'same', (ctx) async {
+              ctx.unattended(() async {
+                // A job of the same domain, started from inside the work:
+                // its body runs in this fork's zone. The two are equal by
+                // key, and a zone looks its keys up by `==`, so without an
+                // identity check the inner job finds itself inside
+                // somebody's unattended work and refuses a step that is
+                // perfectly legal.
+                final inner = KeyedJob<void>(key: 'same', (inner) async {
+                  await inner.uncancellable(() async => ranTheStep = true);
+                })..ignoreFailure();
+                try {
+                  inner.launch();
+                } on Object catch (error) {
+                  thrown = error;
+                }
+              });
+              await ctx.abandonable(() => delay(10));
+            })
+            ..ignoreFailure()
+            ..launch();
       async.flushTimers();
       expect(thrown, isNull);
       expect(ranTheStep, isTrue);
@@ -465,16 +446,17 @@ void main() {
     late final JobContext ctxA;
     late final JobContext ctxB;
     fakeAsync((async) {
-      a = KeyedJob<void>(key: 'same', (ctx) async {
-        ctxA = ctx;
-        await ctx.abandonable(() => delay(100));
-      })
-        ..ignoreFailure()
-        ..launch();
+      a =
+          KeyedJob<void>(key: 'same', (ctx) async {
+              ctxA = ctx;
+              await ctx.abandonable(() => delay(100));
+            })
+            ..ignoreFailure()
+            ..launch();
       KeyedJob<void>(key: 'same', (ctx) async {
-        ctxB = ctx;
-        await ctx.abandonable(() => delay(100));
-      })
+          ctxB = ctx;
+          await ctx.abandonable(() => delay(100));
+        })
         ..ignoreFailure()
         ..launch();
       ctxA.unattended(

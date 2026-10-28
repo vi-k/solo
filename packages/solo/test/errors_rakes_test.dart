@@ -101,8 +101,7 @@ final class _ReportsAndReturns extends Solo<int> with OpenSolo<int> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add(text(error));
+  }) => heard.add(text(error));
 }
 
 /// An answer that keeps the default route as well.
@@ -134,43 +133,41 @@ final class _TokenCamera extends Solo<CameraState>
 
   _TokenCamera() : super(const Closed());
 
-  SoloJob<void> open(String version) => enqueue<CameraState, void>(
-        key: version,
-        (ctx) async {
-          final token = StopToken();
-          ctx.onCancel(token.stop);
-          switch (version) {
-            case 'on Cancelled':
-              try {
-                await ctx.join(() => hw.openWith(token));
-              } on Cancelled {
-                rethrow;
-              } on Object catch (error) {
-                await hw.reset();
-                ctx.emit(Broken(error));
-                rethrow;
-              }
-            case 'error is Cancelled':
-              try {
-                await ctx.join(() => hw.openWith(token));
-              } on Object catch (error) {
-                if (error is Cancelled) rethrow;
-                await hw.reset();
-                ctx.emit(Broken(error));
-                rethrow;
-              }
-            default:
-              try {
-                await ctx.join(() => hw.openWith(token));
-              } on Object catch (error) {
-                ctx.check();
-                await hw.reset();
-                ctx.emit(Broken(error));
-                rethrow;
-              }
-          }
-        },
-      );
+  SoloJob<void> open(String version) =>
+      enqueue<CameraState, void>(key: version, (ctx) async {
+        final token = StopToken();
+        ctx.onCancel(token.stop);
+        switch (version) {
+          case 'on Cancelled':
+            try {
+              await ctx.join(() => hw.openWith(token));
+            } on Cancelled {
+              rethrow;
+            } on Object catch (error) {
+              await hw.reset();
+              ctx.emit(Broken(error));
+              rethrow;
+            }
+          case 'error is Cancelled':
+            try {
+              await ctx.join(() => hw.openWith(token));
+            } on Object catch (error) {
+              if (error is Cancelled) rethrow;
+              await hw.reset();
+              ctx.emit(Broken(error));
+              rethrow;
+            }
+          default:
+            try {
+              await ctx.join(() => hw.openWith(token));
+            } on Object catch (error) {
+              ctx.check();
+              await hw.reset();
+              ctx.emit(Broken(error));
+              rethrow;
+            }
+        }
+      });
 }
 
 /// A controller whose members a stack trace names, so a test can tell the
@@ -202,8 +199,7 @@ final class _Zoned extends Solo<int> {
   SoloJob<void> make(
     Future<void> Function(SoloContext<int, int> ctx) body, {
     bool Function(int state)? canStart,
-  }) =>
-      job<int, void>(body, canStart: canStart);
+  }) => job<int, void>(body, canStart: canStart);
 
   SoloJob<void> submit(SoloJob<void> job) => enqueueJob(job);
 
@@ -213,8 +209,7 @@ final class _Zoned extends Solo<int> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      trace.add('controller in ${Zone.current[#zone]}: ${text(error)}');
+  }) => trace.add('controller in ${Zone.current[#zone]}: ${text(error)}');
 }
 
 /// Notes the zone it hears each error in, as [_Zoned] does.
@@ -230,8 +225,7 @@ final class _ZonedObserver extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      trace.add('observer in ${Zone.current[#zone]}: ${text(error)}');
+  }) => trace.add('observer in ${Zone.current[#zone]}: ${text(error)}');
 }
 
 /// Runs [body] in a zone named [name] that notes what reaches it uncaught.
@@ -261,10 +255,10 @@ void _fail(FakeAsync async, String call, Object error) {
 
 /// The members a stack trace names, innermost first.
 List<String> _frames(StackTrace? trace) => [
-      for (final line in '$trace'.split('\n'))
-        if (line.trim().isNotEmpty)
-          line.replaceFirst(RegExp(r'^#\d+\s+'), '').split(' (').first,
-    ];
+  for (final line in '$trace'.split('\n'))
+    if (line.trim().isNotEmpty)
+      line.replaceFirst(RegExp(r'^#\d+\s+'), '').split(' (').first,
+];
 
 /// A job whose disposer throws.
 SoloJob<void> _dirtyCleanup(OpenSolo<int> controller) =>
@@ -361,9 +355,7 @@ void main() {
         'operation that `abandonable` stopped waiting for; - a rule '
         'that threw instead of answering.',
       );
-      _says(
-        'It hears each error once for each job',
-      );
+      _says('It hears each error once for each job');
       late Bench bench;
       runFaked((async) {
         bench = Bench();
@@ -413,8 +405,7 @@ void main() {
               (child) async => throw StateError('the child'),
             ),
           );
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
       });
 
       expect(bench.heard, ['child: the child', 'parent: the child']);
@@ -448,8 +439,7 @@ void main() {
 
     for (final handlerSet in [false, true]) {
       final third = handlerSet ? 'the handler' : 'the zone';
-      test(
-          'a crash reporter fed from the hook gets one error three times, '
+      test('a crash reporter fed from the hook gets one error three times, '
           'the third from $third', () {
         _says(
           'A crash reporter fed from here can get one error three times: '
@@ -462,8 +452,8 @@ void main() {
         late Bench bench;
         final ran = runFaked((async) {
           if (handlerSet) {
-            Solo.unansweredHandler =
-                (solo, job, error, stackTrace) => handled.add(text(error));
+            Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+                handled.add(text(error));
           }
           bench = Bench();
           bench.enqueue<int, void>(key: 'parent', (ctx) async {
@@ -499,8 +489,8 @@ void main() {
         );
         final handled = <String>[];
         final ran = runFaked((async) {
-          Solo.unansweredHandler =
-              (solo, job, error, stackTrace) => handled.add(text(error));
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(text(error));
           _dirtyCleanup(make());
           async.flushMicrotasks();
           Solo.unansweredHandler = null;
@@ -522,8 +512,8 @@ void main() {
       final handled = <String>[];
       late answering.ProfileController profile;
       final ran = runFaked((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add(text(error));
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+            handled.add(text(error));
         profile = answering.ProfileController(ProfileApi());
         final job = profile.load()..ignoreFailure();
         async.flushMicrotasks();
@@ -557,8 +547,8 @@ void main() {
       late Bench bench;
       late Job<void> job;
       final ran = runFaked((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add(text(error));
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+            handled.add(text(error));
         bench = Bench();
         job = bench.enqueue<int, void>(
           key: 'body',
@@ -570,24 +560,21 @@ void main() {
       expect('${job.outcome}', 'Failed(Bad state: the body)');
       expect(bench.currentState, -1, reason: 'the state handler ran');
       expect(bench.heard, ['body: the body']);
-      expect(
-        bench.unanswered,
-        ['body: the body'],
-        reason: 'nobody observed the outcome',
-      );
+      expect(bench.unanswered, [
+        'body: the body',
+      ], reason: 'nobody observed the outcome');
       expect(handled, ['the body'], reason: 'the handler is asked');
       expect(ran.errors, isEmpty, reason: 'and the zone is not');
     });
 
     group('what no outcome carries:', () {
       test('the list of the page', () {
-        _says(
-          'These are the errors that no outcome carries:',
-        );
-        final section =
-            _page().split(RegExp('^(?=## )', multiLine: true)).singleWhere(
-                  (part) => part.startsWith('## Answering for an error'),
-                );
+        _says('These are the errors that no outcome carries:');
+        final section = _page()
+            .split(RegExp('^(?=## )', multiLine: true))
+            .singleWhere(
+              (part) => part.startsWith('## Answering for an error'),
+            );
         expect(
           RegExp('^- ', multiLine: true).allMatches(section),
           hasLength(6),
@@ -664,19 +651,19 @@ void main() {
         expect(ran.errors, ['disposer']);
       });
 
-      test(
-          'a ctx.onCancel callback, a whenCancelled and a whenFinished '
+      test('a ctx.onCancel callback, a whenCancelled and a whenFinished '
           'listener', () {
         late Bench bench;
         final ran = runFaked((async) {
           bench = Bench();
-          final job = bench.enqueue<int, void>(key: 'cancelled', (ctx) async {
-            ctx.onCancel(() => throw StateError('the callback'));
-            await ctx.abandonable(() => stage.start<void>('op', null));
-          })
-            ..whenCancelled((_) => throw StateError('the listener'))
-            ..whenFinished((_) => throw StateError('the end listener'))
-            ..ignoreFailure();
+          final job =
+              bench.enqueue<int, void>(key: 'cancelled', (ctx) async {
+                  ctx.onCancel(() => throw StateError('the callback'));
+                  await ctx.abandonable(() => stage.start<void>('op', null));
+                })
+                ..whenCancelled((_) => throw StateError('the listener'))
+                ..whenFinished((_) => throw StateError('the end listener'))
+                ..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
         });
@@ -688,10 +675,11 @@ void main() {
         ];
         expect(bench.heard, all);
         expect(bench.unanswered, all);
-        expect(
-          ran.errors,
-          ['the callback', 'the listener', 'the end listener'],
-        );
+        expect(ran.errors, [
+          'the callback',
+          'the listener',
+          'the end listener',
+        ]);
       });
 
       test('a state handler of enqueue', () {
@@ -770,76 +758,82 @@ void main() {
         expect(ran.errors, ['the work']);
       });
 
-      test('the failure of a branch of runAll that the group did not throw',
-          () {
-        _row(
-          'An error of a branch of `ctx.runAll` that the group did not throw',
-          '`onError`',
-          '`onUnanswered`, unless `ignoreFailure()` was called on the branch',
-        );
-        late Bench bench;
-        late Job<void> job;
-        final caught = <String>[];
-        final ran = runFaked((async) {
-          bench = Bench();
-          job = bench.enqueue<int, void>(key: 'group', (ctx) async {
-            try {
-              await ctx.runAll([
-                bench.job<int, void>(
-                  key: 'first',
-                  (child) =>
-                      child.abandonable(() => stage.start<void>('first', null)),
-                ),
-                bench.job<int, void>(
-                  key: 'second',
-                  cancellable: false,
-                  (child) => child
-                      .abandonable(() => stage.start<void>('second', null)),
-                ),
-              ]);
-            } on Object catch (error) {
-              caught.add(text(error));
-            }
+      test(
+        'the failure of a branch of runAll that the group did not throw',
+        () {
+          _row(
+            'An error of a branch of `ctx.runAll` that the group did not throw',
+            '`onError`',
+            '`onUnanswered`, unless `ignoreFailure()` was called on the branch',
+          );
+          late Bench bench;
+          late Job<void> job;
+          final caught = <String>[];
+          final ran = runFaked((async) {
+            bench = Bench();
+            job = bench.enqueue<int, void>(key: 'group', (ctx) async {
+              try {
+                await ctx.runAll([
+                  bench.job<int, void>(
+                    key: 'first',
+                    (child) => child.abandonable(
+                      () => stage.start<void>('first', null),
+                    ),
+                  ),
+                  bench.job<int, void>(
+                    key: 'second',
+                    cancellable: false,
+                    (child) => child.abandonable(
+                      () => stage.start<void>('second', null),
+                    ),
+                  ),
+                ]);
+              } on Object catch (error) {
+                caught.add(text(error));
+              }
+            });
+            async.flushMicrotasks();
+            _fail(async, 'first', StateError('first'));
+            _fail(async, 'second', StateError('second'));
           });
-          async.flushMicrotasks();
-          _fail(async, 'first', StateError('first'));
-          _fail(async, 'second', StateError('second'));
-        });
 
-        expect(caught, ['first'], reason: 'the group threw this one');
-        expect(bench.heard, ['first: first', 'second: second']);
-        expect(bench.unanswered, ['second: second']);
-        expect('${job.outcome}', 'Done(null)');
-        expect(ran.errors, ['second']);
-      });
+          expect(caught, ['first'], reason: 'the group threw this one');
+          expect(bench.heard, ['first: first', 'second: second']);
+          expect(bench.unanswered, ['second: second']);
+          expect('${job.outcome}', 'Done(null)');
+          expect(ran.errors, ['second']);
+        },
+      );
 
-      test('a failure, and a cancellation before the error leaves the body',
-          () {
-        _row(
-          'An error of the body, and the job ends `Cancelled`',
-          '`onError`',
-          '`onUnanswered`, unless `ignoreFailure()` was called on the job',
-        );
-        late Bench bench;
-        late Job<void> job;
-        Object? thrown;
-        final ran = runFaked((async) {
-          bench = Bench();
-          job = waits(bench, 'covered');
-          job.value.then<void>((_) {}, onError: (Object e) => thrown = e);
-          async.flushMicrotasks();
-          stage.fail('op', StateError('the call'));
-          // One microtask later the job has seen the failure, and the body
-          // has not thrown it yet.
-          scheduleMicrotask(job.cancel);
-        });
+      test(
+        'a failure, and a cancellation before the error leaves the body',
+        () {
+          _row(
+            'An error of the body, and the job ends `Cancelled`',
+            '`onError`',
+            '`onUnanswered`, unless `ignoreFailure()` was called on the job',
+          );
+          late Bench bench;
+          late Job<void> job;
+          Object? thrown;
+          final ran = runFaked((async) {
+            bench = Bench();
+            job = waits(bench, 'covered');
+            job.value.then<void>((_) {}, onError: (Object e) => thrown = e);
+            async.flushMicrotasks();
+            stage.fail('op', StateError('the call'));
+            // One microtask later the job has seen the failure, and the body
+            // has not thrown it yet.
+            scheduleMicrotask(job.cancel);
+          });
 
-        expect('${job.outcome}', 'Cancelled(manual)');
-        expect(thrown, same(job.outcome), reason: 'value gets the Cancelled');
-        expect(bench.heard, ['covered: the call']);
-        expect(bench.unanswered, ['covered: the call']);
-        expect(ran.errors, ['the call']);
-      });
+          expect('${job.outcome}', 'Cancelled(manual)');
+          expect(thrown, same(job.outcome), reason: 'value gets the Cancelled');
+          expect(bench.heard, ['covered: the call']);
+          expect(bench.unanswered, ['covered: the call']);
+          expect(ran.errors, ['the call']);
+        },
+      );
 
       test('a failure, and a cancellation while the job waits for a child', () {
         late Bench bench;
@@ -900,64 +894,65 @@ void main() {
 
     for (final named in [false, true]) {
       test(
-          named
-              ? 'a failure after the cancellation that the app named goes no '
+        named
+            ? 'a failure after the cancellation that the app named goes no '
                   'further than onError'
-              : 'a failure after the cancellation is answered for', () {
-        if (named) {
-          _row(
-            'An error that `Job.isCancellationError` names, on a cancelled job',
-            '`onError`',
-            'Nobody',
-          );
-          _says(
-            'A failure of a cancelled job that it names reaches `onError` '
-            'and goes no further: neither `onUnanswered` nor '
-            '`Solo.unansweredHandler` hears it',
-          );
-        } else {
-          _says(
-            'The last item of the list comes most often from the '
-            'cancellation itself. A call that `ctx.join` is still waiting '
-            'out stops at a token that `ctx.onCancel` cancelled, and throws '
-            'as it stops',
-          );
-        }
-        final handled = <String>[];
-        late Bench bench;
-        late Job<void> job;
-        final ran = runFaked((async) {
+            : 'a failure after the cancellation is answered for',
+        () {
           if (named) {
-            Job.isCancellationError = (error) => error is _CallStopped;
+            _row(
+              'An error that `Job.isCancellationError` names, '
+                  'on a cancelled job',
+              '`onError`',
+              'Nobody',
+            );
+            _says(
+              'A failure of a cancelled job that it names reaches `onError` '
+              'and goes no further: neither `onUnanswered` nor '
+              '`Solo.unansweredHandler` hears it',
+            );
+          } else {
+            _says(
+              'The last item of the list comes most often from the '
+              'cancellation itself. A call that `ctx.join` is still waiting '
+              'out stops at a token that `ctx.onCancel` cancelled, and throws '
+              'as it stops',
+            );
           }
-          Solo.unansweredHandler =
-              (solo, job, error, stackTrace) => handled.add(text(error));
-          bench = Bench();
-          job = bench.enqueue<int, void>(
-            key: 'stopped',
-            (ctx) => ctx.join(() => stage.start<void>('op', null)),
-          );
-          async.flushMicrotasks();
-          unawaited(job.cancel());
-          async.flushMicrotasks();
-          _fail(async, 'op', const _CallStopped());
-        });
+          final handled = <String>[];
+          late Bench bench;
+          late Job<void> job;
+          final ran = runFaked((async) {
+            if (named) {
+              Job.isCancellationError = (error) => error is _CallStopped;
+            }
+            Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+                handled.add(text(error));
+            bench = Bench();
+            job = bench.enqueue<int, void>(
+              key: 'stopped',
+              (ctx) => ctx.join(() => stage.start<void>('op', null)),
+            );
+            async.flushMicrotasks();
+            unawaited(job.cancel());
+            async.flushMicrotasks();
+            _fail(async, 'op', const _CallStopped());
+          });
 
-        expect('${job.outcome}', 'Cancelled(manual)');
-        expect(bench.heard, ['stopped: the call stopped']);
-        expect(
-          bench.unanswered,
-          named ? isEmpty : ['stopped: the call stopped'],
-        );
-        expect(handled, named ? isEmpty : ['the call stopped']);
-        expect(ran.errors, isEmpty, reason: 'the handler took what came');
-      });
+          expect('${job.outcome}', 'Cancelled(manual)');
+          expect(bench.heard, ['stopped: the call stopped']);
+          expect(
+            bench.unanswered,
+            named ? isEmpty : ['stopped: the call stopped'],
+          );
+          expect(handled, named ? isEmpty : ['the call stopped']);
+          expect(ran.errors, isEmpty, reason: 'the handler took what came');
+        },
+      );
     }
 
     test('the handler of the page: one for the app, given the controller', () {
-      _says(
-        'one handler for the whole application, set once at startup',
-      );
+      _says('one handler for the whole application, set once at startup');
       final served = <String>[];
       final ran = runFaked((async) {
         Solo.unansweredHandler = (solo, job, error, stackTrace) =>
@@ -971,9 +966,7 @@ void main() {
     });
 
     test('with no handler set: the zone the job was created in', () {
-      _says(
-        'With no handler set, the error goes to the creation zone',
-      );
+      _says('With no handler set, the error goes to the creation zone');
       final where = <String, List<String>>{};
       fakeAsync((async) {
         late Bench bench;
@@ -1008,8 +1001,8 @@ void main() {
       );
       final served = <String>[];
       final ran = runFaked((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => served.add('${solo.runtimeType}');
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+            served.add('${solo.runtimeType}');
         _dirtyCleanup(_AnswersInSilence());
         _dirtyCleanup(Bench());
       });
@@ -1026,8 +1019,8 @@ void main() {
       final handled = <String>[];
       late _AnswersAndCallsSuper controller;
       final ran = runFaked((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add(text(error));
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+            handled.add(text(error));
         controller = _AnswersAndCallsSuper();
         _dirtyCleanup(controller);
         async.flushMicrotasks();
@@ -1074,8 +1067,8 @@ void main() {
       final got = <String>[];
       late Bench bench;
       final ran = runFaked((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => got.add(text(error));
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+            got.add(text(error));
         bench = Bench();
         handsWorkOver(bench);
       });
@@ -1234,9 +1227,7 @@ void main() {
       });
 
       test('a load that fails just before a cancellation reaches it', () {
-        _says(
-          'The report goes out, and then the same error reaches the zone',
-        );
+        _says('The report goes out, and then the same error reaches the zone');
         late Bench bench;
         final ran = runFaked((async) {
           Solo.observer = first.Failures();
@@ -1253,25 +1244,25 @@ void main() {
         expect(ran.errors, ['no network'], reason: 'and so has the zone');
       });
 
-      test('reported from onFinish, the failure reaches the zone all the same',
-          () {
-        _says(
-          'whichever hook it is',
-        );
-        late Bench bench;
-        final ran = runFaked((async) {
-          Solo.observer = _FailuresOnFinish();
-          bench = Bench()
-            ..enqueue<int, void>(
-              key: 'load',
-              (ctx) async => throw StateError('no network'),
-            );
-        });
+      test(
+        'reported from onFinish, the failure reaches the zone all the same',
+        () {
+          _says('whichever hook it is');
+          late Bench bench;
+          final ran = runFaked((async) {
+            Solo.observer = _FailuresOnFinish();
+            bench = Bench()
+              ..enqueue<int, void>(
+                key: 'load',
+                (ctx) async => throw StateError('no network'),
+              );
+          });
 
-        expect(stage.crashes, ['no network'], reason: 'the reporter has it');
-        expect(ran.errors, ['no network'], reason: 'and so has the zone');
-        expect(bench.unanswered, ['load: no network']);
-      });
+          expect(stage.crashes, ['no network'], reason: 'the reporter has it');
+          expect(ran.errors, ['no network'], reason: 'and so has the zone');
+          expect(bench.unanswered, ['load: no network']);
+        },
+      );
     });
 
     group('observing the outcome:', () {
@@ -1293,35 +1284,41 @@ void main() {
         expect(ran.errors, isEmpty, reason: 'and nothing reaches the zone');
       });
 
-      test('done, value with the error caught, outcome read and nothing more',
-          () {
-        _says(
-          'Reading `job.done` or `job.value`, or calling '
-          '`job.ignoreFailure()`, observes the outcome',
-        );
-        _says('Reading `job.outcome` does not.');
-        final caught = <String>[];
-        String? read;
-        final ran = runFaked((async) {
-          final bench = Bench();
-          SoloJob<void> failing(String key) => bench.enqueue<int, void>(
-                key: key,
-                (ctx) async => throw StateError(key),
-              );
-          unawaited(failing('done').done);
-          failing('value').value.then<void>(
-                (_) {},
-                onError: (Object error) => caught.add(text(error)),
-              );
-          final job = failing('outcome');
-          async.flushMicrotasks();
-          read = '${job.outcome}';
-        });
+      test(
+        'done, value with the error caught, outcome read and nothing more',
+        () {
+          _says(
+            'Reading `job.done` or `job.value`, or calling '
+            '`job.ignoreFailure()`, observes the outcome',
+          );
+          _says('Reading `job.outcome` does not.');
+          final caught = <String>[];
+          String? read;
+          final ran = runFaked((async) {
+            final bench = Bench();
+            SoloJob<void> failing(String key) => bench.enqueue<int, void>(
+              key: key,
+              (ctx) async => throw StateError(key),
+            );
+            unawaited(failing('done').done);
+            failing('value').value.then<void>(
+              (_) {},
+              onError: (Object error) => caught.add(text(error)),
+            );
+            final job = failing('outcome');
+            async.flushMicrotasks();
+            read = '${job.outcome}';
+          });
 
-        expect(caught, ['value'], reason: 'the caller answers by catching it');
-        expect(read, 'Failed(Bad state: outcome)');
-        expect(ran.errors, ['outcome'], reason: 'reading outcome observes not');
-      });
+          expect(caught, [
+            'value',
+          ], reason: 'the caller answers by catching it');
+          expect(read, 'Failed(Bad state: outcome)');
+          expect(ran.errors, [
+            'outcome',
+          ], reason: 'reading outcome observes not');
+        },
+      );
 
       /// Cancels [job] one microtask after the call behind its
       /// `ctx.abandonable` fails: the job has seen the failure, and the body
@@ -1343,8 +1340,8 @@ void main() {
         late Job<String> job;
         late page.ProfileController profile;
         final ran = runFaked((async) {
-          Solo.unansweredHandler =
-              (solo, job, error, stackTrace) => handled.add(text(error));
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(text(error));
           profile = page.ProfileController(ProfileApi());
           job = profile.load();
           job.value.then<void>((_) {}, onError: (Object e) => thrown = e);
@@ -1368,8 +1365,8 @@ void main() {
         final handled = <String>[];
         late Job<String> job;
         final ran = runFaked((async) {
-          Solo.unansweredHandler =
-              (solo, job, error, stackTrace) => handled.add(text(error));
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(text(error));
           job = page.ProfileController(ProfileApi()).load()..ignoreFailure();
           async.flushMicrotasks();
           failThenCancel(async, job);
@@ -1394,16 +1391,12 @@ void main() {
         'override of `onUnanswered` or at `Solo.unansweredHandler`; with '
         'neither, in the creation zone |',
       );
-      _says(
-        'With no handler set, the error goes to the creation zone',
-      );
+      _says('With no handler set, the error goes to the creation zone');
       _says(
         'An error that `onUnanswered` takes can come after the job has '
         'completed',
       );
-      _says(
-        'It does not replace the outcome the job already has',
-      );
+      _says('It does not replace the outcome the job already has');
       late Bench bench;
       late Job<void> job;
       var heardBefore = -1;
@@ -1425,8 +1418,7 @@ void main() {
     });
 
     for (final withHandler in [true, false]) {
-      test(
-          'an abandoned call that ends in a Cancelled, '
+      test('an abandoned call that ends in a Cancelled, '
           '${withHandler ? 'a handler set' : 'no handler'}', () {
         _row(
           'A `Cancelled` from outside the body, such as an abandoned '
@@ -1440,8 +1432,8 @@ void main() {
         final ran = runFaked((async) {
           Solo.observer = watching;
           if (withHandler) {
-            Solo.unansweredHandler =
-                (solo, job, error, stackTrace) => handled.add(text(error));
+            Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+                handled.add(text(error));
           }
           bench = Bench();
           final job = waits(bench, 'abandons')..ignoreFailure();
@@ -1493,9 +1485,7 @@ void main() {
     });
 
     test('the value of a cancelled job, taken and not handled', () {
-      _says(
-        "Dart's route in the table above is not the engine's",
-      );
+      _says("Dart's route in the table above is not the engine's");
       _says(
         'An unhandled error of `job.value` or of `ctx.run(child)` is an '
         'unhandled future error under the rules of Dart, even when that '
@@ -1515,8 +1505,7 @@ void main() {
     });
 
     for (final handlerSet in [false, true]) {
-      test(
-          'the value of a failed job, taken and not handled, '
+      test('the value of a failed job, taken and not handled, '
           '${handlerSet ? 'a handler set' : 'no handler'}', () {
         _says(
           'Taking `job.value` observes the outcome: when that future goes '
@@ -1527,8 +1516,8 @@ void main() {
         late Bench bench;
         final ran = runFaked((async) {
           if (handlerSet) {
-            Solo.unansweredHandler =
-                (solo, job, error, stackTrace) => handled.add(text(error));
+            Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+                handled.add(text(error));
           }
           bench = Bench();
           final job = bench.enqueue<int, void>(
@@ -1602,8 +1591,8 @@ void main() {
         cancelled(Bench()).value.ignore();
         unawaited(
           cancelled(Bench()).value.onError<Cancelled>(
-                (error, stackTrace) => caught.add('$error'),
-              ),
+            (error, stackTrace) => caught.add('$error'),
+          ),
         );
       });
 
@@ -1626,10 +1615,12 @@ void main() {
           [for (final cell in line.split('|').skip(1).take(3)) cell.trim()],
       ];
 
-      const callbacks = 'An error of a disposer, a `ctx.onCancel` callback, a '
+      const callbacks =
+          'An error of a disposer, a `ctx.onCancel` callback, a '
           '`whenCancelled` or `whenFinished` listener, or a state handler of '
           'a job';
-      const fromOutside = 'A `Cancelled` from outside the body, such as an '
+      const fromOutside =
+          'A `Cancelled` from outside the body, such as an '
           "abandoned operation that ended in another job's cancellation";
       expect(rows, [
         [
@@ -1652,11 +1643,7 @@ void main() {
           '`onError`',
           '`onUnanswered`',
         ],
-        [
-          callbacks,
-          '`onError`',
-          '`onUnanswered`',
-        ],
+        [callbacks, '`onError`', '`onUnanswered`'],
         [
           'A `keepWhile` that throws when a change of state re-checks it',
           '`onError`',
@@ -1677,11 +1664,7 @@ void main() {
           '`onError`',
           'Nobody',
         ],
-        [
-          fromOutside,
-          '`onError`',
-          'Nobody',
-        ],
+        [fromOutside, '`onError`', 'Nobody'],
         [
           'A `Cancelled` the body lets out, such as that of a cancelled child',
           'Nobody',
@@ -1853,9 +1836,7 @@ void main() {
     });
 
     test('a child runs in the zone of the parent that runs it', () {
-      _says(
-        'the body of a child runs in the zone of the parent that runs it',
-      );
+      _says('the body of a child runs in the zone of the parent that runs it');
       final trace = <String>[];
       fakeAsync((async) {
         final controller = _Zoned(trace);
@@ -1907,14 +1888,10 @@ void main() {
           _inZone('ending', trace, gate.complete);
           async.flushMicrotasks();
         });
-        expect(
-          trace,
-          [
-            'controller in ${ahead ? 'ahead' : 'queueing'}: rule',
-            'zone created: rule',
-          ],
-          reason: 'a job ahead: $ahead',
-        );
+        expect(trace, [
+          'controller in ${ahead ? 'ahead' : 'queueing'}: rule',
+          'zone created: rule',
+        ], reason: 'a job ahead: $ahead');
       }
     });
   });
@@ -2015,33 +1992,37 @@ void main() {
           expect('${job.outcome}', 'Cancelled(manual)');
         });
 
-        test('closed while hw.setZoom is in flight, and the reset takes time',
-            () {
-          if (!asks) {
-            _says(
-              'Whoever cancelled the job waits for the reset as well',
-            );
-          }
-          var backAfterTheCall = false;
-          var resetStarted = false;
-          runFaked((async) {
-            stage.endsByItself.remove('reset');
-            final (camera, started) = start();
-            started.ignoreFailure();
-            async.flushMicrotasks();
-            endCall(async, 'open');
-            var back = false;
-            camera.close().then((_) => back = true);
-            async.flushMicrotasks();
-            endCall(async, 'setZoom');
-            backAfterTheCall = back;
-            resetStarted = stage.isRunning('reset');
-            if (resetStarted) endCall(async, 'reset');
-          });
+        test(
+          'closed while hw.setZoom is in flight, and the reset takes time',
+          () {
+            if (!asks) {
+              _says('Whoever cancelled the job waits for the reset as well');
+            }
+            var backAfterTheCall = false;
+            var resetStarted = false;
+            runFaked((async) {
+              stage.endsByItself.remove('reset');
+              final (camera, started) = start();
+              started.ignoreFailure();
+              async.flushMicrotasks();
+              endCall(async, 'open');
+              var back = false;
+              camera.close().then((_) => back = true);
+              async.flushMicrotasks();
+              endCall(async, 'setZoom');
+              backAfterTheCall = back;
+              resetStarted = stage.isRunning('reset');
+              if (resetStarted) endCall(async, 'reset');
+            });
 
-          expect(resetStarted, !asks);
-          expect(backAfterTheCall, asks, reason: 'close() waits for the reset');
-        });
+            expect(resetStarted, !asks);
+            expect(
+              backAfterTheCall,
+              asks,
+              reason: 'close() waits for the reset',
+            );
+          },
+        );
 
         test('nobody cancels, and hw.open fails', () {
           late Desk<CameraState> camera;
@@ -2166,8 +2147,7 @@ void main() {
             reachedTheRethrow = true;
             rethrow;
           }
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -2267,8 +2247,7 @@ void main() {
           }
 
           return 42;
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -2284,10 +2263,10 @@ void main() {
       );
       fakeAsync((async) {
         SoloJob<void> open(Bench bench) => bench.enqueue<int, void>(
-              key: 'open',
-              ifFailed: (state, error, stackTrace) => -1,
-              (ctx) => ctx.join(() => stage.start<void>('op', null)),
-            )..ignoreFailure();
+          key: 'open',
+          ifFailed: (state, error, stackTrace) => -1,
+          (ctx) => ctx.join(() => stage.start<void>('op', null)),
+        )..ignoreFailure();
 
         final failing = Bench();
         final failed = open(failing);
@@ -2329,11 +2308,10 @@ void main() {
       Desk<ProfileState> profile,
       FakeAsync async,
       List<String> events,
-    ) =>
-        (profile as OpenSolo<ProfileState>).enqueue<ProfileState, void>(
-          key: 'next',
-          (ctx) async => events.add('next ran at ${async.elapsed.inSeconds} s'),
-        );
+    ) => (profile as OpenSolo<ProfileState>).enqueue<ProfileState, void>(
+      key: 'next',
+      (ctx) async => events.add('next ran at ${async.elapsed.inSeconds} s'),
+    );
 
     /// Notes in [events] when [job] ends.
     void noteEnd(SoloJob<String> job, FakeAsync async, List<String> events) =>
@@ -2399,8 +2377,10 @@ void main() {
 
         test('closed while the first call is in flight', () {
           if (!pauses) {
-            _says('The next job waits for a body that has nothing left to '
-                'do, and so does `close()`');
+            _says(
+              'The next job waits for a body that has nothing left to '
+              'do, and so does `close()`',
+            );
           }
           final events = <String>[];
           final ran = runFaked((async) {
@@ -2409,8 +2389,8 @@ void main() {
             async.flushMicrotasks();
             unawaited(
               profile.close().then(
-                    (_) => events.add('closed at ${async.elapsed.inSeconds} s'),
-                  ),
+                (_) => events.add('closed at ${async.elapsed.inSeconds} s'),
+              ),
             );
             async.elapse(const Duration(seconds: 5));
           });
@@ -2445,18 +2425,17 @@ void main() {
             }
           });
 
-          expect(
-            calling,
-            [false, true, false, true],
-            reason: 'the second call a second later, the third two more',
-          );
+          expect(calling, [
+            false,
+            true,
+            false,
+            true,
+          ], reason: 'the second call a second later, the third two more');
           expect('${job.outcome}', 'Failed(Bad state: no network 3)');
           expect('${profile.currentState}', 'Failure(Bad state: no network 3)');
-          expect(
-            profile.heard,
-            ['load: no network 3'],
-            reason: "the failures the catch took are nobody else's",
-          );
+          expect(profile.heard, [
+            'load: no network 3',
+          ], reason: "the failures the catch took are nobody else's");
           expect(ran.errors, isEmpty);
         });
 
@@ -2502,22 +2481,20 @@ void main() {
         'job at once. It still needs nothing for the cancellation',
       );
       // Not on the page: the loop of the page with the narrower clause.
-      SoloJob<String> load(Bench bench) => bench.enqueue<int, String>(
-            key: 'load',
-            (ctx) async {
-              for (var attempt = 1;; attempt++) {
-                final String name;
-                try {
-                  name = await ctx.abandonable(ProfileApi().fetchName);
-                } on SocketException {
-                  if (attempt == 3) rethrow;
-                  await ctx.pause(Duration(seconds: attempt));
-                  continue;
-                }
-                return name;
+      SoloJob<String> load(Bench bench) =>
+          bench.enqueue<int, String>(key: 'load', (ctx) async {
+            for (var attempt = 1; ; attempt++) {
+              final String name;
+              try {
+                name = await ctx.abandonable(ProfileApi().fetchName);
+              } on SocketException {
+                if (attempt == 3) rethrow;
+                await ctx.pause(Duration(seconds: attempt));
+                continue;
               }
-            },
-          )..ignoreFailure();
+              return name;
+            }
+          })..ignoreFailure();
 
       final ended = <String>[];
       late SoloJob<String> bug;
@@ -2636,7 +2613,9 @@ void main() {
       page.ProfileController retry(FakeAsync async, List<String> events) {
         final profile = page.ProfileController(ProfileApi());
         unawaited(
-          page.loadWithRetries(profile).then(
+          page
+              .loadWithRetries(profile)
+              .then(
                 (outcome) => events.add(
                   'returned $outcome at ${async.elapsed.inMilliseconds} ms',
                 ),
@@ -2674,10 +2653,10 @@ void main() {
           events.add('pending ${profile.pending}');
           unawaited(
             profile.load().done.then(
-                  (outcome) => events.add(
-                    'sent: $outcome at ${async.elapsed.inMilliseconds} ms',
-                  ),
-                ),
+              (outcome) => events.add(
+                'sent: $outcome at ${async.elapsed.inMilliseconds} ms',
+              ),
+            ),
           );
           async.flushMicrotasks();
           events.add('calling ${stage.isRunning('fetchName')}');
@@ -2685,10 +2664,8 @@ void main() {
           endCall(async, 'fetchName');
           unawaited(
             profile.close().then(
-                  (_) => events.add(
-                    'closed at ${async.elapsed.inMilliseconds} ms',
-                  ),
-                ),
+              (_) => events.add('closed at ${async.elapsed.inMilliseconds} ms'),
+            ),
           );
           async.elapse(const Duration(seconds: 1));
         });
@@ -2703,8 +2680,7 @@ void main() {
         expect(ran.errors, isEmpty);
       });
 
-      test(
-          'two failures, then the name: Failure between the attempts, and '
+      test('two failures, then the name: Failure between the attempts, and '
           'the reporter hears each failure', () {
         _says(
           'Between the attempts the state is the `Failure` of `ifFailed`, and '
@@ -2732,11 +2708,12 @@ void main() {
           endCall(async, 'fetchName');
         });
 
-        expect(
-          calling,
-          [false, true, false, true],
-          reason: 'the second call a second later, the third two more',
-        );
+        expect(calling, [
+          false,
+          true,
+          false,
+          true,
+        ], reason: 'the second call a second later, the third two more');
         expect(states, [
           'Failure(Bad state: no network)',
           'Loading',
@@ -2809,38 +2786,40 @@ void main() {
         expect(ran.errors, isEmpty);
       });
 
-      test('the timer of the gap outlives a closed profile; a pause does not',
-          () {
-        _says(
-          "The gap itself is the caller's to stop. Until it does, the timer "
-          'outlives a closed profile',
-        );
-        _says('where the loop in the body passes');
-        late int afterGap;
-        late int afterPause;
-        final ran = runFaked((async) {
-          final profile = retry(async, <String>[]);
-          _fail(async, 'fetchName', StateError('no network'));
-          async.elapse(const Duration(milliseconds: 300));
-          unawaited(profile.close());
-          async.flushMicrotasks();
-          afterGap = async.pendingTimers.length;
-          async.elapse(const Duration(seconds: 1));
+      test(
+        'the timer of the gap outlives a closed profile; a pause does not',
+        () {
+          _says(
+            "The gap itself is the caller's to stop. Until it does, the timer "
+            'outlives a closed profile',
+          );
+          _says('where the loop in the body passes');
+          late int afterGap;
+          late int afterPause;
+          final ran = runFaked((async) {
+            final profile = retry(async, <String>[]);
+            _fail(async, 'fetchName', StateError('no network'));
+            async.elapse(const Duration(milliseconds: 300));
+            unawaited(profile.close());
+            async.flushMicrotasks();
+            afterGap = async.pendingTimers.length;
+            async.elapse(const Duration(seconds: 1));
 
-          final inBody = page.RetryingProfile(ProfileApi());
-          inBody.load().ignoreFailure();
-          async.flushMicrotasks();
-          _fail(async, 'fetchName', StateError('no network'));
-          async.elapse(const Duration(milliseconds: 300));
-          unawaited(inBody.close());
-          async.flushMicrotasks();
-          afterPause = async.pendingTimers.length;
-        });
+            final inBody = page.RetryingProfile(ProfileApi());
+            inBody.load().ignoreFailure();
+            async.flushMicrotasks();
+            _fail(async, 'fetchName', StateError('no network'));
+            async.elapse(const Duration(milliseconds: 300));
+            unawaited(inBody.close());
+            async.flushMicrotasks();
+            afterPause = async.pendingTimers.length;
+          });
 
-        expect(afterGap, 1);
-        expect(afterPause, 0);
-        expect(ran.errors, isEmpty);
-      });
+          expect(afterGap, 1);
+          expect(afterPause, 0);
+          expect(ran.errors, isEmpty);
+        },
+      );
 
       test('a load sent in the gap does not stop the loop', () {
         _says(
@@ -3015,10 +2994,10 @@ void main() {
 
     group('the trace of a cancellation by the rules:', () {
       SoloJob<void> kept(_Traced traced) => traced.enqueue<int, void>(
-            key: 'kept',
-            keepWhile: (state) => state < 5,
-            (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
-          )..ignoreFailure();
+        key: 'kept',
+        keepWhile: (state) => state < 5,
+        (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+      )..ignoreFailure();
 
       Cancelled outcomeOf(Job<void> job) => job.outcome! as Cancelled;
 
@@ -3036,16 +3015,13 @@ void main() {
           async.flushMicrotasks();
 
           expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
-          expect(
-            _frames(outcomeOf(job).stackTrace).take(5),
-            [
-              'Solo._reevaluate',
-              'Solo._setState',
-              'Solo.externalSetState',
-              'OpenSolo.externalSetState',
-              '_Traced.setsTooBig',
-            ],
-          );
+          expect(_frames(outcomeOf(job).stackTrace).take(5), [
+            'Solo._reevaluate',
+            'Solo._setState',
+            'Solo.externalSetState',
+            'OpenSolo.externalSetState',
+            '_Traced.setsTooBig',
+          ]);
         });
       });
 
@@ -3067,15 +3043,12 @@ void main() {
           async.flushMicrotasks();
 
           expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
-          expect(
-            _frames(outcomeOf(job).stackTrace).take(4),
-            [
-              'Solo._reevaluate',
-              'Solo._setState',
-              '_SoloContext.emit',
-              '_Traced.emitsTooBig',
-            ],
-          );
+          expect(_frames(outcomeOf(job).stackTrace).take(4), [
+            'Solo._reevaluate',
+            'Solo._setState',
+            '_SoloContext.emit',
+            '_Traced.emitsTooBig',
+          ]);
         });
       });
 
@@ -3121,11 +3094,9 @@ void main() {
             async.flushTimers();
 
             expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
-            expect(
-              stage.trace,
-              ['the body went on'],
-              reason: 'the call of the waiting method never started',
-            );
+            expect(stage.trace, [
+              'the body went on',
+            ], reason: 'the call of the waiting method never started');
             final frames = _frames(outcomeOf(job).stackTrace);
             expect(frames, contains(member));
             expect(frames, isNot(contains('_Traced.emitsTooBig')));
@@ -3283,10 +3254,7 @@ void main() {
 
         expect(cancelledByIt, isFalse);
         expect(stage.trace.last, 'the body went on');
-        expect(
-          bench.heard,
-          ['reevaluated: the rule', 'reevaluated: the body'],
-        );
+        expect(bench.heard, ['reevaluated: the rule', 'reevaluated: the body']);
         expect(bench.unanswered, ['reevaluated: the rule']);
         expect('${job.outcome}', 'Failed(Bad state: the body)');
         expect(ran.errors, ['the rule']);
@@ -3330,35 +3298,37 @@ void main() {
         expect(bench.currentState, 99);
       });
 
-      test('a job with a state handler, re-evaluated after its body has ended',
-          () {
-        _says(
-          'A job with a state handler is re-evaluated after its body has '
-          'ended as well',
-        );
-        late Bench bench;
-        final ran = runFaked((async) {
-          bench = Bench();
-          bench.enqueue<int, void>(
-            key: 'ended',
-            keepWhile: (state) =>
-                state == 0 ? true : throw StateError('the rule'),
-            ifFailed: (state, error, stackTrace) => 99,
-            (ctx) async {
-              ctx.onDispose(() => stage.start<void>('release', null));
-              throw StateError('the body');
-            },
-          ).ignoreFailure();
-          async.flushMicrotasks();
-          bench.reflect(1);
-          endCall(async, 'release');
-        });
+      test(
+        'a job with a state handler, re-evaluated after its body has ended',
+        () {
+          _says(
+            'A job with a state handler is re-evaluated after its body has '
+            'ended as well',
+          );
+          late Bench bench;
+          final ran = runFaked((async) {
+            bench = Bench();
+            bench.enqueue<int, void>(
+              key: 'ended',
+              keepWhile: (state) =>
+                  state == 0 ? true : throw StateError('the rule'),
+              ifFailed: (state, error, stackTrace) => 99,
+              (ctx) async {
+                ctx.onDispose(() => stage.start<void>('release', null));
+                throw StateError('the body');
+              },
+            ).ignoreFailure();
+            async.flushMicrotasks();
+            bench.reflect(1);
+            endCall(async, 'release');
+          });
 
-        expect(bench.heard, ['ended: the body', 'ended: the rule']);
-        expect(bench.unanswered, ['ended: the rule']);
-        expect(bench.currentState, 1, reason: 'the handler is disabled');
-        expect(ran.errors, ['the rule']);
-      });
+          expect(bench.heard, ['ended: the body', 'ended: the rule']);
+          expect(bench.unanswered, ['ended: the rule']);
+          expect(bench.currentState, 1, reason: 'the handler is disabled');
+          expect(ran.errors, ['the rule']);
+        },
+      );
 
       test('a job without one, re-evaluated after its body has ended', () {
         late Bench bench;
@@ -3427,8 +3397,8 @@ void main() {
         late first.BroadCamera camera;
         late Job<void> job;
         final ran = runFaked((async) {
-          Solo.unansweredHandler =
-              (solo, job, error, stackTrace) => handled.add(text(error));
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(text(error));
           camera = first.BroadCamera(Hardware());
           job = camera.zoomTo(2);
           async.flushMicrotasks();
@@ -3506,8 +3476,8 @@ void main() {
       test('the same with a handler set', () {
         final handled = <String>[];
         final ran = runFaked((async) {
-          Solo.unansweredHandler =
-              (solo, job, error, stackTrace) => handled.add(text(error));
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(text(error));
           page.Camera(Hardware()).zoomTo(2, page.sendZoom);
           async.flushMicrotasks();
           _fail(async, 'send', StateError('analytics offline'));
@@ -3588,12 +3558,12 @@ void main() {
         );
         fakeAsync((async) {
           final camera = page.Camera(Hardware());
-          final job =
-              camera.enqueue<CameraState, void>(key: 'zoom', (ctx) async {
+          final job = camera.enqueue<CameraState, void>(key: 'zoom', (
+            ctx,
+          ) async {
             page.sendZoom(ctx, 2);
             await ctx.abandonable(() => stage.start<void>('op', null));
-          })
-                ..ignoreFailure();
+          })..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
           var back = false;
@@ -3659,7 +3629,7 @@ void main() {
           'ctx.each': 'Job(work) cannot follow a stream inside unattended work',
           'ctx.uncancellable':
               'Job(work) cannot run an uncancellable action inside unattended '
-                  'work',
+              'work',
         });
         expect(let, ['ctx.abandonable', 'ctx.join', 'ctx.pause', 'ctx.emit']);
         expect(bench.currentState, 1);
@@ -3715,12 +3685,12 @@ void main() {
           endCall(async, 'op');
           final afterCompletion = emit(2);
 
-          final cancelled =
-              bench.enqueue<int, void>(key: 'cancelled', (ctx) async {
+          final cancelled = bench.enqueue<int, void>(key: 'cancelled', (
+            ctx,
+          ) async {
             captured = ctx;
             await stage.start<void>('op', null);
-          })
-                ..ignoreFailure();
+          })..ignoreFailure();
           async.flushMicrotasks();
           unawaited(cancelled.cancel());
           async.flushMicrotasks();
@@ -3787,17 +3757,15 @@ void main() {
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom(
-          'doc/errors.md',
-          answers,
-          alsoIn: [answer, attempts],
-        ),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom('doc/errors.md', answers, alsoIn: [answer, attempts]),
+          isEmpty,
+        );
+      },
+    );
 
     test('every heading with code under it is held to a file', () {
       final withCode = [

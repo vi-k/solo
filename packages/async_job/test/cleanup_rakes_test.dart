@@ -42,10 +42,10 @@ DeferredJob<Database> nextLine(ChildJob<Database> connect) {
 
 /// `connect` as the page writes it, but refusing the cascade.
 DeferredJob<Database> stubborn() => Job.deferred<Database>(
-      key: 'connect',
-      cancellable: false,
-      (ctx) => ctx.abandonable(Database.open, discard: (db) => db.close()),
-    );
+  key: 'connect',
+  cancellable: false,
+  (ctx) => ctx.abandonable(Database.open, discard: (db) => db.close()),
+);
 
 /// The answer of "A value the job keeps back" without its `disown`.
 Future<Database?> closingWithoutDisown(JobContext ctx) async {
@@ -67,7 +67,8 @@ Future<Database> open([String name = 'database']) async {
 }
 
 /// The line of the debug channel for the first attempt of keeping back.
-const keptBackLine = 'Job() ended Done(null) without the value of 1 '
+const keptBackLine =
+    'Job() ended Done(null) without the value of 1 '
     'conditional cleanup (database): unless it is inside the result, nothing '
     'will dispose of it';
 
@@ -76,40 +77,23 @@ const pages = ['doc/cleanup.md', 'doc/cleanup-rules.md'];
 
 /// What each `text` block of the pages says, in the order of the pages.
 const quoted = [
-  [
-    'lock acquired',
-    'database opened',
-    'outcome: Done(database)',
-  ],
+  ['lock acquired', 'database opened', 'outcome: Done(database)'],
   [
     'lock acquired',
     'database opened',
     'lock released',
     'outcome: Done(database)',
   ],
-  [
-    'database opened',
-    'outcome: Done(null)',
-  ],
+  ['database opened', 'outcome: Done(null)'],
   [keptBackLine],
-  [
-    'database opened',
-    'database closed',
-    'outcome: Done(null)',
-  ],
+  ['database opened', 'database closed', 'outcome: Done(null)'],
   [
     'database opened',
     'database migration failed',
     'outcome: Failed(MigrationFailed)',
   ],
-  [
-    'Job(connect) handed its value over: 1 conditional cleanup dropped',
-  ],
-  [
-    'database opened',
-    'cancel',
-    'outcome: Cancelled(manual)',
-  ],
+  ['Job(connect) handed its value over: 1 conditional cleanup dropped'],
+  ['database opened', 'cancel', 'outcome: Cancelled(manual)'],
   [
     'database opened',
     'cancel',
@@ -123,12 +107,7 @@ const quoted = [
     'cursor closed',
     'outcome: Cancelled(manual)',
   ],
-  [
-    'cancel',
-    'cursor read',
-    'cursor closed',
-    'outcome: Cancelled(manual)',
-  ],
+  ['cancel', 'cursor read', 'cursor closed', 'outcome: Cancelled(manual)'],
   [
     'cancel',
     'database opened',
@@ -181,8 +160,9 @@ Job<Database> cancelledOnceConnected(
 /// `StateError` in a callback of the cleanup stack, as its sentence lists
 /// them.
 Set<String> bodyMembers() {
-  final page =
-      File('doc/cleanup.md').readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+  final page = File(
+    'doc/cleanup.md',
+  ).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
   final sentence = RegExp(
     r"((?:`\w+`(?:, | and ))+`\w+`) are the body's and throw `StateError`",
   ).firstMatch(page);
@@ -197,23 +177,23 @@ Set<String> bodyMembers() {
 
 /// Every member of [ctx], each called the way a callback would call it.
 Map<String, FutureOr<Object?> Function()> contextMembers(JobContext ctx) => {
-      'check': ctx.check,
-      'abandonable': () => ctx.abandonable(() async => 1),
-      'join': () => ctx.join(() async => 1),
-      'pause': ctx.pause,
-      'uncancellable': () => ctx.uncancellable(() async => 1),
-      'run': () => ctx.run(Job.deferred<int>((ctx) async => 1)),
-      'start': () => ctx.start(Job.deferred<int>((ctx) async => 1)),
-      'runAll': () => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),
-      'each': () => ctx.each(Stream.value(1), (ctx, event) {}).done,
-      'onCancel': () => ctx.onCancel(() {}),
-      'onDispose': () => ctx.onDispose(() {}),
-      'onDiscard': () => ctx.onDiscard(() {}),
-      'disown': () => ctx.disown(Object()),
-      'unattended': () => ctx.unattended(() {}),
-      'log': () => ctx.log('cleanup'),
-      'job': () => ctx.job,
-    };
+  'check': ctx.check,
+  'abandonable': () => ctx.abandonable(() async => 1),
+  'join': () => ctx.join(() async => 1),
+  'pause': ctx.pause,
+  'uncancellable': () => ctx.uncancellable(() async => 1),
+  'run': () => ctx.run(Job.deferred<int>((ctx) async => 1)),
+  'start': () => ctx.start(Job.deferred<int>((ctx) async => 1)),
+  'runAll': () => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),
+  'each': () => ctx.each(Stream.value(1), (ctx, event) {}).done,
+  'onCancel': () => ctx.onCancel(() {}),
+  'onDispose': () => ctx.onDispose(() {}),
+  'onDiscard': () => ctx.onDiscard(() {}),
+  'disown': () => ctx.disown(Object()),
+  'unattended': () => ctx.unattended(() {}),
+  'log': () => ctx.log('cleanup'),
+  'job': () => ctx.job,
+};
 
 /// A value with an equality of its own: two built from one name are equal,
 /// and only one of them is the value a call handed over.
@@ -346,28 +326,30 @@ void main() {
       });
     });
 
-    test('two branches that share the lock hang the group, cancelled or not',
-        () {
-      fakeAsync((async) {
-        stage.exclusive = true;
-        final group = Job<List<Database>>(
-          (ctx) => ctx.runAll([
-            Job.deferred<Database>(page.keeping),
-            Job.deferred<Database>(page.keeping),
-          ]),
-        )..ignoreFailure();
-        async.flushTimers();
-        expect(group.isFinished, isFalse);
-        expect(trace, ['lock acquired', 'lock waits', 'database opened']);
+    test(
+      'two branches that share the lock hang the group, cancelled or not',
+      () {
+        fakeAsync((async) {
+          stage.exclusive = true;
+          final group = Job<List<Database>>(
+            (ctx) => ctx.runAll([
+              Job.deferred<Database>(page.keeping),
+              Job.deferred<Database>(page.keeping),
+            ]),
+          )..ignoreFailure();
+          async.flushTimers();
+          expect(group.isFinished, isFalse);
+          expect(trace, ['lock acquired', 'lock waits', 'database opened']);
 
-        // The waiting branch is inside `join`, which waits its action
-        // out, and the one holding the lock unwinds only after it.
-        group.cancel().ignore();
-        async.flushTimers();
-        expect(group.isFinished, isFalse);
-        expect(trace, isNot(contains('lock released')));
-      });
-    });
+          // The waiting branch is inside `join`, which waits its action
+          // out, and the one holding the lock unwinds only after it.
+          group.cancel().ignore();
+          async.flushTimers();
+          expect(group.isFinished, isFalse);
+          expect(trace, isNot(contains('lock released')));
+        });
+      },
+    );
   });
 
   group('A value the job keeps back', () {
@@ -430,8 +412,7 @@ void main() {
   });
 
   group('A resource that travels', () {
-    test(
-        'a checkpoint of run that throws closes the value before the body '
+    test('a checkpoint of run that throws closes the value before the body '
         'hears it', () {
       stage.closeTake = 10;
       fakeAsync((async) {
@@ -484,16 +465,18 @@ void main() {
       );
     });
 
-    test('the channel names the hand-over when the receiver registered too',
-        () {
-      final printed = <String>[];
-      Job.debug = printed.add;
-      fakeAsync((async) {
-        page.onArrival(first.connecting()).start();
-        async.flushTimers();
-      });
-      expect(printed, containsAll(quoted[6]));
-    });
+    test(
+      'the channel names the hand-over when the receiver registered too',
+      () {
+        final printed = <String>[];
+        Job.debug = printed.add;
+        fakeAsync((async) {
+          page.onArrival(first.connecting()).start();
+          async.flushTimers();
+        });
+        expect(printed, containsAll(quoted[6]));
+      },
+    );
 
     test('the second attempt closes the database when migration fails', () {
       fakeAsync((async) {
@@ -521,8 +504,7 @@ void main() {
       ('the second attempt', nextLine, false),
       ('registering on arrival', page.onArrival, true),
     ]) {
-      test(
-          '$name, cancelled between the Done of connect and the checkpoint '
+      test('$name, cancelled between the Done of connect and the checkpoint '
           'of run', () {
         fakeAsync((async) {
           final connect = first.connecting();
@@ -555,21 +537,23 @@ void main() {
         });
       });
 
-      test('$name, a connect with cancellable: false, cancelled while it opens',
-          () {
-        fakeAsync((async) {
-          final connect = stubborn();
-          final ready = version(connect)
-            ..ignoreFailure()
-            ..start();
-          async.elapse(const Duration(milliseconds: 5));
-          ready.cancel().ignore();
-          async.flushTimers();
-          expect(connect.outcome, isA<Done<Database>>());
-          expect(ready.outcome, isA<Cancelled>());
-          expect(trace, ['database opened', if (closes) 'database closed']);
-        });
-      });
+      test(
+        '$name, a connect with cancellable: false, cancelled while it opens',
+        () {
+          fakeAsync((async) {
+            final connect = stubborn();
+            final ready = version(connect)
+              ..ignoreFailure()
+              ..start();
+            async.elapse(const Duration(milliseconds: 5));
+            ready.cancel().ignore();
+            async.flushTimers();
+            expect(connect.outcome, isA<Done<Database>>());
+            expect(ready.outcome, isA<Cancelled>());
+            expect(trace, ['database opened', if (closes) 'database closed']);
+          });
+        },
+      );
     }
 
     test('registering on arrival closes the database when migration fails', () {
@@ -627,15 +611,17 @@ void main() {
       });
     });
 
-    test('the first attempt closes the cursor once when nothing cancels it',
-        () {
-      fakeAsync((async) {
-        final job = Job<void>(first.unregisteringAfter)..ignoreFailure();
-        async.flushTimers();
-        expect(job.outcome, isA<Done<void>>());
-        expect(stage.cursor.closes, 1);
-      });
-    });
+    test(
+      'the first attempt closes the cursor once when nothing cancels it',
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(first.unregisteringAfter)..ignoreFailure();
+          async.flushTimers();
+          expect(job.outcome, isA<Done<void>>());
+          expect(stage.cursor.closes, 1);
+        });
+      },
+    );
 
     test('the first attempt closes the cursor twice on a cancellation', () {
       fakeAsync((async) {
@@ -649,17 +635,19 @@ void main() {
       });
     });
 
-    test('unregistering inside the action closes it once on a cancellation',
-        () {
-      fakeAsync((async) {
-        final job = Job<void>(page.unregisteringInside)..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 5));
-        job.cancel().ignore();
-        async.flushTimers();
-        expect(job.outcome, isA<Cancelled>());
-        expect(trace, ['cursor read', 'cursor closed']);
-      });
-    });
+    test(
+      'unregistering inside the action closes it once on a cancellation',
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(page.unregisteringInside)..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.flushTimers();
+          expect(job.outcome, isA<Cancelled>());
+          expect(trace, ['cursor read', 'cursor closed']);
+        });
+      },
+    );
 
     test('a hand-over in one section is not rolled back on a cancellation', () {
       fakeAsync((async) {
@@ -682,36 +670,38 @@ void main() {
       });
     });
 
-    fakeAsyncTest('the unregister function is safe twice and after cleanup',
-        () async {
-      late void Function() removeDisposer;
-      final job = Job<void>(key: 'twice', (ctx) async {
-        removeDisposer = ctx.onDispose(() async => trace.add('disposer ran'));
+    fakeAsyncTest(
+      'the unregister function is safe twice and after cleanup',
+      () async {
+        late void Function() removeDisposer;
+        final job = Job<void>(key: 'twice', (ctx) async {
+          removeDisposer = ctx.onDispose(() async => trace.add('disposer ran'));
+          removeDisposer();
+          removeDisposer();
+        })..ignoreFailure();
+        await job.done;
+        removeDisposer();
+
+        expect(job.outcome, isA<Done<void>>());
+        expect(trace, isEmpty);
+      },
+    );
+
+    fakeAsyncTest(
+      'the unregister function is safe after its callback ran',
+      () async {
+        late void Function() removeDisposer;
+        final job = Job<void>(key: 'ran', (ctx) async {
+          removeDisposer = ctx.onDispose(() async => trace.add('disposer ran'));
+        })..ignoreFailure();
+        await job.done;
         removeDisposer();
         removeDisposer();
-      })
-        ..ignoreFailure();
-      await job.done;
-      removeDisposer();
 
-      expect(job.outcome, isA<Done<void>>());
-      expect(trace, isEmpty);
-    });
-
-    fakeAsyncTest('the unregister function is safe after its callback ran',
-        () async {
-      late void Function() removeDisposer;
-      final job = Job<void>(key: 'ran', (ctx) async {
-        removeDisposer = ctx.onDispose(() async => trace.add('disposer ran'));
-      })
-        ..ignoreFailure();
-      await job.done;
-      removeDisposer();
-      removeDisposer();
-
-      expect(job.outcome, isA<Done<void>>());
-      expect(trace, ['disposer ran']);
-    });
+        expect(job.outcome, isA<Done<void>>());
+        expect(trace, ['disposer ran']);
+      },
+    );
 
     fakeAsyncTest('disown looks the value up by identity', () async {
       final answers = <bool>[];
@@ -727,15 +717,15 @@ void main() {
           ..add(ctx.disown(equal))
           ..add(ctx.disown(address))
           ..add(ctx.disown(address));
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       await job.done;
 
-      expect(
-        answers,
-        <bool>[true, false, true, false],
-        reason: 'an equal value is not the one the call handed over',
-      );
+      expect(answers, <bool>[
+        true,
+        false,
+        true,
+        false,
+      ], reason: 'an equal value is not the one the call handed over');
       expect(trace, isEmpty);
     });
 
@@ -749,14 +739,14 @@ void main() {
         answers
           ..add(ctx.disown(8080))
           ..add(ctx.disown(port));
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       await job.done;
 
       expect(
         answers,
         <bool>[true, false],
-        reason: 'a number has no identity apart from its value, as the '
+        reason:
+            'a number has no identity apart from its value, as the '
             'dartdoc of disown says',
       );
       expect(trace, isEmpty);
@@ -776,11 +766,10 @@ void main() {
                   trace.add('child finished');
                 }),
               )
-              .onError((_, __) {}),
+              .onError((_, _) {}),
         );
         await pump();
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       await pump();
       await gate.release();
       await job.done;
@@ -791,21 +780,22 @@ void main() {
       );
     });
 
-    fakeAsyncTest('callbacks run in reverse order and each is awaited',
-        () async {
-      final job = Job<void>(key: 'order', (ctx) async {
-        ctx
-          ..onDispose(() async {
-            await pump();
-            trace.add('first');
-          })
-          ..onDispose(() async => trace.add('second'));
-      })
-        ..ignoreFailure();
-      await job.done;
+    fakeAsyncTest(
+      'callbacks run in reverse order and each is awaited',
+      () async {
+        final job = Job<void>(key: 'order', (ctx) async {
+          ctx
+            ..onDispose(() async {
+              await pump();
+              trace.add('first');
+            })
+            ..onDispose(() async => trace.add('second'));
+        })..ignoreFailure();
+        await job.done;
 
-      expect(trace, <String>['second', 'first']);
-    });
+        expect(trace, <String>['second', 'first']);
+      },
+    );
 
     fakeAsyncTest('an error in one callback leaves the rest running', () async {
       final errors = <Object>[];
@@ -827,93 +817,98 @@ void main() {
       expect(job.outcome, isA<Done<void>>());
     });
 
-    fakeAsyncTest('a cancellation into the unwinding stops no callback',
-        () async {
-      final gate = Gate();
-      final job = Job<void>(key: 'unwind', (ctx) async {
-        ctx
-          ..onDispose(() async => trace.add('under it'))
-          ..onDispose(() async {
-            trace.add('waiting');
-            await gate.wait();
-            trace.add('released');
-          });
-      })
-        ..ignoreFailure();
-      await pump();
-      // It lands while the first callback is awaiting its resource.
-      job.cancel().ignore();
-      await gate.release();
-      await job.done;
+    fakeAsyncTest(
+      'a cancellation into the unwinding stops no callback',
+      () async {
+        final gate = Gate();
+        final job = Job<void>(key: 'unwind', (ctx) async {
+          ctx
+            ..onDispose(() async => trace.add('under it'))
+            ..onDispose(() async {
+              trace.add('waiting');
+              await gate.wait();
+              trace.add('released');
+            });
+        })..ignoreFailure();
+        await pump();
+        // It lands while the first callback is awaiting its resource.
+        job.cancel().ignore();
+        await gate.release();
+        await job.done;
 
-      expect(trace, <String>['waiting', 'released', 'under it']);
-    });
+        expect(trace, <String>['waiting', 'released', 'under it']);
+      },
+    );
 
     // Every member of the context is called, so a list on the page that
     // leaves one out, or names one that works, turns this red.
     fakeAsyncTest(
-        'the members the page names, and no others, throw StateError in a '
-        'callback', () async {
-      final caught = <String, Object>{};
-      final job = Job<void>(key: 'late', (ctx) async {
-        ctx.onDispose(() async {
-          for (final MapEntry(key: name, value: call)
-              in contextMembers(ctx).entries) {
-            try {
-              await call();
-            } on Object catch (error) {
-              caught[name] = error;
+      'the members the page names, and no others, throw StateError in a '
+      'callback',
+      () async {
+        final caught = <String, Object>{};
+        final job = Job<void>(key: 'late', (ctx) async {
+          ctx.onDispose(() async {
+            for (final MapEntry(key: name, value: call) in contextMembers(
+              ctx,
+            ).entries) {
+              try {
+                await call();
+              } on Object catch (error) {
+                caught[name] = error;
+              }
             }
-          }
-        });
-      })
-        ..ignoreFailure();
-      await job.done;
+          });
+        })..ignoreFailure();
+        await job.done;
 
-      expect(caught.keys.toSet(), bodyMembers());
-      expect(caught.values, everyElement(isStateError));
-    });
+        expect(caught.keys.toSet(), bodyMembers());
+        expect(caught.values, everyElement(isStateError));
+      },
+    );
 
     // The one exception the page makes: on a cancelled job `check` throws
     // the job's cancellation, so an action the body walked away from stops
     // on what it waits for. The other members of the body still refuse.
     fakeAsyncTest(
-        'on a cancelled job check throws its Cancelled in a callback, and the '
-        'other members of the body still throw StateError', () async {
-      final caught = <String, Object>{};
-      final job = Job<void>(key: 'late', (ctx) async {
-        ctx.onDispose(() async {
-          for (final MapEntry(key: name, value: call)
-              in contextMembers(ctx).entries) {
-            try {
-              await call();
-            } on Object catch (error) {
-              caught[name] = error;
+      'on a cancelled job check throws its Cancelled in a callback, and the '
+      'other members of the body still throw StateError',
+      () async {
+        final caught = <String, Object>{};
+        final job = Job<void>(key: 'late', (ctx) async {
+          ctx.onDispose(() async {
+            for (final MapEntry(key: name, value: call) in contextMembers(
+              ctx,
+            ).entries) {
+              try {
+                await call();
+              } on Object catch (error) {
+                caught[name] = error;
+              }
             }
-          }
-        });
-        await ctx.pause(const Duration(seconds: 1));
-      })
-        ..ignoreFailure();
-      await delay(1);
-      job.cancel().ignore();
-      await job.done;
+          });
+          await ctx.pause(const Duration(seconds: 1));
+        })..ignoreFailure();
+        await delay(1);
+        job.cancel().ignore();
+        await job.done;
 
-      expect(caught.keys.toSet(), bodyMembers());
-      expect(caught.remove('check'), same(job.outcome));
-      expect(caught.values, everyElement(isStateError));
-      expect(
-        File('doc/cleanup.md')
-            .readAsStringSync()
-            .replaceAll(RegExp(r'\s+'), ' '),
-        allOf(
-          contains(
-            "On a cancelled job `check` throws the job's `Cancelled` instead",
+        expect(caught.keys.toSet(), bodyMembers());
+        expect(caught.remove('check'), same(job.outcome));
+        expect(caught.values, everyElement(isStateError));
+        expect(
+          File(
+            'doc/cleanup.md',
+          ).readAsStringSync().replaceAll(RegExp(r'\s+'), ' '),
+          allOf(
+            contains(
+              "On a cancelled job `check` throws the job's `Cancelled` instead",
+            ),
+            contains('a `Cancelled` stops at `onError`'),
           ),
-          contains('a `Cancelled` stops at `onError`'),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     final waits = <String, Future<Object?> Function(Job<int> job)>{
       'done': (job) => job.done,
@@ -931,8 +926,7 @@ void main() {
               returned = true;
             });
             return 1;
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
           async.flushTimers();
           expect(job.isFinished, isFalse);
           expect(returned, isFalse);
@@ -940,140 +934,144 @@ void main() {
       });
     }
 
-    fakeAsyncTest('cancellation after the return closes what was returned',
-        () async {
-      final gate = Gate();
-      late Database db;
-      final job = Job<Database>(key: 'open', (ctx) async {
-        db = await ctx.join(open, discard: (db) => db.close());
-        unawaited(
-          ctx
-              .run(
-                Job.deferred<void>(
-                  key: 'child',
-                  (child) => child.join(gate.wait),
-                ),
-              )
-              .onError((_, __) {}),
-        );
+    fakeAsyncTest(
+      'cancellation after the return closes what was returned',
+      () async {
+        final gate = Gate();
+        late Database db;
+        final job = Job<Database>(key: 'open', (ctx) async {
+          db = await ctx.join(open, discard: (db) => db.close());
+          unawaited(
+            ctx
+                .run(
+                  Job.deferred<void>(
+                    key: 'child',
+                    (child) => child.join(gate.wait),
+                  ),
+                )
+                .onError((_, _) {}),
+          );
+          await pump();
+          return db;
+        })..ignoreFailure();
+        unawaited(job.value.onError((_, _) => Database('none')));
         await pump();
-        return db;
-      })
-        ..ignoreFailure();
-      unawaited(job.value.onError((_, __) => Database('none')));
-      await pump();
-      await pump();
-      job.cancel().ignore();
-      await gate.release();
-      await job.done;
+        await pump();
+        job.cancel().ignore();
+        await gate.release();
+        await job.done;
 
-      expect(job.outcome, isA<Cancelled>());
-      expect(db.closed, isTrue);
-    });
+        expect(job.outcome, isA<Cancelled>());
+        expect(db.closed, isTrue);
+      },
+    );
 
     fakeAsyncTest(
-        'the second pass runs the discard after the earlier callbacks',
-        () async {
-      final gate = Gate();
-      final job = Job<Database>(key: 'order', (ctx) async {
-        ctx
-          ..onDispose(() async => trace.add('disposer A'))
-          ..onDispose(() async {
-            trace.add('disposer B waits');
-            await gate.wait();
-            trace.add('disposer B done');
-          });
-        final db = await ctx.join(open, discard: (db) => db.close());
-        ctx.onDispose(() async => trace.add('disposer D'));
-        return db;
-      })
-        ..ignoreFailure();
-      unawaited(job.value.onError((_, __) => Database('none')));
-      await pump();
-      await pump();
-      job.cancel().ignore();
-      await pump();
-      await gate.release();
-      await job.done;
+      'the second pass runs the discard after the earlier callbacks',
+      () async {
+        final gate = Gate();
+        final job = Job<Database>(key: 'order', (ctx) async {
+          ctx
+            ..onDispose(() async => trace.add('disposer A'))
+            ..onDispose(() async {
+              trace.add('disposer B waits');
+              await gate.wait();
+              trace.add('disposer B done');
+            });
+          final db = await ctx.join(open, discard: (db) => db.close());
+          ctx.onDispose(() async => trace.add('disposer D'));
+          return db;
+        })..ignoreFailure();
+        unawaited(job.value.onError((_, _) => Database('none')));
+        await pump();
+        await pump();
+        job.cancel().ignore();
+        await pump();
+        await gate.release();
+        await job.done;
 
-      expect(
-        trace,
-        <String>[
-          'database opened',
-          'disposer D',
-          'disposer B waits',
-          'disposer B done',
-          'disposer A',
-          'database closed',
-        ],
-        reason: 'strict reverse order would close the database before A '
-            'and B, registered before the discard; the second pass closes it '
-            'after them',
-      );
-    });
+        expect(
+          trace,
+          <String>[
+            'database opened',
+            'disposer D',
+            'disposer B waits',
+            'disposer B done',
+            'disposer A',
+            'database closed',
+          ],
+          reason:
+              'strict reverse order would close the database before A '
+              'and B, registered before the discard; the second pass closes it '
+              'after them',
+        );
+      },
+    );
 
-    fakeAsyncTest('a branch whose group handed the values over keeps its value',
-        () async {
-      final job = Job<void>(key: 'group', (ctx) async {
-        final values = await ctx.runAll(<ChildJob<Database>>[
-          Job.deferred<Database>(
-            key: 'left',
-            (branch) => branch.abandonable(
-              () => open('left'),
-              discard: (db) => db.close(),
+    fakeAsyncTest(
+      'a branch whose group handed the values over keeps its value',
+      () async {
+        final job = Job<void>(key: 'group', (ctx) async {
+          final values = await ctx.runAll(<ChildJob<Database>>[
+            Job.deferred<Database>(
+              key: 'left',
+              (branch) => branch.abandonable(
+                () => open('left'),
+                discard: (db) => db.close(),
+              ),
             ),
-          ),
-          Job.deferred<Database>(
-            key: 'right',
-            (branch) => branch.abandonable(
-              () => open('right'),
-              discard: (db) => db.close(),
+            Job.deferred<Database>(
+              key: 'right',
+              (branch) => branch.abandonable(
+                () => open('right'),
+                discard: (db) => db.close(),
+              ),
             ),
-          ),
-        ]);
-        trace.add('group handed over ${values.length} values');
-      })
-        ..ignoreFailure();
-      await job.done;
+          ]);
+          trace.add('group handed over ${values.length} values');
+        })..ignoreFailure();
+        await job.done;
 
-      expect(job.outcome, isA<Done<void>>());
-      expect(trace, contains('group handed over 2 values'));
-      expect(trace, isNot(contains('left closed')));
-      expect(trace, isNot(contains('right closed')));
-    });
+        expect(job.outcome, isA<Done<void>>());
+        expect(trace, contains('group handed over 2 values'));
+        expect(trace, isNot(contains('left closed')));
+        expect(trace, isNot(contains('right closed')));
+      },
+    );
 
-    fakeAsyncTest('a branch whose group never decided closes what it took',
-        () async {
-      final gate = Gate();
-      final job = Job<void>(key: 'group', (ctx) async {
-        await ctx.runAll(<ChildJob<Database>>[
-          Job.deferred<Database>(key: 'left', (branch) async {
-            final db = await branch.abandonable(
-              () => open('left'),
-              discard: (db) => db.close(),
-            );
-            await branch.join(gate.wait);
-            return db;
-          }),
-          Job.deferred<Database>(
-            key: 'right',
-            (branch) => branch.abandonable(
-              () => open('right'),
-              discard: (db) => db.close(),
+    fakeAsyncTest(
+      'a branch whose group never decided closes what it took',
+      () async {
+        final gate = Gate();
+        final job = Job<void>(key: 'group', (ctx) async {
+          await ctx.runAll(<ChildJob<Database>>[
+            Job.deferred<Database>(key: 'left', (branch) async {
+              final db = await branch.abandonable(
+                () => open('left'),
+                discard: (db) => db.close(),
+              );
+              await branch.join(gate.wait);
+              return db;
+            }),
+            Job.deferred<Database>(
+              key: 'right',
+              (branch) => branch.abandonable(
+                () => open('right'),
+                discard: (db) => db.close(),
+              ),
             ),
-          ),
-        ]);
-      })
-        ..ignoreFailure();
-      await pump();
-      job.cancel().ignore();
-      await gate.release();
-      await job.done;
+          ]);
+        })..ignoreFailure();
+        await pump();
+        job.cancel().ignore();
+        await gate.release();
+        await job.done;
 
-      expect(job.outcome, isA<Cancelled>());
-      expect(trace, contains('left closed'));
-      expect(trace, contains('right closed'));
-    });
+        expect(job.outcome, isA<Cancelled>());
+        expect(trace, contains('left closed'));
+        expect(trace, contains('right closed'));
+      },
+    );
 
     /// A job that waits for a slot and gives it up on a cancellation at 5
     /// ms, while a child keeps it from unwinding until 30 ms; the slot
@@ -1083,7 +1081,7 @@ void main() {
     List<String> slotRelease(
       void Function(JobContext ctx, void Function(String what) at) registered, {
       Future<void> Function(JobContext ctx, void Function(String what) at)?
-          caught,
+      caught,
     }) {
       final seen = <String>[];
       fakeAsync((async) {
@@ -1107,8 +1105,7 @@ void main() {
             await caught?.call(ctx, at);
             rethrow;
           }
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         job.done.then((_) => at('the job ends')).ignore();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
@@ -1133,8 +1130,7 @@ void main() {
       ]);
     });
 
-    test(
-        'its release counts as registered when the value came: an earlier '
+    test('its release counts as registered when the value came: an earlier '
         'callback waits for it, a later one does not', () {
       final seen = slotRelease(
         (ctx, at) => ctx.onDispose(() => at('the pool closes')),
@@ -1167,21 +1163,21 @@ void main() {
             seen.add('${async.elapsed.inMilliseconds} ms: $what');
         final branch = Job.deferred<int>((ctx) async {
           ctx.onDispose(() => at('the pool closes'));
-          ctx.abandonable(
-            () => delay(20).then((_) => 'slot'),
-            dispose: (slot) async {
-              at('the slot release starts');
-              await delay(40);
-              at('the slot release ends');
-            },
-          ).ignore();
+          ctx
+              .abandonable(
+                () => delay(20).then((_) => 'slot'),
+                dispose: (slot) async {
+                  at('the slot release starts');
+                  await delay(40);
+                  at('the slot release ends');
+                },
+              )
+              .ignore();
           return 1;
         });
         Job<List<int>>(
-          (ctx) => ctx.runAll([
-            branch,
-            Job.deferred<int>((ctx) => other(ctx, at)),
-          ]),
+          (ctx) =>
+              ctx.runAll([branch, Job.deferred<int>((ctx) => other(ctx, at))]),
         ).ignoreFailure();
         branch.done.then((_) => at('the branch ends')).ignore();
         async.elapse(const Duration(milliseconds: 10));
@@ -1191,8 +1187,7 @@ void main() {
       return seen;
     }
 
-    test(
-        'a branch waiting for its group before the unwinding: an earlier '
+    test('a branch waiting for its group before the unwinding: an earlier '
         'callback waits for the release', () {
       final seen = branchRelease((ctx, at) async {
         await ctx.abandonable(() => delay(30));
@@ -1208,8 +1203,7 @@ void main() {
       ]);
     });
 
-    test(
-        'a branch between the cleanup stack and the second pass has run its '
+    test('a branch between the cleanup stack and the second pass has run its '
         'stack and releases at once', () {
       final seen = branchRelease((ctx, at) async {
         ctx.onDispose(() async {
@@ -1253,8 +1247,7 @@ void main() {
               dispose: release,
             ),
           ]);
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         job.done.then((_) => at('the job ends')).ignore();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
@@ -1270,55 +1263,53 @@ void main() {
     });
 
     fakeAsyncTest(
-        'a value abandoned by abandonable is released after the job ended',
-        () async {
-      final gate = Gate();
-      final job = Job<void>(key: 'abandon', (ctx) async {
-        await ctx.abandonable(
-          () async {
+      'a value abandoned by abandonable is released after the job ended',
+      () async {
+        final gate = Gate();
+        final job = Job<void>(key: 'abandon', (ctx) async {
+          await ctx.abandonable(() async {
             await gate.wait();
             return open('late');
-          },
-          dispose: (db) => db.close(),
-        );
-      })
-        ..ignoreFailure();
-      await pump();
-      job.cancel().ignore();
-      await job.done;
-      trace.add('job ended ${job.outcome}');
-      await gate.release();
-      await pump();
-
-      expect(
-        trace,
-        containsAllInOrder(<String>[
-          'job ended Cancelled(manual)',
-          'late opened',
-          'late closed',
-        ]),
-      );
-    });
-
-    test('a plain await: a cancellation while it opens closes the database',
-        () {
-      fakeAsync((async) {
-        final job = page.plainAwait()..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 5));
+          }, dispose: (db) => db.close());
+        })..ignoreFailure();
+        await pump();
         job.cancel().ignore();
-        async.flushTimers();
-        // The body waits `open` out and registers what it opened.
-        expect(job.outcome, isA<Cancelled>());
-        expect(trace, ['database opened', 'database closed']);
-      });
-    });
+        await job.done;
+        trace.add('job ended ${job.outcome}');
+        await gate.release();
+        await pump();
+
+        expect(
+          trace,
+          containsAllInOrder(<String>[
+            'job ended Cancelled(manual)',
+            'late opened',
+            'late closed',
+          ]),
+        );
+      },
+    );
+
+    test(
+      'a plain await: a cancellation while it opens closes the database',
+      () {
+        fakeAsync((async) {
+          final job = page.plainAwait()..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.flushTimers();
+          // The body waits `open` out and registers what it opened.
+          expect(job.outcome, isA<Cancelled>());
+          expect(trace, ['database opened', 'database closed']);
+        });
+      },
+    );
 
     test('a call left unawaited: the database that comes late is closed', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) async {
           page.leftUnawaited(ctx);
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.flushTimers();
         // The body ends before `open` does, so the value is late and its
         // `dispose` runs as it comes.
@@ -1431,7 +1422,7 @@ void main() {
     (
       'doc/cleanup-rules.md',
       '### Unregistering inside the action',
-      answersFile
+      answersFile,
     ),
     (
       'doc/cleanup-rules.md',

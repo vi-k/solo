@@ -21,8 +21,7 @@ final class Keys extends JobObserver with JobAnswerer {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('${job.key}: ${error.runtimeType}');
+  }) => heard.add('${job.key}: ${error.runtimeType}');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {}
@@ -52,8 +51,9 @@ void main() {
 
     test('a handle of shared()', () {
       String name({Object? key, String Function()? describe}) {
-        final handle =
-            Job<int>((ctx) async => 1).shared(key: key, describe: describe);
+        final handle = Job<int>(
+          (ctx) async => 1,
+        ).shared(key: key, describe: describe);
         unawaited(handle.done);
         return '$handle';
       }
@@ -97,8 +97,9 @@ void main() {
   test('the key of a continuation reaches its observer with the error', () {
     fakeAsync((async) {
       final keys = Keys();
-      Job<int>((ctx) async => throw StateError('load'))
-          .then((ctx, value) => value, key: 'length', observer: keys);
+      Job<int>(
+        (ctx) async => throw StateError('load'),
+      ).then((ctx, value) => value, key: 'length', observer: keys);
       async.flushMicrotasks();
       expect(keys.heard, ['length: StateError']);
     });

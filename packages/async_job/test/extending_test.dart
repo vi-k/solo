@@ -64,9 +64,7 @@ final class DomainContext extends JobContextBase {
   DomainContext(super.owner);
 
   /// A rule of the domain: a cancellation the job cannot refuse.
-  void breakRule() => cancelOwnJob(
-        const Cancelled.by(reason: RuleReason()),
-      );
+  void breakRule() => cancelOwnJob(const Cancelled.by(reason: RuleReason()));
 }
 
 final class RuleReason extends CancelReason {
@@ -270,77 +268,73 @@ final class RuleBroken implements Exception {
 }
 
 void main() {
-  test("the engine's observer answers for the failure a group did not throw",
-      () {
-    fakeAsync((async) {
-      final first = AnsweringJob<int>(key: 'a', (ctx) async {
-        await ctx.abandonable(() => delay(10));
-        throw StateError('first');
-      });
-      // Refuses the stop the group asks for, runs on and fails on its own:
-      // a diagnosis of its own, which the caller never sees, because the
-      // group throws the first failure and only that one.
-      final second = AnsweringJob<int>(
-        key: 'b',
-        cancellable: false,
-        (ctx) async {
+  test(
+    "the engine's observer answers for the failure a group did not throw",
+    () {
+      fakeAsync((async) {
+        final first = AnsweringJob<int>(key: 'a', (ctx) async {
+          await ctx.abandonable(() => delay(10));
+          throw StateError('first');
+        });
+        // Refuses the stop the group asks for, runs on and fails on its own:
+        // a diagnosis of its own, which the caller never sees, because the
+        // group throws the first failure and only that one.
+        final second = AnsweringJob<int>(key: 'b', cancellable: false, (
+          ctx,
+        ) async {
           await ctx.abandonable(() => delay(20));
           throw StateError('second');
-        },
-      );
-      Object? thrown;
-      Job<void>((ctx) async {
-        try {
-          await ctx.runAll([first, second]);
-        } on Object catch (error) {
-          thrown = error;
-        }
-      }).ignoreFailure();
-      async.flushTimers();
-      expect('$thrown', 'Bad state: first');
-      expect(first.answered, isEmpty, reason: 'this one reached the caller');
-      expect(
-        second.answered.map((error) => '$error').toList(),
-        ['Bad state: second'],
-        reason: 'and this one reached the answer of the engine, which is '
-            'the whole reason the engine puts an observer of its own on '
-            'every job',
-      );
-    });
-  });
+        });
+        Object? thrown;
+        Job<void>((ctx) async {
+          try {
+            await ctx.runAll([first, second]);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        }).ignoreFailure();
+        async.flushTimers();
+        expect('$thrown', 'Bad state: first');
+        expect(first.answered, isEmpty, reason: 'this one reached the caller');
+        expect(
+          second.answered.map((error) => '$error').toList(),
+          ['Bad state: second'],
+          reason:
+              'and this one reached the answer of the engine, which is '
+              'the whole reason the engine puts an observer of its own on '
+              'every job',
+        );
+      });
+    },
+  );
 
   test('without an answer of its own it goes to the zone', () {
     final caught = <Object>[];
     Object? thrown;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final second = Job.deferred<int>(
-            key: 'b',
-            cancellable: false,
-            (ctx) async {
-              await ctx.abandonable(() => delay(20));
-              throw StateError('second');
-            },
-          );
-          Job<void>((ctx) async {
-            try {
-              await ctx.runAll([
-                Job.deferred<int>(key: 'a', (ctx) async {
-                  await ctx.abandonable(() => delay(10));
-                  throw StateError('first');
-                }),
-                second,
-              ]);
-            } on Object catch (error) {
-              thrown = error;
-            }
-          }).ignoreFailure();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final second = Job.deferred<int>(key: 'b', cancellable: false, (
+          ctx,
+        ) async {
+          await ctx.abandonable(() => delay(20));
+          throw StateError('second');
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        Job<void>((ctx) async {
+          try {
+            await ctx.runAll([
+              Job.deferred<int>(key: 'a', (ctx) async {
+                await ctx.abandonable(() => delay(10));
+                throw StateError('first');
+              }),
+              second,
+            ]);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        }).ignoreFailure();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect('$thrown', 'Bad state: first');
     expect(caught.map((error) => '$error').toList(), ['Bad state: second']);
   });
@@ -351,14 +345,18 @@ void main() {
       final seen = <int>[];
       final controller = StreamController<int>();
       late Job<void> subscription;
-      final job = EachJob<void>((ctx) async {
-        subscription = ctx.each(controller.stream, key: 'events', (ctx, event) {
-          seen.add(event);
-        });
-        await ctx.abandonable(() => delay(50));
-      })
-        ..ignoreFailure()
-        ..launch();
+      final job =
+          EachJob<void>((ctx) async {
+              subscription = ctx.each(controller.stream, key: 'events', (
+                ctx,
+                event,
+              ) {
+                seen.add(event);
+              });
+              await ctx.abandonable(() => delay(50));
+            })
+            ..ignoreFailure()
+            ..launch();
       async.flushMicrotasks();
       controller.add(1);
       async.flushMicrotasks();
@@ -369,7 +367,8 @@ void main() {
       expect(
         EachContext.made.map((child) => '$child').toList(),
         ['Job(events: a child of mine, each)'],
-        reason: 'the engine restricts child ownership, and the factory is '
+        reason:
+            'the engine restricts child ownership, and the factory is '
             'the only way it can; the name each was given, and the default '
             'description, reach the factory',
       );
@@ -384,19 +383,24 @@ void main() {
       ChildMakingContext.made.clear();
       final controller = StreamController<int>();
       late Job<void> subscription;
-      final job = ChildMakingJob<void>((ctx) async {
-        await ctx.run(ctx.child(key: 'step', (ctx) async {}));
-        subscription = ctx.each(controller.stream, key: 'events', (ctx, _) {});
-      })
-        ..ignoreFailure()
-        ..launch();
+      final job =
+          ChildMakingJob<void>((ctx) async {
+              await ctx.run(ctx.child(key: 'step', (ctx) async {}));
+              subscription = ctx.each(
+                controller.stream,
+                key: 'events',
+                (ctx, _) {},
+              );
+            })
+            ..ignoreFailure()
+            ..launch();
       async.flushMicrotasks();
       unawaited(controller.close());
       async.flushTimers();
-      expect(
-        ChildMakingContext.made.map((child) => '$child').toList(),
-        ['Job(step: a child of mine)', 'Job(events: a child of mine)'],
-      );
+      expect(ChildMakingContext.made.map((child) => '$child').toList(), [
+        'Job(step: a child of mine)',
+        'Job(events: a child of mine)',
+      ]);
       expect(identical(subscription, ChildMakingContext.made.last), isTrue);
       expect(job.outcome, isA<Done<void>>());
     });
@@ -419,8 +423,7 @@ void main() {
         } on RuleBroken catch (error) {
           thrown = error;
         }
-      })
-        ..launch();
+      })..launch();
       async.flushTimers();
       expect(childContext, isNot(isA<CheckingContext>()));
       expect(
@@ -440,39 +443,34 @@ void main() {
   test('untilFinished waits without observing the failure', () {
     final caught = <Object>[];
     var waited = false;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = WaitingJob<int>((ctx) async => throw StateError('boom'))
-            ..launch();
-          job.waited.then((_) => waited = true).ignore();
-          async.flushMicrotasks();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = WaitingJob<int>((ctx) async => throw StateError('boom'))
+          ..launch();
+        job.waited.then((_) => waited = true).ignore();
+        async.flushMicrotasks();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(waited, isTrue);
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: boom'],
-      reason: 'the waiting of an engine is not observation, so a failure '
+      reason:
+          'the waiting of an engine is not observation, so a failure '
           'nobody looked at still goes to the zone',
     );
   });
 
   test('done, unlike untilFinished, is observation', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = WaitingJob<int>((ctx) async => throw StateError('boom'))
-            ..launch();
-          job.done.ignore();
-          async.flushMicrotasks();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = WaitingJob<int>((ctx) async => throw StateError('boom'))
+          ..launch();
+        job.done.ignore();
+        async.flushMicrotasks();
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught, isEmpty);
   });
 
@@ -480,12 +478,15 @@ void main() {
   // calling `check()`. A rule already broken stops the action before it starts;
   // asked only after, it would let the action run for a job whose rules no
   // longer hold.
-  final members = <String,
-      Future<void> Function(JobContext ctx, Future<void> Function() action)>{
-    'abandonable': (ctx, action) => ctx.abandonable(action),
-    'join': (ctx, action) => ctx.join(action),
-    'uncancellable': (ctx, action) => ctx.uncancellable(action),
-  };
+  final members =
+      <
+        String,
+        Future<void> Function(JobContext ctx, Future<void> Function() action)
+      >{
+        'abandonable': (ctx, action) => ctx.abandonable(action),
+        'join': (ctx, action) => ctx.join(action),
+        'uncancellable': (ctx, action) => ctx.uncancellable(action),
+      };
   for (final MapEntry(key: name, value: call) in members.entries) {
     test('$name asks check() before the action runs', () {
       fakeAsync((async) {
@@ -498,8 +499,7 @@ void main() {
           } on RuleBroken catch (error) {
             thrown = error;
           }
-        })
-          ..launch();
+        })..launch();
         async.flushMicrotasks();
         expect(thrown, isA<RuleBroken>());
         expect(ran, isFalse, reason: 'the rule was broken before the call');
@@ -519,8 +519,7 @@ void main() {
         } on RuleBroken catch (error) {
           thrown = error;
         }
-      })
-        ..launch();
+      })..launch();
       async.flushMicrotasks();
       expect(thrown, isA<RuleBroken>(), reason: 'no time has passed');
       expect(async.pendingTimers, isEmpty, reason: 'the wait never began');
@@ -531,44 +530,48 @@ void main() {
   // `doc/engine.md`: `join` asks `check()` again after its action, and
   // the other three do not. A rule broken while the action runs is noticed
   // there by `join` alone.
-  final during = <String,
-      Future<void> Function(CheckingContext ctx, void Function() breakRule)>{
-    'abandonable': (ctx, breakRule) => ctx.abandonable(() async => breakRule()),
-    'join': (ctx, breakRule) => ctx.join(() async => breakRule()),
-    'pause': (ctx, breakRule) {
-      Timer(const Duration(milliseconds: 5), breakRule);
-      return ctx.pause(const Duration(milliseconds: 10));
-    },
-    'uncancellable': (ctx, breakRule) =>
-        ctx.uncancellable(() async => breakRule()),
-  };
+  final during =
+      <
+        String,
+        Future<void> Function(CheckingContext ctx, void Function() breakRule)
+      >{
+        'abandonable': (ctx, breakRule) =>
+            ctx.abandonable(() async => breakRule()),
+        'join': (ctx, breakRule) => ctx.join(() async => breakRule()),
+        'pause': (ctx, breakRule) {
+          Timer(const Duration(milliseconds: 5), breakRule);
+          return ctx.pause(const Duration(milliseconds: 10));
+        },
+        'uncancellable': (ctx, breakRule) =>
+            ctx.uncancellable(() async => breakRule()),
+      };
   for (final MapEntry(key: name, value: call) in during.entries) {
     final asksAfter = name == 'join';
     test(
-        '$name ${asksAfter ? 'asks' : 'does not ask'} check() after the action',
-        () {
-      fakeAsync((async) {
-        Object? thrown;
-        late CheckingContext context;
-        final job = CheckingJob<void>((ctx) async {
-          context = ctx;
-          try {
-            await call(ctx, () => ctx.rules = () => throw const RuleBroken());
-          } on RuleBroken catch (error) {
-            thrown = error;
+      '$name ${asksAfter ? 'asks' : 'does not ask'} check() after the action',
+      () {
+        fakeAsync((async) {
+          Object? thrown;
+          late CheckingContext context;
+          final job = CheckingJob<void>((ctx) async {
+            context = ctx;
+            try {
+              await call(ctx, () => ctx.rules = () => throw const RuleBroken());
+            } on RuleBroken catch (error) {
+              thrown = error;
+            }
+          })..launch();
+          async.flushTimers();
+          if (asksAfter) {
+            expect(thrown, isA<RuleBroken>());
+          } else {
+            expect(thrown, isNull);
+            expect(context.rules, isNotNull, reason: 'nobody asked the rule');
           }
-        })
-          ..launch();
-        async.flushTimers();
-        if (asksAfter) {
-          expect(thrown, isA<RuleBroken>());
-        } else {
-          expect(thrown, isNull);
-          expect(context.rules, isNotNull, reason: 'nobody asked the rule');
-        }
-        expect(job.outcome, isA<Done<void>>());
-      });
-    });
+          expect(job.outcome, isA<Done<void>>());
+        });
+      },
+    );
   }
 
   test('an empty runAll asks check(), as a group of children does', () {
@@ -583,8 +586,7 @@ void main() {
         } on RuleBroken catch (error) {
           thrown = error;
         }
-      })
-        ..launch();
+      })..launch();
       async.flushMicrotasks();
       expect(thrown, isA<RuleBroken>());
       expect(job.outcome, isA<Done<void>>());
@@ -608,7 +610,8 @@ void main() {
       expect(
         inside,
         [false, true, false],
-        reason: 'an engine waiting for this job says why, and an open '
+        reason:
+            'an engine waiting for this job says why, and an open '
             'section is one of the answers',
       );
       expect(job.outcome, isA<Done<void>>());
@@ -645,57 +648,61 @@ void main() {
     });
   });
 
-  test('a cancellation the job cannot refuse drops the one a section holds',
-      () {
-    fakeAsync((async) {
-      final seen = <String>[];
-      late SectionJob<void> job;
-      job = SectionJob<void>((ctx) async {
-        ctx.onCancel(() => seen.add('onCancel: ${job.held}'));
-        await ctx.uncancellable(() async {
-          await delay(10);
-          seen.add('held: ${job.held}');
-          await delay(10);
-          seen.add('after the rule: ${job.held}');
-          await delay(10);
-        });
-      })
-        ..whenCancelled(
-          (cancelled) => seen.add('accepted: $cancelled, held: ${job.held}'),
-        );
-      job.launch();
-      async.elapse(const Duration(milliseconds: 5));
-      var asked = false;
-      unawaited(job.cancel().then((_) => asked = true));
-      async.elapse(const Duration(milliseconds: 10));
-      job.context.breakRule();
-      async.flushMicrotasks();
-      expect(asked, isFalse, reason: 'the job still runs its section');
-      async.flushTimers();
+  test(
+    'a cancellation the job cannot refuse drops the one a section holds',
+    () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        late SectionJob<void> job;
+        job =
+            SectionJob<void>((ctx) async {
+              ctx.onCancel(() => seen.add('onCancel: ${job.held}'));
+              await ctx.uncancellable(() async {
+                await delay(10);
+                seen.add('held: ${job.held}');
+                await delay(10);
+                seen.add('after the rule: ${job.held}');
+                await delay(10);
+              });
+            })..whenCancelled(
+              (cancelled) =>
+                  seen.add('accepted: $cancelled, held: ${job.held}'),
+            );
+        job.launch();
+        async.elapse(const Duration(milliseconds: 5));
+        var asked = false;
+        unawaited(job.cancel().then((_) => asked = true));
+        async.elapse(const Duration(milliseconds: 10));
+        job.context.breakRule();
+        async.flushMicrotasks();
+        expect(asked, isFalse, reason: 'the job still runs its section');
+        async.flushTimers();
 
-      expect(seen, [
-        'held: Cancelled(manual)',
-        'onCancel: null',
-        'accepted: Cancelled(rule), held: null',
-        'after the rule: null',
-      ]);
-      expect(
-        (job.outcome! as Cancelled).reason,
-        isA<RuleReason>(),
-        reason: 'the rule wins, and the held cancellation never lands',
-      );
-      expect(asked, isTrue, reason: 'whoever asked still hears the end');
-    });
-  });
+        expect(seen, [
+          'held: Cancelled(manual)',
+          'onCancel: null',
+          'accepted: Cancelled(rule), held: null',
+          'after the rule: null',
+        ]);
+        expect(
+          (job.outcome! as Cancelled).reason,
+          isA<RuleReason>(),
+          reason: 'the rule wins, and the held cancellation never lands',
+        );
+        expect(asked, isTrue, reason: 'whoever asked still hears the end');
+      });
+    },
+  );
 
   test('a job the engine finishes drops what a section holds', () {
     fakeAsync((async) {
-      final job = SectionJob<int>((ctx) async {
-        await ctx.uncancellable(() => delay(100));
-        return 7;
-      })
-        ..ignoreFailure()
-        ..launch();
+      final job =
+          SectionJob<int>((ctx) async {
+              await ctx.uncancellable(() => delay(100));
+              return 7;
+            })
+            ..ignoreFailure()
+            ..launch();
       async.elapse(const Duration(milliseconds: 5));
       unawaited(job.cancel());
       expect(job.held, isA<Cancelled>());
@@ -707,41 +714,45 @@ void main() {
     });
   });
 
-  test('a body that cancels itself drops what a section it left open holds',
-      () {
-    fakeAsync((async) {
-      final job = SectionJob<void>((ctx) async {
-        unawaited(ctx.uncancellable(() => delay(100)));
-        unawaited(
-          ctx.run(Job.deferred<void>(cancellable: false, (_) => delay(80))),
-        );
-        await delay(20);
-        throw const Cancelled('self');
-      })
-        ..launch();
-      async.elapse(const Duration(milliseconds: 5));
-      unawaited(job.cancel());
-      async.elapse(const Duration(milliseconds: 20));
+  test(
+    'a body that cancels itself drops what a section it left open holds',
+    () {
+      fakeAsync((async) {
+        final job = SectionJob<void>((ctx) async {
+          unawaited(ctx.uncancellable(() => delay(100)));
+          unawaited(
+            ctx.run(Job.deferred<void>(cancellable: false, (_) => delay(80))),
+          );
+          await delay(20);
+          throw const Cancelled('self');
+        })..launch();
+        async.elapse(const Duration(milliseconds: 5));
+        unawaited(job.cancel());
+        async.elapse(const Duration(milliseconds: 20));
 
-      expect(job.isFinished, isFalse, reason: 'its child still runs');
-      expect(job.held, isNull, reason: 'the job already accepted its own');
-      async.flushTimers();
-      expect((job.outcome! as Cancelled).reason, isA<HandlerCancelReason>());
-    });
-  });
+        expect(job.isFinished, isFalse, reason: 'its child still runs');
+        expect(job.held, isNull, reason: 'the job already accepted its own');
+        async.flushTimers();
+        expect((job.outcome! as Cancelled).reason, isA<HandlerCancelReason>());
+      });
+    },
+  );
 
   test('a body that returns before its child keeps what a section holds', () {
     fakeAsync((async) {
-      final job = SectionJob<int>((ctx) async {
-        unawaited(ctx.uncancellable(() => delay(50)));
-        unawaited(
-          ctx.run(Job.deferred<void>(cancellable: false, (_) => delay(100))),
-        );
-        await delay(20);
-        return 7;
-      })
-        ..ignoreFailure()
-        ..launch();
+      final job =
+          SectionJob<int>((ctx) async {
+              unawaited(ctx.uncancellable(() => delay(50)));
+              unawaited(
+                ctx.run(
+                  Job.deferred<void>(cancellable: false, (_) => delay(100)),
+                ),
+              );
+              await delay(20);
+              return 7;
+            })
+            ..ignoreFailure()
+            ..launch();
       async.elapse(const Duration(milliseconds: 5));
       unawaited(job.cancel());
       async.elapse(const Duration(milliseconds: 20));
@@ -768,7 +779,8 @@ void main() {
       expect(
         ranIn,
         ['made'],
-        reason: 'the queue runs in the zone of whatever woke it, and the '
+        reason:
+            'the queue runs in the zone of whatever woke it, and the '
             'body belongs to the zone the job was made in',
       );
       expect(job.outcome, isA<Done<void>>());
@@ -794,7 +806,8 @@ void main() {
       expect(
         identical(seen, body),
         isTrue,
-        reason: 'the fork carries the job that started the work, and a job '
+        reason:
+            'the fork carries the job that started the work, and a job '
             'waiting in a queue would hold that job through it',
       );
       made.launch();
@@ -807,17 +820,14 @@ void main() {
     final zone = <Object>[];
     Outcome<int>? outcome;
     var ran = true;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = RefusingContextJob<int>((ctx) async => 42)..launch();
-          async.flushTimers();
-          outcome = job.outcome;
-          ran = job.ran;
-        });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = RefusingContextJob<int>((ctx) async => 42)..launch();
+        async.flushTimers();
+        outcome = job.outcome;
+        ran = job.ran;
+      });
+    }, (error, stackTrace) => zone.add(error));
     expect(outcome, isA<Cancelled>());
     expect((outcome! as Cancelled).started, isFalse);
     expect(ran, isFalse, reason: 'a finished job does not run');
@@ -838,30 +848,34 @@ void main() {
   });
 
   group('heldCancellation', () {
-    test('goes back to null when a cancellation the job cannot refuse lands',
-        () {
-      fakeAsync((async) {
-        final seen = <String>[];
-        final job = SectionJob<void>((ctx) async {
-          await ctx.uncancellable(() async {
-            await delay(10);
-            seen.add('held: ${ctx.heldCancellation}');
-            await delay(10);
-            seen.add(
-              'after the rule: ${ctx.heldCancellation}, '
-              '${ctx.job.isCancelled}',
-            );
-          });
-        })
-          ..launch();
-        async.elapse(const Duration(milliseconds: 5));
-        unawaited(job.cancel());
-        async.elapse(const Duration(milliseconds: 10));
-        job.context.breakRule();
-        async.flushTimers();
-        expect(seen, ['held: Cancelled(manual)', 'after the rule: null, true']);
-      });
-    });
+    test(
+      'goes back to null when a cancellation the job cannot refuse lands',
+      () {
+        fakeAsync((async) {
+          final seen = <String>[];
+          final job = SectionJob<void>((ctx) async {
+            await ctx.uncancellable(() async {
+              await delay(10);
+              seen.add('held: ${ctx.heldCancellation}');
+              await delay(10);
+              seen.add(
+                'after the rule: ${ctx.heldCancellation}, '
+                '${ctx.job.isCancelled}',
+              );
+            });
+          })..launch();
+          async.elapse(const Duration(milliseconds: 5));
+          unawaited(job.cancel());
+          async.elapse(const Duration(milliseconds: 10));
+          job.context.breakRule();
+          async.flushTimers();
+          expect(seen, [
+            'held: Cancelled(manual)',
+            'after the rule: null, true',
+          ]);
+        });
+      },
+    );
 
     test('the step sees a rule of the engine through isCancelled', () {
       for (final asked in [true, false]) {
@@ -876,8 +890,7 @@ void main() {
               return receipt;
             });
             return receipt;
-          })
-            ..launch();
+          })..launch();
           async.elapse(const Duration(milliseconds: 5));
           if (asked) unawaited(job.cancel());
           async.elapse(const Duration(milliseconds: 5));

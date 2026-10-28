@@ -323,20 +323,19 @@ abstract class Solo<S extends Object> {
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      _SoloJob<S, W, T>(
-        this,
-        body,
-        key: key,
-        canStart: canStart,
-        keepWhile: keepWhile,
-        cancellable: cancellable,
-        timeout: timeout,
-        describe: describe,
-        observer: _jobObserver,
-        ifFailed: ifFailed,
-        ifCancelled: ifCancelled,
-      );
+  }) => _SoloJob<S, W, T>(
+    this,
+    body,
+    key: key,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    observer: _jobObserver,
+    ifFailed: ifFailed,
+    ifCancelled: ifCancelled,
+  );
 
   /// Creates an accumulator that collects events into an immutable list.
   ///
@@ -376,24 +375,23 @@ abstract class Solo<S extends Object> {
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      _SoloAccumulator<S, W, E, List<E>, T>(
-        this,
-        handler,
-        seed: (event) => <E>[event],
-        merge: (events, event) => events..add(event),
-        snapshot: List<E>.unmodifiable,
-        key: key,
-        policy: policy,
-        timing: timing,
-        canStart: canStart,
-        keepWhile: keepWhile,
-        cancellable: cancellable,
-        timeout: timeout,
-        describe: describe,
-        ifFailed: ifFailed,
-        ifCancelled: ifCancelled,
-      );
+  }) => _SoloAccumulator<S, W, E, List<E>, T>(
+    this,
+    handler,
+    seed: (event) => <E>[event],
+    merge: (events, event) => events..add(event),
+    snapshot: List<E>.unmodifiable,
+    key: key,
+    policy: policy,
+    timing: timing,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    ifFailed: ifFailed,
+    ifCancelled: ifCancelled,
+  );
 
   /// Creates an accumulator holding one value, combined synchronously by
   /// [merge] on each addition after the first.
@@ -426,24 +424,23 @@ abstract class Solo<S extends Object> {
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      _SoloAccumulator<S, W, E, E, T>(
-        this,
-        handler,
-        seed: (event) => event,
-        merge: merge,
-        snapshot: (value) => value,
-        key: key,
-        policy: policy,
-        timing: timing,
-        canStart: canStart,
-        keepWhile: keepWhile,
-        cancellable: cancellable,
-        timeout: timeout,
-        describe: describe,
-        ifFailed: ifFailed,
-        ifCancelled: ifCancelled,
-      );
+  }) => _SoloAccumulator<S, W, E, E, T>(
+    this,
+    handler,
+    seed: (event) => event,
+    merge: merge,
+    snapshot: (value) => value,
+    key: key,
+    policy: policy,
+    timing: timing,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    ifFailed: ifFailed,
+    ifCancelled: ifCancelled,
+  );
 
   /// Queues [job] and returns it, or the existing job found by
   /// [Policy.droppable].
@@ -657,21 +654,20 @@ abstract class Solo<S extends Object> {
     Policy policy = Policy.sequential,
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) =>
-      enqueueJob(
-        job<W, T>(
-          body,
-          key: key,
-          canStart: canStart,
-          keepWhile: keepWhile,
-          cancellable: cancellable,
-          timeout: timeout,
-          describe: describe,
-          ifFailed: ifFailed,
-          ifCancelled: ifCancelled,
-        ),
-        policy: policy,
-      );
+  }) => enqueueJob(
+    job<W, T>(
+      body,
+      key: key,
+      canStart: canStart,
+      keepWhile: keepWhile,
+      cancellable: cancellable,
+      timeout: timeout,
+      describe: describe,
+      ifFailed: ifFailed,
+      ifCancelled: ifCancelled,
+    ),
+    policy: policy,
+  );
 
   /// The queue, for subclasses that manage it directly.
   @protected
@@ -806,9 +802,7 @@ abstract class Solo<S extends Object> {
   @protected
   void externalSetState(S state) {
     if (_finished) {
-      throw StateError(
-        '$runtimeType has finished closing, cannot set state',
-      );
+      throw StateError('$runtimeType has finished closing, cannot set state');
     }
     _debug(() => 'externalSetState: $state');
     _setState(state, emitter: null);
@@ -1127,11 +1121,7 @@ abstract class Solo<S extends Object> {
       failureTrace = stackTrace;
     }
     try {
-      _reevaluate(
-        except: emitter,
-        ruleErrors: ruleErrors,
-        revision: revision,
-      );
+      _reevaluate(except: emitter, ruleErrors: ruleErrors, revision: revision);
     } on Object catch (error, stackTrace) {
       if (failure == null) rethrow;
       Zone.current.handleUncaughtError(error, stackTrace);
@@ -1406,9 +1396,7 @@ final class _SoloJobObserver<S extends Object>
       () =>
           Solo.observer?.onError(_solo, job, error, stackTrace, answer: answer),
     );
-    Solo._callHook(
-      () => _solo.onError(job, error, stackTrace, answer: answer),
-    );
+    Solo._callHook(() => _solo.onError(job, error, stackTrace, answer: answer));
   }
 
   /// The controller answers for its jobs: [Solo.onUnanswered], and the

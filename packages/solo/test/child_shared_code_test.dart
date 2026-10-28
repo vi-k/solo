@@ -18,14 +18,10 @@ Duration ms(int milliseconds) => Duration(milliseconds: milliseconds);
 /// a deadline of [limit].
 Future<int> loadWithin(JobContext ctx, int milliseconds, Duration limit) =>
     ctx.run(
-      ctx.child(
-        key: 'step',
-        timeout: limit,
-        (ctx) async {
-          await ctx.abandonable(() => delay(milliseconds));
-          return 1;
-        },
-      ),
+      ctx.child(key: 'step', timeout: limit, (ctx) async {
+        await ctx.abandonable(() => delay(milliseconds));
+        return 1;
+      }),
     );
 
 /// Code that knows nothing of `solo`: a pause that [wake] cuts short.
@@ -44,10 +40,10 @@ Future<bool> napOrWake(JobContext ctx, Duration nap, Future<void> wake) async {
 }
 
 Matcher cancelledBy<T>() => isA<Cancelled>().having(
-      (cancelled) => cancelled.reason,
-      'reason',
-      isA<T>(),
-    );
+  (cancelled) => cancelled.reason,
+  'reason',
+  isA<T>(),
+);
 
 void main() {
   group('code on JobContext inside a job of the controller', () {

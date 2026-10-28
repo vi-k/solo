@@ -27,7 +27,7 @@
     ..emit(Ready(db));
 
   return file;
-}
+},
 ```
 
 | Метод | Что и когда освобождает |
@@ -51,16 +51,13 @@
 
 ```dart
 // Первая попытка: отмена влезает между открытием и onDispose.
-Job<void> load() => enqueue<Idle, void>(
-      key: 'load',
-      (ctx) async {
-        final db = await ctx.join(Database.open);
-        ctx.onDispose(db.close);
+Job<void> load() => enqueue<Idle, void>(key: 'load', (ctx) async {
+  final db = await ctx.join(Database.open);
+  ctx.onDispose(db.close);
 
-        final rows = await ctx.join(db.readAll);
-        ctx.emit(Loaded(rows));
-      },
-    );
+  final rows = await ctx.join(db.readAll);
+  ctx.emit(Loaded(rows));
+});
 ```
 
 `onDispose` и есть метод для ресурса, который `Job` освобождает при любом
@@ -79,18 +76,12 @@ Job<void> load() => enqueue<Idle, void>(
 ### Освобождение едет на вызове
 
 ```dart
-Job<void> load() => enqueue<Idle, void>(
-      key: 'load',
-      (ctx) async {
-        final db = await ctx.join(
-          Database.open,
-          dispose: (db) => db.close(),
-        );
+Job<void> load() => enqueue<Idle, void>(key: 'load', (ctx) async {
+  final db = await ctx.join(Database.open, dispose: (db) => db.close());
 
-        final rows = await ctx.join(db.readAll);
-        ctx.emit(Loaded(rows));
-      },
-    );
+  final rows = await ctx.join(db.readAll);
+  ctx.emit(Loaded(rows));
+});
 ```
 
 `abandonable` и `join` принимают колбэк `dispose` для ресурса, который
@@ -146,17 +137,11 @@ final sub = await ctx.join(
 
 ```dart
 // Первая попытка: при успехе база закрывается раньше, чем её отдают.
-Job<Database> open() => enqueue<Idle, Database>(
-      key: 'open',
-      (ctx) async {
-        final db = await ctx.join(
-          Database.open,
-          dispose: (db) => db.close(),
-        );
-        await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
-        return db;
-      },
-    );
+Job<Database> open() => enqueue<Idle, Database>(key: 'open', (ctx) async {
+  final db = await ctx.join(Database.open, dispose: (db) => db.close());
+  await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
+  return db;
+});
 ```
 
 Базу всё ещё освобождает эта `Job`, если она упадёт, поэтому колбэк, который
@@ -173,17 +158,11 @@ Job<Database> open() => enqueue<Idle, Database>(
 ### `discard` для значения, которое уходит
 
 ```dart
-Job<Database> open() => enqueue<Idle, Database>(
-      key: 'open',
-      (ctx) async {
-        final db = await ctx.join(
-          Database.open,
-          discard: (db) => db.close(),
-        );
-        await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
-        return db;
-      },
-    );
+Job<Database> open() => enqueue<Idle, Database>(key: 'open', (ctx) async {
+  final db = await ctx.join(Database.open, discard: (db) => db.close());
+  await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
+  return db;
+});
 ```
 
 `discard` срабатывает, только когда `Job` заканчивается не `Done`: отменённой
@@ -223,10 +202,7 @@ Job<Database> open() => enqueue<Idle, Database>(
 
 ```dart
 // Первая попытка: dispose закрывает базу, которую держит состояние.
-final db = await ctx.join(
-  Database.open,
-  dispose: (db) => db.close(),
-);
+final db = await ctx.join(Database.open, dispose: (db) => db.close());
 await ctx.uncancellable(db.migrate);
 ctx.emit(Ready(db));
 ```

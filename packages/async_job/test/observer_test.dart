@@ -14,14 +14,10 @@ void main() {
   test('the observer sees start, log, error and finish in order', () {
     fakeAsync((async) {
       final journal = JobJournal();
-      Job<void>(
-        key: 'job',
-        observer: journal,
-        (ctx) async {
-          ctx.log('hello');
-          throw StateError('boom');
-        },
-      ).ignoreFailure();
+      Job<void>(key: 'job', observer: journal, (ctx) async {
+        ctx.log('hello');
+        throw StateError('boom');
+      }).ignoreFailure();
       async.flushMicrotasks();
       expect(journal.take(), [
         '[job] started',
@@ -35,13 +31,9 @@ void main() {
   test('a child without an observer inherits the parent one', () {
     fakeAsync((async) {
       final journal = JobJournal();
-      Job<void>(
-        key: 'parent',
-        observer: journal,
-        (ctx) async {
-          await ctx.run(Job.deferred<void>(key: 'child', (ctx) async {}));
-        },
-      ).ignoreFailure();
+      Job<void>(key: 'parent', observer: journal, (ctx) async {
+        await ctx.run(Job.deferred<void>(key: 'child', (ctx) async {}));
+      }).ignoreFailure();
       async.flushMicrotasks();
       expect(journal.take(), [
         '[parent] started',
@@ -55,51 +47,42 @@ void main() {
   test('a hook that throws changes nothing', () {
     final caught = <Object>[];
     Outcome<int>? outcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<int>(
-            key: 'job',
-            observer: _ThrowingObserver(),
-            (ctx) async => 42,
-          );
-          async.flushMicrotasks();
-          outcome = job.outcome;
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<int>(
+          key: 'job',
+          observer: _ThrowingObserver(),
+          (ctx) async => 42,
+        );
+        async.flushMicrotasks();
+        outcome = job.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     // Read out here, and not inside the zone above: an `expect` in there
     // is an error like any other, the handler swallows it, and the test
     // goes green on nothing.
     expect(outcome, isA<Done<int>>());
-    expect(
-      caught.map((error) => '$error').toList(),
-      ['Bad state: onStart', 'Bad state: onFinish'],
-      reason: 'each hook is isolated on its own',
-    );
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: onStart',
+      'Bad state: onFinish',
+    ], reason: 'each hook is isolated on its own');
   });
 
   test('the hooks of a failing job are isolated too', () {
     final caught = <Object>[];
     Outcome<int>? outcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<int>(
-            key: 'job',
-            observer: _ThrowingObserver(),
-            (ctx) async {
-              ctx.log('spoken to a hook that throws');
-              throw StateError('boom');
-            },
-          )..ignoreFailure();
-          async.flushMicrotasks();
-          outcome = job.outcome;
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<int>(key: 'job', observer: _ThrowingObserver(), (
+          ctx,
+        ) async {
+          ctx.log('spoken to a hook that throws');
+          throw StateError('boom');
+        })..ignoreFailure();
+        async.flushMicrotasks();
+        outcome = job.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     // The two hooks the succeeding job above never reaches. Their
     // isolation is the one whose loss is worst: an `onError` that took the
     // job down with it would leave it running for good -- `done` never
@@ -117,30 +100,26 @@ void main() {
     final caught = <Object>[];
     Outcome<void>? outcome;
     var cancelAnswered = false;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(
-            key: 'job',
-            observer: _ThrowingObserver(),
-            (ctx) async {
-              ctx.onDispose(() => throw StateError('disposer'));
-              await ctx.abandonable(() => delay(100));
-            },
-          );
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().then((_) => cancelAnswered = true).ignore();
-          async.flushTimers();
-          outcome = job.outcome;
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(key: 'job', observer: _ThrowingObserver(), (
+          ctx,
+        ) async {
+          ctx.onDispose(() => throw StateError('disposer'));
+          await ctx.abandonable(() => delay(100));
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().then((_) => cancelAnswered = true).ignore();
+        async.flushTimers();
+        outcome = job.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(outcome, isA<Cancelled>());
     expect(
       cancelAnswered,
       isTrue,
-      reason: 'whoever waits for the job gets an answer, even though the '
+      reason:
+          'whoever waits for the job gets an answer, even though the '
           'hook that was told about the disposer threw',
     );
     expect(
@@ -152,7 +131,8 @@ void main() {
         'Bad state: onUnanswered',
         'Bad state: onFinish',
       ],
-      reason: 'the disposer failed, both hooks failed on hearing it, and '
+      reason:
+          'the disposer failed, both hooks failed on hearing it, and '
           'each went to the zone on its own; the answer that threw did not '
           'take the failure of the disposer with it',
     );
@@ -181,22 +161,19 @@ void main() {
     // the job, and a job that has accepted a cancellation by then.
     final caught = <Object>[];
     Outcome<void>? outcome;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(observer: _CallsMessages(), (ctx) async {
-            ctx.job.cancel().ignore();
-            ctx.log(() {
-              ctx.check();
-              return 'unreachable';
-            });
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<void>(observer: _CallsMessages(), (ctx) async {
+          ctx.job.cancel().ignore();
+          ctx.log(() {
+            ctx.check();
+            return 'unreachable';
           });
-          async.flushTimers();
-          outcome = job.outcome;
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.flushTimers();
+        outcome = job.outcome;
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(outcome, isA<Cancelled>());
     expect(caught, isEmpty);
   });
@@ -239,8 +216,7 @@ final class _ThrowingObserver extends JobObserver with JobAnswerer {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      throw StateError('onError');
+  }) => throw StateError('onError');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>

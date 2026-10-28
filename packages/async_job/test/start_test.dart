@@ -54,8 +54,7 @@ void main() {
     });
   });
 
-  test(
-      "the parent's cancellation cascades onto the child, and the child's "
+  test("the parent's cancellation cascades onto the child, and the child's "
       'cancellation goes nowhere', () {
     late DeferredJob<void> child;
     late Job<void> parent;
@@ -77,8 +76,7 @@ void main() {
     expect(errors, isEmpty);
   });
 
-  test(
-      'a failure of the child goes to the answerer it inherits, and the '
+  test('a failure of the child goes to the answerer it inherits, and the '
       'parent ends Done', () {
     late DeferredJob<void> child;
     late Job<void> parent;
@@ -158,30 +156,31 @@ void main() {
     expect(errors, [contains('inside unattended work')]);
   });
 
-  test('a parent cancelled already throws its Cancelled and drops the child',
-      () {
-    fakeAsync((async) {
-      Object? thrown;
-      final child = Job.deferred<void>(key: 'child', (ctx) async {});
-      final parent = Job<void>((ctx) async {
-        await ctx.uncancellable(() => delay(5));
-        try {
-          ctx.start(child);
-        } on Object catch (error) {
-          thrown = error;
-          rethrow;
-        }
-      });
-      async.flushMicrotasks();
-      parent.cancel().ignore();
-      async.flushTimers();
-      expect(thrown, isA<Cancelled>());
-      expect('${child.outcome}', 'Cancelled(parent)');
-    });
-  });
-
   test(
-      'a rule of the domain that throws ends the child Failed and throws '
+    'a parent cancelled already throws its Cancelled and drops the child',
+    () {
+      fakeAsync((async) {
+        Object? thrown;
+        final child = Job.deferred<void>(key: 'child', (ctx) async {});
+        final parent = Job<void>((ctx) async {
+          await ctx.uncancellable(() => delay(5));
+          try {
+            ctx.start(child);
+          } on Object catch (error) {
+            thrown = error;
+            rethrow;
+          }
+        });
+        async.flushMicrotasks();
+        parent.cancel().ignore();
+        async.flushTimers();
+        expect(thrown, isA<Cancelled>());
+        expect('${child.outcome}', 'Cancelled(parent)');
+      });
+    },
+  );
+
+  test('a rule of the domain that throws ends the child Failed and throws '
       'from start', () {
     late DeferredJob<void> child;
     Object? thrown;

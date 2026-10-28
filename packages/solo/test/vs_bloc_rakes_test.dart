@@ -74,39 +74,42 @@ String _prose() => _page()
 ///
 /// The page is not handed to `expect`: a failure would print all of it.
 void _says(String phrase) => expect(
-      _prose().contains(phrase),
-      isTrue,
-      reason: '$_doc no longer says: $phrase',
-    );
+  _prose().contains(phrase),
+  isTrue,
+  reason: '$_doc no longer says: $phrase',
+);
 
 /// The scenario sections of the page, heading line first, numbered in page
 /// order: every `## ` section after the correspondences.
 Map<int, String> _sections() {
   final parts = _page().split(RegExp('^## ', multiLine: true)).skip(1).toList();
   expect(parts.first, startsWith('Correspondences\n'));
-  return {
-    for (final (index, part) in parts.skip(1).indexed) index + 1: part,
-  };
+  return {for (final (index, part) in parts.skip(1).indexed) index + 1: part};
 }
 
 /// The `dart` blocks under the `### Solo` heading of section [number].
 List<String> _soloBlocks(int number) {
-  final parts =
-      _sections()[number]!.split(RegExp('^(?=### )', multiLine: true));
+  final parts = _sections()[number]!.split(
+    RegExp('^(?=### )', multiLine: true),
+  );
   final solo = parts.singleWhere((part) => part.startsWith('### Solo\n'));
   return [
-    for (final block
-        in RegExp(r'```dart\n(.*?)```', dotAll: true).allMatches(solo))
+    for (final block in RegExp(
+      r'```dart\n(.*?)```',
+      dotAll: true,
+    ).allMatches(solo))
       block.group(1)!,
   ];
 }
 
 /// What the page quotes under its `text` fences, in order.
 List<String> _quotes() => [
-      for (final block
-          in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(_page()))
-        block.group(1)!,
-    ];
+  for (final block in RegExp(
+    r'```text\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(_page()))
+    block.group(1)!,
+];
 
 Duration _ms(int milliseconds) => Duration(milliseconds: milliseconds);
 
@@ -139,13 +142,14 @@ final class _Order extends Solo<int> {
   SoloJob<void> grouped(String value) => _group.add(value);
 
   SoloJob<void> plain(String key, {bool first = false}) => enqueueJob(
-        job<int, void>(key: key, (ctx) async => started.add(key)),
-        first: first,
-      );
+    job<int, void>(key: key, (ctx) async => started.add(key)),
+    first: first,
+  );
 }
 
-List<firmware.Chunk> _chunks(int from) =>
-    [for (var i = from; i < from + 6; i++) firmware.Chunk(i)];
+List<firmware.Chunk> _chunks(int from) => [
+  for (var i = from; i < from + 6; i++) firmware.Chunk(i),
+];
 
 void main() {
   tearDown(() {
@@ -196,8 +200,10 @@ void main() {
       final shapes = {
         for (final MapEntry(key: number, value: text) in sections.entries)
           number: [
-            for (final heading
-                in RegExp(r'^### (.*)$', multiLine: true).allMatches(text))
+            for (final heading in RegExp(
+              r'^### (.*)$',
+              multiLine: true,
+            ).allMatches(text))
               heading.group(1)!,
           ],
       };
@@ -205,8 +211,10 @@ void main() {
         expect(headings.first, 'The first attempt');
         expect(headings.last, 'Solo');
       }
-      _says('Each section states the required behavior, starts from the code '
-          "that habit or the API's own vocabulary leads to");
+      _says(
+        'Each section states the required behavior, starts from the code '
+        "that habit or the API's own vocabulary leads to",
+      );
       _says('through eleven controller scenarios');
       // Where one attempt does not get close enough, a second follows.
       expect(
@@ -246,8 +254,10 @@ void main() {
           : 'the translation is not in the archive of the package',
       () {
         expect(
-          RegExp(r'^\*\*Что даёт solo:\*\* ', multiLine: true)
-              .allMatches(translation.readAsStringSync()),
+          RegExp(
+            r'^\*\*Что даёт solo:\*\* ',
+            multiLine: true,
+          ).allMatches(translation.readAsStringSync()),
           hasLength(_sections().length),
         );
       },
@@ -272,8 +282,10 @@ void main() {
       controller.addListener(() => heard++);
       expect(controller.currentState.notes, isEmpty);
       expect(heard, 0);
-      _says('| `state`, `stream` | `currentState`, `addListener`; `stream` '
-          'with `SoloStream` mixed in |');
+      _says(
+        '| `state`, `stream` | `currentState`, `addListener`; `stream` '
+        'with `SoloStream` mixed in |',
+      );
     });
 
     test('value gives the value or throws, done gives the outcome', () {
@@ -285,14 +297,18 @@ void main() {
             .pay(const checkout.Order('A'))
             .value
             .then((receipt) => value = receipt);
-        final declined =
-            checkout.CheckoutController(checkout.Api(declines: true));
-        declined.pay(const checkout.Order('B')).value.then(
-          (_) {},
-          onError: (Object error) {
-            thrown = error;
-          },
+        final declined = checkout.CheckoutController(
+          checkout.Api(declines: true),
         );
+        declined
+            .pay(const checkout.Order('B'))
+            .value
+            .then(
+              (_) {},
+              onError: (Object error) {
+                thrown = error;
+              },
+            );
         declined
             .pay(const checkout.Order('C'))
             .done
@@ -303,8 +319,10 @@ void main() {
       expect('$value', 'Receipt(for A)');
       expect(thrown, isA<StateError>());
       expect(failed, isA<Failed>());
-      _says('The caller can await `job.value` for a value or exception, or '
-          '`job.done` for a `Done`, `Failed` or `Cancelled` outcome.');
+      _says(
+        'The caller can await `job.value` for a value or exception, or '
+        '`job.done` for a `Done`, `Failed` or `Cancelled` outcome.',
+      );
     });
   });
 
@@ -322,8 +340,10 @@ void main() {
         '${controller.currentState}',
         'NotesState([n0, n1], uploading: false)',
       );
-      _says('The final state is also `NotesState([n0, n1], uploading: '
-          'false)`, from the same order as the bloc above');
+      _says(
+        'The final state is also `NotesState([n0, n1], uploading: '
+        'false)`, from the same order as the bloc above',
+      );
       // "With job keys where that run has event types."
       expect(
         controller.api.trace,
@@ -333,8 +353,10 @@ void main() {
             .split('\n'),
       );
       _says('with job keys where that run has event types');
-      _says('**What solo gives:** after upload and refresh the state is '
-          '`NotesState([n0, n1], uploading: false)`');
+      _says(
+        '**What solo gives:** after upload and refresh the state is '
+        '`NotesState([n0, n1], uploading: false)`',
+      );
     });
 
     test('under join a cancelled upload holds the queue for the server', () {
@@ -360,33 +382,37 @@ void main() {
         'server receives n1 and holds [n0, n1]',
         'list reads [n0, n1]',
       ]);
-      _says('Upload uses `join` so that even a cancelled upload holds the '
-          'queue until the server has answered: the queue does not start the '
-          'next job while the upload is still in progress.');
+      _says(
+        'Upload uses `join` so that even a cancelled upload holds the '
+        'queue until the server has answered: the queue does not start the '
+        'next job while the upload is still in progress.',
+      );
       _says('`ctx.join(action)` calls the operation and waits for it.');
     });
 
-    test('under abandonable the refresh reads a server that has not the note',
-        () {
-      late notes.Api api;
-      late notes.AbandoningNotesController controller;
-      final errors = _zone((async) {
-        api = notes.Api();
-        controller = notes.AbandoningNotesController(api);
-        final job = controller.upload(notes.Note('n1'));
-        controller.refresh();
-        async.elapse(_ms(10));
-        unawaited(job.cancel());
-        async.elapse(_ms(300));
-      });
-      expect(errors, isEmpty);
-      expect(api.trace, [
-        'upload n1 starts',
-        'list reads [n0]',
-        'server receives n1 and holds [n0, n1]',
-      ]);
-      expect('${controller.currentState.notes}', '[n0]');
-    });
+    test(
+      'under abandonable the refresh reads a server that has not the note',
+      () {
+        late notes.Api api;
+        late notes.AbandoningNotesController controller;
+        final errors = _zone((async) {
+          api = notes.Api();
+          controller = notes.AbandoningNotesController(api);
+          final job = controller.upload(notes.Note('n1'));
+          controller.refresh();
+          async.elapse(_ms(10));
+          unawaited(job.cancel());
+          async.elapse(_ms(300));
+        });
+        expect(errors, isEmpty);
+        expect(api.trace, [
+          'upload n1 starts',
+          'list reads [n0]',
+          'server receives n1 and holds [n0, n1]',
+        ]);
+        expect('${controller.currentState.notes}', '[n0]');
+      },
+    );
 
     test('a cancelled refresh ends before the API answers', () {
       Outcome<void>? atTen;
@@ -403,34 +429,42 @@ void main() {
       expect(errors, isEmpty);
       expect('$atTen', 'Cancelled(manual)');
       expect(controller.currentState.notes, isEmpty);
-      _says('`refresh` uses `ctx.abandonable`, which can stop waiting on '
-          'cancellation because this example allows its read result to be '
-          'abandoned.');
+      _says(
+        '`refresh` uses `ctx.abandonable`, which can stop waiting on '
+        'cancellation because this example allows its read result to be '
+        'abandoned.',
+      );
     });
 
-    test('root jobs run one at a time, ready ones in the order they were added',
-        () {
-      late notes.PlainNotesController controller;
-      final errors = _zone((async) {
-        controller = notes.PlainNotesController(notes.Api())
-          ..upload(notes.Note('n1'))
-          ..mark('second')
-          ..mark('third');
-        async.elapse(_ms(300));
-      });
-      expect(errors, isEmpty);
-      expect(controller.met, [
-        'the await returned',
-        'emitted',
-        'second started',
-        'third started',
-      ]);
-      _says('The root jobs of a controller run one at a time, and that is '
+    test(
+      'root jobs run one at a time, ready ones in the order they were added',
+      () {
+        late notes.PlainNotesController controller;
+        final errors = _zone((async) {
+          controller = notes.PlainNotesController(notes.Api())
+            ..upload(notes.Note('n1'))
+            ..mark('second')
+            ..mark('third');
+          async.elapse(_ms(300));
+        });
+        expect(errors, isEmpty);
+        expect(controller.met, [
+          'the await returned',
+          'emitted',
+          'second started',
+          'third started',
+        ]);
+        _says(
+          'The root jobs of a controller run one at a time, and that is '
           'the only way they run. Ready jobs start in the order they were '
-          'added.');
-      _says('because the root jobs of a controller run one at a time and '
-          'there is no transformer to pass.');
-    });
+          'added.',
+        );
+        _says(
+          'because the root jobs of a controller run one at a time and '
+          'there is no transformer to pass.',
+        );
+      },
+    );
 
     test('two things change that order, and the code asks for each', () {
       late _Order order;
@@ -446,9 +480,11 @@ void main() {
       });
       expect(errors, isEmpty);
       expect(order.started, ['c', 'a', 'b', 'd', 'group']);
-      _says('`first: true` puts a job ahead of what is waiting, and a job '
-          'waiting for an accumulation window can be passed by a ready one '
-          'standing behind it.');
+      _says(
+        '`first: true` puts a job ahead of what is waiting, and a job '
+        'waiting for an accumulation window can be passed by a ready one '
+        'standing behind it.',
+      );
     });
 
     test('a plain await keeps the body and the queue under a cancellation', () {
@@ -477,8 +513,10 @@ void main() {
         'emit threw Cancelled',
         'next started',
       ]);
-      _says('A plain `await` still keeps the body and queue occupied but '
-          'does not react to cancellation.');
+      _says(
+        'A plain `await` still keeps the body and queue occupied but '
+        'does not react to cancellation.',
+      );
     });
 
     test('work nobody awaits outlives the job and close', () {
@@ -497,8 +535,10 @@ void main() {
       expect(errors, isEmpty);
       expect(closedBefore, isTrue);
       expect(controller.met, ['detached work ended']);
-      _says('Work started without awaiting it can outlive the job; it must '
-          'not be assumed to finish before `close()`.');
+      _says(
+        'Work started without awaiting it can outlive the job; it must '
+        'not be assumed to finish before `close()`.',
+      );
     });
 
     test('the queue starts the next job after the unawaited child', () {
@@ -533,8 +573,8 @@ void main() {
           async.elapse(_ms(10));
           if (close) {
             controller.close().then(
-                  (_) => seen.add('closed at ${async.elapsed.inMilliseconds}'),
-                );
+              (_) => seen.add('closed at ${async.elapsed.inMilliseconds}'),
+            );
           }
           async.flushMicrotasks();
           seen.add('at 10: ${job.outcome} ${controller.met}');
@@ -548,9 +588,11 @@ void main() {
         'at 10: null [], at 210: Done(null) [child work ended]',
         'at 10: null [], closed at 100, at 210: Cancelled(closed) []',
       ]);
-      _says('If such work has to end before the job does, it is started as '
-          'a child with `ctx.run`. The parent waits for its children even '
-          'when its body does not await them');
+      _says(
+        'If such work has to end before the job does, it is started as '
+        'a child with `ctx.run`. The parent waits for its children even '
+        'when its body does not await them',
+      );
       _says('and `close()` waits for them too.');
     });
   });
@@ -581,15 +623,21 @@ void main() {
         'arm meter',
       ]);
       expect(errors, ['telemetry unavailable', 'telemetry unavailable']);
-      _says('With the throwing observer, the state still reaches '
-          '`Recording`, the meter is armed, the journal holds `[Recording]` '
-          'and the job finishes with `Done(null)`: the failing hook changes '
-          "neither the job's outcome nor the queue.");
-      _says('The observer, installed as `Solo.observer`, and the '
-          "controller's own hooks are invoked independently.");
-      _says('**What solo gives:** an observer that throws changes neither '
-          "the job's outcome nor the queue: the state reaches `Recording`, the "
-          'meter is armed');
+      _says(
+        'With the throwing observer, the state still reaches '
+        '`Recording`, the meter is armed, the journal holds `[Recording]` '
+        'and the job finishes with `Done(null)`: the failing hook changes '
+        "neither the job's outcome nor the queue.",
+      );
+      _says(
+        'The observer, installed as `Solo.observer`, and the '
+        "controller's own hooks are invoked independently.",
+      );
+      _says(
+        '**What solo gives:** an observer that throws changes neither '
+        "the job's outcome nor the queue: the state reaches `Recording`, the "
+        'meter is armed',
+      );
     });
 
     test('the error of a hook goes to the zone and nowhere else', () {
@@ -600,10 +648,12 @@ void main() {
           recorder.TelemetryObserver(recorder.Telemetry()),
           watcher,
         ]);
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add('$error');
-        recorder.RecorderController(recorder.Recorder(), recorder.Journal())
-            .start();
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+            handled.add('$error');
+        recorder.RecorderController(
+          recorder.Recorder(),
+          recorder.Journal(),
+        ).start();
         async.elapse(_ms(10));
       });
       expect(errors, ['telemetry unavailable']);
@@ -630,9 +680,11 @@ void main() {
       expect('$outcome', 'Done(null)');
       expect('${controller.currentState}', 'Recording');
       expect(watcher.seen, ['change to Recording']);
-      _says("The controller's own hook goes the same way: had `_journal.note` "
-          'thrown, its error would reach the zone too. The observer would '
-          'not hear it');
+      _says(
+        "The controller's own hook goes the same way: had `_journal.note` "
+        'thrown, its error would reach the zone too. The observer would '
+        'not hear it',
+      );
     });
   });
 
@@ -663,15 +715,23 @@ void main() {
       expect(api.sent, ['hi']);
       expect(api.reads, 0);
       expect('${controller.currentState}', 'ChatState(null)');
-      _says('`close()` stops accepting jobs, cancels queued jobs, requests '
-          'cancellation of the running job and waits for its completion');
-      _says('In this body, `ctx.abandonable` throws `Cancelled` when closing '
-          'cancels the job.');
-      _says('A message still queued behind the running one never reaches '
-          'the API: it ends `Cancelled(closed)` without starting');
-      _says('**What solo gives:** `close()` cancels the running job at '
-          '`ctx.abandonable`, before the reply update and `markReplyRead()`, '
-          'and a queued message');
+      _says(
+        '`close()` stops accepting jobs, cancels queued jobs, requests '
+        'cancellation of the running job and waits for its completion',
+      );
+      _says(
+        'In this body, `ctx.abandonable` throws `Cancelled` when closing '
+        'cancels the job.',
+      );
+      _says(
+        'A message still queued behind the running one never reaches '
+        'the API: it ends `Cancelled(closed)` without starting',
+      );
+      _says(
+        '**What solo gives:** `close()` cancels the running job at '
+        '`ctx.abandonable`, before the reply update and `markReplyRead()`, '
+        'and a queued message',
+      );
     });
 
     test('a call after close comes back already Cancelled(closed)', () {
@@ -682,10 +742,14 @@ void main() {
       });
       expect(errors, isEmpty);
       expect('$atOnce', 'Cancelled(closed)');
-      _says('Calls made after closure return jobs already completed with '
-          '`Cancelled(closed)`, so the call site needs no `isClosed` guard.');
-      _says('or a call after `close()` ends `Cancelled(closed)` with no '
-          '`isClosed` guard.');
+      _says(
+        'Calls made after closure return jobs already completed with '
+        '`Cancelled(closed)`, so the call site needs no `isClosed` guard.',
+      );
+      _says(
+        'or a call after `close()` ends `Cancelled(closed)` with no '
+        '`isClosed` guard.',
+      );
     });
 
     test('markReplyRead is a root job of its own, not a child of send', () {
@@ -713,8 +777,10 @@ void main() {
       expect(idleAtLast, isTrue);
       expect(api.reads, 1);
       expect('${controller.currentState}', 'ChatState(reply to hi)');
-      _says('That method would submit a separate root job through the '
-          "controller's `enqueue`; it is not a child of `send`.");
+      _says(
+        'That method would submit a separate root job through the '
+        "controller's `enqueue`; it is not a child of `send`.",
+      );
     });
 
     test('with a plain await closing waits for the API, and emit throws', () {
@@ -740,9 +806,11 @@ void main() {
       expect(controller.afterAwait, isA<Cancelled>());
       expect('$outcome', 'Cancelled(closed)');
       expect('${controller.currentState}', 'ChatState(null)');
-      _says('With a plain await instead, closing would wait for the API '
-          'response. The `ctx.emit` after it would still throw `Cancelled`, '
-          'so the reply would not be published.');
+      _says(
+        'With a plain await instead, closing would wait for the API '
+        'response. The `ctx.emit` after it would still throw `Cancelled`, '
+        'so the reply would not be published.',
+      );
     });
 
     test('a drain sends the queued message and takes no new root job', () {
@@ -767,11 +835,15 @@ void main() {
       expect(api.answered, ['hi', 'and again']);
       expect('${controller.currentState}', 'ChatState(reply to and again)');
       expect(api.reads, 0);
-      _says('`close(mode: SoloCloseMode.drain)` runs the queue first, as '
-          '`sequential()` does');
-      _says('The `markReplyRead()` each reply calls still comes back '
-          '`Cancelled(closed)` there, because a closing controller takes no '
-          'new root job.');
+      _says(
+        '`close(mode: SoloCloseMode.drain)` runs the queue first, as '
+        '`sequential()` does',
+      );
+      _says(
+        'The `markReplyRead()` each reply calls still comes back '
+        '`Cancelled(closed)` there, because a closing controller takes no '
+        'new root job.',
+      );
     });
 
     test('an emit after the job is over throws and leaves the state', () {
@@ -780,23 +852,24 @@ void main() {
         controller = chat.LateChatController(chat.Api())..send('hi');
         async.elapse(_ms(200));
       });
-      expect(
-        errors,
-        ['Bad state: Job(send) has already finished, cannot emit'],
-      );
+      expect(errors, [
+        'Bad state: Job(send) has already finished, cannot emit',
+      ]);
       expect('${controller.currentState}', 'ChatState(null)');
-      _says('That call throws `Bad state: Job(send) has already finished, '
-          'cannot emit`, in debug and release alike, and the state stays as '
-          'it was.');
+      _says(
+        'That call throws `Bad state: Job(send) has already finished, '
+        'cannot emit`, in debug and release alike, and the state stays as '
+        'it was.',
+      );
     });
 
     test('close waits for the cleanup of the job it cancels', () {
       var closedAtTwenty = true;
       var closedAtForty = false;
       final errors = _zone((async) {
-        final controller =
-            refresh.SlowCleanupRefreshController(refresh.RefreshApi())
-              ..refresh();
+        final controller = refresh.SlowCleanupRefreshController(
+          refresh.RefreshApi(),
+        )..refresh();
         async.flushMicrotasks();
         var closed = false;
         controller.close().then((_) => closed = true);
@@ -813,33 +886,37 @@ void main() {
   });
 
   group('Leaving a loading state when the work is cancelled', () {
-    test('cancelRefresh cancels the running refresh and hands back its job',
-        () {
-      late refresh.RefreshController controller;
-      var same = false;
-      String? atTheCall;
-      Outcome<void>? outcome;
-      final errors = _zone((async) {
-        controller = refresh.RefreshController(refresh.RefreshApi());
-        final job = controller.refresh();
-        async.flushMicrotasks();
-        same = identical(controller.cancelRefresh(), job);
-        atTheCall = '${controller.currentState}';
-        async.flushMicrotasks();
-        outcome = job.outcome;
-      });
-      expect(errors, isEmpty);
-      expect(same, isTrue);
-      // The handler has not run yet when `cancelRefresh()` returns.
-      expect(atTheCall, 'Loading');
-      expect('$outcome', 'Cancelled(manual)');
-      expect('${controller.currentState}', 'Initial');
-      _says('`cancelRefresh()` finds the running refresh by its key and '
-          'cancels it');
-      _says('It hands back the job it is cancelling rather than a future');
-      _says("solo's state handler runs after the cancelled job's cleanup");
-      _says('and `cancelRefresh()` finds the refresh to cancel by its key.');
-    });
+    test(
+      'cancelRefresh cancels the running refresh and hands back its job',
+      () {
+        late refresh.RefreshController controller;
+        var same = false;
+        String? atTheCall;
+        Outcome<void>? outcome;
+        final errors = _zone((async) {
+          controller = refresh.RefreshController(refresh.RefreshApi());
+          final job = controller.refresh();
+          async.flushMicrotasks();
+          same = identical(controller.cancelRefresh(), job);
+          atTheCall = '${controller.currentState}';
+          async.flushMicrotasks();
+          outcome = job.outcome;
+        });
+        expect(errors, isEmpty);
+        expect(same, isTrue);
+        // The handler has not run yet when `cancelRefresh()` returns.
+        expect(atTheCall, 'Loading');
+        expect('$outcome', 'Cancelled(manual)');
+        expect('${controller.currentState}', 'Initial');
+        _says(
+          '`cancelRefresh()` finds the running refresh by its key and '
+          'cancels it',
+        );
+        _says('It hands back the job it is cancelling rather than a future');
+        _says("solo's state handler runs after the cancelled job's cleanup");
+        _says('and `cancelRefresh()` finds the refresh to cancel by its key.');
+      },
+    );
 
     test('with nothing to cancel it answers null', () {
       final controller = refresh.RefreshController(refresh.RefreshApi());
@@ -857,7 +934,8 @@ void main() {
         final running = controller.refresh();
         async.flushMicrotasks();
         final queued = controller.refresh();
-        foundQueued = identical(controller.cancelRefresh(), queued) &&
+        foundQueued =
+            identical(controller.cancelRefresh(), queued) &&
             running.isCancelled;
         async.flushMicrotasks();
         first = running.outcome;
@@ -868,9 +946,11 @@ void main() {
       expect('$first', 'Cancelled(replaced)');
       expect('$second', 'Cancelled(manual)');
       expect('${controller.currentState}', 'Initial');
-      _says('`lastJobWhere` searches the queue from the end and falls back '
-          'to the running job, so it answers with the queued refresh when '
-          'one is waiting.');
+      _says(
+        '`lastJobWhere` searches the queue from the end and falls back '
+        'to the running job, so it answers with the queued refresh when '
+        'one is waiting.',
+      );
       _says('`Policy.restart` cancelled the running one at that moment');
     });
 
@@ -894,10 +974,14 @@ void main() {
         'cleanup ends in Loading',
         'the next job starts in Initial',
       ]);
-      _says('`ctx.abandonable` ends the wait for the API, and `ifCancelled` '
-          'returns `Initial` before the queue proceeds.');
-      _says('**What solo gives:** `ifCancelled` returns the indicator to '
-          "`Initial` after the cancelled job's cleanup");
+      _says(
+        '`ctx.abandonable` ends the wait for the API, and `ifCancelled` '
+        'returns `Initial` before the queue proceeds.',
+      );
+      _says(
+        '**What solo gives:** `ifCancelled` returns the indicator to '
+        "`Initial` after the cancelled job's cleanup",
+      );
     });
 
     test('a refresh that succeeds or fails leaves Initial as well', () {
@@ -929,9 +1013,11 @@ void main() {
       expect(whileLoading, 'Loading');
       expect('$failed', 'Failed(Bad state: offline)');
       expect('${controller.currentState}', 'Initial');
-      _says('A successful refresh publishes `Initial` from the body; '
-          '`ifFailed` resets the indicator on failure while the job still '
-          'reports `Failed`.');
+      _says(
+        'A successful refresh publishes `Initial` from the body; '
+        '`ifFailed` resets the indicator on failure while the job still '
+        'reports `Failed`.',
+      );
       _says('`ifFailed` resets it on failure');
     });
 
@@ -965,8 +1051,10 @@ void main() {
       // The same job cancelled by hand does get its handler.
       expect('$byHand', 'Cancelled(manual)');
       expect(controller.seen, ['ifCancelled ran']);
-      _says('If an independent external state makes the solo job invalid, '
-          'its final state handlers are skipped');
+      _says(
+        'If an independent external state makes the solo job invalid, '
+        'its final state handlers are skipped',
+      );
     });
   });
 
@@ -1004,16 +1092,26 @@ void main() {
         'Done(null)',
         'Done(null)',
       ]);
-      _says('The traces are those of the bloc answer above: `[play, seek 3, '
-          'pause]` for the drag');
-      _says('`Policy.restart` removes cancellable queued seeks with the '
-          'same key and requests cancellation of the active `seek`.');
-      _says('`pause` and `play` remain in the same queue with their default '
-          'sequential policy.');
-      _says('callers can inspect the outcome of each `seek`, including '
-          '`Cancelled(replaced)` for a replaced request');
-      _says('**What solo gives:** with `Policy.restart` on `seek` only, the '
-          'device gets `[play, seek 3, pause]`');
+      _says(
+        'The traces are those of the bloc answer above: `[play, seek 3, '
+        'pause]` for the drag',
+      );
+      _says(
+        '`Policy.restart` removes cancellable queued seeks with the '
+        'same key and requests cancellation of the active `seek`.',
+      );
+      _says(
+        '`pause` and `play` remain in the same queue with their default '
+        'sequential policy.',
+      );
+      _says(
+        'callers can inspect the outcome of each `seek`, including '
+        '`Cancelled(replaced)` for a replaced request',
+      );
+      _says(
+        '**What solo gives:** with `Policy.restart` on `seek` only, the '
+        'device gets `[play, seek 3, pause]`',
+      );
       _says('and every `seek` has an outcome to read.');
     });
 
@@ -1047,54 +1145,66 @@ void main() {
       );
       expect('$stale', 'Cancelled(replaced)');
       expect('$fresh', 'Done(null)');
-      _says('`[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` '
-          'when `seek 1` is already active');
-      _says('`ctx.onCancel` forwards that request to the player '
-          'immediately.');
-      _says('`ctx.join` waits for the operation to return before the '
-          'current job can finish and the replacement can start.');
+      _says(
+        '`[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` '
+        'when `seek 1` is already active',
+      );
+      _says(
+        '`ctx.onCancel` forwards that request to the player '
+        'immediately.',
+      );
+      _says(
+        '`ctx.join` waits for the operation to return before the '
+        'current job can finish and the replacement can start.',
+      );
       _says('a `seek` in flight stops before its replacement starts');
     });
 
     for (final named in [false, true]) {
       test(
-          named
-              ? 'an error of the stopped call the application named stops at '
+        named
+            ? 'an error of the stopped call the application named stops at '
                   'the hook'
-              : 'an error of the stopped call reaches the body and the '
-                  'answer, not the outcome', () {
-        late player.CatchingPlayerController controller;
-        Outcome<void>? stale;
-        Outcome<void>? fresh;
-        if (named) {
-          Job.isCancellationError = (error) => error is player.SeekInterrupted;
-        }
-        final errors = _zone((async) {
-          controller = player.CatchingPlayerController(
-            player.Player(failsWhenStopped: true),
+            : 'an error of the stopped call reaches the body and the '
+                  'answer, not the outcome',
+        () {
+          late player.CatchingPlayerController controller;
+          Outcome<void>? stale;
+          Outcome<void>? fresh;
+          if (named) {
+            Job.isCancellationError = (error) =>
+                error is player.SeekInterrupted;
+          }
+          final errors = _zone((async) {
+            controller = player.CatchingPlayerController(
+              player.Player(failsWhenStopped: true),
+            );
+            final first = controller.seek(_ms(1));
+            async.elapse(_ms(15));
+            final second = controller.seek(_ms(3));
+            async.elapse(_ms(300));
+            stale = first.outcome;
+            fresh = second.outcome;
+          });
+          expect(errors, named ? isEmpty : ['seek 1 interrupted']);
+          expect(controller.met, [
+            'join threw SeekInterrupted: seek 1 interrupted',
+          ]);
+          expect(controller.heard, ['seek 1 interrupted']);
+          expect('$stale', 'Cancelled(replaced)');
+          expect('$fresh', 'Done(null)');
+          _says(
+            'If the operation throws as it stops, its error reaches the '
+            "body, and the job's outcome still remains cancelled.",
           );
-          final first = controller.seek(_ms(1));
-          async.elapse(_ms(15));
-          final second = controller.seek(_ms(3));
-          async.elapse(_ms(300));
-          stale = first.outcome;
-          fresh = second.outcome;
-        });
-        expect(errors, named ? isEmpty : ['seek 1 interrupted']);
-        expect(
-          controller.met,
-          ['join threw SeekInterrupted: seek 1 interrupted'],
-        );
-        expect(controller.heard, ['seek 1 interrupted']);
-        expect('$stale', 'Cancelled(replaced)');
-        expect('$fresh', 'Done(null)');
-        _says('If the operation throws as it stops, its error reaches the '
-            "body, and the job's outcome still remains cancelled.");
-        _says("The error then goes to the controller's `onError` hook and on "
+          _says(
+            "The error then goes to the controller's `onError` hook and on "
             'to `onUnanswered`, as any failure of the body of a cancelled job '
             'does, unless the application has named it once in '
-            '`Job.isCancellationError`.');
-      });
+            '`Job.isCancellationError`.',
+          );
+        },
+      );
     }
   });
 
@@ -1116,8 +1226,10 @@ void main() {
           controller.setZoom(4),
         ];
         async.elapse(_ms(300));
-        outcomes
-            .addAll(['${first.outcome}', for (final j in rest) '${j.outcome}']);
+        outcomes.addAll([
+          '${first.outcome}',
+          for (final j in rest) '${j.outcome}',
+        ]);
       });
       expect(errors, isEmpty);
       expect(
@@ -1132,18 +1244,24 @@ void main() {
         'Done(null)',
       ]);
       expect(aFuture, isFalse);
-      _says('In the scenario below a drag sends position 1, then, while the '
-          'map is still moving there, positions 2 and 3, and the user zooms '
-          'to 4.');
-      _says('The trace is `[moveTo 1 start, moveTo 1 stopped, moveTo 3 '
-          'start, moveTo 3 end]`: the first request was already under way '
-          'and stops before the latest one begins, and the middle one does '
-          'not start.');
+      _says(
+        'In the scenario below a drag sends position 1, then, while the '
+        'map is still moving there, positions 2 and 3, and the user zooms '
+        'to 4.',
+      );
+      _says(
+        'The trace is `[moveTo 1 start, moveTo 1 stopped, moveTo 3 '
+        'start, moveTo 3 end]`: the first request was already under way '
+        'and stops before the latest one begins, and the middle one does '
+        'not start.',
+      );
       _says('Both the map and `MapState(3, z4)` reflect the latest request.');
       _says('The returned job itself is not a `Future`');
-      _says('**What solo gives:** typed methods return a `Job`, and under '
-          '`Policy.restart` the first move stops before the latest begins, the '
-          'middle one never starts and the map ends at `MapState(3, z4)`.');
+      _says(
+        '**What solo gives:** typed methods return a `Job`, and under '
+        '`Policy.restart` the first move stops before the latest begins, the '
+        'middle one never starts and the map ends at `MapState(3, z4)`.',
+      );
     });
 
     test('onMapDrag is a finished statement that waits for nothing', () {
@@ -1201,8 +1319,10 @@ void main() {
       _says('the removal happens when `disconnect` is called');
       _says('The removed read job completes with `Cancelled(manual)`');
       _says('Rename stays queued, and disconnect runs after it.');
-      _says('**What solo gives:** `queue.removeWhere` takes the pending read '
-          'out at the call to `disconnect`');
+      _says(
+        '**What solo gives:** `queue.removeWhere` takes the pending read '
+        'out at the call to `disconnect`',
+      );
     });
 
     test('a read that has already started is not removed', () {
@@ -1220,34 +1340,30 @@ void main() {
         reading = battery.outcome;
       });
       expect(errors, isEmpty);
-      expect(
-        '${ble.trace}',
-        '[connect, battery, rename kitchen, disconnect]',
-      );
+      expect('${ble.trace}', '[connect, battery, rename kitchen, disconnect]');
       expect('$reading', 'Done(null)');
-      _says('`removeWhere` works on the queue alone: if the read has '
-          'already started, it is not removed, and the device receives '
-          '`[connect, battery, rename kitchen, disconnect]`.');
+      _says(
+        '`removeWhere` works on the queue alone: if the read has '
+        'already started, it is not removed, and the device receives '
+        '`[connect, battery, rename kitchen, disconnect]`.',
+      );
     });
 
-    for (final (name, sweep, renamed) in <(
-      String,
-      void Function(device.DeviceController),
-      bool,
-    )>[
-      ('cancelAll()', (controller) => controller.cancelAll(), true),
-      ('queue.clear()', (controller) => controller.clearQueue(), true),
-      (
-        'cancelAll(force: true)',
-        (controller) => controller.cancelAll(force: true),
-        false,
-      ),
-      (
-        'queue.clear(force: true)',
-        (controller) => controller.clearQueue(force: true),
-        false,
-      ),
-    ]) {
+    for (final (name, sweep, renamed)
+        in <(String, void Function(device.DeviceController), bool)>[
+          ('cancelAll()', (controller) => controller.cancelAll(), true),
+          ('queue.clear()', (controller) => controller.clearQueue(), true),
+          (
+            'cancelAll(force: true)',
+            (controller) => controller.cancelAll(force: true),
+            false,
+          ),
+          (
+            'queue.clear(force: true)',
+            (controller) => controller.clearQueue(force: true),
+            false,
+          ),
+        ]) {
       test('$name ${renamed ? 'skips' : 'takes'} the queued rename', () {
         late device.Ble ble;
         Outcome<void>? rename;
@@ -1269,15 +1385,16 @@ void main() {
         });
         expect(errors, isEmpty);
         expect('$read', 'Cancelled(manual)');
-        expect(
-          '$rename',
-          renamed ? 'Done(null)' : 'Cancelled(manual)',
-        );
+        expect('$rename', renamed ? 'Done(null)' : 'Cancelled(manual)');
         expect(ble.trace.contains('rename hall'), renamed);
-        _says('A sweep skips such a job instead of removing it, and '
-            '`force: true` is what takes it');
-        _says('code that later sweeps the whole queue with `cancelAll()` or '
-            '`queue.clear()`');
+        _says(
+          'A sweep skips such a job instead of removing it, and '
+          '`force: true` is what takes it',
+        );
+        _says(
+          'code that later sweeps the whole queue with `cancelAll()` or '
+          '`queue.clear()`',
+        );
         _says('`cancellable: false` makes a sweep skip the rename');
       });
     }
@@ -1311,10 +1428,14 @@ void main() {
         expect(ble.trace, ['connect', 'disconnect']);
         expect(state, held ? 'Offline' : 'Connected(b:null)');
         expect('$outcome', held ? 'Done(null)' : 'Cancelled(manual)');
-        _says('A sweep arriving while `disconnect` runs would leave the '
-            'device disconnected and the state at `Connected`');
-        _says('A sweep turns a running `cancellable: false` job down, so the '
-            'state follows the device to `Offline` and `Connected`.');
+        _says(
+          'A sweep arriving while `disconnect` runs would leave the '
+          'device disconnected and the state at `Connected`',
+        );
+        _says(
+          'A sweep turns a running `cancellable: false` job down, so the '
+          'state follows the device to `Offline` and `Connected`.',
+        );
       });
 
       test('a sweep during connect, $kind version', () {
@@ -1362,11 +1483,14 @@ void main() {
       expect(ble.trace, ['connect', 'disconnect']);
       expect('$late_', 'Cancelled(rules: is not Connected)');
       _says(
-          'Here `enqueue<Connected, void>` is checked when the job starts, so '
-          'the same read ends as `Cancelled(rules: is not Connected)` and '
-          'the call is never made.');
-      _says('and a read queued behind the disconnect ends `Cancelled(rules: '
-          'is not Connected)` and never reaches the device.');
+        'Here `enqueue<Connected, void>` is checked when the job starts, so '
+        'the same read ends as `Cancelled(rules: is not Connected)` and '
+        'the call is never made.',
+      );
+      _says(
+        'and a read queued behind the disconnect ends `Cancelled(rules: '
+        'is not Connected)` and never reaches the device.',
+      );
     });
   });
 
@@ -1384,7 +1508,7 @@ void main() {
         // The running job and the queued one alike.
         shared =
             identical(running, controller.pay(const checkout.Order('A'))) &&
-                identical(queued, controller.pay(const checkout.Order('B')));
+            identical(queued, controller.pay(const checkout.Order('B')));
         for (final order in ['A', 'A', 'B']) {
           checkout
               .handlePayRequest(controller, checkout.Order(order))
@@ -1401,15 +1525,19 @@ void main() {
         {'paid': true, 'receipt': 'R-B'},
       ]);
       expect('${controller.currentState}', 'Paid(Receipt(for B))');
-      _says("The key is `('pay', order.id)`, the same for every request for "
-          'one order, and `Policy.droppable` returns the job already queued or '
-          'running under it instead of adding another.');
+      _says(
+        "The key is `('pay', order.id)`, the same for every request for "
+        'one order, and `Policy.droppable` returns the job already queued or '
+        'running under it instead of adding another.',
+      );
       _says('The three requests again make two API calls.');
-      _says('**What solo gives:** with a key per order and '
-          '`Policy.droppable`, the callers of one order share its job and '
-          'receipt, and another order gets its own job. `cancellable: false` '
-          'turns down a cancel from a screen, and the platform handler reads '
-          "its own request's outcome.");
+      _says(
+        '**What solo gives:** with a key per order and '
+        '`Policy.droppable`, the callers of one order share its job and '
+        'receipt, and another order gets its own job. `cancellable: false` '
+        'turns down a cancel from a screen, and the platform handler reads '
+        "its own request's outcome.",
+      );
     });
 
     test('a cancel from a screen is refused, running or queued', () {
@@ -1433,11 +1561,15 @@ void main() {
       expect(cancelled, isFalse);
       expect(outcomes, ['Done(Receipt(for A))', 'Done(Receipt(for B))']);
       expect(api.calls, 2);
-      _says('Every other cancellation is rejectable, and `cancellable: '
-          'false` rejects it: `Job.cancel` from a screen, a closing '
-          'controller.');
-      _says('The flag also refuses manual cancellation while the payment is '
-          'queued.');
+      _says(
+        'Every other cancellation is rejectable, and `cancellable: '
+        'false` rejects it: `Job.cancel` from a screen, a closing '
+        'controller.',
+      );
+      _says(
+        'The flag also refuses manual cancellation while the payment is '
+        'queued.',
+      );
     });
 
     test('withdraw takes the queued payment and leaves the charge', () {
@@ -1461,11 +1593,13 @@ void main() {
       expect(withdrawn, [false, true]);
       expect(outcomes, ['Done(Receipt(for A))', 'Cancelled(manual)']);
       expect(api.calls, 1);
-      _says('A payment the user may still withdraw before charging starts is '
-          'taken out of the queue by `withdraw`. `force: true` removes a '
-          'queued job whatever its flag, and the queue never touches a '
-          'running job, so a charge already on its way stays and `withdraw` '
-          'returns `false`.');
+      _says(
+        'A payment the user may still withdraw before charging starts is '
+        'taken out of the queue by `withdraw`. `force: true` removes a '
+        'queued job whatever its flag, and the queue never touches a '
+        'running job, so a charge already on its way stays and `withdraw` '
+        'returns `false`.',
+      );
     });
 
     test('a whole-body section lets a cancel land after the charge', () {
@@ -1486,12 +1620,16 @@ void main() {
       expect(api.calls, 1);
       expect(state, 'Paid(Receipt(for A))');
       expect('$outcome', 'Cancelled(manual)');
-      _says('Wrapping the whole body in `ctx.uncancellable` instead of the '
-          'flag would not do the same.');
-      _says('A cancel arriving during the charge lands when the section '
-          'closes, after `Paid` is published, and the job ends `Cancelled`, '
-          'so the platform handler answers `paid: false` for a payment that '
-          'was made.');
+      _says(
+        'Wrapping the whole body in `ctx.uncancellable` instead of the '
+        'flag would not do the same.',
+      );
+      _says(
+        'A cancel arriving during the charge lands when the section '
+        'closes, after `Paid` is published, and the job ends `Cancelled`, '
+        'so the platform handler answers `paid: false` for a payment that '
+        'was made.',
+      );
     });
 
     test('close waits for the running payment and discards the queued one', () {
@@ -1527,13 +1665,19 @@ void main() {
       expect(api.calls, 1);
       expect('${controller.currentState}', 'Paid(Receipt(for C))');
       expect(afterClose, {'paid': false, 'cancelled': 'closed'});
-      _says('The body publishes `Paid` before completing with the receipt, '
-          'and `close()` waits for that completion.');
-      _says('`close()` and `queue.clear(force: true)` can still discard a '
-          'queued payment without charging, and a submission after close '
-          'also never starts.');
-      _says('These cases, `withdraw` among them, explain the platform '
-          "handler's `Cancelled` branch.");
+      _says(
+        'The body publishes `Paid` before completing with the receipt, '
+        'and `close()` waits for that completion.',
+      );
+      _says(
+        '`close()` and `queue.clear(force: true)` can still discard a '
+        'queued payment without charging, and a submission after close '
+        'also never starts.',
+      );
+      _says(
+        'These cases, `withdraw` among them, explain the platform '
+        "handler's `Cancelled` branch.",
+      );
     });
 
     test('queue.clear takes a queued payment only by force', () {
@@ -1573,8 +1717,10 @@ void main() {
       expect(reply, {'paid': false, 'error': 'Bad state: card declined'});
       // No `onError` was supplied, so the state stays where the body left it.
       expect('${controller.currentState}', 'Paying(A)');
-      _says('API failures still produce `Failed`; a failure state can be '
-          'supplied with `enqueue(ifFailed: ...)`.');
+      _says(
+        'API failures still produce `Failed`; a failure state can be '
+        'supplied with `enqueue(ifFailed: ...)`.',
+      );
     });
 
     test('a narrower type lets a state rule cancel a charge that was sent', () {
@@ -1608,55 +1754,64 @@ void main() {
       expect(narrowApi.calls, 1);
       expect(narrowState, 'Suspended');
       expect(wideApi.calls, 1);
-      _says('It sets no `keepWhile` and accepts the base `CheckoutState`, '
-          'so no state rule can reject it');
-      _says('a state rule cancels even a non-cancellable job: a narrower '
-          'type would allow cancellation after a charge was sent but before '
-          'it was recorded');
+      _says(
+        'It sets no `keepWhile` and accepts the base `CheckoutState`, '
+        'so no state rule can reject it',
+      );
+      _says(
+        'a state rule cancels even a non-cancellable job: a narrower '
+        'type would allow cancellation after a charge was sent but before '
+        'it was recorded',
+      );
     });
 
     test(
-        'abandonable lets go, join stays, uncancellable holds the cancellation',
-        () {
-      final atTen = <String, String>{};
-      final atLast = <String, List<String>>{};
-      final errors = _zone((async) {
-        for (final member in ['abandonable', 'join', 'uncancellable']) {
-          final controller = checkout.WaitingCheckoutController(checkout.Api());
-          const order = checkout.Order('A');
-          final job = switch (member) {
-            'abandonable' => controller.viaAbandonable(order),
-            'join' => controller.viaJoin(order),
-            _ => controller.viaUncancellable(order),
-          };
-          async.elapse(_ms(10));
-          unawaited(job.cancel());
-          async.flushMicrotasks();
-          atTen[member] = '${job.outcome}, cancelled ${job.isCancelled}';
-          async.elapse(_ms(100));
-          atLast[member] = ['${job.outcome}', ...controller.met];
-        }
-      });
-      expect(errors, isEmpty);
-      expect(atTen, {
-        'abandonable': 'Cancelled(manual), cancelled true',
-        'join': 'null, cancelled true',
-        'uncancellable': 'null, cancelled false',
-      });
-      expect(atLast, {
-        'abandonable': ['Cancelled(manual)', 'abandonable threw Cancelled'],
-        'join': ['Cancelled(manual)', 'join threw Cancelled'],
-        'uncancellable': [
-          'Cancelled(manual)',
-          'uncancellable got Receipt(for A)',
-          'the next checkpoint threw Cancelled',
-        ],
-      });
-      _says('`abandonable` lets go of the call, `join` stays with it until it '
+      'abandonable lets go, join stays, uncancellable holds the cancellation',
+      () {
+        final atTen = <String, String>{};
+        final atLast = <String, List<String>>{};
+        final errors = _zone((async) {
+          for (final member in ['abandonable', 'join', 'uncancellable']) {
+            final controller = checkout.WaitingCheckoutController(
+              checkout.Api(),
+            );
+            const order = checkout.Order('A');
+            final job = switch (member) {
+              'abandonable' => controller.viaAbandonable(order),
+              'join' => controller.viaJoin(order),
+              _ => controller.viaUncancellable(order),
+            };
+            async.elapse(_ms(10));
+            unawaited(job.cancel());
+            async.flushMicrotasks();
+            atTen[member] = '${job.outcome}, cancelled ${job.isCancelled}';
+            async.elapse(_ms(100));
+            atLast[member] = ['${job.outcome}', ...controller.met];
+          }
+        });
+        expect(errors, isEmpty);
+        expect(atTen, {
+          'abandonable': 'Cancelled(manual), cancelled true',
+          'join': 'null, cancelled true',
+          'uncancellable': 'null, cancelled false',
+        });
+        expect(atLast, {
+          'abandonable': ['Cancelled(manual)', 'abandonable threw Cancelled'],
+          'join': ['Cancelled(manual)', 'join threw Cancelled'],
+          'uncancellable': [
+            'Cancelled(manual)',
+            'uncancellable got Receipt(for A)',
+            'the next checkpoint threw Cancelled',
+          ],
+        });
+        _says(
+          '`abandonable` lets go of the call, `join` stays with it until it '
           'answers, `uncancellable` holds the cancellation back until the '
-          'step ends.');
-      _says('The charge is a plain `await`.');
-    });
+          'step ends.',
+        );
+        _says('The charge is a plain `await`.');
+      },
+    );
   });
 
   group('Reacting to an independent external state change', () {
@@ -1692,15 +1847,23 @@ void main() {
       expect('$atFifty', 'Cancelled(rules: is not SignedIn)');
       expect(reports.built, 1);
       expect('$states', '[SignedOut(signed out elsewhere)]');
-      _says('`externalSetState` updates state immediately and checks '
-          'running bodies against their rules.');
-      _says('the revocation cancels it with `Cancelled(rules: is not '
-          'SignedIn)`');
+      _says(
+        '`externalSetState` updates state immediately and checks '
+        'running bodies against their rules.',
+      );
+      _says(
+        'the revocation cancels it with `Cancelled(rules: is not '
+        'SignedIn)`',
+      );
       _says('The build already in progress still finishes in both examples.');
-      _says('**What solo gives:** `externalSetState` publishes `SignedOut` '
-          'at once');
-      _says('and the rule of `enqueue<SignedIn, void>` cancels the build with '
-          '`Cancelled(rules: is not SignedIn)`.');
+      _says(
+        '**What solo gives:** `externalSetState` publishes `SignedOut` '
+        'at once',
+      );
+      _says(
+        'and the rule of `enqueue<SignedIn, void>` cancels the build with '
+        '`Cancelled(rules: is not SignedIn)`.',
+      );
     });
 
     test('join holds the queue for the build', () {
@@ -1720,16 +1883,20 @@ void main() {
         'the next root job starts with 1 built',
         'mark is over',
       ]);
-      _says('`join` waits for it before allowing another root job to '
-          'start.');
+      _says(
+        '`join` waits for it before allowing another root job to '
+        'start.',
+      );
     });
 
     test('published by an ordinary job the revocation waits its turn', () {
       final states = <report.ReportState>[];
       final errors = _zone((async) {
         final auth = report.Auth();
-        final controller =
-            report.QueuedRevocationController(report.Reports(), auth);
+        final controller = report.QueuedRevocationController(
+          report.Reports(),
+          auth,
+        );
         controller.stream.listen(states.add);
         controller.build(const report.Range(30));
         async.elapse(_ms(25));
@@ -1741,8 +1908,10 @@ void main() {
         '$states',
         '[Ready(Report(30 days)), SignedOut(signed out elsewhere)]',
       );
-      _says('Published by an ordinary job, `SignedOut` would queue behind '
-          'the build and wait for the very work it makes worthless.');
+      _says(
+        'Published by an ordinary job, `SignedOut` would queue behind '
+        'the build and wait for the very work it makes worthless.',
+      );
       _says('instead of queueing it behind the build');
     });
 
@@ -1751,16 +1920,22 @@ void main() {
       String? pageState;
       Outcome<void>? checked;
       final errors = _zone((async) {
-        final controller =
-            report.ReportController(report.Reports(), report.Auth());
+        final controller = report.ReportController(
+          report.Reports(),
+          report.Auth(),
+        );
         final job = controller.build(const report.Range(30));
         async.elapse(_ms(100));
         page = job.outcome;
         pageState = '${controller.currentState}';
-        final reading =
-            report.HandledReportController(report.Reports(), report.Auth());
-        final other =
-            reading.build(const report.Range(30), readsAfterEmit: true);
+        final reading = report.HandledReportController(
+          report.Reports(),
+          report.Auth(),
+        );
+        final other = reading.build(
+          const report.Range(30),
+          readsAfterEmit: true,
+        );
         async.elapse(_ms(100));
         checked = other.outcome;
       });
@@ -1768,10 +1943,12 @@ void main() {
       expect('$page', 'Done(null)');
       expect(pageState, 'Ready(Report(30 days))');
       expect('$checked', 'Cancelled(rules: is not SignedIn)');
-      _says('On the success path, the job may finish by emitting `Ready`, '
-          'even though that state is outside `SignedIn`. Its own `emit` is '
-          'excluded from the rule check; a later state checkpoint would '
-          'cancel it.');
+      _says(
+        'On the success path, the job may finish by emitting `Ready`, '
+        'even though that state is outside `SignedIn`. Its own `emit` is '
+        'excluded from the rule check; a later state checkpoint would '
+        'cancel it.',
+      );
     });
 
     test('final state handlers are disabled by the revocation', () {
@@ -1785,8 +1962,10 @@ void main() {
         async.elapse(_ms(25));
         auth.revoke('signed out elsewhere');
         async.elapse(_ms(100));
-        byHand =
-            report.HandledReportController(report.Reports(), report.Auth());
+        byHand = report.HandledReportController(
+          report.Reports(),
+          report.Auth(),
+        );
         final stall = byHand.stall();
         async.elapse(_ms(10));
         unawaited(stall.cancel());
@@ -1799,9 +1978,11 @@ void main() {
       // The handler does run for a cancellation nothing external caused.
       expect('$cancelled', 'Cancelled(manual)');
       expect(byHand.handlers, ['ifCancelled']);
-      _says('Final `ifFailed` and `ifCancelled` state handlers, if supplied, '
-          'are disabled by an incompatible external update, so they do not '
-          'overwrite `SignedOut` during cleanup.');
+      _says(
+        'Final `ifFailed` and `ifCancelled` state handlers, if supplied, '
+        'are disabled by an incompatible external update, so they do not '
+        'overwrite `SignedOut` during cleanup.',
+      );
     });
 
     test('a drain still hears the revocation', () {
@@ -1830,8 +2011,10 @@ void main() {
         'Cancelled(rules: is not SignedIn)',
       ]);
       expect('${controller.currentState}', 'SignedOut(signed out elsewhere)');
-      _says('a `SoloCloseMode.drain` still hears the revocation while its '
-          'queue runs');
+      _says(
+        'a `SoloCloseMode.drain` still hears the revocation while its '
+        'queue runs',
+      );
     });
 
     test('after the end a revocation reaches nothing', () {
@@ -1864,8 +2047,10 @@ void main() {
       expect(thrown, isA<StateError>());
       // `onClose` comes after the last job, with `isFinished` still false.
       expect(unguarded.seen, ['report is over', 'onClose, isFinished false']);
-      _says('`ReportController` clears it in `onClose`, which comes once '
-          'every job is over, while `isFinished` is still false');
+      _says(
+        '`ReportController` clears it in `onClose`, which comes once '
+        'every job is over, while `isFinished` is still false',
+      );
       _says('after the end nothing reaches `externalSetState`');
       _says('a revocation would throw from `externalSetState`');
     });
@@ -1899,15 +2084,21 @@ void main() {
       expect('$first', 'Cancelled(replaced)');
       expect('$second', 'Done(null)');
       expect('${controller.currentState}', 'Flashing(6/6)');
-      _says('The device gets the chunks in the order of the locked bloc, '
-          '`[0, 1, 100, 101, …]`, and no write starts before the one ahead '
-          'of it has ended.');
-      _says('`join` waits for the current write and throws `Cancelled` once '
-          'it returns, before the next iteration; the replaced upload ends '
-          'at `Cancelled(replaced)`.');
-      _says('**What solo gives:** `ctx.join` around each write is the one '
-          'checkpoint: a replaced upload ends `Cancelled(replaced)` after its '
-          'current write, no two writes overlap');
+      _says(
+        'The device gets the chunks in the order of the locked bloc, '
+        '`[0, 1, 100, 101, …]`, and no write starts before the one ahead '
+        'of it has ended.',
+      );
+      _says(
+        '`join` waits for the current write and throws `Cancelled` once '
+        'it returns, before the next iteration; the replaced upload ends '
+        'at `Cancelled(replaced)`.',
+      );
+      _says(
+        '**What solo gives:** `ctx.join` around each write is the one '
+        'checkpoint: a replaced upload ends `Cancelled(replaced)` after its '
+        'current write, no two writes overlap',
+      );
     });
 
     test('a Broken state from outside stops the upload after its write', () {
@@ -1927,11 +2118,15 @@ void main() {
       expect('${ble.written}', '[0, 1, 2]');
       expect('$outcome', 'Cancelled(rules: is not NotBroken)');
       expect('${controller.currentState}', 'Broken(cable unplugged)');
-      _says('When the state turns `Broken` during the third write, the '
-          'upload stops after `[0, 1, 2]` with `Cancelled(rules: is not '
-          'NotBroken)`.');
-      _says('The one checkpoint in `join` covers both replacement and state '
-          'invalidation.');
+      _says(
+        'When the state turns `Broken` during the third write, the '
+        'upload stops after `[0, 1, 2]` with `Cancelled(rules: is not '
+        'NotBroken)`.',
+      );
+      _says(
+        'The one checkpoint in `join` covers both replacement and state '
+        'invalidation.',
+      );
       _says('and a `Broken` state stops the upload the same way.');
     });
 
@@ -1957,8 +2152,10 @@ void main() {
         'the cleanup of the child ended',
         'the next job started',
       ]);
-      _says('If the upload starts child jobs through `ctx.run`, the parent '
-          'also waits for those children and their cleanup.');
+      _says(
+        'If the upload starts child jobs through `ctx.run`, the parent '
+        'also waits for those children and their cleanup.',
+      );
     });
 
     test('unattended work does not hold the queue, and its error is heard', () {
@@ -1979,9 +2176,11 @@ void main() {
       );
       // Nothing answered for it, so it ends in the zone as well.
       expect(errors, ['Bad state: the unattended work failed']);
-      _says('Work intentionally allowed to outlive the job can use '
-          "`ctx.unattended`, whose errors are reported through the job's "
-          'hooks; it does not keep the queue occupied.');
+      _says(
+        'Work intentionally allowed to outlive the job can use '
+        "`ctx.unattended`, whose errors are reported through the job's "
+        'hooks; it does not keep the queue occupied.',
+      );
     });
   });
 
@@ -2023,18 +2222,28 @@ void main() {
       );
       expect('${controller.currentState}', 'Preview(2)');
       expect([current.releases, stale.releases], [1, 1]);
-      _says('`ctx.abandonable` can end the cancelled job before the decoder '
-          'finishes. A late buffer is still passed to `dispose`');
-      _says('The replacement job may therefore start without waiting for '
-          'the obsolete decode, while each buffer is released.');
-      _says('The guarded bloc and this controller both go through `[open 1, '
-          'open 2, ready 2, sample 2, release 2, ready 1, release 1]` and '
-          'end at `Preview(2)`.');
-      _says('In solo, `close()` finishes before the obsolete buffer '
-          'arrives; it is released when decoding finally returns it.');
-      _says('**What solo gives:** `dispose` on `ctx.abandonable` releases '
-          'every buffer, the late one included, while the replacement starts '
-          'without waiting for the obsolete decode.');
+      _says(
+        '`ctx.abandonable` can end the cancelled job before the decoder '
+        'finishes. A late buffer is still passed to `dispose`',
+      );
+      _says(
+        'The replacement job may therefore start without waiting for '
+        'the obsolete decode, while each buffer is released.',
+      );
+      _says(
+        'The guarded bloc and this controller both go through `[open 1, '
+        'open 2, ready 2, sample 2, release 2, ready 1, release 1]` and '
+        'end at `Preview(2)`.',
+      );
+      _says(
+        'In solo, `close()` finishes before the obsolete buffer '
+        'arrives; it is released when decoding finally returns it.',
+      );
+      _says(
+        '**What solo gives:** `dispose` on `ctx.abandonable` releases '
+        'every buffer, the late one included, while the replacement starts '
+        'without waiting for the obsolete decode.',
+      );
     });
 
     test('with discard the buffer of a successful job is not released', () {
@@ -2057,9 +2266,11 @@ void main() {
       expect(errors, isEmpty);
       expect('$done', 'Done(null)');
       expect([current.releases, stale.releases], [0, 1]);
-      _says('`discard` is for a resource handed to the caller as the '
-          'successful result; it would not release this temporary buffer '
-          'after a successful waveform update.');
+      _says(
+        '`discard` is for a resource handed to the caller as the '
+        'successful result; it would not release this temporary buffer '
+        'after a successful waveform update.',
+      );
     });
 
     test('with join the queue and close wait for the decode', () {
@@ -2089,8 +2300,10 @@ void main() {
       expect(decoder.trace, ['open 1', 'ready 1', 'release 1']);
       expect(buffer.releases, 1);
       expect(outcomes, ['Cancelled(replaced)', 'Cancelled(closed)']);
-      _says('Use `join` when both the operation and its resource release '
-          'must finish before the queue or controller proceeds.');
+      _says(
+        'Use `join` when both the operation and its resource release '
+        'must finish before the queue or controller proceeds.',
+      );
     });
   });
 

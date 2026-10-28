@@ -71,19 +71,21 @@ void main() {
     });
   });
 
-  test('removing one registration leaves the same callback registered twice',
-      () {
-    final seen = <Cancelled>[];
-    final job = Job.deferred<void>((ctx) async {});
-    final remove = job.whenCancelled(seen.add);
-    job
-      ..whenCancelled(seen.add)
-      ..whenCancelled(seen.add);
-    remove();
-    remove();
-    job.cancel().ignore();
-    expect(seen, hasLength(2));
-  });
+  test(
+    'removing one registration leaves the same callback registered twice',
+    () {
+      final seen = <Cancelled>[];
+      final job = Job.deferred<void>((ctx) async {});
+      final remove = job.whenCancelled(seen.add);
+      job
+        ..whenCancelled(seen.add)
+        ..whenCancelled(seen.add);
+      remove();
+      remove();
+      job.cancel().ignore();
+      expect(seen, hasLength(2));
+    },
+  );
 
   test('a callback may cancel again and subscribe during notification', () {
     final order = <String>[];
@@ -147,8 +149,7 @@ void main() {
       selfCancelling = Job.deferred<void>((ctx) async {
         await delay(1);
         throw const Cancelled('gave up');
-      })
-        ..whenCancelled(heard.add);
+      })..whenCancelled(heard.add);
       final sibling = Job.deferred<void>((ctx) async {
         ctx.onCancel(
           () =>
@@ -172,31 +173,35 @@ void main() {
     });
   });
 
-  test('a cancellation made while the body cancels itself is the one heard',
-      () {
-    // Putting the body's cancellation into words formats the child's key,
-    // which is the caller's code, and this one cancels the parent right
-    // then. That cancellation came first and stands.
-    fakeAsync((async) {
-      final heard = <Cancelled>[];
-      final key = _CancellingKey();
-      final child = Job.deferred<void>(key: key, (ctx) async {
-        await delay(1);
-        throw const Cancelled('child gave up');
+  test(
+    'a cancellation made while the body cancels itself is the one heard',
+    () {
+      // Putting the body's cancellation into words formats the child's key,
+      // which is the caller's code, and this one cancels the parent right
+      // then. That cancellation came first and stands.
+      fakeAsync((async) {
+        final heard = <Cancelled>[];
+        final key = _CancellingKey();
+        final child = Job.deferred<void>(key: key, (ctx) async {
+          await delay(1);
+          throw const Cancelled('child gave up');
+        });
+        final parent =
+            Job<void>((ctx) async {
+                ctx.run(Job.deferred<void>((_) => delay(30))).ignore();
+                await ctx.run(child);
+              })
+              ..whenCancelled(heard.add)
+              ..ignoreFailure();
+        key.onFormat = () =>
+            parent.cancel(reason: const TestCancelReason('key'));
+        async.flushTimers();
+        expect(heard, hasLength(1));
+        expect(heard.single.reason, isA<TestCancelReason>());
+        expect(parent.outcome, same(heard.single));
       });
-      final parent = Job<void>((ctx) async {
-        ctx.run(Job.deferred<void>((_) => delay(30))).ignore();
-        await ctx.run(child);
-      })
-        ..whenCancelled(heard.add)
-        ..ignoreFailure();
-      key.onFormat = () => parent.cancel(reason: const TestCancelReason('key'));
-      async.flushTimers();
-      expect(heard, hasLength(1));
-      expect(heard.single.reason, isA<TestCancelReason>());
-      expect(parent.outcome, same(heard.single));
-    });
-  });
+    },
+  );
 
   test('a refused cancellation sends no notification', () {
     fakeAsync((async) {
@@ -213,50 +218,50 @@ void main() {
     });
   });
 
-  test('a held cancellation sends the first reason when the section closes',
-      () {
-    fakeAsync((async) {
-      final seen = <Cancelled>[];
-      const first = Cancelled.by(
-        reason: ManualCancelReason(),
-        description: 'first request',
-      );
-      final job = ProbeJob<void>(
-        (ctx) => ctx.uncancellable(() => delay(50)),
-      )
-        ..launch()
-        ..whenCancelled(seen.add)
-        ..cancelBy(first)
-        ..cancelBy(const Cancelled('later request'));
-      expect(seen, isEmpty);
-      async.flushTimers();
-      expect(seen, [same(first)]);
-      expect(job.outcome, same(first));
-    });
-  });
+  test(
+    'a held cancellation sends the first reason when the section closes',
+    () {
+      fakeAsync((async) {
+        final seen = <Cancelled>[];
+        const first = Cancelled.by(
+          reason: ManualCancelReason(),
+          description: 'first request',
+        );
+        final job = ProbeJob<void>((ctx) => ctx.uncancellable(() => delay(50)))
+          ..launch()
+          ..whenCancelled(seen.add)
+          ..cancelBy(first)
+          ..cancelBy(const Cancelled('later request'));
+        expect(seen, isEmpty);
+        async.flushTimers();
+        expect(seen, [same(first)]);
+        expect(job.outcome, same(first));
+      });
+    },
+  );
 
   test('self cancellation notifies at the throw, as one from outside does', () {
     fakeAsync((async) {
       final order = <String>[];
       Cancelled? seen;
-      final job = Job<void>((ctx) async {
-        ctx
-          ..onCancel(() => order.add('context cancelled'))
-          ..onDispose(() => order.add('cleanup'));
-        ctx
-            .run(
-              Job.deferred<void>(cancellable: false, (child) async {
-                await delay(20);
-                order.add('child done');
-              }),
-            )
-            .ignore();
-        throw const Cancelled('no photo');
-      })
-        ..whenCancelled((cancelled) {
-          seen = cancelled;
-          order.add('cancelled');
-        });
+      final job =
+          Job<void>((ctx) async {
+            ctx
+              ..onCancel(() => order.add('context cancelled'))
+              ..onDispose(() => order.add('cleanup'));
+            ctx
+                .run(
+                  Job.deferred<void>(cancellable: false, (child) async {
+                    await delay(20);
+                    order.add('child done');
+                  }),
+                )
+                .ignore();
+            throw const Cancelled('no photo');
+          })..whenCancelled((cancelled) {
+            seen = cancelled;
+            order.add('cancelled');
+          });
       async.flushMicrotasks();
       expect(order, ['context cancelled', 'cancelled']);
       async.flushTimers();
@@ -273,32 +278,27 @@ void main() {
     });
   });
 
-  test(
-      'a callback error reaches the observer, then the zone, and other '
+  test('a callback error reaches the observer, then the zone, and other '
       'callbacks still run', () {
     final observer = _ErrorObserver();
     final seen = <Cancelled>[];
     final error = StateError('callback');
     final zone = <Object>[];
     late final ChildJob<void> job;
-    runZonedGuarded(
-      () {
-        job = Job.deferred<void>((ctx) async {}, observer: observer)
-          ..whenCancelled((_) => throw error)
-          ..whenCancelled(seen.add);
-        job.cancel().ignore();
-        job.whenCancelled((_) => throw error);
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+    runZonedGuarded(() {
+      job = Job.deferred<void>((ctx) async {}, observer: observer)
+        ..whenCancelled((_) => throw error)
+        ..whenCancelled(seen.add);
+      job.cancel().ignore();
+      job.whenCancelled((_) => throw error);
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone: an `expect` that fails inside it lands in
     // the handler and is counted as a zone error instead of failing.
     expect(observer.errors, [same(error), same(error)]);
-    expect(
-      zone,
-      [same(error), same(error)],
-      reason: 'an observer that only watches answers for nothing',
-    );
+    expect(zone, [
+      same(error),
+      same(error),
+    ], reason: 'an observer that only watches answers for nothing');
     expect(seen, hasLength(1));
     expect(job.outcome, same(seen.single));
   });
@@ -307,12 +307,9 @@ void main() {
     final errors = <Object>[];
     final error = StateError('callback');
     late ChildJob<void> job;
-    runZonedGuarded(
-      () {
-        job = Job.deferred<void>((ctx) async {});
-      },
-      (error, stackTrace) => errors.add(error),
-    );
+    runZonedGuarded(() {
+      job = Job.deferred<void>((ctx) async {});
+    }, (error, stackTrace) => errors.add(error));
     final seen = <Cancelled>[];
     job
       ..whenCancelled((_) => throw error)
@@ -324,14 +321,11 @@ void main() {
 
   test('a cancellation thrown by a subscriber stays out of the zone', () {
     final errors = <Object>[];
-    runZonedGuarded(
-      () {
-        final job = Job.deferred<void>((ctx) async {})
-          ..whenCancelled((_) => throw const Cancelled('listener'));
-        job.cancel().ignore();
-      },
-      (error, stackTrace) => errors.add(error),
-    );
+    runZonedGuarded(() {
+      final job = Job.deferred<void>((ctx) async {})
+        ..whenCancelled((_) => throw const Cancelled('listener'));
+      job.cancel().ignore();
+    }, (error, stackTrace) => errors.add(error));
     expect(errors, isEmpty);
   });
 
@@ -339,12 +333,9 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       final error = StateError('body');
-      runZonedGuarded(
-        () {
-          Job<void>((ctx) async => throw error).whenCancelled((_) {});
-        },
-        (error, stackTrace) => errors.add(error),
-      );
+      runZonedGuarded(() {
+        Job<void>((ctx) async => throw error).whenCancelled((_) {});
+      }, (error, stackTrace) => errors.add(error));
       async.flushMicrotasks();
       expect(errors, [same(error)]);
     });
@@ -354,30 +345,32 @@ void main() {
     fakeAsync((async) {
       final heard = <String>[];
       late Job<void> parent;
-      parent = Job<void>((ctx) async {
-        ctx
-            .run(
-              Job.deferred<void>(key: 'child', (child) async {
-                child.onCancel(() {
-                  // Inside the cascade: the parent is marked, and the pass
-                  // that tells its listeners has not run yet.
-                  parent.whenCancelled((_) => heard.add('late'));
-                });
-                await child.abandonable(() => delay(100));
-              }),
-            )
-            .ignore();
-        await ctx.abandonable(() => delay(100));
-      })
-        ..ignoreFailure()
-        ..whenCancelled((_) => heard.add('early'));
+      parent =
+          Job<void>((ctx) async {
+              ctx
+                  .run(
+                    Job.deferred<void>(key: 'child', (child) async {
+                      child.onCancel(() {
+                        // Inside the cascade: the parent is marked, and the
+                        // pass that tells its listeners has not run yet.
+                        parent.whenCancelled((_) => heard.add('late'));
+                      });
+                      await child.abandonable(() => delay(100));
+                    }),
+                  )
+                  .ignore();
+              await ctx.abandonable(() => delay(100));
+            })
+            ..ignoreFailure()
+            ..whenCancelled((_) => heard.add('early'));
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
       async.flushTimers();
       expect(
         heard,
         ['early', 'late'],
-        reason: 'a registration made later never runs before one made '
+        reason:
+            'a registration made later never runs before one made '
             'earlier, whatever window it is made in',
       );
     });

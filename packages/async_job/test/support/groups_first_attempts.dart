@@ -49,10 +49,10 @@ Job<void> exportWithEagerError() {
     );
 
     try {
-      final sources = await Future.wait(
-        [ctx.run(rows), ctx.run(images)],
-        eagerError: true,
-      );
+      final sources = await Future.wait([
+        ctx.run(rows),
+        ctx.run(images),
+      ], eagerError: true);
       await ctx.join(() => writeArchive(sources));
     } on Object {
       stage.trace.add('the body wakes');

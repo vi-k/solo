@@ -54,10 +54,10 @@ void main() {
 
   test('a switch over Outcome<T> is exhaustive with three cases', () {
     String describe(Outcome<int> outcome) => switch (outcome) {
-          Done(:final value) => 'done $value',
-          Failed(:final error) => 'failed $error',
-          Cancelled(:final reason) => 'cancelled $reason',
-        };
+      Done(:final value) => 'done $value',
+      Failed(:final error) => 'failed $error',
+      Cancelled(:final reason) => 'cancelled $reason',
+    };
     expect(describe(const Done(1)), 'done 1');
     expect(describe(const Cancelled()), 'cancelled handler');
     expect(
@@ -72,13 +72,15 @@ void main() {
       final job = Job<int>((ctx) async => throw error);
       Object? caught;
       StackTrace? caughtStack;
-      job.value.then<void>(
-        (_) {},
-        onError: (Object thrown, StackTrace stackTrace) {
-          caught = thrown;
-          caughtStack = stackTrace;
-        },
-      ).ignore();
+      job.value
+          .then<void>(
+            (_) {},
+            onError: (Object thrown, StackTrace stackTrace) {
+              caught = thrown;
+              caughtStack = stackTrace;
+            },
+          )
+          .ignore();
       async.flushMicrotasks();
       expect(identical(caught, error), isTrue, reason: 'the same object');
       expect(
@@ -98,12 +100,14 @@ void main() {
         return 1;
       });
       Object? caught;
-      job.value.then<void>(
-        (_) {},
-        onError: (Object thrown, StackTrace stackTrace) {
-          caught = thrown;
-        },
-      ).ignore();
+      job.value
+          .then<void>(
+            (_) {},
+            onError: (Object thrown, StackTrace stackTrace) {
+              caught = thrown;
+            },
+          )
+          .ignore();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();

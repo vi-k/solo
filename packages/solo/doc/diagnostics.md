@@ -110,10 +110,12 @@ goes.
 controller says what it is waiting for:
 
 ```dart
-unawaited(controller.close().timeout(
-  const Duration(seconds: 5),
-  onTimeout: () => log('closing is held by ${controller.pending}'),
-));
+unawaited(
+  controller.close().timeout(
+    const Duration(seconds: 5),
+    onTimeout: () => log('closing is held by ${controller.pending}'),
+  ),
+);
 ```
 
 While a job holds it, `pending` is a `SoloPendingJob`, a snapshot of that job:
@@ -172,9 +174,9 @@ final class Hangs extends SoloObserver {
 
   @override
   void onStart(Solo<Object> solo, Job<Object?> job) => _timers[job] = Timer(
-        const Duration(seconds: 5),
-        () => log('${job.key} is still running: ${solo.pending}'),
-      );
+    const Duration(seconds: 5),
+    () => log('${job.key} is still running: ${solo.pending}'),
+  );
 
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
@@ -319,11 +321,11 @@ final class StuckCancellations extends SoloObserver {
 
   @override
   void onStart(Solo<Object> solo, Job<Object?> job) => job.whenCancelled(
-        (_) => _timers[job] = Timer(
-          const Duration(seconds: 5),
-          () => log('${job.key} has not stopped: ${solo.pending}'),
-        ),
-      );
+    (_) => _timers[job] = Timer(
+      const Duration(seconds: 5),
+      () => log('${job.key} has not stopped: ${solo.pending}'),
+    ),
+  );
 
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();

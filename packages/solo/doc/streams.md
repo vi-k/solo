@@ -19,14 +19,9 @@ A controller copies the positions its hardware reports into the state.
 
 ```dart
 // The first attempt: the job ends before the first position.
-Job<void> track() => enqueue<Ready, void>(
-      key: 'track',
-      (ctx) async {
-        hw.positions.listen(
-          (p) => ctx.emit(ctx.state.copyWith(position: p)),
-        );
-      },
-    );
+Job<void> track() => enqueue<Ready, void>(key: 'track', (ctx) async {
+  hw.positions.listen((p) => ctx.emit(ctx.state.copyWith(position: p)));
+});
 ```
 
 The body subscribes and returns, so the job is over before the first position
@@ -47,11 +42,11 @@ cancels the subscription before the first position arrives.
 
 ```dart
 Job<void> track() => enqueue<Ready, void>(
-      key: 'track',
-      (ctx) => ctx.each(hw.positions, (childCtx, p) {
-        childCtx.emit(childCtx.state.copyWith(position: p));
-      }).value,
-    );
+  key: 'track',
+  (ctx) => ctx.each(hw.positions, (childCtx, p) {
+    childCtx.emit(childCtx.state.copyWith(position: p));
+  }).value,
+);
 ```
 
 `ctx.each(stream, onData)` creates and returns a child `Job<void>` that owns
@@ -122,11 +117,11 @@ final class ScreenController extends Solo<Screen> {
   ScreenController(this.session) : super(const Screen());
 
   Job<void> follow() => enqueue<Screen, void>(
-        key: 'follow',
-        (ctx) => ctx.each(session.stream, (childCtx, next) {
-          childCtx.emit(childCtx.state.copyWith(signedIn: next.signedIn));
-        }).value,
-      );
+    key: 'follow',
+    (ctx) => ctx.each(session.stream, (childCtx, next) {
+      childCtx.emit(childCtx.state.copyWith(signedIn: next.signedIn));
+    }).value,
+  );
 }
 ```
 
@@ -138,17 +133,14 @@ when `follow()` starts sends nothing, and the screen goes on showing
 ### The state first, then the stream
 
 ```dart
-Job<void> follow() => enqueue<Screen, void>(
-      key: 'follow',
-      (ctx) async {
-        void take(SoloContext<Screen, Screen> target, Session next) =>
-            target.emit(target.state.copyWith(signedIn: next.signedIn));
+Job<void> follow() => enqueue<Screen, void>(key: 'follow', (ctx) async {
+  void take(SoloContext<Screen, Screen> target, Session next) =>
+      target.emit(target.state.copyWith(signedIn: next.signedIn));
 
-        final following = ctx.each(session.stream, take); // what happens next
-        take(ctx, session.currentState); // what has already happened
-        await following.value;
-      },
-    );
+  final following = ctx.each(session.stream, take); // what happens next
+  take(ctx, session.currentState); // what has already happened
+  await following.value;
+});
 ```
 
 Here `Screen` and `Session` are application states with a `signedIn` property.

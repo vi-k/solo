@@ -81,19 +81,19 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     required String Function()? describe,
     required S Function(S, Object, StackTrace)? ifFailed,
     required S Function(S, Cancelled)? ifCancelled,
-  })  : _timeout = _checkTimeout(timeout, cancellable: cancellable),
-        _seed = seed,
-        _merge = merge,
-        _snapshot = snapshot,
-        _key = key,
-        _policy = policy,
-        _timing = timing,
-        _canStart = canStart,
-        _keepWhile = keepWhile,
-        _cancellable = cancellable,
-        _describe = describe,
-        _ifFailed = ifFailed,
-        _ifCancelled = ifCancelled;
+  }) : _timeout = _checkTimeout(timeout, cancellable: cancellable),
+       _seed = seed,
+       _merge = merge,
+       _snapshot = snapshot,
+       _key = key,
+       _policy = policy,
+       _timing = timing,
+       _canStart = canStart,
+       _keepWhile = keepWhile,
+       _cancellable = cancellable,
+       _describe = describe,
+       _ifFailed = ifFailed,
+       _ifCancelled = ifCancelled;
 
   /// The check `JobBase` makes of every job, made once here, when the
   /// accumulator is created: its jobs are built on [add], and a mistake of
@@ -133,22 +133,23 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     return null;
   }
 
-  _SoloJob<S, W, T> _job(_AccumulationGroup<V>? group) => _SoloJob<S, W, T>(
-        _solo,
-        (ctx) {
-          ctx.check();
-          return _handler(ctx, group!._take());
-        },
-        key: _key,
-        canStart: _canStart,
-        keepWhile: _keepWhile,
-        cancellable: _cancellable,
-        timeout: _timeout,
-        describe: _describe,
-        observer: _solo._jobObserver,
-        ifFailed: _ifFailed,
-        ifCancelled: _ifCancelled,
-      )
+  _SoloJob<S, W, T> _job(_AccumulationGroup<V>? group) =>
+      _SoloJob<S, W, T>(
+          _solo,
+          (ctx) {
+            ctx.check();
+            return _handler(ctx, group!._take());
+          },
+          key: _key,
+          canStart: _canStart,
+          keepWhile: _keepWhile,
+          cancellable: _cancellable,
+          timeout: _timeout,
+          describe: _describe,
+          observer: _solo._jobObserver,
+          ifFailed: _ifFailed,
+          ifCancelled: _ifCancelled,
+        )
         .._accumulation = group
         // Every event of the group gets this job back, so a plain `then`
         // by one caller would leave the next one nothing but a throw.
@@ -206,8 +207,8 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   bool get _throttleReady => _throttleTimer?.isActive != true;
 
   bool get _hasQueuedGroup => _solo._queue._jobs.any(
-        (job) => identical(job._accumulation?._owner, this),
-      );
+    (job) => identical(job._accumulation?._owner, this),
+  );
 
   /// Whether this accumulator has no group of its own queued or running.
   bool get _isIdle =>

@@ -88,8 +88,11 @@ void main() {
   });
 
   test('keepWhile false at start drops the job before start', () {
-    runSolo(initialState: const Preparing(progress: 100),
-        (solo, journal, async) {
+    runSolo(initialState: const Preparing(progress: 100), (
+      solo,
+      journal,
+      async,
+    ) {
       solo.enqueue<Preparing, void>(
         key: 'kept',
         keepWhile: (state) => state.progress < 100,
@@ -139,7 +142,8 @@ void main() {
   // writes the state asks itself again, and one that writes every time it
   // is asked never comes back. The write throws instead, and the rule
   // throws with it, as any rule that throws.
-  const refused = 'Bad state: Cannot set the state of TestSolo while a '
+  const refused =
+      'Bad state: Cannot set the state of TestSolo while a '
       'keepWhile is answering; a rule answers about the state, it does not '
       'change it';
 
@@ -255,10 +259,9 @@ void main() {
         (ctx) async {},
       );
       async.flushMicrotasks();
-      expect(
-        journal.take(),
-        ['[typed] dropped Cancelled(rules: is not Working)'],
-      );
+      expect(journal.take(), [
+        '[typed] dropped Cancelled(rules: is not Working)',
+      ]);
       expect(called, isFalse);
     });
   });
@@ -324,8 +327,8 @@ void main() {
         expect(job.outcome, isA<Cancelled>());
         expect(
           journal.take().where(
-                (line) => line == '[x] error Bad state: rule boom',
-              ),
+            (line) => line == '[x] error Bad state: rule boom',
+          ),
           hasLength(1),
         );
       });
@@ -353,10 +356,9 @@ void main() {
       async.elapse(const Duration(milliseconds: 10));
       solo.externalSetState(const Preparing());
       async.flushTimers();
-      expect(
-        journal.take().where((line) => line.contains('error')).toList(),
-        ['[thrower] error Bad state: keep boom'],
-      );
+      expect(journal.take().where((line) => line.contains('error')).toList(), [
+        '[thrower] error Bad state: keep boom',
+      ]);
       expect(
         other.outcome,
         isA<Cancelled>(),
@@ -576,24 +578,19 @@ void main() {
       Object? refused;
       var once = true;
       late SoloJob<void> incoming;
-      Solo.observer = _Retrier(
-        (solo, job) {
-          if (once && job.key == 'old') {
-            once = false;
-            try {
-              (solo as TestSolo).enqueueJob(incoming);
-            } on Object catch (error) {
-              refused = error;
-            }
+      Solo.observer = _Retrier((solo, job) {
+        if (once && job.key == 'old') {
+          once = false;
+          try {
+            (solo as TestSolo).enqueueJob(incoming);
+          } on Object catch (error) {
+            refused = error;
           }
-        },
-        alsoOnFinish: true,
-      );
+        }
+      }, alsoOnFinish: true);
       solo
         ..enqueue<Initial, void>(key: 'blocker', (ctx) async => pause(ctx, 50))
-        ..enqueueJob(
-          solo.job<Initial, void>(key: 'old', (ctx) async {}),
-        );
+        ..enqueueJob(solo.job<Initial, void>(key: 'old', (ctx) async {}));
       incoming = solo.job<Initial, void>(key: 'old', (ctx) async {});
       solo.enqueueJob(incoming, policy: Policy.replace);
       async.flushTimers();
@@ -614,8 +611,10 @@ void main() {
         },
         (ctx) async {},
       );
-      final second =
-          solo.enqueue<TestState, void>(key: 'second', (ctx) async {});
+      final second = solo.enqueue<TestState, void>(
+        key: 'second',
+        (ctx) async {},
+      );
       async.flushTimers();
       expect(first.outcome, isA<Cancelled>());
       expect(second.outcome, isA<Done<void>>(), reason: 'the queue moved on');
@@ -625,8 +624,7 @@ void main() {
   });
 
   for (final answer in [true, false]) {
-    test(
-        'a child whose own start rule gives it up and says $answer '
+    test('a child whose own start rule gives it up and says $answer '
         'reaches its parent as its cancellation', () {
       runSolo((solo, journal, async) {
         var ran = false;
@@ -640,8 +638,9 @@ void main() {
           (ctx) async => ran = true,
         );
         Object? caught;
-        final parent =
-            solo.enqueue<TestState, void>(key: 'parent', (ctx) async {
+        final parent = solo.enqueue<TestState, void>(key: 'parent', (
+          ctx,
+        ) async {
           try {
             await ctx.run(child);
           } on Object catch (error) {
@@ -711,6 +710,5 @@ final class _Retrier extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      _onError(solo, job);
+  }) => _onError(solo, job);
 }

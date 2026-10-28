@@ -59,9 +59,7 @@ void main() {
       final done = Completer<int>();
       final job = Job<void>((ctx) async {
         final watch = Stopwatch()..start();
-        final removers = [
-          for (var i = 0; i < count; i++) ctx.onCancel(() {}),
-        ];
+        final removers = [for (var i = 0; i < count; i++) ctx.onCancel(() {})];
         for (final remove in removers.reversed) {
           remove();
         }
@@ -86,8 +84,7 @@ void main() {
         first();
         first();
         await ctx.abandonable(() => Completer<void>().future);
-      })
-        ..launch();
+      })..launch();
       await Future<void>.delayed(Duration.zero);
       await job.cancel();
       expect(calls, ['heard'], reason: 'a second call takes back nothing');

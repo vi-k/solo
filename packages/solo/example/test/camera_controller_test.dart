@@ -16,7 +16,8 @@ void runCamera(
     FakeCameraHardware hw,
     JournalObserver journal,
     FakeAsync async,
-  ) body,
+  )
+  body,
 ) {
   fakeAsync((async) {
     final journal = JournalObserver();
@@ -96,11 +97,9 @@ void main() {
 
       hw.fail(StateError('overheat'));
       async.flushMicrotasks();
-      expect(
-        journal.take(),
-        ['state: Broken(Bad state: overheat)'],
-        reason: 'join is still waiting for the zoom command to come back',
-      );
+      expect(journal.take(), [
+        'state: Broken(Bad state: overheat)',
+      ], reason: 'join is still waiting for the zoom command to come back');
 
       async.elapse(const Duration(milliseconds: 5));
       expect(journal.take(), [
@@ -264,11 +263,10 @@ void main() {
         'state: Ready(zoom: 2.0, focusPoint: Point(0.9, 0.9), paused: false)',
         '[setFocusPoint: Point(0.9, 0.9)] finished Done(null)',
       ]);
-      expect(
-        hw.log.where((line) => line.startsWith('focus')),
-        ['focus Point(0.9, 0.9): begin', 'focus Point(0.9, 0.9): end'],
-        reason: 'only the surviving request reached the hardware',
-      );
+      expect(hw.log.where((line) => line.startsWith('focus')), [
+        'focus Point(0.9, 0.9): begin',
+        'focus Point(0.9, 0.9): end',
+      ], reason: 'only the surviving request reached the hardware');
     });
   });
 

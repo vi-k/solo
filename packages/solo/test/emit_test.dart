@@ -33,12 +33,13 @@ void main() {
         '[init] finished Cancelled(rules: is not Initial)',
       ]);
     });
-    const trap = 'Job(init) emit: Preparing(progress: 0), which is not '
+    const trap =
+        'Job(init) emit: Preparing(progress: 0), which is not '
         'Initial: the rules cancel Job(init) at its next checkpoint';
-    expect(
-      lines.where((line) => line.contains(' emit: ')),
-      ['Job(init) emit: Initial()', trap],
-    );
+    expect(lines.where((line) => line.contains(' emit: ')), [
+      'Job(init) emit: Initial()',
+      trap,
+    ]);
   });
 
   test('emit gives up on a cancellation that arrived inside it', () {

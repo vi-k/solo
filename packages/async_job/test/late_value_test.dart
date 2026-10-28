@@ -32,8 +32,7 @@ void main() {
             )
             .ignore();
         return resource;
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 30));
       job.cancel().ignore();
       async.flushTimers();
@@ -53,14 +52,10 @@ void main() {
         // line.
         ctx
             .run(
-              Job.deferred<void>(
-                key: 'child',
-                cancellable: false,
-                (ctx) async {
-                  await ctx.abandonable(() => delay(50));
-                  order.add('child');
-                },
-              ),
+              Job.deferred<void>(key: 'child', cancellable: false, (ctx) async {
+                await ctx.abandonable(() => delay(50));
+                order.add('child');
+              }),
             )
             .ignore();
         return 'db';
@@ -77,76 +72,59 @@ void main() {
     final journal = JobJournal();
     final zone = <Object>[];
     late final Job<String> job;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          job = Job<String>(
-            key: 'job',
-            observer: journal,
-            (ctx) async {
-              ctx.onDiscard(() => throw StateError('close failed'));
-              ctx
-                  .run(
-                    Job.deferred<void>(
-                      key: 'child',
-                      (ctx) => ctx.abandonable(() => delay(100)),
-                    ),
-                  )
-                  .ignore();
-              return 'db';
-            },
-          );
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        job = Job<String>(key: 'job', observer: journal, (ctx) async {
+          ctx.onDiscard(() => throw StateError('close failed'));
+          ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (ctx) => ctx.abandonable(() => delay(100)),
+                ),
+              )
+              .ignore();
+          return 'db';
         });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone: an `expect` that fails inside it lands in
     // the handler and is counted as a zone error instead of failing.
     expect(job.outcome, isA<Cancelled>());
-    expect(
-      journal.take(),
-      contains('[job] error Bad state: close failed'),
-    );
-    expect(
-      zone.map((error) => '$error'),
-      ['Bad state: close failed'],
-      reason: 'an observer that only watches answers for nothing',
-    );
+    expect(journal.take(), contains('[job] error Bad state: close failed'));
+    expect(zone.map((error) => '$error'), [
+      'Bad state: close failed',
+    ], reason: 'an observer that only watches answers for nothing');
   });
 
   test('without an observer the disposer error goes to the zone', () {
     final caught = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<String>((ctx) async {
-            ctx.onDiscard(() => throw StateError('close failed'));
-            ctx
-                .run(
-                  Job.deferred<void>(
-                    (ctx) => ctx.abandonable(() => delay(100)),
-                  ),
-                )
-                .ignore();
-            return 'db';
-          });
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
-          expect(job.outcome, isA<Cancelled>());
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final job = Job<String>((ctx) async {
+          ctx.onDiscard(() => throw StateError('close failed'));
+          ctx
+              .run(
+                Job.deferred<void>((ctx) => ctx.abandonable(() => delay(100))),
+              )
+              .ignore();
+          return 'db';
         });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(job.outcome, isA<Cancelled>());
+      });
+    }, (error, stackTrace) => caught.add(error));
     expect(caught.map((error) => '$error').toList(), [
       'Bad state: close failed',
     ]);
   });
-  test('a value that arrives during the cleanup is released before the end',
-      () {
+  test('a value that arrives during the cleanup '
+      'is released before the end', () {
     fakeAsync((async) {
       final order = <String>[];
       final job = Job<void>((ctx) async {
@@ -154,22 +132,23 @@ void main() {
         // up later, while the engine is still unwinding the stack. `ignore`,
         // not `unawaited`: an `abandonable` call left behind still completes
         // with the job's cancellation, and nobody is there to catch it.
-        ctx.abandonable<String>(
-          () => delay(50).then((_) => 'db'),
-          discard: (value) async {
-            order.add('discard starts');
-            await delay(100);
-            order.add('discard ends');
-          },
-        ).ignore();
+        ctx
+            .abandonable<String>(
+              () => delay(50).then((_) => 'db'),
+              discard: (value) async {
+                order.add('discard starts');
+                await delay(100);
+                order.add('discard ends');
+              },
+            )
+            .ignore();
         ctx.onDispose(() async {
           order.add('dispose starts');
           await delay(50);
           order.add('dispose ends');
         });
         await ctx.abandonable(() => delay(200));
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job
         ..cancel().ignore()
@@ -191,22 +170,19 @@ void main() {
       final action = Completer<String>();
       final child = Completer<void>();
       final disposed = <String>[];
-      final job = Job<void>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          // Walked away from: the body ends while the action is still in
-          // flight, so the value comes back to a job whose body is gone.
-          ctx
-              .abandonable<String>(() => action.future, dispose: disposed.add)
-              .ignore();
-          // And a child, so the job is still running when it does. Without
-          // one the job would be over by then, and the window this test is
-          // about would not exist.
-          ctx
-              .run(Job.deferred<void>((ctx) => ctx.join(() => child.future)))
-              .ignore();
-        },
-      );
+      final job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
+        // Walked away from: the body ends while the action is still in
+        // flight, so the value comes back to a job whose body is gone.
+        ctx
+            .abandonable<String>(() => action.future, dispose: disposed.add)
+            .ignore();
+        // And a child, so the job is still running when it does. Without
+        // one the job would be over by then, and the window this test is
+        // about would not exist.
+        ctx
+            .run(Job.deferred<void>((ctx) => ctx.join(() => child.future)))
+            .ignore();
+      });
       async.flushMicrotasks();
       action.complete('v');
       // Into the microtask the registration of the late value costs: the
@@ -216,15 +192,14 @@ void main() {
       child.complete();
       async.flushTimers();
       expect(job.outcome, isA<Cancelled>());
-      expect(
-        disposed,
-        ['v'],
-        reason: 'the value did not reach the body, so it is cleaned up',
-      );
+      expect(disposed, [
+        'v',
+      ], reason: 'the value did not reach the body, so it is cleaned up');
       expect(
         errors,
         isEmpty,
-        reason: 'and the observer hears nothing: a second completion of an '
+        reason:
+            'and the observer hears nothing: a second completion of an '
             'internal future is not news of the job',
       );
     });
@@ -244,8 +219,7 @@ void main() {
         } on Object catch (error) {
           caught = error;
         }
-      })
-        ..launch();
+      })..launch();
       async.flushMicrotasks();
       // An engine ending the job by hand, while the body is still inside a call
       // that has a resource coming.
@@ -255,13 +229,15 @@ void main() {
       expect(
         released,
         ['db'],
-        reason: 'there is no stack to register on any more, so the value is '
+        reason:
+            'there is no stack to register on any more, so the value is '
             'released on the spot instead of being left to nobody',
       );
       expect(
         caught,
         isA<StateError>(),
-        reason: 'and the body hears about the job, not about a registration '
+        reason:
+            'and the body hears about the job, not about a registration '
             'it never made',
       );
       expect('$caught', contains('has already finished'));
@@ -272,38 +248,36 @@ void main() {
     final errors = <Object>[];
     final zone = <Object>[];
     late final Job<String> job;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          job = Job<String>(
-            observer: ErrorObserver(errors),
-            (ctx) => ctx.abandonable<String>(() async {
-              await delay(50);
-              throw StateError('the action failed late');
-            }).timeout(
-              const Duration(milliseconds: 10),
-              onTimeout: () => 'fallback',
-            ),
-          );
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) => zone.add(error),
-    );
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        job = Job<String>(
+          observer: ErrorObserver(errors),
+          (ctx) => ctx
+              .abandonable<String>(() async {
+                await delay(50);
+                throw StateError('the action failed late');
+              })
+              .timeout(
+                const Duration(milliseconds: 10),
+                onTimeout: () => 'fallback',
+              ),
+        );
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => zone.add(error));
     // Outside the guarded zone: an `expect` that fails inside it lands in
     // the handler and is counted as a zone error instead of failing.
     expect(job.outcome.toString(), 'Done(fallback)');
     expect(
       errors.map((error) => '$error').toList(),
       ['Bad state: the action failed late'],
-      reason: 'the wrapper the body walked away through swallows what it '
+      reason:
+          'the wrapper the body walked away through swallows what it '
           'is handed, and an error is never lost silently',
     );
-    expect(
-      zone.map((error) => '$error').toList(),
-      ['Bad state: the action failed late'],
-      reason: 'an observer that only watches answers for nothing',
-    );
+    expect(zone.map((error) => '$error').toList(), [
+      'Bad state: the action failed late',
+    ], reason: 'an observer that only watches answers for nothing');
   });
 
   test('a wait made in the work still reports once, and only once', () {
@@ -324,10 +298,9 @@ void main() {
         // well would say one error twice.
       }).ignoreFailure();
       async.flushTimers();
-      expect(
-        journal.take().where((line) => line.contains('error')).toList(),
-        ['[j] error Bad state: late'],
-      );
+      expect(journal.take().where((line) => line.contains('error')).toList(), [
+        '[j] error Bad state: late',
+      ]);
     });
   });
 
@@ -335,18 +308,21 @@ void main() {
     // The work waits for the value, so it is the receiver: it gets the
     // value on the terms the call asked for, and a job that is over hands
     // it nothing closed -- it releases the value and says why.
-    final members = <String,
-        Future<_Resource> Function(
-      JobContext ctx,
-      Future<_Resource> Function() open, {
-      void Function(_Resource)? dispose,
-      void Function(_Resource)? discard,
-    })>{
-      'join': (ctx, open, {dispose, discard}) =>
-          ctx.join(open, dispose: dispose, discard: discard),
-      'abandonable': (ctx, open, {dispose, discard}) =>
-          ctx.abandonable(open, dispose: dispose, discard: discard),
-    };
+    final members =
+        <
+          String,
+          Future<_Resource> Function(
+            JobContext ctx,
+            Future<_Resource> Function() open, {
+            void Function(_Resource)? dispose,
+            void Function(_Resource)? discard,
+          })
+        >{
+          'join': (ctx, open, {dispose, discard}) =>
+              ctx.join(open, dispose: dispose, discard: discard),
+          'abandonable': (ctx, open, {dispose, discard}) =>
+              ctx.abandonable(open, dispose: dispose, discard: discard),
+        };
 
     /// The body hands `take` to unattended work and returns, or cancels itself
     /// with [cancelsItself]; `open` brings the value back [opensIn] ms later
@@ -358,7 +334,8 @@ void main() {
         JobContext ctx,
         Future<_Resource> Function() open,
         _Resource Function() make,
-      ) take, {
+      )
+      take, {
       int opensIn = 10,
       int childFor = 0,
       int? cancelAt,
@@ -373,14 +350,10 @@ void main() {
           }
           ctx.unattended(() async {
             try {
-              final resource = await take(
-                ctx,
-                () async {
-                  await delay(opensIn);
-                  return made = _Resource();
-                },
-                () => made = _Resource(),
-              );
+              final resource = await take(ctx, () async {
+                await delay(opensIn);
+                return made = _Resource();
+              }, () => made = _Resource());
               seen.add('got it, closed: ${resource.closed}');
             } on Cancelled {
               seen.add('cancelled');
@@ -404,7 +377,8 @@ void main() {
 
     void close(_Resource resource) => resource.closed = true;
 
-    const refused = 'Bad state: Job() has already finished, '
+    const refused =
+        'Bad state: Job() has already finished, '
         'cannot take the value of a call it made';
 
     for (final MapEntry(key: member, value: call) in members.entries) {
@@ -421,10 +395,7 @@ void main() {
                 discard: discard ? close : null,
               ),
             ),
-            [
-              refused,
-              'in the end closed: true',
-            ],
+            [refused, 'in the end closed: true'],
           );
         });
       }
@@ -471,8 +442,9 @@ void main() {
       });
     }
     for (final cancelsItself in [true, false]) {
-      final how =
-          cancelsItself ? 'the body cancelled itself' : 'cancelled outside';
+      final how = cancelsItself
+          ? 'the body cancelled itself'
+          : 'cancelled outside';
       test('abandonable, the job ended by hand in the cascade, $how', () {
         // A callback of the child reaches the engine, and it ends the parent
         // by hand: the mark is on, and the callbacks that would have told
@@ -481,37 +453,39 @@ void main() {
         fakeAsync((async) {
           _Resource? made;
           late final ProbeJob<void> parent;
-          parent = ProbeJob<void>((ctx) async {
-            ctx.run(
-              Job.deferred<void>((ctx) async {
-                ctx.onCancel(() => parent.drop(const Cancelled('by hand')));
-                await ctx.abandonable(() => delay(50));
-              }),
-            ).ignore();
-            ctx.unattended(() async {
-              try {
-                final resource = await ctx.abandonable(
-                  () async {
-                    await delay(20);
-                    return made = _Resource();
-                  },
-                  discard: close,
-                );
-                seen.add('got it, closed: ${resource.closed}');
-              } on Cancelled {
-                seen.add('cancelled');
-              } on Object catch (error) {
-                seen.add('$error');
-              }
-            });
-            await delay(5);
-            if (cancelsItself) {
-              throw const Cancelled('gave up');
-            }
-            await delay(100);
-          })
-            ..ignoreFailure()
-            ..launch();
+          parent =
+              ProbeJob<void>((ctx) async {
+                  ctx
+                      .run(
+                        Job.deferred<void>((ctx) async {
+                          ctx.onCancel(
+                            () => parent.drop(const Cancelled('by hand')),
+                          );
+                          await ctx.abandonable(() => delay(50));
+                        }),
+                      )
+                      .ignore();
+                  ctx.unattended(() async {
+                    try {
+                      final resource = await ctx.abandonable(() async {
+                        await delay(20);
+                        return made = _Resource();
+                      }, discard: close);
+                      seen.add('got it, closed: ${resource.closed}');
+                    } on Cancelled {
+                      seen.add('cancelled');
+                    } on Object catch (error) {
+                      seen.add('$error');
+                    }
+                  });
+                  await delay(5);
+                  if (cancelsItself) {
+                    throw const Cancelled('gave up');
+                  }
+                  await delay(100);
+                })
+                ..ignoreFailure()
+                ..launch();
           if (!cancelsItself) {
             async.elapse(const Duration(milliseconds: 5));
             parent.cancel().ignore();
@@ -522,8 +496,7 @@ void main() {
         expect(seen, ['cancelled', 'in the end closed: true']);
       });
     }
-    test(
-        'abandonable, a raw callback before it threw, '
+    test('abandonable, a raw callback before it threw, '
         'the body cancelled itself', () {
       // The pass over the callbacks stops at the throw, and the race of the
       // call never hears the cancellation from it.
@@ -533,24 +506,21 @@ void main() {
         () => fakeAsync((async) {
           _Resource? made;
           ProbeJob<void>((ctx) async {
-            (ctx as ProbeContext).onCancelRaw(() => throw StateError('boom'));
-            ctx.unattended(() async {
-              try {
-                final resource = await ctx.abandonable(
-                  () async {
+              (ctx as ProbeContext).onCancelRaw(() => throw StateError('boom'));
+              ctx.unattended(() async {
+                try {
+                  final resource = await ctx.abandonable(() async {
                     await delay(20);
                     return made = _Resource();
-                  },
-                  discard: close,
-                );
-                seen.add('got it, closed: ${resource.closed}');
-              } on Cancelled {
-                seen.add('cancelled');
-              }
-            });
-            await delay(5);
-            throw const Cancelled('gave up');
-          })
+                  }, discard: close);
+                  seen.add('got it, closed: ${resource.closed}');
+                } on Cancelled {
+                  seen.add('cancelled');
+                }
+              });
+              await delay(5);
+              throw const Cancelled('gave up');
+            })
             ..ignoreFailure()
             ..launch();
           async.flushTimers();
@@ -561,20 +531,19 @@ void main() {
       expect(seen, ['cancelled', 'in the end closed: true']);
       expect(errors, ['Bad state: boom']);
     });
-    test('abandonable with a value at hand, on a job still waiting for a child',
-        () {
-      expect(
-        scenario(
-          childFor: 30,
-          (ctx, open, make) async {
+    test(
+      'abandonable with a value at hand, on a job still waiting for a child',
+      () {
+        expect(
+          scenario(childFor: 30, (ctx, open, make) async {
             await delay(10);
             return ctx.abandonable(make, discard: close);
-          },
-        ),
-        ['got it, closed: false', 'in the end closed: false'],
-        reason: 'the job ended Done: the work is the receiver',
-      );
-    });
+          }),
+          ['got it, closed: false', 'in the end closed: false'],
+          reason: 'the job ended Done: the work is the receiver',
+        );
+      },
+    );
   });
 
   group('a value that reached nobody is released before the unwinding', () {
@@ -604,28 +573,26 @@ void main() {
           final a = Job.deferred<int>(key: 'a', (ctx) async {
             // Asks a millisecond later, so the slot comes to `a` first, and
             // holds on through the cancellation of `a`.
-            ctx.run(
-              Job.deferred<void>((ctx) async {
-                await ctx.abandonable(() => delay(1));
-                await ctx.uncancellable(() async {
-                  (await take('child')).give('child');
-                });
-              }),
-            ).ignore();
+            ctx
+                .run(
+                  Job.deferred<void>((ctx) async {
+                    await ctx.abandonable(() => delay(1));
+                    await ctx.uncancellable(() async {
+                      (await take('child')).give('child');
+                    });
+                  }),
+                )
+                .ignore();
             await ctx.abandonable(() => take('a'), dispose: (s) => s.give('a'));
             return 0;
           });
           final parent = Job<void>((ctx) async {
             if (how == 'runAll branch') {
-              await ctx.runAll([
-                a,
-                Job.deferred<int>((ctx) async => 2),
-              ]);
+              await ctx.runAll([a, Job.deferred<int>((ctx) async => 2)]);
             } else {
               await ctx.run(a);
             }
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
           a.cancel().ignore();
           async.flushTimers();
@@ -641,7 +608,8 @@ void main() {
               'child takes',
               'child gives',
             ],
-            reason: 'the slot came to `a` after its wait was abandoned: `a` '
+            reason:
+                'the slot came to `a` after its wait was abandoned: `a` '
                 'waits for its child, the child for the slot, and kept for '
                 'the unwinding the slot would wait for `a`',
           );
@@ -691,7 +659,8 @@ void main() {
               'b cleanup takes',
               'b cleanup gives',
             ],
-            reason: 'the slot came to `a` at the second barrier, where no '
+            reason:
+                'the slot came to `a` at the second barrier, where no '
                 'callback runs: held for the second pass, it would wait for '
                 'the barrier, the barrier for `b`, and `b` for the slot',
           );
@@ -709,9 +678,7 @@ void main() {
         final job = Job<void>((ctx) async {
           ctx
               .run(
-                Job.deferred<void>(
-                  (ctx) => ctx.uncancellable(() => delay(30)),
-                ),
+                Job.deferred<void>((ctx) => ctx.uncancellable(() => delay(30))),
               )
               .ignore();
           await ctx.abandonable(
@@ -778,14 +745,16 @@ void main() {
         void at(String what) =>
             order.add('${async.elapsed.inMilliseconds} ms: $what');
         final a = Job.deferred<void>((ctx) async {
-          ctx.abandonable<String>(
-            () => delay(50).then((_) => 'db'),
-            discard: (value) async {
-              at('discard starts');
-              await delay(100);
-              at('discard ends');
-            },
-          ).ignore();
+          ctx
+              .abandonable<String>(
+                () => delay(50).then((_) => 'db'),
+                discard: (value) async {
+                  at('discard starts');
+                  await delay(100);
+                  at('discard ends');
+                },
+              )
+              .ignore();
           ctx.onDispose(() async {
             at('dispose starts');
             await delay(50);
@@ -807,7 +776,8 @@ void main() {
             '60 ms: discard starts',
             '160 ms: discard ends',
           ],
-          reason: 'the value came while the stack was unwinding, and the '
+          reason:
+              'the value came while the stack was unwinding, and the '
               'callbacks of the stack do not overlap',
         );
       });
@@ -818,35 +788,28 @@ void main() {
         final errors = <Object>[];
         final zone = <Object>[];
         late final Job<void> job;
-        runZonedGuarded(
-          () {
-            fakeAsync((async) {
-              job = Job<void>(
-                observer: ErrorObserver(errors),
-                (ctx) async {
-                  ctx
-                      .run(
-                        Job.deferred<void>(
-                          (ctx) => ctx.uncancellable(() => delay(30)),
-                        ),
-                      )
-                      .ignore();
-                  await ctx.abandonable(
-                    () => delay(10).then((_) => 'db'),
-                    dispose: (db) => how == 'throws'
-                        ? throw StateError('close failed')
-                        : delay(5)
-                            .then((_) => throw StateError('close failed')),
-                  );
-                },
-              )..ignoreFailure();
-              async.elapse(const Duration(milliseconds: 5));
-              job.cancel().ignore();
-              async.flushTimers();
-            });
-          },
-          (error, stackTrace) => zone.add(error),
-        );
+        runZonedGuarded(() {
+          fakeAsync((async) {
+            job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
+              ctx
+                  .run(
+                    Job.deferred<void>(
+                      (ctx) => ctx.uncancellable(() => delay(30)),
+                    ),
+                  )
+                  .ignore();
+              await ctx.abandonable(
+                () => delay(10).then((_) => 'db'),
+                dispose: (db) => how == 'throws'
+                    ? throw StateError('close failed')
+                    : delay(5).then((_) => throw StateError('close failed')),
+              );
+            })..ignoreFailure();
+            async.elapse(const Duration(milliseconds: 5));
+            job.cancel().ignore();
+            async.flushTimers();
+          });
+        }, (error, stackTrace) => zone.add(error));
         // Outside the guarded zone: an `expect` that fails inside it lands in
         // the handler and is counted as a zone error instead of failing.
         expect(job.outcome, isA<Cancelled>());
@@ -859,39 +822,37 @@ void main() {
       final errors = <Object>[];
       final zone = <Object>[];
       late final ProbeJob<void> job;
-      runZonedGuarded(
-        () {
-          fakeAsync((async) {
-            job = ProbeJob<void>(
-              observer: ErrorObserver.answering(errors),
-              (ctx) async {
-                ctx
-                    .run(
-                      Job.deferred<void>(
-                        (ctx) => ctx.uncancellable(() => delay(30)),
-                      ),
-                    )
-                    .ignore();
-                await ctx.abandonable(
-                  () => delay(10).then((_) => 'db'),
-                  dispose: (db) => job.drop(const Cancelled('by hand')),
-                );
-              },
-            )
-              ..launch()
-              ..ignoreFailure();
-            async.elapse(const Duration(milliseconds: 5));
-            job.cancel().ignore();
-            async.flushTimers();
-          });
-        },
-        (error, stackTrace) => zone.add(error),
-      );
+      runZonedGuarded(() {
+        fakeAsync((async) {
+          job =
+              ProbeJob<void>(observer: ErrorObserver.answering(errors), (
+                  ctx,
+                ) async {
+                  ctx
+                      .run(
+                        Job.deferred<void>(
+                          (ctx) => ctx.uncancellable(() => delay(30)),
+                        ),
+                      )
+                      .ignore();
+                  await ctx.abandonable(
+                    () => delay(10).then((_) => 'db'),
+                    dispose: (db) => job.drop(const Cancelled('by hand')),
+                  );
+                })
+                ..launch()
+                ..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      }, (error, stackTrace) => zone.add(error));
       expect(job.outcome, isA<Cancelled>());
       expect(
         [...errors, ...zone],
         isEmpty,
-        reason: 'the wait for the release is on the stack before the release '
+        reason:
+            'the wait for the release is on the stack before the release '
             'starts, not after the disposer has finished the job',
       );
     });
@@ -929,7 +890,8 @@ void main() {
         expect(
           released,
           ['170 ms: db'],
-          reason: 'the value came to a wait the cancellation had ended: it '
+          reason:
+              'the value came to a wait the cancellation had ended: it '
               'reaches nobody, and the group taking the value of the branch '
               'does not pass over its release; it came in the second pass, '
               'so it waits for the callback running there',
@@ -962,8 +924,7 @@ void main() {
             disowned = ctx.disown(mine);
             rethrow;
           }
-        })
-          ..ignoreFailure();
+        })..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.flushTimers();
@@ -971,7 +932,8 @@ void main() {
         expect(
           released,
           ['late'],
-          reason: 'the release of the late value is no registration of the '
+          reason:
+              'the release of the late value is no registration of the '
               'value: disown takes back the one the body made',
         );
       });
@@ -994,23 +956,26 @@ void main() {
               'abandonable' => ctx.abandonable(open, dispose: close),
               'join' => ctx.join(open, dispose: close),
               _ => ctx.run(
-                  Job.deferred<_Resource>((ctx) => open()),
-                  dispose: close,
-                ),
+                Job.deferred<_Resource>((ctx) => open()),
+                dispose: close,
+              ),
             };
-            ctx.run(
-              Job.deferred<void>((ctx) async {
-                final taken = await resource;
-                await ctx.abandonable(() => delay(5));
-                log.add('used, closed: ${taken.closed}');
-              }),
-            ).ignore();
+            ctx
+                .run(
+                  Job.deferred<void>((ctx) async {
+                    final taken = await resource;
+                    await ctx.abandonable(() => delay(5));
+                    log.add('used, closed: ${taken.closed}');
+                  }),
+                )
+                .ignore();
           }).ignoreFailure();
           async.flushTimers();
           expect(
             log,
             ['used, closed: false', 'closed'],
-            reason: 'the body walked away, but the child holds the future: '
+            reason:
+                'the body walked away, but the child holds the future: '
                 'the value reaches it, and the parent closes it after its '
                 'children, on the stack',
           );

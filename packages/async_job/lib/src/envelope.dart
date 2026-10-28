@@ -31,12 +31,12 @@ final class _EnvelopeFrame {
   int index = 0;
 
   _EnvelopeFrame._list(this.envelope, List<AsyncError?> this.list)
-      : record = null,
-        length = list.length;
+    : record = null,
+      length = list.length;
 
   _EnvelopeFrame._record(this.envelope, List<Object?> this.record)
-      : list = null,
-        length = record.length;
+    : list = null,
+      length = record.length;
 
   Object? read() {
     if (list case final values?) {
@@ -58,20 +58,20 @@ final class _EnvelopeFrame {
         (final a, final b, final c) => <Object?>[a, b, c],
         (final a, final b, final c, final d) => <Object?>[a, b, c, d],
         (final a, final b, final c, final d, final e) => <Object?>[
-            a,
-            b,
-            c,
-            d,
-            e,
-          ],
+          a,
+          b,
+          c,
+          d,
+          e,
+        ],
         (final a, final b, final c, final d, final e, final f) => <Object?>[
-            a,
-            b,
-            c,
-            d,
-            e,
-            f,
-          ],
+          a,
+          b,
+          c,
+          d,
+          e,
+          f,
+        ],
         (final a, final b, final c, final d, final e, final f, final g) =>
           <Object?>[a, b, c, d, e, f, g],
         (
@@ -82,7 +82,7 @@ final class _EnvelopeFrame {
           final e,
           final f,
           final g,
-          final h
+          final h,
         ) =>
           <Object?>[a, b, c, d, e, f, g, h],
         (
@@ -224,7 +224,7 @@ _EnvelopeAnalysis? _analyzeEnvelope(Object error) {
   _visitErrors(
     error,
     StackTrace.empty,
-    onFailure: (_, __) => hasRealFailure = true,
+    onFailure: (_, _) => hasRealFailure = true,
     onCancelled: (cancelled, stackTrace) {
       cancellationCount++;
       firstCancelled ??= cancelled;

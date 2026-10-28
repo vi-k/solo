@@ -51,15 +51,15 @@ final class _Retrying extends Solo<AppState> {
   _Retrying() : super(const Ready());
 
   Job<void> sync(int item) => enqueue<Ready, void>(
-        key: _Op.sync,
-        policy: Policy.droppable,
-        (ctx) async {
-          attempts++;
-          if (attempts == 1) {
-            await sync(item).value;
-          }
-        },
-      );
+    key: _Op.sync,
+    policy: Policy.droppable,
+    (ctx) async {
+      attempts++;
+      if (attempts == 1) {
+        await sync(item).value;
+      }
+    },
+  );
 }
 
 /// An observer that writes what it hears to [_seen].
@@ -79,9 +79,9 @@ final class _Watch extends SoloObserver {
 
 /// The lines of [_seen] that say a job started.
 List<String> get _starts => [
-      for (final line in _seen)
-        if (line.endsWith(' started')) line,
-    ];
+  for (final line in _seen)
+    if (line.endsWith(' started')) line,
+];
 
 String _page() => File('doc/children.md').readAsStringSync();
 
@@ -93,17 +93,19 @@ String _prose() => _page().replaceAll(RegExp(r'\s+'), ' ');
 /// says, so a page that stops saying it leaves the test with nothing to
 /// stand for.
 void _says(String phrase) => expect(
-      _prose(),
-      contains(phrase),
-      reason: 'doc/children.md no longer says this',
-    );
+  _prose(),
+  contains(phrase),
+  reason: 'doc/children.md no longer says this',
+);
 
 /// What the page quotes under its `text` fences, in order.
 List<String> _quotes() => [
-      for (final block
-          in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(_page()))
-        block.group(1)!,
-    ];
+  for (final block in RegExp(
+    r'```text\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(_page()))
+    block.group(1)!,
+];
 
 /// Runs [body] under fake time, in a zone of its own, and returns the errors
 /// that reached that zone uncaught. Nothing is asserted inside: an `expect`
@@ -209,8 +211,7 @@ final class _Own extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('$job: $error');
+  }) => heard.add('$job: $error');
 }
 
 final class _Answering extends _Own with JobAnswerer {
@@ -222,7 +223,8 @@ final class _Answering extends _Own with JobAnswerer {
 }
 
 /// How a controller refuses a job it did not make, up to the job.
-const _refused = 'Invalid argument (job): was not created by this Solo '
+const _refused =
+    'Invalid argument (job): was not created by this Solo '
     '(make it with job(...) or ctx.child of this controller)';
 
 void main() {
@@ -245,15 +247,16 @@ void main() {
         final solo = page.Syncer();
         final made = solo.made(1);
         async.elapse(const Duration(seconds: 10));
-        _see('queued ${made.isQueued}, running ${made.isRunning}, '
-            'outcome ${made.outcome}, current ${solo.current}');
+        _see(
+          'queued ${made.isQueued}, running ${made.isRunning}, '
+          'outcome ${made.outcome}, current ${solo.current}',
+        );
       });
 
       expect(errors, isEmpty);
-      expect(
-        _seen,
-        ['queued false, running false, outcome null, current null'],
-      );
+      expect(_seen, [
+        'queued false, running false, outcome null, current null',
+      ]);
       expect(stage.trace, isEmpty);
       _says('`job(...)` makes a job and starts nothing.');
     });
@@ -263,8 +266,10 @@ void main() {
         final solo = page.Syncer();
         final made = solo.made(1);
         final added = solo.enqueueJob(made);
-        _see('the same handle ${identical(added, made)}, '
-            'queued ${made.isQueued}');
+        _see(
+          'the same handle ${identical(added, made)}, '
+          'queued ${made.isQueued}',
+        );
         async.flushMicrotasks();
         _see('running ${made.isRunning}, current ${solo.current}');
       });
@@ -297,29 +302,30 @@ void main() {
       _says('A child starts immediately, bypassing the queue');
     });
 
-    test('the progress goes into the state as it comes, written by the child',
-        () {
-      final errors = _zone((async) {
-        final solo = page.Syncer()..sync(1);
-        async.flushMicrotasks();
-        Solo.observer = _Watch();
-        stage.progress
-          ..add(40)
-          ..add(70);
-        async.flushMicrotasks();
-        _see('${solo.currentState}');
-      });
-
-      expect(errors, isEmpty);
-      expect(_seen, [
-        'state Ready(sent: 40, position: 0, path: ) by Job(each)',
-        'state Ready(sent: 70, position: 0, path: ) by Job(each)',
-        'Ready(sent: 70, position: 0, path: )',
-      ]);
-    });
-
     test(
-        'sync is over once the upload has returned and the API has closed '
+      'the progress goes into the state as it comes, written by the child',
+      () {
+        final errors = _zone((async) {
+          final solo = page.Syncer()..sync(1);
+          async.flushMicrotasks();
+          Solo.observer = _Watch();
+          stage.progress
+            ..add(40)
+            ..add(70);
+          async.flushMicrotasks();
+          _see('${solo.currentState}');
+        });
+
+        expect(errors, isEmpty);
+        expect(_seen, [
+          'state Ready(sent: 40, position: 0, path: ) by Job(each)',
+          'state Ready(sent: 70, position: 0, path: ) by Job(each)',
+          'Ready(sent: 70, position: 0, path: )',
+        ]);
+      },
+    );
+
+    test('sync is over once the upload has returned and the API has closed '
         'the progress', () {
       final errors = _zone((async) {
         final solo = page.Syncer();
@@ -330,12 +336,16 @@ void main() {
         async.flushMicrotasks();
         _end(async, 'push 1');
         async.elapse(const Duration(hours: 1));
-        _see('the upload returned: sync ${_how(job)}; the caller got $got; '
-            'save queued ${save.isQueued}');
+        _see(
+          'the upload returned: sync ${_how(job)}; the caller got $got; '
+          'save queued ${save.isQueued}',
+        );
         unawaited(stage.progress.close());
         async.flushMicrotasks();
-        _see('the progress closed: sync ${_how(job)}; the caller got $got; '
-            'save queued ${save.isQueued}');
+        _see(
+          'the progress closed: sync ${_how(job)}; the caller got $got; '
+          'save queued ${save.isQueued}',
+        );
       });
 
       expect(errors, isEmpty);
@@ -348,10 +358,14 @@ void main() {
         'save queued false',
       ]);
       expect(stage.trace, ['push 1 start', 'push 1 end', 'save start']);
-      _says('The parent keeps the queue occupied until all its children '
-          'finish, even if its body returns earlier');
-      _says('`sync` is over once the upload has returned its path and the '
-          'API has closed the progress');
+      _says(
+        'The parent keeps the queue occupied until all its children '
+        'finish, even if its body returns earlier',
+      );
+      _says(
+        '`sync` is over once the upload has returned its path and the '
+        'API has closed the progress',
+      );
     });
 
     test('the progress may close first: sync is over with the upload', () {
@@ -393,50 +407,56 @@ void main() {
       ]);
     });
 
-    test('an upload that fails leaves sync waiting for the progress to close',
-        () {
-      final errors = _zone((async) {
-        final job = page.Syncer().sync(1)..ignoreFailure();
-        async.flushMicrotasks();
-        _fail(async, 'push 1', StateError('push failed'));
-        _see('the upload failed: sync ${_how(job)}');
-        unawaited(stage.progress.close());
-        async.flushMicrotasks();
-        _see('the progress closed: sync ${_how(job)}');
-      });
+    test(
+      'an upload that fails leaves sync waiting for the progress to close',
+      () {
+        final errors = _zone((async) {
+          final job = page.Syncer().sync(1)..ignoreFailure();
+          async.flushMicrotasks();
+          _fail(async, 'push 1', StateError('push failed'));
+          _see('the upload failed: sync ${_how(job)}');
+          unawaited(stage.progress.close());
+          async.flushMicrotasks();
+          _see('the progress closed: sync ${_how(job)}');
+        });
 
-      expect(errors, isEmpty);
-      expect(_seen, [
-        'the upload failed: sync no outcome',
-        'the progress closed: sync Failed(Bad state: push failed)',
-      ]);
-    });
+        expect(errors, isEmpty);
+        expect(_seen, [
+          'the upload failed: sync no outcome',
+          'the progress closed: sync Failed(Bad state: push failed)',
+        ]);
+      },
+    );
   });
 
   group('The future of ctx.run', () {
-    test('a failed upload comes into the parent once the progress is closed',
-        () {
-      final errors = _zone((async) {
-        final syncer = page.Trying();
-        final job = syncer.trySync(7);
-        async.flushMicrotasks();
-        _fail(async, 'push 7', const ApiException());
-        _see('the upload failed: ${_how(job)}');
-        unawaited(stage.progress.close());
-        async.flushMicrotasks();
-        _see('the progress closed: ${_how(job)}');
-        _see('${syncer.currentState}');
-      });
+    test(
+      'a failed upload comes into the parent once the progress is closed',
+      () {
+        final errors = _zone((async) {
+          final syncer = page.Trying();
+          final job = syncer.trySync(7);
+          async.flushMicrotasks();
+          _fail(async, 'push 7', const ApiException());
+          _see('the upload failed: ${_how(job)}');
+          unawaited(stage.progress.close());
+          async.flushMicrotasks();
+          _see('the progress closed: ${_how(job)}');
+          _see('${syncer.currentState}');
+        });
 
-      expect(errors, isEmpty);
-      expect(_seen, [
-        'the upload failed: no outcome',
-        'the progress closed: Done(false)',
-        'Ready(sent: 0, position: 0, path: )',
-      ]);
-      _says('the `catch` above runs once the API has closed the progress '
-          '`_sync` follows');
-    });
+        expect(errors, isEmpty);
+        expect(_seen, [
+          'the upload failed: no outcome',
+          'the progress closed: Done(false)',
+          'Ready(sent: 0, position: 0, path: )',
+        ]);
+        _says(
+          'the `catch` above runs once the API has closed the progress '
+          '`_sync` follows',
+        );
+      },
+    );
 
     test('an upload that succeeds leaves its path in the state', () {
       final errors = _zone((async) {
@@ -503,9 +523,11 @@ void main() {
             'the clause ran with Cancelled(parent)',
           'Cancelled(manual)',
         ]);
-        _says('`Cancelled` implements `Exception`, so `on Exception` or '
-            '`on Object` in its place would take a cancellation along with '
-            'the failures of the API');
+        _says(
+          '`Cancelled` implements `Exception`, so `on Exception` or '
+          '`on Object` in its place would take a cancellation along with '
+          'the failures of the API',
+        );
       });
     }
   });
@@ -537,41 +559,44 @@ void main() {
 
     for (final listener in ['ignore()', 'nothing']) {
       test(
-          'an upload that fails before the await, with $listener on the future',
-          () {
-        final errors = _zone((async) {
-          final bench = Bench();
-          final parent =
-              bench.enqueue<Ready, String>(key: 'parent', (ctx) async {
-            final child = bench.job<Ready, String>(
-              key: 'child',
-              (childCtx) => childCtx.join(() => api.push(7)),
-            );
-            final uploading = ctx.run(child);
-            if (listener == 'ignore()') {
-              uploading.ignore();
-            }
-            await ctx.join(() => analytics.send('started 7'));
-            return uploading;
-          })
-                ..ignoreFailure();
-          async.flushMicrotasks();
-          _fail(async, 'push 7', const ApiException());
-          _see('the upload failed: ${_how(parent)}');
-          _end(async, 'send started 7');
-          _see(_how(parent));
-        });
+        'an upload that fails before the await, with $listener on the future',
+        () {
+          final errors = _zone((async) {
+            final bench = Bench();
+            final parent = bench.enqueue<Ready, String>(key: 'parent', (
+              ctx,
+            ) async {
+              final child = bench.job<Ready, String>(
+                key: 'child',
+                (childCtx) => childCtx.join(() => api.push(7)),
+              );
+              final uploading = ctx.run(child);
+              if (listener == 'ignore()') {
+                uploading.ignore();
+              }
+              await ctx.join(() => analytics.send('started 7'));
+              return uploading;
+            })..ignoreFailure();
+            async.flushMicrotasks();
+            _fail(async, 'push 7', const ApiException());
+            _see('the upload failed: ${_how(parent)}');
+            _end(async, 'send started 7');
+            _see(_how(parent));
+          });
 
-        expect(errors, listener == 'ignore()' ? isEmpty : ['ApiException']);
-        expect(_seen, [
-          'the upload failed: no outcome',
-          'Failed(ApiException)',
-        ]);
-        _says('Nobody waits for a future kept this way until the `await`');
-        _says('`ignore()` on the kept future says that the error is not to '
+          expect(errors, listener == 'ignore()' ? isEmpty : ['ApiException']);
+          expect(_seen, [
+            'the upload failed: no outcome',
+            'Failed(ApiException)',
+          ]);
+          _says('Nobody waits for a future kept this way until the `await`');
+          _says(
+            '`ignore()` on the kept future says that the error is not to '
             'be reported there. The body fails with that error all the same, '
-            'at the `return`, where it hands the future on.');
-      });
+            'at the `return`, where it hands the future on.',
+          );
+        },
+      );
     }
 
     test('the page code hears a failed upload once, at the return', () {
@@ -628,12 +653,15 @@ void main() {
         ),
       );
       _says(
-          '`handler:` in that line is not a state handler of `enqueue`. It is '
-          '`HandlerCancelReason`, the reason the core gives a body that lets '
-          'the cancellation of its child out, and after it come the child '
-          'and the cancellation it ended with.');
-      _says('[Cancellation details](cancellation.md#cancellation-details) has '
-          'every reason and how it prints.');
+        '`handler:` in that line is not a state handler of `enqueue`. It is '
+        '`HandlerCancelReason`, the reason the core gives a body that lets '
+        'the cancellation of its child out, and after it come the child '
+        'and the cancellation it ended with.',
+      );
+      _says(
+        '[Cancellation details](cancellation.md#cancellation-details) has '
+        'every reason and how it prints.',
+      );
     });
 
     test('not paused, the upload runs', () {
@@ -659,19 +687,19 @@ void main() {
           bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
             child = switch (rule) {
               'canStart' => bench.job<Ready, void>(
-                  key: 'child',
-                  canStart: (state) => !state.paused,
-                  (childCtx) async => _see('the child ran'),
-                ),
+                key: 'child',
+                canStart: (state) => !state.paused,
+                (childCtx) async => _see('the child ran'),
+              ),
               'keepWhile' => bench.job<Ready, void>(
-                  key: 'child',
-                  keepWhile: (state) => !state.paused,
-                  (childCtx) async => _see('the child ran'),
-                ),
+                key: 'child',
+                keepWhile: (state) => !state.paused,
+                (childCtx) async => _see('the child ran'),
+              ),
               _ => bench.job<Off, void>(
-                  key: 'child',
-                  (childCtx) async => _see('the child ran'),
-                ),
+                key: 'child',
+                (childCtx) async => _see('the child ran'),
+              ),
             };
             try {
               await ctx.run(child);
@@ -692,20 +720,23 @@ void main() {
           'the parent goes on',
           'Job(parent) finished Done(null)',
         ]);
-        expect(
-          (child.outcome! as Cancelled).reason,
-          isA<RulesCancelReason>(),
-        );
+        expect((child.outcome! as Cancelled).reason, isA<RulesCancelReason>());
         expect(child.isChild, isTrue);
         expect(child.level, 1);
-        _says('subject to its own start rules: its working type, `canStart` '
-            'and `keepWhile`');
-        _says('A child the start rules turn away never runs. It is adopted '
-            'first — parent and level — and only then finished `Cancelled` '
-            'with a `RulesCancelReason`');
-        _says('The observer hears the drop as an outcome of this tree, with '
-            '`job.level` telling it how deep under the parent the job '
-            'stands');
+        _says(
+          'subject to its own start rules: its working type, `canStart` '
+          'and `keepWhile`',
+        );
+        _says(
+          'A child the start rules turn away never runs. It is adopted '
+          'first — parent and level — and only then finished `Cancelled` '
+          'with a `RulesCancelReason`',
+        );
+        _says(
+          'The observer hears the drop as an outcome of this tree, with '
+          '`job.level` telling it how deep under the parent the job '
+          'stands',
+        );
       });
     }
 
@@ -729,8 +760,7 @@ void main() {
       _says('`child.done` holds the cancellation');
     });
 
-    test(
-        'a child turned away joins no waiting list, and the future of run '
+    test('a child turned away joins no waiting list, and the future of run '
         'carries the drop', () {
       final errors = _zone((async) {
         final bench = Bench(const Ready(paused: true));
@@ -741,7 +771,9 @@ void main() {
             (childCtx) async {},
           );
           unawaited(
-            ctx.run(child).then<void>(
+            ctx
+                .run(child)
+                .then<void>(
                   (_) => _see('the future gave a value'),
                   onError: (Object error) => _see('the future threw $error'),
                 ),
@@ -756,8 +788,10 @@ void main() {
         'the future threw Cancelled(rules: canStart)',
         'parent Done(null)',
       ]);
-      _says('It joins no waiting list, so the parent waits for nothing; the '
-          'future of `ctx.run` carries that cancellation all the same');
+      _says(
+        'It joins no waiting list, so the parent waits for nothing; the '
+        'future of `ctx.run` carries that cancellation all the same',
+      );
       _says('and it is what ends `resend` above.');
     });
 
@@ -793,9 +827,11 @@ void main() {
         ]);
         expect('${child.outcome}', 'Failed(Bad state: $rule threw)');
         expect(bench.heard, ['Job(child): Bad state: $rule threw']);
-        _says("The error is the rule's own, the child ends `Failed` with "
-            'it, and `ctx.run` throws it synchronously — the line after the '
-            'call never runs.');
+        _says(
+          "The error is the rule's own, the child ends `Failed` with "
+          'it, and `ctx.run` throws it synchronously — the line after the '
+          'call never runs.',
+        );
       });
     }
 
@@ -831,45 +867,47 @@ void main() {
       _says("It waits for the child, the child's children and cleanup");
     });
 
-    test('after a child that succeeds, ctx.run throws the parent cancellation',
-        () {
-      late SoloJob<int> child;
-      final errors = _zone((async) {
-        final bench = Bench();
-        final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
-          child = bench.job<Ready, int>(
-            key: 'child',
-            cancellable: false,
-            (childCtx) async {
+    test(
+      'after a child that succeeds, ctx.run throws the parent cancellation',
+      () {
+        late SoloJob<int> child;
+        final errors = _zone((async) {
+          final bench = Bench();
+          final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
+            child = bench.job<Ready, int>(key: 'child', cancellable: false, (
+              childCtx,
+            ) async {
               await childCtx.join(() => stage.start<void>('work', null));
 
               return 7;
-            },
-          );
-          try {
-            _see('ctx.run returned ${await ctx.run(child)}');
-          } on Cancelled catch (cancelled) {
-            _see('ctx.run threw $cancelled');
-            rethrow;
-          }
+            });
+            try {
+              _see('ctx.run returned ${await ctx.run(child)}');
+            } on Cancelled catch (cancelled) {
+              _see('ctx.run threw $cancelled');
+              rethrow;
+            }
+          });
+          async.flushMicrotasks();
+          parent.cancel().ignore();
+          async.flushMicrotasks();
+          _see('cancelled: parent ${_how(parent)}, child ${_how(child)}');
+          _end(async, 'work');
+          _see('parent ${_how(parent)}, child ${_how(child)}');
         });
-        async.flushMicrotasks();
-        parent.cancel().ignore();
-        async.flushMicrotasks();
-        _see('cancelled: parent ${_how(parent)}, child ${_how(child)}');
-        _end(async, 'work');
-        _see('parent ${_how(parent)}, child ${_how(child)}');
-      });
 
-      expect(errors, isEmpty);
-      expect(_seen, [
-        'cancelled: parent no outcome, child no outcome',
-        'ctx.run threw Cancelled(manual)',
-        'parent Cancelled(manual), child Done(7)',
-      ]);
-      _says("On success, it checks the parent's cancellation and state "
-          'rules before returning the value');
-    });
+        expect(errors, isEmpty);
+        expect(_seen, [
+          'cancelled: parent no outcome, child no outcome',
+          'ctx.run threw Cancelled(manual)',
+          'parent Cancelled(manual), child Done(7)',
+        ]);
+        _says(
+          "On success, it checks the parent's cancellation and state "
+          'rules before returning the value',
+        );
+      },
+    );
 
     test('a value registered on the call is released when ctx.run throws', () {
       final errors = _zone((async) {
@@ -895,38 +933,42 @@ void main() {
 
       expect(errors, isEmpty);
       expect(_seen, ['released handle', 'parent Cancelled(manual)']);
-      _says('So a value the parent has to release is registered on the call, '
-          '`ctx.run(child, dispose: ...)`, and not on the line after it');
+      _says(
+        'So a value the parent has to release is registered on the call, '
+        '`ctx.run(child, dispose: ...)`, and not on the line after it',
+      );
     });
 
-    test('after a child that succeeds, ctx.run checks the rules of the parent',
-        () {
-      final errors = _zone((async) {
-        final bench = Bench();
-        final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
-          // The job that wrote a state is not asked about it at once.
-          ctx.emit(const Off());
-          final child = bench.job<AppState, int>(
-            key: 'child',
-            (childCtx) async => 7,
-          );
-          try {
-            _see('ctx.run returned ${await ctx.run(child)}');
-          } on Cancelled catch (cancelled) {
-            _see('ctx.run threw $cancelled');
-            rethrow;
-          }
+    test(
+      'after a child that succeeds, ctx.run checks the rules of the parent',
+      () {
+        final errors = _zone((async) {
+          final bench = Bench();
+          final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
+            // The job that wrote a state is not asked about it at once.
+            ctx.emit(const Off());
+            final child = bench.job<AppState, int>(
+              key: 'child',
+              (childCtx) async => 7,
+            );
+            try {
+              _see('ctx.run returned ${await ctx.run(child)}');
+            } on Cancelled catch (cancelled) {
+              _see('ctx.run threw $cancelled');
+              rethrow;
+            }
+          });
+          async.flushMicrotasks();
+          _see('parent ${_how(parent)}');
         });
-        async.flushMicrotasks();
-        _see('parent ${_how(parent)}');
-      });
 
-      expect(errors, isEmpty);
-      expect(_seen, [
-        'ctx.run threw Cancelled(rules: is not Ready)',
-        'parent Cancelled(rules: is not Ready)',
-      ]);
-    });
+        expect(errors, isEmpty);
+        expect(_seen, [
+          'ctx.run threw Cancelled(rules: is not Ready)',
+          'parent Cancelled(rules: is not Ready)',
+        ]);
+      },
+    );
 
     test('a child error comes into the parent body with its stack trace', () {
       late Bench bench;
@@ -940,8 +982,10 @@ void main() {
           try {
             await ctx.run(child);
           } on Object catch (error, stackTrace) {
-            _see('caught $error, the trace names the throw: '
-                '${'$stackTrace'.contains('_throwFromChild')}');
+            _see(
+              'caught $error, the trace names the throw: '
+              '${'$stackTrace'.contains('_throwFromChild')}',
+            );
           }
         });
         async.flushMicrotasks();
@@ -954,8 +998,10 @@ void main() {
         'parent Done(null)',
       ]);
       expect(bench.heard, ['Job(child): Bad state: child failed']);
-      _says('A child error or cancellation is thrown into the parent body '
-          'with its stack trace.');
+      _says(
+        'A child error or cancellation is thrown into the parent body '
+        'with its stack trace.',
+      );
     });
 
     test('a child cancellation comes into the parent body', () {
@@ -972,8 +1018,10 @@ void main() {
           try {
             await ctx.run(child);
           } on Cancelled catch (cancelled) {
-            _see('caught $cancelled, the parent cancelled '
-                '${ctx.job.isCancelled}');
+            _see(
+              'caught $cancelled, the parent cancelled '
+              '${ctx.job.isCancelled}',
+            );
             rethrow;
           }
         });
@@ -988,10 +1036,7 @@ void main() {
         '${parent.outcome}',
         'Cancelled(handler: Job(child): Cancelled(manual))',
       );
-      expect(
-        (parent.outcome! as Cancelled).reason,
-        isA<HandlerCancelReason>(),
-      );
+      expect((parent.outcome! as Cancelled).reason, isA<HandlerCancelReason>());
     });
 
     test('a parent that works beside its child: their writes interleave', () {
@@ -1026,9 +1071,11 @@ void main() {
         '> Job(child) finished Done(null)',
         'Job(parent) finished Done(null)',
       ]);
-      _says('To work in the parent while a child runs, keep the future '
-          '`ctx.run` returned and await it later. The state writes of the '
-          'two can then interleave');
+      _says(
+        'To work in the parent while a child runs, keep the future '
+        '`ctx.run` returned and await it later. The state writes of the '
+        'two can then interleave',
+      );
     });
 
     for (final rule in ['the working type', 'keepWhile']) {
@@ -1040,18 +1087,13 @@ void main() {
             key: 'parent',
             keepWhile: (state) => !state.paused,
             (ctx) async {
-              child = bench.job<AppState, void>(
-                key: 'child',
-                (childCtx) async {
-                  await childCtx.join(() => stage.start<void>('work', null));
-                  childCtx.emit(
-                    rule == 'keepWhile'
-                        ? const Ready(paused: true)
-                        : const Off(),
-                  );
-                  _see('the child went on past its write');
-                },
-              );
+              child = bench.job<AppState, void>(key: 'child', (childCtx) async {
+                await childCtx.join(() => stage.start<void>('work', null));
+                childCtx.emit(
+                  rule == 'keepWhile' ? const Ready(paused: true) : const Off(),
+                );
+                _see('the child went on past its write');
+              });
               await ctx.run(child);
             },
           );
@@ -1065,9 +1107,11 @@ void main() {
         expect(_seen, [
           'parent Cancelled(rules: $reason), child Cancelled(parent)',
         ]);
-        _says("A write of the child that the parent's working type or "
-            '`keepWhile` does not accept cancels the parent, and the child '
-            'with it');
+        _says(
+          "A write of the child that the parent's working type or "
+          '`keepWhile` does not accept cancels the parent, and the child '
+          'with it',
+        );
       });
     }
 
@@ -1075,8 +1119,9 @@ void main() {
       final errors = _zone((async) {
         final bench = Bench();
         late SoloJob<void> child;
-        final parent =
-            bench.enqueue<AppState, void>(key: 'parent', (ctx) async {
+        final parent = bench.enqueue<AppState, void>(key: 'parent', (
+          ctx,
+        ) async {
           child = bench.job<Ready, void>(
             key: 'child',
             (childCtx) =>
@@ -1103,11 +1148,9 @@ void main() {
     });
 
     for (final window in ['a child of its own', 'its cleanup']) {
-      group(
-          'a child fails, and a cancellation arrives while it waits for '
+      group('a child fails, and a cancellation arrives while it waits for '
           '$window', () {
-        test(
-            'the parent body catches Cancelled, and the error goes to '
+        test('the parent body catches Cancelled, and the error goes to '
             'onUnanswered and the zone', () {
           late Bench bench;
           final errors = _zone((async) {
@@ -1119,35 +1162,38 @@ void main() {
             'parent Cancelled(manual)',
           ]);
           expect(bench.heard, ['Job(child): Bad state: child failed first']);
-          expect(
-            bench.unanswered,
-            ['Job(child): Bad state: child failed first'],
-          );
+          expect(bench.unanswered, [
+            'Job(child): Bad state: child failed first',
+          ]);
           expect(errors, ['Bad state: child failed first']);
-          _says('If the child ends `Cancelled` and its body failed, its error '
-              'is not thrown into the parent body');
-          _says('`await ctx.run(child)` throws `Cancelled`, and the error goes '
-              "to the controller's `onUnanswered`");
+          _says(
+            'If the child ends `Cancelled` and its body failed, its error '
+            'is not thrown into the parent body',
+          );
+          _says(
+            '`await ctx.run(child)` throws `Cancelled`, and the error goes '
+            "to the controller's `onUnanswered`",
+          );
         });
 
         test('with Solo.unansweredHandler set, the error goes there', () {
           final handled = <String>[];
           late Bench bench;
           final errors = _zone((async) {
-            Solo.unansweredHandler =
-                (solo, job, error, stackTrace) => handled.add('$job: $error');
+            Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+                handled.add('$job: $error');
             bench = _coveredFailure(async, window);
           });
 
           expect(handled, ['Job(child): Bad state: child failed first']);
-          expect(
-            bench.unanswered,
-            ['Job(child): Bad state: child failed first'],
-          );
+          expect(bench.unanswered, [
+            'Job(child): Bad state: child failed first',
+          ]);
           expect(errors, isEmpty);
           _says(
-              'by default to `Solo.unansweredHandler`, or to the zone without '
-              'one');
+            'by default to `Solo.unansweredHandler`, or to the zone without '
+            'one',
+          );
         });
 
         test('child.ignoreFailure() silences it', () {
@@ -1164,8 +1210,10 @@ void main() {
           expect(bench.unanswered, isEmpty);
           expect(errors, isEmpty);
           _says('`child.ignoreFailure()` silences it.');
-          _says('| `child.ignoreFailure()` | not handled, goes to the zone | '
-              'silenced |');
+          _says(
+            '| `child.ignoreFailure()` | not handled, goes to the zone | '
+            'silenced |',
+          );
         });
 
         test('ctx.run(child).ignore() does not', () {
@@ -1179,87 +1227,98 @@ void main() {
           });
 
           expect(_seen, ['parent Cancelled(manual)']);
-          expect(
-            bench.unanswered,
-            ['Job(child): Bad state: child failed first'],
-          );
+          expect(bench.unanswered, [
+            'Job(child): Bad state: child failed first',
+          ]);
           expect(errors, ['Bad state: child failed first']);
-          _says('| `ctx.run(child).ignore()` | dropped: nobody answers for '
-              'it | goes to `onUnanswered` |');
-          _says('`ctx.run(child).ignore()` does not: it handles what the '
-              'future throws, and the future throws the cancellation.');
+          _says(
+            '| `ctx.run(child).ignore()` | dropped: nobody answers for '
+            'it | goes to `onUnanswered` |',
+          );
+          _says(
+            '`ctx.run(child).ignore()` does not: it handles what the '
+            'future throws, and the future throws the cancellation.',
+          );
         });
 
         test('ctx.start(child) leaves it to onUnanswered', () {
           late Bench bench;
           final errors = _zone((async) {
-            bench = _coveredFailure(
-              async,
-              window,
-              silence: 'ctx.start(child)',
-            );
+            bench = _coveredFailure(async, window, silence: 'ctx.start(child)');
           });
 
           expect(_seen, ['parent Cancelled(manual)']);
-          expect(
-            bench.unanswered,
-            ['Job(child): Bad state: child failed first'],
-          );
+          expect(bench.unanswered, [
+            'Job(child): Bad state: child failed first',
+          ]);
           expect(errors, ['Bad state: child failed first']);
-          _says('| `ctx.start(child)` | there is no future: a failure of the '
-              'child goes to `onUnanswered` | goes to `onUnanswered` |');
+          _says(
+            '| `ctx.start(child)` | there is no future: a failure of the '
+            'child goes to `onUnanswered` | goes to `onUnanswered` |',
+          );
         });
       });
     }
 
     for (final named in [false, true]) {
       test(
-          named
-              ? 'a child whose operation the cancellation stopped, the stop '
+        named
+            ? 'a child whose operation the cancellation stopped, the stop '
                   'named by the app: only onError hears it'
-              : 'a child whose operation the cancellation stopped: the stop '
-                  'goes to onUnanswered', () {
-        if (named) {
-          Job.isCancellationError = (error) => error is _OpStopped;
-        }
-        late Bench bench;
-        final errors = _zone((async) {
-          bench = Bench();
-          final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
-            try {
-              await ctx.run(
-                bench.job<Ready, void>(key: 'child', (childCtx) async {
-                  childCtx.onCancel(
-                    () => stage.fail('op', const _OpStopped()),
-                  );
-                  await childCtx.join(() => stage.start<void>('op', null));
-                }),
-              );
-            } on Object catch (error) {
-              _see('the parent body caught $error');
-              rethrow;
-            }
+            : 'a child whose operation the cancellation stopped: the stop '
+                  'goes to onUnanswered',
+        () {
+          if (named) {
+            Job.isCancellationError = (error) => error is _OpStopped;
+          }
+          late Bench bench;
+          final errors = _zone((async) {
+            bench = Bench();
+            final parent = bench.enqueue<Ready, void>(key: 'parent', (
+              ctx,
+            ) async {
+              try {
+                await ctx.run(
+                  bench.job<Ready, void>(key: 'child', (childCtx) async {
+                    childCtx.onCancel(
+                      () => stage.fail('op', const _OpStopped()),
+                    );
+                    await childCtx.join(() => stage.start<void>('op', null));
+                  }),
+                );
+              } on Object catch (error) {
+                _see('the parent body caught $error');
+                rethrow;
+              }
+            });
+            async.flushMicrotasks();
+            parent.cancel().ignore();
+            async.flushMicrotasks();
+            _see('parent ${_how(parent)}');
           });
-          async.flushMicrotasks();
-          parent.cancel().ignore();
-          async.flushMicrotasks();
-          _see('parent ${_how(parent)}');
-        });
 
-        expect(_seen, [
-          'the parent body caught Cancelled(parent)',
-          'parent Cancelled(manual)',
-        ]);
-        expect(bench.heard, ['Job(child): op stopped']);
-        expect(bench.unanswered, named ? isEmpty : ['Job(child): op stopped']);
-        expect(errors, named ? isEmpty : ['op stopped']);
-        _says('That happens, for instance, when the cancellation stops an '
-            "operation and the body throws that operation's error");
-        if (named) {
-          _says('An error the app named in `Job.isCancellationError` goes no '
-              "further than the controller's `onError`");
-        }
-      });
+          expect(_seen, [
+            'the parent body caught Cancelled(parent)',
+            'parent Cancelled(manual)',
+          ]);
+          expect(bench.heard, ['Job(child): op stopped']);
+          expect(
+            bench.unanswered,
+            named ? isEmpty : ['Job(child): op stopped'],
+          );
+          expect(errors, named ? isEmpty : ['op stopped']);
+          _says(
+            'That happens, for instance, when the cancellation stops an '
+            "operation and the body throws that operation's error",
+          );
+          if (named) {
+            _says(
+              'An error the app named in `Job.isCancellationError` goes no '
+              "further than the controller's `onError`",
+            );
+          }
+        },
+      );
     }
 
     group('what the page leaves to the core', () {
@@ -1298,11 +1357,12 @@ void main() {
             );
             ctx.run(child).ignore();
             throw StateError('parent failed');
-          })
-            ..ignoreFailure();
+          })..ignoreFailure();
           async.flushMicrotasks();
-          _see('the body failed: parent ${_how(parent)}, '
-              'child ${_how(child)}');
+          _see(
+            'the body failed: parent ${_how(parent)}, '
+            'child ${_how(child)}',
+          );
           _end(async, 'work');
           _see('parent ${_how(parent)}, child ${_how(child)}');
         });
@@ -1349,22 +1409,30 @@ void main() {
             case 'child.ignoreFailure()':
               expect(bench.unanswered, isEmpty);
               expect(errors, ['Bad state: child failed']);
-              _says('`child.ignoreFailure()` alone does not handle errors of '
-                  'the future returned by `ctx.run`.');
+              _says(
+                '`child.ignoreFailure()` alone does not handle errors of '
+                'the future returned by `ctx.run`.',
+              );
             case 'ctx.run(child).ignore()':
               expect(bench.unanswered, isEmpty);
               expect(errors, isEmpty);
-              _says('| `ctx.run(child).ignore()` | dropped: nobody answers for '
-                  'it | goes to `onUnanswered` |');
-              _says('`ctx.run(child).ignore()` explicitly ignores that '
-                  "future's result while the parent still waits for its "
-                  'children.');
+              _says(
+                '| `ctx.run(child).ignore()` | dropped: nobody answers for '
+                'it | goes to `onUnanswered` |',
+              );
+              _says(
+                '`ctx.run(child).ignore()` explicitly ignores that '
+                "future's result while the parent still waits for its "
+                'children.',
+              );
             default:
               expect(bench.unanswered, ['Job(child): Bad state: child failed']);
               expect(errors, ['Bad state: child failed']);
-              _says('`ctx.start(child)` starts the child and returns no '
-                  "future: its failure goes to the controller's "
-                  '`onUnanswered`, as any failure nobody observed does');
+              _says(
+                '`ctx.start(child)` starts the child and returns no '
+                "future: its failure goes to the controller's "
+                '`onUnanswered`, as any failure nobody observed does',
+              );
           }
         });
       }
@@ -1433,8 +1501,10 @@ void main() {
           'Job(parent) finished '
           'Cancelled(handler: Job(b): Cancelled(rules: canStart))',
         );
-        _says('each branch of a group answers to its start rules as a child '
-            'of `ctx.run` does');
+        _says(
+          'each branch of a group answers to its start rules as a child '
+          'of `ctx.run` does',
+        );
       });
 
       for (final call in ['ctx.run', 'ctx.runAll']) {
@@ -1456,13 +1526,15 @@ void main() {
           });
 
           expect(errors, isEmpty);
-          expect(_seen, [
-            '$_refused: "Job()"',
-          ]);
-          _says('Where those pages make a child with `Job.deferred`, a '
-              'controller makes it with `job(...)` or `ctx.child`.');
-          _says('The `ctx.run` and `ctx.runAll` of a controller take no '
-              'other job');
+          expect(_seen, ['$_refused: "Job()"']);
+          _says(
+            'Where those pages make a child with `Job.deferred`, a '
+            'controller makes it with `job(...)` or `ctx.child`.',
+          );
+          _says(
+            'The `ctx.run` and `ctx.runAll` of a controller take no '
+            'other job',
+          );
         });
       }
     });
@@ -1489,8 +1561,10 @@ void main() {
         'the progress closed: [push 1 start, push 1 end, send path/1 start]',
         'report Done(null)',
       ]);
-      _says('a job that runs after its source succeeds, including children '
-          'and cleanup — for `sync`, once the API has closed the progress');
+      _says(
+        'a job that runs after its source succeeds, including children '
+        'and cleanup — for `sync`, once the API has closed the progress',
+      );
     });
 
     test('the callback gets the result and a plain core JobContext', () {
@@ -1498,9 +1572,11 @@ void main() {
         final solo = page.Syncer();
         unawaited(stage.progress.close());
         final continuation = solo.sync(1).then((ctx, path) {
-          _see('path $path; a SoloContext ${ctx is SoloContext}; '
-              'a SoloJob ${ctx.job is SoloJob}; a child ${ctx.job.isChild}; '
-              'the queue is held by ${solo.current}');
+          _see(
+            'path $path; a SoloContext ${ctx is SoloContext}; '
+            'a SoloJob ${ctx.job is SoloJob}; a child ${ctx.job.isChild}; '
+            'the queue is held by ${solo.current}',
+          );
 
           return path.length;
         });
@@ -1518,10 +1594,14 @@ void main() {
         'the queue is held by null',
         'continuation Done(6)',
       ]);
-      _says('Its callback receives the result and a new core `JobContext`, '
-          'and may return a value or future.');
-      _says("A continuation does not inherit the controller's state "
-          'context, rules, observer or queue position.');
+      _says(
+        'Its callback receives the result and a new core `JobContext`, '
+        'and may return a value or future.',
+      );
+      _says(
+        "A continuation does not inherit the controller's state "
+        'context, rules, observer or queue position.',
+      );
     });
 
     test('a failure of sync comes down the chain to whoever reads it', () {
@@ -1543,41 +1623,48 @@ void main() {
         'report Failed(Bad state: push failed)',
         '[push 1 start, push 1 failed]',
       ]);
-      _says('If `sync` fails, the callback is not called, and the job `then` '
-          'returned ends `Failed` with the same error.');
-      _says('A failure reaches whoever reads its outcome, the failure of '
-          '`sync` passed down the chain included');
-    });
-
-    test('a failure of sync nobody reads on the continuation goes to the zone',
-        () {
-      final handled = <String>[];
-      late page.Syncer solo;
-      final errors = _zone((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add('$job: $error');
-        solo = page.Syncer()..syncAndReport(1);
-        async.flushMicrotasks();
-        unawaited(stage.progress.close());
-        _fail(async, 'push 1', StateError('push failed'));
-      });
-
-      expect(errors, ['Bad state: push failed']);
-      expect(handled, isEmpty);
-      expect(solo.unanswered, isEmpty);
-      expect(solo.heard, [
-        'Job(_Op.upload): Bad state: push failed',
-        'Job(_Op.sync): Bad state: push failed',
-      ]);
-      _says('The continuation answers for one nobody reads, and for an error '
-          'with no outcome, itself: in `onUnanswered` of its observer when '
-          'that observer mixes in `JobAnswerer`, and otherwise in the zone '
-          'where `then` was called. `Solo.unansweredHandler` does not hear '
-          'them either.');
+      _says(
+        'If `sync` fails, the callback is not called, and the job `then` '
+        'returned ends `Failed` with the same error.',
+      );
+      _says(
+        'A failure reaches whoever reads its outcome, the failure of '
+        '`sync` passed down the chain included',
+      );
     });
 
     test(
-        'the hooks of the controller and Solo.observer do not hear a '
+      'a failure of sync nobody reads on the continuation goes to the zone',
+      () {
+        final handled = <String>[];
+        late page.Syncer solo;
+        final errors = _zone((async) {
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add('$job: $error');
+          solo = page.Syncer()..syncAndReport(1);
+          async.flushMicrotasks();
+          unawaited(stage.progress.close());
+          _fail(async, 'push 1', StateError('push failed'));
+        });
+
+        expect(errors, ['Bad state: push failed']);
+        expect(handled, isEmpty);
+        expect(solo.unanswered, isEmpty);
+        expect(solo.heard, [
+          'Job(_Op.upload): Bad state: push failed',
+          'Job(_Op.sync): Bad state: push failed',
+        ]);
+        _says(
+          'The continuation answers for one nobody reads, and for an error '
+          'with no outcome, itself: in `onUnanswered` of its observer when '
+          'that observer mixes in `JobAnswerer`, and otherwise in the zone '
+          'where `then` was called. `Solo.unansweredHandler` does not hear '
+          'them either.',
+        );
+      },
+    );
+
+    test('the hooks of the controller and Solo.observer do not hear a '
         'continuation', () {
       late page.Syncer solo;
       final errors = _zone((async) {
@@ -1595,8 +1682,10 @@ void main() {
       expect(_seen, isEmpty);
       expect(solo.heard, isEmpty);
       expect(solo.unanswered, isEmpty);
-      _says('It belongs to whoever called `then`, not to the controller: the '
-          "controller's hooks and `Solo.observer` do not hear it.");
+      _says(
+        'It belongs to whoever called `then`, not to the controller: the '
+        "controller's hooks and `Solo.observer` do not hear it.",
+      );
     });
 
     test('a continuation has an observer of its own', () {
@@ -1615,40 +1704,46 @@ void main() {
 
       expect(errors, isEmpty);
       expect(own.heard, ['Job(then): Bad state: send failed']);
-      _says('It has its own optional observer, and `then` names it '
-          '`Job(then)` unless the call gives it a `key` or a `describe`.');
+      _says(
+        'It has its own optional observer, and `then` names it '
+        '`Job(then)` unless the call gives it a `key` or a `describe`.',
+      );
     });
 
-    test('an observer that mixes in JobAnswerer answers for the continuation',
-        () {
-      final own = _Answering();
-      final handled = <String>[];
-      final errors = _zone((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add('$job: $error');
-        final solo = page.Syncer();
-        unawaited(stage.progress.close());
-        solo.sync(1).then((ctx, path) => analytics.send(path), observer: own);
-        async.flushMicrotasks();
-        _end(async, 'push 1');
-        _fail(async, 'send path/1', StateError('send failed'));
-      });
+    test(
+      'an observer that mixes in JobAnswerer answers for the continuation',
+      () {
+        final own = _Answering();
+        final handled = <String>[];
+        final errors = _zone((async) {
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add('$job: $error');
+          final solo = page.Syncer();
+          unawaited(stage.progress.close());
+          solo.sync(1).then((ctx, path) => analytics.send(path), observer: own);
+          async.flushMicrotasks();
+          _end(async, 'push 1');
+          _fail(async, 'send path/1', StateError('send failed'));
+        });
 
-      expect(errors, isEmpty);
-      expect(handled, isEmpty);
-      expect(own.heard, ['Job(then): Bad state: send failed']);
-      expect(own.answered, ['Job(then): Bad state: send failed']);
-      _says('in `onUnanswered` of its observer when that observer mixes in '
-          '`JobAnswerer`');
-    });
+        expect(errors, isEmpty);
+        expect(handled, isEmpty);
+        expect(own.heard, ['Job(then): Bad state: send failed']);
+        expect(own.answered, ['Job(then): Bad state: send failed']);
+        _says(
+          'in `onUnanswered` of its observer when that observer mixes in '
+          '`JobAnswerer`',
+        );
+      },
+    );
 
     test('an error with no outcome goes to the zone where then was called', () {
       final inner = <String>[];
       final handled = <String>[];
       late page.Syncer solo;
       final errors = _zone((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add('$job: $error');
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+            handled.add('$job: $error');
         solo = page.Syncer();
         unawaited(stage.progress.close());
         final source = solo.sync(1);
@@ -1670,32 +1765,38 @@ void main() {
       _says('and otherwise in the zone where `then` was called');
     });
 
-    test('the job queued behind sync starts while the report still has to run',
-        () {
-      final errors = _zone((async) {
-        final solo = page.Syncer();
-        unawaited(stage.progress.close());
-        final report = solo.syncAndReport(1);
-        final save = solo.save();
-        async.flushMicrotasks();
-        _end(async, 'push 1');
-        _see('current ${solo.current}, report ${_how(report)}, '
-            'save ${_how(save)}');
-      });
+    test(
+      'the job queued behind sync starts while the report still has to run',
+      () {
+        final errors = _zone((async) {
+          final solo = page.Syncer();
+          unawaited(stage.progress.close());
+          final report = solo.syncAndReport(1);
+          final save = solo.save();
+          async.flushMicrotasks();
+          _end(async, 'push 1');
+          _see(
+            'current ${solo.current}, report ${_how(report)}, '
+            'save ${_how(save)}',
+          );
+        });
 
-      expect(errors, isEmpty);
-      expect(_seen, [
-        'current Job(save), report no outcome, save no outcome',
-      ]);
-      expect(stage.trace, [
-        'push 1 start',
-        'push 1 end',
-        'save start',
-        'send path/1 start',
-      ]);
-      _says('the slot is freed when the root job finishes, and the next '
-          'queued job starts while the continuation still has to run');
-    });
+        expect(errors, isEmpty);
+        expect(_seen, [
+          'current Job(save), report no outcome, save no outcome',
+        ]);
+        expect(stage.trace, [
+          'push 1 start',
+          'push 1 end',
+          'save start',
+          'send path/1 start',
+        ]);
+        _says(
+          'the slot is freed when the root job finishes, and the next '
+          'queued job starts while the continuation still has to run',
+        );
+      },
+    );
 
     test('cancelling the continuation goes back to the unfinished source', () {
       final errors = _zone((async) {
@@ -1708,8 +1809,10 @@ void main() {
         async.flushMicrotasks();
         _see('cancel() came back $back');
         _end(async, 'push 1');
-        _see('source ${_how(source)}, report ${_how(report)}; '
-            'cancel() came back $back');
+        _see(
+          'source ${_how(source)}, report ${_how(report)}; '
+          'cancel() came back $back',
+        );
       });
 
       expect(errors, isEmpty);
@@ -1767,8 +1870,10 @@ void main() {
         var closed = false;
         solo.close().then((_) => closed = true);
         async.flushMicrotasks();
-        _see('closed $closed, finished ${solo.isFinished}, '
-            'report ${_how(report)}');
+        _see(
+          'closed $closed, finished ${solo.isFinished}, '
+          'report ${_how(report)}',
+        );
         _end(async, 'send path/1');
         _see('report ${_how(report)}');
       });
@@ -1778,8 +1883,10 @@ void main() {
         'closed true, finished true, report no outcome',
         'report Done(null)',
       ]);
-      _says('but does not own one already running after the source '
-          'finished');
+      _says(
+        'but does not own one already running after the source '
+        'finished',
+      );
     });
 
     test(
@@ -1849,9 +1956,11 @@ final class Probe extends Solo<int> {
         '$_refused: "Job(theirs)"',
         'made by job(...) and not queued: ran',
       ]);
-      _says("Inside a controller's body `ctx.run` takes jobs of that "
-          'controller, the ones `job(...)` or `ctx.child` makes and nobody '
-          'has queued');
+      _says(
+        "Inside a controller's body `ctx.run` takes jobs of that "
+        'controller, the ones `job(...)` or `ctx.child` makes and nobody '
+        'has queued',
+      );
     });
   });
 
@@ -1903,11 +2012,15 @@ final class Probe extends Solo<int> {
             'chain Done(null)',
           ],
         );
-        _says('with another method of the controller, `save()`, called while '
-            '`sync` was still running, the order is `sync`, `save`, '
-            '`recordPath`');
-        _says('The end of the source does two things at once: it frees the '
-            'slot and it starts the continuation.');
+        _says(
+          'with another method of the controller, `save()`, called while '
+          '`sync` was still running, the order is `sync`, `save`, '
+          '`recordPath`',
+        );
+        _says(
+          'The end of the source does two things at once: it frees the '
+          'slot and it starts the continuation.',
+        );
       });
 
       test('a drain that is still running takes no new job', () {
@@ -1920,8 +2033,10 @@ final class Probe extends Solo<int> {
           var closed = false;
           solo.close(mode: SoloCloseMode.drain).then((_) => closed = true);
           _end(async, 'push 1');
-          _see('draining ${solo.isDraining}, closed $closed, '
-              'chain ${_how(chain)}');
+          _see(
+            'draining ${solo.isDraining}, closed $closed, '
+            'chain ${_how(chain)}',
+          );
           _end(async, 'save');
           _see('closed $closed; ${solo.currentState}');
         });
@@ -1951,9 +2066,11 @@ final class Probe extends Solo<int> {
           'closed true, chain Cancelled(closed)',
           'Ready(sent: 0, position: 0, path: )',
         ]);
-        _says('And a controller that is draining takes no new job at all: '
-            'the path is never recorded, and the continuation ends '
-            '`Cancelled(closed)`.');
+        _says(
+          'And a controller that is draining takes no new job at all: '
+          'the path is never recorded, and the continuation ends '
+          '`Cancelled(closed)`.',
+        );
       });
     });
 
@@ -1963,8 +2080,10 @@ final class Probe extends Solo<int> {
           final solo = first.Queued();
           final job = solo.syncAndRecord(1);
           async.elapse(const Duration(hours: 1));
-          _see('an hour later: job ${_how(job)}, ${stage.trace}, '
-              'queue ${solo.queue.jobs}');
+          _see(
+            'an hour later: job ${_how(job)}, ${stage.trace}, '
+            'queue ${solo.queue.jobs}',
+          );
         });
 
         expect(errors, isEmpty);
@@ -1984,8 +2103,10 @@ final class Probe extends Solo<int> {
 
         expect(errors, isEmpty);
         expect(lines, contains(_quotes()[3]));
-        _says('The hang itself shows nothing, but `Solo.debug` warns of it '
-            'when the job is queued:');
+        _says(
+          'The hang itself shows nothing, but `Solo.debug` warns of it '
+          'when the job is queued:',
+        );
       });
 
       test('close() cancels both', () {
@@ -2009,30 +2130,34 @@ final class Probe extends Solo<int> {
         _says('and nothing moves until `close()` cancels both');
       });
 
-      test('called without the await, such a method queues behind this job',
-          () {
-        final errors = _zone((async) {
-          Solo.observer = _Watch();
-          final bench = Bench();
-          bench.enqueue<Ready, void>(key: 'caller', (ctx) async {
-            bench
-                .enqueue<Ready, void>(key: 'called', (ctx) async {})
-                .ignoreFailure();
+      test(
+        'called without the await, such a method queues behind this job',
+        () {
+          final errors = _zone((async) {
+            Solo.observer = _Watch();
+            final bench = Bench();
+            bench.enqueue<Ready, void>(key: 'caller', (ctx) async {
+              bench
+                  .enqueue<Ready, void>(key: 'called', (ctx) async {})
+                  .ignoreFailure();
+            });
+            bench.save();
+            async.flushMicrotasks();
+            _end(async, 'save');
           });
-          bench.save();
-          async.flushMicrotasks();
-          _end(async, 'save');
-        });
 
-        expect(errors, isEmpty);
-        expect(_starts, [
-          'Job(caller) started',
-          'Job(save) started',
-          'Job(called) started',
-        ]);
-        _says('what it queues runs after this job and after everything '
-            'queued before it');
-      });
+          expect(errors, isEmpty);
+          expect(_starts, [
+            'Job(caller) started',
+            'Job(save) started',
+            'Job(called) started',
+          ]);
+          _says(
+            'what it queues runs after this job and after everything '
+            'queued before it',
+          );
+        },
+      );
 
       test('with droppable, the job awaits itself and close() never ends', () {
         final lines = <String>[];
@@ -2056,12 +2181,16 @@ final class Probe extends Solo<int> {
           'closed false, job no outcome, cancelled true',
           'attempts 1',
         ]);
-        _says('A droppable method called from inside its own job sets a trap '
-            'that not even `close()` gets out of.');
+        _says(
+          'A droppable method called from inside its own job sets a trap '
+          'that not even `close()` gets out of.',
+        );
         _says('It hands back that very job');
-        _says('`close()` marks the job cancelled, but a plain `await` does '
-            'not wake for that, and the value comes only when the body ends, '
-            'so `close()` waits for good as well.');
+        _says(
+          '`close()` marks the job cancelled, but a plain `await` does '
+          'not wake for that, and the value comes only when the body ends, '
+          'so `close()` waits for good as well.',
+        );
         _says('`Solo.debug` shows it on the line of the duplicate:');
       });
     });
@@ -2092,9 +2221,11 @@ final class Probe extends Solo<int> {
           _seen.last,
           'Ready(sent: 0, position: 0, path: path/1), job Done(null)',
         );
-        _says('Use children within one parent when the whole sequence must '
-            'occupy the queue without another root job running between its '
-            'steps.');
+        _says(
+          'Use children within one parent when the whole sequence must '
+          'occupy the queue without another root job running between its '
+          'steps.',
+        );
       });
 
       test('a draining controller lets both steps run', () {
@@ -2128,8 +2259,10 @@ final class Probe extends Solo<int> {
 
     test('it goes on to a second attempt', () {
       expect(
-        RegExp(r'^### The second attempt$', multiLine: true)
-            .allMatches(_page()),
+        RegExp(
+          r'^### The second attempt$',
+          multiLine: true,
+        ).allMatches(_page()),
         hasLength(1),
       );
     });
@@ -2162,13 +2295,15 @@ final class Probe extends Solo<int> {
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom('doc/children.md', answers, alsoIn: [attempts]),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom('doc/children.md', answers, alsoIn: [attempts]),
+          isEmpty,
+        );
+      },
+    );
 
     test('every heading with code under it is held to a file', () {
       final withCode = [

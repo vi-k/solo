@@ -13,17 +13,14 @@ import 'observing_page.dart' show Check, Crashes, Declare, Reporter;
 import 'observing_stubs.dart';
 
 /// The body of the log section, with the message built as a string.
-Job<void> migrationLoggedAsAString({JobObserver? observer}) => Job<void>(
-      key: 'migrate',
-      observer: observer,
-      (ctx) async {
-        try {
-          await migrate();
-        } on Object catch (error) {
-          ctx.log('migration failed: $error');
-        }
-      },
-    );
+Job<void> migrationLoggedAsAString({JobObserver? observer}) =>
+    Job<void>(key: 'migrate', observer: observer, (ctx) async {
+      try {
+        await migrate();
+      } on Object catch (error) {
+        ctx.log('migration failed: $error');
+      }
+    });
 
 /// The job of the section on where errors go, with the token wired as the
 /// cancellation page wires it.
@@ -39,12 +36,9 @@ Job<void> migrating() {
 
 /// The job of the section on work the job does not wait for, with the work
 /// left behind.
-Job<void> sendingUnawaited() => Job<void>(
-      observer: Reporter(),
-      (ctx) async {
-        unawaited(analytics.send('loaded'));
-      },
-    );
+Job<void> sendingUnawaited() => Job<void>(observer: Reporter(), (ctx) async {
+  unawaited(analytics.send('loaded'));
+});
 
 final class Both extends JobObserver with JobAnswerer {
   final _reporter = Reporter();
@@ -90,12 +84,9 @@ final class Both extends JobObserver with JobAnswerer {
 /// The job of the section on several observers, with the hooks handed on
 /// by hand.
 Job<void> sendingWithBoth() {
-  final job = Job<void>(
-    observer: Both(),
-    (ctx) async {
-      ctx.unattended(() => analytics.send('loaded'));
-    },
-  );
+  final job = Job<void>(observer: Both(), (ctx) async {
+    ctx.unattended(() => analytics.send('loaded'));
+  });
   return job;
 }
 

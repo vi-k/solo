@@ -57,14 +57,11 @@ final class RecorderController extends Solo<RecorderState> {
 
   RecorderController(this._recorder, this._journal) : super(const Idle());
 
-  Job<void> start() => enqueue<RecorderState, void>(
-        key: 'start',
-        (ctx) async {
-          await ctx.join(_recorder.start);
-          ctx.emit(const Recording());
-          _recorder.armMeter();
-        },
-      );
+  Job<void> start() => enqueue<RecorderState, void>(key: 'start', (ctx) async {
+    await ctx.join(_recorder.start);
+    ctx.emit(const Recording());
+    _recorder.armMeter();
+  });
 
   @override
   void onChange(SoloTransition<RecorderState> transition) =>
@@ -87,9 +84,8 @@ final class TelemetryObserver extends SoloObserver {
 final class ThrowingHookController extends Solo<RecorderState> {
   ThrowingHookController() : super(const Idle());
 
-  Job<void> start() => enqueue<RecorderState, void>(
-        (ctx) async => ctx.emit(const Recording()),
-      );
+  Job<void> start() =>
+      enqueue<RecorderState, void>((ctx) async => ctx.emit(const Recording()));
 
   @override
   void onChange(SoloTransition<RecorderState> transition) =>
@@ -111,6 +107,5 @@ final class WatchingObserver extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      seen.add('error $error');
+  }) => seen.add('error $error');
 }

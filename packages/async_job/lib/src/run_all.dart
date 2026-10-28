@@ -308,11 +308,11 @@ final class _RunAllGroup<T> {
   }
 
   _GroupHold _holdFor(_GroupBranch<T> branch) => _GroupHold(
-        bodyEnded: (outcome) => _branchBodyEnded(branch, outcome),
-        beforeDisposal: () => _parkBeforeDisposal(branch),
-        beforeOutcome: () => _parkBeforeOutcome(branch),
-        takeFailure: () => _takeFailure(branch),
-      );
+    bodyEnded: (outcome) => _branchBodyEnded(branch, outcome),
+    beforeDisposal: () => _parkBeforeDisposal(branch),
+    beforeOutcome: () => _parkBeforeOutcome(branch),
+    takeFailure: () => _takeFailure(branch),
+  );
 
   /// A value handed to [branch] by hand after the group heard its body fail
   /// comes too late: the group goes by the failure, as if the branch had ended

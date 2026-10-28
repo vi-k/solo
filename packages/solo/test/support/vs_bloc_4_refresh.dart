@@ -45,16 +45,16 @@ final class RefreshController extends Solo<RefreshState> {
   RefreshController(this._api) : super(const Initial());
 
   Job<void> refresh() => enqueue<RefreshState, void>(
-        key: 'refresh',
-        policy: Policy.restart,
-        ifFailed: (state, error, stackTrace) => const Initial(),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          await ctx.abandonable(_api.refresh);
-          ctx.emit(const Initial());
-        },
-      );
+    key: 'refresh',
+    policy: Policy.restart,
+    ifFailed: (state, error, stackTrace) => const Initial(),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      await ctx.abandonable(_api.refresh);
+      ctx.emit(const Initial());
+    },
+  );
 
   Job<void>? cancelRefresh() {
     final refresh = lastJobWhere((job) => job.key == 'refresh');
@@ -75,37 +75,37 @@ final class SlowCleanupRefreshController extends Solo<RefreshState> {
   final seen = <String>[];
 
   Job<void> refresh() => enqueue<RefreshState, void>(
-        key: 'refresh',
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx
-            ..onDispose(() async {
-              seen.add('cleanup starts in $currentState');
-              await Future<void>.delayed(const Duration(milliseconds: 30));
-              seen.add('cleanup ends in $currentState');
-            })
-            ..emit(const Loading());
-          await ctx.abandonable(_api.refresh);
-        },
-      );
+    key: 'refresh',
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx
+        ..onDispose(() async {
+          seen.add('cleanup starts in $currentState');
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+          seen.add('cleanup ends in $currentState');
+        })
+        ..emit(const Loading());
+      await ctx.abandonable(_api.refresh);
+    },
+  );
 
   Job<void> mark() => enqueue<RefreshState, void>(
-        key: 'mark',
-        (ctx) async => seen.add('the next job starts in ${ctx.state}'),
-      );
+    key: 'mark',
+    (ctx) async => seen.add('the next job starts in ${ctx.state}'),
+  );
 
   Job<void> narrow() => enqueue<Loading, void>(
-        key: 'narrow',
-        ifFailed: (state, error, stackTrace) {
-          seen.add('ifFailed ran');
-          return const Initial();
-        },
-        ifCancelled: (state, cancelled) {
-          seen.add('ifCancelled ran');
-          return const Loading();
-        },
-        (ctx) => ctx.abandonable(_api.refresh),
-      );
+    key: 'narrow',
+    ifFailed: (state, error, stackTrace) {
+      seen.add('ifFailed ran');
+      return const Initial();
+    },
+    ifCancelled: (state, cancelled) {
+      seen.add('ifCancelled ran');
+      return const Loading();
+    },
+    (ctx) => ctx.abandonable(_api.refresh),
+  );
 
   void outside(RefreshState state) => externalSetState(state);
 }

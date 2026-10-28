@@ -123,12 +123,13 @@ abstract class SoloObserver {
 
 /// Answers for an error that has nowhere else to go; see
 /// [Solo.unansweredHandler].
-typedef SoloUnansweredHandler = void Function(
-  Solo<Object> solo,
-  Job<Object?> job,
-  Object error,
-  StackTrace stackTrace,
-);
+typedef SoloUnansweredHandler =
+    void Function(
+      Solo<Object> solo,
+      Job<Object?> job,
+      Object error,
+      StackTrace stackTrace,
+    );
 
 /// [SoloObserver.all].
 final class _AllSoloObservers extends SoloObserver {
@@ -160,8 +161,7 @@ final class _AllSoloObservers extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      _each((o) => o.onError(solo, job, error, stackTrace, answer: answer));
+  }) => _each((o) => o.onError(solo, job, error, stackTrace, answer: answer));
 
   @override
   void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>

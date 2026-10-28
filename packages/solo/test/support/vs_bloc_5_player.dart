@@ -17,9 +17,9 @@ final class Ready extends PlayerState {
   final Duration position;
 
   Ready copyWith({bool? playing, Duration? position}) => Ready(
-        playing: playing ?? this.playing,
-        position: position ?? this.position,
-      );
+    playing: playing ?? this.playing,
+    position: position ?? this.position,
+  );
 
   @override
   String toString() => 'Ready(${position.inMilliseconds}ms)';
@@ -82,32 +82,26 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
 
   PlayerController(this._player) : super(Ready());
 
-  Job<void> play() => enqueue<Ready, void>(
-        key: PlayerKey.play,
-        (ctx) async {
-          await ctx.join(_player.play);
-          ctx.emit(ctx.state.copyWith(playing: true));
-        },
-      );
+  Job<void> play() => enqueue<Ready, void>(key: PlayerKey.play, (ctx) async {
+    await ctx.join(_player.play);
+    ctx.emit(ctx.state.copyWith(playing: true));
+  });
 
-  Job<void> pause() => enqueue<Ready, void>(
-        key: PlayerKey.pause,
-        (ctx) async {
-          await ctx.join(_player.pause);
-          ctx.emit(ctx.state.copyWith(playing: false));
-        },
-      );
+  Job<void> pause() => enqueue<Ready, void>(key: PlayerKey.pause, (ctx) async {
+    await ctx.join(_player.pause);
+    ctx.emit(ctx.state.copyWith(playing: false));
+  });
 
   Job<void> seek(Duration position) => enqueue<Ready, void>(
-        key: PlayerKey.seek,
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => _player.seek(position, cancelToken: token));
-          ctx.emit(ctx.state.copyWith(position: position));
-        },
-      );
+    key: PlayerKey.seek,
+    policy: Policy.restart,
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => _player.seek(position, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(position: position));
+    },
+  );
 }
 
 // What the test adds.
@@ -127,22 +121,21 @@ final class CatchingPlayerController extends Solo<PlayerState> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('$error');
+  }) => heard.add('$error');
 
   Job<void> seek(Duration position) => enqueue<Ready, void>(
-        key: PlayerKey.seek,
-        policy: Policy.restart,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          try {
-            await ctx.join(() => _player.seek(position, cancelToken: token));
-          } on Object catch (error) {
-            met.add('join threw ${error.runtimeType}: $error');
-            rethrow;
-          }
-          ctx.emit(ctx.state.copyWith(position: position));
-        },
-      );
+    key: PlayerKey.seek,
+    policy: Policy.restart,
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      try {
+        await ctx.join(() => _player.seek(position, cancelToken: token));
+      } on Object catch (error) {
+        met.add('join threw ${error.runtimeType}: $error');
+        rethrow;
+      }
+      ctx.emit(ctx.state.copyWith(position: position));
+    },
+  );
 }

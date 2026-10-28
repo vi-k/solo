@@ -199,14 +199,16 @@ void main() {
   test('a job past its body and children reads as its cleanup', () {
     runSolo((solo, journal, async) {
       final phases = <SoloPhase?>[];
-      solo.enqueue<TestState, void>(
-        key: 'job',
-        (ctx) async => throw StateError('gone'),
-        ifFailed: (state, error, stackTrace) {
-          phases.add((solo.pending as SoloPendingJob?)?.phase);
-          return state;
-        },
-      ).ignoreFailure();
+      solo
+          .enqueue<TestState, void>(
+            key: 'job',
+            (ctx) async => throw StateError('gone'),
+            ifFailed: (state, error, stackTrace) {
+              phases.add((solo.pending as SoloPendingJob?)?.phase);
+              return state;
+            },
+          )
+          .ignoreFailure();
       async.flushTimers();
       expect(phases, [SoloPhase.cleanup]);
     });
@@ -246,33 +248,31 @@ void main() {
   test('a key, describe or reason that throws is printed as a mark', () {
     final errors = <Object>[];
     late final String printed;
-    runZonedGuarded(
-      () {
-        printed = '${SoloPendingJob(
-          job: Job.deferred<void>(
-            key: _BrokenKey(),
-            describe: () => throw ArgumentError('describe'),
+    runZonedGuarded(() {
+      final pending = SoloPendingJob(
+        job: Job.deferred<void>(
+          key: _BrokenKey(),
+          describe: () => throw ArgumentError('describe'),
+          (ctx) async {},
+        ),
+        phase: SoloPhase.body,
+        cancellation: const Cancelled.by(reason: _BrokenReason()),
+        heldCancellation: const Cancelled.by(reason: _BrokenReason()),
+        children: 0,
+        inUncancellableSection: false,
+        cancellable: true,
+        closing: false,
+        draining: false,
+        queued: [
+          Job.deferred<void>(
+            key: 'next',
+            describe: () => throw _BrokenType(),
             (ctx) async {},
           ),
-          phase: SoloPhase.body,
-          cancellation: const Cancelled.by(reason: _BrokenReason()),
-          heldCancellation: const Cancelled.by(reason: _BrokenReason()),
-          children: 0,
-          inUncancellableSection: false,
-          cancellable: true,
-          closing: false,
-          draining: false,
-          queued: [
-            Job.deferred<void>(
-              key: 'next',
-              describe: () => throw _BrokenType(),
-              (ctx) async {},
-            ),
-          ],
-        )}';
-      },
-      (error, stackTrace) => errors.add(error),
-    );
+        ],
+      );
+      printed = '$pending';
+    }, (error, stackTrace) => errors.add(error));
     expect(
       printed,
       'SoloPending([<key threw StateError>: <describe threw ArgumentError>] '
@@ -425,11 +425,9 @@ void main() {
         last.enqueue<TestState, void>(key: 'last', (ctx) async {});
         last.close(mode: SoloCloseMode.drain).then((_) => lastReturned = true);
         async.flushMicrotasks();
-        expect(
-          seen,
-          ['null false'],
-          reason: 'the close is still held, and nothing is left to name',
-        );
+        expect(seen, [
+          'null false',
+        ], reason: 'the close is still held, and nothing is left to name');
         expect(lastReturned, isTrue);
       });
     });
@@ -463,11 +461,10 @@ void main() {
         )..ignoreFailure();
         async.flushMicrotasks();
 
-        expect(
-          seen,
-          ['null', 'null'],
-          reason: 'the rule ended the job: the drain has nothing left to run',
-        );
+        expect(seen, [
+          'null',
+          'null',
+        ], reason: 'the rule ended the job: the drain has nothing left to run');
       });
     });
 

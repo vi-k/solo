@@ -26,16 +26,13 @@ device reports a pause.
 
 ```dart
 // The first attempt: the state is checked once, at the start.
-Job<void> record() => enqueue<CameraState, void>(
-      key: 'record',
-      (ctx) async {
-        final state = ctx.state;
-        if (state is! Ready || state.free == 0 || state.paused) return;
-        await for (final frame in device.frames) {
-          await store(frame);
-        }
-      },
-    );
+Job<void> record() => enqueue<CameraState, void>(key: 'record', (ctx) async {
+  final state = ctx.state;
+  if (state is! Ready || state.free == 0 || state.paused) return;
+  await for (final frame in device.frames) {
+    await store(frame);
+  }
+});
 ```
 
 This is what happens:
@@ -52,13 +49,13 @@ This is what happens:
 
 ```dart
 Job<void> record() => enqueue<Ready, void>(
-      key: 'record',
-      canStart: (state) => state.free > 0,
-      keepWhile: (state) => !state.paused,
-      (ctx) => ctx.each(device.frames, (child, frame) async {
-        await child.join(() => store(frame));
-      }).value,
-    );
+  key: 'record',
+  canStart: (state) => state.free > 0,
+  keepWhile: (state) => !state.paused,
+  (ctx) => ctx.each(device.frames, (child, frame) async {
+    await child.join(() => store(frame));
+  }).value,
+);
 ```
 
 The rules are parameters, and the engine checks them for the job. Because the
@@ -105,15 +102,13 @@ A rule answers and does not write: a write from inside `keepWhile` throws a
 ### Reading and updating state
 
 ```dart
-Job<void> zoomIn() => enqueue<Ready, void>(
-      (ctx) async {
-        // A read is a checkpoint: cancellation and the rules are checked.
-        final state = ctx.state;
+Job<void> zoomIn() => enqueue<Ready, void>((ctx) async {
+  // A read is a checkpoint: cancellation and the rules are checked.
+  final state = ctx.state;
 
-        // The body's only way to write, and it is synchronous.
-        ctx.emit(state.copyWith(zoom: state.zoom + 1));
-      },
-    );
+  // The body's only way to write, and it is synchronous.
+  ctx.emit(state.copyWith(zoom: state.zoom + 1));
+});
 ```
 
 `ctx.state`, `ctx.stateAs<T>()` and `ctx.check()` check cancellation and state
@@ -125,18 +120,18 @@ rather than returning null: a mismatch cancels the job.
 
 ```dart
 Job<void> switchOn(int zoom) => enqueue<CameraState, void>(
-      canStart: (state) => state is Off,
-      (ctx) async {
-        // W is every state, so after each wait the body names the one
-        // it needs.
-        await ctx.join(device.powerUp);
-        ctx.stateAs<Off>();
-        ctx.emit(const Ready());
+  canStart: (state) => state is Off,
+  (ctx) async {
+    // W is every state, so after each wait the body names the one
+    // it needs.
+    await ctx.join(device.powerUp);
+    ctx.stateAs<Off>();
+    ctx.emit(const Ready());
 
-        await ctx.join(() => device.setZoom(zoom));
-        ctx.emit(ctx.stateAs<Ready>().copyWith(zoom: zoom));
-      },
-    );
+    await ctx.join(() => device.setZoom(zoom));
+    ctx.emit(ctx.stateAs<Ready>().copyWith(zoom: zoom));
+  },
+);
 ```
 
 `switchOn` starts in `Off` and goes on in the `Ready` it writes. Its `W` is
@@ -483,9 +478,9 @@ final class Saved extends CameraState {
 }
 
 Job<void> shoot() => enqueue<Ready, void>((ctx) async {
-      final photo = await ctx.join(device.shoot);
-      ctx.emit(Saved(photo));
-    });
+  final photo = await ctx.join(device.shoot);
+  ctx.emit(Saved(photo));
+});
 
 Job<void> accept() =>
     enqueue<Saved, void>((ctx) async => ctx.emit(const Ready()));
@@ -509,9 +504,9 @@ next frame, see `Ready`.
 ```dart
 // The second attempt: the acceptance waits behind the recording.
 Job<void> shoot() => enqueue<Ready, void>((ctx) async {
-      final photo = await ctx.join(device.shoot);
-      ctx.emit(ctx.state.withNotice(photo));
-    });
+  final photo = await ctx.join(device.shoot);
+  ctx.emit(ctx.state.withNotice(photo));
+});
 
 Job<void> accept() =>
     enqueue<Ready, void>((ctx) async => ctx.emit(ctx.state.withNotice(null)));
@@ -553,9 +548,9 @@ final class Notices extends Solo<NoticeBoard> {
       enqueue<NoticeBoard, void>((ctx) async => ctx.emit(NoticeBoard(notice)));
 
   Job<void> accept(Notice notice) => enqueue<NoticeBoard, void>((ctx) async {
-        // Only the notice the screen showed: a newer one stays.
-        if (identical(ctx.state.notice, notice)) ctx.emit(const NoticeBoard());
-      });
+    // Only the notice the screen showed: a newer one stays.
+    if (identical(ctx.state.notice, notice)) ctx.emit(const NoticeBoard());
+  });
 }
 ```
 
@@ -563,9 +558,9 @@ The camera is handed the board as `notices`, and its shot posts there:
 
 ```dart
 Job<void> shoot() => enqueue<Ready, void>((ctx) async {
-      final photo = await ctx.join(device.shoot);
-      notices.post(Notice(photo));
-    });
+  final photo = await ctx.join(device.shoot);
+  notices.post(Notice(photo));
+});
 ```
 
 The notices live in a controller of their own. Its queue holds only short jobs,
@@ -620,19 +615,17 @@ Something has to take the controller out of it when the load does not arrive.
 
 ```dart
 // The first attempt: a cancellation leaves the state at Loading.
-enqueue<ProfileState, String>(
-  (ctx) async {
-    ctx.emit(const Loading());
-    try {
-      final name = await ctx.abandonable(api.fetchName);
-      ctx.emit(Loaded(name));
-      return name;
-    } on Object {
-      ctx.emit(const Initial());
-      rethrow;
-    }
-  },
-);
+enqueue<ProfileState, String>((ctx) async {
+  ctx.emit(const Loading());
+  try {
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  } on Object {
+    ctx.emit(const Initial());
+    rethrow;
+  }
+});
 ```
 
 This is what happens:
@@ -691,17 +684,17 @@ final class Disconnected extends ProfileState {
 }
 
 Job<String> load() => enqueue<ProfileState, String>(
-      key: 'load',
-      policy: Policy.droppable,
-      ifFailed: (state, error, stackTrace) => Failure(error),
-      ifCancelled: (state, cancelled) => const Initial(),
-      (ctx) async {
-        ctx.emit(const Loading());
-        final name = await ctx.abandonable(api.fetchName);
-        ctx.emit(Loaded(name));
-        return name;
-      },
-    );
+  key: 'load',
+  policy: Policy.droppable,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  ifCancelled: (state, cancelled) => const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
 ```
 
 Nothing here says the load has an opinion about `Disconnected`, so it keeps
@@ -718,18 +711,18 @@ The job would still be running work that the disconnection made pointless.
 
 ```dart
 Job<String> load() => enqueue<ProfileState, String>(
-      key: 'load',
-      policy: Policy.droppable,
-      keepWhile: (state) => state is! Disconnected,
-      ifFailed: (state, error, stackTrace) => Failure(error),
-      ifCancelled: (state, cancelled) => const Initial(),
-      (ctx) async {
-        ctx.emit(const Loading());
-        final name = await ctx.abandonable(api.fetchName);
-        ctx.emit(Loaded(name));
-        return name;
-      },
-    );
+  key: 'load',
+  policy: Policy.droppable,
+  keepWhile: (state) => state is! Disconnected,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  ifCancelled: (state, cancelled) => const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
 ```
 
 The connection drops while the load is running, and the controller publishes
@@ -778,19 +771,19 @@ publishes nothing, and listeners hear `Loading`, `Loading`, `Loaded`:
 
 ```dart
 Job<String> reload() => enqueue<ProfileState, String>(
-      key: 'load',
-      policy: Policy.restart,
-      ifFailed: (state, error, stackTrace) => Failure(error),
-      // The newer reload publishes its own state.
-      ifCancelled: (state, cancelled) =>
-          cancelled.reason is ReplacedCancelReason ? state : const Initial(),
-      (ctx) async {
-        ctx.emit(const Loading());
-        final name = await ctx.abandonable(api.fetchName);
-        ctx.emit(Loaded(name));
-        return name;
-      },
-    );
+  key: 'load',
+  policy: Policy.restart,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  // The newer reload publishes its own state.
+  ifCancelled: (state, cancelled) =>
+      cancelled.reason is ReplacedCancelReason ? state : const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
 ```
 
 Cancelled any other way, by hand or by `close()`, the reload still returns

@@ -1,3 +1,9 @@
+## Unreleased
+
+### Breaking changes
+
+- **Dart 3.10.0 is the lowest SDK the package supports, up from 3.6.0.**
+
 ## 0.5.0
 
 ### Breaking changes

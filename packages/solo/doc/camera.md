@@ -86,14 +86,14 @@ start only from `Initial`.
 ```dart
 // The first attempt: the first emit leaves the working type.
 Job<void> init() => enqueue<Initial, void>(
-      key: CameraKey.init,
-      policy: Policy.droppable,
-      (ctx) async {
-        ctx.emit(const Preparing());
-        await ctx.join(hw.open);
-        ctx.emit(const Ready());
-      },
-    );
+  key: CameraKey.init,
+  policy: Policy.droppable,
+  (ctx) async {
+    ctx.emit(const Preparing());
+    await ctx.join(hw.open);
+    ctx.emit(const Ready());
+  },
+);
 ```
 
 ```text
@@ -113,15 +113,15 @@ opened at all.
 
 ```dart
 Job<void> init() => enqueue<NotDisposed, void>(
-      key: CameraKey.init,
-      policy: Policy.droppable,
-      canStart: (state) => state is Initial,
-      (ctx) async {
-        ctx.emit(const Preparing());
-        await ctx.join(hw.open);
-        ctx.emit(const Ready());
-      },
-    );
+  key: CameraKey.init,
+  policy: Policy.droppable,
+  canStart: (state) => state is Initial,
+  (ctx) async {
+    ctx.emit(const Preparing());
+    await ctx.join(hw.open);
+    ctx.emit(const Ready());
+  },
+);
 ```
 
 `NotDisposed` is what the body needs for all its length: `Preparing` and
@@ -182,17 +182,17 @@ on the state page, with a device behind the spinner.
 
 ```dart
 Job<void> init() => enqueue<NotDisposed, void>(
-      key: CameraKey.init,
-      policy: Policy.droppable,
-      canStart: (state) => state is Initial,
-      ifFailed: (state, error, stackTrace) => Broken(error),
-      ifCancelled: (state, cancelled) => Broken(cancelled),
-      (ctx) async {
-        ctx.emit(const Preparing());
-        await ctx.join(hw.open);
-        ctx.emit(const Ready());
-      },
-    );
+  key: CameraKey.init,
+  policy: Policy.droppable,
+  canStart: (state) => state is Initial,
+  ifFailed: (state, error, stackTrace) => Broken(error),
+  ifCancelled: (state, cancelled) => Broken(cancelled),
+  (ctx) async {
+    ctx.emit(const Preparing());
+    await ctx.join(hw.open);
+    ctx.emit(const Ready());
+  },
+);
 ```
 
 The handlers compute the state after the body is over, so a cancellation
@@ -257,18 +257,18 @@ it opens the hardware or restores the zoom.
 
 ```dart
 Job<void> init() => enqueue<NotDisposed, void>(
-      key: CameraKey.init,
-      policy: Policy.droppable,
-      canStart: (state) => state is Initial,
-      keepWhile: (state) => state is! Broken,
-      ifFailed: (state, error, stackTrace) => Broken(error),
-      ifCancelled: (state, cancelled) => Broken(cancelled),
-      (ctx) async {
-        ctx.emit(const Preparing());
-        await ctx.join(hw.open);
-        ctx.emit(const Ready());
-      },
-    );
+  key: CameraKey.init,
+  policy: Policy.droppable,
+  canStart: (state) => state is Initial,
+  keepWhile: (state) => state is! Broken,
+  ifFailed: (state, error, stackTrace) => Broken(error),
+  ifCancelled: (state, cancelled) => Broken(cancelled),
+  (ctx) async {
+    ctx.emit(const Preparing());
+    await ctx.join(hw.open);
+    ctx.emit(const Ready());
+  },
+);
 ```
 
 `keepWhile` refuses what the working type lets by: an opening does not go on in
@@ -337,13 +337,13 @@ A pinch asks for a zoom on every frame, and only the last request matters.
 ```dart
 // The first attempt: every zoom reaches the lens.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-      key: CameraKey.setZoom,
-      describe: () => 'zoom: $zoom',
-      (ctx) async {
-        await ctx.join(() => hw.setZoom(zoom));
-        ctx.emit(ctx.state.copyWith(zoom: zoom));
-      },
-    );
+  key: CameraKey.setZoom,
+  describe: () => 'zoom: $zoom',
+  (ctx) async {
+    await ctx.join(() => hw.setZoom(zoom));
+    ctx.emit(ctx.state.copyWith(zoom: zoom));
+  },
+);
 ```
 
 Three calls in one turn, `setZoom(2)`, `setZoom(3)` and `setZoom(4)`, end on
@@ -364,15 +364,15 @@ zoom 4.0: end
 
 ```dart
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-      key: CameraKey.setZoom,
-      policy: Policy.replace,
-      describe: () => 'zoom: $zoom',
-      canStart: (state) => !state.paused,
-      (ctx) async {
-        await ctx.join(() => hw.setZoom(zoom));
-        ctx.emit(ctx.state.copyWith(zoom: zoom));
-      },
-    );
+  key: CameraKey.setZoom,
+  policy: Policy.replace,
+  describe: () => 'zoom: $zoom',
+  canStart: (state) => !state.paused,
+  (ctx) async {
+    await ctx.join(() => hw.setZoom(zoom));
+    ctx.emit(ctx.state.copyWith(zoom: zoom));
+  },
+);
 ```
 
 `replace` queues the new job and then drops the queued one with the same key,
@@ -395,16 +395,16 @@ camera from taking the command at all.
 
 ```dart
 Job<Photo> takePhoto() => enqueue<Ready, Photo>(
-      key: CameraKey.takePhoto,
-      policy: Policy.droppable,
-      canStart: (state) => !state.paused,
-      (ctx) async {
-        final photo = await ctx.join(hw.capture);
-        queue.clear();
-        ctx.log('captured $photo');
-        return photo;
-      },
-    );
+  key: CameraKey.takePhoto,
+  policy: Policy.droppable,
+  canStart: (state) => !state.paused,
+  (ctx) async {
+    final photo = await ctx.join(hw.capture);
+    queue.clear();
+    ctx.log('captured $photo');
+    return photo;
+  },
+);
 ```
 
 A capture takes three times as long as the other operations, and the commands
@@ -435,23 +435,23 @@ was doing when it was called.
 ```dart
 // The first attempt: the disposal waits at the end of the queue.
 Job<void> dispose() => enqueue<CameraState, void>(
-      key: CameraKey.dispose,
-      policy: Policy.droppable,
-      cancellable: false,
-      canStart: (state) => state is! Disposed,
-      (ctx) async {
-        if (ctx.state is! Initial) {
-          await ctx.run(_closeCameraJob());
-        }
-        ctx.emit(const Disposed());
-      },
-    );
+  key: CameraKey.dispose,
+  policy: Policy.droppable,
+  cancellable: false,
+  canStart: (state) => state is! Disposed,
+  (ctx) async {
+    if (ctx.state is! Initial) {
+      await ctx.run(_closeCameraJob());
+    }
+    ctx.emit(const Disposed());
+  },
+);
 
 SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
-      key: CameraKey.closeCamera,
-      cancellable: false,
-      (ctx) async => hw.close(),
-    );
+  key: CameraKey.closeCamera,
+  cancellable: false,
+  (ctx) async => hw.close(),
+);
 ```
 
 Called with a zoom in flight and a shot waiting behind it, this disposal takes

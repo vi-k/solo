@@ -26,14 +26,12 @@ void addLifecycle(TestSolo solo, {bool cancellableA = true}) {
           ..emit(const Working());
       },
     )
-    ..enqueue<Working, void>(
-      key: 'incrementA',
-      cancellable: cancellableA,
-      (ctx) async {
-        await delay(100);
-        ctx.emit(ctx.state.copyWith(a: ctx.state.a + 1));
-      },
-    )
+    ..enqueue<Working, void>(key: 'incrementA', cancellable: cancellableA, (
+      ctx,
+    ) async {
+      await delay(100);
+      ctx.emit(ctx.state.copyWith(a: ctx.state.a + 1));
+    })
     ..enqueue<Working, void>(key: 'incrementB', (ctx) async {
       await delay(100);
       ctx.emit(ctx.state.copyWith(b: ctx.state.b + 1));

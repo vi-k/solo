@@ -144,8 +144,7 @@ abstract final class Sentry {
   static Future<void> captureException(
     Object throwable, {
     StackTrace? stackTrace,
-  }) async =>
-      stage.sentry.add(text(throwable));
+  }) async => stage.sentry.add(text(throwable));
 }
 
 /// The log of the application.
@@ -283,8 +282,7 @@ mixin Desk<S extends Object> on Solo<S> {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('${job.key}: ${text(error)}');
+  }) => heard.add('${job.key}: ${text(error)}');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {

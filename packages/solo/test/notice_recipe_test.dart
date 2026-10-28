@@ -22,9 +22,9 @@ import 'support/state_notice_second_attempts.dart' as second;
 /// recording runs until the device ends its frames.
 
 String _ended(Job<Object?> job) => switch (job.outcome) {
-      final Cancelled cancelled => '$cancelled, started: ${cancelled.started}',
-      final outcome => '$outcome',
-    };
+  final Cancelled cancelled => '$cancelled, started: ${cancelled.started}',
+  final outcome => '$outcome',
+};
 
 const _ms = Duration(milliseconds: 1);
 
@@ -46,11 +46,10 @@ void main() {
           expect(_ended(job), 'Cancelled(rules: is not Ready), started: false');
           expect((job.outcome! as Cancelled).reason, isA<RulesCancelReason>());
         }
-        expect(
-          camera.stage.trace,
-          ['photo 1 begins', 'photo 1 stored'],
-          reason: 'the commands are lost rather than kept waiting',
-        );
+        expect(camera.stage.trace, [
+          'photo 1 begins',
+          'photo 1 stored',
+        ], reason: 'the commands are lost rather than kept waiting');
 
         cam.accept();
         async.elapse(_ms * 200);
@@ -337,23 +336,25 @@ void main() {
       });
     });
 
-    test('the board closed with the camera, not after it, loses the notice',
-        () {
-      fakeAsync((async) {
-        final device = camera.Device();
-        final board = page.Notices();
-        final cam = page.Camera(device, board);
-        final shot = cam.shoot();
-        async.elapse(_ms * 50);
-        cam.close(mode: SoloCloseMode.drain).ignore();
-        board.close().ignore();
-        async.flushTimers();
+    test(
+      'the board closed with the camera, not after it, loses the notice',
+      () {
+        fakeAsync((async) {
+          final device = camera.Device();
+          final board = page.Notices();
+          final cam = page.Camera(device, board);
+          final shot = cam.shoot();
+          async.elapse(_ms * 50);
+          cam.close(mode: SoloCloseMode.drain).ignore();
+          board.close().ignore();
+          async.flushTimers();
 
-        expect(_ended(shot), 'Done(null)');
-        expect(board.currentState.notice, isNull);
-        device.dispose();
-      });
-    });
+          expect(_ended(shot), 'Done(null)');
+          expect(board.currentState.notice, isNull);
+          device.dispose();
+        });
+      },
+    );
 
     test('a closed board turns down post and accept, and keeps its notice', () {
       fakeAsync((async) {

@@ -26,8 +26,7 @@ final class Listening extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      heard.add('$job: $error');
+  }) => heard.add('$job: $error');
 }
 
 /// Answers for what reaches it, and keeps it out of the zone.
@@ -65,10 +64,12 @@ List<String> play(Job<void> Function() start, {int? cancelAt}) {
 
 /// The lines of every `text` block of the page, block by block.
 List<List<String>> quotedOutputs() => [
-      for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .allMatches(File('doc/children.md').readAsStringSync()))
-        block.group(1)!.split('\n'),
-    ];
+  for (final block in RegExp(
+    r'```text\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(File('doc/children.md').readAsStringSync()))
+    block.group(1)!.split('\n'),
+];
 
 void main() {
   group('Children', () {
@@ -77,20 +78,18 @@ void main() {
         final how = fromOutside
             ? 'the parent cancelled from outside'
             : 'a parent body that throws Cancelled';
-        test(
-            'a child with cancellable: $cancellable under $how, and the '
+        test('a child with cancellable: $cancellable under $how, and the '
             'parent ends Cancelled after it', () {
           fakeAsync((async) {
             final trace = <String>[];
-            final child = Job.deferred<int>(
-              cancellable: cancellable,
-              (ctx) async {
-                ctx.onCancel(() => trace.add('child onCancel'));
-                await ctx.abandonable(() => delay(50));
-                trace.add('child ran to its end');
-                return 1;
-              },
-            );
+            final child = Job.deferred<int>(cancellable: cancellable, (
+              ctx,
+            ) async {
+              ctx.onCancel(() => trace.add('child onCancel'));
+              await ctx.abandonable(() => delay(50));
+              trace.add('child ran to its end');
+              return 1;
+            });
             final parent = Job<void>((ctx) async {
               ctx.run(child).ignore();
               if (!fromOutside) {
@@ -114,11 +113,10 @@ void main() {
                 isA<ParentCancelReason>(),
               );
             } else {
-              expect(
-                trace,
-                ['child ran to its end', 'parent finished'],
-                reason: 'the child refuses, and the parent waits for it',
-              );
+              expect(trace, [
+                'child ran to its end',
+                'parent finished',
+              ], reason: 'the child refuses, and the parent waits for it');
               expect(child.outcome, isA<Done<int>>());
             }
           });
@@ -127,8 +125,7 @@ void main() {
     }
 
     for (final fails in [true, false]) {
-      test(
-          'a run future left unhandled hands the zone '
+      test('a run future left unhandled hands the zone '
           "${fails ? "the child's error" : "the child's Cancelled"}", () {
         final zone = <Object>[];
         late final ChildJob<int> child;
@@ -155,16 +152,12 @@ void main() {
           (error, stackTrace) => zone.add(error),
         );
 
-        expect(
-          zone,
-          [if (fails) isA<StateError>() else same(child.outcome)],
-        );
+        expect(zone, [if (fails) isA<StateError>() else same(child.outcome)]);
         expect(child.outcome, fails ? isA<Failed>() : isA<Cancelled>());
       });
     }
 
-    test(
-        'ctx.run(child).ignore() keeps the error from the zone, and the '
+    test('ctx.run(child).ignore() keeps the error from the zone, and the '
         "child's observer still hears it", () {
       final observer = Listening();
       final zone = <Object>[];
@@ -202,11 +195,11 @@ void main() {
           ..close().ignore();
         async.flushTimers();
         expect(job.outcome, isA<Done<void>>());
-        expect(
-          trace(),
-          ['saved e1', 'reported 21', 'finished'],
-          reason: 'the body waits for its chain',
-        );
+        expect(trace(), [
+          'saved e1',
+          'reported 21',
+          'finished',
+        ], reason: 'the body waits for its chain');
       });
     });
 
@@ -251,14 +244,17 @@ void main() {
         'zone: DatabaseStopped',
         'Job(parent): Cancelled(manual)',
       ]);
-      expect(
-        quotedOutputs(),
-        [run, cancelled, refused, ignored, started, failed],
-      );
+      expect(quotedOutputs(), [
+        run,
+        cancelled,
+        refused,
+        ignored,
+        started,
+        failed,
+      ]);
     });
 
-    test(
-        'a child started and not awaited warms the cache, and the parent '
+    test('a child started and not awaited warms the cache, and the parent '
         'waits for it', () {
       final ignored = play(page.childIgnored);
       final started = play(page.childStarted);
@@ -318,20 +314,18 @@ void main() {
       expect(zone, isEmpty);
     });
 
-    test(
-        'how deep a tree goes: with the await, fifty thousand levels build '
+    test('how deep a tree goes: with the await, fifty thousand levels build '
         'and finish', () async {
       final root = Job<void>((ctx) => ctx.run(page.level(50000)));
       expect(await root.done, isA<Done<void>>());
     });
 
-    test(
-        'how deep a tree goes: without the await, the tree runs out of '
+    test('how deep a tree goes: without the await, the tree runs out of '
         'stack and still ends', () async {
       // The level of the page with its `await null` taken out.
       ChildJob<void> level(int depth) => Job.deferred<void>((ctx) async {
-            if (depth > 0) await ctx.run(level(depth - 1));
-          });
+        if (depth > 0) await ctx.run(level(depth - 1));
+      });
       final zone = <Object>[];
       late Job<void> root;
       runZonedGuarded(
@@ -347,12 +341,14 @@ void main() {
     });
   });
 
-  test('every piece of code on children.md is a run of lines of the page file',
-      () {
-    expect(
-      codeMissingFrom('doc/children.md', 'test/support/children_page.dart'),
-      isEmpty,
-    );
-    expect(strayFences('doc/children.md'), isEmpty);
-  });
+  test(
+    'every piece of code on children.md is a run of lines of the page file',
+    () {
+      expect(
+        codeMissingFrom('doc/children.md', 'test/support/children_page.dart'),
+        isEmpty,
+      );
+      expect(strayFences('doc/children.md'), isEmpty);
+    },
+  );
 }

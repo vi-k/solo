@@ -21,8 +21,11 @@ void main() {
       fakeAsync((async) {
         final error = StateError('network');
         final stack = StackTrace.current;
-        final reason =
-            TestCancelReason('network', error: error, stackTrace: stack);
+        final reason = TestCancelReason(
+          'network',
+          error: error,
+          stackTrace: stack,
+        );
         Cancelled? event;
         final job = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
           ..whenCancelled((cancelled) => event = cancelled);
@@ -68,14 +71,10 @@ void main() {
       Cancelled? event;
       final job = Job<void>((ctx) async {
         throw Cancelled.by(reason: reason);
-      })
-        ..whenCancelled((cancelled) => event = cancelled);
+      })..whenCancelled((cancelled) => event = cancelled);
       Object? valueError;
       job.value
-          .then<void>(
-            (_) {},
-            onError: (Object error) => valueError = error,
-          )
+          .then<void>((_) {}, onError: (Object error) => valueError = error)
           .ignore();
       async.flushMicrotasks();
       expect(event!.reason, same(reason));
@@ -84,25 +83,27 @@ void main() {
     });
   });
 
-  test('the parent reason retains the cancellation that caused the cascade',
-      () {
-    fakeAsync((async) {
-      final reason = TestCancelReason('network', error: StateError('failed'));
-      late ChildJob<void> child;
-      final parent = Job<void>((ctx) async {
-        child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
-        ctx.run(child).ignore();
-        await ctx.abandonable(() => delay(50));
+  test(
+    'the parent reason retains the cancellation that caused the cascade',
+    () {
+      fakeAsync((async) {
+        final reason = TestCancelReason('network', error: StateError('failed'));
+        late ChildJob<void> child;
+        final parent = Job<void>((ctx) async {
+          child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
+          ctx.run(child).ignore();
+          await ctx.abandonable(() => delay(50));
+        });
+        async.flushMicrotasks();
+        parent.cancel(reason: reason).ignore();
+        async.flushTimers();
+        final childReason =
+            (child.outcome! as Cancelled).reason as ParentCancelReason;
+        expect(childReason.cause, same(parent.outcome));
+        expect(childReason.cause!.reason, same(reason));
       });
-      async.flushMicrotasks();
-      parent.cancel(reason: reason).ignore();
-      async.flushTimers();
-      final childReason =
-          (child.outcome! as Cancelled).reason as ParentCancelReason;
-      expect(childReason.cause, same(parent.outcome));
-      expect(childReason.cause!.reason, same(reason));
-    });
-  });
+    },
+  );
 
   // `Cancelled.stackTrace` is where the cancellation came from, and for a
   // child the parent took down that is where the parent's came from.
@@ -113,8 +114,7 @@ void main() {
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
         await ctx.abandonable(() => delay(50));
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushMicrotasks();
       parent.cancel().ignore();
       async.flushTimers();
@@ -132,8 +132,7 @@ void main() {
         ctx.run(child).ignore();
         await ctx.abandonable(() => delay(10));
         throw const Cancelled('gave up');
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushTimers();
       final cause = parent.outcome! as Cancelled;
       expect(cause.stackTrace, isNotNull);
@@ -151,8 +150,7 @@ void main() {
           ctx.run(child).ignore();
           rethrow;
         }
-      })
-        ..ignoreFailure();
+      })..ignoreFailure();
       async.flushMicrotasks();
       parent.cancel().ignore();
       async.flushTimers();
@@ -222,8 +220,9 @@ void main() {
       final reason = _BrokenLabelReason();
       // Answering: the subject is the parent finishing, not where the
       // label's error goes after the observer.
-      final parent =
-          Job<void>(observer: ErrorObserver.answering(errors), (ctx) async {
+      final parent = Job<void>(observer: ErrorObserver.answering(errors), (
+        ctx,
+      ) async {
         ctx.onDispose(() => disposed = true);
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         await ctx.run(child);
@@ -246,9 +245,7 @@ void main() {
       late ChildJob<void> child;
       final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
         child = Job.deferred<void>((ctx) async {
-          throw const Cancelled.by(
-            reason: ParentCancelReason(),
-          );
+          throw const Cancelled.by(reason: ParentCancelReason());
         });
         ctx.run(child).ignore();
         ctx.unattended(() => child.value);

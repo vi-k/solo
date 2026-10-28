@@ -110,7 +110,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     // being asked: `test` is the caller's code, and `where` is lazy, so one
     // that touches the queue used to walk into a
     // `ConcurrentModificationError` on the list it had just changed.
-    for (final job in [if (_held case final held?) held, ..._jobs]) {
+    for (final job in [?_held, ..._jobs]) {
       if (!test(job)) {
         continue;
       }
@@ -125,8 +125,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   int clear({
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
-  }) =>
-      removeWhere((_) => true, force: force, reason: reason);
+  }) => removeWhere((_) => true, force: force, reason: reason);
 
   void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
     if (first) {

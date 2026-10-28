@@ -17,63 +17,63 @@ final class ProfileController extends Solo<ProfileState> {
 
   /// The block under "The handlers".
   Job<String> loadWithHandlers() => enqueue<ProfileState, String>(
-        // Both compute a state and nothing else. They run after the body,
-        // children and cleanup, and the outcome is already fixed.
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    // Both compute a state and nothing else. They run after the body,
+    // children and cleanup, and the outcome is already fixed.
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 
   /// The block under "The rules" of "Preserving an incompatible external
   /// state".
   Job<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.droppable,
-        keepWhile: (state) => state is! Disconnected,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.droppable,
+    keepWhile: (state) => state is! Disconnected,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 
   /// The block under "Handler eligibility and errors": a reload that a
   /// newer one replaces.
   Job<String> reload() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.restart,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        // The newer reload publishes its own state.
-        ifCancelled: (state, cancelled) =>
-            cancelled.reason is ReplacedCancelReason ? state : const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.restart,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    // The newer reload publishes its own state.
+    ifCancelled: (state, cancelled) =>
+        cancelled.reason is ReplacedCancelReason ? state : const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 
   /// Not on the page: the same reload with a handler that does not ask the
   /// reason.
   Job<String> reloadAskingNothing() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.restart,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.restart,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 }

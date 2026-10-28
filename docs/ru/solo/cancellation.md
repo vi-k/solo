@@ -38,15 +38,12 @@
 
 ```dart
 // Первая попытка: брошенные перемотки идут на устройстве.
-Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: 'seek',
-      policy: Policy.restart,
-      (ctx) async {
-        // Кончается в тот момент, когда следующая перемотка отменяет эту.
-        await ctx.abandonable(() => _player.seek(position));
-        ctx.emit(ctx.state.copyWith(position: position));
-      },
-    );
+Job<void> seek(Duration position) =>
+    enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+      // Кончается в тот момент, когда следующая перемотка отменяет эту.
+      await ctx.abandonable(() => _player.seek(position));
+      ctx.emit(ctx.state.copyWith(position: position));
+    });
 ```
 
 `restart` отменяет работающую `Job`, и `abandonable` в тот же момент отпускает
@@ -62,15 +59,12 @@ Job<void> seek(Duration position) => enqueue<Ready, void>(
 
 ```dart
 // Вторая попытка: устаревшая перемотка идёт до конца.
-Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: 'seek',
-      policy: Policy.restart,
-      (ctx) async {
-        // Дождаться конца перемотки: двух перемоток сразу не будет.
-        await ctx.join(() => _player.seek(position));
-        ctx.emit(ctx.state.copyWith(position: position));
-      },
-    );
+Job<void> seek(Duration position) =>
+    enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+      // Дождаться конца перемотки: двух перемоток сразу не будет.
+      await ctx.join(() => _player.seek(position));
+      ctx.emit(ctx.state.copyWith(position: position));
+    });
 ```
 
 Двух перемоток сразу устройство больше не получает, но и о том, что перемотка
@@ -83,17 +77,14 @@ Job<void> seek(Duration position) => enqueue<Ready, void>(
 ### Токен
 
 ```dart
-Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: 'seek',
-      policy: Policy.restart,
-      (ctx) async {
-        final token = CancelToken();
-        ctx.onCancel(token.cancel);
-        // Дождаться остановки устройства до следующей перемотки.
-        await ctx.join(() => _player.seek(position, cancelToken: token));
-        ctx.emit(ctx.state.copyWith(position: position));
-      },
-    );
+Job<void> seek(Duration position) =>
+    enqueue<Ready, void>(key: 'seek', policy: Policy.restart, (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      // Дождаться остановки устройства до следующей перемотки.
+      await ctx.join(() => _player.seek(position, cancelToken: token));
+      ctx.emit(ctx.state.copyWith(position: position));
+    });
 ```
 
 `ctx.onCancel(callback)` связывает отмену `Job` с механизмом отмены самой
@@ -138,11 +129,11 @@ Job.isCancellationError = (error) => error is SeekStopped;
 ```dart
 // Первая попытка: платёж проходит, а чек нет.
 Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-      // Каждого вызова дожидаются, что бы ни случилось.
-      final receipt = await ctx.join(() => payment.commit());
-      ctx.emit(ctx.state.copyWith(receipt: receipt));
-      await ctx.join(() => journal.write(entry));
-    });
+  // Каждого вызова дожидаются, что бы ни случилось.
+  final receipt = await ctx.join(() => payment.commit());
+  ctx.emit(ctx.state.copyWith(receipt: receipt));
+  await ctx.join(() => journal.write(entry));
+});
 ```
 
 `join` действительно дожидается платежа, а затем, как и сказано в таблице выше,
@@ -158,13 +149,13 @@ Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
 ```dart
 // Вторая попытка: emit внутри шага бросает.
 Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-      // Дождаться всего шага как одного вызова.
-      await ctx.join(() async {
-        final receipt = await payment.commit();
-        ctx.emit(ctx.state.copyWith(receipt: receipt));
-        await journal.write(entry);
-      });
-    });
+  // Дождаться всего шага как одного вызова.
+  await ctx.join(() async {
+    final receipt = await payment.commit();
+    ctx.emit(ctx.state.copyWith(receipt: receipt));
+    await journal.write(entry);
+  });
+});
 ```
 
 Теперь оба вызова внутри того, чего дожидается `join`, но `Job` принимает
@@ -176,13 +167,13 @@ Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
 
 ```dart
 Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
-      await ctx.uncancellable(() async {
-        final receipt = await payment.commit();
-        ctx.emit(ctx.state.copyWith(receipt: receipt));
-        await journal.write(entry);
-      });
-      // ...остальная работа Job, которую отмена по-прежнему может остановить.
-    });
+  await ctx.uncancellable(() async {
+    final receipt = await payment.commit();
+    ctx.emit(ctx.state.copyWith(receipt: receipt));
+    await journal.write(entry);
+  });
+  // ...остальная работа Job, которую отмена по-прежнему может остановить.
+});
 ```
 
 Ручная отмена, отмена родителя и закрытие удерживаются, пока выполняется
@@ -206,10 +197,8 @@ Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
 
 ```dart
 // Job, отклоняющая все запросы, которые ей позволено отклонить.
-Job<void> flush() => enqueue<Ready, void>(
-      cancellable: false,
-      (ctx) => device.flush(),
-    );
+Job<void> flush() =>
+    enqueue<Ready, void>(cancellable: false, (ctx) => device.flush());
 ```
 
 `cancellable: false` у `Job` полностью отклоняет запросы, которые секция
@@ -244,14 +233,14 @@ Job<void> flush() => enqueue<Ready, void>(
 ```dart
 // Первая попытка: каждая половина ждёт так, как нужно было другой.
 Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
-      ctx.onDispose(() async {
-        // Сброс должен закончиться до продвижения очереди.
-        await ctx.join(() => device.flush());
-      });
-      for (final chunk in chunks) {
-        await device.write(chunk);
-      }
-    });
+  ctx.onDispose(() async {
+    // Сброс должен закончиться до продвижения очереди.
+    await ctx.join(() => device.flush());
+  });
+  for (final chunk in chunks) {
+    await device.write(chunk);
+  }
+});
 ```
 
 Каждая половина ждёт так, как нужно было другой. Цикл ждёт обычным `await`,
@@ -268,16 +257,16 @@ Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
 
 ```dart
 Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
-      ctx.onDispose(() async {
-        // Уборка идёт после тела, где методов ожидания уже нет:
-        // здесь работает обычный await.
-        await device.flush();
-      });
-      for (final chunk in chunks) {
-        // Проверяет и до записи, и после неё.
-        await ctx.join(() => device.write(chunk));
-      }
-    });
+  ctx.onDispose(() async {
+    // Уборка идёт после тела, где методов ожидания уже нет:
+    // здесь работает обычный await.
+    await device.flush();
+  });
+  for (final chunk in chunks) {
+    // Проверяет и до записи, и после неё.
+    await ctx.join(() => device.write(chunk));
+  }
+});
 ```
 
 Теперь цикл ждёт через `join`, и каждая запись стала контрольной точкой.
@@ -384,18 +373,18 @@ switch (job.outcome) {
 
 ```dart
 Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: 'seek',
-      policy: Policy.restart,
-      timeout: const Duration(seconds: 2),
-      ifCancelled: (state, cancelled) =>
-          cancelled.reason is TimeoutCancelReason ? const Offline() : state,
-      (ctx) async {
-        final token = CancelToken();
-        ctx.onCancel(token.cancel);
-        await ctx.join(() => _player.seek(position, cancelToken: token));
-        ctx.emit(ctx.state.copyWith(position: position));
-      },
-    );
+  key: 'seek',
+  policy: Policy.restart,
+  timeout: const Duration(seconds: 2),
+  ifCancelled: (state, cancelled) =>
+      cancelled.reason is TimeoutCancelReason ? const Offline() : state,
+  (ctx) async {
+    final token = CancelToken();
+    ctx.onCancel(token.cancel);
+    await ctx.join(() => _player.seek(position, cancelToken: token));
+    ctx.emit(ctx.state.copyWith(position: position));
+  },
+);
 ```
 
 `timeout` даёт задаче собственный срок. Когда срок выходит, задача отменяется
@@ -509,9 +498,9 @@ await logs.close(mode: SoloCloseMode.drain);
 ```dart
 // Первая попытка: задача ждёт close(), а close() ждёт задачу.
 Job<void> logout() => enqueue<Ready, void>((ctx) async {
-      await ctx.join(api.logout);
-      await close();
-    });
+  await ctx.join(api.logout);
+  await close();
+});
 ```
 
 Этот вызов не возвращается никогда. `close()` ждёт работающую `Job`, включая её

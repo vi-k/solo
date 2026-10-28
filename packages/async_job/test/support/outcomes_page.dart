@@ -82,9 +82,9 @@ Future<void> tellTheRequest(Job<Report> report) async {
     Done(:final value) => 'report: $value',
     Failed(:final error) => 'failed: $error',
     final Cancelled cancelled => switch (origin(cancelled)) {
-        RequestCancelReason(:final error) => 'request failed: $error',
-        final reason => 'cancelled: $reason',
-      },
+      RequestCancelReason(:final error) => 'request failed: $error',
+      final reason => 'cancelled: $reason',
+    },
   };
   print(message);
 }

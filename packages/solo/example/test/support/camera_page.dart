@@ -16,18 +16,18 @@ mixin CameraParts on Solo<CameraState> {
   FakeCameraHardware get hw;
 
   Job<void> init() => enqueue<NotDisposed, void>(
-        key: CameraKey.init,
-        policy: Policy.droppable,
-        canStart: (state) => state is Initial,
-        keepWhile: (state) => state is! Broken,
-        ifFailed: (state, error, stackTrace) => Broken(error),
-        ifCancelled: (state, cancelled) => Broken(cancelled),
-        (ctx) async {
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          ctx.emit(const Ready());
-        },
-      );
+    key: CameraKey.init,
+    policy: Policy.droppable,
+    canStart: (state) => state is Initial,
+    keepWhile: (state) => state is! Broken,
+    ifFailed: (state, error, stackTrace) => Broken(error),
+    ifCancelled: (state, cancelled) => Broken(cancelled),
+    (ctx) async {
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      ctx.emit(const Ready());
+    },
+  );
 
   Job<void> reopen() {
     var opening = false;
@@ -54,33 +54,33 @@ mixin CameraParts on Solo<CameraState> {
   }
 
   Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-        key: CameraKey.setZoom,
-        policy: Policy.replace,
-        describe: () => 'zoom: $zoom',
-        canStart: (state) => !state.paused,
-        (ctx) async {
-          await ctx.join(() => hw.setZoom(zoom));
-          ctx.emit(ctx.state.copyWith(zoom: zoom));
-        },
-      );
+    key: CameraKey.setZoom,
+    policy: Policy.replace,
+    describe: () => 'zoom: $zoom',
+    canStart: (state) => !state.paused,
+    (ctx) async {
+      await ctx.join(() => hw.setZoom(zoom));
+      ctx.emit(ctx.state.copyWith(zoom: zoom));
+    },
+  );
 
   Job<Photo> takePhoto() => enqueue<Ready, Photo>(
-        key: CameraKey.takePhoto,
-        policy: Policy.droppable,
-        canStart: (state) => !state.paused,
-        (ctx) async {
-          final photo = await ctx.join(hw.capture);
-          queue.clear();
-          ctx.log('captured $photo');
-          return photo;
-        },
-      );
+    key: CameraKey.takePhoto,
+    policy: Policy.droppable,
+    canStart: (state) => !state.paused,
+    (ctx) async {
+      final photo = await ctx.join(hw.capture);
+      queue.clear();
+      ctx.log('captured $photo');
+      return photo;
+    },
+  );
 
   SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
-        key: CameraKey.closeCamera,
-        cancellable: false,
-        (ctx) async => hw.close(),
-      );
+    key: CameraKey.closeCamera,
+    cancellable: false,
+    (ctx) async => hw.close(),
+  );
 }
 
 /// "A working type wide enough": the opening before it has its handlers.
@@ -92,15 +92,15 @@ final class WideInit extends Solo<CameraState> with CameraParts {
 
   @override
   Job<void> init() => enqueue<NotDisposed, void>(
-        key: CameraKey.init,
-        policy: Policy.droppable,
-        canStart: (state) => state is Initial,
-        (ctx) async {
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          ctx.emit(const Ready());
-        },
-      );
+    key: CameraKey.init,
+    policy: Policy.droppable,
+    canStart: (state) => state is Initial,
+    (ctx) async {
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      ctx.emit(const Ready());
+    },
+  );
 }
 
 /// "The handlers of enqueue": the opening before its `keepWhile`.
@@ -112,17 +112,17 @@ final class HandledInit extends Solo<CameraState> with CameraParts {
 
   @override
   Job<void> init() => enqueue<NotDisposed, void>(
-        key: CameraKey.init,
-        policy: Policy.droppable,
-        canStart: (state) => state is Initial,
-        ifFailed: (state, error, stackTrace) => Broken(error),
-        ifCancelled: (state, cancelled) => Broken(cancelled),
-        (ctx) async {
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          ctx.emit(const Ready());
-        },
-      );
+    key: CameraKey.init,
+    policy: Policy.droppable,
+    canStart: (state) => state is Initial,
+    ifFailed: (state, error, stackTrace) => Broken(error),
+    ifCancelled: (state, cancelled) => Broken(cancelled),
+    (ctx) async {
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      ctx.emit(const Ready());
+    },
+  );
 }
 
 /// "Checking in the body": the disposal before it takes the listener off.

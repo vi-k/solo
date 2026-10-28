@@ -143,12 +143,9 @@ outcome: Cancelled(manual)
 лежат оба провала:
 
 ```dart
-final job = Job<void>(
-  observer: DatabaseErrors(),
-  (ctx) async {
-    ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
-  },
-);
+final job = Job<void>(observer: DatabaseErrors(), (ctx) async {
+  ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
+});
 ```
 
 ```text
@@ -205,8 +202,8 @@ if (outcome case Failed(:final error, :final stackTrace)) {
 Фильтр называет обёртку по причине:
 
 ```dart
-Job.isCancellationError =
-    (error) => error is AppException && error.cause is Cancelled;
+Job.isCancellationError = (error) =>
+    error is AppException && error.cause is Cancelled;
 ```
 
 Вместо этого `catch` может первым делом вызвать `ctx.check()`, как в разделе

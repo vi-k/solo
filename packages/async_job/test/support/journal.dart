@@ -27,8 +27,9 @@ final class JobJournal extends JobObserver with JobAnswerer {
   static String _label(Job<Object?> job) {
     final indent = job.level == 0 ? '' : '${'>' * job.level} ';
     final description = job.describe();
-    final name =
-        description.isEmpty ? '${job.key}' : '${job.key}: $description';
+    final name = description.isEmpty
+        ? '${job.key}'
+        : '${job.key}: $description';
     return '$indent[$name]';
   }
 
@@ -38,8 +39,9 @@ final class JobJournal extends JobObserver with JobAnswerer {
   @override
   void onFinish(Job<Object?> job) {
     final outcome = job.outcome;
-    final verb =
-        outcome is Cancelled && !outcome.started ? 'dropped' : 'finished';
+    final verb = outcome is Cancelled && !outcome.started
+        ? 'dropped'
+        : 'finished';
     lines.add('${_label(job)} $verb $outcome');
   }
 
@@ -49,8 +51,7 @@ final class JobJournal extends JobObserver with JobAnswerer {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      lines.add('${_label(job)} error $error');
+  }) => lines.add('${_label(job)} error $error');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {

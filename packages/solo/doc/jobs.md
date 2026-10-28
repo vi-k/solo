@@ -73,11 +73,11 @@ enqueueJob(saving);
 
 // Or both at once, which is what a controller method normally does.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-      key: _Op.zoom,
-      // Lazy, and only for diagnostics: built when a log asks for it.
-      describe: () => 'zoom: $zoom',
-      (ctx) => ctx.join(() => camera.zoom(zoom)),
-    );
+  key: _Op.zoom,
+  // Lazy, and only for diagnostics: built when a log asks for it.
+  describe: () => 'zoom: $zoom',
+  (ctx) => ctx.join(() => camera.zoom(zoom)),
+);
 ```
 
 The code of this section and of the ones below belongs to one controller of a
@@ -126,29 +126,26 @@ Job<void> save() =>
 
 // droppable: a second load of the same profile returns the first job.
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: (_Op.load, id),
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: (_Op.load, id),
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 
 // replace: the queued zoom goes, a running one is left alone.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
-      key: _Op.zoom,
-      policy: Policy.replace,
-      (ctx) => ctx.join(() => camera.zoom(zoom)),
-    );
+  key: _Op.zoom,
+  policy: Policy.replace,
+  (ctx) => ctx.join(() => camera.zoom(zoom)),
+);
 
 // restart: the same, and the running one is asked to stop as well.
-Job<void> seek(Duration position) => enqueue<Ready, void>(
-      key: _Op.seek,
-      policy: Policy.restart,
-      (ctx) async {
-        final token = CancelToken();
-        ctx.onCancel(token.cancel);
-        // Wait for the device to stop before the next seek starts.
-        await ctx.join(() => camera.seek(position, cancelToken: token));
-      },
-    );
+Job<void> seek(Duration position) =>
+    enqueue<Ready, void>(key: _Op.seek, policy: Policy.restart, (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      // Wait for the device to stop before the next seek starts.
+      await ctx.join(() => camera.seek(position, cancelToken: token));
+    });
 ```
 
 | Policy | When a job with the same key already exists |
@@ -208,10 +205,10 @@ profile should get that one.
 ```dart
 // The first attempt: one key for every profile.
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: _Op.load,
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: _Op.load,
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 ```
 
 One member of `_Op` for the method, as `save`, `setZoom` and `seek` have it,
@@ -225,10 +222,10 @@ profile, and no request for Grace's is made.
 
 ```dart
 Job<Profile> load(String id) => enqueue<Ready, Profile>(
-      key: (_Op.load, id),
-      policy: Policy.droppable,
-      (ctx) => ctx.abandonable(() => api.load(id)),
-    );
+  key: (_Op.load, id),
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
 ```
 
 A key is any object, compared with `==`: the record `(_Op.load, id)` gives the
@@ -450,13 +447,11 @@ rest of the work, and so does closing the controller.
 
 ```dart
 // The first attempt: the countdown holds the queue.
-Job<void> shootIn(Duration delay) => enqueue<Ready, void>(
-      key: _Op.shoot,
-      (ctx) async {
-        await ctx.pause(delay);
-        await ctx.join(camera.shoot);
-      },
-    );
+Job<void> shootIn(Duration delay) =>
+    enqueue<Ready, void>(key: _Op.shoot, (ctx) async {
+      await ctx.pause(delay);
+      await ctx.join(camera.shoot);
+    });
 ```
 
 `ctx.pause` is the wait the core gives a job, and both `cancelAll()` and

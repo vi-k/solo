@@ -36,10 +36,10 @@ List<String> codeMissingFrom(
   String? under,
 }) {
   List<String> lines(String text) => [
-        for (final line in text.split('\n'))
-          if (line.trim().isNotEmpty && !line.trim().startsWith('// ignore:'))
-            line.trim(),
-      ];
+    for (final line in text.split('\n'))
+      if (line.trim().isNotEmpty && !line.trim().startsWith('// ignore:'))
+        line.trim(),
+  ];
 
   final sources = [
     for (final file in [test, ...alsoIn]) lines(File(file).readAsStringSync()),
@@ -50,8 +50,8 @@ List<String> codeMissingFrom(
         continue;
       }
       var matched = 1;
-      while (
-          matched < piece.length && source[start + matched] == piece[matched]) {
+      while (matched < piece.length &&
+          source[start + matched] == piece[matched]) {
         matched++;
       }
       if (matched == piece.length) {
@@ -71,8 +71,10 @@ List<String> codeMissingFrom(
         if (part.split('\n').first == under) part,
     ].join();
   }
-  final blocks =
-      RegExp(r'```dart\n(.*?)\n```', dotAll: true).allMatches(text).toList();
+  final blocks = RegExp(
+    r'```dart\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(text).toList();
   if (under != null && blocks.isEmpty) {
     throw StateError('$page has no code under "$under"');
   }
@@ -97,14 +99,16 @@ List<String> codeMissingFrom(
 /// one reports both.
 List<String> codeOutOfPlace(String page, String file) {
   List<String> lines(Iterable<String> text) => [
-        for (final line in text)
-          if (line.trim().isNotEmpty && !line.trim().startsWith('// ignore:'))
-            line.trim(),
-      ];
+    for (final line in text)
+      if (line.trim().isNotEmpty && !line.trim().startsWith('// ignore:'))
+        line.trim(),
+  ];
 
   final blocks = [
-    for (final block in RegExp(r'```dart\n(.*?)\n```', dotAll: true)
-        .allMatches(File(page).readAsStringSync()))
+    for (final block in RegExp(
+      r'```dart\n(.*?)\n```',
+      dotAll: true,
+    ).allMatches(File(page).readAsStringSync()))
       lines(_unmarked(block.group(1)!).split('\n')),
   ];
   final regions = <List<String>>[];
@@ -147,9 +151,11 @@ List<String> codeOutOfPlace(String page, String file) {
       'block ${index + 1} of $page:\n${blocks[index].join('\n')}';
 
   return [
-    for (var index = 0;
-        index < blocks.length || index < regions.length;
-        index++)
+    for (
+      var index = 0;
+      index < blocks.length || index < regions.length;
+      index++
+    )
       if (index >= regions.length)
         '${block(index)}\nhas no region in $file'
       else if (index >= blocks.length)

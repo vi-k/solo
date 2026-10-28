@@ -53,10 +53,7 @@ final class Reports extends JobObserver with JobAnswerer {
 ```
 
 ```dart
-runZonedGuarded(
-  startApp,
-  (error, stackTrace) => print('report: $error'),
-);
+runZonedGuarded(startApp, (error, stackTrace) => print('report: $error'));
 ```
 
 `startApp` is the function that starts the app, such as
@@ -171,8 +168,8 @@ first:
 
 ```dart
 final previous = Job.isCancellationError;
-Job.isCancellationError =
-    (error) => error is DatabaseStopped || (previous?.call(error) ?? false);
+Job.isCancellationError = (error) =>
+    error is DatabaseStopped || (previous?.call(error) ?? false);
 ```
 
 A test that sets the field puts it back in `tearDown`, as it would `Job.debug`.
@@ -191,16 +188,12 @@ final class Reporter extends JobObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) =>
-      print('onError: $error');
+  }) => print('onError: $error');
 }
 
 final job = Job<Database>(
   observer: Reporter(),
-  (ctx) => ctx.join(
-    Database.open,
-    discard: (database) => database.close(),
-  ),
+  (ctx) => ctx.join(Database.open, discard: (database) => database.close()),
 );
 ```
 
@@ -409,12 +402,11 @@ otherwise an observer that throws switches off the ones after it.
 ### Observers in one list
 
 ```dart
-final job = Job<void>(
-  observer: JobObserver.all([Reporter(), Crashes()]),
-  (ctx) async {
-    ctx.unattended(() => analytics.send('loaded'));
-  },
-);
+final job = Job<void>(observer: JobObserver.all([Reporter(), Crashes()]), (
+  ctx,
+) async {
+  ctx.unattended(() => analytics.send('loaded'));
+});
 ```
 
 ```text

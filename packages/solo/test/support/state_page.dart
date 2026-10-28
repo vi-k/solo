@@ -25,38 +25,36 @@ final class Camera extends Solo<CameraState> with SoloStream {
   }
 
   Job<void> record() => enqueue<Ready, void>(
-        key: 'record',
-        canStart: (state) => state.free > 0,
-        keepWhile: (state) => !state.paused,
-        (ctx) => ctx.each(device.frames, (child, frame) async {
-          await child.join(() => store(frame));
-        }).value,
-      );
+    key: 'record',
+    canStart: (state) => state.free > 0,
+    keepWhile: (state) => !state.paused,
+    (ctx) => ctx.each(device.frames, (child, frame) async {
+      await child.join(() => store(frame));
+    }).value,
+  );
 
-  Job<void> zoomIn() => enqueue<Ready, void>(
-        (ctx) async {
-          // A read is a checkpoint: cancellation and the rules are checked.
-          final state = ctx.state;
+  Job<void> zoomIn() => enqueue<Ready, void>((ctx) async {
+    // A read is a checkpoint: cancellation and the rules are checked.
+    final state = ctx.state;
 
-          // The body's only way to write, and it is synchronous.
-          ctx.emit(state.copyWith(zoom: state.zoom + 1));
-        },
-      );
+    // The body's only way to write, and it is synchronous.
+    ctx.emit(state.copyWith(zoom: state.zoom + 1));
+  });
 
   Job<void> switchOn(int zoom) => enqueue<CameraState, void>(
-        canStart: (state) => state is Off,
-        (ctx) async {
-          // W is every state, so after each wait the body names the one
-          // it needs.
-          await ctx.join(device.powerUp);
-          ctx.stateAs<Off>();
-          // ignore: cascade_invocations
-          ctx.emit(const Ready());
+    canStart: (state) => state is Off,
+    (ctx) async {
+      // W is every state, so after each wait the body names the one
+      // it needs.
+      await ctx.join(device.powerUp);
+      ctx.stateAs<Off>();
+      // ignore: cascade_invocations
+      ctx.emit(const Ready());
 
-          await ctx.join(() => device.setZoom(zoom));
-          ctx.emit(ctx.stateAs<Ready>().copyWith(zoom: zoom));
-        },
-      );
+      await ctx.join(() => device.setZoom(zoom));
+      ctx.emit(ctx.stateAs<Ready>().copyWith(zoom: zoom));
+    },
+  );
 
   /// Not on the page: a fact of the device other than the connection, the
   /// way a source of the application reports one.
@@ -64,33 +62,31 @@ final class Camera extends Solo<CameraState> with SoloStream {
 
   /// Not on the page: the pause written as a job of the queue.
   Job<void> pauseAsJob() => enqueue<Ready, void>(
-        key: 'pause',
-        (ctx) async => ctx.emit(ctx.state.copyWith(paused: true)),
-      );
+    key: 'pause',
+    (ctx) async => ctx.emit(ctx.state.copyWith(paused: true)),
+  );
 
   /// Not on the page: a job whose rules require the connection, waiting for
   /// an answer the device gives only when the test says so.
   Job<void> waitForAnswer({bool cancellable = true, bool joined = false}) =>
-      enqueue<Ready, void>(
-        key: 'answer',
-        cancellable: cancellable,
-        (ctx) async {
-          try {
-            await (joined
-                ? ctx.join(() => device.answer.future)
-                : ctx.abandonable(() => device.answer.future));
-          } on Cancelled {
-            stage.trace.add('the body resumed');
-            rethrow;
-          }
-        },
-      );
+      enqueue<Ready, void>(key: 'answer', cancellable: cancellable, (
+        ctx,
+      ) async {
+        try {
+          await (joined
+              ? ctx.join(() => device.answer.future)
+              : ctx.abandonable(() => device.answer.future));
+        } on Cancelled {
+          stage.trace.add('the body resumed');
+          rethrow;
+        }
+      });
 
   /// Not on the page: the next root job of the queue.
   Job<void> next() => enqueue<CameraState, void>(
-        key: 'next',
-        (ctx) async => stage.trace.add('the next job started'),
-      );
+    key: 'next',
+    (ctx) async => stage.trace.add('the next job started'),
+  );
 
   // Called once, when the last job is over: nothing in the queue needs
   // to hear the device any more.

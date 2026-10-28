@@ -36,10 +36,8 @@ Future<Database?> keptBack(JobContext ctx) async {
 DeferredJob<Database> connecting() {
   final connect = Job.deferred<Database>(
     key: 'connect',
-    (ctx) => ctx.abandonable(
-      Database.open,
-      discard: (database) => database.close(),
-    ),
+    (ctx) =>
+        ctx.abandonable(Database.open, discard: (database) => database.close()),
   );
   return connect;
 }

@@ -31,11 +31,9 @@ void main() {
     setUp(() => stage = Stage());
 
     test('every quote on the page is what its code prints', () {
-      expect(
-        pageQuotes('doc/observing.md'),
-        [play(loading, outcomeObserved: false)],
-        reason: 'each quote under the code that prints it',
-      );
+      expect(pageQuotes('doc/observing.md'), [
+        play(loading, outcomeObserved: false),
+      ], reason: 'each quote under the code that prints it');
     });
 
     test('the page has no fence the checks do not read', () {
@@ -61,23 +59,22 @@ void main() {
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom('doc/observing.md', page, alsoIn: [firstAttempts]),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom('doc/observing.md', page, alsoIn: [firstAttempts]),
+          isEmpty,
+        );
+      },
+    );
   });
 
   group('Observer', () {
     test('onFinish runs for a job cancelled before it started', () {
       final lines = play(
-        () => Job.deferred<void>(
-          key: 'early',
-          observer: Hooks(),
-          (ctx) async {},
-        ),
+        () =>
+            Job.deferred<void>(key: 'early', observer: Hooks(), (ctx) async {}),
         cancelAt: 0,
       );
 
@@ -90,20 +87,16 @@ void main() {
 
     test('children inherit the observer unless they have their own', () {
       final lines = play(
-        () => Job<void>(
-          key: 'parent',
-          observer: Hooks('parent '),
-          (ctx) async {
-            await ctx.run(Job.deferred<void>(key: 'a', (ctx) async {}));
-            await ctx.run(
-              Job.deferred<void>(
-                key: 'b',
-                observer: Hooks('own '),
-                (ctx) async {},
-              ),
-            );
-          },
-        ),
+        () => Job<void>(key: 'parent', observer: Hooks('parent '), (ctx) async {
+          await ctx.run(Job.deferred<void>(key: 'a', (ctx) async {}));
+          await ctx.run(
+            Job.deferred<void>(
+              key: 'b',
+              observer: Hooks('own '),
+              (ctx) async {},
+            ),
+          );
+        }),
         outcomeObserved: false,
       );
 
@@ -117,36 +110,31 @@ void main() {
       ]);
     });
 
-    test('a class that extends another mixes in the observer and the answer',
-        () {
-      final observer = TallyingAnswerer();
-      final lines = play(
-        () => Job<void>(
-          observer: observer,
-          (ctx) async {
+    test(
+      'a class that extends another mixes in the observer and the answer',
+      () {
+        final observer = TallyingAnswerer();
+        final lines = play(
+          () => Job<void>(observer: observer, (ctx) async {
             ctx.onDispose(() => throw StateError('cleanup'));
-          },
-        ),
-      );
+          }),
+        );
 
-      expect(lines, [
-        'onError: Bad state: cleanup',
-        'onUnanswered: Bad state: cleanup',
-        'outcome: Done(null)',
-      ]);
-      expect(observer.count, 1);
-    });
+        expect(lines, [
+          'onError: Bad state: cleanup',
+          'onUnanswered: Bad state: cleanup',
+          'outcome: Done(null)',
+        ]);
+        expect(observer.count, 1);
+      },
+    );
 
     test('a hook that throws changes nothing else', () {
       final lines = play(
-        () => Job<int>(
-          key: 'hooked',
-          observer: ThrowingStart(),
-          (ctx) async {
-            ctx.log('logged');
-            return 1;
-          },
-        ),
+        () => Job<int>(key: 'hooked', observer: ThrowingStart(), (ctx) async {
+          ctx.log('logged');
+          return 1;
+        }),
       );
 
       expect(lines, [
@@ -279,8 +267,9 @@ void main() {
       expect(errors.map((error) => '$error'), [
         'Bad state: Job(twice: $mark) is already running',
         equals(
-            'Bad state: Job(finished: $mark) has already finished; a job runs '
-            'once, and a child needs a new Job.deferred'),
+          'Bad state: Job(finished: $mark) has already finished; a job runs '
+          'once, and a child needs a new Job.deferred',
+        ),
         startsWith(
           'Invalid argument(s): Job(lost: $mark) '
           'returned Job(), a deferred job that never started',
@@ -291,14 +280,10 @@ void main() {
 
   group('Timing a cancellation', () {
     List<String> timed(Future<void> Function(JobContext ctx) body) => play(
-          () => Job<void>(
-            key: 'slow',
-            observer: FakeTimeCancellations(),
-            body,
-          ),
-          cancelAt: 10,
-          outcomeObserved: false,
-        );
+      () => Job<void>(key: 'slow', observer: FakeTimeCancellations(), body),
+      cancelAt: 10,
+      outcomeObserved: false,
+    );
 
     test('a bare await shows the rest of the wait', () {
       final lines = timed((ctx) async {
@@ -355,21 +340,17 @@ void main() {
       // and the cleanup takes 50 ms more: the child and the cleanup are both
       // in the count, as for a cancellation from outside.
       final lines = play(
-        () => Job<void>(
-          key: 'self',
-          observer: FakeTimeCancellations(),
-          (ctx) async {
-            ctx
-              ..onDispose(() => delay(50))
-              ..run(
-                Job.deferred<void>(cancellable: false, (ctx) => delay(110)),
-              ).ignore();
-            await delay(10);
-            throw const Cancelled.by(
-              reason: ManualCancelReason(),
-            );
-          },
-        ),
+        () => Job<void>(key: 'self', observer: FakeTimeCancellations(), (
+          ctx,
+        ) async {
+          ctx
+            ..onDispose(() => delay(50))
+            ..run(
+              Job.deferred<void>(cancellable: false, (ctx) => delay(110)),
+            ).ignore();
+          await delay(10);
+          throw const Cancelled.by(reason: ManualCancelReason());
+        }),
         outcomeObserved: false,
       );
 
@@ -377,36 +358,26 @@ void main() {
     });
 
     test("a child's cancellation let out counts the same way", () {
-      final lines = play(
-        () {
-          final child = Job.deferred<void>(
-            key: 'child',
-            (ctx) => ctx.abandonable(() => delay(50)),
-          );
-          unawaited(
-            Future<void>.delayed(
-              const Duration(milliseconds: 10),
-              () => child.cancel().ignore(),
-            ),
-          );
-          return Job<void>(
-            key: 'parent',
-            observer: FakeTimeCancellations(),
-            (ctx) async {
-              ctx
-                  .run(
-                    Job.deferred<void>(
-                      cancellable: false,
-                      (ctx) => delay(110),
-                    ),
-                  )
-                  .ignore();
-              await ctx.run(child);
-            },
-          );
-        },
-        outcomeObserved: false,
-      );
+      final lines = play(() {
+        final child = Job.deferred<void>(
+          key: 'child',
+          (ctx) => ctx.abandonable(() => delay(50)),
+        );
+        unawaited(
+          Future<void>.delayed(
+            const Duration(milliseconds: 10),
+            () => child.cancel().ignore(),
+          ),
+        );
+        return Job<void>(key: 'parent', observer: FakeTimeCancellations(), (
+          ctx,
+        ) async {
+          ctx
+              .run(Job.deferred<void>(cancellable: false, (ctx) => delay(110)))
+              .ignore();
+          await ctx.run(child);
+        });
+      }, outcomeObserved: false);
 
       expect(lines, [
         'Job(child) ran 0 ms past its cancellation',
@@ -451,22 +422,15 @@ void main() {
     int ms(String line) =>
         int.parse(RegExp(r'(\d+) ms').firstMatch(line)!.group(1)!);
 
-    test(
-      'a bare await adds the rest of the wait',
-      () async {
-        final lines = await timed(
-          (ctx) async {
-            await delay(300);
-            ctx.check();
-          },
-          cancelAt: 10,
-        );
+    test('a bare await adds the rest of the wait', () async {
+      final lines = await timed((ctx) async {
+        await delay(300);
+        ctx.check();
+      }, cancelAt: 10);
 
-        expect(lines.first, startsWith('Job(slow) ran '));
-        expect(ms(lines.first), greaterThanOrEqualTo(250));
-      },
-      retry: 2,
-    );
+      expect(lines.first, startsWith('Job(slow) ran '));
+      expect(ms(lines.first), greaterThanOrEqualTo(250));
+    }, retry: 2);
 
     test(
       'the same call through ctx.abandonable shows next to nothing',
@@ -481,40 +445,29 @@ void main() {
       retry: 2,
     );
 
-    test(
-      'a held cancellation counts from the end of the section',
-      () async {
-        final lines = await timed(
-          (ctx) async {
-            await ctx.uncancellable(() => delay(100));
-            await ctx.abandonable(() => delay(300));
-          },
-          cancelAt: 10,
-        );
+    test('a held cancellation counts from the end of the section', () async {
+      final lines = await timed((ctx) async {
+        await ctx.uncancellable(() => delay(100));
+        await ctx.abandonable(() => delay(300));
+      }, cancelAt: 10);
 
-        expect(ms(lines.first), lessThan(50));
-        expect(ms(lines.last), greaterThanOrEqualTo(80));
-      },
-      retry: 2,
-    );
+      expect(ms(lines.first), lessThan(50));
+      expect(ms(lines.last), greaterThanOrEqualTo(80));
+    }, retry: 2);
 
-    test(
-      'a body that cancels itself counts its child and cleanup',
-      () async {
-        final lines = await timed((ctx) async {
-          ctx
-            ..onDispose(() => delay(50))
-            ..run(
-              Job.deferred<void>(cancellable: false, (ctx) => delay(110)),
-            ).ignore();
-          await delay(10);
-          throw const Cancelled('gave up');
-        });
+    test('a body that cancels itself counts its child and cleanup', () async {
+      final lines = await timed((ctx) async {
+        ctx
+          ..onDispose(() => delay(50))
+          ..run(
+            Job.deferred<void>(cancellable: false, (ctx) => delay(110)),
+          ).ignore();
+        await delay(10);
+        throw const Cancelled('gave up');
+      });
 
-        expect(ms(lines.single), greaterThanOrEqualTo(140));
-      },
-      retry: 2,
-    );
+      expect(ms(lines.single), greaterThanOrEqualTo(140));
+    }, retry: 2);
   });
 
   group('A message for the log', () {
@@ -604,13 +557,15 @@ void main() {
       });
     }
 
-    test('every piece of code on the page is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom(testingPage, page, alsoIn: [firstAttempts]),
-        isEmpty,
-      );
-    });
+    test(
+      'every piece of code on the page is a run of lines of these files',
+      () {
+        expect(
+          codeMissingFrom(testingPage, page, alsoIn: [firstAttempts]),
+          isEmpty,
+        );
+      },
+    );
 
     group('the first attempt, as the page writes it,', () {
       first.cancelledOpenAwaited(test, expect);
@@ -644,13 +599,10 @@ void main() {
 
     test('time moved by the test runs both of its checks', () {
       final checked = <Object?>[];
-      timeMovedByTheTest(
-        (description, body) => body(),
-        (actual, matcher) {
-          checked.add(actual);
-          expect(actual, matcher);
-        },
-      );
+      timeMovedByTheTest((description, body) => body(), (actual, matcher) {
+        checked.add(actual);
+        expect(actual, matcher);
+      });
 
       expect(checked, [isA<Cancelled>(), 1]);
     });
@@ -674,13 +626,13 @@ void main() {
       final zone = <String>[];
       final checked = <Object?>[];
       runZonedGuarded(
-        () => first.failureLeftUnread(
-          (description, body) => body(),
-          (actual, matcher) {
-            checked.add(actual);
-            expect(actual, matcher);
-          },
-        ),
+        () => first.failureLeftUnread((description, body) => body(), (
+          actual,
+          matcher,
+        ) {
+          checked.add(actual);
+          expect(actual, matcher);
+        }),
         (error, stackTrace) => zone.add('$error'),
       );
 
@@ -693,22 +645,24 @@ void main() {
       failureReadByTheTest(test, expect);
     });
 
-    test('the outcome compared with an outcome: the failure the page quotes',
-        () {
-      expect(
-        () => first.comparedWithAnOutcome(
-          (description, body) => body(),
-          expect,
-        ),
-        throwsA(
-          isA<TestFailure>().having(
-            (failure) => failure.message!.trim().split('\n'),
-            'message',
-            quotedAfter('the job loads three'),
+    test(
+      'the outcome compared with an outcome: the failure the page quotes',
+      () {
+        expect(
+          () => first.comparedWithAnOutcome(
+            (description, body) => body(),
+            expect,
           ),
-        ),
-      );
-    });
+          throwsA(
+            isA<TestFailure>().having(
+              (failure) => failure.message!.trim().split('\n'),
+              'message',
+              quotedAfter('the job loads three'),
+            ),
+          ),
+        );
+      },
+    );
 
     group('compared by type and value, as the page writes it,', () {
       comparedByTypeAndValue(test, expect);

@@ -10,42 +10,35 @@ import 'support/test_state.dart';
 
 /// A short job that only bumps its counter: the "other events" of the 1.x
 /// scenarios.
-SoloJob<void> noop(TestSolo solo, int n) => solo.enqueue<Special, void>(
-      key: 'noop',
-      describe: () => '$n',
-      (ctx) async {
-        await Future<void>(() {});
-        ctx.emit(ctx.state.copyWith(noopCount: ctx.state.noopCount + 1));
-      },
-    );
+SoloJob<void> noop(TestSolo solo, int n) =>
+    solo.enqueue<Special, void>(key: 'noop', describe: () => '$n', (ctx) async {
+      await Future<void>(() {});
+      ctx.emit(ctx.state.copyWith(noopCount: ctx.state.noopCount + 1));
+    });
 
 /// A 100 ms job with no policy at all: the queue alone orders it.
 SoloJob<void> sequential(TestSolo solo, int n) => solo.enqueue<Special, void>(
-      key: 'sequential',
-      describe: () => '$n',
-      (ctx) async {
-        await delay(100);
-        ctx.emit(
-          ctx.state.copyWith(sequentialCount: ctx.state.sequentialCount + 1),
-        );
-      },
+  key: 'sequential',
+  describe: () => '$n',
+  (ctx) async {
+    await delay(100);
+    ctx.emit(
+      ctx.state.copyWith(sequentialCount: ctx.state.sequentialCount + 1),
     );
+  },
+);
 
 /// `Policy.droppable` written out by hand: look the job up, and cancel the
 /// new one before it reaches the queue. The caller always gets the job that
 /// stays, so this one fixture covers both 1.x droppable groups.
 SoloJob<void> droppableByQueue(TestSolo solo, int n) {
   final existing = solo.lastJobWhere((job) => job.key == 'droppable');
-  final job = solo.job<Special, void>(
-    key: 'droppable',
-    describe: () => '$n',
-    (ctx) async {
-      await delay(100);
-      ctx.emit(
-        ctx.state.copyWith(droppableCount: ctx.state.droppableCount + 1),
-      );
-    },
-  );
+  final job = solo.job<Special, void>(key: 'droppable', describe: () => '$n', (
+    ctx,
+  ) async {
+    await delay(100);
+    ctx.emit(ctx.state.copyWith(droppableCount: ctx.state.droppableCount + 1));
+  });
   if (existing != null) {
     job.cancel();
     return existing as SoloJob<void>;
@@ -62,19 +55,17 @@ SoloJob<void> restartableByQueue(TestSolo solo, int n) {
     current.cancel();
   }
   return solo.enqueueJob(
-    solo.job<Special, void>(
-      key: 'restartable',
-      describe: () => '$n',
-      (ctx) async {
-        ctx.emit(
-          ctx.state.copyWith(restartableCount: ctx.state.restartableCount + 1),
-        );
-        await delay(100);
-        ctx.emit(
-          ctx.state.copyWith(restartableCount: ctx.state.restartableCount + 1),
-        );
-      },
-    ),
+    solo.job<Special, void>(key: 'restartable', describe: () => '$n', (
+      ctx,
+    ) async {
+      ctx.emit(
+        ctx.state.copyWith(restartableCount: ctx.state.restartableCount + 1),
+      );
+      await delay(100);
+      ctx.emit(
+        ctx.state.copyWith(restartableCount: ctx.state.restartableCount + 1),
+      );
+    }),
   );
 }
 

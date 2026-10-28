@@ -293,8 +293,7 @@ final job = MyJob<void>(observer: printer, (ctx) async {
   print('downloaded $rows rows');
   await ctx.join(() => save(rows));
   print('saved');
-})
-  .._launch();
+}).._launch();
 ```
 
 Отменённая, пока идёт скачивание, задача закрывает соединение и кончается
@@ -421,11 +420,11 @@ outcome: Cancelled(signed out)
 
 ```dart
 account.onSignOut = () => job._stop(
-      Cancelled.by(
-        reason: const SignedOutReason(),
-        stackTrace: StackTrace.current,
-      ),
-    );
+  Cancelled.by(
+    reason: const SignedOutReason(),
+    stackTrace: StackTrace.current,
+  ),
+);
 ```
 
 ```text

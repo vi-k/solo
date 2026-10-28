@@ -31,17 +31,19 @@ final awaited = test('load fills in the name', () async {
 });
 
 /// `### Awaiting the outcome`: the other half, `value`.
-final failedValue =
-    test('a failed load carries the error to the caller', () async {
-  final profile = ProfileController(
-    FakeProfileApi(error: StateError('no network')),
-  );
+final failedValue = test(
+  'a failed load carries the error to the caller',
+  () async {
+    final profile = ProfileController(
+      FakeProfileApi(error: StateError('no network')),
+    );
 
-  await expectLater(profile.load().value, throwsA(isA<StateError>()));
-  expect(profile.currentState, isA<Failure>());
+    await expectLater(profile.load().value, throwsA(isA<StateError>()));
+    expect(profile.currentState, isA<Failure>());
 
-  await profile.close();
-});
+    await profile.close();
+  },
+);
 
 /// `### Awaiting the outcome`: a cancellation.
 final cancelledLoad = test('a cancelled load ends Cancelled', () async {
@@ -86,32 +88,34 @@ final failureIgnored = test('a failed load shows the failure', () async {
 /// `### Letting the first job start`: the test of the first attempt with
 /// the three lines of the answer in it. The two lines of `### addTearDown`
 /// stand at its top.
-final firstJobStarted =
-    test('a second load while the first one runs is dropped', () {
-  fakeAsync((async) {
-    final journal = Journal();
-    Solo.observer = journal;
-    addTearDown(() => Solo.observer = null);
-    final profile = ProfileController(FakeProfileApi());
+final firstJobStarted = test(
+  'a second load while the first one runs is dropped',
+  () {
+    fakeAsync((async) {
+      final journal = Journal();
+      Solo.observer = journal;
+      addTearDown(() => Solo.observer = null);
+      final profile = ProfileController(FakeProfileApi());
 
-    final first = profile.load();
-    async.flushMicrotasks();
-    final second = profile.load();
-    expect(identical(first, second), isTrue);
+      final first = profile.load();
+      async.flushMicrotasks();
+      final second = profile.load();
+      expect(identical(first, second), isTrue);
 
-    async.elapse(const Duration(milliseconds: 20));
-    expect(journal.lines, [
-      'load started',
-      'state: Loading',
-      'load Cancelled(duplicate)',
-      'state: Loaded',
-      'load Done(Ada Lovelace)',
-    ]);
+      async.elapse(const Duration(milliseconds: 20));
+      expect(journal.lines, [
+        'load started',
+        'state: Loading',
+        'load Cancelled(duplicate)',
+        'state: Loaded',
+        'load Done(Ada Lovelace)',
+      ]);
 
-    profile.close();
-    async.flushTimers();
-  });
-});
+      profile.close();
+      async.flushTimers();
+    });
+  },
+);
 
 /// `### Elapsing instead of awaiting`.
 final elapsed = test('load fills in the name', () {
@@ -149,24 +153,23 @@ final cancelledUnderFakeTime = test('a running load is cancelled', () {
 });
 
 /// `### Collecting in the zone, asserting outside`.
-final collectedInTheZone =
-    test('a failure nobody read reaches the zone', () async {
-  final zoneErrors = <Object>[];
-  late final ProfileController profile;
+final collectedInTheZone = test(
+  'a failure nobody read reaches the zone',
+  () async {
+    final zoneErrors = <Object>[];
+    late final ProfileController profile;
 
-  await runZonedGuarded(
-    () async {
+    await runZonedGuarded(() async {
       profile = ProfileController(
         FakeProfileApi(error: StateError('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
-    },
-    (error, stackTrace) => zoneErrors.add(error),
-  );
+    }, (error, stackTrace) => zoneErrors.add(error));
 
-  expect(profile.currentState, isA<Failure>());
-  expect(zoneErrors, [isA<StateError>()]);
-});
+    expect(profile.currentState, isA<Failure>());
+    expect(zoneErrors, [isA<StateError>()]);
+  },
+);
 
 /// `### A deadline of the job`: the controller of the camera.
 final class CameraController extends Solo<CameraState> {
@@ -175,15 +178,15 @@ final class CameraController extends Solo<CameraState> {
   CameraController(this.hw) : super(const Idle());
 
   Job<void> connect() => enqueue<Idle, void>(
-        key: 'connect',
-        timeout: const Duration(seconds: 5),
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await ctx.join(() => hw.open(cancelToken: token));
-          ctx.emit(const Connected());
-        },
-      );
+    key: 'connect',
+    timeout: const Duration(seconds: 5),
+    (ctx) async {
+      final token = CancelToken();
+      ctx.onCancel(token.cancel);
+      await ctx.join(() => hw.open(cancelToken: token));
+      ctx.emit(const Connected());
+    },
+  );
 }
 
 /// The page's controller with a job to queue behind `connect`, for the

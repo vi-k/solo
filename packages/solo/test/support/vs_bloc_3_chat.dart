@@ -50,14 +50,12 @@ final class ChatController extends Solo<ChatState> {
 
   ChatController(this._api) : super(const ChatState());
 
-  Job<void> send(String text) => enqueue<ChatState, void>(
-        key: 'send',
-        (ctx) async {
-          final reply = await ctx.abandonable(() => _api.send(text));
-          ctx.emit(ctx.state.withReply(reply));
-          markReplyRead();
-        },
-      );
+  Job<void> send(String text) =>
+      enqueue<ChatState, void>(key: 'send', (ctx) async {
+        final reply = await ctx.abandonable(() => _api.send(text));
+        ctx.emit(ctx.state.withReply(reply));
+        markReplyRead();
+      });
 
   Job<void> markReplyRead() =>
       enqueue<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
@@ -80,18 +78,16 @@ final class PlainAwaitChatController extends Solo<ChatState> {
   /// What the body met after its await: the error `ctx.emit` threw.
   Object? afterAwait;
 
-  Job<void> send(String text) => enqueue<ChatState, void>(
-        key: 'send',
-        (ctx) async {
-          final reply = await _api.send(text);
-          try {
-            ctx.emit(ctx.state.withReply(reply));
-          } on Object catch (error) {
-            afterAwait = error;
-            rethrow;
-          }
-        },
-      );
+  Job<void> send(String text) =>
+      enqueue<ChatState, void>(key: 'send', (ctx) async {
+        final reply = await _api.send(text);
+        try {
+          ctx.emit(ctx.state.withReply(reply));
+        } on Object catch (error) {
+          afterAwait = error;
+          rethrow;
+        }
+      });
 }
 
 /// A future started inside a job and left unawaited.
@@ -100,14 +96,10 @@ final class LateChatController extends Solo<ChatState> {
 
   final Api _api;
 
-  Job<void> send(String text) => enqueue<ChatState, void>(
-        key: 'send',
-        (ctx) async {
-          unawaited(
-            _api
-                .send(text)
-                .then((reply) => ctx.emit(ctx.state.withReply(reply))),
-          );
-        },
-      );
+  Job<void> send(String text) =>
+      enqueue<ChatState, void>(key: 'send', (ctx) async {
+        unawaited(
+          _api.send(text).then((reply) => ctx.emit(ctx.state.withReply(reply))),
+        );
+      });
 }

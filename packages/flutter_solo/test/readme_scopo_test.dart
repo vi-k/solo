@@ -32,20 +32,20 @@ String _prose() => File(_doc)
 /// Holds the page to [phrase]: the test that calls this runs what the phrase
 /// says.
 void _says(String phrase) => expect(
-      _prose().contains(phrase),
-      isTrue,
-      reason: '$_doc no longer says: $phrase',
-    );
+  _prose().contains(phrase),
+  isTrue,
+  reason: '$_doc no longer says: $phrase',
+);
 
 /// [child] under a parent asynchronous scope of scopo, which writes
 /// `parent released` to [parentTrace] when it is released.
 Widget underParent(Widget child) => AsyncScope(
-      initScope: (context, ctx) async {},
-      disposeScope: () => parentTrace?.add('parent released'),
-      progressBuilder: (context, progress) => const SizedBox.shrink(),
-      errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
-      builder: (context) => child,
-    );
+  initScope: (context, ctx) async {},
+  disposeScope: () => parentTrace?.add('parent released'),
+  progressBuilder: (context, progress) => const SizedBox.shrink(),
+  errorBuilder: (context, error, stackTrace, progress) => Text('$error'),
+  builder: (context) => child,
+);
 
 /// The trace the parent of [underParent] writes to: that of the API of the
 /// controller below it, which a test sets once the page's code has built
@@ -85,11 +85,14 @@ void main() {
   // A widget test is given ten minutes by default.
   (TestWidgetsFlutterBinding.ensureInitialized()
           as AutomatedTestWidgetsFlutterBinding)
-      .defaultTestTimeout = const Timeout(Duration(seconds: 30));
+      .defaultTestTimeout = const Timeout(
+    Duration(seconds: 30),
+  );
 
   group("The controller's life", () {
-    testWidgets('a ScopeModel owns the controller of one screen',
-        (tester) async {
+    testWidgets('a ScopeModel owns the controller of one screen', (
+      tester,
+    ) async {
       await tester.pumpWidget(MaterialApp(home: screenScope()));
       await tester.pump(const Duration(milliseconds: 10));
       expect(find.text('Ada Lovelace'), findsOneWidget);
@@ -101,9 +104,11 @@ void main() {
 
       await tester.pumpWidget(const SizedBox());
       expect(controller.isClosed, isTrue);
-      _says('`ScopeModel` creates the controller once it is mounted and '
-          'hands it to `dispose` when it leaves the tree, and the subtree '
-          'reads it with `ScopeModel.of`');
+      _says(
+        '`ScopeModel` creates the controller once it is mounted and '
+        'hands it to `dispose` when it leaves the tree, and the subtree '
+        'reads it with `ScopeModel.of`',
+      );
     });
 
     testWidgets('under ScopeModel the parent goes first', (tester) async {
@@ -127,22 +132,29 @@ void main() {
         'save ends',
       ]);
       expect('${save.outcome}', 'Cancelled(closed)');
-      _says('That `dispose` is synchronous, as in a `State`, and nothing '
-          'waits for the close.');
-      _says('Under `ScopeModel` the parent releases it while that save is '
-          'still running.');
+      _says(
+        'That `dispose` is synchronous, as in a `State`, and nothing '
+        'waits for the close.',
+      );
+      _says(
+        'Under `ScopeModel` the parent releases it while that save is '
+        'still running.',
+      );
     });
 
-    testWidgets('AsyncDataScope is ready once the profile is loaded',
-        (tester) async {
+    testWidgets('AsyncDataScope is ready once the profile is loaded', (
+      tester,
+    ) async {
       await tester.pumpWidget(MaterialApp(home: sharedScope()));
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.byType(ProfileView), findsNothing);
 
       await ready(tester, find.text('Ada Lovelace'));
       expect(ProfileApi.last!.trace, ['fetch begins', 'fetch ends']);
-      _says('The scope is ready once the profile is loaded: until then it '
-          'shows `progressBuilder`');
+      _says(
+        'The scope is ready once the profile is loaded: until then it '
+        'shows `progressBuilder`',
+      );
     });
 
     testWidgets('a load that fails closes the controller', (tester) async {
@@ -157,27 +169,32 @@ void main() {
       _says('`ctx.onDiscard` closes it on the two other paths: a failed load');
     });
 
-    testWidgets('a scope removed while it loads closes the controller at once',
-        (tester) async {
-      final controllers = made();
-      ProfileApi.next = profile.ProfileApi(delay: const Duration(seconds: 1));
-      addTearDown(() => ProfileApi.next = profile.ProfileApi());
-      await tester.pumpWidget(MaterialApp(home: sharedScope()));
-      await tester.pump(const Duration(milliseconds: 50));
-      final controller = controllers.single;
-      expect(controller.isClosed, isFalse);
+    testWidgets(
+      'a scope removed while it loads closes the controller at once',
+      (tester) async {
+        final controllers = made();
+        ProfileApi.next = profile.ProfileApi(delay: const Duration(seconds: 1));
+        addTearDown(() => ProfileApi.next = profile.ProfileApi());
+        await tester.pumpWidget(MaterialApp(home: sharedScope()));
+        await tester.pump(const Duration(milliseconds: 50));
+        final controller = controllers.single;
+        expect(controller.isClosed, isFalse);
 
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(milliseconds: 10));
-      expect(controller.isClosed, isTrue);
-      expect(ProfileApi.last!.trace, ['fetch begins']);
-      await tester.pump(const Duration(seconds: 1));
-      _says('a scope removed while it loads, where `ctx.abandonable` stops '
-          'waiting at once and the close cancels the load.');
-    });
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(milliseconds: 10));
+        expect(controller.isClosed, isTrue);
+        expect(ProfileApi.last!.trace, ['fetch begins']);
+        await tester.pump(const Duration(seconds: 1));
+        _says(
+          'a scope removed while it loads, where `ctx.abandonable` stops '
+          'waiting at once and the close cancels the load.',
+        );
+      },
+    );
 
-    testWidgets('AsyncDataScope holds the parent until the close is over',
-        (tester) async {
+    testWidgets('AsyncDataScope holds the parent until the close is over', (
+      tester,
+    ) async {
       await tester.pumpWidget(MaterialApp(home: underParent(sharedScope())));
       await ready(tester, find.text('Ada Lovelace'));
       final controller = AsyncDataScope.of<ProfileController>(
@@ -200,13 +217,19 @@ void main() {
       ]);
       expect(controller.api.saved, ['Ada Lovelace']);
       expect('${save.outcome}', 'Cancelled(closed)');
-      _says('It awaits the future `disposeData` returns, and a parent '
-          'asynchronous scope of scopo is released only after its children');
-      _says('What the parent releases outlives the jobs of the controller, a '
-          'save it waits out with `ctx.join` included.');
-      _says('A screen further down reads the controller with '
-          '`AsyncDataScope.of<ProfileController>(context, listen: '
-          'false).data`.');
+      _says(
+        'It awaits the future `disposeData` returns, and a parent '
+        'asynchronous scope of scopo is released only after its children',
+      );
+      _says(
+        'What the parent releases outlives the jobs of the controller, a '
+        'save it waits out with `ctx.join` included.',
+      );
+      _says(
+        'A screen further down reads the controller with '
+        '`AsyncDataScope.of<ProfileController>(context, listen: '
+        'false).data`.',
+      );
     });
 
     test('both waits have a bound of three seconds by default', () {
@@ -218,8 +241,10 @@ void main() {
         ScopeConfig.defaultWaitForChildrenTimeout,
         const Duration(seconds: 3),
       );
-      _says('Both waits have a bound, `disposeScopeTimeout` of the scope and '
-          '`waitForChildrenTimeout` of its parent, three seconds by default.');
+      _says(
+        'Both waits have a bound, `disposeScopeTimeout` of the scope and '
+        '`waitForChildrenTimeout` of its parent, three seconds by default.',
+      );
       _says('`ScopeTimeout.none` takes the bound off for one scope.');
     });
   });

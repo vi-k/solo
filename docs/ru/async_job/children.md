@@ -16,8 +16,9 @@
 ```dart
 final job = Job<void>((ctx) async {
   // Ребёнок: тело его запускает, дожидается и отменяет вместе с собой.
-  final rows =
-      await ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
+  final rows = await ctx.run(
+    Job.deferred<int>((c) => c.abandonable(loadRows)),
+  );
 
   // Стрим: по одному событию, в собственном ребёнке.
   final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
@@ -151,8 +152,10 @@ Job(parent): Cancelled(manual)
 // Первая попытка: ignore() теряет провал кэша.
 final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
   final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
-  final cache =
-      Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+  final cache = Job.deferred<void>(
+    key: 'cache',
+    (c) => c.abandonable(warmCache),
+  );
   ctx.run(cache).ignore();
   final count = ctx.run(rows);
   ctx.log('${await count} rows');
@@ -183,8 +186,10 @@ future. `ignore()` выбрасывает future, а с ней и ошибку. 
 ```dart
 final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
   final rows = Job.deferred<int>(key: 'rows', (c) => c.abandonable(loadRows));
-  final cache =
-      Job.deferred<void>(key: 'cache', (c) => c.abandonable(warmCache));
+  final cache = Job.deferred<void>(
+    key: 'cache',
+    (c) => c.abandonable(warmCache),
+  );
   ctx.start(cache);
   final count = ctx.run(rows);
   ctx.log('${await count} rows');

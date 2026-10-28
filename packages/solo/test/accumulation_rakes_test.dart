@@ -54,17 +54,19 @@ String _prose() => _pages().replaceAll(RegExp(r'\s+'), ' ');
 ///
 /// The pages are not handed to `expect`: a failure would print all of them.
 void _says(String phrase) => expect(
-      _prose().contains(phrase),
-      isTrue,
-      reason: '$_doc and $_rules no longer say: $phrase',
-    );
+  _prose().contains(phrase),
+  isTrue,
+  reason: '$_doc and $_rules no longer say: $phrase',
+);
 
 /// What the pages quote under their `text` fences, in order.
 List<String> _quotes() => [
-      for (final block
-          in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(_pages()))
-        block.group(1)!,
-    ];
+  for (final block in RegExp(
+    r'```text\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(_pages()))
+    block.group(1)!,
+];
 
 /// What the code under test printed.
 final _printed = <String>[];
@@ -100,7 +102,7 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
 /// The scenario of the search recipe: `solo`, one character every 50 ms.
 /// Returns the lines the page quotes under a version, and the server.
 ({String trace, FakeSearchApi api, List<int> shownAt})
-    _type<C extends Solo<SearchState>>(
+_type<C extends Solo<SearchState>>(
   C Function(SearchApi api) make,
   Job<void> Function(C controller, String text) query, {
   int latency = 100,
@@ -142,7 +144,8 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
   List<String> outcomes,
   List<int> shownAt,
   List<String> errors,
-}) _flip<C extends Solo<Settings>>(
+})
+_flip<C extends Solo<Settings>>(
   C Function(SettingsApi api) make,
   Job<void> Function(C controller, SettingsPatch patch) update,
 ) {
@@ -222,7 +225,7 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
 /// The scenario of the command recipe: three taps in a row, resume, pause,
 /// resume.
 ({String trace, FakeDevice device, List<String> heard})
-    _tap<C extends Solo<Playback>>(
+_tap<C extends Solo<Playback>>(
   C Function(PlayerDevice device) make,
   Job<void> Function(C controller) resume,
   Job<void> Function(C controller) pause,
@@ -345,8 +348,10 @@ void main() {
       expect(strayFences(_doc), isEmpty);
       expect(strayFences(_rules), isEmpty);
       expect(_quotes(), hasLength(13));
-      _says('Under each version of a controller is what the scenario above it '
-          'leads to');
+      _says(
+        'Under each version of a controller is what the scenario above it '
+        'leads to',
+      );
     });
 
     test('a first attempt opens every recipe, the accumulator closes it', () {
@@ -370,12 +375,16 @@ void main() {
     });
 
     test('the sections it points at are named by their headings', () {
-      _says('[Choosing where events '
-          'join](accumulation-rules.md#choosing-where-events-join) says when '
-          'to take `adjacent` instead');
-      _says('[Choosing when a group is '
-          'ready](accumulation-rules.md#choosing-when-a-group-is-ready) '
-          'explains what a throttle interval is measured from');
+      _says(
+        '[Choosing where events '
+        'join](accumulation-rules.md#choosing-where-events-join) says when '
+        'to take `adjacent` instead',
+      );
+      _says(
+        '[Choosing when a group is '
+        'ready](accumulation-rules.md#choosing-when-a-group-is-ready) '
+        'explains what a throttle interval is measured from',
+      );
       expect(_prose().contains('The policy section'), isFalse);
       expect(_prose().contains('the timing section'), isFalse);
     });
@@ -388,8 +397,10 @@ void main() {
 
   group('The opening', () {
     test('adding an event runs no handler and changes no state', () {
-      _says('Adding an event does not run the handler or change controller '
-          'state');
+      _says(
+        'Adding an event does not run the handler or change controller '
+        'state',
+      );
       final api = FakeLogApi();
       var counter = -1;
       var queued = false;
@@ -408,8 +419,10 @@ void main() {
     });
 
     test('a group is sealed when its debounce window expires', () {
-      _says('A group accepts events until it is sealed: when its debounce '
-          'window expires');
+      _says(
+        'A group accepts events until it is sealed: when its debounce '
+        'window expires',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -433,8 +446,10 @@ void main() {
     });
 
     test('under a throttle or no timing, when the queue takes the job', () {
-      _says('under a throttle or with no timing at all, when the queue takes '
-          'the job to run it');
+      _says(
+        'under a throttle or with no timing at all, when the queue takes '
+        'the job to run it',
+      );
       for (final timing in [null, _throttle(200)]) {
         final seen = <String>[];
         _zone((async) {
@@ -447,11 +462,11 @@ void main() {
           async.elapse(ms(1000));
           seen.add(bench.ran.first);
         });
-        expect(
-          seen,
-          ['queued: true', 'taken: false', 'a[1, 2] at 0 ms'],
-          reason: '$timing',
-        );
+        expect(seen, [
+          'queued: true',
+          'taken: false',
+          'a[1, 2] at 0 ms',
+        ], reason: '$timing');
       }
     });
   });
@@ -461,8 +476,10 @@ void main() {
       final run = _type(QueuedSearch.new, (c, text) => c.query(text));
       expect(run.trace, _quotes()[0]);
       expect(run.api.askedAt, [0, 100, 200, 300]);
-      _says('Each request waits for the one before it, so the answer to '
-          '`solo` arrives 400 ms after the first keystroke');
+      _says(
+        'Each request waits for the one before it, so the answer to '
+        '`solo` arrives 400 ms after the first keystroke',
+      );
       _says('the screen answers three words the user had already typed past');
     });
 
@@ -471,20 +488,26 @@ void main() {
       expect(run.trace, _quotes()[1]);
       expect(run.api.askedAt, [0, 50, 100, 150]);
       expect(run.shownAt, [250]);
-      _says('Nothing stale reaches the screen now, and the answer comes '
-          'sooner');
+      _says(
+        'Nothing stale reaches the screen now, and the answer comes '
+        'sooner',
+      );
       _says('The server was still asked four times');
     });
 
-    test('ctx.join in its place sends fewer against this server, and later',
-        () {
-      _says('how many requests go out depends on how much faster the server '
-          'is than the typing');
-      final waited = _type(RestartingSearch.new, (c, text) => c.query(text));
-      final joined = _type(JoiningSearch.new, (c, text) => c.query(text));
-      expect(joined.api.asked, ['s', 'so', 'solo']);
-      expect(joined.shownAt.single, greaterThan(waited.shownAt.single));
-    });
+    test(
+      'ctx.join in its place sends fewer against this server, and later',
+      () {
+        _says(
+          'how many requests go out depends on how much faster the server '
+          'is than the typing',
+        );
+        final waited = _type(RestartingSearch.new, (c, text) => c.query(text));
+        final joined = _type(JoiningSearch.new, (c, text) => c.query(text));
+        expect(joined.api.asked, ['s', 'so', 'solo']);
+        expect(joined.shownAt.single, greaterThan(waited.shownAt.single));
+      },
+    );
 
     test('against a server faster than the typing ctx.join saves nothing', () {
       final waited = _type(
@@ -506,9 +529,11 @@ void main() {
       expect(run.trace, _quotes()[2]);
       expect(run.api.askedAt, [450]);
       _says('the debounce holds the group until the typing stops for 300 ms');
-      _says('`policy` spells out the default, `join`; [Choosing where events '
-          'join](accumulation-rules.md#choosing-where-events-join) says what a '
-          'policy decides');
+      _says(
+        '`policy` spells out the default, `join`; [Choosing where events '
+        'join](accumulation-rules.md#choosing-where-events-join) says what a '
+        'policy decides',
+      );
     });
 
     test('its answer is later than either attempt above', () {
@@ -537,8 +562,10 @@ void main() {
     });
 
     test('a cancelled job leaves its request in flight for the next group', () {
-      _says('cancelling one ends its waiting, not the request it has already '
-          'sent');
+      _says(
+        'cancelling one ends its waiting, not the request it has already '
+        'sent',
+      );
       final api = FakeSearchApi(1000);
       final seen = <String>[];
       _zone((async) {
@@ -564,11 +591,15 @@ void main() {
     });
 
     test("every keystroke of a group gets the group's one job", () {
-      _says('the returned job exposes the outcome and cancellation, like '
-          'other jobs');
-      _says('Every `add` that lands in one group returns the same job, so a '
-          'plain `then` on it throws `StateError`; a caller continues it '
-          'through `shared()`');
+      _says(
+        'the returned job exposes the outcome and cancellation, like '
+        'other jobs',
+      );
+      _says(
+        'Every `add` that lands in one group returns the same job, so a '
+        'plain `then` on it throws `StateError`; a caller continues it '
+        'through `shared()`',
+      );
       final api = FakeSearchApi();
       final jobs = <Job<void>>{};
       var outcome = '';
@@ -592,10 +623,14 @@ void main() {
 
   group('Settings saved on every flip of a switch', () {
     test('a patch replaces the fields it carries and keeps the rest', () {
-      _says('A new value for a field replaces the previous one; fields '
-          'absent from the new patch are kept');
-      final merged = const SettingsPatch(theme: 'dark', language: 'ru')
-          .merge(const SettingsPatch(theme: 'light'));
+      _says(
+        'A new value for a field replaces the previous one; fields '
+        'absent from the new patch are kept',
+      );
+      final merged = const SettingsPatch(
+        theme: 'dark',
+        language: 'ru',
+      ).merge(const SettingsPatch(theme: 'light'));
       expect(
         describe(merged.apply(_off)),
         'notifications: false, theme: light, language: ru',
@@ -613,10 +648,14 @@ void main() {
     });
 
     test('its first two writes land after the user has moved on from them', () {
-      _says('The first two publish settings the user has already moved on '
-          'from');
-      _says('Another device reading between them finds the light theme '
-          'after its owner has already picked the dark one');
+      _says(
+        'The first two publish settings the user has already moved on '
+        'from',
+      );
+      _says(
+        'Another device reading between them finds the light theme '
+        'after its owner has already picked the dark one',
+      );
       final run = _flip(
         (api) => EagerSettingsController(api, _off),
         (c, patch) => c.update(patch),
@@ -635,18 +674,23 @@ void main() {
       );
       expect(run.trace, _quotes()[4]);
       _says('The switch went back off and the theme went back to light');
-      _says("Two of the user's three changes are gone, from the server and "
-          'from the screen both, and nothing failed');
-      expect(run.errors, isEmpty);
-      expect(
-        run.outcomes,
-        ['Cancelled(replaced)', 'Cancelled(replaced)', 'Done(null)'],
+      _says(
+        "Two of the user's three changes are gone, from the server and "
+        'from the screen both, and nothing failed',
       );
+      expect(run.errors, isEmpty);
+      expect(run.outcomes, [
+        'Cancelled(replaced)',
+        'Cancelled(replaced)',
+        'Done(null)',
+      ]);
     });
 
     test('the write restart asked to stop went out all the same', () {
-      _says('The first of the two writes is the one restart asked to stop, '
-          'and it went out all the same');
+      _says(
+        'The first of the two writes is the one restart asked to stop, '
+        'and it went out all the same',
+      );
       final run = _flip(
         (api) => RestartingSettingsController(api, _off),
         (c, patch) => c.update(patch),
@@ -668,9 +712,11 @@ void main() {
     });
 
     test('200 ms after the last change it saves, then emits what it saved', () {
-      _says('After 200 ms without another change the handler saves one '
-          'snapshot with all three changes, and emits it once the write has '
-          'ended');
+      _says(
+        'After 200 ms without another change the handler saves one '
+        'snapshot with all three changes, and emits it once the write has '
+        'ended',
+      );
       final run = _flip(
         (api) => SettingsController(api, _off),
         (c, patch) => c.update(patch),
@@ -701,29 +747,33 @@ void main() {
       expect(api.sent, ['notifications: false, theme: dark, language: ru']);
     });
 
-    test('merge is not called for the first event, and is for each next one',
-        () {
-      _says('The first event becomes the accumulated value without calling '
-          '`merge`');
-      _says('synchronously from `add`, before the handler starts');
-      final api = FakeSettingsApi();
-      final merged = <String>[];
-      final seen = <String>[];
-      _zone((async) {
-        final settings = SettingsController(api, _off)
-          ..update(CountingPatch(merged, notifications: true));
-        seen.add('after the first: ${merged.length}');
-        async.elapse(ms(50));
-        settings.update(const SettingsPatch(theme: 'dark'));
-        seen.add('after the second: $merged, writes ${api.sent.length}');
-        async.elapse(ms(1000));
-      });
-      expect(seen, [
-        'after the first: 0',
-        'after the second: [merge at 50 ms], writes 0',
-      ]);
-      expect(api.sent, ['notifications: true, theme: dark, language: en']);
-    });
+    test(
+      'merge is not called for the first event, and is for each next one',
+      () {
+        _says(
+          'The first event becomes the accumulated value without calling '
+          '`merge`',
+        );
+        _says('synchronously from `add`, before the handler starts');
+        final api = FakeSettingsApi();
+        final merged = <String>[];
+        final seen = <String>[];
+        _zone((async) {
+          final settings = SettingsController(api, _off)
+            ..update(CountingPatch(merged, notifications: true));
+          seen.add('after the first: ${merged.length}');
+          async.elapse(ms(50));
+          settings.update(const SettingsPatch(theme: 'dark'));
+          seen.add('after the second: $merged, writes ${api.sent.length}');
+          async.elapse(ms(1000));
+        });
+        expect(seen, [
+          'after the first: 0',
+          'after the second: [merge at 50 ms], writes 0',
+        ]);
+        expect(api.sent, ['notifications: true, theme: dark, language: en']);
+      },
+    );
 
     test('changeSettings prints what the page quotes', () {
       final api = FakeSettingsApi();
@@ -735,11 +785,12 @@ void main() {
       expect(api.sent, ['notifications: true, theme: dark, language: ru']);
     });
 
-    test(
-        'until the handler runs the state is the initial one, and a ready '
+    test('until the handler runs the state is the initial one, and a ready '
         'job runs in the pause', () {
-      _says('Until the handler runs, the state keeps its initial value, and '
-          'other ready jobs can run during the pause');
+      _says(
+        'Until the handler runs, the state keeps its initial value, and '
+        'other ready jobs can run during the pause',
+      );
       final api = FakeSettingsApi();
       final seen = <String>[];
       _zone((async) {
@@ -795,8 +846,10 @@ void main() {
     });
 
     test('ctx.join keeps the slot of a cancelled write until it has ended', () {
-      _says('even after cancellation, and that is what stops the next write '
-          'from starting on top of this one');
+      _says(
+        'even after cancellation, and that is what stops the next write '
+        'from starting on top of this one',
+      );
       final api = FakeSettingsApi(latency: 500);
       final seen = <String>[];
       _zone((async) {
@@ -806,8 +859,10 @@ void main() {
         first.cancel().ignore();
         settings.update(const SettingsPatch(language: 'ru'));
         async.elapse(ms(300));
-        seen.add('at 550: finished ${first.isFinished}, '
-            '${api.writing} writing, ${api.sent.length} sent');
+        seen.add(
+          'at 550: finished ${first.isFinished}, '
+          '${api.writing} writing, ${api.sent.length} sent',
+        );
         async.elapse(ms(1500));
         seen.add('${first.outcome}, the next write at ${api.sentAt.last} ms');
       });
@@ -817,11 +872,12 @@ void main() {
       ]);
     });
 
-    test(
-        'a save that gives up on a timeout lets the next write go out over '
+    test('a save that gives up on a timeout lets the next write go out over '
         'it', () {
-      _says('A `save` that completes its future on a timeout hands the slot '
-          'back while the server is still writing');
+      _says(
+        'A `save` that completes its future on a timeout hands the slot '
+        'back while the server is still writing',
+      );
       final api = FakeSettingsApi(latency: 500, timeout: 100);
       var writing = 0;
       _zone((async) {
@@ -838,18 +894,23 @@ void main() {
       expect(api.landedAt, [700, 1050]);
     });
 
-    test(
-        'a deadline keeps the slot, and costs the emit that the next group '
+    test('a deadline keeps the slot, and costs the emit that the next group '
         'writes back over', () {
-      _says('A deadline given to the accumulator with `timeout` is a '
-          'cancellation, not a client timeout: `ctx.join` keeps the slot until '
-          '`save` completes, so the next write still waits for this one to '
-          'end');
-      _says('the next group applies its patch to them and writes the old '
-          'values back over the change');
-      _says('A group past its deadline is cancelled while the server is still '
-          'writing, ends `Cancelled(timeout)` once the write is stored, and '
-          'never reaches its `emit`');
+      _says(
+        'A deadline given to the accumulator with `timeout` is a '
+        'cancellation, not a client timeout: `ctx.join` keeps the slot until '
+        '`save` completes, so the next write still waits for this one to '
+        'end',
+      );
+      _says(
+        'the next group applies its patch to them and writes the old '
+        'values back over the change',
+      );
+      _says(
+        'A group past its deadline is cancelled while the server is still '
+        'writing, ends `Cancelled(timeout)` once the write is stored, and '
+        'never reaches its `emit`',
+      );
       final api = FakeSettingsApi(latency: 500);
       final seen = <String>[];
       _zone((async) {
@@ -858,8 +919,10 @@ void main() {
         async.elapse(ms(350));
         final second = settings.update(const SettingsPatch(language: 'ru'));
         async.elapse(ms(250));
-        seen.add('at 600: ${first.outcome}, cancelled ${first.isCancelled}, '
-            '${api.writing} writing');
+        seen.add(
+          'at 600: ${first.outcome}, cancelled ${first.isCancelled}, '
+          '${api.writing} writing',
+        );
         async.elapse(ms(2000));
         seen
           ..add('${first.outcome}, ${second.outcome}')
@@ -876,55 +939,70 @@ void main() {
       ]);
     });
 
-    test('a cancellation can keep the emit from a write the server accepted',
-        () {
-      _says('Cancellation can also prevent the final `emit` after the server '
-          'has accepted the write');
-      final api = FakeSettingsApi();
-      final seen = <String>[];
-      _zone((async) {
-        final settings = SettingsController(api, _off);
-        final group = settings.update(const SettingsPatch(theme: 'dark'));
-        async.elapse(ms(250));
-        group.cancel().ignore();
-        async.elapse(ms(500));
-        seen
-          ..add('${group.outcome}')
-          ..add('server ${api.stored.theme}, screen '
-              '${settings.currentState.theme}');
-      });
-      expect(seen, ['Cancelled(manual)', 'server dark, screen light']);
-    });
+    test(
+      'a cancellation can keep the emit from a write the server accepted',
+      () {
+        _says(
+          'Cancellation can also prevent the final `emit` after the server '
+          'has accepted the write',
+        );
+        final api = FakeSettingsApi();
+        final seen = <String>[];
+        _zone((async) {
+          final settings = SettingsController(api, _off);
+          final group = settings.update(const SettingsPatch(theme: 'dark'));
+          async.elapse(ms(250));
+          group.cancel().ignore();
+          async.elapse(ms(500));
+          seen
+            ..add('${group.outcome}')
+            ..add(
+              'server ${api.stored.theme}, screen '
+              '${settings.currentState.theme}',
+            );
+        });
+        expect(seen, ['Cancelled(manual)', 'server dark, screen light']);
+      },
+    );
   });
 
   group('One request per log line', () {
-    test('the first attempt sends four requests, each after the one before',
-        () {
-      final run =
-          _write(EagerLogController.new, (c, entry) => c.logEvent(entry));
-      expect(run.trace, _quotes()[7]);
-      _says('Three lines written one after another by the code that handles '
-          'a screen transition, then one more two seconds later');
-      expect(run.api.sentAt, [0, 100, 200, 2000]);
-      _says('each send starts only when the one before it has finished');
-    });
-
     test(
-        'the collector sends the transition together, and the fourth a '
+      'the first attempt sends four requests, each after the one before',
+      () {
+        final run = _write(
+          EagerLogController.new,
+          (c, entry) => c.logEvent(entry),
+        );
+        expect(run.trace, _quotes()[7]);
+        _says(
+          'Three lines written one after another by the code that handles '
+          'a screen transition, then one more two seconds later',
+        );
+        expect(run.api.sentAt, [0, 100, 200, 2000]);
+        _says('each send starts only when the one before it has finished');
+      },
+    );
+
+    test('the collector sends the transition together, and the fourth a '
         'second late', () {
       final run = _write(LogController.new, (c, entry) => c.logEvent(entry));
       expect(run.trace, _quotes()[8]);
-      _says('The fourth line is written when no interval is running, so it '
-          'starts one of its own and waits it out: a line written alone '
-          'reaches the server a second late.');
+      _says(
+        'The fourth line is written when no interval is running, so it '
+        'starts one of its own and waits it out: a line written alone '
+        'reaches the server a second late.',
+      );
       expect(run.api.sentAt, [1000, 3000]);
     });
 
     test('a transition written over several turns stays together', () {
-      _says('With `startAtOnce: false` the interval starts at the first of '
-          'them and the group waits it out, so lines written within that '
-          'second stay together, however many turns the code takes to write '
-          'them.');
+      _says(
+        'With `startAtOnce: false` the interval starts at the first of '
+        'them and the group waits it out, so lines written within that '
+        'second stay together, however many turns the code takes to write '
+        'them.',
+      );
       final run = _write(
         LogController.new,
         (c, entry) => c.logEvent(entry),
@@ -969,8 +1047,10 @@ void main() {
     });
 
     test('every addition to a group gets the same job', () {
-      _says('the caller gets the same `Job` every other addition to that '
-          'group got');
+      _says(
+        'the caller gets the same `Job` every other addition to that '
+        'group got',
+      );
       final jobs = <Job<void>>{};
       _zone((async) {
         final logs = LogController(FakeLogApi());
@@ -983,8 +1063,10 @@ void main() {
     });
 
     test('close() drops the waiting group and leaves no timer of its own', () {
-      _says('`close()` drops the group instead of leaving a list and a timer '
-          'behind');
+      _says(
+        '`close()` drops the group instead of leaving a list and a timer '
+        'behind',
+      );
       final api = FakeLogApi();
       final seen = <String>[];
       _zone((async) {
@@ -993,22 +1075,23 @@ void main() {
         final waiting = logs.logEvent(const LogEntry('two'));
         seen.add('before: ${async.pendingTimers.length} timer');
         logs.close().ignore();
-        seen.add('after: ${async.pendingTimers.length} timers, '
-            '${waiting.outcome}');
+        seen.add(
+          'after: ${async.pendingTimers.length} timers, '
+          '${waiting.outcome}',
+        );
         async.elapse(ms(3000));
       });
-      expect(seen, [
-        'before: 1 timer',
-        'after: 0 timers, Cancelled(closed)',
-      ]);
+      expect(seen, ['before: 1 timer', 'after: 0 timers, Cancelled(closed)']);
       expect(api.sent, [
         ['one'],
       ]);
     });
 
     test('the counter counts what was sent and reached emit', () {
-      _says('counts entries whose send operation completed and whose handler '
-          'reached `emit`');
+      _says(
+        'counts entries whose send operation completed and whose handler '
+        'reached `emit`',
+      );
       final api = FakeLogApi()..failure = StateError('offline');
       final seen = <String>[];
       final errors = _zone((async) {
@@ -1043,11 +1126,15 @@ void main() {
     });
 
     test('the working type int is the whole state, so any count starts', () {
-      _says('`collect` and `accumulate` both take three type arguments, '
-          '`<W, E, T>`: the working type `W`, as in `enqueue`, the event '
-          'type `E` and the result type `T`');
-      _says('The working type `int` is that whole state, so the handler '
-          'starts whatever the count is and reads it as `ctx.state`.');
+      _says(
+        '`collect` and `accumulate` both take three type arguments, '
+        '`<W, E, T>`: the working type `W`, as in `enqueue`, the event '
+        'type `E` and the result type `T`',
+      );
+      _says(
+        'The working type `int` is that whole state, so the handler '
+        'starts whatever the count is and reads it as `ctx.state`.',
+      );
       final api = FakeLogApi();
       final counts = <int>[];
       _zone((async) {
@@ -1068,8 +1155,10 @@ void main() {
     });
 
     test('a cancelled group and a plain close() leave entries unsent', () {
-      _says('A failed send, a cancelled group or a plain `close()` can leave '
-          'them unsent');
+      _says(
+        'A failed send, a cancelled group or a plain `close()` can leave '
+        'them unsent',
+      );
       final api = FakeLogApi();
       _zone((async) {
         final logs = LogController(api)..logEvent(const LogEntry('one'));
@@ -1085,8 +1174,10 @@ void main() {
     });
 
     test('a draining close sends what is already queued', () {
-      _says('`close()` with `SoloCloseMode.drain` sends what is already '
-          'queued');
+      _says(
+        '`close()` with `SoloCloseMode.drain` sends what is already '
+        'queued',
+      );
       final api = FakeLogApi();
       var closedAt = -1;
       var counter = 0;
@@ -1118,8 +1209,10 @@ void main() {
       final run = _tap(QueuedPlayer.new, (c) => c.resume(), (c) => c.pause());
       expect(run.trace, _quotes()[9]);
       _says('gets there the long way');
-      _says('it plays, stops, and plays again, and the stop in the middle is '
-          'something the user hears');
+      _says(
+        'it plays, stops, and plays again, and the stop in the middle is '
+        'something the user hears',
+      );
     });
 
     test('the accumulator tells it once, on one job', () {
@@ -1173,11 +1266,12 @@ void main() {
       expect(sought, ['30 s further on']);
     });
 
-    test(
-        'under adjacent a job of another kind between two commands is a '
+    test('under adjacent a job of another kind between two commands is a '
         'boundary', () {
-      _says('a job of another kind added between two commands is a boundary '
-          'and the merging stops there');
+      _says(
+        'a job of another kind added between two commands is a boundary '
+        'and the merging stops there',
+      );
       final device = FakeDevice();
       _zone((async) {
         BusyPlayer(device, device.note)
@@ -1187,15 +1281,18 @@ void main() {
           ..pause();
         async.elapse(ms(1000));
       });
-      expect(
-        device.heard,
-        ['resume at 50 ms', 'chime at 150 ms', 'pause at 150 ms'],
-      );
+      expect(device.heard, [
+        'resume at 50 ms',
+        'chime at 150 ms',
+        'pause at 150 ms',
+      ]);
     });
 
     test('three taps in a row come out the same under join', () {
-      _says('Three taps in a row have no such job between them, and `join`, '
-          'the default, would merge them the same way.');
+      _says(
+        'Three taps in a row have no such job between them, and `join`, '
+        'the default, would merge them the same way.',
+      );
       final adjacent = _tap(Player.new, (c) => c.resume(), (c) => c.pause());
       final join = _tap(
         (device) => JoiningPlayer(device as FakeDevice),
@@ -1207,12 +1304,16 @@ void main() {
     });
 
     test('under join the resume would be dropped and the pause left alone', () {
-      _says('With a job of another kind between a `resume` and a `pause`, '
-          '`join` folds the `pause` into the group ahead of that job. So the '
-          'device never hears the `resume`, and it pauses before the job '
-          'runs.');
-      _says('`adjacent` sends the `resume`, lets the job run and then sends '
-          'the `pause`, in the order of the calls');
+      _says(
+        'With a job of another kind between a `resume` and a `pause`, '
+        '`join` folds the `pause` into the group ahead of that job. So the '
+        'device never hears the `resume`, and it pauses before the job '
+        'runs.',
+      );
+      _says(
+        '`adjacent` sends the `resume`, lets the job run and then sends '
+        'the `pause`, in the order of the calls',
+      );
       final device = FakeDevice();
       _zone((async) {
         JoiningPlayer(device)
@@ -1226,8 +1327,10 @@ void main() {
     });
 
     test('Policy.replace does not help two jobs that share no key', () {
-      _says('`Policy.replace` does not help: it removes jobs with the same '
-          'key, and these two do not share one');
+      _says(
+        '`Policy.replace` does not help: it removes jobs with the same '
+        'key, and these two do not share one',
+      );
       final run = _tap(
         (device) => KeyedPlayer(device, Policy.replace, oneKey: false),
         (c) => c.resume(),
@@ -1237,12 +1340,16 @@ void main() {
     });
 
     test('removing and adding puts the command at the tail, on a new job', () {
-      _says('the command ends up at the tail, behind whatever was queued '
-          'between');
+      _says(
+        'the command ends up at the tail, behind whatever was queued '
+        'between',
+      );
       _says('this way a new job has to be built');
-      _says('Keeping it means holding the command outside the job, where '
-          'the job reads it when it starts, and that is what an accumulator '
-          'does for its job');
+      _says(
+        'Keeping it means holding the command outside the job, where '
+        'the job reads it when it starts, and that is what an accumulator '
+        'does for its job',
+      );
       final device = FakeDevice();
       final seen = <String>[];
       _zone((async) {
@@ -1254,8 +1361,10 @@ void main() {
         final second = transport.resume();
         seen
           ..add('${transport.queued}')
-          ..add('same job: ${identical(first, second)}, the first '
-              '${first.outcome}');
+          ..add(
+            'same job: ${identical(first, second)}, the first '
+            '${first.outcome}',
+          );
         async.elapse(ms(1000));
       });
       expect(seen, [
@@ -1267,8 +1376,10 @@ void main() {
     });
 
     test('the queue never touches the running job', () {
-      _says('a `pause` that has already started runs to its end whatever is '
-          'removed behind it');
+      _says(
+        'a `pause` that has already started runs to its end whatever is '
+        'removed behind it',
+      );
       final device = FakeDevice();
       final seen = <String>[];
       _zone((async) {
@@ -1286,8 +1397,10 @@ void main() {
     });
 
     test('cancelAll() clears the whole queue and cancels the current job', () {
-      _says('reach for `cancelAll()` — it clears the whole queue and cancels '
-          'the current job');
+      _says(
+        'reach for `cancelAll()` — it clears the whole queue and cancels '
+        'the current job',
+      );
       final device = FakeDevice();
       final seen = <String>[];
       _zone((async) {
@@ -1334,8 +1447,10 @@ void main() {
     });
 
     test('removeWhere skips a protected job unless force is given', () {
-      _says('`removeWhere` skips jobs created with `cancellable: false` '
-          'unless `force: true` is given');
+      _says(
+        '`removeWhere` skips jobs created with `cancellable: false` '
+        'unless `force: true` is given',
+      );
       final device = FakeDevice();
       final seen = <String>[];
       _zone((async) {
@@ -1345,8 +1460,10 @@ void main() {
         transport.resume();
         seen
           ..add('${transport.queued}, ${guarded.outcome}')
-          ..add('removed ${transport.removePauses(force: true)}, '
-              '${guarded.outcome}');
+          ..add(
+            'removed ${transport.removePauses(force: true)}, '
+            '${guarded.outcome}',
+          );
       });
       expect(seen, [
         '[Command.pause, Command.resume], null',
@@ -1374,10 +1491,14 @@ void main() {
     }
 
     test('the table: debounce', () {
-      _says('| The first group is ready | after `duration` with no new event '
-          '| at once | after `duration` |');
-      _says('| An addition | restarts the timer | does not extend the timer '
-          '| does not extend the timer |');
+      _says(
+        '| The first group is ready | after `duration` with no new event '
+        '| at once | after `duration` |',
+      );
+      _says(
+        '| An addition | restarts the timer | does not extend the timer '
+        '| does not extend the timer |',
+      );
       expect(twoAndOne(_debounce(200)), [
         'a[1, 2] at 300 ms',
         'a[3] at 1350 ms',
@@ -1385,9 +1506,11 @@ void main() {
     });
 
     test('the table: throttle', () {
-      _says('| The wait is measured from | the last accepted event | the '
-          'previous actual start | the previous start, or the moment the '
-          'group appeared |');
+      _says(
+        '| The wait is measured from | the last accepted event | the '
+        'previous actual start | the previous start, or the moment the '
+        'group appeared |',
+      );
       expect(twoAndOne(_throttle(200)), [
         'a[1] at 0 ms',
         'a[2] at 200 ms',
@@ -1403,8 +1526,10 @@ void main() {
     });
 
     test('a 200 ms window with events at 0, 60 and 120 is ready at 320', () {
-      _says('With a 200 ms window, events at 0, 60 and 120 ms make the group '
-          'ready at 320 ms');
+      _says(
+        'With a 200 ms window, events at 0, 60 and 120 ms make the group '
+        'ready at 320 ms',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -1422,8 +1547,10 @@ void main() {
     });
 
     test('an addition restarts the timer even when merge changes nothing', () {
-      _says('Every addition restarts the timer, even when `merge` returns an '
-          'unchanged value');
+      _says(
+        'Every addition restarts the timer, even when `merge` returns an '
+        'unchanged value',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -1443,8 +1570,10 @@ void main() {
     });
 
     test('the timer seals the group while another job is running', () {
-      _says('When the debounce timer fires, the group is sealed even if '
-          'another job is running');
+      _says(
+        'When the debounce timer fires, the group is sealed even if '
+        'another job is running',
+      );
       _says('`collect` takes its snapshot then, and not again');
       final seen = <String>[];
       _zone((async) {
@@ -1466,8 +1595,10 @@ void main() {
     });
 
     test('throttle: additions gather and do not extend the interval', () {
-      _says('Additions during the interval gather in an open group without '
-          'extending the timer');
+      _says(
+        'Additions during the interval gather in an open group without '
+        'extending the timer',
+      );
       _says('queued input is ready without needing another event');
       final seen = <String>[];
       _zone((async) {
@@ -1488,12 +1619,13 @@ void main() {
       ]);
     });
 
-    test(
-        'throttle: an empty interval creates no job, and the next group '
+    test('throttle: an empty interval creates no job, and the next group '
         'is ready at once', () {
-      _says('An interval that passes with no event creates no job, and the '
-          'group of the next event is ready at once: the interval is counted '
-          'from the previous start, and it has run out.');
+      _says(
+        'An interval that passes with no event creates no job, and the '
+        'group of the next event is ready at once: the interval is counted '
+        'from the previous start, and it has run out.',
+      );
       final hears = Hears();
       Solo.observer = hears;
       var timers = -1;
@@ -1516,11 +1648,12 @@ void main() {
     });
 
     for (final policy in AccumulationPolicy.values) {
-      test(
-          'startAtOnce false, ${policy.name}: a later event does not push '
+      test('startAtOnce false, ${policy.name}: a later event does not push '
           'back a group that waits only for the slot', () {
-        _says('is not pushed back by a later event, whatever the policy does '
-            'with that event');
+        _says(
+          'is not pushed back by a later event, whatever the policy does '
+          'with that event',
+        );
         final seen = <String>[];
         _zone((async) {
           final bench = Bench();
@@ -1543,12 +1676,13 @@ void main() {
       });
     }
 
-    test(
-        'startAtOnce false: after an empty interval the next group counts a '
+    test('startAtOnce false: after an empty interval the next group counts a '
         'whole one', () {
-      _says('An interval that passes with no event leaves nothing running, '
-          'and the next group counts a whole interval from its own '
-          'appearance.');
+      _says(
+        'An interval that passes with no event leaves nothing running, '
+        'and the next group counts a whole interval from its own '
+        'appearance.',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -1578,58 +1712,64 @@ void main() {
       ]);
     });
 
-    test('startAtOnce false: a group beside a running one starts no interval',
-        () {
-      _says('Another group of its own, queued or running: the new group '
+    test(
+      'startAtOnce false: a group beside a running one starts no interval',
+      () {
+        _says(
+          'Another group of its own, queued or running: the new group '
           'starts no interval and waits for the one that the start of the '
-          'other group renews.');
-      final seen = <String>[];
-      _zone((async) {
-        final bench = Bench();
-        final a = bench.collector(
-          'a',
-          work: 300,
-          timing: _throttle(200, startAtOnce: false),
-        )..add('1');
-        // The first group starts at 200 ms and runs until 500 ms; the
-        // interval its start renewed is over at 400 ms.
-        async.elapse(ms(450));
-        a.add('2');
-        async.elapse(ms(1000));
-        seen.addAll(bench.ran);
-      });
-      // An interval counted from the appearance at 450 ms would hold the
-      // second group until 650 ms.
-      expect(seen, ['a[1] at 200 ms', 'a[2] at 500 ms']);
-    });
+          'other group renews.',
+        );
+        final seen = <String>[];
+        _zone((async) {
+          final bench = Bench();
+          final a = bench.collector(
+            'a',
+            work: 300,
+            timing: _throttle(200, startAtOnce: false),
+          )..add('1');
+          // The first group starts at 200 ms and runs until 500 ms; the
+          // interval its start renewed is over at 400 ms.
+          async.elapse(ms(450));
+          a.add('2');
+          async.elapse(ms(1000));
+          seen.addAll(bench.ran);
+        });
+        // An interval counted from the appearance at 450 ms would hold the
+        // second group until 650 ms.
+        expect(seen, ['a[1] at 200 ms', 'a[2] at 500 ms']);
+      },
+    );
 
-    test('startAtOnce false: a group beside a queued one starts no interval',
-        () {
-      final seen = <String>[];
-      _zone((async) {
-        final bench = Bench()..busy('slot', 350);
-        final a = bench.collector(
-          'a',
-          policy: AccumulationPolicy.adjacent,
-          timing: _throttle(200, startAtOnce: false),
-        )..add('1');
-        // The first group has waited its interval out by 200 ms and waits
-        // for the slot alone.
-        async.elapse(ms(300));
-        bench.busy('between', 10);
-        a.add('2');
-        async.elapse(ms(1000));
-        seen.addAll(bench.ran);
-      });
-      // An interval started by the second group at 300 ms would hold the
-      // first one until 500 ms.
-      expect(seen, [
-        'slot at 0 ms',
-        'a[1] at 350 ms',
-        'between at 350 ms',
-        'a[2] at 550 ms',
-      ]);
-    });
+    test(
+      'startAtOnce false: a group beside a queued one starts no interval',
+      () {
+        final seen = <String>[];
+        _zone((async) {
+          final bench = Bench()..busy('slot', 350);
+          final a = bench.collector(
+            'a',
+            policy: AccumulationPolicy.adjacent,
+            timing: _throttle(200, startAtOnce: false),
+          )..add('1');
+          // The first group has waited its interval out by 200 ms and waits
+          // for the slot alone.
+          async.elapse(ms(300));
+          bench.busy('between', 10);
+          a.add('2');
+          async.elapse(ms(1000));
+          seen.addAll(bench.ran);
+        });
+        // An interval started by the second group at 300 ms would hold the
+        // first one until 500 ms.
+        expect(seen, [
+          'slot at 0 ms',
+          'a[1] at 350 ms',
+          'between at 350 ms',
+          'a[2] at 550 ms',
+        ]);
+      },
+    );
 
     test('starting at once: a burst in one turn is one group', () {
       _says('a burst that does not fit in one synchronous turn is split');
@@ -1648,11 +1788,15 @@ void main() {
 
     test('starting at once: a burst over two turns is split', () {
       _says('Starting at once has a price when nothing is running');
-      _says('the first event goes on its own and the rest wait out the whole '
-          'interval');
-      _says('With the default (`startAtOnce: true`) the first line would go '
-          'at once, and the rest of a transition written over more than one '
-          'turn would follow a second later.');
+      _says(
+        'the first event goes on its own and the rest wait out the whole '
+        'interval',
+      );
+      _says(
+        'With the default (`startAtOnce: true`) the first line would go '
+        'at once, and the rest of a transition written over more than one '
+        'turn would follow a second later.',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -1667,32 +1811,37 @@ void main() {
       expect(seen, ['a[1] at 0 ms', 'a[2, 3] at 1000 ms']);
     });
 
-    test('a burst over several turns while a job is running stays together',
-        () {
-      _says('A burst written while a job of the controller is running stays '
+    test(
+      'a burst over several turns while a job is running stays together',
+      () {
+        _says(
+          'A burst written while a job of the controller is running stays '
           'together, however many turns it takes: under a throttle the '
           'group is sealed when the queue takes it, and the queue cannot take '
-          'it until that job ends.');
-      final seen = <String>[];
-      _zone((async) {
-        final bench = Bench();
-        final a = bench.collector('a', timing: _throttle(1000));
-        bench.busy('busy', 50);
-        for (final event in ['1', '2', '3']) {
-          a.add(event);
-          async.elapse(ms(10));
-        }
-        async.elapse(ms(3000));
-        seen.addAll(bench.ran);
-      });
-      expect(seen, ['busy at 0 ms', 'a[1, 2, 3] at 50 ms']);
-    });
+          'it until that job ends.',
+        );
+        final seen = <String>[];
+        _zone((async) {
+          final bench = Bench();
+          final a = bench.collector('a', timing: _throttle(1000));
+          bench.busy('busy', 50);
+          for (final event in ['1', '2', '3']) {
+            a.add(event);
+            async.elapse(ms(10));
+          }
+          async.elapse(ms(3000));
+          seen.addAll(bench.ran);
+        });
+        expect(seen, ['busy at 0 ms', 'a[1, 2, 3] at 50 ms']);
+      },
+    );
 
-    test(
-        'startAtOnce false: one event waits the whole interval, and a drain '
+    test('startAtOnce false: one event waits the whole interval, and a drain '
         'waits with it', () {
-      _says('A single event on an idle accumulator is held for the whole '
-          'interval, and `close(mode: SoloCloseMode.drain)` waits with it');
+      _says(
+        'A single event on an idle accumulator is held for the whole '
+        'interval, and `close(mode: SoloCloseMode.drain)` waits with it',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -1772,11 +1921,12 @@ void main() {
       ]);
     });
 
-    test(
-        'startAtOnce false: after a refusal the next group counts a full '
+    test('startAtOnce false: after a refusal the next group counts a full '
         'interval', () {
-      _says('so the next group to appear counts a full interval of its own '
-          'from the moment it appears');
+      _says(
+        'so the next group to appear counts a full interval of its own '
+        'from the moment it appears',
+      );
       final seen = <String>[];
       _zone((async) {
         var allowed = false;
@@ -1806,11 +1956,12 @@ void main() {
       ]);
     });
 
-    test(
-        'another job holds the slot until 500: the next group starts then, '
+    test('another job holds the slot until 500: the next group starts then, '
         'and the one after at 700', () {
-      _says('the next group starts at 500 ms and the one after that cannot '
-          'start before 700 ms');
+      _says(
+        'the next group starts at 500 ms and the one after that cannot '
+        'start before 700 ms',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -1832,8 +1983,7 @@ void main() {
       ]);
     });
 
-    test(
-        'a handler that outlasts the interval lets the next group start as '
+    test('a handler that outlasts the interval lets the next group start as '
         'it ends', () {
       _says('the next group can start as soon as they finish');
       final seen = <String>[];
@@ -1872,8 +2022,10 @@ void main() {
     });
 
     test('no timing and a zero duration make no timers', () {
-      _says('makes groups ready immediately and creates no timers, whatever '
-          '`startAtOnce` says');
+      _says(
+        'makes groups ready immediately and creates no timers, whatever '
+        '`startAtOnce` says',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -1930,24 +2082,28 @@ void main() {
       expect(seen, ['one[1] at 0 ms', 'two[1] at 10 ms']);
     });
 
-    test('an event processed before the debounce callback restarts the timer',
-        () {
-      _says('an event processed before a debounce callback can restart the '
-          'timer');
-      final seen = <String>[];
-      _zone((async) {
-        final bench = Bench();
-        final a = bench.collector('a', timing: _debounce(200));
-        // Set before the group's own timer, so it fires first at 200 ms.
-        Timer(ms(200), () => a.add('before'));
-        a.add('1');
-        async.elapse(ms(200));
-        seen.add('at 200: ${bench.ran}');
-        async.elapse(ms(1000));
-        seen.addAll(bench.ran);
-      });
-      expect(seen, ['at 200: []', 'a[1, before] at 400 ms']);
-    });
+    test(
+      'an event processed before the debounce callback restarts the timer',
+      () {
+        _says(
+          'an event processed before a debounce callback can restart the '
+          'timer',
+        );
+        final seen = <String>[];
+        _zone((async) {
+          final bench = Bench();
+          final a = bench.collector('a', timing: _debounce(200));
+          // Set before the group's own timer, so it fires first at 200 ms.
+          Timer(ms(200), () => a.add('before'));
+          a.add('1');
+          async.elapse(ms(200));
+          seen.add('at 200: ${bench.ran}');
+          async.elapse(ms(1000));
+          seen.addAll(bench.ran);
+        });
+        expect(seen, ['at 200: []', 'a[1, before] at 400 ms']);
+      },
+    );
 
     test('an event processed after it belongs to a new group', () {
       _says('an event processed after it belongs to a new group');
@@ -2015,8 +2171,10 @@ void main() {
     });
 
     test('the table: replace', () {
-      _says("| `replace` | `[B, A(A1 + A2)]` | A1's existing job, moved "
-          'behind B |');
+      _says(
+        "| `replace` | `[B, A(A1 + A2)]` | A1's existing job, moved "
+        'behind B |',
+      );
       expect(threeAdditions(AccumulationPolicy.replace), [
         '[B, A]',
         "A1's job",
@@ -2044,11 +2202,9 @@ void main() {
           defaults.busy('B', 10);
           seen.add('${identical(a1, a.add('2'))}, ${defaults.queued}');
         });
-        expect(
-          seen,
-          ['true, [A, B]'],
-          reason: merging ? 'accumulate' : 'collect',
-        );
+        expect(seen, [
+          'true, [A, B]',
+        ], reason: merging ? 'accumulate' : 'collect');
       }
     });
 
@@ -2067,13 +2223,16 @@ void main() {
       expect(seen, ['[A, B]', 'B at 0 ms', 'A[1, 2] at 200 ms']);
     });
 
-    test(
-        'under adjacent and a throttle an entry behind another job costs a '
+    test('under adjacent and a throttle an entry behind another job costs a '
         'second request an interval later', () {
-      _says('`join` is the default so that a group does not depend on what '
-          'else is queued');
-      _says('Under `adjacent` it would start a second group behind that job, '
-          'and a throttle would hold that group for another interval');
+      _says(
+        '`join` is the default so that a group does not depend on what '
+        'else is queued',
+      );
+      _says(
+        'Under `adjacent` it would start a second group behind that job, '
+        'and a throttle would hold that group for another interval',
+      );
       List<String> run(AccumulationPolicy policy) {
         final seen = <String>[];
         _zone((async) {
@@ -2107,8 +2266,10 @@ void main() {
     });
 
     test('once B has run, a waiting A is the tail again for adjacent', () {
-      _says('If B has already run, a waiting A may again be at the tail, so '
-          'a later event can join it with `adjacent`');
+      _says(
+        'If B has already run, a waiting A may again be at the tail, so '
+        'a later event can join it with `adjacent`',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -2127,8 +2288,7 @@ void main() {
       expect(seen, ['joined: true', 'B at 0 ms', 'A[1, 2] at 250 ms']);
     });
 
-    test(
-        'groups already separate are not combined when the job between '
+    test('groups already separate are not combined when the job between '
         'them goes', () {
       _says('Already separate groups are never combined retroactively');
       final seen = <String>[];
@@ -2176,12 +2336,13 @@ void main() {
       });
     }
 
-    test(
-        'replace moves the job, keeps the handle and the events, and says '
+    test('replace moves the job, keeps the handle and the events, and says '
         'so in Solo.debug', () {
-      _says("`Solo.debug`, the engine's own trace from "
-          '[Logs](diagnostics.md#logs) on the diagnostics page, says '
-          '`move <job> to the tail`');
+      _says(
+        "`Solo.debug`, the engine's own trace from "
+        '[Logs](diagnostics.md#logs) on the diagnostics page, says '
+        '`move <job> to the tail`',
+      );
       _says('a group that is already at the tail keeps the place it has');
       final seen = <String>[];
       final debug = <String>[];
@@ -2218,8 +2379,10 @@ void main() {
     });
 
     test('the move starts a fresh debounce window', () {
-      _says('The move starts a fresh debounce window and preserves the '
-          "accumulator's throttle interval");
+      _says(
+        'The move starts a fresh debounce window and preserves the '
+        "accumulator's throttle interval",
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -2287,8 +2450,10 @@ void main() {
     });
 
     test('a running group is never moved', () {
-      _says('A running group is never moved: it stops accepting events when '
-          'the queue takes it');
+      _says(
+        'A running group is never moved: it stops accepting events when '
+        'the queue takes it',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -2320,8 +2485,10 @@ void main() {
     });
 
     test('the key still labels their jobs for the ordinary policies', () {
-      _says("The key still labels their jobs for the ordinary queue's "
-          'search and policies');
+      _says(
+        "The key still labels their jobs for the ordinary queue's "
+        'search and policies',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench()..busy('current', 100);
@@ -2339,8 +2506,10 @@ void main() {
     });
 
     test('a new accumulator on every call joins nothing', () {
-      _says('Creating a new accumulator on every call prevents events from '
-          'joining an existing one');
+      _says(
+        'Creating a new accumulator on every call prevents events from '
+        'joining an existing one',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench()..busy('current', 100);
@@ -2371,13 +2540,15 @@ void main() {
     });
 
     test('state handlers take back the state a group wrote', () {
-      _says('a `close()` in the middle of an upload leaves `Uploading(3)` for '
-          'good');
+      _says(
+        'a `close()` in the middle of an upload leaves `Uploading(3)` for '
+        'good',
+      );
       String upload(UploadState state) => switch (state) {
-            Waiting() => 'Waiting',
-            Uploading(:final photos) => 'Uploading($photos)',
-            UploadFailed(:final error) => 'UploadFailed($error)',
-          };
+        Waiting() => 'Waiting',
+        Uploading(:final photos) => 'Uploading($photos)',
+        UploadFailed(:final error) => 'UploadFailed($error)',
+      };
       final stuck = <String>[];
       final errors = _zone((async) {
         final uploader = PhotoUploader((_) => Completer<void>().future)
@@ -2410,8 +2581,10 @@ void main() {
     });
 
     test('events added from canStart and onStart go to a later group', () {
-      _says('before `canStart` and `onStart`. Events added from either '
-          'callback go to a later group');
+      _says(
+        'before `canStart` and `onStart`. Events added from either '
+        'callback go to a later group',
+      );
       final seen = <String>[];
       _zone((async) {
         final hooks = AddsFromHooks();
@@ -2423,8 +2596,10 @@ void main() {
     });
 
     test('the handler runs with the working type it was given', () {
-      _says('The handler runs with the configured working type and rules, '
-          "and the group's job is an ordinary job to the queue");
+      _says(
+        'The handler runs with the configured working type and rules, '
+        "and the group's job is an ordinary job to the queue",
+      );
       final seen = <String>[];
       _zone((async) {
         final typed = Typed();
@@ -2476,11 +2651,12 @@ void main() {
     });
 
     for (final policy in AccumulationPolicy.values) {
-      test(
-          'cancelling the handle cancels the whole group under '
+      test('cancelling the handle cancels the whole group under '
           '${policy.name}', () {
-        _says('Additions to one group share one handle, result and '
-            'cancellation under every policy');
+        _says(
+          'Additions to one group share one handle, result and '
+          'cancellation under every policy',
+        );
         final seen = <String>[];
         _zone((async) {
           final bench = Bench();
@@ -2566,8 +2742,10 @@ void main() {
     }
 
     test('a merge that throws leaves the group, its job and its timer', () {
-      _says('If it throws, `add` throws the same error and the existing '
-          'group, its job and its timer remain unchanged');
+      _says(
+        'If it throws, `add` throws the same error and the existing '
+        'group, its job and its timer remain unchanged',
+      );
       final run = merging('throws');
       expect(run.seen, [
         'StateError',
@@ -2580,8 +2758,10 @@ void main() {
     });
 
     test('an add from within merge throws StateError', () {
-      _says("Calling the same accumulator's `add` from within its `merge` "
-          'throws `StateError`');
+      _says(
+        "Calling the same accumulator's `add` from within its `merge` "
+        'throws `StateError`',
+      );
       expect(merging('adds').seen, [
         'StateError',
         'Bad state: Cannot add while this accumulator is merging',
@@ -2592,10 +2772,12 @@ void main() {
     });
 
     test('a merge that removes its own group is not committed', () {
-      _says('After the callback the engine looks for the group again and '
-          'writes the result only if the search finds the same group: if '
-          '`merge` has cancelled its job or closed the controller, `add` '
-          'throws `StateError`.');
+      _says(
+        'After the callback the engine looks for the group again and '
+        'writes the result only if the search finds the same group: if '
+        '`merge` has cancelled its job or closed the controller, `add` '
+        'throws `StateError`.',
+      );
       expect(merging('cancels').seen, [
         'StateError',
         'Bad state: The accumulation group changed during merge',
@@ -2606,10 +2788,12 @@ void main() {
     });
 
     test('a merge that closes the controller is not committed', () {
-      _says('After the callback the engine looks for the group again and '
-          'writes the result only if the search finds the same group: if '
-          '`merge` has cancelled its job or closed the controller, `add` '
-          'throws `StateError`.');
+      _says(
+        'After the callback the engine looks for the group again and '
+        'writes the result only if the search finds the same group: if '
+        '`merge` has cancelled its job or closed the controller, `add` '
+        'throws `StateError`.',
+      );
       expect(merging('closes').seen, [
         'StateError',
         'Bad state: The accumulation group changed during merge',
@@ -2620,8 +2804,10 @@ void main() {
     });
 
     test('a start rule that turns the job down cancels the whole group', () {
-      _says('A start rule that turns the job down cancels everything the '
-          'group has accumulated');
+      _says(
+        'A start rule that turns the job down cancels everything the '
+        'group has accumulated',
+      );
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();
@@ -2637,8 +2823,10 @@ void main() {
     });
 
     test('an accepted cancellation wins over the value that comes later', () {
-      _says('accepted cancellation still takes precedence over a later value '
-          'or error');
+      _says(
+        'accepted cancellation still takes precedence over a later value '
+        'or error',
+      );
       final api = FakeLogApi();
       final seen = <String>[];
       _zone((async) {
@@ -2670,8 +2858,10 @@ void main() {
     });
 
     test('clearing throttle groups keeps the interval already started', () {
-      _says('Removing or clearing throttle groups preserves an already '
-          'started interval, so adding another event cannot bypass the limit');
+      _says(
+        'Removing or clearing throttle groups preserves an already '
+        'started interval, so adding another event cannot bypass the limit',
+      );
       _says('That timer expires once');
       final seen = <String>[];
       _zone((async) {
@@ -2697,8 +2887,7 @@ void main() {
       ]);
     });
 
-    test(
-        'startAtOnce false: a group removed in its interval leaves what is '
+    test('startAtOnce false: a group removed in its interval leaves what is '
         'left of it', () {
       final seen = <String>[];
       _zone((async) {
@@ -2727,8 +2916,11 @@ void main() {
       _zone((async) {
         final bench = Bench();
         final debounced = bench.collector('deb', timing: _debounce(200));
-        final throttled =
-            bench.collector('thr', timing: _throttle(300), work: 50);
+        final throttled = bench.collector(
+          'thr',
+          timing: _throttle(300),
+          work: 50,
+        );
         final merged = bench.accumulate<int, String, void>(
           (ctx, value) async => bench.ran.add('acc[$value] at ${now()} ms'),
           merge: (accumulated, incoming) {
@@ -2745,11 +2937,15 @@ void main() {
         var closedAt = -1;
         bench.close(mode: mode).then((_) => closedAt = now()).ignore();
         // One timer is the running handler's own, not the engine's.
-        seen.add('${async.pendingTimers.length - 1} engine timers, '
-            '${bench.queued.length} queued');
+        seen.add(
+          '${async.pendingTimers.length - 1} engine timers, '
+          '${bench.queued.length} queued',
+        );
         final late = merged.add('2');
-        seen.add('an add after: ${late.outcome}, the same job '
-            '${identical(late, m)}, $merges merges');
+        seen.add(
+          'an add after: ${late.outcome}, the same job '
+          '${identical(late, m)}, $merges merges',
+        );
         async.elapse(ms(1000));
         seen
           ..add('${d.outcome}, ${t.outcome}, ${m.outcome}')
@@ -2761,10 +2957,14 @@ void main() {
     }
 
     test('close() cancels the timers and drops the queued groups', () {
-      _says('`close()` cancels every timing timer, drops queued groups and '
-          'cancels or waits for the running job under the usual rules');
-      _says('its job, the one handle every addition to it got, completes '
-          'with `Cancelled(closed)`');
+      _says(
+        '`close()` cancels every timing timer, drops queued groups and '
+        'cancels or waits for the running job under the usual rules',
+      );
+      _says(
+        'its job, the one handle every addition to it got, completes '
+        'with `Cancelled(closed)`',
+      );
       expect(closing(SoloCloseMode.cancel), [
         '0 engine timers, 0 queued',
         'an add after: Cancelled(closed), the same job false, 0 merges',
@@ -2775,8 +2975,10 @@ void main() {
     });
 
     test('a draining close waits the windows out and runs what is queued', () {
-      _says('it waits the accumulation window out and runs the groups '
-          'already queued');
+      _says(
+        'it waits the accumulation window out and runs the groups '
+        'already queued',
+      );
       _says('Neither mode takes anything new');
       expect(closing(SoloCloseMode.drain), [
         '3 engine timers, 3 queued',

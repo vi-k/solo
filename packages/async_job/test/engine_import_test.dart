@@ -5,11 +5,10 @@ import 'package:test/test.dart';
 // Which import carries the protocol of an engine is a fact of the export
 // directives: both libraries hand out the very same classes, so no call
 // made at runtime can tell them apart. The guard reads the two files.
-List<String> _exports(String path) =>
-    RegExp("^export '[^']+'[^;]*;", multiLine: true)
-        .allMatches(File(path).readAsStringSync())
-        .map((match) => match[0]!)
-        .toList();
+List<String> _exports(String path) => RegExp(
+  "^export '[^']+'[^;]*;",
+  multiLine: true,
+).allMatches(File(path).readAsStringSync()).map((match) => match[0]!).toList();
 
 void main() {
   test('the main import leaves the engine protocol out', () {

@@ -175,15 +175,13 @@ void main() {
         );
       }).ignoreFailure();
       async.flushTimers();
-      const errorLine = '[job] error TimeoutException after '
+      const errorLine =
+          '[job] error TimeoutException after '
           '0:00:00.010000: Future not completed';
-      const finishedLine = '[job] finished Failed(TimeoutException after '
+      const finishedLine =
+          '[job] finished Failed(TimeoutException after '
           '0:00:00.010000: Future not completed)';
-      expect(journal.take(), [
-        '[job] started',
-        errorLine,
-        finishedLine,
-      ]);
+      expect(journal.take(), ['[job] started', errorLine, finishedLine]);
     });
   });
 
@@ -191,13 +189,10 @@ void main() {
     runSolo((solo, journal, async) {
       final disposed = <int>[];
       solo.enqueue<TestState, void>(key: 'job', (ctx) async {
-        await ctx.abandonable(
-          () async {
-            await delay(100);
-            return 7;
-          },
-          discard: disposed.add,
-        );
+        await ctx.abandonable(() async {
+          await delay(100);
+          return 7;
+        }, discard: disposed.add);
       });
       async.elapse(const Duration(milliseconds: 50));
       solo.current!.cancel();
@@ -217,13 +212,10 @@ void main() {
       final disposed = <int>[];
       final job = solo.enqueue<TestState, int>(
         key: 'job',
-        (ctx) => ctx.abandonable(
-          () async {
-            await delay(50);
-            return 7;
-          },
-          discard: disposed.add,
-        ),
+        (ctx) => ctx.abandonable(() async {
+          await delay(50);
+          return 7;
+        }, discard: disposed.add),
       );
       async.flushTimers();
       expect((job.outcome! as Done<int>).value, 7);
@@ -235,13 +227,10 @@ void main() {
     runSolo((solo, journal, async) {
       final disposed = <int>[];
       solo.enqueue<TestState, void>(key: 'job', (ctx) async {
-        await ctx.abandonable<int>(
-          () async {
-            await delay(100);
-            throw StateError('late');
-          },
-          discard: disposed.add,
-        );
+        await ctx.abandonable<int>(() async {
+          await delay(100);
+          throw StateError('late');
+        }, discard: disposed.add);
       });
       async.elapse(const Duration(milliseconds: 50));
       solo.current!.cancel();
@@ -259,13 +248,10 @@ void main() {
   test('an error from discard goes to onError', () {
     runSolo((solo, journal, async) {
       solo.enqueue<TestState, void>(key: 'job', (ctx) async {
-        await ctx.abandonable(
-          () async {
-            await delay(100);
-            return 7;
-          },
-          discard: (value) => throw StateError('cannot dispose $value'),
-        );
+        await ctx.abandonable(() async {
+          await delay(100);
+          return 7;
+        }, discard: (value) => throw StateError('cannot dispose $value'));
       });
       async.elapse(const Duration(milliseconds: 50));
       solo.current!.cancel();

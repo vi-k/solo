@@ -68,10 +68,8 @@ API вашего приложения:
 
 ```dart
 class ProfileApi {
-  Future<String> fetchName() => Future.delayed(
-        const Duration(milliseconds: 20),
-        () => 'Ada Lovelace',
-      );
+  Future<String> fetchName() =>
+      Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
 }
 
 final class ProfileController extends Solo<ProfileState> {
@@ -80,17 +78,17 @@ final class ProfileController extends Solo<ProfileState> {
   ProfileController(this.api) : super(const Initial());
 
   Job<String> load() => enqueue<ProfileState, String>(
-        key: 'load',
-        policy: Policy.droppable,
-        ifFailed: (state, error, stackTrace) => Failure(error),
-        ifCancelled: (state, cancelled) => const Initial(),
-        (ctx) async {
-          ctx.emit(const Loading());
-          final name = await ctx.abandonable(api.fetchName);
-          ctx.emit(Loaded(name));
-          return name;
-        },
-      );
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 }
 ```
 
@@ -222,47 +220,47 @@ final class Player extends Solo<PlayerState> {
   /// заканчивается, когда трек начинает играть: дальше его играет само
   /// устройство.
   Job<Track> play(String id) => enqueue<PlayerState, Track>(
-        // Ключом может быть любой объект. Этот ключ называет операцию,
-        // а не трек.
-        key: _Op.play,
-        // Новый запуск отменяет работающий с тем же ключом.
-        policy: Policy.restart,
-        // Правило: его спрашивают перед стартом и при каждой смене
-        // состояния, пока работает тело, кроме сделанной самим телом
-        // через `ctx.emit`.
-        keepWhile: (state) => state is! Disconnected,
-        // Состояние для публикации, если Job упала или её отменили. Если Job
-        // отменяется правилом, ничего не публикуется, и `Disconnected`
-        // остаётся. Запуск, который заменил более новый, возвращает
-        // полученное состояние, и оно ничего не публикует.
-        ifFailed: (state, error, stackTrace) => const Idle(),
-        ifCancelled: (state, cancelled) =>
-            cancelled.reason is ReplacedCancelReason ? state : const Idle(),
-        (ctx) async {
-          // Так тело меняет состояние. Сеттера снаружи нет.
-          ctx.emit(const Loading());
-          // Этого дожидаются в любом случае: трек, который играет сейчас,
-          // останавливается раньше, чем загрузится следующий.
-          await ctx.join(device.stop);
-          // Отмена прекращает это ожидание сразу; запрос может идти дальше.
-          final track = await ctx.abandonable(() => api.fetch(id));
-          // Этого тоже дожидаются. `dispose` закрывает скачивание, когда
-          // Job заканчивается, или сразу после возврата вызова, если Job
-          // за это время отменили.
-          final download = await ctx.join(
-            () => api.download(track),
-            dispose: (download) => download.close(),
-          );
-          // Дочерняя Job: устройство читает скачанное, и её стрим кончается,
-          // когда трек начинает играть. Тело ждёт её `value` и идёт дальше,
-          // когда трек уже играет.
-          await ctx.each(device.load(download), (childCtx, percent) {
-            childCtx.emit(Buffering(track, percent));
-          }).value;
-          ctx.emit(Playing(track));
-          return track;
-        },
+    // Ключом может быть любой объект. Этот ключ называет операцию,
+    // а не трек.
+    key: _Op.play,
+    // Новый запуск отменяет работающий с тем же ключом.
+    policy: Policy.restart,
+    // Правило: его спрашивают перед стартом и при каждой смене
+    // состояния, пока работает тело, кроме сделанной самим телом
+    // через `ctx.emit`.
+    keepWhile: (state) => state is! Disconnected,
+    // Состояние для публикации, если Job упала или её отменили. Если Job
+    // отменяется правилом, ничего не публикуется, и `Disconnected`
+    // остаётся. Запуск, который заменил более новый, возвращает
+    // полученное состояние, и оно ничего не публикует.
+    ifFailed: (state, error, stackTrace) => const Idle(),
+    ifCancelled: (state, cancelled) =>
+        cancelled.reason is ReplacedCancelReason ? state : const Idle(),
+    (ctx) async {
+      // Так тело меняет состояние. Сеттера снаружи нет.
+      ctx.emit(const Loading());
+      // Этого дожидаются в любом случае: трек, который играет сейчас,
+      // останавливается раньше, чем загрузится следующий.
+      await ctx.join(device.stop);
+      // Отмена прекращает это ожидание сразу; запрос может идти дальше.
+      final track = await ctx.abandonable(() => api.fetch(id));
+      // Этого тоже дожидаются. `dispose` закрывает скачивание, когда
+      // Job заканчивается, или сразу после возврата вызова, если Job
+      // за это время отменили.
+      final download = await ctx.join(
+        () => api.download(track),
+        dispose: (download) => download.close(),
       );
+      // Дочерняя Job: устройство читает скачанное, и её стрим кончается,
+      // когда трек начинает играть. Тело ждёт её `value` и идёт дальше,
+      // когда трек уже играет.
+      await ctx.each(device.load(download), (childCtx, percent) {
+        childCtx.emit(Buffering(track, percent));
+      }).value;
+      ctx.emit(Playing(track));
+      return track;
+    },
+  );
 
   /// События, делящие одну Job в очереди: важна только последняя громкость.
   late final _volume = accumulate<PlayerState, double, void>(
@@ -318,21 +316,19 @@ await player.close(mode: SoloCloseMode.drain);
 загружен:
 
 ```dart
-Job<String> reload() => enqueue<Loaded, String>(
-      (ctx) async {
-        // Снимок чужого контроллера: обычное чтение, и имя об этом
-        // говорит.
-        final user = session.currentState.user;
-        final name = await ctx.abandonable(() => api.fetchName(user));
-        // Собственное состояние этой Job: контрольная точка, которая
-        // бросит `Cancelled`, если Job отменена или состояние уже
-        // не `Loaded`.
-        if (ctx.state.name != name) {
-          ctx.emit(Loaded(name));
-        }
-        return name;
-      },
-    );
+Job<String> reload() => enqueue<Loaded, String>((ctx) async {
+  // Снимок чужого контроллера: обычное чтение, и имя об этом
+  // говорит.
+  final user = session.currentState.user;
+  final name = await ctx.abandonable(() => api.fetchName(user));
+  // Собственное состояние этой Job: контрольная точка, которая
+  // бросит `Cancelled`, если Job отменена или состояние уже
+  // не `Loaded`.
+  if (ctx.state.name != name) {
+    ctx.emit(Loaded(name));
+  }
+  return name;
+});
 ```
 
 Тело `Job` пишется замыканием внутри метода контроллера, поэтому в теле видны

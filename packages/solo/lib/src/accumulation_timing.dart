@@ -23,8 +23,8 @@ final class AccumulationTiming {
   /// Throws [ArgumentError] when [duration] is negative. A zero duration
   /// preserves the behavior of an accumulator without timing.
   AccumulationTiming.debounce(this.duration)
-      : _kind = _AccumulationTimingKind.debounce,
-        _startAtOnce = true {
+    : _kind = _AccumulationTimingKind.debounce,
+      _startAtOnce = true {
     _validateDuration(duration);
   }
 
@@ -41,8 +41,8 @@ final class AccumulationTiming {
   /// preserves the behavior of an accumulator without timing, whatever
   /// [startAtOnce] says.
   AccumulationTiming.throttle(this.duration, {bool startAtOnce = true})
-      : _kind = _AccumulationTimingKind.throttle,
-        _startAtOnce = startAtOnce {
+    : _kind = _AccumulationTimingKind.throttle,
+      _startAtOnce = startAtOnce {
     _validateDuration(duration);
   }
 
@@ -63,12 +63,13 @@ final class AccumulationTiming {
   /// `AccumulationTiming.throttle(0:00:01.000000, startAtOnce: false)`.
   @override
   String toString() => switch (_kind) {
-        _AccumulationTimingKind.debounce =>
-          'AccumulationTiming.debounce($duration)',
-        _AccumulationTimingKind.throttle => _startAtOnce
-            ? 'AccumulationTiming.throttle($duration)'
-            : 'AccumulationTiming.throttle($duration, startAtOnce: false)',
-      };
+    _AccumulationTimingKind.debounce =>
+      'AccumulationTiming.debounce($duration)',
+    _AccumulationTimingKind.throttle =>
+      _startAtOnce
+          ? 'AccumulationTiming.throttle($duration)'
+          : 'AccumulationTiming.throttle($duration, startAtOnce: false)',
+  };
 
   static void _validateDuration(Duration duration) {
     if (duration.isNegative) {
