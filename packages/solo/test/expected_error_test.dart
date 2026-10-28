@@ -3,10 +3,13 @@ library;
 
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/journal.dart';
 import 'support/run_solo.dart';
+import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 /// An error the jobs of these tests expect.
@@ -655,6 +658,188 @@ void main() {
       });
     });
   });
+
+  group('listeners', () {
+    test('a whenFinished listener throws an ApiError', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo
+              .enqueue<TestState, void>(
+                key: 'load',
+                isExpectedError: _isApiError,
+                (ctx) async {},
+              )
+              .whenFinished((_) => throw const ApiError());
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '[load] finished Done(null)',
+          '[load] error ApiError (answered)',
+          '[load] unanswered ApiError',
+        ]);
+      });
+    });
+
+    test('a whenCancelled listener throws an ApiError', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          final job = solo.enqueue<TestState, void>(
+            key: 'load',
+            isExpectedError: _isApiError,
+            (ctx) async {
+              await delay(10);
+            },
+          )..whenCancelled((_) => throw const ApiError());
+          async.flushMicrotasks();
+          unawaited(job.cancel());
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '[load] error ApiError (answered)',
+          '[load] unanswered ApiError',
+          '[load] finished Cancelled(manual)',
+        ]);
+      });
+    });
+
+    test('a listener throws a ParallelWaitError of an ApiError', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo
+              .enqueue<TestState, void>(
+                key: 'load',
+                isExpectedError: _isApiError,
+                (ctx) async {},
+              )
+              .whenFinished((_) {
+                throw ParallelWaitError<List<Object?>, List<AsyncError?>>(
+                  [null],
+                  [AsyncError(const ApiError(), StackTrace.empty)],
+                );
+              });
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '[load] finished Done(null)',
+          '[load] error ApiError (answered)',
+          '[load] unanswered ApiError',
+        ]);
+      });
+    });
+
+    test('a listener rethrows the expected failure of its job', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo
+              .enqueue<TestState, void>(
+                key: 'load',
+                isExpectedError: _isApiError,
+                (ctx) async => throw const ApiError(),
+              )
+              .whenFinished((outcome) {
+                if (outcome case Failed(:final error, :final stackTrace)) {
+                  Error.throwWithStackTrace(error, stackTrace);
+                }
+              });
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '[load] error ApiError (never)',
+          '[load] finished Failed(ApiError)',
+          '[load] error ApiError (answered)',
+          '[load] unanswered ApiError',
+        ]);
+      });
+    });
+
+    test('a listener error while another one is answered for', () {
+      fakeAsync((async) {
+        final journal = JournalObserver(answers: true);
+        Solo.observer = journal;
+        Solo.unansweredHandler = journal.answerForErrors;
+        final solo = _Nesting();
+        try {
+          final errors = <String>[];
+          _inZone(errors, () {
+            final job = solo.enqueue<TestState, void>(
+              key: 'load',
+              isExpectedError: _isApiError,
+              (ctx) async {},
+            );
+            solo.watched = job;
+            job.whenFinished((_) => throw const ApiError());
+          });
+          async.flushTimers();
+          expect(errors, isEmpty);
+          expect(journal.take(), [
+            '[load] started',
+            '[load] finished Done(null)',
+            '[load] error ApiError (answered)',
+            '[load] error Bad state: inner (answered)',
+            '[load] unanswered Bad state: inner',
+            '[load] unanswered ApiError',
+          ]);
+        } finally {
+          solo.close();
+          async.flushTimers();
+          Solo.observer = null;
+          Solo.unansweredHandler = null;
+        }
+      });
+    });
+
+    test('a listener of a job without a predicate throws', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo
+              .enqueue<TestState, void>(key: 'load', (ctx) async {})
+              .whenFinished((_) => throw const ApiError());
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '[load] finished Done(null)',
+          '[load] error ApiError (answered)',
+          '[load] unanswered ApiError',
+        ]);
+      });
+    });
+  });
+}
+
+/// A controller whose [onError] registers a failing listener on [watched] at
+/// the first error it hears.
+final class _Nesting extends Solo<TestState> with OpenSolo<TestState> {
+  _Nesting() : super(const Initial());
+
+  Job<Object?>? watched;
+  var _registered = false;
+
+  @override
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) {
+    if (_registered) return;
+    _registered = true;
+    watched?.whenFinished((_) => throw StateError('inner'));
+  }
 }
 
 /// Runs [body] in a zone that collects uncaught errors into [errors].

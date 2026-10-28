@@ -348,10 +348,61 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     }
   }
 
+  /// The failures of the listener whose error is being announced, while its
+  /// window is open; null outside a window.
+  List<Object>? _listenerFailures;
+
+  /// Whether [error] is one the window of a listener holds: what a caller's
+  /// listener threw is the caller's to see, not the predicate's to name.
+  bool _isListenerFailure(Object error) {
+    final failures = _listenerFailures;
+    if (failures == null) return false;
+    for (final failure in failures) {
+      if (identical(failure, error)) return true;
+    }
+    return false;
+  }
+
+  /// [callback], with the errors it throws announced inside a window.
+  ///
+  /// `StackOverflowError` goes on to the guard of the core, whose rule reads
+  /// the private `_outOfStack`. `notifyError` calls `onError` and asks for the
+  /// answer synchronously, so the window closes after the answer. The
+  /// registrations of `_SharedJob` and `_ThenJob` in the core go through this
+  /// wrapper and do not throw.
+  void Function(A) _windowed<A>(void Function(A) callback) => (event) {
+    try {
+      callback(event);
+    } on Object catch (error, stackTrace) {
+      if (error is StackOverflowError) rethrow;
+      final outer = _listenerFailures;
+      final failures = [...?outer];
+      Job.visitErrors(
+        error,
+        stackTrace,
+        onFailure: (failure, _) => failures.add(failure),
+      );
+      _listenerFailures = failures;
+      try {
+        notifyError(error, stackTrace);
+      } finally {
+        _listenerFailures = outer;
+      }
+    }
+  };
+
+  @override
+  void Function() whenFinished(void Function(Outcome<T> outcome) callback) =>
+      super.whenFinished(_windowed(callback));
+
+  @override
+  void Function() whenCancelled(void Function(Cancelled) callback) =>
+      super.whenCancelled(_windowed(callback));
+
   /// The verdict for `onError`: asks, notes it for [_answersFor] and says
   /// whether [error] is expected.
   bool _judge(Object error) {
-    if (_isExpectedError == null) return false;
+    if (_isExpectedError == null || _isListenerFailure(error)) return false;
     final expected = _isExpected(error);
     _noteVerdict(error, expected);
     return expected;
@@ -360,7 +411,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// The verdict for `onUnanswered`: the one [_judge] noted, taken, or, for
   /// an error that did not pass `onError`, a question that is not noted.
   bool _answersFor(Object error) {
-    if (_isExpectedError == null) return false;
+    if (_isExpectedError == null || _isListenerFailure(error)) return false;
     return _takeVerdict(error) ?? _isExpected(error);
   }
 
