@@ -1,5 +1,6 @@
-> **Состояние на 2026-10-28:** план, не начат. Ждёт ревью; исполнение —
-> субагентами по задачам, выбор владельца 2026-10-28.
+> **Состояние на 2026-10-28:** план, не начат. Ревью на Opus влито: одиннадцать
+> находок, прототип подтвердил строки журнала всех таблиц задач 1–3.
+> Исполнение — субагентами по задачам, выбор владельца 2026-10-28.
 > **Что это:** план реализации предиката `isExpectedError` по дизайну, семь
 > задач: три кода, четыре документов.
 > **Связанные записи:** `2026-10-28-if-failed-answer-design.md`.
@@ -60,15 +61,23 @@
 1. Ошибка без предиката: каждый существующий тест `solo` проходит без правки
    журнала. Ошибка в ветке «предиката нет» меняет маршрут для всех.
 2. Ошибка, которую ядро передаёт дважды: `onError` с `later`, затем
-   `onUnanswered` через микротаску. Вердикт обязан дожить до второго вызова
-   и исчезнуть после него — тест «нечистый предикат» в задаче 1.
+   `onUnanswered` через микротаску. Вердикт обязан дожить до второго вызова —
+   тест «нечистый предикат» в задаче 1. Что запись после этого удаляется, тест
+   не видит: наружу это не выходит, и держит это довод дизайна о слабой ссылке,
+   а не набор.
 3. Строка, число или запись, брошенные как ошибка: `Expando` на них бросает.
    Тест «строка как ожидаемая ошибка» в задаче 1.
-4. Слушатель внутри слушателя: окно восстанавливает внешнее, а не обнуляет его.
-   Тест «слушатель регистрирует слушателя» в задаче 3.
-5. Каскад, кончившийся стеком: `StackOverflowError` обёртка не ловит. Его
-   держит единственный такой тест `solo`, в `test/state_rakes_test.dart`;
-   задача 3 гоняет его отдельно.
+4. Окно внутри окна: ошибка слушателя, пока окно другого слушателя открыто.
+   Окно восстанавливает внешнее, а не обнуляет его. Тест «a listener error
+   while another one is answered for» в задаче 3; мутация `= null` вместо
+   `= outer` теряет в нём последнюю строку.
+5. Каскад, кончившийся стеком: `StackOverflowError` обёртка пропускает в охрану
+   ядра. Ни один тест `solo` не проводит переполнение через слушателя
+   `_SoloJob`, и мутация, которая его глотает, остаётся зелёной; держит это код
+   и ревью задачи 3. Переполнение, брошенное слушателем вне такого каскада,
+   ядро передаёт `notifyError` уже мимо окна, и предикат о нём спрашивают —
+   предикат, который назвал бы `StackOverflowError`, нелеп, и случай
+   не закрывается.
 
 ---
 
@@ -90,6 +99,9 @@
   `packages/solo/test/support/run_solo.dart` — журнал с ответом.
 - Изменить: `packages/solo/doc/reference.md` и `docs/ru/solo/reference.md` —
   строка таблицы «Parameters of a job».
+- Изменить: `docs/settled.md` — пункты 44, 109 и 15; дизайн велит пересмотреть
+  44 тем же коммитом, что и реализацию.
+- Изменить: `docs/handoff.md` — абзац о работе, после каждой задачи.
 - Создать: `packages/solo/test/expected_error_test.dart`.
 
 **Интерфейсы:**
@@ -104,8 +116,9 @@
     запоминает, отвечает «ожидаемая ли».
   - `_SoloJob._answersFor(Object error) → bool` — для `onUnanswered`: забирает
     вердикт или спрашивает, не запоминая.
-  - `_SoloJob._isExpected(Object error) → bool` — сам вопрос; задача 3
-    добавляет в него проверку окна.
+  - `_SoloJob._isExpected(Object error) → bool` — сам вопрос предиката.
+    Проверка окна задачи 3 встаёт в `_judge` и `_answersFor`, не сюда: здесь
+    `_judge` записал бы «нет» поверх вердикта исхода.
   - `runSolo(..., {bool answers = false})`,
     `JournalObserver({bool answers = false})`.
 
@@ -174,6 +187,7 @@
   | `an expected failure of a collect group` | `solo.collect(..., isExpectedError: ...)`, обработчик бросает | `(never)`, молчит |
   | `an expected failure of an accumulate group` | то же для `accumulate` | `(never)`, молчит |
   | `an expected failure under Solo.debug` | `Solo.debug = lines.add` (сброс в `tearDown`) | среди строк есть `'Job(load) expected ApiError: nobody is asked to answer'` |
+  | `an expected failure of a droppable job continued with shared and dropped` | `enqueue(policy: Policy.droppable, isExpectedError: ..., throw ApiError).shared()`, ручку выбросили | `[load] error ApiError (never)`, `errors == ['ApiError']`: продолжение отвечает своей ручкой, как описано в дизайне |
 
 - [ ] **Шаг 3: запустить, убедиться, что падают.**
   `dart test test/expected_error_test.dart` — ошибка компиляции «No named
@@ -189,19 +203,22 @@
   | `isExpectedError` | `enqueue`, `job`, `collect`, `accumulate` | Names the errors the job expects: one it names is heard by `onError` and answered for by nobody | [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) |
   ```
 
-  и её перевод в `docs/ru/solo/reference.md`.
-  `dart test test/reference_page_test.dart` — зелёный.
+  и её перевод в `docs/ru/solo/reference.md`. Сторож справочной страницы
+  гоняется в шаге 7, когда параметр дойдёт до `_SoloJob`.
 
-  Dartdoc параметра у `job` — абзац рядом с абзацем `[ifFailed]`: охват (каждая
-  ошибка задачи, которая иначе пошла бы к ответу; части `ParallelWaitError`
-  по одной, поэтому `error is ParallelWaitError` не совпадает никогда),
-  не зависит от `ifFailed`, `onError` слышит с `JobErrorAnswer.never`,
-  `job.value` бросает; ребёнок без своего берёт этот — широкий тип гасит и баги
-  детей; держать его проверкой типа, без состояния; не спрашивается об отменах
-  и о том, что назвал `Job.isCancellationError`; бросивший предикат ничего
-  не назвал. `enqueue`, `collect`, `accumulate` ссылаются на `job`, как уже
-  делают для `ifFailed`. При `Policy.droppable` — одна фраза: вызывающему
-  возвращается задача первого вызова, с её предикатом.
+  Dartdoc параметра у `job` — абзац рядом с абзацем `[ifFailed]`, не больше
+  шести строк: `check_dartdoc.py` держит блок в 30 строк, у `job` их уже 23.
+  В абзаце: ошибку, которую назвал предикат, `onError` слышит
+  с `JobErrorAnswer.never`, а ответа за неё не просят — ни `onUnanswered`,
+  ни `unansweredHandler`, ни зону; `value` её по-прежнему бросает; предикат
+  спрашивают о каждой ошибке задачи по одной, части `ParallelWaitError` тоже,
+  позвали `ifFailed` или нет, и ребёнок, запущенный в теле, берёт его; держать
+  его проверкой типа. Остальное — отмены, бросивший предикат,
+  `Policy.droppable` и продолжения `shared()` и `then`, широкий тип у детей —
+  говорит страница ошибок (задача 4); `job` ведёт туда своей ссылкой
+  на «Parameters of a job». Это отступление от списка «Документы» дизайна, где
+  всё перечислено в dartdoc, и причина — предел `check_dartdoc.py`. `enqueue`,
+  `collect`, `accumulate` ссылаются на `job`, как уже делают для `ifFailed`.
 
 - [ ] **Шаг 5: вердикт на `_SoloJob`.** В `job.dart`:
 
@@ -235,11 +252,20 @@
   `Solo.onUnanswered`, «What comes here»: ожидаемая ошибка сюда не приходит.
 
 - [ ] **Шаг 7: тесты зелёные.** `dart test test/expected_error_test.dart` — все
-  проходят; `dart test` целиком — `All tests passed!`;
-  `dart analyze --fatal-infos` — `No issues found!`;
-  `python3 tool/check_dartdoc.py` из корня — зелёный.
+  проходят; `dart test test/reference_page_test.dart` — зелёный; `dart test`
+  целиком — `All tests passed!`; `dart analyze --fatal-infos` —
+  `No issues found!`; `python3 tool/check_dartdoc.py` из корня — зелёный.
 
-- [ ] **Шаг 8: коммит.**
+- [ ] **Шаг 8: решения и состояние.** `docs/settled.md`: пункт 44 переписан —
+  ожидаемый провал от бага отделяет не только ответчик приложения, но и сама
+  задача, назвав тип; дата 2026-10-28
+  и `2026-10-28-if-failed-answer-design.md`. Пункт 109 — оговорка: ошибку,
+  которую назвал `isExpectedError`, хуки получают с `never`, не как ядро. Пункт
+  15 — ссылка на предикат рядом с «Глушит провал `ignoreFailure()`».
+  `docs/handoff.md` — абзац о работе: задача 1 сделана, дальше задача 2.
+  `python3 tool/reflow.py --check`, `python3 tool/check_line_width.py`.
+
+- [ ] **Шаг 9: коммит.**
   `feat: name the expected errors of a job with isExpectedError`.
 
 ### Задача 2: наследование детьми
@@ -278,7 +304,9 @@
   в теле родителя.
 
 - [ ] **Шаг 4: зелёные.** `dart test` целиком — `All tests passed!`,
-  `dart analyze --fatal-infos` — `No issues found!`.
+  `dart analyze --fatal-infos` — `No issues found!`,
+  `python3 tool/check_dartdoc.py` — зелёный. `docs/handoff.md` — задача 2
+  сделана.
 
 - [ ] **Шаг 5: коммит.**
   `feat: let a child take the isExpectedError of its parent`.
@@ -288,8 +316,8 @@
 **Файлы:**
 
 - Изменить: `packages/solo/lib/src/job.dart` — переопределения `whenFinished`,
-  `whenCancelled`, поле окна, проверка в `_isExpected`, `_judge`,
-  `_answersFor`.
+  `whenCancelled`, поле окна, проверка в начале `_judge` и `_answersFor`.
+- Изменить: `docs/handoff.md` — задача 3 сделана.
 - Тест: `packages/solo/test/expected_error_test.dart`, группа `listeners`.
 
 **Интерфейсы:**
@@ -307,7 +335,7 @@
   | `a whenCancelled listener throws an ApiError` | `job.cancel()`, слушатель бросает | `(answered)`, `unanswered ApiError` |
   | `a listener throws a ParallelWaitError of an ApiError` | слушатель бросает `ParallelWaitError` с `ApiError` внутри | у части `(answered)`, `unanswered ApiError` |
   | `a listener rethrows the expected failure of its job` | тело бросает `ApiError`, `whenFinished` перебрасывает его с его же `stackTrace` | `error ApiError (never)` исхода, `error ApiError (answered)` слушателя, ровно одна строка `unanswered ApiError` |
-  | `a listener registers a listener` | `whenFinished` внутри `whenFinished`, внутренний бросает `ApiError`, внешний потом бросает `StateError` | обе ошибки `(answered)` и обе в `unanswered` |
+  | `a listener error while another one is answered for` | контроллер теста переопределяет `onError`: на первой ошибке он регистрирует на той же задаче `whenFinished`, который бросает `StateError('inner')`; задача кончилась `Done`, её слушатель бросает `const ApiError()` | по порядку `error ApiError (answered)`, `error Bad state: inner (answered)`, `unanswered Bad state: inner`, `unanswered ApiError` |
   | `a listener of a job without a predicate throws` | без `isExpectedError` | как сейчас: `(answered)`, `unanswered` |
 
 - [ ] **Шаг 2: убедиться, что падают.** Первые пять — красные: ошибки слушателя
@@ -320,9 +348,8 @@
   void Function(A) _windowed<A>(void Function(A) callback) => (event) {
     try {
       callback(event);
-    } on StackOverflowError {
-      rethrow;
     } on Object catch (error, stackTrace) {
+      if (error is StackOverflowError) rethrow;
       final outer = _listenerFailures;
       final failures = [...?outer];
       Job.visitErrors(
@@ -340,6 +367,8 @@
   };
   ```
 
+  Ловля — `on Object` с проверкой типа внутри, как в `_guardListener` ядра
+  (`job_base.dart`): `on StackOverflowError` роняет `avoid_catching_errors`.
   Комментарий над ним: `StackOverflowError` уходит в охрану ядра, чьё правило
   читает приватный `_outOfStack`; `notifyError` зовёт `onError` и спрашивает
   ответ синхронно, поэтому окно закрывается после ответа; регистрации
@@ -348,10 +377,11 @@
   и записи вердикта.
 
 - [ ] **Шаг 4: зелёные.** `dart test test/expected_error_test.dart`; затем
-  отдельно каскад, кончившийся стеком, — в `test/state_rakes_test.dart` тест
-  с `-n "after a failed delivery"` — и `test/listeners_test.dart`
-  с `test/when_cancelled_test.dart`; затем `dart test` целиком —
-  `All tests passed!`; `dart analyze --fatal-infos`.
+  `test/listeners_test.dart` с `test/when_cancelled_test.dart`; затем
+  `dart test` целиком — `All tests passed!`; `dart analyze --fatal-infos` —
+  `No issues found!`. Переполнение через слушателя `_SoloJob` тестом
+  не держится (пункт 5 фокуса ревью): его проверяет ревью задачи по коду.
+  `docs/handoff.md` — задача 3 сделана.
 
 - [ ] **Шаг 5: коммит.**
   `feat: keep the listener errors of a caller out of isExpectedError`.
@@ -366,6 +396,11 @@
   `errors_stubs.dart`, `errors_rakes.dart` — что из них держит правленые блоки;
   сторож — `packages/solo/test/errors_rakes_test.dart`.
 
+- Создать: `packages/solo/test/support/errors_page_expected.dart` — код раздела
+  `### Naming the expected errors`: его `load` с предикатом не уживётся
+  в `errors_page.dart` рядом с `load` без предиката.
+- Изменить: `docs/handoff.md` — задача 4 сделана.
+
 - [ ] **Шаг 1: тип ошибки примеров.** В `errors_stubs.dart` —
   `final class ApiException implements Exception` с `final String message`,
   `const ApiException(this.message)`, `toString() => 'ApiException: $message'`.
@@ -378,9 +413,26 @@
   - таблица вступления, строка «A failure kept out of the zone» — добавить
     `isExpectedError`;
   - «Where each error goes» — строка «Answer» первой таблицы; ячейки
-    `onUnanswered` второй; новая строка второй таблицы после строки
-    `Job.isCancellationError`: «An error `isExpectedError` names» | `onError`,
-    with `never` | Nobody;
+    `onUnanswered` второй там, где предикат действует: ошибка тела, правила
+    старта, `abandonable`, диспоузера, `ctx.onCancel`, обработчика состояния,
+    `keepWhile`, `unattended`, ветки `runAll`. Строку «An error of a disposer,
+    a `ctx.onCancel` callback, a `whenCancelled` or `whenFinished` listener, or
+    a state handler of a job» (строка 69) разделить надвое: слушатели
+    `whenCancelled` и `whenFinished` идут отдельной строкой с прежним
+    `onUnanswered` — их ошибок предикат не видит (задача 3). Новая строка
+    второй таблицы после строки `Job.isCancellationError`: «An error
+    `isExpectedError` names» | `onError`, with `never` | Nobody;
+  - список «These are the errors that no outcome carries» (строки 232–240) —
+    тот же раздел: слушатели отдельным пунктом, и абзац под списком говорит,
+    что ошибки, которые назвал предикат, до переопределения не доходят;
+  - опора на быстрый старт. README получает предикат в задаче 6, а страница
+    показывает, куда идёт ошибка задачи, которая своих ошибок не назвала.
+    Комментарий `// ...the jobs from the quick start...` (строка 107) и dartdoc
+    `Not on the page: the job of the quick start in the README.`
+    в `errors_page.dart` — «the jobs of the quick start, without its
+    `isExpectedError`»; абзац строки 147 («A screen starts a job of the profile
+    from the quick start…») и строка 438 («The job is `load()` of the quick
+    start…») — та же оговорка;
   - «Reporting an error» — абзац об `answer`: случай `never` для ожидаемой
     ошибки назван здесь, страница ядра его не знает;
   - «Handled and unhandled failures» — после «Observing the outcome» третий
@@ -398,18 +450,27 @@
   рядом с «Observing the outcome».
 
 - [ ] **Шаг 3: код раздела.** Блок `### Naming the expected errors` стоит
-  в `errors_page.dart` (или своём файле, названном через `alsoIn`), и сторож
-  гоняет его с проверкой трассы. `dart test test/errors_rakes_test.dart` —
-  зелёный.
+  в `errors_page_expected.dart`. В `errors_rakes_test.dart` карта `holders`
+  получает строку `'### Naming the expected errors': expected` с константой
+  `const expected = 'test/support/errors_page_expected.dart';` — без неё тест
+  «every heading with code under it is held to a file» красный. Трасса раздела
+  сверяется тем же сторожем, через `errorsPage.quoted`, как у соседних
+  разделов. `dart test test/errors_rakes_test.dart` — зелёный.
 
 - [ ] **Шаг 4: перевод.** `docs/ru/solo/errors.md` — те же правки;
   `python3 tool/check_translations.py`; линтер `humanizer--ru` по правленым
   абзацам, ноль `ERROR`.
 
-- [ ] **Шаг 5: проверки.** `python3 tool/reflow.py --check`,
+- [ ] **Шаг 5: проверки.** Из корня: `python3 tool/reflow.py --check`,
   `python3 tool/check_line_width.py`, `python3 tool/check_links.py`,
-  `python3 tool/check_traces.py` (как его зовёт `.github/workflows/gate.yml`),
-  `dart test` целиком.
+  `python3 tool/check_doc_shape.py` (новый раздел доходит до кода за десять
+  строк прозы), `python3 tool/build_site.py`
+  и `python3 -m unittest tool/build_site_test.py`. Трассы страницы держит
+  `errors_rakes_test.dart`, не `check_traces.py`: гейт гоняет тот только
+  по выводу стендов. `dart test` целиком. Ссылка из dartdoc `job` (задача 1)
+  переключается со строки справочника на раздел
+  `errors.md#naming-the-expected-errors`; `python3 tool/check_dartdoc.py`.
+  `docs/handoff.md` — задача 4 сделана.
 
 - [ ] **Шаг 6: коммит.** `docs: name the expected errors on the errors page`.
 
@@ -420,9 +481,9 @@
 - Изменить: `packages/solo/doc/state.md`, `testing.md`, `children.md`,
   `jobs.md`, `mistakes.md` и их переводы в `docs/ru/solo/`.
 - Изменить: код страниц в `packages/solo/test/support/testing_*.dart`,
-  `children_*.dart`; сторожа — `testing_rakes_test.dart`,
-  `children_rakes_test.dart`, `state_rakes_test.dart`, `jobs_rakes_test.dart`,
-  `mistakes_page_test.dart`.
+  `children_*.dart`; новый `testing_page_expected.dart` (шаг 2); сторожа —
+  `testing_rakes_test.dart`, `children_rakes_test.dart`,
+  `state_rakes_test.dart`, `jobs_rakes_test.dart`, `mistakes_page_test.dart`.
 
 - [ ] **Шаг 1: `state.md`, «The handlers».** Фраза, что обработчик не наблюдает
   исход, получает продолжение: задача, которая знает свои ожидаемые ошибки,
@@ -440,6 +501,27 @@
   не требует. Остальные `ignoreFailure()` страницы (разделы о `fakeAsync`)
   стоят на контроллере страницы без предиката и не меняются.
 
+  Опора на быстрый старт. Первый блок страницы — контроллер README, и после
+  задачи 6 он уже не совпадает с ним: в README у `load` появится строка
+  `isExpectedError:`. Решение — контроллер страницы есть контроллер быстрого
+  старта без его `isExpectedError`, и это сказано в прозе: строки 42–44 («all
+  but the last drive the `load` of the controller from Quick start») получают
+  оговорку «without its `isExpectedError`, so that the failure is the test's to
+  read». Сторож `the controller is the one of the quick start of the README`
+  (`testing_rakes_test.dart`) сравнивает блок с быстрым стартом, из которого
+  вынута строка `isExpectedError:` —
+  `quickStart.replaceAll(RegExp(r'\n *isExpectedError: [^\n]*'), '')`, — и его
+  `_says` следует за новой фразой. Пока задача 6 не сделана, строки в README
+  нет, и замена ничего не вынимает: сторож зелёный в обоих коммитах.
+
+  Код раздела `### isExpectedError` — новый файл
+  `packages/solo/test/support/testing_page_expected.dart`: свой
+  `final class ProfileController` с предикатом у `load` рядом с тестом раздела;
+  с контроллером `testing_page_fixtures.dart` он в одном файле не уживётся.
+  Карта `holders` в `testing_rakes_test.dart` получает
+  `'### isExpectedError': [expected]` с константой
+  `const expected = 'test/support/testing_page_expected.dart';`.
+
 - [ ] **Шаг 3: `children.md`.** Абзац о наследовании: ребёнок, запущенный
   в теле, берёт предикат родителя; свой бывает только у `job(...)`; широкий тип
   гасит и баги детей. Таблица «Three ways to ignore a child» — сноска под
@@ -453,9 +535,11 @@
   о задаче, исход которой не нужен.
 
 - [ ] **Шаг 5: переводы и проверки.** Переводы пяти страниц; линтер
-  `humanizer--ru`; `check_translations.py`, `reflow.py --check`,
-  `check_line_width.py`, `check_links.py`, `check_traces.py`; `dart test`
-  целиком.
+  `humanizer--ru`; из корня `check_translations.py`, `reflow.py --check`,
+  `check_line_width.py`, `check_links.py`, `check_doc_shape.py`,
+  `build_site.py`, `python3 -m unittest tool/build_site_test.py`; трассы
+  страниц держат их сторожа; `dart test` целиком. `docs/handoff.md` — задача 5
+  сделана.
 
 - [ ] **Шаг 6: коммит.** `docs: tell the solo pages about isExpectedError`.
 
@@ -469,8 +553,15 @@
 - Изменить: `packages/flutter_solo/README.md`, `README.ru.md`,
   `packages/flutter_solo/doc/testing.md`, `docs/ru/flutter_solo/testing.md`,
   `packages/flutter_solo/test/support/readme_profile.dart`,
-  `readme_widgets.dart`, `readme_variants.dart` — что держит правленые блоки;
-  сторожа `readme_rakes_test.dart`, `testing_rakes_test.dart`.
+  `readme_widgets.dart`, `readme_variants.dart`, `readme_scopo.dart` (строка 46
+  держит строку README 537 дословно) — что держит правленые блоки; сторожа
+  `readme_rakes_test.dart`, `testing_rakes_test.dart`,
+  `readme_scopo_test.dart`.
+- Изменить: `tool/flutter_snippets.py` — стенд задания `flutter`
+  в `.github/workflows/gate.yml`.
+- Изменить: `packages/flutter_solo/example/lib/main.dart` — только комментарий
+  строки 6.
+- Изменить: `docs/handoff.md` — задача 6 сделана.
 
 - [ ] **Шаг 1: README `solo`, быстрый старт.** Рядом с `ProfileApi` —
   `final class ApiException implements Exception` (как в задаче 4) и фраза, что
@@ -484,27 +575,65 @@
   пример формы, которой хватает предиката.
 
 - [ ] **Шаг 2: README `flutter_solo`.** `load` — тот же предикат и тот же тип
-  у API. Кнопка — `onPressed: () => controller.load()`, оба `initState` (строки
-  494 и 537) — `controller.load();` без `ignoreFailure()`. Абзац «They answer
-  on the screen…» (строки 167–175) и абзац строк 609–616 — по дизайну: две
-  формы. Абзац о `save` (строки 260–266) не меняется: у `save` предиката нет.
+  у API. Кнопка — `onPressed: controller.load`: лямбда роняет
+  `unnecessary_lambdas`, а блок README анализируется в `readme_profile.dart`
+  и в стенде с `--fatal-infos`. `initState` строки 494 и `ScopeModel.create`
+  строки 537 (scopo) — `controller.load();` без `ignoreFailure()`. Абзац «They
+  answer on the screen…» (строки 168–175) и абзац строк 609–612 — по дизайну:
+  две формы; абзац 614–620 не меняется. Абзац о `save` (строки 260–266)
+  не меняется: у `save` предиката нет.
 
 - [ ] **Шаг 3: тесты README `flutter_solo`.** Тест, где фейк проваливает
   `load`, отдаёт `ApiException` и зелёный без `ignoreFailure()`; новый тест
   `a load that fails with a bug`: фейк бросает `StateError`, тест ловит её
   в зоне — баг по-прежнему роняет виджет-тест.
 
-- [ ] **Шаг 4: `flutter_solo/doc/testing.md`.** Строка 98 — задача, контроллер
-  которой называет свои ожидаемые ошибки, ничего больше не требует; брошенная
-  тестом задача без предиката говорит это `ignoreFailure()`.
+- [ ] **Шаг 4: `flutter_solo/doc/testing.md`.** Абзац строк 90–96 («A load that
+  fails makes a test red even though it reads `done`, if it reads it after the
+  pump») для `ApiException` больше не верен: провал, который назвал предикат,
+  тест не роняет, роняет баг. Строка 98 — задача, контроллер которой называет
+  свои ожидаемые ошибки, ничего больше не требует; брошенная тестом задача без
+  предиката говорит это `ignoreFailure()`.
 
-- [ ] **Шаг 5: переводы и проверки.** `README.ru.md` обоих пакетов
-  и `docs/ru/flutter_solo/testing.md`; линтер `humanizer--ru`;
+- [ ] **Шаг 5: стенд `tool/flutter_snippets.py`.** Он собирает README
+  `flutter_solo`, его `doc/testing.md` и быстрый старт `solo`; `ProfileApi`
+  берёт из `README_API` (строки 1176–1204), README его не объявляет.
+  - в `README_API` — тот же `ApiException`, что в README; `FailingApi` бросает
+    `ApiException('no network')`;
+  - драйвер «a failed load is what the toast says too» ждёт
+    `['ApiException: no network']`;
+  - драйвер «a tap on Load that fails puts the button back, and no more»
+    держится уже предикатом, а не `ignoreFailure()` кнопки; комментарий в нём —
+    о предикате;
+  - новый драйвер рядом: фейк бросает `StateError('bug')`, нажатие на Load —
+    и баг доходит до зоны теста; ловить его тем же способом, что тест
+    `a load that fails with a bug` шага 3;
+  - свои `controller.load().ignoreFailure()` стенда (`loaded` и драйверы
+    `fakeAsync`) остаются: это не текст README.
+
+  Прогон — как в задании `flutter`:
+  `python3 tool/flutter_snippets.py <каталог>` вне репозитория, в нём
+  `flutter pub get`, `flutter analyze`,
+  `flutter test --concurrency=1 | tee <вывод>`, затем
+  `python3 tool/check_traces.py packages/flutter_solo/doc/mixins.md <вывод>`.
+
+- [ ] **Шаг 6: комментарий примера.**
+  `packages/flutter_solo/example/lib/main.dart` строка 6: «The model and the
+  job of the README's Usage» — «The model of the README's Usage, its job
+  without `isExpectedError`»: пример ждёт `load().done`, исход наблюдает,
+  и предикат ему не нужен. Поведение не меняется; `flutter analyze`
+  в `packages/flutter_solo/example`.
+
+- [ ] **Шаг 7: переводы и проверки.** `README.ru.md` обоих пакетов
+  и `docs/ru/flutter_solo/testing.md`; линтер `humanizer--ru`; из корня
   `check_translations.py`, `reflow.py --check`, `check_line_width.py`,
-  `check_links.py`; `dart test` в `packages/solo`; `flutter test`
-  и `dart analyze --fatal-infos` в `packages/flutter_solo`.
+  `check_links.py`, `check_doc_shape.py`, `build_site.py`,
+  `python3 -m unittest tool/build_site_test.py`; `dart test` в `packages/solo`
+  (в нём сторож `testing_rakes_test.dart` из задачи 5 сравнивает уже
+  с предикатом в README); `flutter test` и `dart analyze --fatal-infos`
+  в `packages/flutter_solo`. `docs/handoff.md` — задача 6 сделана.
 
-- [ ] **Шаг 6: коммит.** `docs: name the expected errors in the READMEs`.
+- [ ] **Шаг 8: коммит.** `docs: name the expected errors in the READMEs`.
 
 ### Задача 7: CHANGELOG, решения и записи
 
@@ -512,8 +641,9 @@
 
 - Изменить: `packages/solo/CHANGELOG.md`, `docs/ru/solo/CHANGELOG.md`,
   `packages/flutter_solo/CHANGELOG.md`, `docs/ru/flutter_solo/CHANGELOG.md`.
-- Изменить: `docs/settled.md`, `docs/backlog.md`, `docs/handoff.md`, шапки
-  `2026-10-28-if-failed-answer-design.md` и этого плана.
+- Изменить: `docs/backlog.md`, `docs/handoff.md`, шапки
+  `2026-10-28-if-failed-answer-design.md` и этого плана. `docs/settled.md`
+  правит задача 1.
 
 - [ ] **Шаг 1: CHANGELOG `solo`, «Unreleased».** В «Breaking changes»: `job`,
   `enqueue`, `collect`, `accumulate` получают именованный `isExpectedError`,
@@ -523,27 +653,22 @@
   «Unreleased», «Documentation»: README называет ожидаемые ошибки `load`,
   и кнопка больше не зовёт `ignoreFailure()`. Переводы обоих.
 
-- [ ] **Шаг 2: `docs/settled.md`.** Пункт 44 переписан: вторая половина
-  («ожидаемый провал от бага отделяет ответчик») — ещё и сама задача, назвав
-  тип; дата 2026-10-28 и `2026-10-28-if-failed-answer-design.md`. Пункт 109 —
-  оговорка о `never` для ожидаемой ошибки. Пункт 15 — ссылка на предикат рядом
-  с «Глушит провал `ignoreFailure()`».
-
-- [ ] **Шаг 3: бэклог и записи.** Из `docs/backlog.md` удалить запись «Сделать
+- [ ] **Шаг 2: бэклог и записи.** Из `docs/backlog.md` удалить запись «Сделать
   `ifFailed` отвечающим». Шапки дизайна и плана — «сделано», с коммитами.
   `docs/handoff.md` — абзац о работе: сделано, что дальше.
 
-- [ ] **Шаг 4: проверки.** `python3 tool/reflow.py --check` и названные записи,
-  `check_line_width.py`, `check_translations.py`, `check_links.py`.
+- [ ] **Шаг 3: проверки.** `python3 tool/reflow.py --check` и названные записи,
+  `check_line_width.py`, `check_translations.py`, `check_links.py`,
+  `build_site.py` и `python3 -m unittest tool/build_site_test.py`: запись
+  «Added» ссылается на новый якорь страницы ошибок.
 
-- [ ] **Шаг 5: коммит.**
-  `docs: record isExpectedError in the changelogs and settled decisions`.
+- [ ] **Шаг 4: коммит.** `docs: record isExpectedError in the changelogs`.
 
 ## Что не трогается
 
 - `packages/solo/doc/vs-bloc.md`, `accumulation.md`, `accumulation-rules.md`
   и их стенды: страницы сравнивают и объясняют накопление, а без предиката
   маршрут прежний.
-- Пример `packages/flutter_solo/example/`: он ждёт `load().done`, то есть исход
-  наблюдает.
+- Код примера `packages/flutter_solo/example/`: он ждёт `load().done`, то есть
+  исход наблюдает; задача 6 правит только его комментарий.
 - `packages/solo_lints`: правила о брошенной задаче там нет.

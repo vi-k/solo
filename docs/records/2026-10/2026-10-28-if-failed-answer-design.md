@@ -365,14 +365,14 @@ B1 — две ветки `runAll`; B2 — `ctx.start(ctx.child(...))`; B3 — `e
 - README `flutter_solo`, абзац о том, что провал после `ifFailed` уходит в зону
   и роняет виджет-тест, и `packages/flutter_solo/doc/testing.md` там же, —
   отсюда и пришла жалоба. `load` там получает предикат, и кнопка теряет
-  `ignoreFailure()`: `onPressed: () => controller.load()` и два таких же вызова
-  в `initState` экранов README. С `ignoreFailure()` кнопка глушила бы и баги,
-  то есть README учил бы ровно тому, от чего предикат избавляет. Абзац
-  о выброшенной задаче («a fire-and-forget call is
-  `controller.load().ignoreFailure()`») говорит теперь о двух формах: задача
-  называет свои ожидаемые ошибки, а `ignoreFailure()` остаётся вызову, которому
-  исход не нужен вовсе. Фраза `packages/flutter_solo/doc/testing.md`
-  о брошенной задаче — так же.
+  `ignoreFailure()`: `onPressed: controller.load`, и так же `controller.load()`
+  без `ignoreFailure()` в `initState` экрана README и в `ScopeModel.create`
+  примера со scopo. С `ignoreFailure()` кнопка глушила бы и баги, то есть
+  README учил бы ровно тому, от чего предикат избавляет. Абзац о выброшенной
+  задаче («a fire-and-forget call is `controller.load().ignoreFailure()`»)
+  говорит теперь о двух формах: задача называет свои ожидаемые ошибки,
+  а `ignoreFailure()` остаётся вызову, которому исход не нужен вовсе. Фраза
+  `packages/flutter_solo/doc/testing.md` о брошенной задаче — так же.
 - Переводы всех перечисленных, CHANGELOG `solo` и его перевод.
 - `docs/settled.md`: пункт 44 — пересмотр, ниже; пункт 109 — оговорка
   о значении `never`; пункт 15, который кончается «Глушит провал
