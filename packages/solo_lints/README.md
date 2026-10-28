@@ -5,7 +5,8 @@
 [solo](https://pub.dev/packages/solo). It reports the mistakes that compile,
 run and often pass a first test: a wait in cleanup that never happens, a
 resource lost to a cancellation, a catch that resets a working device, a job
-that waits for itself. Each rule stands for a section of
+that waits for itself, one key for every request. Most rules stand for a
+section of
 [Common mistakes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md),
 the page of solo that shows each mistake and the right way side by side.
 
@@ -24,8 +25,9 @@ The analysis server fetches the plugin itself, so it is not a dependency in
 `flutter analyze` and the editor report its diagnostics. An editor sees a
 change to the `plugins` section after its analysis server restarts.
 
-The warnings are on as soon as the plugin is named. The lint,
-`catch_without_check`, is turned on by name:
+The warnings are on as soon as the plugin is named. The three lints,
+`catch_without_check`, `key_per_request` and `ignore_failure_hides_bugs`, are
+turned on by name:
 
 ```yaml
 plugins:
@@ -33,6 +35,8 @@ plugins:
     version: ^0.1.0
     diagnostics:
       catch_without_check: true
+      key_per_request: true
+      ignore_failure_hides_bugs: true
 ```
 
 A diagnostic is silenced with the name of the plugin in front of the rule:
@@ -48,6 +52,8 @@ A diagnostic is silenced with the name of the plugin in front of the rule:
 | `catch_without_check` | lint | a broad catch in a body that acts before asking the job |
 | `sync_fake_async` | warning | an `async` callback of `fakeAsync` |
 | `await_own_queue` | warning | a job that waits for a job of its own controller's queue |
+| `key_per_request` | lint | one key for a `Policy.droppable` job whose body reads an argument |
+| `ignore_failure_hides_bugs` | lint | `ignoreFailure()` on a job that names its expected errors |
 
 ### ctx_in_cleanup
 
@@ -81,6 +87,11 @@ database is lost. Pass the release to the call that brings the resource:
 by `onDispose` or `onDiscard` that mentions the variable. See
 [Registering a release on the call](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#registering-a-release-on-the-call).
 
+The quick fix removes the `onDispose` or `onDiscard` and passes the release to
+the call as `dispose:` or `discard:`, so the lines above become
+`ctx.join(Database.open, dispose: (db) => db.close())`. It is offered for a
+release that is a tear-off or a function literal without parameters.
+
 ### catch_without_check
 
 ```dart
@@ -108,6 +119,8 @@ lint rather than a warning because a catch that has to wait for a release on a
 cancellation too is reported as well: there `ctx.check()` first would leave the
 resource behind, and the catch keeps its lines under an `// ignore:`. See
 [Letting cancellation through a catch](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#letting-cancellation-through-a-catch).
+
+The quick fix inserts `ctx.check();` as the first line of the catch.
 
 ### sync_fake_async
 
@@ -144,6 +157,55 @@ the actions that body waits for through `join`, `abandonable`, `wait` and
 `uncancellable`, and at its cleanup, which the queue waits for as well. A mixin
 `on Solo` is the controller too. See
 [Steps as children](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#steps-as-children).
+
+### key_per_request
+
+```dart
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
+  key: _Op.load, // key_per_request
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
+```
+
+A policy compares keys, not arguments. With one key for every `load(id)`,
+`Policy.droppable` takes `load('grace')`, called while `load('ada')` runs, for
+a duplicate and hands its caller Ada's profile. Put the argument into the key:
+`key: (_Op.load, id)`. The rule takes `enqueue` of `Solo` with
+`Policy.droppable` and `enqueueJob` of a `job` with that policy, when the key
+reads no parameter of the enclosing method or function and the body reads one.
+A key that reads a local variable is left alone. It is a lint rather than a
+warning because one key is sometimes meant, when the result does not depend on
+the argument. See
+[A key for each request](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#a-key-for-each-request).
+
+The quick fix replaces the key `K` with the record `(K, a, b)` of the
+parameters the body reads. It is offered when each of them compares by value: a
+`String`, a number, a `bool`, an enum, or one of those that can be `null`.
+
+### ignore_failure_hides_bugs
+
+```dart
+SoloJob<Profile> load() => enqueue<Ready, Profile>(
+  (ctx) => api.load(),
+  isExpectedError: (e) => e is ApiException,
+);
+
+profiles.load().ignoreFailure(); // ignore_failure_hides_bugs
+```
+
+`isExpectedError` already keeps the errors it names quiet and lets the bugs
+through to the zone, and `ignoreFailure()` hides those as well. Drop
+`ignoreFailure()`: the expected errors stay quiet, and a bug is still reported.
+The rule takes `ignoreFailure()` on a job that comes from `job` or `enqueue`
+with `isExpectedError`, or from the `add` of a `collect` or `accumulate` field
+with one, also through a method of the same library whose body is one
+expression, when nobody uses the job afterwards: the call itself, or a cascade
+whose value is dropped, as the `onPressed` of a button is. The page of common
+mistakes has no section for this one. It is a lint rather than a warning
+because a job whose outcome nobody needs, with the reporting left to the hooks,
+may call `ignoreFailure()` on purpose: see
+[Answering for every failure](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#answering-for-every-failure).
 
 ## Versions
 

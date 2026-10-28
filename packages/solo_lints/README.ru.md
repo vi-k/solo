@@ -5,8 +5,8 @@
 и [solo](https://pub.dev/packages/solo). Он сообщает об ошибках, которые
 компилируются, работают и часто проходят первый тест: ожидание в уборке,
 которое так и не случается; ресурс, потерянный при отмене; `catch`, который
-сбрасывает исправное устройство; задача, которая ждёт саму себя. За каждым
-правилом стоит раздел
+сбрасывает исправное устройство; задача, которая ждёт саму себя; один ключ
+на все запросы. За большинством правил стоит раздел
 [«Частых ошибок»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md) —
 страницы solo, где каждая ошибка показана рядом с правильным способом.
 
@@ -25,8 +25,9 @@ plugins:
 `dart analyze`, `flutter analyze` и редактор. Правку раздела `plugins` редактор
 видит после перезапуска своего сервера анализа.
 
-Предупреждения включаются, как только плагин назван. Линт `catch_without_check`
-включается по имени:
+Предупреждения включаются, как только плагин назван. Три линта,
+`catch_without_check`, `key_per_request` и `ignore_failure_hides_bugs`,
+включаются по имени:
 
 ```yaml
 plugins:
@@ -34,6 +35,8 @@ plugins:
     version: ^0.1.0
     diagnostics:
       catch_without_check: true
+      key_per_request: true
+      ignore_failure_hides_bugs: true
 ```
 
 Диагностику глушат именем плагина перед именем правила:
@@ -49,6 +52,8 @@ plugins:
 | `catch_without_check` | линт | широкий `catch` в теле, которое действует, не спросив задачу |
 | `sync_fake_async` | предупреждение | `async`-колбэк `fakeAsync` |
 | `await_own_queue` | предупреждение | задача ждёт задачу из очереди своего же контроллера |
+| `key_per_request` | линт | один ключ у задачи `Policy.droppable`, чьё тело читает аргумент |
+| `ignore_failure_hides_bugs` | линт | `ignoreFailure()` у задачи, которая называет свои ожидаемые ошибки |
 
 ### ctx_in_cleanup
 
@@ -82,6 +87,11 @@ ctx.onDispose(db.close); // release_on_the_call
 `onDispose` или `onDiscard`, упоминающий переменную. Подробнее в разделе
 [«Освобождение на вызове»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md#освобождение-на-вызове).
 
+Быстрое исправление удаляет `onDispose` или `onDiscard` и передаёт освобождение
+вызову как `dispose:` или `discard:`, так что строки выше превращаются
+в `ctx.join(Database.open, dispose: (db) => db.close())`. Исправление
+предлагается, когда освобождение — отрыв или литерал функции без параметров.
+
 ### catch_without_check
 
 ```dart
@@ -111,6 +121,8 @@ try {
 `ctx.check()` первой строкой оставил бы ресурс неосвобождённым, и такой `catch`
 сохраняет свои строки под `// ignore:`. Подробнее в разделе
 [«Пропустить отмену через catch»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md#пропустить-отмену-через-catch).
+
+Быстрое исправление вставляет `ctx.check();` первой строкой `catch`.
 
 ### sync_fake_async
 
@@ -148,6 +160,54 @@ Job<void> syncAndRecord(int item) =>
 `wait` и `uncancellable`, и в его уборку: её очередь тоже ждёт. Контроллер —
 и `mixin` с `on Solo`. Подробнее в разделе
 [«Шаги детьми»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md#шаги-детьми).
+
+### key_per_request
+
+```dart
+Job<Profile> load(String id) => enqueue<Ready, Profile>(
+  key: _Op.load, // key_per_request
+  policy: Policy.droppable,
+  (ctx) => ctx.abandonable(() => api.load(id)),
+);
+```
+
+Политика сравнивает ключи, а не аргументы. При одном ключе на все `load(id)`
+`Policy.droppable` принимает `load('grace')`, вызванный, пока идёт
+`load('ada')`, за дубликат и отдаёт его вызывающему профиль Ады. Положите
+аргумент в ключ: `key: (_Op.load, id)`. Правило берёт `enqueue` класса `Solo`
+с `Policy.droppable` и `enqueueJob` с `job` и той же политикой, когда ключ
+не читает ни одного параметра объемлющего метода или функции, а тело читает.
+Ключ, который читает локальную переменную, правило не трогает. Это линт,
+а не предупреждение: один ключ иногда задуман, когда результат от аргумента
+не зависит. Подробнее в разделе
+[«Ключ на каждый запрос»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md#ключ-на-каждый-запрос).
+
+Быстрое исправление заменяет ключ `K` записью `(K, a, b)` из параметров,
+которые читает тело. Исправление предлагается, когда каждый из них сравнивается
+по значению: `String`, число, `bool`, перечисление или один из них с `null`.
+
+### ignore_failure_hides_bugs
+
+```dart
+SoloJob<Profile> load() => enqueue<Ready, Profile>(
+  (ctx) => api.load(),
+  isExpectedError: (e) => e is ApiException,
+);
+
+profiles.load().ignoreFailure(); // ignore_failure_hides_bugs
+```
+
+`isExpectedError` уже держит названные в нём ошибки тихими и пропускает баги
+в зону, а `ignoreFailure()` прячет и их. Уберите `ignoreFailure()`: ожидаемые
+ошибки останутся тихими, а баг по-прежнему будет замечен. Правило берёт
+`ignoreFailure()` у задачи, которая пришла из `job` или `enqueue`
+с `isExpectedError` или из `add` поля с `collect` или `accumulate` с ним, в том
+числе через метод той же библиотеки, чьё тело — одно выражение, когда задача
+дальше никому не нужна: сам вызов или каскад, значение которого отброшено, как
+у `onPressed` кнопки. У страницы частых ошибок раздела для этого правила нет.
+Это линт, а не предупреждение: задача, чей исход никому не нужен, а отчёт
+оставлен хукам, может вызывать `ignoreFailure()` намеренно, см.
+[«Ответ за каждую ошибку»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md#ответ-за-каждую-ошибку).
 
 ## Версии
 

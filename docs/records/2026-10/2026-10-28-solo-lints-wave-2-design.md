@@ -1,10 +1,13 @@
-> **Состояние на 2026-10-28:** дизайн одобрен владельцем, не реализован;
-> план — `2026-10-28-solo-lints-wave-2-plan.md`.
+> **Состояние на 2026-10-28:** дизайн одобрен владельцем, реализован в ветке
+> `worktree-solo-lints-wave-2`, не влит; расхождения — в отчёте
+> `2026-10-28-solo-lints-wave-2-report.md`. План —
+> `2026-10-28-solo-lints-wave-2-plan.md`.
 > **Что это:** вторая волна `solo_lints` — правила `key_per_request`
 > и `ignore_failure_hides_bugs`, быстрые исправления трёх правил и сторож
 > страницы ошибок.
 > **Связанные записи:** `2026-10-28-solo-lints-design.md`,
-> `2026-10-28-solo-lints-report.md`, `2026-10-28-if-failed-answer-design.md`.
+> `2026-10-28-solo-lints-report.md`, `2026-10-28-if-failed-answer-design.md`,
+> `2026-10-28-solo-lints-wave-2-report.md`.
 
 # `solo_lints`, вторая волна: дизайн
 

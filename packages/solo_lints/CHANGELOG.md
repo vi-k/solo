@@ -13,3 +13,12 @@ for Dart 3.10 and later.
   `FakeAsync.run`.
 - `await_own_queue`, a warning: a job of a `Solo` controller that waits for a
   job queued on the same controller, or for its `close()` or `cancelAll()`.
+- `key_per_request`, a lint: a `Policy.droppable` job whose key reads no
+  argument while its body does, so a later caller gets the result of the first.
+- `ignore_failure_hides_bugs`, a lint: `ignoreFailure()` on a job that names
+  its expected errors in `isExpectedError`, which hides the bugs the predicate
+  lets through.
+- Quick fixes for `release_on_the_call` (the release moves into `dispose:` or
+  `discard:` of the call), `catch_without_check` (`ctx.check();` becomes the
+  first line of the catch) and `key_per_request` (the arguments the body reads
+  go into the key).
