@@ -243,7 +243,7 @@ jobs:
       # Here and not in `floor`, which is where the layout is used: listing
       # an archive is a dry run of `pub publish`, and that resolves the
       # package where it stands, lint packages included, which the floor
-      # cannot do. This job has the one SDK that resolves all three.
+      # cannot do. This job has the one SDK that resolves all four.
       - name: Lay out what would be published
         run: python3 tool/archive_floor.py stage "$RUNNER_TEMP/archive"
 
@@ -269,7 +269,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # The floor of both: Flutter 3.38.1 carries Dart 3.10.0, the `sdk`
-      # the three pubspecs declare. Not 3.38.0, which carries a beta build
+      # the four pubspecs declare. Not 3.38.0, which carries a beta build
       # of 3.10.0 that `^3.10.0` does not admit. The script reads the
       # pubspecs and refuses any other SDK, so a floor raised in a pubspec
       # and not here is a red job, not a check of the wrong thing.

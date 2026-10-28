@@ -250,4 +250,100 @@ final job = Job<void>((ctx) async {
 ''',
     ['on [[Object]] {'],
   );
+
+  // errors.md of solo, "A pause between attempts".
+  Future<void> test_rethrow_if_before_a_checkpoint() => assertAt('''
+$_solo
+  Job<void> open() => enqueue<Object, void>((ctx) async {
+    for (var attempt = 1; ; attempt++) {
+      try {
+        await ctx.abandonable(hw.open);
+      } on Object {
+        if (attempt == 3) rethrow;
+        await ctx.pause(Duration(seconds: attempt));
+        continue;
+      }
+      return;
+    }
+  });
+}
+''', []);
+
+  // groups.md of async_job, "A list the body hands out": the release has to
+  // run for a cancellation too.
+  Future<void> test_release_on_the_way_out() => assertAt('''
+import 'package:async_job/async_job.dart';
+
+abstract interface class Source {
+  void close();
+}
+
+late final List<ChildJob<Source>> branches;
+
+Future<void> writeArchive(List<Source> sources) async {}
+
+final exported = Job.deferred<List<Source>>((ctx) async {
+  final sources = await ctx.runAll(branches);
+  try {
+    await ctx.join(() => writeArchive(sources));
+  } on Object catch (error) {
+    ctx.log(error);
+    for (final source in sources) {
+      source.close();
+    }
+    rethrow;
+  }
+  return sources;
+});
+''', []);
+
+  Future<void> test_catch_that_keeps_the_cancellation() => assertAt(
+    '''
+$_solo
+  Job<void> open(bool quiet) => enqueue<Object, void>((ctx) async {
+    try {
+      await ctx.join(hw.open);
+    } on Object catch (error) {
+      ctx.log(error);
+    }
+    try {
+      await ctx.join(hw.open);
+    } on Object {
+      if (quiet) return;
+      rethrow;
+    }
+    try {
+      await ctx.join(hw.open);
+    } on Object {
+      await hw.reset();
+      rethrow;
+    }
+  });
+}
+''',
+    ['on [[Object]] catch', 'on [[Object]] {', 'on [[Object]] {'],
+  );
+
+  Future<void> test_work_the_body_does_not_wait_for() => assertAt('''
+$_solo
+  Job<void> open() => enqueue<Object, void>((ctx) async {
+    ctx.unattended(() async {
+      try {
+        await hw.open();
+      } on Object catch (error) {
+        ctx.log(error);
+      }
+    });
+    await ctx.run(
+      ctx.child((_) async {
+        try {
+          await ctx.join(hw.open);
+        } on Object {
+          await hw.reset();
+        }
+      }),
+    );
+  });
+}
+''', []);
 }

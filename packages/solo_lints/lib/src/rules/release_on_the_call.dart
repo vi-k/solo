@@ -37,7 +37,12 @@ class ReleaseOnTheCall extends AnalysisRule {
     RuleVisitorRegistry registry,
     RuleContext context,
   ) {
-    registry.addBlock(this, _Visitor(this));
+    final visitor = _Visitor(this);
+    registry
+      ..addBlock(this, visitor)
+      ..addSwitchCase(this, visitor)
+      ..addSwitchDefault(this, visitor)
+      ..addSwitchPatternCase(this, visitor);
   }
 }
 
@@ -47,8 +52,18 @@ class _Visitor extends SimpleAstVisitor<void> {
   _Visitor(this.rule);
 
   @override
-  void visitBlock(Block node) {
-    final statements = node.statements;
+  void visitBlock(Block node) => _scan(node.statements);
+
+  @override
+  void visitSwitchCase(SwitchCase node) => _scan(node.statements);
+
+  @override
+  void visitSwitchDefault(SwitchDefault node) => _scan(node.statements);
+
+  @override
+  void visitSwitchPatternCase(SwitchPatternCase node) => _scan(node.statements);
+
+  void _scan(List<Statement> statements) {
     for (var i = 0; i + 1 < statements.length; i++) {
       final call = _broughtBy(statements[i]);
       if (call == null) continue;

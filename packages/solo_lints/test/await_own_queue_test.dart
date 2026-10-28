@@ -145,4 +145,55 @@ $_syncer
   });
 }
 ''', []);
+
+  // cancellation.md of solo: close() awaited from the job's cleanup waits
+  // the same way.
+  Future<void> test_cleanup() => assertAt(
+    '''
+$_syncer
+  Job<void> logout() => enqueue<int, void>((ctx) async {
+    ctx.onDispose(() async {
+      await close();
+    });
+  });
+}
+''',
+    ['await [[close()]]'],
+  );
+
+  Future<void> test_body_returns_the_job() => assertAt(
+    '''
+$_syncer
+  Job<String> again(int item) =>
+      enqueue<int, String>((ctx) => sync(item).value);
+}
+''',
+    ['(ctx) => [[sync(item)]]'],
+  );
+
+  Future<void> test_body_queued_on_another_controller() => assertAt('''
+$_syncer
+  late final Syncer other;
+
+  Job<void> relay(int item) => other.enqueue<int, void>((ctx) async {
+    await sync(item).value;
+  });
+}
+''', []);
+
+  Future<void> test_mixin_on_solo() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+mixin Steps on Solo<int> {
+  Job<String> sync(int item) =>
+      enqueueJob(job<int, String>((ctx) async => 'x'));
+
+  Job<void> twice(int item) => enqueue<int, void>((ctx) async {
+    await sync(item).value;
+  });
+}
+''',
+    ['await [[sync(item)]]'],
+  );
 }

@@ -173,4 +173,15 @@ $_solo
 ''',
     ['ctx.emit(ctx.state + 1)', 'ctx.state', 'ctx.stateAs<int>()'],
   );
+
+  Future<void> test_closure_in_a_final_variable() => assertAt(
+    '''
+$_core
+final job = Job<void>((ctx) async {
+  final flush = () => ctx.check();
+  ctx.onDispose(flush);
+});
+''',
+    ['() => [[ctx.check()]]'],
+  );
 }

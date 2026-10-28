@@ -33,6 +33,9 @@ const soloCheckpoints = {'emit', 'state', 'stateAs'};
 /// The waiting calls whose `dispose:` and `discard:` take a cleanup.
 const releasingCalls = {'join', 'abandonable', 'wait', 'run'};
 
+/// The calls on a context whose action the body waits for.
+const waitingCalls = {'join', 'abandonable', 'wait', 'uncancellable'};
+
 /// Whether [element] comes from a library of async_job or solo.
 bool isFromJobPackages(Element? element) {
   final uri = element?.library?.uri.toString();
@@ -78,6 +81,8 @@ bool isDartCoreClass(Element? element, String name) =>
 FormalParameterElement? jobContextOf(FunctionExpression node) {
   final parameters = node.parameters?.parameters;
   if (parameters == null || parameters.isEmpty) return null;
+  // A wildcard names no context: nothing in the body can call on it.
+  if (parameters.first.name?.lexeme == '_') return null;
   final element = parameters.first.declaredFragment?.element;
   return isJobContext(element?.type) ? element : null;
 }
@@ -205,25 +210,40 @@ Element? cleanupContext(Expression node) {
       : null;
 }
 
-/// The function [argument] stands for: a literal, or the declaration of the
-/// local function it names; `null` for anything else.
+/// The context of the waiting call whose action [node] is, otherwise `null`.
+Element? waitingContext(FunctionExpression node) {
+  final list = node.parent;
+  if (list is! ArgumentList || firstPositional(list) != node) return null;
+  final call = list.parent;
+  if (call is! MethodInvocation) return null;
+  final ctx = contextNamed(call.realTarget);
+  if (ctx == null || !callsOn(call, ctx, waitingCalls)) return null;
+  return ctx;
+}
+
+/// The function [argument] stands for: a literal, the declaration of the
+/// local function it names or the literal a final local variable it names
+/// holds; `null` for anything else.
 FunctionExpression? functionOf(Expression argument) {
   final node = argument.unParenthesized;
   if (node is FunctionExpression) return node;
   if (node is! SimpleIdentifier) return null;
   final element = node.element;
-  if (element is! LocalFunctionElement) return null;
-  final finder = _DeclarationFinder(element);
+  final named =
+      element is LocalFunctionElement ||
+      (element is LocalVariableElement && element.isFinal);
+  if (!named) return null;
+  final finder = _FunctionFinder(element!);
   node.root.accept(finder);
   return finder.found;
 }
 
-class _DeclarationFinder extends RecursiveAstVisitor<void> {
-  final LocalFunctionElement element;
+class _FunctionFinder extends RecursiveAstVisitor<void> {
+  final Element element;
 
   FunctionExpression? found;
 
-  _DeclarationFinder(this.element);
+  _FunctionFinder(this.element);
 
   @override
   void visitFunctionDeclaration(FunctionDeclaration node) {
@@ -232,5 +252,15 @@ class _DeclarationFinder extends RecursiveAstVisitor<void> {
       return;
     }
     super.visitFunctionDeclaration(node);
+  }
+
+  @override
+  void visitVariableDeclaration(VariableDeclaration node) {
+    if (node.declaredFragment?.element == element) {
+      final value = node.initializer?.unParenthesized;
+      if (value is FunctionExpression) found = value;
+      return;
+    }
+    super.visitVariableDeclaration(node);
   }
 }

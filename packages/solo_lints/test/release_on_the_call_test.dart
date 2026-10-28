@@ -98,4 +98,18 @@ final job = Job<void>((ctx) async {
   );
 });
 ''', []);
+
+  Future<void> test_switch_case() => assertAt(
+    '''
+$_core
+final job = Job<void>((ctx) async {
+  switch (1) {
+    case 1:
+      final db = await ctx.join(Database.open);
+      ctx.onDispose(db.close);
+  }
+});
+''',
+    ['ctx.onDispose(db.close)'],
+  );
 }

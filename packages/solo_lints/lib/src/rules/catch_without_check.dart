@@ -17,7 +17,9 @@ class CatchWithoutCheck extends AnalysisRule {
     'catch_without_check',
     'This catch takes the cancellation of the job along with the errors it '
         'was written for.',
-    correctionMessage: "Make '{0}.check();' the first line of the catch.",
+    correctionMessage:
+        "Make '{0}.check();' the first line of the catch, unless the catch "
+        'has to run for a cancellation as well.',
   );
 
   /// Creates the rule.
@@ -53,8 +55,8 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (ctx == null) return;
     final statement = node.parent;
     if (statement is! TryStatement) return;
-    if (!_mayCancel(statement.body, ctx)) return;
-    if (_asksFirst(node.body, ctx)) return;
+    if (!_waits(statement.body, ctx)) return;
+    if (_letsItThrough(node.body, ctx)) return;
     final at = node.exceptionType;
     if (at != null) {
       rule.reportAtNode(at, arguments: [ctx.displayName]);
@@ -74,41 +76,75 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 
   /// The context of the job body around [node], unless [node] is in a
-  /// cleanup, where a checkpoint throws `StateError`.
+  /// cleanup, where a checkpoint throws `StateError`, or in a function that
+  /// runs on its own: unattended work, a listener, a timer.
   static Element? _contextAround(AstNode node) {
     for (var at = node.parent; at != null; at = at.parent) {
       if (at is! FunctionExpression) continue;
       if (cleanupContext(at) != null) return null;
       final ctx = jobContextOf(at);
       if (ctx != null) return ctx;
+      // A local function runs when the body calls it, and the action of a
+      // waiting call while the body waits for it.
+      if (at.parent is! FunctionDeclaration && waitingContext(at) == null) {
+        return null;
+      }
     }
     return null;
   }
 
-  static bool _mayCancel(Block body, Element ctx) {
+  /// Whether [block] waits or reaches a checkpoint of [ctx].
+  static bool _waits(Block block, Element ctx) {
     final finder = _Cancellation(ctx);
-    body.accept(finder);
+    block.accept(finder);
     return finder.found;
   }
 
-  static bool _asksFirst(Block body, Element ctx) {
+  /// Whether the catch [body] lets a cancellation out before it acts on it.
+  static bool _letsItThrough(Block body, Element ctx) {
     final statements = body.statements;
     if (statements.isEmpty) return false;
     final first = statements.first;
-    if (statements.length == 1 && _isRethrow(first)) return true;
-    if (first is ExpressionStatement) {
-      return isCheckpoint(first.expression, ctx);
+    if (first is IfStatement &&
+        _isCancelledOf(first.expression, ctx) &&
+        _isRethrowIf(first)) {
+      return true;
     }
-    if (first is VariableDeclarationStatement) {
-      final initializer = first.variables.variables.first.initializer;
+    // `if (attempt == 3) rethrow;` passes the cancellation on unchanged, so
+    // the statement after it is the first that acts.
+    final acting = statements.skipWhile(_isRethrowIf).firstOrNull;
+    if (acting != null && _isCheckpoint(acting, ctx)) return true;
+    return _leavesAtOnce(body, ctx);
+  }
+
+  /// Whether [statement] is a checkpoint of [ctx], as an expression or as
+  /// the value of a variable.
+  static bool _isCheckpoint(Statement statement, Element ctx) {
+    if (statement is ExpressionStatement) {
+      return isCheckpoint(statement.expression, ctx);
+    }
+    if (statement is VariableDeclarationStatement) {
+      final initializer = statement.variables.variables.first.initializer;
       return initializer != null && isCheckpoint(initializer, ctx);
     }
-    if (first is IfStatement) {
-      return first.elseStatement == null &&
-          _isCancelledOf(first.expression, ctx) &&
-          _isRethrow(first.thenStatement);
-    }
     return false;
+  }
+
+  /// Whether [statement] is `if (...) rethrow;` with no else.
+  static bool _isRethrowIf(Statement statement) =>
+      statement is IfStatement &&
+      statement.elseStatement == null &&
+      _isRethrow(statement.thenStatement);
+
+  /// Whether the catch [body] ends in `rethrow;` with nothing on the way that
+  /// waits, reaches a checkpoint of [ctx] or leaves the catch otherwise: a
+  /// release or a log on the way out holds up nobody and must run for a
+  /// cancellation too.
+  static bool _leavesAtOnce(Block body, Element ctx) {
+    if (!_isRethrow(body.statements.last)) return false;
+    final finder = _Cancellation(ctx, exits: true);
+    body.accept(finder);
+    return !finder.found;
   }
 
   /// Whether [statement] is `rethrow;` or a block of nothing else.
@@ -134,14 +170,32 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 }
 
-/// Finds an `await` or a checkpoint on the context in a try block, outside
-/// the functions declared in it.
+/// Finds an `await` or a checkpoint on the context in a block, outside the
+/// functions declared in it, and with [exits] a `return`, `break` or
+/// `continue` as well.
 class _Cancellation extends RecursiveAstVisitor<void> {
   final Element ctx;
+  final bool exits;
 
   bool found = false;
 
-  _Cancellation(this.ctx);
+  _Cancellation(this.ctx, {this.exits = false});
+
+  @override
+  void visitBreakStatement(BreakStatement node) {
+    if (exits) found = true;
+  }
+
+  @override
+  void visitContinueStatement(ContinueStatement node) {
+    if (exits) found = true;
+  }
+
+  @override
+  void visitReturnStatement(ReturnStatement node) {
+    if (exits) found = true;
+    super.visitReturnStatement(node);
+  }
 
   @override
   void visitAwaitExpression(AwaitExpression node) => found = true;

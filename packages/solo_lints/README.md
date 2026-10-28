@@ -61,9 +61,10 @@ Cleanup runs after the body, where `join` throws `StateError`, so the buffer
 stays unflushed however the job ended. Wait there with a plain `await`. The
 rule looks into the functions given to `ctx.onDispose` and `ctx.onDiscard` and
 to `dispose:` and `discard:` of `join`, `abandonable`, `wait` and `run`,
-literals and local functions passed by name, and reports the members that throw
-there: the checkpoints, `onCancel`, `start` and `each`. `onDispose`,
-`onDiscard`, `disown`, `log` and `unattended` are left alone. See
+literals, and local functions and final variables holding a literal passed by
+name, and reports the members that throw there: the checkpoints, `onCancel`,
+`start` and `each`. `onDispose`, `onDiscard`, `disown`, `log` and `unattended`
+are left alone. See
 [Each wait in its place](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#each-wait-in-its-place).
 
 ### release_on_the_call
@@ -96,11 +97,16 @@ try {
 `Cancelled` implements `Exception`, so a catch without `on`, or on `Object`,
 `Exception` or `Outcome`, takes it along with the failures it was written for,
 and a cancelled job resets a camera nobody broke. Make `ctx.check()` the first
-line of the catch. The rule is quiet when the try block neither awaits nor
-reaches a checkpoint, inside cleanup, and when the catch begins with a
-checkpoint, with `if (ctx.job.isCancelled) rethrow;` or is a bare `rethrow;`.
-It is a lint rather than a warning because a catch that only logs and rethrows
-is reported too, and does no harm. See
+line of the catch. The rule looks at a job body, at the local functions
+declared in it and at the actions it waits for through `join`, `abandonable`,
+`wait` and `uncancellable`; cleanup and unattended work are left alone. It is
+quiet when the try block neither awaits nor reaches a checkpoint, and when the
+catch begins with a checkpoint, after any `if (...) rethrow;` lines, begins
+with `if (ctx.job.isCancelled) rethrow;`, or ends in `rethrow;` with no wait
+and no checkpoint on the way, as a synchronous release or a log does. It is a
+lint rather than a warning because a catch that has to wait for a release on a
+cancellation too is reported as well: there `ctx.check()` first would leave the
+resource behind, and the catch keeps its lines under an `// ignore:`. See
 [Letting cancellation through a catch](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#letting-cancellation-through-a-catch).
 
 ### sync_fake_async
@@ -133,8 +139,10 @@ until `close()` cancels both. Run the job through `ctx.run(_sync(item))`
 instead. The rule takes a method of the same controller that brings a
 `SoloJob`, by its declared type or by what it returns when it is declared in
 the same file, and `close()` and `cancelAll()`. It looks at the body of a
-`SoloContext` job and at the actions that body waits for through `join`,
-`abandonable`, `wait` and `uncancellable`. See
+`SoloContext` job queued on this controller, what the body returns included, at
+the actions that body waits for through `join`, `abandonable`, `wait` and
+`uncancellable`, and at its cleanup, which the queue waits for as well. A mixin
+`on Solo` is the controller too. See
 [Steps as children](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#steps-as-children).
 
 ## Versions

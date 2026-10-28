@@ -21,9 +21,6 @@ class AwaitOwnQueue extends AnalysisRule {
     severity: DiagnosticSeverity.WARNING,
   );
 
-  /// The calls whose action the job waits for.
-  static const _waiting = {'join', 'abandonable', 'wait', 'uncancellable'};
-
   /// Creates the rule.
   AwaitOwnQueue()
     : super(
@@ -56,10 +53,14 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitAwaitExpression(AwaitExpression node) => _check(node.expression);
 
-  /// The action of a waiting call is waited for through what it returns.
+  /// A job body and the action of a waiting call are waited for through what
+  /// they return.
   @override
   void visitFunctionExpression(FunctionExpression node) {
-    if (_waitingContext(node) == null) return;
+    if (waitingContext(node) == null &&
+        !isSoloContext(jobContextOf(node)?.type)) {
+      return;
+    }
     final body = node.body;
     if (body is ExpressionFunctionBody) {
       _check(body.expression);
@@ -75,8 +76,14 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (call == null) return;
     final ctx = _queuedBody(waited);
     if (ctx == null) return;
-    final around = waited.thisOrAncestorOfType<ClassDeclaration>();
-    final owner = around?.declaredFragment?.element;
+    final around = waited.thisOrAncestorMatching(
+      (node) => node is ClassDeclaration || node is MixinDeclaration,
+    );
+    final owner = switch (around) {
+      ClassDeclaration(:final declaredFragment) => declaredFragment?.element,
+      MixinDeclaration(:final declaredFragment) => declaredFragment?.element,
+      _ => null,
+    };
     if (owner == null || !isSolo(owner.thisType)) return;
     rule.reportAtNode(call, arguments: [call.methodName.name]);
   }
@@ -128,35 +135,36 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 
   /// The context of the job body that waits for [node] when that is a body
-  /// of a `SoloContext`: [node] is in the body itself or in the actions of
-  /// waiting calls on its context.
+  /// of a `SoloContext` queued on this controller: [node] is in the body
+  /// itself, in the actions of waiting calls on its context or in its
+  /// cleanup, which the queue waits for as well.
   static Element? _queuedBody(AstNode node) {
     final crossed = <Element>[];
     for (var at = node.parent; at != null; at = at.parent) {
       if (at is! FunctionExpression) continue;
       final ctx = jobContextOf(at);
       if (ctx != null) {
-        if (!isSoloContext(ctx.type)) return null;
+        if (!isSoloContext(ctx.type) || !_queuedHere(at)) return null;
         return crossed.every((c) => c == ctx) ? ctx : null;
       }
-      final through = _waitingContext(at);
+      final through = waitingContext(at) ?? cleanupContext(at);
       if (through == null) return null;
       crossed.add(through);
     }
     return null;
   }
 
-  /// The context of the waiting call [node] is the action of.
-  static Element? _waitingContext(FunctionExpression node) {
-    final list = node.parent;
-    if (list is! ArgumentList || firstPositional(list) != node) return null;
-    final call = list.parent;
-    if (call is! MethodInvocation) return null;
-    final ctx = contextNamed(call.realTarget);
-    if (ctx == null || !callsOn(call, ctx, AwaitOwnQueue._waiting)) {
-      return null;
-    }
-    return ctx;
+  /// Whether [body] is given to a call on this controller or on a context,
+  /// rather than to another controller's `enqueue`.
+  static bool _queuedHere(FunctionExpression body) {
+    final parent = body.parent;
+    final list = parent is ArgumentList ? parent : parent?.parent;
+    final call = list?.parent;
+    if (list is! ArgumentList || call is! MethodInvocation) return true;
+    final target = call.realTarget;
+    return target == null ||
+        target is ThisExpression ||
+        isJobContext(target.staticType);
   }
 }
 
