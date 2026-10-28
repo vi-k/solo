@@ -63,9 +63,19 @@ final class Failure extends ProfileState {
 ```
 
 The example API returns a name after a short delay. Replace it with your
-application's API client:
+application's API client. The `fetchName` of a real client throws an
+`ApiException` when the call fails:
 
 ```dart
+final class ApiException implements Exception {
+  final String message;
+
+  const ApiException(this.message);
+
+  @override
+  String toString() => 'ApiException: $message';
+}
+
 class ProfileApi {
   Future<String> fetchName() =>
       Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
@@ -80,6 +90,7 @@ final class ProfileController extends Solo<ProfileState> {
     key: 'load',
     policy: Policy.droppable,
     ifFailed: (state, error, stackTrace) => Failure(error),
+    isExpectedError: (error) => error is ApiException,
     ifCancelled: (state, cancelled) => const Initial(),
     (ctx) async {
       ctx.emit(const Loading());
@@ -148,9 +159,12 @@ listener and closes the controller even if loading fails.
 
 A `Failed` that nobody observes goes on to the zone the job was created in,
 even when `ifFailed` has published a state, unless `Solo.unansweredHandler`
-answers for it. Reading the job's `done` or `value` observes the outcome; a
-caller that needs no result says so with `ignoreFailure()`, as in
-`profile.load().ignoreFailure()`. See
+answers for it. An error the job names in `isExpectedError` goes no further.
+`load` names `ApiException`, so a `profile.load()` that nobody reads and that
+fails with one ends at the `Failure` state; a bug is not an `ApiException`, and
+it still goes on. Reading the job's `done` or `value` observes the outcome, and
+a caller that needs no outcome at all says so with `ignoreFailure()`. See
+[Naming the expected errors](doc/errors.md#naming-the-expected-errors) and
 [Handled and unhandled failures](doc/errors.md#handled-and-unhandled-failures)
 on the errors page.
 

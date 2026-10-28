@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
-/// The model and the job of the README's Usage, with a state to fall back
-/// to, on a screen that answers every way a load can end: with a name,
-/// with a failure, cancelled, or handed to a tap that came while it ran.
+/// The model of the README's Usage, its job without `isExpectedError`,
+/// with a state to fall back to, on a screen that answers every way a load
+/// can end: with a name, with a failure, cancelled, or handed to a tap that
+/// came while it ran.
 void main() => runApp(MaterialApp(home: ProfileScreen(api: ProfileApi())));
 
 /// A fake profile service: slow, and failing every third call.

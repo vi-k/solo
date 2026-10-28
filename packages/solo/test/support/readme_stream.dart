@@ -4,7 +4,14 @@
 import 'package:solo/solo.dart';
 
 import 'readme_quick_start.dart'
-    show Failure, Initial, Loaded, Loading, ProfileApi, ProfileState;
+    show
+        ApiException,
+        Failure,
+        Initial,
+        Loaded,
+        Loading,
+        ProfileApi,
+        ProfileState;
 
 final class ProfileController extends Solo<ProfileState> with SoloStream {
   final ProfileApi api;
@@ -15,6 +22,7 @@ final class ProfileController extends Solo<ProfileState> with SoloStream {
     key: 'load',
     policy: Policy.droppable,
     ifFailed: (state, error, stackTrace) => Failure(error),
+    isExpectedError: (error) => error is ApiException,
     ifCancelled: (state, cancelled) => const Initial(),
     (ctx) async {
       ctx.emit(const Loading());

@@ -1174,6 +1174,17 @@ _life_imports, _life_body = split_imports(
 assert _life_imports == ["import 'dart:async';"], _life_imports
 
 README_API = '''
+/// What a call of the API that fails throws, which the README takes as the
+/// application's own along with the API.
+final class ApiException implements Exception {
+  final String message;
+
+  const ApiException(this.message);
+
+  @override
+  String toString() => 'ApiException: $message';
+}
+
 /// The API the README takes as the application's own: it answers ten
 /// milliseconds after the call.
 class ProfileApi {
@@ -1199,7 +1210,16 @@ class FailingApi extends ProfileApi {
   @override
   Future<String> fetchName() async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
-    throw StateError('no network');
+    throw const ApiException('no network');
+  }
+}
+
+/// The same API with a bug in it, which `isExpectedError` does not name.
+class BuggyApi extends ProfileApi {
+  @override
+  Future<String> fetchName() async {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    throw StateError('bug');
   }
 }
 '''
@@ -1392,13 +1412,36 @@ void main() {
       MaterialApp(home: ProfileView(controller: controller)),
     );
 
-    // A failure the button left to the zone would fail this test here.
+    // The button drops the job, and `isExpectedError` of `load` names the
+    // failure: one it left to the zone would fail this test here.
     await tester.tap(find.text('Load'));
     await tester.pump(const Duration(milliseconds: 20));
 
     expect(find.text('Load'), findsOneWidget);
     expect(tester.takeException(), isNull);
     debugPrint('the failed tap: back on Load');
+  });
+
+  testWidgets('a tap on Load that fails with a bug takes it to the zone',
+      (tester) async {
+    final controller = ProfileController(BuggyApi());
+    closing(controller);
+    await tester.pumpWidget(
+      MaterialApp(home: ProfileView(controller: controller)),
+    );
+
+    // The tap creates the job in a zone of its own, where its failure
+    // goes; in a widget test that zone would be the test's.
+    final errors = <Object>[];
+    await runZonedGuarded(
+      () => tester.tap(find.text('Load')),
+      (error, stackTrace) => errors.add(error),
+    );
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(find.text('Load'), findsOneWidget);
+    expect(errors, [isA<StateError>()]);
+    debugPrint('the tap with a bug: ${errors.single}');
   });
 
   testWidgets('save starts on a loaded profile and nowhere else',
@@ -1477,7 +1520,7 @@ void main() {
 
     await tester.tap(find.text('Load'));
     await tester.pumpAndSettle();
-    expect(toasts, ['Bad state: no network']);
+    expect(toasts, ['ApiException: no network']);
   });
 
   testWidgets('a closed controller leaves nothing to say', (tester) async {

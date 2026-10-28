@@ -29,6 +29,15 @@ final class Failure extends ProfileState {
   const Failure(this.error);
 }
 
+final class ApiException implements Exception {
+  final String message;
+
+  const ApiException(this.message);
+
+  @override
+  String toString() => 'ApiException: $message';
+}
+
 class ProfileApi {
   Future<String> fetchName() =>
       Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
@@ -43,6 +52,7 @@ final class ProfileController extends Solo<ProfileState> {
     key: 'load',
     policy: Policy.droppable,
     ifFailed: (state, error, stackTrace) => Failure(error),
+    isExpectedError: (error) => error is ApiException,
     ifCancelled: (state, cancelled) => const Initial(),
     (ctx) async {
       ctx.emit(const Loading());

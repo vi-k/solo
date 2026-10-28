@@ -3,8 +3,8 @@
 // shows and nothing else. `test/readme_rakes_test.dart` runs it.
 //
 // What the page takes as the application's own stands below the page's
-// code: the API behind the controller, and the fake `doc/testing.md` tests
-// the controller with.
+// code: the API behind the controller with the `ApiException` it throws,
+// and the fake `doc/testing.md` tests the controller with.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
@@ -39,6 +39,7 @@ final class ProfileController extends Solo<Profile> {
 
       return name;
     },
+    isExpectedError: (error) => error is ApiException,
     // Without these a load that fails or is cancelled leaves the state
     // on Loading: a spinner, and nothing on the screen to tap.
     ifFailed: (state, error, stackTrace) => Empty(),
@@ -61,13 +62,26 @@ class ProfileView extends StatelessWidget {
     solo: controller,
     builder: (context, state, _) => switch (state) {
       Empty() => TextButton(
-        onPressed: () => controller.load().ignoreFailure(),
+        onPressed: controller.load,
         child: const Text('Load'),
       ),
       Loading() => const CircularProgressIndicator(),
       Loaded(:final name) => Text(name),
     },
   );
+}
+
+/// What a call of the API that fails throws, which the page takes as the
+/// application's own, as it takes the API.
+final class ApiException implements Exception {
+  /// What went wrong.
+  final String message;
+
+  /// The failure of a call, saying what went wrong.
+  const ApiException(this.message);
+
+  @override
+  String toString() => 'ApiException: $message';
 }
 
 /// The API behind the controller, which the page takes as the

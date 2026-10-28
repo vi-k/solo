@@ -57,8 +57,11 @@ CI с 2026-10-21 стоит на `ubuntu-26.04` во всех заданиях `
 сделана: страница ошибок и её перевод, раздел «Naming the expected errors»,
 пример страницы бросает `ApiException`; задача 5 сделана: `state.md`,
 `testing.md` с разделом `### isExpectedError`, `children.md`, `jobs.md`,
-`mistakes.md` и их переводы; следующий шаг — задача 6, README `solo`
-и `flutter_solo`. Вторая волна `solo_lints` отложена до конца работы.
+`mistakes.md` и их переводы; задача 6 сделана: README `solo` и `flutter_solo`,
+`flutter_solo/doc/testing.md`, стенд `tool/flutter_snippets.py` и комментарий
+примера — `load` называет `ApiException`, кнопка `flutter_solo` без
+`ignoreFailure()`; следующий шаг — задача 7, CHANGELOG. Вторая волна
+`solo_lints` отложена до конца работы.
 
 Дерево на 2026-10-28, ветка `worktree-solo-lints-2`: её коммиты начиная
 с `7735e9e7` лежат поверх `main` (= `origin/main` = `826d2b4f`), не влиты

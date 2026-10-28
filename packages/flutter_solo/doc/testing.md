@@ -92,10 +92,14 @@ matters. A `Failed` nobody has asked about is answered for on the microtask
 after the job ends, and with no `Solo.unansweredHandler` set it goes to the
 zone it was created in. Here that is the zone of the test, which fails the test
 on the spot, and `tester.takeException()` has nothing to take afterwards. A
-load that fails makes a test red even though it reads `done`, if it reads it
+failure that `isExpectedError` names does not go there: a load that fails with
+an `ApiException` leaves the test green, whenever it reads `done`. A load that
+fails with a bug makes a test red even though it reads `done`, if it reads it
 after the pump.
 
-A job the test starts and drops says so with `ignoreFailure()`.
+A job the test starts and drops needs nothing more when its controller names
+its expected errors, as `load` does. A job without such a predicate says so
+with `ignoreFailure()`.
 
 A `pump()` with no duration decides whether to draw before it runs the
 microtask a job starts on. So after `controller.load()` and one `pump()` the

@@ -83,7 +83,8 @@ import 'package:flutter_solo/listenable.dart';
 ## Как пользоваться
 
 `ProfileApi` здесь — собственный сервис приложения: `fetchName()` возвращает
-`Future<String>`, а `saveName(name)` — `Future<void>`.
+`Future<String>`, а `saveName(name)` — `Future<void>`. Вызов `fetchName()`,
+который не удался, бросает `ApiException`.
 
 ```dart
 import 'package:flutter/material.dart';
@@ -119,6 +120,7 @@ final class ProfileController extends Solo<Profile> {
 
       return name;
     },
+    isExpectedError: (error) => error is ApiException,
     // Без них упавшая или отменённая загрузка оставляет состояние
     // на Loading: спиннер, и нажать на экране нечего.
     ifFailed: (state, error, stackTrace) => Empty(),
@@ -141,7 +143,7 @@ class ProfileView extends StatelessWidget {
     solo: controller,
     builder: (context, state, _) => switch (state) {
       Empty() => TextButton(
-        onPressed: () => controller.load().ignoreFailure(),
+        onPressed: controller.load,
         child: const Text('Load'),
       ),
       Loading() => const CircularProgressIndicator(),
@@ -171,8 +173,9 @@ class ProfileView extends StatelessWidget {
 уходит в зону, хотя `ifFailed` уже вернул на экран `Empty`, если за него
 не отвечает `Solo.unansweredHandler`. В приложении он идёт
 к `PlatformDispatcher.onError`, в виджет-тесте попадает в сам тест, и тест
-падает. `ignoreFailure()` на кнопке говорит, что в ответ на провал хватит
-экрана; правило описано в разделе [«Исходы»](#исходы). Всё API целиком,
+падает. `isExpectedError` называет провалы, в ответ на которые хватит экрана:
+`ApiException` дальше `Empty` не идёт, а баг — не `ApiException` и по-прежнему
+уходит в зону. Правило описано в разделе [«Исходы»](#исходы). Всё API целиком,
 с правилами, очередью, детьми и наблюдателями, описано
 в [solo](https://pub.dev/packages/solo).
 
@@ -490,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    controller.load().ignoreFailure();
+    controller.load();
   }
 
   @override
@@ -531,12 +534,7 @@ import 'dart:async';
 import 'package:scopo/scopo.dart';
 
 ScopeModel<ProfileController>(
-  create: (context) {
-    final controller = ProfileController(ProfileApi());
-    controller.load().ignoreFailure();
-
-    return controller;
-  },
+  create: (context) => ProfileController(ProfileApi())..load(),
   dispose: (controller) => unawaited(controller.close()),
   builder: (context) => ProfileView(
     controller: ScopeModel.of<ProfileController>(context, listen: false),
@@ -606,9 +604,13 @@ Future<void> _load() async {
 остаётся обычным правилом Flutter.
 
 `Job`, на которую никто не смотрит, не молчит. `Failed`, который никто
-не наблюдал, уходит в зону, создавшую `Job`, поэтому «запустил и забыл» пишется
-`controller.load().ignoreFailure()`. Именно `ignoreFailure()` говорит, что
-исход никого не интересует.
+не наблюдал, уходит в зону, создавшую `Job`, если `Job` не называет его ошибку
+в `isExpectedError`. Поэтому у «запустил и забыл» две формы. `Job`, которая
+называет свои ожидаемые ошибки, как `load` называет `ApiException`, больше
+ничего не требует: вызов — это `controller.load()`, а баг всё равно доходит
+до зоны. Вызов, которому исход не нужен вовсе, заканчивается
+на `ignoreFailure()`: так он говорит, что исход никого не интересует, даже если
+`Job` упала из-за бага.
 
 По той же дороге идут ошибки, которых не несёт ни один исход, например провал
 работы, которую тело отдало `ctx.unattended`. Контроллер, который переопределил

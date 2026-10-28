@@ -372,10 +372,18 @@ void main() {
         expect(await api.fetchName(), 'Ada Lovelace');
         await api.saveName('Grace Hopper');
         expect(api.saved, ['Grace Hopper']);
+        await expectLater(
+          ProfileApi(
+            delay: Duration.zero,
+            error: const ApiException('no network'),
+          ).fetchName(),
+          throwsA(isA<ApiException>()),
+        );
         _says(
           "`ProfileApi` stands for the app's own service: `fetchName()` "
           'returns a `Future<String>`, and `saveName(name)` a '
-          '`Future<void>`.',
+          '`Future<void>`. A call of `fetchName()` that fails throws an '
+          '`ApiException`.',
         );
       },
     );
@@ -445,10 +453,12 @@ void main() {
       tester,
     ) async {
       final controller = ProfileController(
-        ProfileApi(error: StateError('no network')),
+        ProfileApi(error: const ApiException('no network')),
       );
       await tester.pumpWidget(_app(ProfileView(controller: controller)));
 
+      // The button has no `ignoreFailure()`: `isExpectedError` names the
+      // failure, and a failure it left to the zone would fail this test.
       await tester.tap(find.text('Load'));
       await tester.pump();
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -459,19 +469,41 @@ void main() {
       expect(tester.takeException(), isNull);
       await controller.close();
       _says(
-        '`ignoreFailure()` on the button says the screen is all the answer '
-        'the failure needs',
+        '`isExpectedError` names the failures the screen is all the answer '
+        'for: an `ApiException` goes no further than `Empty`, and a bug, '
+        'which is not an `ApiException`, still goes on to the zone.',
       );
     });
 
-    test('a button that drops the job hands the failure to the zone', () async {
+    testWidgets('a load that fails with a bug', (tester) async {
+      final controller = ProfileController(
+        ProfileApi(error: StateError('a bug')),
+      );
+      await tester.pumpWidget(_app(ProfileView(controller: controller)));
+
+      // The tap creates the job in a zone of its own, where its failure
+      // goes; in a widget test that zone would be the test's.
+      final errors = <Object>[];
+      await runZonedGuarded(
+        () => tester.tap(find.text('Load')),
+        (error, stackTrace) => errors.add(error),
+      );
+      await tester.pump(const Duration(milliseconds: 10));
+
+      expect(controller.currentState, isA<Empty>());
+      expect(errors, [isA<StateError>()]);
+      await controller.close();
+      _says('a bug, which is not an `ApiException`, still goes on to the zone');
+    });
+
+    test('a button that drops the job hands a bug to the zone', () async {
       Profile? state;
       final reported = await _asWidgetTest((binding) async {
         final controller = ProfileController(
-          ProfileApi(error: StateError('no network')),
+          ProfileApi(error: StateError('a bug')),
         );
-        // What `onPressed: controller.load` would call: the job it hands
-        // back goes nowhere.
+        // What `onPressed: controller.load` calls: the job it hands back
+        // goes nowhere.
         final VoidCallback onPressed = controller.load;
         onPressed();
         await binding.pump(const Duration(milliseconds: 10));
@@ -2052,14 +2084,13 @@ void main() {
       tester,
     ) async {
       Future<List<Object>> inZone(
+        Object error,
         void Function(ProfileController controller) use,
       ) async {
         final errors = <Object>[];
         // The controller belongs to the zone of the test; the job is
         // created in a zone of its own.
-        final controller = ProfileController(
-          ProfileApi(error: StateError('no network')),
-        );
+        final controller = ProfileController(ProfileApi(error: error));
         runZonedGuarded(
           () => use(controller),
           (error, stackTrace) => errors.add(error),
@@ -2069,22 +2100,37 @@ void main() {
         return errors;
       }
 
-      expect(await inZone((controller) => controller.load()), [
+      const expected = ApiException('no network');
+      final bug = StateError('a bug');
+      expect(
+        await inZone(expected, (controller) => controller.load()),
+        isEmpty,
+      );
+      expect(await inZone(bug, (controller) => controller.load()), [
         isA<StateError>(),
       ]);
       expect(
-        await inZone((controller) => controller.load().ignoreFailure()),
+        await inZone(bug, (controller) => controller.load().ignoreFailure()),
         isEmpty,
       );
       expect(
-        await inZone((controller) => unawaited(controller.load().done)),
+        await inZone(bug, (controller) => unawaited(controller.load().done)),
         isEmpty,
       );
       expect(tester.takeException(), isNull);
       _says(
         'An unobserved `Failed` reaches the zone that created the job, '
-        'so a fire-and-forget call is '
-        '`controller.load().ignoreFailure()`.',
+        'unless the job names its error in `isExpectedError`.',
+      );
+      _says(
+        'A job that names its expected errors, as `load` names '
+        '`ApiException`, needs nothing more: the call is '
+        '`controller.load()`, and a bug still reaches the zone.',
+      );
+      _says(
+        'A call that needs no outcome at all ends with `ignoreFailure()`: '
+        "it says the outcome is nobody's business, even when a bug ended "
+        'the job.',
       );
     });
 

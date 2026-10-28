@@ -1,7 +1,8 @@
 // What `doc/testing.md` says in prose about code it does not show: an API
-// that never answers, the load of the page with a deadline, and a view with
-// nothing animating. None of this is page code, and
-// `test/testing_rakes_test.dart` never looks for the page's code here.
+// that never answers, the load of the page with a deadline, the load of the
+// page without its `isExpectedError`, and a view with nothing animating.
+// None of this is page code, and `test/testing_rakes_test.dart` never looks
+// for the page's code here.
 
 import 'dart:async';
 
@@ -38,6 +39,28 @@ final class TimedLoad extends Solo<Profile> with SoloListenable {
   );
 }
 
+/// The load of `ProfileController` without its `isExpectedError`: "a job
+/// without such a predicate".
+final class Unnamed extends Solo<Profile> {
+  final ProfileApi api;
+
+  Unnamed(this.api) : super(Empty());
+
+  Job<String> load() => enqueue<Profile, String>(
+    key: 'load',
+    policy: Policy.droppable,
+    (ctx) async {
+      ctx.emit(Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+
+      return name;
+    },
+    ifFailed: (state, error, stackTrace) => Empty(),
+    ifCancelled: (state, cancelled) => Empty(),
+  );
+}
+
 /// The view of the page with nothing animating while the profile loads.
 class QuietView extends StatelessWidget {
   /// The controller the view shows.
@@ -51,7 +74,7 @@ class QuietView extends StatelessWidget {
     solo: controller,
     builder: (context, state, _) => switch (state) {
       Empty() => TextButton(
-        onPressed: () => controller.load().ignoreFailure(),
+        onPressed: controller.load,
         child: const Text('Load'),
       ),
       Loading() => const Text('Loading'),

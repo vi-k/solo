@@ -64,9 +64,19 @@ final class Failure extends ProfileState {
 ```
 
 API в примере возвращает имя после небольшой задержки. Замените его клиентом
-API вашего приложения:
+API вашего приложения. `fetchName` настоящего клиента бросает `ApiException`,
+когда вызов не удался:
 
 ```dart
+final class ApiException implements Exception {
+  final String message;
+
+  const ApiException(this.message);
+
+  @override
+  String toString() => 'ApiException: $message';
+}
+
 class ProfileApi {
   Future<String> fetchName() =>
       Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
@@ -81,6 +91,7 @@ final class ProfileController extends Solo<ProfileState> {
     key: 'load',
     policy: Policy.droppable,
     ifFailed: (state, error, stackTrace) => Failure(error),
+    isExpectedError: (error) => error is ApiException,
     ifCancelled: (state, cancelled) => const Initial(),
     (ctx) async {
       ctx.emit(const Loading());
@@ -151,11 +162,15 @@ Future<void> main() async {
 
 `Failed`, который никто не наблюдал, уходит в зону, где создана `Job`, если
 за него не отвечает `Solo.unansweredHandler`, — даже когда `ifFailed` уже
-опубликовал состояние. Исход наблюдает тот, кто читает `done` или `value` этой
-`Job`; если результат не нужен, вызывающий код говорит об этом через
-`ignoreFailure()`, например `profile.load().ignoreFailure()`. Подробнее
-в разделе
-[«Обработанные и необработанные ошибки»](../../docs/ru/solo/errors.md#обработанные-и-необработанные-ошибки)
+опубликовал состояние. Ошибка, которую `Job` называет в `isExpectedError`,
+дальше не идёт. `load` называет `ApiException`, поэтому `profile.load()`,
+результат которого никто не читает, с такой ошибкой заканчивается на состоянии
+`Failure`; баг — не `ApiException`, и он по-прежнему идёт дальше. Исход
+наблюдает тот, кто читает `done` или `value` этой `Job`, а вызывающий код,
+которому исход не нужен вовсе, говорит об этом через `ignoreFailure()`.
+Подробнее в разделах
+[«Назвать ожидаемые ошибки»](../../docs/ru/solo/errors.md#назвать-ожидаемые-ошибки)
+и [«Обработанные и необработанные ошибки»](../../docs/ru/solo/errors.md#обработанные-и-необработанные-ошибки)
 страницы об ошибках.
 
 Чтобы получать изменения ещё и через broadcast-стрим `stream`, события которого

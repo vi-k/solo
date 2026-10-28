@@ -111,6 +111,22 @@ void main() {
       );
     });
 
+    testWidgets('a ScopeModel load that fails with an ApiException leaves '
+        'Load on the screen and fails no test', (tester) async {
+      ProfileApi.next = profile.ProfileApi(
+        error: const ApiException('no network'),
+      );
+      addTearDown(() => ProfileApi.next = profile.ProfileApi());
+      await tester.pumpWidget(MaterialApp(home: screenScope()));
+      await tester.pump(const Duration(milliseconds: 10));
+
+      // `create` drops the job: `isExpectedError` names the failure, and a
+      // failure it left to the zone would fail this test.
+      expect(find.text('Load'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
     testWidgets('under ScopeModel the parent goes first', (tester) async {
       await tester.pumpWidget(MaterialApp(home: underParent(screenScope())));
       await ready(tester, find.text('Ada Lovelace'));

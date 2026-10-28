@@ -416,50 +416,102 @@ void main() {
       },
     );
 
-    test('read after the pump, the same load fails the test', () async {
-      Object? taken = 'never asked';
+    test('read after the pump, a load that fails with an ApiException fails '
+        'no test', () async {
       Outcome<String>? outcome;
       final reported = await _asWidgetTest((binding) async {
         final controller = ProfileController(
-          FakeApi(error: StateError('no network')),
+          FakeApi(error: const ApiException('no network')),
         );
         final job = controller.load();
         await binding.pump(const Duration(milliseconds: 20));
-        taken = binding.takeException();
         outcome = await job.done;
         await controller.close();
       });
 
-      expect(reported.single.exception, isA<StateError>());
-      expect(taken, isNull);
-      expect(outcome, isA<Failed>(), reason: 'the test did read done');
-      _says('a test that reads `done` reads it before it moves the clock');
+      expect(reported, isEmpty);
+      expect(outcome, isA<Failed>());
       _says(
-        'A `Failed` nobody has asked about is answered for on the '
-        'microtask after the job ends, and with no `Solo.unansweredHandler` '
-        'set it goes to the zone it was created in. Here that is the zone '
-        'of the test, '
-        'which fails the test on the spot, and `tester.takeException()` '
-        'has nothing to take afterwards.',
-      );
-      _says(
-        'A load that fails makes a test red even though it reads `done`, '
-        'if it reads it after the pump.',
+        'A failure that `isExpectedError` names does not go there: a load '
+        'that fails with an `ApiException` leaves the test green, whenever '
+        'it reads `done`.',
       );
     });
 
-    testWidgets('a job the test drops says so with ignoreFailure()', (
+    test(
+      'read after the pump, a load that fails with a bug fails the test',
+      () async {
+        Object? taken = 'never asked';
+        Outcome<String>? outcome;
+        final reported = await _asWidgetTest((binding) async {
+          final controller = ProfileController(
+            FakeApi(error: StateError('a bug')),
+          );
+          final job = controller.load();
+          await binding.pump(const Duration(milliseconds: 20));
+          taken = binding.takeException();
+          outcome = await job.done;
+          await controller.close();
+        });
+
+        expect(reported.single.exception, isA<StateError>());
+        expect(taken, isNull);
+        expect(outcome, isA<Failed>(), reason: 'the test did read done');
+        _says('a test that reads `done` reads it before it moves the clock');
+        _says(
+          'A `Failed` nobody has asked about is answered for on the '
+          'microtask after the job ends, and with no `Solo.unansweredHandler` '
+          'set it goes to the zone it was created in. Here that is the zone '
+          'of the test, '
+          'which fails the test on the spot, and `tester.takeException()` '
+          'has nothing to take afterwards.',
+        );
+        _says(
+          'A load that fails with a bug makes a test red even though it reads '
+          '`done`, if it reads it after the pump.',
+        );
+      },
+    );
+
+    testWidgets('a job the test drops needs nothing more when its controller '
+        'names its expected errors', (tester) async {
+      final controller = ProfileController(
+        FakeApi(error: const ApiException('no network')),
+      )..load();
+      await tester.pump(const Duration(milliseconds: 20));
+
+      expect(controller.currentState, isA<Empty>());
+      await controller.close();
+      _says(
+        'A job the test starts and drops needs nothing more when its '
+        'controller names its expected errors, as `load` does.',
+      );
+    });
+
+    test('a job without such a predicate fails the test, dropped', () async {
+      final reported = await _asWidgetTest((binding) async {
+        final controller = Unnamed(
+          FakeApi(error: const ApiException('no network')),
+        )..load();
+        await binding.pump(const Duration(milliseconds: 20));
+        await controller.close();
+      });
+
+      expect(reported.single.exception, isA<ApiException>());
+    });
+
+    testWidgets('a job without such a predicate says so with ignoreFailure()', (
       tester,
     ) async {
-      final controller = ProfileController(
-        FakeApi(error: StateError('no network')),
+      final controller = Unnamed(
+        FakeApi(error: const ApiException('no network')),
       );
       controller.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 20));
 
       expect(controller.currentState, isA<Empty>());
       await controller.close();
-      _says('A job the test starts and drops says so with `ignoreFailure()`.');
+      _says('A job without such a predicate says so with `ignoreFailure()`.');
     });
 
     testWidgets('one pump after load() moves the state and not the screen', (

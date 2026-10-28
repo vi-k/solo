@@ -46,14 +46,25 @@ class _TracingApi extends quick.ProfileApi {
   }
 }
 
-/// The API of the quick start, offline.
+/// The API of the quick start, offline: its call fails with the
+/// `ApiException` the quick start names in `isExpectedError`.
 class _FailingApi extends quick.ProfileApi {
-  final error = StateError('offline');
+  final error = const quick.ApiException('offline');
 
   @override
   Future<String> fetchName() async {
     await Future<void>.delayed(const Duration(milliseconds: 20));
     throw error;
+  }
+}
+
+/// The API of the quick start with a bug in it: its call throws a
+/// `StateError`, which `isExpectedError` does not name.
+class _BuggyApi extends quick.ProfileApi {
+  @override
+  Future<String> fetchName() async {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    throw StateError('a bug');
   }
 }
 
@@ -242,7 +253,10 @@ void main() {
           },
         );
         async.flushTimers();
-        expect(_profile(profile.currentState), 'Failure(Bad state: offline)');
+        expect(
+          _profile(profile.currentState),
+          'Failure(ApiException: offline)',
+        );
         expect(job.outcome, isA<Failed>());
         expect(thrown, same(api.error), reason: 'value throws the error');
         profile.close().ignore();
@@ -250,7 +264,8 @@ void main() {
       });
     });
 
-    test('a Failed nobody observes goes to the zone, ifFailed or not', () {
+    test('a Failed nobody observes goes to the zone, ifFailed or not, '
+        'unless isExpectedError names its error', () {
       final prose = _page().replaceAll(RegExp(r'\s+'), ' ');
       expect(
         prose,
@@ -261,9 +276,15 @@ void main() {
             'state, unless `Solo.unansweredHandler` answers for it',
           ),
           contains(
-            "Reading the job's `done` or `value` observes the outcome; "
-            'a caller that needs no result says so with `ignoreFailure()`, '
-            'as in `profile.load().ignoreFailure()`.',
+            'An error the job names in `isExpectedError` goes no further. '
+            '`load` names `ApiException`, so a `profile.load()` that nobody '
+            'reads and that fails with one ends at the `Failure` state; a '
+            'bug is not an `ApiException`, and it still goes on.',
+          ),
+          contains(
+            "Reading the job's `done` or `value` observes the outcome, and "
+            'a caller that needs no outcome at all says so with '
+            '`ignoreFailure()`.',
           ),
         ),
       );
@@ -272,9 +293,13 @@ void main() {
       // Nothing is asserted inside the zones: an `expect` that failed there
       // would be one more error of the zone.
       fakeAsync((async) {
-        void call(String how, void Function(quick.ProfileController) use) {
+        void call(
+          String how,
+          quick.ProfileApi api,
+          void Function(quick.ProfileController) use,
+        ) {
           final errors = zones[how] = [];
-          final profile = quick.ProfileController(_FailingApi());
+          final profile = quick.ProfileController(api);
           runZonedGuarded(
             () => use(profile),
             (error, stackTrace) => errors.add('$error'),
@@ -285,19 +310,39 @@ void main() {
           async.flushTimers();
         }
 
-        call('dropped', (profile) => profile.load());
-        call('done read', (profile) => profile.load().done.ignore());
-        call('value read', (profile) => profile.load().value.ignore());
-        call('ignored', (profile) => profile.load().ignoreFailure());
+        call('expected, dropped', _FailingApi(), (profile) => profile.load());
+        call('bug, dropped', _BuggyApi(), (profile) => profile.load());
+        call(
+          'bug, done read',
+          _BuggyApi(),
+          (profile) => profile.load().done.ignore(),
+        );
+        call(
+          'bug, value read',
+          _BuggyApi(),
+          (profile) => profile.load().value.ignore(),
+        );
+        call(
+          'bug, ignored',
+          _BuggyApi(),
+          (profile) => profile.load().ignoreFailure(),
+        );
       });
 
       expect(zones, {
-        'dropped': ['Bad state: offline'],
-        'done read': isEmpty,
-        'value read': isEmpty,
-        'ignored': isEmpty,
+        'expected, dropped': isEmpty,
+        'bug, dropped': ['Bad state: a bug'],
+        'bug, done read': isEmpty,
+        'bug, value read': isEmpty,
+        'bug, ignored': isEmpty,
       });
-      expect(states.values.toSet(), {'Failure(Bad state: offline)'});
+      expect(states, {
+        'expected, dropped': 'Failure(ApiException: offline)',
+        'bug, dropped': 'Failure(Bad state: a bug)',
+        'bug, done read': 'Failure(Bad state: a bug)',
+        'bug, value read': 'Failure(Bad state: a bug)',
+        'bug, ignored': 'Failure(Bad state: a bug)',
+      });
     });
 
     test('a started load cancelled publishes Initial; cancel waits for it', () {

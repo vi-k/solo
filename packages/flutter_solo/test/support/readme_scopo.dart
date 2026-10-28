@@ -41,12 +41,7 @@ class ProfileApi extends profile.ProfileApi {
 /// The scope that owns the controller of one screen.
 Widget screenScope() => [
   ScopeModel<ProfileController>(
-    create: (context) {
-      final controller = ProfileController(ProfileApi());
-      controller.load().ignoreFailure();
-
-      return controller;
-    },
+    create: (context) => ProfileController(ProfileApi())..load(),
     dispose: (controller) => unawaited(controller.close()),
     builder: (context) => ProfileView(
       controller: ScopeModel.of<ProfileController>(context, listen: false),

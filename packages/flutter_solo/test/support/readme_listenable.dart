@@ -6,7 +6,8 @@
 
 import 'package:flutter_solo/flutter_solo.dart';
 
-import 'readme_profile.dart' show Empty, Loaded, Loading, Profile, ProfileApi;
+import 'readme_profile.dart'
+    show ApiException, Empty, Loaded, Loading, Profile, ProfileApi;
 
 final class ProfileController extends Solo<Profile> with SoloListenable {
   final ProfileApi api;
@@ -23,6 +24,7 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
 
       return name;
     },
+    isExpectedError: (error) => error is ApiException,
     // Without these a load that fails or is cancelled leaves the state
     // on Loading: a spinner, and nothing on the screen to tap.
     ifFailed: (state, error, stackTrace) => Empty(),

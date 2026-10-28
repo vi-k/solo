@@ -83,7 +83,8 @@ second one.
 ## Usage
 
 `ProfileApi` stands for the app's own service: `fetchName()` returns a
-`Future<String>`, and `saveName(name)` a `Future<void>`.
+`Future<String>`, and `saveName(name)` a `Future<void>`. A call of
+`fetchName()` that fails throws an `ApiException`.
 
 ```dart
 import 'package:flutter/material.dart';
@@ -119,6 +120,7 @@ final class ProfileController extends Solo<Profile> {
 
       return name;
     },
+    isExpectedError: (error) => error is ApiException,
     // Without these a load that fails or is cancelled leaves the state
     // on Loading: a spinner, and nothing on the screen to tap.
     ifFailed: (state, error, stackTrace) => Empty(),
@@ -141,7 +143,7 @@ class ProfileView extends StatelessWidget {
     solo: controller,
     builder: (context, state, _) => switch (state) {
       Empty() => TextButton(
-        onPressed: () => controller.load().ignoreFailure(),
+        onPressed: controller.load,
         child: const Text('Load'),
       ),
       Loading() => const CircularProgressIndicator(),
@@ -169,10 +171,11 @@ They answer on the screen and not for the caller. The button drops the job that
 `load` hands back. A failure nobody reads goes on to the zone even after
 `ifFailed` has put `Empty` on the screen, unless `Solo.unansweredHandler`
 answers for it. In an app it goes towards `PlatformDispatcher.onError`, in a
-widget test into the test, which fails. `ignoreFailure()` on the button says
-the screen is all the answer the failure needs; [Outcomes](#outcomes) has the
-rule. The full API, with rules, the queue, children and observers, is
-documented in [solo](https://pub.dev/packages/solo).
+widget test into the test, which fails. `isExpectedError` names the failures
+the screen is all the answer for: an `ApiException` goes no further than
+`Empty`, and a bug, which is not an `ApiException`, still goes on to the zone.
+[Outcomes](#outcomes) has the rule. The full API, with rules, the queue,
+children and observers, is documented in [solo](https://pub.dev/packages/solo).
 
 `SoloBuilder` is what draws the state: it takes the controller as `solo`,
 rebuilds on every change of the state and hands `child` through untouched. The
@@ -491,7 +494,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    controller.load().ignoreFailure();
+    controller.load();
   }
 
   @override
@@ -532,12 +535,7 @@ import 'dart:async';
 import 'package:scopo/scopo.dart';
 
 ScopeModel<ProfileController>(
-  create: (context) {
-    final controller = ProfileController(ProfileApi());
-    controller.load().ignoreFailure();
-
-    return controller;
-  },
+  create: (context) => ProfileController(ProfileApi())..load(),
   dispose: (controller) => unawaited(controller.close()),
   builder: (context) => ProfileView(
     controller: ScopeModel.of<ProfileController>(context, listen: false),
@@ -607,9 +605,12 @@ that failed and throws the `Cancelled` of one that was cancelled. `mounted`
 after an `await` is the usual Flutter rule, and it applies here too.
 
 A job nobody looks at is not silent. An unobserved `Failed` reaches the zone
-that created the job, so a fire-and-forget call is
-`controller.load().ignoreFailure()`. The `ignoreFailure()` is what says the
-outcome is nobody's business.
+that created the job, unless the job names its error in `isExpectedError`. So a
+fire-and-forget call takes one of two forms. A job that names its expected
+errors, as `load` names `ApiException`, needs nothing more: the call is
+`controller.load()`, and a bug still reaches the zone. A call that needs no
+outcome at all ends with `ignoreFailure()`: it says the outcome is nobody's
+business, even when a bug ended the job.
 
 The same road carries the errors no outcome holds, such as the failure of work
 a body handed to `ctx.unattended`. A controller that overrides `onUnanswered`,

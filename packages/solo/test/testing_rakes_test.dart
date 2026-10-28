@@ -304,6 +304,19 @@ void main() {
 
       expect(predicate.allMatches(load), hasLength(1));
       expect(controller, contains(indented));
+
+      // The predicate line is the one the quick start has.
+      final readme = File('README.md').readAsStringSync();
+      final quickStart = readme.substring(
+        readme.indexOf('\n## Quick start\n'),
+        readme.indexOf('\n## ', readme.indexOf('\n## Quick start\n') + 1),
+      );
+      final quickPredicate = predicate.allMatches(quickStart).toList();
+      expect(quickPredicate, hasLength(1));
+      expect(
+        quickPredicate.single.group(0)!.trim(),
+        predicate.firstMatch(load)!.group(0)!.trim(),
+      );
       _says(
         'Here the `load` keeps the `isExpectedError` of Quick start, which '
         'names the `ApiException` the fake throws:',
