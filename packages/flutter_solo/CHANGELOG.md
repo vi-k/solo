@@ -5,6 +5,11 @@
 - **Flutter 3.38.1 with Dart 3.10.0 is the lowest SDK the package supports, up
   from Flutter 3.27.0 with Dart 3.6.0.**
 
+### Documentation
+
+- The README names the errors `load` expects, and the button no longer calls
+  `ignoreFailure()`.
+
 ## 0.5.0
 
 This package re-exports `solo` and, through it, `async_job`, so their changes

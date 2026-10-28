@@ -3,6 +3,15 @@
 ### Breaking changes
 
 - **Dart 3.10.0 is the lowest SDK the package supports, up from 3.6.0.**
+- **`Solo.job`, `Solo.enqueue`, `Solo.collect` and `Solo.accumulate` take the
+  named `isExpectedError`.** A subclass that overrides one of them must accept
+  it.
+
+### Added
+
+- `isExpectedError` names the errors a job expects: `onError` does not hear
+  them, and a bug still reaches it. See
+  [Naming the expected errors](doc/errors.md#naming-the-expected-errors).
 
 ## 0.5.0
 
