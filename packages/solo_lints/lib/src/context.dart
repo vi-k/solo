@@ -66,6 +66,14 @@ bool isSolo(DartType? type) => _isA(type, 'Solo', _solo);
 /// Whether [type] is `SoloJob` of solo or one of its subtypes.
 bool isSoloJob(DartType? type) => _isA(type, 'SoloJob', _solo);
 
+/// Whether [element] is the member [name] of the class or enum [type]
+/// declared in solo.
+bool isSoloMember(Element? element, String type, String name) {
+  if (element == null || element.name != name) return false;
+  final owner = element.enclosingElement;
+  return owner is InterfaceElement && _named(owner, type, _solo);
+}
+
 /// Whether [element] is the class [name] declared in async_job.
 bool isCoreClass(Element? element, String name) =>
     element is InterfaceElement && _named(element, name, _asyncJob);
