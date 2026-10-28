@@ -39,14 +39,19 @@ class PutArgumentsIntoKey extends ResolvedCorrectionProducer {
     for (var at = node.parent; at != null; at = at.parent) {
       if (at is! MethodInvocation) continue;
       final shared = sharedKey(at);
-      if (shared == null || !identical(shared.key, node)) continue;
+      // `node` is the deepest node over the key's range, which may be a child
+      // of the key (the type of a type literal), so the range decides.
+      if (shared == null ||
+          shared.key.offset != node.offset ||
+          shared.key.end != node.end) {
+        continue;
+      }
       if (!shared.read.every(_isComparable)) return;
       final names = shared.read.map((p) => p.displayName).join(', ');
-      final key = shared.key;
       await builder.addDartFileEdit(file, (builder) {
         builder.addSimpleReplacement(
-          range.node(key),
-          '(${utils.getNodeText(key)}, $names)',
+          range.node(shared.key),
+          '(${utils.getNodeText(shared.key)}, $names)',
         );
       });
       return;

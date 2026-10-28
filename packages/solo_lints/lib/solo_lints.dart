@@ -32,8 +32,8 @@ class SoloLintsPlugin extends Plugin {
       ..registerWarningRule(SyncFakeAsync())
       ..registerWarningRule(AwaitOwnQueue())
       ..registerLintRule(CatchWithoutCheck())
+      ..registerFixForRule(CatchWithoutCheck.code, AddCheck.new)
       ..registerLintRule(KeyPerRequest())
-      ..registerFixForRule(KeyPerRequest.code, PutArgumentsIntoKey.new)
-      ..registerFixForRule(CatchWithoutCheck.code, AddCheck.new);
+      ..registerFixForRule(KeyPerRequest.code, PutArgumentsIntoKey.new);
   }
 }

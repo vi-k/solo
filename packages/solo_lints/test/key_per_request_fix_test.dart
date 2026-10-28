@@ -155,6 +155,50 @@ $_profiles
 ''',
   );
 
+  Future<void> test_type_literal_key() => assertFix(
+    '''
+$_profiles
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
+    key: Profile,
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
+}
+''',
+    'key: [[Profile]]',
+    '''
+$_profiles
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
+    key: (Profile, id),
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
+}
+''',
+  );
+
+  Future<void> test_parenthesised_key() => assertFix(
+    '''
+$_profiles
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
+    key: (_Op.load),
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
+}
+''',
+    'key: [[(_Op.load)]]',
+    '''
+$_profiles
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
+    key: ((_Op.load), id),
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
+}
+''',
+  );
+
   Future<void> test_enum_and_nullable() => assertFix(
     '''
 $_profiles
