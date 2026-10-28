@@ -215,8 +215,7 @@ final job = Job<void>((ctx) async {
 });
 ''', '[[ctx.onDispose(() => db.close())]]');
 
-  Future<void> test_no_fix_for_other_forms() async {
-    await assertNoFix('''
+  Future<void> test_no_fix_for_tear_off_of_a_field() => assertNoFix('''
 $_core
 final job = Job<void>((ctx) async {
   final db = await ctx.join(Database.open);
@@ -224,7 +223,8 @@ final job = Job<void>((ctx) async {
   print(db);
 });
 ''', '[[ctx.onDispose(db.pool.close)]]');
-    await assertNoFix('''
+
+  Future<void> test_no_fix_for_computed_release() => assertNoFix('''
 $_core
 final job = Job<void>((ctx) async {
   final db = await ctx.join(Database.open);
@@ -232,7 +232,6 @@ final job = Job<void>((ctx) async {
   print(db);
 });
 ''', '[[ctx.onDispose(closerFor(db))]]');
-  }
 
   Future<void> test_no_fix_for_literal_with_optional_parameters() =>
       assertNoFix('''

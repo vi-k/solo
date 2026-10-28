@@ -35,6 +35,10 @@ Map<String, String> _read(String name) {
 }
 
 /// A test of one rule against code that imports the real packages.
+///
+/// Each test method checks one fixture: the analysis keeps the result of the
+/// first one, so a second `assertAt` or `assertNoFix` in the same method
+/// checks the first code again.
 abstract class RuleTest extends AnalysisRuleTest {
   /// The rule under test.
   AbstractAnalysisRule get underTest;
