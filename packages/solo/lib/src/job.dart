@@ -32,7 +32,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// Not let go of in [finished], unlike the handlers above: a [Failed] nobody
   /// observed goes to its answer a microtask after the job is over, and the
   /// answer asks this predicate.
-  final bool Function(Object error)? _isExpectedError;
+  bool Function(Object error)? _isExpectedError;
 
   /// The rules outlive the job on purpose: a context that leaked out of a
   /// body reads the state through them long after the outcome, and the
@@ -113,6 +113,9 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // not be able to put it in the queue.
     _taken = true;
     _parentJob = parent._job;
+    // A predicate of its own is stronger; a child made by `ctx.child` or
+    // `each` has none and takes the one of the job whose body starts it.
+    _isExpectedError ??= parent._job._isExpectedError;
   }
 
   @override

@@ -474,6 +474,187 @@ void main() {
       });
     },
   );
+
+  group('children', () {
+    test('a ctx.child started and left fails with an expected error', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo.enqueue<TestState, void>(
+            key: 'load',
+            isExpectedError: _isApiError,
+            (ctx) async {
+              ctx.start(
+                ctx.child(key: 'kid', (c) async => throw const ApiError()),
+              );
+            },
+          );
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '> [kid] started',
+          '> [kid] error ApiError (never)',
+          '> [kid] finished Failed(ApiError)',
+          '[load] finished Done(null)',
+        ]);
+      });
+    });
+
+    test('two branches of runAll fail with expected errors', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo.enqueue<TestState, void>(
+            key: 'load',
+            isExpectedError: _isApiError,
+            ifFailed: (state, error, stackTrace) => const Disposed(),
+            (ctx) async {
+              await ctx.runAll([
+                ctx.child<void>(key: 'a', (c) async => throw const ApiError()),
+                ctx.child<void>(key: 'b', (c) async => throw const ApiError()),
+              ]);
+            },
+          );
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(solo.currentState, const Disposed());
+        expect(journal.take(), [
+          '[load] started',
+          '> [a] started',
+          '> [b] started',
+          '> [a] error ApiError (never)',
+          '> [b] error ApiError (never)',
+          '> [a] finished Failed(ApiError)',
+          '> [b] finished Cancelled(sibling)',
+          '[load] error ApiError (never)',
+          'state: ${const Disposed()}',
+          '[load] finished Failed(ApiError)',
+        ]);
+      });
+    });
+
+    test('each inside a ctx.child fails with an expected error', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        final source = StreamController<int>();
+        addTearDown(source.close);
+        _inZone(errors, () {
+          solo.enqueue<TestState, void>(
+            key: 'load',
+            isExpectedError: _isApiError,
+            (ctx) async {
+              ctx.start(
+                ctx.child<void>(key: 'kid', (c) async {
+                  c.each(source.stream, (_, _) {
+                    throw const ApiError();
+                  });
+                }),
+              );
+            },
+          );
+        });
+        async.flushMicrotasks();
+        source.add(1);
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '> [kid] started',
+          '>> [null: each] started',
+          '>> [null: each] error ApiError (never)',
+          '>> [null: each] finished Failed(ApiError)',
+          '> [kid] finished Done(null)',
+          '[load] finished Done(null)',
+        ]);
+      });
+    });
+
+    test('a child of job(...) with a predicate of its own', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo.enqueue<TestState, void>(
+            key: 'load',
+            isExpectedError: _isApiError,
+            (ctx) async {
+              ctx.start(
+                solo.job<TestState, void>(
+                  key: 'kid',
+                  isExpectedError: (e) => e is StateError,
+                  (c) async => throw const ApiError(),
+                ),
+              );
+            },
+          );
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '> [kid] started',
+          '> [kid] error ApiError (later)',
+          '> [kid] finished Failed(ApiError)',
+          '[load] finished Done(null)',
+          '> [kid] unanswered ApiError',
+        ]);
+      });
+    });
+
+    test('a child of job(...) without a predicate', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo.enqueue<TestState, void>(
+            key: 'load',
+            isExpectedError: _isApiError,
+            (ctx) async {
+              ctx.start(
+                solo.job<TestState, void>(
+                  key: 'kid',
+                  (c) async => throw const ApiError(),
+                ),
+              );
+            },
+          );
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '> [kid] started',
+          '> [kid] error ApiError (never)',
+          '> [kid] finished Failed(ApiError)',
+          '[load] finished Done(null)',
+        ]);
+      });
+    });
+
+    test('a child under a parent without a predicate', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          solo.enqueue<TestState, void>(key: 'load', (ctx) async {
+            ctx.start(
+              ctx.child(key: 'kid', (c) async => throw const ApiError()),
+            );
+          });
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[load] started',
+          '> [kid] started',
+          '> [kid] error ApiError (later)',
+          '> [kid] finished Failed(ApiError)',
+          '[load] finished Done(null)',
+          '> [kid] unanswered ApiError',
+        ]);
+      });
+    });
+  });
 }
 
 /// Runs [body] in a zone that collects uncaught errors into [errors].

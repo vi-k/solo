@@ -66,6 +66,9 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// final rows = await ctx.run(ctx.child(load, key: 'rows', timeout: limit));
   /// ```
   ///
+  /// The child has no `isExpectedError` of its own: it takes the one of the job
+  /// whose body runs it, if that job has one.
+  ///
   /// All other behavior is [JobContext.child]'s: [key] and [describe] only
   /// name the child, and the queue policies do not govern it.
   @override
@@ -128,6 +131,9 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// such a state, followed by `each`, ends this job [Cancelled] by the
   /// rules, and `each` throws it instead of handing back a child that never
   /// listened.
+  ///
+  /// The child has no `isExpectedError` of its own: it takes the one of this
+  /// job, if there is one.
   ///
   /// Use the context passed to [onData] for [emit], state access and
   /// cancellation checkpoints. [key] and [describe] only name the child: the
