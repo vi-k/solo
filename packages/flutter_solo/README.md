@@ -169,13 +169,14 @@ spinner of a job that is no longer running.
 
 They answer on the screen and not for the caller. The button drops the job that
 `load` hands back. A failure nobody reads goes on to the zone even after
-`ifFailed` has put `Empty` on the screen, unless `Solo.unansweredHandler`
-answers for it. In an app it goes towards `PlatformDispatcher.onError`, in a
-widget test into the test, which fails. `isExpectedError` names the failures
-the screen is all the answer for: an `ApiException` goes no further than
-`Empty`, and a bug, which is not an `ApiException`, still goes on to the zone.
-[Outcomes](#outcomes) has the rule. The full API, with rules, the queue,
-children and observers, is documented in [solo](https://pub.dev/packages/solo).
+`ifFailed` has put `Empty` on the screen, unless `load` names it in
+`isExpectedError` or `Solo.unansweredHandler` answers for it. `load` names
+`ApiException`, so a call that fails goes no further than `Empty`: the screen
+is all the answer it needs. A bug is not an `ApiException`, and it goes on: in
+an app towards `PlatformDispatcher.onError`, in a widget test into the test,
+which fails. [Outcomes](#outcomes) has the rule. The full API, with rules, the
+queue, children and observers, is documented in
+[solo](https://pub.dev/packages/solo).
 
 `SoloBuilder` is what draws the state: it takes the controller as `solo`,
 rebuilds on every change of the state and hands `child` through untouched. The

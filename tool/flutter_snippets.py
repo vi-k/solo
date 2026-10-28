@@ -1386,7 +1386,9 @@ void main() {
 
   testWidgets('read before the clock moves, a failed load is an outcome',
       (tester) async {
-    final controller = ProfileController(FailingApi());
+    // A bug, which `isExpectedError` does not name: only the order of the
+    // reads keeps it from the zone.
+    final controller = ProfileController(BuggyApi());
     closing(controller);
     await tester.pumpWidget(
       MaterialApp(home: ProfileView(controller: controller)),

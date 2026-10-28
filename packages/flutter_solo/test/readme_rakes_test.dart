@@ -469,9 +469,8 @@ void main() {
       expect(tester.takeException(), isNull);
       await controller.close();
       _says(
-        '`isExpectedError` names the failures the screen is all the answer '
-        'for: an `ApiException` goes no further than `Empty`, and a bug, '
-        'which is not an `ApiException`, still goes on to the zone.',
+        '`load` names `ApiException`, so a call that fails goes no further '
+        'than `Empty`: the screen is all the answer it needs.',
       );
     });
 
@@ -493,31 +492,45 @@ void main() {
       expect(controller.currentState, isA<Empty>());
       expect(errors, [isA<StateError>()]);
       await controller.close();
-      _says('a bug, which is not an `ApiException`, still goes on to the zone');
+      _says('A bug is not an `ApiException`, and it goes on:');
     });
 
-    test('a button that drops the job hands a bug to the zone', () async {
-      Profile? state;
-      final reported = await _asWidgetTest((binding) async {
-        final controller = ProfileController(
-          ProfileApi(error: StateError('a bug')),
-        );
-        // What `onPressed: controller.load` calls: the job it hands back
-        // goes nowhere.
-        final VoidCallback onPressed = controller.load;
-        onPressed();
-        await binding.pump(const Duration(milliseconds: 10));
-        state = controller.currentState;
-        await controller.close();
-      });
+    test('a button that drops the job hands a bug to the zone, and not an '
+        'ApiException', () async {
+      Future<(Profile?, List<FlutterErrorDetails>)> dropped(
+        Object error,
+      ) async {
+        Profile? state;
+        final reported = await _asWidgetTest((binding) async {
+          final controller = ProfileController(ProfileApi(error: error));
+          // What `onPressed: controller.load` calls: the job it hands back
+          // goes nowhere.
+          final VoidCallback onPressed = controller.load;
+          onPressed();
+          await binding.pump(const Duration(milliseconds: 10));
+          state = controller.currentState;
+          await controller.close();
+        });
+        return (state, reported);
+      }
 
-      expect(state, isA<Empty>(), reason: 'ifFailed has answered on screen');
-      expect(reported.single.exception, isA<StateError>());
+      final (expectedState, expected) = await dropped(
+        const ApiException('no network'),
+      );
+      expect(expectedState, isA<Empty>());
+      expect(expected, isEmpty, reason: 'load names an ApiException');
+
+      final (bugState, bug) = await dropped(StateError('a bug'));
+      expect(bugState, isA<Empty>(), reason: 'ifFailed has answered on screen');
+      expect(bug.single.exception, isA<StateError>());
       _says(
         'The button drops the job that `load` hands back. A failure '
         'nobody reads goes on to the zone even after `ifFailed` has put '
-        '`Empty` on the screen, unless `Solo.unansweredHandler` answers for '
-        'it. In an app it goes towards '
+        '`Empty` on the screen, unless `load` names it in `isExpectedError` '
+        'or `Solo.unansweredHandler` answers for it.',
+      );
+      _says(
+        'A bug is not an `ApiException`, and it goes on: in an app towards '
         '`PlatformDispatcher.onError`, in a widget test into the test, '
         'which fails.',
       );

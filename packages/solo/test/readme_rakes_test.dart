@@ -241,6 +241,13 @@ void main() {
     });
 
     test('an error publishes Failure, and the outcome stays Failed', () {
+      expect(
+        _page().replaceAll(RegExp(r'\s+'), ' '),
+        contains(
+          'The `fetchName` of a real client throws an `ApiException` when '
+          'the call fails:',
+        ),
+      );
       fakeAsync((async) {
         final api = _FailingApi();
         final profile = quick.ProfileController(api);
