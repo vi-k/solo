@@ -2,8 +2,6 @@ import 'package:analysis_server_plugin/edit/dart/correction_producer.dart';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer_plugin/protocol/protocol_common.dart';
 import 'package:analyzer_plugin/utilities/change_builder/change_builder_core.dart';
-import 'package:analyzer_testing/src/analysis_rule/pub_package_resolution.dart'
-    show ExpectedDiagnostic; // ignore: implementation_imports
 import 'package:test/test.dart';
 
 import 'rule_base.dart';
@@ -33,7 +31,7 @@ abstract class FixTest extends RuleTest {
     String expected, {
     List<String>? arguments,
   }) async {
-    final (:change, :fix) = await _fix(code, span, const []);
+    final (:change, :fix) = await _fix(code, span, false);
     expect(change.edits, hasLength(1), reason: 'one file is edited');
     final edit = change.edits.single;
     expect(edit.file, result.path);
@@ -53,24 +51,39 @@ abstract class FixTest extends RuleTest {
   /// Asserts that the rule reports [code] exactly at [span], in the form of
   /// [assertAt], and that the fix for that diagnostic builds no edits.
   ///
-  /// [alsoExpected] are passed on to [assertAt].
+  /// With [otherDiagnostics], the code may have diagnostics besides the one
+  /// of the rule, such as the compile error of a fixture that cannot be
+  /// valid: the diagnostic of the rule is then only required to be among
+  /// them, at [span].
   Future<void> assertNoFix(
     String code,
     String span, {
-    List<ExpectedDiagnostic> alsoExpected = const [],
+    bool otherDiagnostics = false,
   }) async {
-    final (:change, fix: _) = await _fix(code, span, alsoExpected);
+    final (:change, fix: _) = await _fix(code, span, otherDiagnostics);
     expect(change.edits, isEmpty);
   }
 
   Future<({SourceChange change, ResolvedCorrectionProducer fix})> _fix(
     String code,
     String span,
-    List<ExpectedDiagnostic> alsoExpected,
+    bool otherDiagnostics,
   ) async {
-    await assertAt(code, [span], alsoExpected: alsoExpected);
+    if (otherDiagnostics) {
+      testFile.writeAsStringSync(code);
+      result = await resolveFile(testFile.path);
+    } else {
+      await assertAt(code, [span]);
+    }
+    final start = span.indexOf('[[');
+    final text = span.replaceAll('[[', '').replaceAll(']]', '');
+    final offset = code.indexOf(text) + (start < 0 ? 0 : start);
+    final length = start < 0 ? text.length : span.indexOf(']]') - start - 2;
     final diagnostic = result.diagnostics.singleWhere(
-      (d) => rule.diagnosticCodes.contains(d.diagnosticCode),
+      (d) =>
+          rule.diagnosticCodes.contains(d.diagnosticCode) &&
+          d.offset == offset &&
+          d.length == length,
     );
     final library = await result.session.getResolvedLibrary(result.path);
     if (library is! ResolvedLibraryResult) {

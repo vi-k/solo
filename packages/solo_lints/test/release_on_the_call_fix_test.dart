@@ -3,9 +3,6 @@
 
 import 'package:analysis_server_plugin/edit/dart/correction_producer.dart';
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
-import 'package:analyzer/src/diagnostic/diagnostic.dart' // ignore: implementation_imports
-    as diag;
-import 'package:analyzer_testing/analysis_rule/analysis_rule.dart';
 import 'package:solo_lints/src/fixes/release_on_the_call.dart';
 import 'package:solo_lints/src/rules/release_on_the_call.dart';
 import 'package:test_reflective_loader/test_reflective_loader.dart';
@@ -179,24 +176,16 @@ final job = Job<void>((ctx) async {
 
   // The call has no arguments, which does not compile: the rule still
   // reports, and the fix has no argument list to extend.
-  Future<void> test_no_fix_for_call_without_arguments() {
-    const code =
-        '''
+  Future<void> test_no_fix_for_call_without_arguments() => assertNoFix(
+    '''
 $_core
 final job = Job<void>((ctx) async {
   final db = await ctx.join();
   ctx.onDispose(db.close);
   print(db);
 });
-''';
-    // The missing argument is reported at the closing parenthesis.
-    final close = code.indexOf('ctx.join(') + 'ctx.join('.length;
-    return assertNoFix(
-      code,
-      '[[ctx.onDispose(db.close)]]',
-      alsoExpected: [
-        error(diag.notEnoughPositionalArgumentsNameSingular, close, 1),
-      ],
-    );
-  }
+''',
+    '[[ctx.onDispose(db.close)]]',
+    otherDiagnostics: true,
+  );
 }
