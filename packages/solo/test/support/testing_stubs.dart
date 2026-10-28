@@ -1,4 +1,5 @@
-// What stands between a test of `doc/testing.md` and the runner.
+// What stands between a test of `doc/testing.md` and the runner, and the
+// error the API of the page fails with.
 //
 // The code of the page is tests. In the files that hold it `test` is the
 // function below, not the one of `package:test`: it keeps the name and the
@@ -14,3 +15,15 @@ typedef PageTest = ({String name, FutureOr<void> Function() body});
 /// Stands in for `test` of `package:test` in the files of the page's code.
 PageTest test(String name, FutureOr<void> Function() body) =>
     (name: name, body: body);
+
+/// What the API of the page throws when the network is down. The type is
+/// the one of `errors_stubs.dart`, copied rather than imported: that file
+/// has a `ProfileApi` of its own.
+final class ApiException implements Exception {
+  final String message;
+
+  const ApiException(this.message);
+
+  @override
+  String toString() => 'ApiException: $message';
+}

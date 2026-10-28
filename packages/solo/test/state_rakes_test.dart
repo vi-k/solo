@@ -699,6 +699,34 @@ String _ended(Job<Object?> job) => switch (job.outcome) {
   final outcome => '$outcome',
 };
 
+/// What the API of [_Naming] fails with when the network is down.
+final class _Offline implements Exception {
+  const _Offline();
+
+  @override
+  String toString() => 'offline';
+}
+
+/// Not on the page: the load of "The handlers" with an `isExpectedError`
+/// that names [_Offline].
+final class _Naming extends Solo<stubs.ProfileState> {
+  final stubs.ProfileApi api;
+
+  _Naming(this.api) : super(const stubs.Initial());
+
+  Job<String> load() => enqueue<stubs.ProfileState, String>(
+    ifFailed: (state, error, stackTrace) => stubs.Failure(error),
+    isExpectedError: (error) => error is _Offline,
+    ifCancelled: (state, cancelled) => const stubs.Initial(),
+    (ctx) async {
+      ctx.emit(const stubs.Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(stubs.Loaded(name));
+      return name;
+    },
+  );
+}
+
 /// Runs [body] under fake time in a zone of its own and returns what
 /// reached that zone uncaught. Expectations go after the call: inside the
 /// zone a failed one would land in the handler.
@@ -2144,6 +2172,48 @@ void main() {
         controller.close().ignore();
         async.flushTimers();
       });
+    });
+
+    test('the handler leaves the failure to be answered for, unless the job '
+        'names it in isExpectedError', () {
+      final ends = <String>[];
+      final handled = _zone((async) {
+        final controller = byHandlers();
+        final job = controller.loadWithHandlers();
+        async.flushMicrotasks();
+        api.fail(const _Offline());
+        async.flushMicrotasks();
+        ends.add('${stubs.describe(controller.currentState)}, ${job.outcome}');
+        controller.close().ignore();
+        async.flushTimers();
+      });
+      final named = _zone((async) {
+        final api = stubs.ProfileApi();
+        final controller = _Naming(api);
+        final job = controller.load();
+        async.flushMicrotasks();
+        api.fail(const _Offline());
+        async.flushMicrotasks();
+        ends.add('${stubs.describe(controller.currentState)}, ${job.outcome}');
+        controller.close().ignore();
+        async.flushTimers();
+      });
+
+      expect(ends, [
+        'Failure(offline), Failed(offline)',
+        'Failure(offline), Failed(offline)',
+      ]);
+      expect(handled, ['offline']);
+      expect(named, isEmpty);
+      expect(
+        _page().replaceAll(RegExp(r'\s+'), ' '),
+        contains(
+          'does not mark the outcome as handled for error reporting. A job '
+          'that knows which of its errors are expected names them in '
+          '`isExpectedError`, and nobody is asked to answer for those: '
+          '[Naming the expected errors](errors.md#naming-the-expected-errors)',
+        ),
+      );
     });
 
     test('a replaced reload publishes Initial unless its handler asks', () {

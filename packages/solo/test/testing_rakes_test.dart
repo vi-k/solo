@@ -15,6 +15,7 @@ import 'support/testing_camera.dart';
 import 'support/testing_first_attempt_timeout.dart' as deadline;
 import 'support/testing_first_attempts.dart' as first;
 import 'support/testing_page.dart' as page;
+import 'support/testing_page_expected.dart' as named;
 import 'support/testing_page_fixtures.dart';
 import 'support/testing_stubs.dart' hide test;
 
@@ -23,9 +24,10 @@ import 'support/testing_stubs.dart' hide test;
 /// The code of the page is tests, and it stands verbatim in
 /// `test/support/testing_*.dart`: the controller, the fake and the journal
 /// in one file, the tests that work in another, the first attempts in a
-/// third and the deadline of the last section in a fourth. A test that works
-/// is declared here as a test of this suite, under the name the page gives
-/// it. A first attempt is run as the body of a test case of its own —
+/// third, the deadline of the last section in a fourth, and the controller
+/// that names its expected errors, with its test, in a fifth. A test that
+/// works is declared here as a test of this suite, under the name the page
+/// gives it. A first attempt is run as the body of a test case of its own —
 /// `TestCaseMonitor` of `package:test_api`, the same machinery the runner
 /// puts a test in — and what it ends with is looked at from outside: a
 /// failure, an error that reached its zone, an error that came after it was
@@ -181,6 +183,20 @@ final class _HungApi implements ProfileApi {
   Future<String> fetchName() => Completer<String>().future;
 }
 
+/// An observer that keeps what `onError` heard, with the answer it was given.
+final class _Heard extends SoloObserver {
+  final lines = <String>[];
+
+  @override
+  void onError(
+    Solo<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) => lines.add('${_what(error)}, ${answer.name}');
+}
+
 /// An observer that keeps the jobs it saw finish.
 final class _Finished extends SoloObserver {
   final jobs = <Job<Object?>>[];
@@ -247,14 +263,22 @@ void main() {
         dotAll: true,
       ).firstMatch(_page())!;
       final readme = File('README.md').readAsStringSync();
-      final quickStart = readme.substring(
-        readme.indexOf('\n## Quick start\n'),
-        readme.indexOf('\n## ', readme.indexOf('\n## Quick start\n') + 1),
-      );
+      // The page's controller is that of the quick start without its
+      // `isExpectedError`.
+      final quickStart = readme
+          .substring(
+            readme.indexOf('\n## Quick start\n'),
+            readme.indexOf('\n## ', readme.indexOf('\n## Quick start\n') + 1),
+          )
+          .replaceAll(RegExp(r'\n *isExpectedError: [^\n]*'), '');
 
       expect(block.group(1), startsWith('final class ProfileController '));
       expect(quickStart, contains(block.group(1)));
       _says('drive the `load` of the controller from');
+      _says(
+        'in the package README, without its `isExpectedError`, so that the '
+        "failure is the test's to read:",
+      );
     });
 
     test('the fake answers twenty milliseconds after the call, not before', () {
@@ -272,7 +296,7 @@ void main() {
 
     test('or throws the error it was given, after the same wait', () {
       fakeAsync((async) {
-        final given = StateError('no network');
+        const given = ApiException('no network');
         Object? thrown;
         FakeProfileApi(error: given).fetchName().then<void>(
           (_) {},
@@ -368,7 +392,7 @@ void main() {
       test('done never throws, whichever way the load ends', () async {
         final loaded = ProfileController(FakeProfileApi());
         final failed = ProfileController(
-          FakeProfileApi(error: StateError('no network')),
+          FakeProfileApi(error: const ApiException('no network')),
         );
         final cancelled = ProfileController(FakeProfileApi());
         final job = cancelled.load();
@@ -376,7 +400,10 @@ void main() {
         unawaited(job.cancel());
 
         expect('${await loaded.load().done}', 'Done(Ada Lovelace)');
-        expect('${await failed.load().done}', 'Failed(Bad state: no network)');
+        expect(
+          '${await failed.load().done}',
+          'Failed(ApiException: no network)',
+        );
         expect('${await job.done}', 'Cancelled(manual)');
         _says('`done` completes with the outcome and never throws');
 
@@ -389,7 +416,7 @@ void main() {
         final journal = Journal();
         Solo.observer = journal;
         final failed = ProfileController(
-          FakeProfileApi(error: StateError('no network')),
+          FakeProfileApi(error: const ApiException('no network')),
         );
 
         await failed.load().done;
@@ -399,7 +426,7 @@ void main() {
           'load started',
           'state: Loading',
           'state: Failure',
-          'load Failed(Bad state: no network)',
+          'load Failed(ApiException: no network)',
         ]);
         _says('By the time it completes the state handlers have run as well');
 
@@ -565,13 +592,13 @@ void main() {
 
         final errors = await _zoned(() async {
           profile = ProfileController(
-            FakeProfileApi(error: StateError('no network')),
+            FakeProfileApi(error: const ApiException('no network')),
           )..load();
           await profile.close(mode: SoloCloseMode.drain);
         });
 
         expect(_state(profile), 'Failure');
-        expect(errors, ['StateError: no network']);
+        expect(errors, ['ApiException: no network']);
         _says(
           'A drain runs the queue; it does not promise the work '
           'succeeds.',
@@ -588,10 +615,10 @@ void main() {
           final run = await _run(first.failureNobodyRead.body);
 
           expect(run.state, _failed);
-          expect(_errors(run), ['StateError: no network']);
-          expect('${run.errors.single.error}', 'Bad state: no network');
+          expect(_errors(run), ['ApiException: no network']);
+          expect('${run.errors.single.error}', 'ApiException: no network');
           _says('The expectation holds and the test is red anyway.');
-          _says('the runner fails the test with `Bad state: no network`');
+          _says('the runner fails the test with `ApiException: no network`');
         },
       );
 
@@ -621,7 +648,7 @@ void main() {
         () async {
           final run = await _run(() {
             ProfileController(
-              FakeProfileApi(error: StateError('no network')),
+              FakeProfileApi(error: const ApiException('no network')),
             ).load();
           });
           final whenOver = '${run.state}, ${_errors(run)}';
@@ -630,7 +657,7 @@ void main() {
 
           expect(whenOver, '$_passed, []');
           expect(run.state, _failed);
-          expect(_errors(run), ['StateError: no network', _tooLate]);
+          expect(_errors(run), ['ApiException: no network', _tooLate]);
           _says('the failure arrives after the test has ended');
           _says('`This test failed after it had already completed`');
           _says(
@@ -659,7 +686,7 @@ void main() {
         ]) {
           reached[read] = await _zoned(() async {
             final profile = ProfileController(
-              FakeProfileApi(error: StateError('no network')),
+              FakeProfileApi(error: const ApiException('no network')),
             );
             final job = profile.load();
             switch (read) {
@@ -677,11 +704,11 @@ void main() {
         }
 
         expect(reached, {
-          'nothing': ['StateError: no network'],
+          'nothing': ['ApiException: no network'],
           'done': isEmpty,
           'value': isEmpty,
           'ignoreFailure': isEmpty,
-          'outcome': ['StateError: no network'],
+          'outcome': ['ApiException: no network'],
         });
         _says(
           '`ignoreFailure()` marks the job observed without waiting for it',
@@ -695,7 +722,7 @@ void main() {
         () async {
           final run = await _run(() async {
             final profile = ProfileController(
-              FakeProfileApi(error: StateError('no network')),
+              FakeProfileApi(error: const ApiException('no network')),
             );
 
             final job = profile.load();
@@ -706,7 +733,7 @@ void main() {
           });
 
           expect(run.state, _failed);
-          expect(_errors(run), ['StateError: no network']);
+          expect(_errors(run), ['ApiException: no network']);
           _says('The mark has to come by the microtask after the job ends');
           _says(
             'so a test that holds the job, drains the controller and reads '
@@ -736,7 +763,7 @@ void main() {
       test('fails after the test is over, whatever the test read', () async {
         final run = await _run(() async {
           final profile = ProfileController(
-            FakeProfileApi(error: StateError('no network')),
+            FakeProfileApi(error: const ApiException('no network')),
           );
           final job = profile.load()..ignoreFailure();
           await pumpEventQueue();
@@ -751,7 +778,7 @@ void main() {
         await _nextError(run);
 
         expect(whenOver, '$_passed, []');
-        expect(_errors(run), ['StateError: no network', _tooLate]);
+        expect(_errors(run), ['ApiException: no network', _tooLate]);
         _says('One failure is out of reach of all three');
         _says(
           'The job ends `Cancelled`; the call fails twenty milliseconds '
@@ -765,7 +792,7 @@ void main() {
         () async {
           final run = await _run(() async {
             final profile = ProfileController(
-              FakeProfileApi(error: StateError('no network')),
+              FakeProfileApi(error: const ApiException('no network')),
             )..load().ignoreFailure();
             await pumpEventQueue();
 
@@ -776,7 +803,7 @@ void main() {
           await _nextError(run);
 
           expect(whenOver, '$_passed, []');
-          expect(_errors(run), ['StateError: no network', _tooLate]);
+          expect(_errors(run), ['ApiException: no network', _tooLate]);
           _says(
             'or close the controller on it, and `ctx.abandonable` lets go of '
             'the call',
@@ -791,7 +818,7 @@ void main() {
 
         final run = await _run(() async {
           final profile = ProfileController(
-            FakeProfileApi(error: StateError('no network')),
+            FakeProfileApi(error: const ApiException('no network')),
           );
           final job = profile.load();
           await pumpEventQueue();
@@ -802,7 +829,7 @@ void main() {
         final error = await answered.future.timeout(const Duration(seconds: 5));
         await pumpEventQueue();
 
-        expect(_what(error), 'StateError: no network');
+        expect(_what(error), 'ApiException: no network');
         expect(run.state, _passed);
         expect(_errors(run), isEmpty);
         _says(
@@ -823,6 +850,138 @@ void main() {
           });
 
           expect(errors, isEmpty);
+        },
+      );
+    });
+
+    group('isExpectedError, as the page writes it:', () {
+      _asWritten(named.failureExpected);
+    });
+
+    group('isExpectedError', () {
+      test('its test is the first attempt with nothing added', () {
+        final section = _sections().singleWhere(
+          (section) => section.startsWith('## A failure nobody read\n'),
+        );
+        List<String> blocks(String heading) {
+          final start = section.indexOf('\n$heading\n');
+          final end = section.indexOf('\n### ', start + 1);
+          return [
+            for (final block in RegExp(
+              r'```dart\n(.*?)\n```',
+              dotAll: true,
+            ).allMatches(section.substring(start, end < 0 ? null : end)))
+              block.group(1)!,
+          ];
+        }
+
+        final attempt = blocks('### The first attempt').single;
+
+        expect(
+          blocks('### isExpectedError').last,
+          attempt.substring(attempt.indexOf('\n') + 1),
+        );
+        expect(named.failureExpected.name, first.failureNobodyRead.name);
+        _says(
+          'The test is the first attempt with nothing added, and on this '
+          'controller it is green.',
+        );
+      });
+
+      for (final handled in [false, true]) {
+        test('onError hears the failure with never, and nobody answers for it, '
+            '${handled ? 'with' : 'without'} Solo.unansweredHandler', () async {
+          final heard = _Heard();
+          final answered = <String>[];
+          Solo.observer = heard;
+          if (handled) {
+            Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+                answered.add(_what(error));
+          }
+          late named.ProfileController profile;
+          late Job<String> job;
+
+          final errors = await _zoned(() async {
+            profile = named.ProfileController(
+              FakeProfileApi(error: const ApiException('no network')),
+            );
+            job = profile.load();
+            await profile.close(mode: SoloCloseMode.drain);
+          });
+
+          expect(heard.lines, ['ApiException: no network, never']);
+          expect(answered, isEmpty);
+          expect(errors, isEmpty);
+          expect(_how(job), 'Failed(ApiException: no network)');
+          expect(_state(profile), 'Failure');
+          _says(
+            '`onError` hears the failure with `JobErrorAnswer.never`, and '
+            'nobody is asked to answer for it: not '
+            '`Solo.unansweredHandler`, not the zone of the test.',
+          );
+          _says(
+            'The outcome is still `Failed`, and the state is the `Failure` '
+            'of `ifFailed`.',
+          );
+          _says(
+            'so a job the test does not await gets `ignoreFailure()`, '
+            'unless the job names its expected errors in '
+            '`isExpectedError`.',
+          );
+        });
+      }
+
+      test(
+        'the ApiException of a call the job walked away from goes no further',
+        () async {
+          final heard = _Heard();
+          Solo.observer = heard;
+
+          final run = await _run(() async {
+            final profile = named.ProfileController(
+              FakeProfileApi(error: const ApiException('no network')),
+            );
+            final job = profile.load();
+            await pumpEventQueue();
+
+            await job.cancel();
+
+            expect(await job.done, isA<Cancelled>());
+            await profile.close();
+          });
+          final whenOver = '${run.state}, ${_errors(run)}, ${heard.lines}';
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+
+          expect(whenOver, '$_passed, [], []');
+          expect(heard.lines, ['ApiException: no network, never']);
+          expect(run.state, _passed);
+          expect(_errors(run), isEmpty);
+          _says(
+            'The `ApiException` of a call the job has walked away from goes '
+            'no further either.',
+          );
+        },
+      );
+
+      test(
+        'a bug turns the same test red, the way the first attempt was',
+        () async {
+          final run = await _run(() async {
+            final profile = named.ProfileController(
+              FakeProfileApi(error: StateError('no name')),
+            )..load();
+            await profile.close(mode: SoloCloseMode.drain);
+
+            expect(profile.currentState, isA<Failure>());
+          });
+
+          expect(run.state, _failed);
+          expect(_errors(run), ['StateError: no name']);
+          _says('A bug still turns such a test red.');
+          _says(
+            'give the fake a `StateError` in its place, and the same test is '
+            'red with it, the way the first attempt was.',
+          );
         },
       );
     });
@@ -1091,7 +1250,7 @@ void main() {
         for (final ignored in [false, true]) {
           reached[ignored] = _fakeZoned((async, errors) {
             final profile = ProfileController(
-              FakeProfileApi(error: StateError('no network')),
+              FakeProfileApi(error: const ApiException('no network')),
             );
             final job = profile.load();
             if (ignored) job.ignoreFailure();
@@ -1103,10 +1262,33 @@ void main() {
         }
 
         expect(reached, {
-          false: ['StateError: no network'],
+          false: ['ApiException: no network'],
           true: isEmpty,
         });
         _says('`ignoreFailure()` is what stands in for that read');
+      });
+
+      test('a job that names the error needs no ignoreFailure() there', () {
+        var outcome = 'not reached';
+
+        final errors = _fakeZoned((async, errors) {
+          final profile = named.ProfileController(
+            FakeProfileApi(error: const ApiException('no network')),
+          );
+          final job = profile.load();
+          async.elapse(const Duration(milliseconds: 20));
+          outcome = _how(job);
+
+          profile.close();
+          async.flushTimers();
+        });
+
+        expect(outcome, 'Failed(ApiException: no network)');
+        expect(errors, isEmpty);
+        _says(
+          '`ignoreFailure()` marks a job that does not name its expected '
+          'errors in `isExpectedError`.',
+        );
       });
 
       test('the test as written ends with an empty clock', () {
@@ -1145,7 +1327,7 @@ void main() {
 
         final errors = _fakeZoned((async, errors) {
           final profile = ProfileController(
-            FakeProfileApi(error: StateError('no network')),
+            FakeProfileApi(error: const ApiException('no network')),
           );
           final job = profile.load();
           async.flushMicrotasks();
@@ -1158,7 +1340,7 @@ void main() {
         });
 
         expect(beforeTheFlush, ['Cancelled(manual)']);
-        expect(errors, ['StateError: no network']);
+        expect(errors, ['ApiException: no network']);
         _says('so a call that fails late fails inside the test that made it');
       });
 
@@ -1307,7 +1489,7 @@ void main() {
             await runZonedGuarded(
               () async {
                 final profile = ProfileController(
-                  FakeProfileApi(error: StateError('no network')),
+                  FakeProfileApi(error: const ApiException('no network')),
                 )..load().ignoreFailure();
                 await profile.close(mode: SoloCloseMode.drain);
 
@@ -1315,7 +1497,7 @@ void main() {
               },
               (error, stackTrace) {
                 handled++;
-                expect(error, isA<StateError>());
+                expect(error, isA<ApiException>());
               },
             );
           });
@@ -1337,12 +1519,12 @@ void main() {
         final run = nested.TestCaseMonitor.start(() async {
           await runZonedGuarded(() async {
             final profile = ProfileController(
-              FakeProfileApi(error: StateError('no network')),
+              FakeProfileApi(error: const ApiException('no network')),
             )..load();
             await profile.close(mode: SoloCloseMode.drain);
 
             expect(profile.currentState, isA<Loaded>());
-          }, (error, stackTrace) => expect(error, isA<StateError>()));
+          }, (error, stackTrace) => expect(error, isA<ApiException>()));
           returned = true;
         });
         await _nextError(run);
@@ -1352,14 +1534,14 @@ void main() {
         expect(
           _message(run),
           allOf(
-            contains("Expected: <Instance of 'StateError'>"),
+            contains("Expected: <Instance of 'ApiException'>"),
             contains('Actual: TestFailure:<'),
             contains("Actual: <Instance of 'Failure'>"),
           ),
         );
         expect(returned, isFalse);
         _says(
-          'compare it to `StateError`, find no match and report that on '
+          'compare it to `ApiException`, find no match and report that on '
           'a line of the handler',
         );
         _says('the `await` would never return');
@@ -1395,14 +1577,14 @@ void main() {
         final outer = await _zoned(() async {
           runZonedGuarded(
             () => profile = ProfileController(
-              FakeProfileApi(error: StateError('no network')),
+              FakeProfileApi(error: const ApiException('no network')),
             )..load(),
             (error, stackTrace) => inner.add(_what(error)),
           );
           await profile.close(mode: SoloCloseMode.drain);
         });
 
-        expect(inner, ['StateError: no network']);
+        expect(inner, ['ApiException: no network']);
         expect(outer, isEmpty);
         _says('A job reports to the zone it was created in');
       });
@@ -1413,13 +1595,13 @@ void main() {
 
         await runZonedGuarded(() async {
           final profile = ProfileController(
-            FakeProfileApi(error: StateError('no network')),
+            FakeProfileApi(error: const ApiException('no network')),
           )..load();
           await profile.close(mode: SoloCloseMode.drain);
           whenCloseReturned = [...errors];
         }, (error, stackTrace) => errors.add(_what(error)));
 
-        expect(whenCloseReturned, ['StateError: no network']);
+        expect(whenCloseReturned, ['ApiException: no network']);
         _says(
           'by the time `close` returns, the job has finished and its '
           'failure has been reported',
@@ -1514,7 +1696,7 @@ final name = await ctx.abandonable(
       });
 
       test('the call returns at its twentieth millisecond, into nothing', () {
-        final failing = _CountingApi(error: StateError('no network'));
+        final failing = _CountingApi(error: const ApiException('no network'));
         var at19 = 'not reached';
         var at20 = 'not reached';
 
@@ -2009,12 +2191,14 @@ final name = await ctx.abandonable(
     const answers = 'test/support/testing_page.dart';
     const attempts = 'test/support/testing_first_attempts.dart';
     const timeout = 'test/support/testing_first_attempt_timeout.dart';
+    const expected = 'test/support/testing_page_expected.dart';
     const holders = {
       '# Testing': [fixtures],
       '### The first attempt': [attempts, timeout, fixtures],
       '### Awaiting the outcome': [answers],
       '### Letting the work finish': [answers],
       '### ignoreFailure': [answers],
+      '### isExpectedError': [expected],
       '### Letting the first job start': [answers],
       '### Elapsing instead of awaiting': [answers],
       '### addTearDown': [answers],
@@ -2042,7 +2226,7 @@ final name = await ctx.abandonable(
           codeMissingFrom(
             'doc/testing.md',
             answers,
-            alsoIn: [attempts, timeout, fixtures],
+            alsoIn: [attempts, timeout, fixtures, expected],
           ),
           isEmpty,
         );

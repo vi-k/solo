@@ -13,7 +13,8 @@ down to one rule. Four are for a test that awaits its job or the controller's
   `SoloCloseMode.drain`.
 - [A failure nobody read](#a-failure-nobody-read): a failure nobody reads turns
   the test red with an error none of its expectations raised, or arrives after
-  the test has passed, so a job the test does not await gets `ignoreFailure()`.
+  the test has passed, so a job the test does not await gets `ignoreFailure()`,
+  unless the job names its expected errors in `isExpectedError`.
 - [Assertions inside a zone](#assertions-inside-a-zone): the job is created
   inside `runZonedGuarded`, the zone collects its errors, and the test asserts
   outside it. A test that asserts inside passes having checked nothing, or
@@ -26,8 +27,9 @@ The other four are for a test under `fakeAsync`, which awaits nothing:
   job start. Without the flush the test fails on an order it did not expect.
 - [Awaiting inside fakeAsync](#awaiting-inside-fakeasync): `async.elapse` moves
   the clock, the test reads `job.outcome` where it would await `done`, and
-  `ignoreFailure()` marks the job. A test that awaits inside `fakeAsync` hangs
-  until its own timeout, or passes before its expectations run.
+  `ignoreFailure()` marks a job that does not name its expected errors in
+  `isExpectedError`. A test that awaits inside `fakeAsync` hangs until its own
+  timeout, or passes before its expectations run.
 - [What one test leaves for the next](#what-one-test-leaves-for-the-next): the
   observer is a static, and so are four more; the test that sets one puts it
   back in `addTearDown`, not on its last line: a failed test skips that line
@@ -44,7 +46,8 @@ The tests of the page import `dart:async`,
 
 Of the examples below, all but the last drive the `load` of the controller from
 [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
-in the package README:
+in the package README, without its `isExpectedError`, so that the failure is
+the test's to read:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -151,10 +154,10 @@ test(
   'a failed load carries the error to the caller',
   () async {
     final profile = ProfileController(
-      FakeProfileApi(error: StateError('no network')),
+      FakeProfileApi(error: const ApiException('no network')),
     );
 
-    await expectLater(profile.load().value, throwsA(isA<StateError>()));
+    await expectLater(profile.load().value, throwsA(isA<ApiException>()));
     expect(profile.currentState, isA<Failure>());
 
     await profile.close();
@@ -250,7 +253,7 @@ waiting.
 // The first attempt: the unread failure fails the test.
 test('a failed load shows the failure', () async {
   final profile = ProfileController(
-    FakeProfileApi(error: StateError('no network')),
+    FakeProfileApi(error: const ApiException('no network')),
   );
 
   profile.load();
@@ -263,7 +266,7 @@ test('a failed load shows the failure', () async {
 The expectation holds and the test is red anyway. Nobody read the job's
 outcome, and no `Solo.unansweredHandler` is set, so the engine reports the
 failure to the zone the job was created in. Here that is the zone of the test,
-and the runner fails the test with `Bad state: no network`. Its stack trace
+and the runner fails the test with `ApiException: no network`. Its stack trace
 names the line of the fake that threw and a frame of the engine, and no line of
 the test. A test that does not wait for the job at all pays more: the failure
 arrives after the test has ended. The runner says so —
@@ -277,7 +280,7 @@ anything, and the run is green.
 ```dart
 test('a failed load shows the failure', () async {
   final profile = ProfileController(
-    FakeProfileApi(error: StateError('no network')),
+    FakeProfileApi(error: const ApiException('no network')),
   );
 
   profile.load().ignoreFailure();
@@ -305,6 +308,54 @@ by then the test is over. A test that expects such an error sets
 `Solo.unansweredHandler`, which takes it in place of the zone:
 [Answering for an error](errors.md#answering-for-an-error) on the errors page.
 
+### isExpectedError
+
+A job that knows which of its errors are expected names them in
+`isExpectedError`. Here the `load` of the page's controller names the
+`ApiException` its fake throws:
+
+```dart
+Job<String> load() => enqueue<ProfileState, String>(
+  key: 'load',
+  policy: Policy.droppable,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  isExpectedError: (error) => error is ApiException,
+  ifCancelled: (state, cancelled) => const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
+```
+
+```dart
+test('a failed load shows the failure', () async {
+  final profile = ProfileController(
+    FakeProfileApi(error: const ApiException('no network')),
+  );
+
+  profile.load();
+  await profile.close(mode: SoloCloseMode.drain);
+
+  expect(profile.currentState, isA<Failure>());
+});
+```
+
+The test is the first attempt with nothing added, and on this controller it is
+green. `onError` hears the failure with `JobErrorAnswer.never`, and nobody is
+asked to answer for it: not `Solo.unansweredHandler`, not the zone of the test.
+The outcome is still `Failed`, and the state is the `Failure` of `ifFailed`.
+The `ApiException` of a call the job has walked away from goes no further
+either.
+
+A bug still turns such a test red. A bug is not an `ApiException`: give the
+fake a `StateError` in its place, and the same test is red with it, the way the
+first attempt was. What else the predicate is asked about, and what it is not,
+is under [Naming the expected errors](errors.md#naming-the-expected-errors) on
+the errors page.
+
 ## Assertions inside a zone
 
 That an unread failure reaches the zone when no `Solo.unansweredHandler` is set
@@ -321,12 +372,12 @@ test(
   () async {
     await runZonedGuarded(() async {
       final profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
+        FakeProfileApi(error: const ApiException('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
 
       expect(profile.currentState, isA<Failure>());
-    }, (error, stackTrace) => expect(error, isA<StateError>()));
+    }, (error, stackTrace) => expect(error, isA<ApiException>()));
   },
 );
 ```
@@ -342,10 +393,10 @@ created in, so `load()`, the call that creates it, has to be made inside
 There it stops being an expectation: `expect` reports a failure by throwing
 `TestFailure`, and a throw from inside the zone belongs to the zone's handler,
 like any other error. With a state other than `Failure` the handler would be
-handed that `TestFailure`, compare it to `StateError`, find no match and report
-that on a line of the handler rather than the line the expectation was on. And
-the `await` would never return — the body's error went to the zone instead of
-into its future — so the test would end on a timeout.
+handed that `TestFailure`, compare it to `ApiException`, find no match and
+report that on a line of the handler rather than the line the expectation was
+on. And the `await` would never return — the body's error went to the zone
+instead of into its future — so the test would end on a timeout.
 
 ### Collecting in the zone, asserting outside
 
@@ -358,13 +409,13 @@ test(
 
     await runZonedGuarded(() async {
       profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
+        FakeProfileApi(error: const ApiException('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
     }, (error, stackTrace) => zoneErrors.add(error));
 
     expect(profile.currentState, isA<Failure>());
-    expect(zoneErrors, [isA<StateError>()]);
+    expect(zoneErrors, [isA<ApiException>()]);
   },
 );
 ```

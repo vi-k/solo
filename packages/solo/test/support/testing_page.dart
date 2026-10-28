@@ -35,10 +35,10 @@ final failedValue = test(
   'a failed load carries the error to the caller',
   () async {
     final profile = ProfileController(
-      FakeProfileApi(error: StateError('no network')),
+      FakeProfileApi(error: const ApiException('no network')),
     );
 
-    await expectLater(profile.load().value, throwsA(isA<StateError>()));
+    await expectLater(profile.load().value, throwsA(isA<ApiException>()));
     expect(profile.currentState, isA<Failure>());
 
     await profile.close();
@@ -76,7 +76,7 @@ final drained = test('load fills in the name', () async {
 /// `### ignoreFailure`.
 final failureIgnored = test('a failed load shows the failure', () async {
   final profile = ProfileController(
-    FakeProfileApi(error: StateError('no network')),
+    FakeProfileApi(error: const ApiException('no network')),
   );
 
   profile.load().ignoreFailure();
@@ -161,13 +161,13 @@ final collectedInTheZone = test(
 
     await runZonedGuarded(() async {
       profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
+        FakeProfileApi(error: const ApiException('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
     }, (error, stackTrace) => zoneErrors.add(error));
 
     expect(profile.currentState, isA<Failure>());
-    expect(zoneErrors, [isA<StateError>()]);
+    expect(zoneErrors, [isA<ApiException>()]);
   },
 );
 

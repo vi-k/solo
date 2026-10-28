@@ -37,7 +37,7 @@ final closedToWait = test('load fills in the name', () async {
 /// `## A failure nobody read`: the drain does the waiting.
 final failureNobodyRead = test('a failed load shows the failure', () async {
   final profile = ProfileController(
-    FakeProfileApi(error: StateError('no network')),
+    FakeProfileApi(error: const ApiException('no network')),
   );
 
   // ignore: cascade_invocations
@@ -110,11 +110,11 @@ final assertedInsideTheZone = test(
   () async {
     await runZonedGuarded(() async {
       final profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
+        FakeProfileApi(error: const ApiException('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
 
       expect(profile.currentState, isA<Failure>());
-    }, (error, stackTrace) => expect(error, isA<StateError>()));
+    }, (error, stackTrace) => expect(error, isA<ApiException>()));
   },
 );

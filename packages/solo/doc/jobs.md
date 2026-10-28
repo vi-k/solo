@@ -35,7 +35,7 @@ error and stack trace, `Cancelled` the cancellation reason.
 | `job.done` | Await an `Outcome<T>` without throwing. |
 | `job.outcome` | Read the outcome synchronously; `null` until the job has finished. |
 | `job.cancel()` | Request cancellation and wait for completion. |
-| `job.ignoreFailure()` | Keep the failure of a job nobody awaits from being reported as unhandled. |
+| `job.ignoreFailure()` | Keep the failure of a job nobody awaits from being reported as unhandled; the errors a job expects are named in its `isExpectedError` instead. |
 | `job.whenCancelled(callback)` | Hear the cancellation the moment the job accepts it, running or still queued. |
 | `job.whenFinished(callback)` | Hear the end with the outcome, without observing a failure. |
 
@@ -47,13 +47,15 @@ queued job or a state the job's rules do not accept can all end work
 Every failure reaches the `onError` hook of the controller and of
 `Solo.observer`. A failed job whose outcome nobody has accessed through `done`,
 `value` or `ignoreFailure()` by the microtask after it ends is also answered
-for. The controller's `onUnanswered` hands the error to
-`Solo.unansweredHandler` when one is set, and otherwise reports it as unhandled
-to the Dart zone in which the job was created. Use `ignoreFailure()` when error
-reporting elsewhere is sufficient: leaving a job unawaited does not by itself
-mark the error as handled, and neither does reading `outcome`. See
-[Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
-the errors page.
+for, unless the job names the error in `isExpectedError`. The controller's
+`onUnanswered` hands the error to `Solo.unansweredHandler` when one is set, and
+otherwise reports it as unhandled to the Dart zone in which the job was
+created. Use `ignoreFailure()` when error reporting elsewhere is sufficient:
+leaving a job unawaited does not by itself mark the error as handled, and
+neither does reading `outcome`. See
+[Handled and unhandled failures](errors.md#handled-and-unhandled-failures) and
+[Naming the expected errors](errors.md#naming-the-expected-errors) on the
+errors page.
 
 The job decides once whether to answer for its failure, on the microtask after
 it ends: `done` read later still returns the `Failed`, but the error has been

@@ -97,7 +97,10 @@ const _sources = <String, _Source>{
     attemptHolder: 'test/support/errors_first_attempts.dart',
     answer: '### Observing the outcome',
     answerHolder: 'test/support/errors_page.dart',
-    links: ['errors.md#handled-and-unhandled-failures'],
+    links: [
+      'errors.md#handled-and-unhandled-failures',
+      'errors.md#naming-the-expected-errors',
+    ],
   ),
   '## Moving the clock in fakeAsync': (
     pairs: 1,

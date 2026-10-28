@@ -665,9 +665,12 @@ object is published, as an `emit` of it would be.
 
 The matching handler runs before the next queued job and before the `onFinish`
 hook. Changing state does not turn `Failed` or `Cancelled` into `Done`, and
-does not mark the outcome as handled for error reporting. `ifCancelled` runs at
-completion, so the signal to stop the operation belongs in `ctx.onCancel`,
-which delivers it at once.
+does not mark the outcome as handled for error reporting. A job that knows
+which of its errors are expected names them in `isExpectedError`, and nobody is
+asked to answer for those:
+[Naming the expected errors](errors.md#naming-the-expected-errors) on the
+errors page. `ifCancelled` runs at completion, so the signal to stop the
+operation belongs in `ctx.onCancel`, which delivers it at once.
 
 ### Preserving an incompatible external state
 

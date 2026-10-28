@@ -144,44 +144,52 @@ Never _throwFromChild() => throw StateError('child failed');
 /// A child whose body fails while it still waits for [window] — a child of
 /// its own or its cleanup — under a parent that is cancelled afterwards.
 /// [silence] is what the parent does about the child: nothing,
-/// `child.ignoreFailure()` or `ctx.run(child).ignore()`.
+/// `child.ignoreFailure()` or `ctx.run(child).ignore()`. With [named] the
+/// parent names the error of the child in its `isExpectedError`, and the
+/// child takes it.
 Bench _coveredFailure(
   FakeAsync async,
   String window, {
   String silence = 'none',
+  bool named = false,
 }) {
   final bench = Bench();
-  final parent = bench.enqueue<Ready, void>(key: 'parent', (ctx) async {
-    final child = bench.job<Ready, void>(key: 'child', (childCtx) async {
-      if (window == 'a child of its own') {
-        final grandchild = bench.job<Ready, void>(
-          key: 'grandchild',
-          (ctx) => ctx.abandonable(() => stage.start<void>('grandchild', null)),
-        );
-        childCtx.run(grandchild).ignore();
+  final parent = bench.enqueue<Ready, void>(
+    key: 'parent',
+    isExpectedError: named ? (error) => error is StateError : null,
+    (ctx) async {
+      final child = bench.job<Ready, void>(key: 'child', (childCtx) async {
+        if (window == 'a child of its own') {
+          final grandchild = bench.job<Ready, void>(
+            key: 'grandchild',
+            (ctx) =>
+                ctx.abandonable(() => stage.start<void>('grandchild', null)),
+          );
+          childCtx.run(grandchild).ignore();
+        } else {
+          childCtx.onDispose(() => stage.start<void>('cleanup', null));
+        }
+        throw StateError('child failed first');
+      });
+      if (silence == 'child.ignoreFailure()') {
+        child.ignoreFailure();
+      }
+      if (silence == 'ctx.run(child).ignore()') {
+        ctx.run(child).ignore();
+        await ctx.abandonable(() => stage.start<void>('parent step', null));
+      } else if (silence == 'ctx.start(child)') {
+        ctx.start(child);
+        await ctx.abandonable(() => stage.start<void>('parent step', null));
       } else {
-        childCtx.onDispose(() => stage.start<void>('cleanup', null));
+        try {
+          await ctx.run(child);
+        } on Object catch (error) {
+          _see('the parent body caught $error');
+          rethrow;
+        }
       }
-      throw StateError('child failed first');
-    });
-    if (silence == 'child.ignoreFailure()') {
-      child.ignoreFailure();
-    }
-    if (silence == 'ctx.run(child).ignore()') {
-      ctx.run(child).ignore();
-      await ctx.abandonable(() => stage.start<void>('parent step', null));
-    } else if (silence == 'ctx.start(child)') {
-      ctx.start(child);
-      await ctx.abandonable(() => stage.start<void>('parent step', null));
-    } else {
-      try {
-        await ctx.run(child);
-      } on Object catch (error) {
-        _see('the parent body caught $error');
-        rethrow;
-      }
-    }
-  });
+    },
+  );
   async.flushMicrotasks();
   parent.cancel().ignore();
   async.flushMicrotasks();
@@ -1320,6 +1328,115 @@ void main() {
         },
       );
     }
+
+    group('the isExpectedError of a child', () {
+      for (final silence in ['ctx.run(child).ignore()', 'ctx.start(child)']) {
+        test('a child that ends Cancelled after its body failed with an '
+            'error the predicate names, under $silence', () {
+          late Bench bench;
+          final errors = _zone((async) {
+            bench = _coveredFailure(
+              async,
+              'its cleanup',
+              silence: silence,
+              named: true,
+            );
+          });
+
+          expect(_seen, ['parent Cancelled(manual)']);
+          expect(bench.heard, ['Job(child): Bad state: child failed first']);
+          expect(bench.unanswered, isEmpty);
+          expect(errors, isEmpty);
+          _says(
+            "An error that the child's `isExpectedError` names goes to "
+            '`onUnanswered` in no row: `onError` hears it, and nobody is '
+            'asked to answer for it.',
+          );
+        });
+      }
+
+      // How the child is made, what the parent names, what the child names
+      // of its own, what the child throws, and whether it is answered for.
+      for (final (made, parent, own, thrown, answered)
+          in <(String, String?, String?, Exception, bool)>[
+            ('job(...)', 'ApiException', null, const ApiException(), false),
+            ('ctx.child', 'ApiException', null, const ApiException(), false),
+            ('ctx.each', 'ApiException', null, const ApiException(), false),
+            ('job(...)', null, 'ApiException', const ApiException(), false),
+            (
+              'job(...)',
+              'ApiException',
+              'op stopped',
+              const ApiException(),
+              true,
+            ),
+            (
+              'job(...)',
+              'Exception',
+              null,
+              const FormatException('a bug'),
+              false,
+            ),
+          ]) {
+        test('a child of $made, the parent naming ${parent ?? 'nothing'} and '
+            'the child ${own ?? 'nothing'} of its own, fails with $thrown', () {
+          bool Function(Object error)? names(String? type) => switch (type) {
+            'ApiException' => (error) => error is ApiException,
+            'Exception' => (error) => error is Exception,
+            'op stopped' => (error) => error is _OpStopped,
+            _ => null,
+          };
+          late Bench bench;
+          final errors = _zone((async) {
+            bench = Bench();
+            bench.enqueue<Ready, void>(
+              key: 'parent',
+              isExpectedError: names(parent),
+              (ctx) async {
+                switch (made) {
+                  case 'job(...)':
+                    ctx.start(
+                      bench.job<Ready, void>(
+                        key: 'child',
+                        isExpectedError: names(own),
+                        (childCtx) async => throw thrown,
+                      ),
+                    );
+                  case 'ctx.child':
+                    ctx.start(
+                      ctx.child(key: 'child', (childCtx) async => throw thrown),
+                    );
+                  default:
+                    ctx.each(
+                      stage.progress.stream,
+                      key: 'child',
+                      (childCtx, sent) => throw thrown,
+                    );
+                }
+              },
+            );
+            async.flushMicrotasks();
+            stage.progress.add(1);
+            async.flushMicrotasks();
+          });
+
+          // A child of `each` says so in its name.
+          final child = made == 'ctx.each' ? 'Job(child: each)' : 'Job(child)';
+          expect(bench.heard, ['$child: $thrown']);
+          expect(bench.unanswered, answered ? ['$child: $thrown'] : isEmpty);
+          expect(errors, answered ? ['$thrown'] : isEmpty);
+          _says(
+            'A child started in the body takes the `isExpectedError` of the '
+            'job that started it, unless it is made by `job(...)` with one of '
+            'its own: `ctx.child` and `ctx.each` have no parameter for one.',
+          );
+          _says(
+            'A broad type such as `error is Exception` in the predicate of '
+            'the parent silences the bugs of every child as well',
+          );
+        });
+      }
+    });
 
     group('what the page leaves to the core', () {
       test('a cancellation the parent accepts passes to its children', () {

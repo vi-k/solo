@@ -361,6 +361,39 @@ void main() {
         });
       }
 
+      test('a failure the job names in isExpectedError, accessed through '
+          'nothing at all, stays out of the zone', () {
+        late page.CameraController camera;
+        late Job<void> job;
+        final zone = _zone((async) {
+          camera = page.CameraController();
+          job = camera.enqueue<Ready, void>(
+            key: 'named',
+            isExpectedError: (error) => error is StateError,
+            (ctx) async => throw StateError('disk full'),
+          );
+          async.flushTimers();
+          camera.close().ignore();
+        });
+
+        expect('${job.outcome}', 'Failed(Bad state: disk full)');
+        expect(zone, isEmpty);
+        expect(camera.hookHeard, ['Job(named): Bad state: disk full']);
+        expect(
+          _page().replaceAll(RegExp(r'\s+'), ' '),
+          allOf(
+            contains(
+              'is also answered for, unless the job names the error in '
+              '`isExpectedError`.',
+            ),
+            contains(
+              'the errors a job expects are named in its `isExpectedError` '
+              'instead.',
+            ),
+          ),
+        );
+      });
+
       test('whenCancelled hears a job cancelled while it runs', () {
         fakeAsync((async) {
           final camera = page.CameraController();

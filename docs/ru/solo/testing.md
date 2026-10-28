@@ -14,7 +14,8 @@
 - [«Ошибка, которую никто не прочитал»](#ошибка-которую-никто-не-прочитал):
   провал, который никто не прочитал, делает тест красным с ошибкой, которую
   не бросала ни одна его проверка, или приходит, когда тест уже прошёл, поэтому
-  задача, которую тест не ждёт, получает `ignoreFailure()`.
+  задача, которую тест не ждёт, получает `ignoreFailure()`, если только она
+  не называет свои ожидаемые ошибки в `isExpectedError`.
 - [«Проверки внутри зоны»](#проверки-внутри-зоны): задача создаётся внутри
   `runZonedGuarded`, зона собирает её ошибки, а тест проверяет снаружи. Тест,
   который проверяет внутри, проходит, ничего не проверив, или висит до своего
@@ -27,8 +28,9 @@
   этого `flushMicrotasks()` тест падает на порядке, которого не ждал.
 - [«Ожидание внутри fakeAsync»](#ожидание-внутри-fakeasync): часы двигает
   `async.elapse`, тест читает `job.outcome` там, где ждал бы `done`,
-  а `ignoreFailure()` помечает задачу. Тест, который ждёт внутри `fakeAsync`,
-  висит до своего таймаута или проходит раньше, чем выполнятся его проверки.
+  а `ignoreFailure()` помечает задачу, которая не называет свои ожидаемые
+  ошибки в `isExpectedError`. Тест, который ждёт внутри `fakeAsync`, висит
+  до своего таймаута или проходит раньше, чем выполнятся его проверки.
 - [«Что один тест оставляет следующему»](#что-один-тест-оставляет-следующему):
   наблюдатель — статическое поле, и таких полей ещё четыре; тест, который
   ставит такое поле, возвращает его в `addTearDown`, а не своей последней
@@ -46,7 +48,8 @@
 
 Из примеров ниже все, кроме последнего, гоняют `load` контроллера из раздела
 [«Быстрый старт»](https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#быстрый-старт)
-README пакета:
+README пакета, только без `isExpectedError`, чтобы провал оставался делом
+теста:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -155,10 +158,10 @@ test(
   'a failed load carries the error to the caller',
   () async {
     final profile = ProfileController(
-      FakeProfileApi(error: StateError('no network')),
+      FakeProfileApi(error: const ApiException('no network')),
     );
 
-    await expectLater(profile.load().value, throwsA(isA<StateError>()));
+    await expectLater(profile.load().value, throwsA(isA<ApiException>()));
     expect(profile.currentState, isA<Failure>());
 
     await profile.close();
@@ -254,7 +257,7 @@ test('load fills in the name', () async {
 // Первая попытка: непрочитанный сбой роняет тест.
 test('a failed load shows the failure', () async {
   final profile = ProfileController(
-    FakeProfileApi(error: StateError('no network')),
+    FakeProfileApi(error: const ApiException('no network')),
   );
 
   profile.load();
@@ -267,20 +270,20 @@ test('a failed load shows the failure', () async {
 Проверка проходит, а тест всё равно красный. Исход задачи никто не прочитал,
 а `Solo.unansweredHandler` не задан, поэтому движок отправляет ошибку в зону,
 в которой `Job` была создана, здесь это зона самого теста, и тест падает
-с `Bad state: no network`. Трасса под сообщением называет строку фейка, которая
-бросила, и кадр движка, а строк теста в ней нет. Тест, который задачу не ждёт
-вовсе, платит больше: ошибка приходит после его конца. В отчёте так и сказано —
-`This test failed after it had already completed` — под именем теста, который
-уже прошёл, а выполняется в этот момент следующий. Если же к этому времени
-не выполняется ни один тест, прогон кончается раньше, чем приходит ошибка:
-о ней не говорит никто, и прогон зелёный.
+с `ApiException: no network`. Трасса под сообщением называет строку фейка,
+которая бросила, и кадр движка, а строк теста в ней нет. Тест, который задачу
+не ждёт вовсе, платит больше: ошибка приходит после его конца. В отчёте так
+и сказано — `This test failed after it had already completed` — под именем
+теста, который уже прошёл, а выполняется в этот момент следующий. Если же
+к этому времени не выполняется ни один тест, прогон кончается раньше, чем
+приходит ошибка: о ней не говорит никто, и прогон зелёный.
 
 ### ignoreFailure
 
 ```dart
 test('a failed load shows the failure', () async {
   final profile = ProfileController(
-    FakeProfileApi(error: StateError('no network')),
+    FakeProfileApi(error: const ApiException('no network')),
   );
 
   profile.load().ignoreFailure();
@@ -308,6 +311,54 @@ test('a failed load shows the failure', () async {
 `Solo.unansweredHandler`, и ошибка приходит ему вместо зоны: об этом раздел
 [«Ответ за ошибку»](errors.md#ответ-за-ошибку) страницы об ошибках.
 
+### isExpectedError
+
+Задача, которая знает, какие её ошибки ожидаемы, называет их
+в `isExpectedError`. Здесь `load` контроллера страницы называет `ApiException`,
+ошибку его фейка:
+
+```dart
+Job<String> load() => enqueue<ProfileState, String>(
+  key: 'load',
+  policy: Policy.droppable,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  isExpectedError: (error) => error is ApiException,
+  ifCancelled: (state, cancelled) => const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
+```
+
+```dart
+test('a failed load shows the failure', () async {
+  final profile = ProfileController(
+    FakeProfileApi(error: const ApiException('no network')),
+  );
+
+  profile.load();
+  await profile.close(mode: SoloCloseMode.drain);
+
+  expect(profile.currentState, isA<Failure>());
+});
+```
+
+Тест — первая попытка, к которой ничего не добавлено, и на этом контроллере он
+зелёный. `onError` слышит провал с `JobErrorAnswer.never`, а ответа за него
+не просят ни у кого: ни у `Solo.unansweredHandler`, ни у зоны теста. Исход
+по-прежнему `Failed`, а состояние — `Failure` из `ifFailed`. Дальше не идёт
+и `ApiException` вызова, от которого задача ушла.
+
+Баг такой тест всё равно делает красным. Баг — не `ApiException`: дайте фейку
+`StateError` вместо `ApiException`, и тот же тест будет красным с этой ошибкой,
+как была красной первая попытка. О чём ещё спрашивают предикат, а о чём нет,
+рассказывает раздел
+[«Назвать ожидаемые ошибки»](errors.md#назвать-ожидаемые-ошибки) страницы
+об ошибках.
+
 ## Проверки внутри зоны
 
 То, что непрочитанный провал доходит до зоны, когда `Solo.unansweredHandler`
@@ -323,12 +374,12 @@ test(
   () async {
     await runZonedGuarded(() async {
       final profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
+        FakeProfileApi(error: const ApiException('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
 
       expect(profile.currentState, isA<Failure>());
-    }, (error, stackTrace) => expect(error, isA<StateError>()));
+    }, (error, stackTrace) => expect(error, isA<ApiException>()));
   },
 );
 ```
@@ -344,7 +395,7 @@ test(
 перестаёт быть проверкой: о провале `expect` сообщает броском `TestFailure`,
 а бросок изнутри зоны достаётся её обработчику, как любая другая ошибка. Будь
 состояние не `Failure`, обработчик получил бы этот `TestFailure`, сравнил его
-со `StateError`, не нашёл совпадения и написал об этом со строкой обработчика,
+с `ApiException`, не нашёл совпадения и написал об этом со строкой обработчика,
 а не той, на которой стояла проверка. А `await` не вернулся бы никогда, потому
 что ошибка тела ушла в зону, а не в его future, и тест кончился бы таймаутом.
 
@@ -359,13 +410,13 @@ test(
 
     await runZonedGuarded(() async {
       profile = ProfileController(
-        FakeProfileApi(error: StateError('no network')),
+        FakeProfileApi(error: const ApiException('no network')),
       )..load();
       await profile.close(mode: SoloCloseMode.drain);
     }, (error, stackTrace) => zoneErrors.add(error));
 
     expect(profile.currentState, isA<Failure>());
-    expect(zoneErrors, [isA<StateError>()]);
+    expect(zoneErrors, [isA<ApiException>()]);
   },
 );
 ```

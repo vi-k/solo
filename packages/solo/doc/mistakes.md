@@ -177,7 +177,8 @@ page.
 
 A failure nobody reads is answered for: by `Solo.unansweredHandler` when one is
 set, and otherwise in the zone the job was created in, where an unhandled error
-can end the app.
+can end the app. An error the job names in `isExpectedError` is not answered
+for at all.
 
 Don't do this:
 
@@ -199,7 +200,9 @@ The `onError` hook of an observer or of the controller, an `ifFailed` handler
 and a look at `job.outcome` all see the failure, but none of them counts as
 reading it. Await `job.value` and catch the error, read `job.done`, or call
 `ignoreFailure()` when nobody needs the result and the reporting is left to the
-hooks, like the observer above.
+hooks, like the observer above. A job that knows which of its errors are
+expected names them in `isExpectedError`, and nobody is asked to answer for
+those.
 
 Do this:
 
@@ -209,8 +212,9 @@ profile.load().ignoreFailure();
 
 Do it by the microtask after the job ends: a failure nobody has asked about is
 answered for on that microtask. See
-[Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
-the errors page. To answer for every such failure in one place instead, set
+[Handled and unhandled failures](errors.md#handled-and-unhandled-failures) and
+[Naming the expected errors](errors.md#naming-the-expected-errors) on the
+errors page. To answer for every such failure in one place instead, set
 `Solo.unansweredHandler` once at startup, as
 [Answering for an error](errors.md#answering-for-an-error) shows.
 

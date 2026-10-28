@@ -132,6 +132,9 @@ where it hands the future on.
 | `child.ignoreFailure()` | not handled, goes to the zone | silenced |
 | `ctx.start(child)` | there is no future: a failure of the child goes to `onUnanswered` | goes to `onUnanswered` |
 
+An error that the child's `isExpectedError` names goes to `onUnanswered` in no
+row: `onError` hears it, and nobody is asked to answer for it.
+
 `ctx.run(child).ignore()` explicitly ignores that future's result while the
 parent still waits for its children. `child.ignoreFailure()` alone does not
 handle errors of the future returned by `ctx.run`. `ctx.start(child)` starts
@@ -152,6 +155,14 @@ handles what the future throws, and the future throws the cancellation. An
 error the app named in `Job.isCancellationError` goes no further than the
 controller's `onError`, as in [The token](cancellation.md#the-token) on the
 cancellation page.
+
+A child started in the body takes the `isExpectedError` of the job that started
+it, unless it is made by `job(...)` with one of its own: `ctx.child` and
+`ctx.each` have no parameter for one. A broad type such as `error is Exception`
+in the predicate of the parent silences the bugs of every child as well, so
+keep the predicate a check of the types the API throws:
+[Naming the expected errors](errors.md#naming-the-expected-errors) on the
+errors page.
 
 ## A child the rules turn away
 
