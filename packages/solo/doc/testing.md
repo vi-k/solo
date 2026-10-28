@@ -27,7 +27,7 @@ The other four are for a test under `fakeAsync`, which awaits nothing:
   job start. Without the flush the test fails on an order it did not expect.
 - [Awaiting inside fakeAsync](#awaiting-inside-fakeasync): `async.elapse` moves
   the clock, the test reads `job.outcome` where it would await `done`, and
-  `ignoreFailure()` marks a job that does not name its expected errors in
+  `ignoreFailure()` marks the job, unless the job names its expected errors in
   `isExpectedError`. A test that awaits inside `fakeAsync` hangs until its own
   timeout, or passes before its expectations run.
 - [What one test leaves for the next](#what-one-test-leaves-for-the-next): the
@@ -46,8 +46,9 @@ The tests of the page import `dart:async`,
 
 Of the examples below, all but the last drive the `load` of the controller from
 [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
-in the package README, without its `isExpectedError`, so that the failure is
-the test's to read:
+in the package README. All but the one under
+[isExpectedError](#isexpectederror) drive it without its `isExpectedError`, so
+that the failure is the test's to read:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -311,8 +312,8 @@ by then the test is over. A test that expects such an error sets
 ### isExpectedError
 
 A job that knows which of its errors are expected names them in
-`isExpectedError`. Here the `load` of the page's controller names the
-`ApiException` its fake throws:
+`isExpectedError`. Here the `load` keeps the `isExpectedError` of Quick start,
+which names the `ApiException` the fake throws:
 
 ```dart
 Job<String> load() => enqueue<ProfileState, String>(

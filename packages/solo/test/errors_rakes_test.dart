@@ -1852,7 +1852,7 @@ void main() {
         _says(
           'A child started in the body takes the predicate of the job that '
           'started it, '
-          'unless it is made by `job(...)` with one of its own. A broad type '
+          'unless it is made by `job(...)` with one of its own. A broad check '
           'such as `error is Exception` silences the bugs of every child as '
           'well',
         );

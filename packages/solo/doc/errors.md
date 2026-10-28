@@ -268,7 +268,7 @@ A predicate that throws names nothing: the error goes on as it would without
 one, and what the predicate threw goes to the zone the job was created in.
 
 A child started in the body takes the predicate of the job that started it,
-unless it is made by `job(...)` with one of its own. A broad type such as
+unless it is made by `job(...)` with one of its own. A broad check such as
 `error is Exception` silences the bugs of every child as well, so keep the
 predicate a check of the types the API throws.
 

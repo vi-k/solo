@@ -276,8 +276,37 @@ void main() {
       expect(quickStart, contains(block.group(1)));
       _says('drive the `load` of the controller from');
       _says(
-        'in the package README, without its `isExpectedError`, so that the '
-        "failure is the test's to read:",
+        'in the package README. All but the one under '
+        '[isExpectedError](#isexpectederror) drive it without its '
+        "`isExpectedError`, so that the failure is the test's to read:",
+      );
+    });
+
+    test('the load under "### isExpectedError" is the same load with the '
+        'isExpectedError of the quick start', () {
+      final controller = RegExp(
+        r'```dart\n(.*?)\n```',
+        dotAll: true,
+      ).firstMatch(_page())!.group(1)!;
+      final section = _page().substring(
+        _page().indexOf('\n### isExpectedError\n'),
+      );
+      final load = RegExp(
+        r'```dart\n(.*?)\n```',
+        dotAll: true,
+      ).firstMatch(section)!.group(1)!;
+      final predicate = RegExp(r'\n *isExpectedError: [^\n]*');
+      final indented = load
+          .replaceAll(predicate, '')
+          .split('\n')
+          .map((line) => line.isEmpty ? line : '  $line')
+          .join('\n');
+
+      expect(predicate.allMatches(load), hasLength(1));
+      expect(controller, contains(indented));
+      _says(
+        'Here the `load` keeps the `isExpectedError` of Quick start, which '
+        'names the `ApiException` the fake throws:',
       );
     });
 
@@ -1286,7 +1315,7 @@ void main() {
         expect(outcome, 'Failed(ApiException: no network)');
         expect(errors, isEmpty);
         _says(
-          '`ignoreFailure()` marks a job that does not name its expected '
+          '`ignoreFailure()` marks the job, unless the job names its expected '
           'errors in `isExpectedError`.',
         );
       });

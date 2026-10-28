@@ -1348,9 +1348,60 @@ void main() {
           expect(bench.unanswered, isEmpty);
           expect(errors, isEmpty);
           _says(
-            "An error that the child's `isExpectedError` names goes to "
-            '`onUnanswered` in no row: `onError` hears it, and nobody is '
-            'asked to answer for it.',
+            "Where the table says `onUnanswered`, an error that the child's "
+            '`isExpectedError` names goes no further than `onError`, and '
+            'nobody is asked to answer for it.',
+          );
+        });
+      }
+
+      for (final silence in [
+        'child.ignoreFailure()',
+        'ctx.run(child).ignore()',
+        'ctx.start(child)',
+      ]) {
+        test('a child that fails under $silence with an error the predicate '
+            'names', () {
+          late Bench bench;
+          final errors = _zone((async) {
+            bench = Bench();
+            bench.enqueue<Ready, void>(
+              key: 'parent',
+              isExpectedError: (error) => error is StateError,
+              (ctx) async {
+                final child = bench.job<Ready, void>(
+                  key: 'child',
+                  (childCtx) =>
+                      childCtx.join(() => stage.start<void>('work', null)),
+                );
+                switch (silence) {
+                  case 'child.ignoreFailure()':
+                    child.ignoreFailure();
+                    unawaited(ctx.run(child));
+                  case 'ctx.run(child).ignore()':
+                    ctx.run(child).ignore();
+                  default:
+                    ctx.start(child);
+                }
+              },
+            );
+            async.flushMicrotasks();
+            _fail(async, 'work', StateError('child failed'));
+          });
+
+          expect(bench.heard, ['Job(child): Bad state: child failed']);
+          expect(bench.unanswered, isEmpty);
+          // The predicate keeps the error from `onUnanswered`; the future of
+          // `ctx.run` that nobody handles still throws it into the zone.
+          expect(
+            errors,
+            silence == 'child.ignoreFailure()'
+                ? ['Bad state: child failed']
+                : isEmpty,
+          );
+          _says(
+            'The future of `ctx.run` throws that error all the same, so under '
+            '`child.ignoreFailure()` it still reaches the zone unhandled.',
           );
         });
       }
@@ -1431,7 +1482,7 @@ void main() {
             'its own: `ctx.child` and `ctx.each` have no parameter for one.',
           );
           _says(
-            'A broad type such as `error is Exception` in the predicate of '
+            'A broad check such as `error is Exception` in the predicate of '
             'the parent silences the bugs of every child as well',
           );
         });

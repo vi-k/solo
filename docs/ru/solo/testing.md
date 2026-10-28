@@ -28,9 +28,9 @@
   этого `flushMicrotasks()` тест падает на порядке, которого не ждал.
 - [«Ожидание внутри fakeAsync»](#ожидание-внутри-fakeasync): часы двигает
   `async.elapse`, тест читает `job.outcome` там, где ждал бы `done`,
-  а `ignoreFailure()` помечает задачу, которая не называет свои ожидаемые
-  ошибки в `isExpectedError`. Тест, который ждёт внутри `fakeAsync`, висит
-  до своего таймаута или проходит раньше, чем выполнятся его проверки.
+  а `ignoreFailure()` помечает задачу, если только она не называет свои
+  ожидаемые ошибки в `isExpectedError`. Тест, который ждёт внутри `fakeAsync`,
+  висит до своего таймаута или проходит раньше, чем выполнятся его проверки.
 - [«Что один тест оставляет следующему»](#что-один-тест-оставляет-следующему):
   наблюдатель — статическое поле, и таких полей ещё четыре; тест, который
   ставит такое поле, возвращает его в `addTearDown`, а не своей последней
@@ -48,8 +48,9 @@
 
 Из примеров ниже все, кроме последнего, гоняют `load` контроллера из раздела
 [«Быстрый старт»](https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#быстрый-старт)
-README пакета, только без `isExpectedError`, чтобы провал оставался делом
-теста:
+README пакета. Все, кроме примера в разделе
+[isExpectedError](#isexpectederror), гоняют его без `isExpectedError`, чтобы
+провал оставался делом теста:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -314,8 +315,8 @@ test('a failed load shows the failure', () async {
 ### isExpectedError
 
 Задача, которая знает, какие её ошибки ожидаемы, называет их
-в `isExpectedError`. Здесь `load` контроллера страницы называет `ApiException`,
-ошибку его фейка:
+в `isExpectedError`. Здесь `load` сохраняет `isExpectedError` из «Быстрого
+старта», и этот предикат называет `ApiException`, ошибку фейка:
 
 ```dart
 Job<String> load() => enqueue<ProfileState, String>(
