@@ -9,9 +9,7 @@
 final loaded = Job<String>((ctx) => ctx.join(loadText));
 final parsed = loaded.then<int>((ctx, text) => int.parse(text));
 final saved = parsed.then<void>(
-  (ctx, number) => ctx.join(
-    () => saveNumber(number),
-  ),
+  (ctx, number) => ctx.join(() => saveNumber(number)),
 );
 
 await saved.value;
