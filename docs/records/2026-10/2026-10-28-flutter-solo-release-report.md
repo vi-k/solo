@@ -1,5 +1,6 @@
-> **Состояние на 2026-10-28:** связка выпуска `flutter_solo` 0.6.0 идёт;
-> итог — в разделе «Связка» следующим коммитом.
+> **Состояние на 2026-10-28:** `flutter_solo` 0.6.0 опубликован на pub.dev;
+> релизный коммит `da1525d9` и аннотированный тег отправлены в origin. Выпуск
+> 0.6.0 завершён: все три пакета на pub.dev.
 > **Что это:** снятие оверрайдов `flutter_solo` и подготовка его выпуска 0.6.0.
 > **Связанные записи:** `2026-10-28-solo-release-report.md`,
 > `2026-10-28-async-job-release-report.md`,
@@ -67,6 +68,20 @@ floor: 6 roots»: `async_job` +1885, `solo` +2198 при 11 пропущенны
 ни в origin, оверрайдов у пакета и примера нет,
 `flutter pub publish --dry-run` — 0 предупреждений; на pub.dev `latest: 0.5.0`.
 
-Связка идёт подряд: коммит `Release flutter_solo 0.6.0`, аннотированный тег
-`flutter_solo-v0.6.0`, push, `flutter pub publish`. Итог — в этом разделе
-следующим коммитом.
+Связка выполнена подряд:
+
+- `da1525d9` — Release flutter_solo 0.6.0;
+- аннотированный тег `flutter_solo-v0.6.0` указывает на `da1525d9`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/flutter_solo-v0.6.0^{}` дают `da1525d9`;
+- `flutter pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/flutter_solo version 0.6.0»;
+- API pub.dev вернул `latest: 0.6.0`;
+- CI `gate` на `da1525d9`: `dart`, `flutter`, `snippets` и `docs` зелёные,
+  `floor` отменён — группа конкурентности `gate.yml` сняла его, когда пришёл
+  push `84ddb054` выпуска `solo_lints`. `gate` на `84ddb054`, где то же дерево
+  `flutter_solo`, зелёный во всех пяти заданиях.
+
+Пакет: https://pub.dev/packages/flutter_solo/versions/0.6.0
+
+Выпуск 0.6.0 завершён: все три пакета на pub.dev.

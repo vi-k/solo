@@ -1,8 +1,9 @@
-> **Состояние на 2026-10-28:** подготовка сделана и в `main`. `async_job`
-> и `solo` 0.6.0 опубликованы, `2026-10-28-async-job-release-report.md`
-> и `2026-10-28-solo-release-report.md`; scopo 0.21.0 вышел; `flutter_solo`
-> подготовлен, `2026-10-28-flutter-solo-release-report.md`. Связка каждого
-> следующего пакета ждёт отдельного слова владельца.
+> **Состояние на 2026-10-28:** выпуск завершён: `async_job`, `solo`
+> и `flutter_solo` 0.6.0 и `solo_lints` 0.1.0 опубликованы,
+> `2026-10-28-async-job-release-report.md`,
+> `2026-10-28-solo-release-report.md`,
+> `2026-10-28-flutter-solo-release-report.md`,
+> `2026-10-28-solo-lints-release-report.md`; scopo 0.21.0 вышел тем же днём.
 > **Что это:** шаги подготовки 0.6.0, которые не ждут публикации, и чем они
 > проверены.
 > **Связанные записи:** `2026-10-28-sdk-floor-3-10-report.md`

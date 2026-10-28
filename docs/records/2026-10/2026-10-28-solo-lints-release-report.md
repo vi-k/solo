@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-28:** связка выпуска `solo_lints` 0.1.0 идёт; итог —
-> в разделе «Связка» следующим коммитом.
+> **Состояние на 2026-10-28:** `solo_lints` 0.1.0 опубликован на pub.dev;
+> релизный коммит `84ddb054` и аннотированный тег отправлены в origin.
 > **Что это:** снятие оверрайдов `solo_lints` и первый выпуск пакета, 0.1.0.
 > **Связанные записи:** `2026-10-28-solo-lints-report.md`,
 > `2026-10-28-solo-lints-wave-2-report.md`,
@@ -47,6 +47,24 @@ floor: 6 roots». `solo_lints` опускает `analysis_server_plugin`, `analy
 
 ## Связка
 
-Связка идёт подряд: коммит `Release solo_lints 0.1.0`, аннотированный тег
-`solo_lints-v0.1.0`, push, `dart pub publish`. Итог — в этом разделе следующим
-коммитом.
+Перед связкой: `git fetch` выполнен, `origin/main` совпадал с веткой
+на `da1525d9`; тега `solo_lints-v0.1.0` не было ни локально, ни в origin;
+оверрайдов у пакета нет, `dart pub publish --dry-run` в основной копии — 0
+предупреждений.
+
+Связка выполнена подряд:
+
+- `87188b74` — снятие оверрайдов, `84ddb054` — Release solo_lints 0.1.0;
+- аннотированный тег `solo_lints-v0.1.0` указывает на `84ddb054`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/solo_lints-v0.1.0^{}` дают `84ddb054`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/solo_lints version 0.1.0»;
+- API pub.dev вернул `latest: 0.1.0`;
+- CI `gate` на `84ddb054`: `dart`, `flutter`, `floor`, `snippets` и `docs`
+  зелёные.
+
+Пакет: https://pub.dev/packages/solo_lints/versions/0.1.0
+
+Выпуск завершён. Что осталось за ним: страница пакета на сайте документации,
+линты в примерах и упоминание в README ядра и `solo` — решением владельца.
