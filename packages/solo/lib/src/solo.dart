@@ -1429,7 +1429,8 @@ final class _SoloJobObserver<S extends Object>
 
   /// The controller answers for its jobs: [Solo.onUnanswered], and the
   /// [Solo.unansweredHandler] behind it. [Solo.observer] is not asked —
-  /// watching every controller is not answering for any of them.
+  /// watching every controller is not answering for any of them. An error the
+  /// job's `isExpectedError` names returns early, with a line of [Solo.debug].
   ///
   /// Not called through [Solo._callHook]: what the answer throws goes back
   /// to the core, which sends the error it was asked about to the zone

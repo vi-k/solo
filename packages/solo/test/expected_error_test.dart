@@ -295,12 +295,11 @@ void main() {
       async.flushTimers();
       expect(errors, ['Bad state: predicate']);
       expect(asked, 1);
-      final lines = journal.take();
-      expect(lines.where((line) => line.contains('] error ')), [
+      expect(journal.take(), [
+        '[load] started',
         '[load] error ApiError (answered)',
-      ]);
-      expect(lines.where((line) => line.contains('] unanswered ')), [
         '[load] unanswered ApiError',
+        '[load] finished Cancelled(manual)',
       ]);
     });
   });
@@ -442,7 +441,11 @@ void main() {
         lines,
         contains('Job(load) expected ApiError: nobody is asked to answer'),
       );
-      journal.take();
+      expect(journal.take(), [
+        '[load] started',
+        '[load] error ApiError (never)',
+        '[load] finished Failed(ApiError)',
+      ]);
     });
   });
 

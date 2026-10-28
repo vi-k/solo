@@ -140,9 +140,10 @@ that refuses cancellation» на `cancellation.md` написан по прос�
 в зону мимо ответа: `onUnanswered` отмен не видит, а исход должен до кого-то
 дойти. `ParallelWaitError` отвечают по провалу. Глушит провал
 `ignoreFailure()`, а в `solo` ещё и предикат `isExpectedError`, пункт 44.
-(2026-09-03, 2026-10-20; `2026-09-02[1]-solo-design.md`,
+(2026-09-03, 2026-10-20, 2026-10-28; `2026-09-02[1]-solo-design.md`,
 `2026-10-20-async-job-project-review.md`, L21,
-`2026-10-20-solo-project-review.md`, M7, `2026-10-20-api-0-3-0-design.md`.)
+`2026-10-20-solo-project-review.md`, M7, `2026-10-20-api-0-3-0-design.md`,
+`2026-10-28-if-failed-answer-design.md`.)
 
 **92. Провал наблюдают чтением `done` или `value`, а не отдельным вызовом.**
 Так `await job.done` наблюдает сам, без второй строки. Чтение в часах отладчика
