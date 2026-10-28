@@ -5,6 +5,7 @@ import 'package:analysis_server_plugin/plugin.dart';
 import 'package:analysis_server_plugin/registry.dart';
 
 import 'src/fixes/add_check.dart';
+import 'src/fixes/key_per_request.dart';
 import 'src/fixes/release_on_the_call.dart';
 import 'src/rules/await_own_queue.dart';
 import 'src/rules/catch_without_check.dart';
@@ -32,6 +33,7 @@ class SoloLintsPlugin extends Plugin {
       ..registerWarningRule(AwaitOwnQueue())
       ..registerLintRule(CatchWithoutCheck())
       ..registerLintRule(KeyPerRequest())
+      ..registerFixForRule(KeyPerRequest.code, PutArgumentsIntoKey.new)
       ..registerFixForRule(CatchWithoutCheck.code, AddCheck.new);
   }
 }
