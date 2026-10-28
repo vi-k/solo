@@ -5,6 +5,7 @@ import 'package:analyzer_plugin/utilities/change_builder/change_builder_core.dar
 import 'package:analyzer_plugin/utilities/fixes/fixes.dart';
 import 'package:analyzer_plugin/utilities/range_factory.dart';
 
+import '../context.dart';
 import '../rules/release_on_the_call.dart';
 
 /// Moves a release reported by `release_on_the_call` into `dispose:` or
@@ -48,17 +49,18 @@ class PassReleaseToCall extends ResolvedCorrectionProducer {
     final statement = _statement;
     final release = _release;
     if (statement == null || release == null) return;
-    final statements = _siblings(statement);
+    final statements = statementsOf(statement.parent);
     final at = statements?.indexOf(statement) ?? -1;
     if (statements == null || at < 1) return;
     final brought = broughtBy(statements[at - 1]);
     if (brought == null) return;
     final name = brought.variable.displayName;
-    final released = release.argumentList.arguments.firstOrNull;
-    if (released is! Expression) return;
+    final released = firstPositional(release.argumentList);
+    if (released == null) return;
     final function = _closure(released, name);
     if (function == null) return;
     final arguments = brought.call.argumentList;
+    if (arguments.arguments.isEmpty) return;
     final last = arguments.arguments.last;
     final comma = last.endToken.next;
     final trailing = comma != null && comma.type == TokenType.COMMA;
@@ -102,16 +104,5 @@ class PassReleaseToCall extends ResolvedCorrectionProducer {
       return '${text.substring(0, open)}$name${text.substring(open)}';
     }
     return null;
-  }
-
-  static List<Statement>? _siblings(Statement statement) {
-    final parent = statement.parent;
-    return switch (parent) {
-      Block() => parent.statements,
-      SwitchCase() => parent.statements,
-      SwitchDefault() => parent.statements,
-      SwitchPatternCase() => parent.statements,
-      _ => null,
-    };
   }
 }

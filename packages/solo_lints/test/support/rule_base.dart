@@ -3,6 +3,8 @@ import 'dart:isolate';
 
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer_testing/analysis_rule/analysis_rule.dart';
+import 'package:analyzer_testing/src/analysis_rule/pub_package_resolution.dart'
+    show ExpectedDiagnostic; // ignore: implementation_imports
 
 /// The packages whose real sources a test file can import.
 ///
@@ -59,7 +61,14 @@ abstract class RuleTest extends AnalysisRuleTest {
   /// A span may mark the reported part of a longer text with `[[` and `]]`:
   /// `'on [[Object]] catch'` expects the diagnostic at `Object` of the first
   /// `on Object catch`.
-  Future<void> assertAt(String code, List<String> spans) {
+  ///
+  /// [alsoExpected] are diagnostics of other codes the code is meant to have,
+  /// such as the compile error of a fixture that cannot be valid.
+  Future<void> assertAt(
+    String code,
+    List<String> spans, {
+    List<ExpectedDiagnostic> alsoExpected = const [],
+  }) {
     var from = 0;
     final expected = [
       for (final span in spans)
@@ -73,6 +82,6 @@ abstract class RuleTest extends AnalysisRuleTest {
           return lint(found + start, span.indexOf(']]') - start - 2);
         }(),
     ];
-    return assertDiagnostics(code, expected);
+    return assertDiagnostics(code, [...alsoExpected, ...expected]);
   }
 }

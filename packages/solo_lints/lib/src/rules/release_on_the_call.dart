@@ -52,18 +52,20 @@ class _Visitor extends SimpleAstVisitor<void> {
   _Visitor(this.rule);
 
   @override
-  void visitBlock(Block node) => _scan(node.statements);
+  void visitBlock(Block node) => _scan(statementsOf(node));
 
   @override
-  void visitSwitchCase(SwitchCase node) => _scan(node.statements);
+  void visitSwitchCase(SwitchCase node) => _scan(statementsOf(node));
 
   @override
-  void visitSwitchDefault(SwitchDefault node) => _scan(node.statements);
+  void visitSwitchDefault(SwitchDefault node) => _scan(statementsOf(node));
 
   @override
-  void visitSwitchPatternCase(SwitchPatternCase node) => _scan(node.statements);
+  void visitSwitchPatternCase(SwitchPatternCase node) =>
+      _scan(statementsOf(node));
 
-  void _scan(List<Statement> statements) {
+  void _scan(List<Statement>? statements) {
+    if (statements == null) return;
     for (var i = 0; i + 1 < statements.length; i++) {
       final brought = broughtBy(statements[i]);
       if (brought == null) continue;
@@ -89,8 +91,19 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 }
 
-/// The call, the variable and the context of the call it awaits, when
-/// [statement] is `final x = await ctx.join(...)` with no release of its own.
+/// The statements [node] holds when it is a block or a switch member,
+/// otherwise `null`.
+List<Statement>? statementsOf(AstNode? node) => switch (node) {
+  Block() => node.statements,
+  SwitchCase() => node.statements,
+  SwitchDefault() => node.statements,
+  SwitchPatternCase() => node.statements,
+  _ => null,
+};
+
+/// The call [statement] awaits, the variable it declares and the context of
+/// that call, when [statement] is `final x = await ctx.join(...)` with no
+/// release of its own.
 ({MethodInvocation call, Element variable, Element ctx})? broughtBy(
   Statement statement,
 ) {

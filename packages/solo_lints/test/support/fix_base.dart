@@ -2,6 +2,8 @@ import 'package:analysis_server_plugin/edit/dart/correction_producer.dart';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer_plugin/protocol/protocol_common.dart';
 import 'package:analyzer_plugin/utilities/change_builder/change_builder_core.dart';
+import 'package:analyzer_testing/src/analysis_rule/pub_package_resolution.dart'
+    show ExpectedDiagnostic; // ignore: implementation_imports
 import 'package:test/test.dart';
 
 import 'rule_base.dart';
@@ -31,7 +33,7 @@ abstract class FixTest extends RuleTest {
     String expected, {
     List<String>? arguments,
   }) async {
-    final (:change, :fix) = await _fix(code, span);
+    final (:change, :fix) = await _fix(code, span, const []);
     expect(change.edits, hasLength(1), reason: 'one file is edited');
     final edit = change.edits.single;
     expect(edit.file, result.path);
@@ -50,16 +52,23 @@ abstract class FixTest extends RuleTest {
 
   /// Asserts that the rule reports [code] exactly at [span], in the form of
   /// [assertAt], and that the fix for that diagnostic builds no edits.
-  Future<void> assertNoFix(String code, String span) async {
-    final (:change, fix: _) = await _fix(code, span);
+  ///
+  /// [alsoExpected] are passed on to [assertAt].
+  Future<void> assertNoFix(
+    String code,
+    String span, {
+    List<ExpectedDiagnostic> alsoExpected = const [],
+  }) async {
+    final (:change, fix: _) = await _fix(code, span, alsoExpected);
     expect(change.edits, isEmpty);
   }
 
   Future<({SourceChange change, ResolvedCorrectionProducer fix})> _fix(
     String code,
     String span,
+    List<ExpectedDiagnostic> alsoExpected,
   ) async {
-    await assertAt(code, [span]);
+    await assertAt(code, [span], alsoExpected: alsoExpected);
     final diagnostic = result.diagnostics.singleWhere(
       (d) => rule.diagnosticCodes.contains(d.diagnosticCode),
     );
