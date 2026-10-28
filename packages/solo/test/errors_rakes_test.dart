@@ -12,6 +12,7 @@ import 'package:test/test.dart';
 import 'support/errors_first_attempts.dart' as first;
 import 'support/errors_page.dart' as page;
 import 'support/errors_page_answering.dart' as answering;
+import 'support/errors_page_expected.dart' as expected;
 import 'support/errors_rakes.dart';
 import 'support/errors_stubs.dart';
 import 'support/page_code.dart';
@@ -71,6 +72,36 @@ final class _FailuresOnFinish extends SoloObserver {
     }
   }
 }
+
+/// Not on the page: the API of "Naming the expected errors" with a reply that
+/// has no name, which `fetchName` reads as if it had one.
+final class _NamelessApi extends ProfileApi {
+  @override
+  Future<String> fetchName() async {
+    final reply = await stage.start<Map<String, Object?>>('fetchName', const {
+      'id': 7,
+    });
+
+    return reply['name']! as String;
+  }
+}
+
+/// An observer that keeps what `onError` told it, with the answer.
+final class _Answers extends SoloObserver {
+  final heard = <String>[];
+
+  @override
+  void onError(
+    Solo<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) => heard.add('${job.key}: ${text(error)} (${answer.name})');
+}
+
+/// The errors the jobs of "Naming the expected errors" expect.
+bool _isApi(Object error) => error is ApiException;
 
 /// A reporting hook that calls `super`, and one that does not.
 final class _ReportsAndCallsSuper extends Solo<int> with OpenSolo<int> {
@@ -247,6 +278,33 @@ List<List<String>> _quoted() => errorsPage.quoted;
 void _row(String error, String hears, String answers) =>
     errorsRow(error, hears, answers);
 
+// The rows of the table of where each error goes that more than one test
+// pins: the runs without `isExpectedError` and the runs with it.
+const _body = 'An error of the body, and the job ends `Failed` with it';
+const _bodyAnswer =
+    'Whoever observes the outcome; if nobody does, `onUnanswered`, unless '
+    '`isExpectedError` names it';
+const _cancelledBody = 'An error of the body, and the job ends `Cancelled`';
+const _cancelledBodyAnswer =
+    '`onUnanswered`, unless `ignoreFailure()` was called on the job or '
+    '`isExpectedError` names it';
+const _late = 'A late error of an operation `abandonable` stopped waiting for';
+const _callbacks =
+    'An error of a disposer, a `ctx.onCancel` callback or a state handler of '
+    'a job';
+const _listeners = 'An error of a `whenCancelled` or `whenFinished` listener';
+const _keepWhile =
+    'A `keepWhile` that throws when a change of state re-checks it';
+const _unattended = 'An error of work handed to `ctx.unattended`';
+const _branch =
+    'An error of a branch of `ctx.runAll` that the group did not throw';
+const _branchAnswer =
+    '`onUnanswered`, unless `ignoreFailure()` was called on the branch or '
+    '`isExpectedError` names it';
+const _unlessNamed = '`onUnanswered`, unless `isExpectedError` names it';
+const _named = 'An error `isExpectedError` names';
+const _namedHeard = '`onError`, with `never`';
+
 /// Fails [call] of a stub with [error].
 void _fail(FakeAsync async, String call, Object error) {
   stage.fail(call, error);
@@ -319,12 +377,12 @@ void main() {
         profile = page.ProfileController(ProfileApi());
         job = profile.load()..ignoreFailure();
         async.flushMicrotasks();
-        _fail(async, 'fetchName', StateError('no network'));
+        _fail(async, 'fetchName', const ApiException('no network'));
       });
 
       expect(stage.crashes, ['no network'], reason: 'told once');
-      expect('${job.outcome}', 'Failed(Bad state: no network)');
-      expect('${profile.currentState}', 'Failure(Bad state: no network)');
+      expect('${job.outcome}', 'Failed(ApiException: no network)');
+      expect('${profile.currentState}', 'Failure(ApiException: no network)');
       expect(
         ran.errors,
         isEmpty,
@@ -529,11 +587,7 @@ void main() {
     });
 
     test('the failure of a body: the outcome carries it', () {
-      _row(
-        'An error of the body, and the job ends `Failed` with it',
-        '`onError`',
-        'Whoever observes the outcome; `onUnanswered` if nobody does',
-      );
+      _row(_body, '`onError`', _bodyAnswer);
       _says(
         '`enqueue(ifFailed: ...)` turns the failure into the state the '
         'screen shows',
@@ -577,7 +631,7 @@ void main() {
             );
         expect(
           RegExp('^- ', multiLine: true).allMatches(section),
-          hasLength(6),
+          hasLength(7),
         );
         _says(
           '- an operation that `abandonable` stopped waiting for, which '
@@ -585,8 +639,11 @@ void main() {
         );
         _says(
           '- what the job calls outside its body: a disposer, a '
-          '`ctx.onCancel` callback, a `whenCancelled` or `whenFinished` '
-          'listener, a state handler of a job;',
+          '`ctx.onCancel` callback, a state handler of a job;',
+        );
+        _says(
+          '- a `whenCancelled` or `whenFinished` listener, which the caller '
+          'of the job registers;',
         );
         _says(
           '- a `keepWhile` that throws when a change of state re-checks it;',
@@ -608,11 +665,7 @@ void main() {
       });
 
       test('an operation abandoned by abandonable that fails later', () {
-        _row(
-          'A late error of an operation `abandonable` stopped waiting for',
-          '`onError`',
-          '`onUnanswered`',
-        );
+        _row(_late, '`onError`', _unlessNamed);
         late Bench bench;
         late Job<void> job;
         final ran = runFaked((async) {
@@ -631,13 +684,7 @@ void main() {
       });
 
       test('a disposer', () {
-        _row(
-          'An error of a disposer, a `ctx.onCancel` callback, a '
-              '`whenCancelled` or `whenFinished` listener, or a state handler '
-              'of a job',
-          '`onError`',
-          '`onUnanswered`',
-        );
+        _row(_callbacks, '`onError`', _unlessNamed);
         late Bench bench;
         late Job<void> job;
         final ran = runFaked((async) {
@@ -653,6 +700,7 @@ void main() {
 
       test('a ctx.onCancel callback, a whenCancelled and a whenFinished '
           'listener', () {
+        _row(_listeners, '`onError`', '`onUnanswered`');
         late Bench bench;
         final ran = runFaked((async) {
           bench = Bench();
@@ -705,11 +753,7 @@ void main() {
       });
 
       test('a keepWhile that throws when a change of state re-checks it', () {
-        _row(
-          'A `keepWhile` that throws when a change of state re-checks it',
-          '`onError`',
-          '`onUnanswered`',
-        );
+        _row(_keepWhile, '`onError`', _unlessNamed);
         late Bench bench;
         late Job<void> job;
         var cancelledByIt = true;
@@ -736,11 +780,7 @@ void main() {
       });
 
       test('work handed to ctx.unattended', () {
-        _row(
-          'An error of work handed to `ctx.unattended`',
-          '`onError`',
-          '`onUnanswered`',
-        );
+        _row(_unattended, '`onError`', _unlessNamed);
         late Bench bench;
         late Job<void> job;
         final ran = runFaked((async) {
@@ -761,11 +801,7 @@ void main() {
       test(
         'the failure of a branch of runAll that the group did not throw',
         () {
-          _row(
-            'An error of a branch of `ctx.runAll` that the group did not throw',
-            '`onError`',
-            '`onUnanswered`, unless `ignoreFailure()` was called on the branch',
-          );
+          _row(_branch, '`onError`', _branchAnswer);
           late Bench bench;
           late Job<void> job;
           final caught = <String>[];
@@ -808,11 +844,7 @@ void main() {
       test(
         'a failure, and a cancellation before the error leaves the body',
         () {
-          _row(
-            'An error of the body, and the job ends `Cancelled`',
-            '`onError`',
-            '`onUnanswered`, unless `ignoreFailure()` was called on the job',
-          );
+          _row(_cancelledBody, '`onError`', _cancelledBodyAnswer);
           late Bench bench;
           late Job<void> job;
           Object? thrown;
@@ -1139,8 +1171,8 @@ void main() {
     });
   });
   group('Handled and unhandled failures', () {
-    test('the page quotes two lines of a failure, then one', () {
-      expect(_quoted().map((block) => block.length), [2, 1]);
+    test('the page quotes two lines of a failure, then one, one and two', () {
+      expect(_quoted().map((block) => block.length), [2, 1, 1, 2]);
     });
 
     /// Runs [body] under fake time and returns the lines of the page it
@@ -1162,7 +1194,7 @@ void main() {
         Solo.observer = first.Failures();
         Bench().enqueue<int, void>(
           key: 'load',
-          (ctx) async => throw StateError('no network'),
+          (ctx) async => throw const ApiException('no network'),
         );
       });
 
@@ -1175,7 +1207,7 @@ void main() {
         Bench()
             .enqueue<int, void>(
               key: 'load',
-              (ctx) async => throw StateError('no network'),
+              (ctx) async => throw const ApiException('no network'),
             )
             .ignoreFailure();
       });
@@ -1203,7 +1235,7 @@ void main() {
           bench = Bench()
             ..enqueue<int, void>(
               key: 'load',
-              (ctx) async => throw StateError('no network'),
+              (ctx) async => throw const ApiException('no network'),
             );
         });
 
@@ -1234,7 +1266,7 @@ void main() {
           bench = Bench();
           final load = waits(bench, 'load');
           async.flushMicrotasks();
-          stage.fail('op', StateError('no network'));
+          stage.fail('op', const ApiException('no network'));
           scheduleMicrotask(load.cancel);
           async.flushMicrotasks();
         });
@@ -1254,7 +1286,7 @@ void main() {
             bench = Bench()
               ..enqueue<int, void>(
                 key: 'load',
-                (ctx) async => throw StateError('no network'),
+                (ctx) async => throw const ApiException('no network'),
               );
           });
 
@@ -1276,11 +1308,11 @@ void main() {
           profile = page.ProfileController(ProfileApi());
           page.loadAndIgnore(profile);
           async.flushMicrotasks();
-          _fail(async, 'fetchName', StateError('no network'));
+          _fail(async, 'fetchName', const ApiException('no network'));
         });
 
         expect(stage.crashes, ['no network'], reason: 'the hook reports it');
-        expect('${profile.currentState}', 'Failure(Bad state: no network)');
+        expect('${profile.currentState}', 'Failure(ApiException: no network)');
         expect(ran.errors, isEmpty, reason: 'and nothing reaches the zone');
       });
 
@@ -1324,7 +1356,7 @@ void main() {
       /// `ctx.abandonable` fails: the job has seen the failure, and the body
       /// has not thrown it yet.
       void failThenCancel(FakeAsync async, Job<Object?> job) {
-        stage.fail('fetchName', StateError('no network'));
+        stage.fail('fetchName', const ApiException('no network'));
         scheduleMicrotask(job.cancel);
         async.flushMicrotasks();
       }
@@ -1379,15 +1411,515 @@ void main() {
       });
     });
 
-    test('an abandoned call that fails once its job has completed', () {
-      _row(
-        'A late error of an operation `abandonable` stopped waiting for',
-        '`onError`',
-        '`onUnanswered`',
+    group('naming the expected errors:', () {
+      /// Runs [body] under fake time with the observer of the first attempt
+      /// and returns the lines of the page it printed, as `printed` does.
+      List<String> printedBy(void Function(FakeAsync async) body) {
+        fakeAsync((async) {
+          runZonedGuarded(() {
+            Solo.observer = first.Failures();
+            body(async);
+          }, (error, stackTrace) => stage.printed.add('zone: $error'));
+          async.flushTimers();
+        });
+
+        return stage.printed;
+      }
+
+      test('the line of the page: the network is down, and that is all', () {
+        _says(
+          'The observer of the first attempt stays, and the screen calls '
+          '`profile.load()` with nobody waiting for the result',
+        );
+        late expected.ProfileController profile;
+        late Job<String> job;
+        final lines = printedBy((async) {
+          profile = expected.ProfileController(ProfileApi());
+          job = profile.load();
+          async.flushMicrotasks();
+          _fail(async, 'fetchName', const ApiException('no network'));
+        });
+
+        expect(lines, _quoted()[2]);
+        expect('${job.outcome}', 'Failed(ApiException: no network)');
+        expect('${profile.currentState}', 'Failure(ApiException: no network)');
+      });
+
+      test('onError hears never, and nobody is asked to answer', () {
+        _row(_named, _namedHeard, 'Nobody');
+        _says(
+          '`onError` hears the error with `JobErrorAnswer.never`, and nobody '
+          'is asked to answer for it: not `onUnanswered`, not '
+          '`Solo.unansweredHandler`, not the zone',
+        );
+        final answers = _Answers();
+        final handled = <String>[];
+        late Bench bench;
+        final ran = runFaked((async) {
+          Solo.observer = answers;
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(text(error));
+          expected.ProfileController(ProfileApi()).load();
+          async.flushMicrotasks();
+          _fail(async, 'fetchName', const ApiException('no network'));
+          bench = Bench()
+            ..enqueue<int, void>(
+              key: 'bench',
+              isExpectedError: _isApi,
+              (ctx) async => throw const ApiException('the body'),
+            );
+        });
+
+        expect(answers.heard, [
+          'load: no network (never)',
+          'bench: the body (never)',
+        ]);
+        expect(bench.unanswered, isEmpty, reason: 'onUnanswered is not asked');
+        expect(handled, isEmpty, reason: 'nor is the handler');
+        expect(ran.errors, isEmpty, reason: 'nor the zone');
+      });
+
+      test('the outcome, the state and value stay what they were', () {
+        _says(
+          'The outcome is still `Failed`, the screen shows the `Failure` of '
+          '`ifFailed`, and `await job.value` still throws the error',
+        );
+        final caught = <String>[];
+        late expected.ProfileController profile;
+        final ran = runFaked((async) {
+          profile = expected.ProfileController(ProfileApi());
+          profile.load().value.then<void>(
+            (_) {},
+            onError: (Object error) => caught.add(text(error)),
+          );
+          async.flushMicrotasks();
+          _fail(async, 'fetchName', const ApiException('no network'));
+        });
+
+        expect(caught, ['no network']);
+        expect('${profile.currentState}', 'Failure(ApiException: no network)');
+        expect(ran.errors, isEmpty);
+      });
+
+      test(
+        'the lines of the page: a bug goes the way of the first attempt',
+        () {
+          _says(
+            'A bug is not an `ApiException`. A reply without a name makes '
+            '`fetchName` throw a `TypeError`, and that error goes the way of '
+            'the first attempt',
+          );
+          late expected.ProfileController profile;
+          final lines = printedBy((async) {
+            profile = expected.ProfileController(_NamelessApi())..load();
+            async.flushMicrotasks();
+            endCall(async, 'fetchName');
+          });
+
+          expect(lines, _quoted()[3]);
+          expect(
+            profile.currentState,
+            isA<Failure>().having((s) => s.error, 'error', isA<TypeError>()),
+          );
+        },
       );
+
+      // Each row whose answer `isExpectedError` takes away, run on a job that
+      // names `ApiException` and fails with one. The same runs without the
+      // predicate stand under "Answering for an error".
+      final rows = <String, (String, String, void Function(Bench, FakeAsync))>{
+        'the body fails': (
+          _body,
+          _bodyAnswer,
+          (bench, async) => bench.enqueue<int, void>(
+            key: 'body',
+            isExpectedError: _isApi,
+            (ctx) async => throw const ApiException('the body'),
+          ),
+        ),
+        'a start rule throws': (
+          'An error of a start rule: `canStart` throws instead of '
+              'answering',
+          'The same: the job ends `Failed` with it',
+          (bench, async) => bench.enqueue<int, void>(
+            key: 'rule',
+            isExpectedError: _isApi,
+            canStart: (state) => throw const ApiException('the rule'),
+            (ctx) async {},
+          ),
+        ),
+        'the body fails, and the job ends Cancelled': (
+          _cancelledBody,
+          _cancelledBodyAnswer,
+          (bench, async) {
+            final job = bench.enqueue<int, void>(
+              key: 'covered',
+              isExpectedError: _isApi,
+              (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+            );
+            job.value.ignore();
+            async.flushMicrotasks();
+            stage.fail('op', const ApiException('the call'));
+            scheduleMicrotask(job.cancel);
+          },
+        ),
+        'an abandoned operation fails late': (
+          _late,
+          _unlessNamed,
+          (bench, async) {
+            final job = bench.enqueue<int, void>(
+              key: 'abandons',
+              isExpectedError: _isApi,
+              (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+            )..ignoreFailure();
+            async.flushMicrotasks();
+            unawaited(job.cancel());
+            async.flushMicrotasks();
+            _fail(async, 'op', const ApiException('late'));
+          },
+        ),
+        'a disposer throws': (
+          _callbacks,
+          _unlessNamed,
+          (bench, async) => bench.enqueue<int, void>(
+            key: 'cleanup',
+            isExpectedError: _isApi,
+            (ctx) async {
+              ctx.onDispose(() async => throw const ApiException('disposer'));
+            },
+          ),
+        ),
+        'a ctx.onCancel callback throws': (
+          _callbacks,
+          _unlessNamed,
+          (bench, async) {
+            final job = bench.enqueue<int, void>(
+              key: 'cancelled',
+              isExpectedError: _isApi,
+              (ctx) async {
+                ctx.onCancel(() => throw const ApiException('the callback'));
+                await ctx.abandonable(() => stage.start<void>('op', null));
+              },
+            )..ignoreFailure();
+            async.flushMicrotasks();
+            unawaited(job.cancel());
+          },
+        ),
+        'a state handler throws': (
+          _callbacks,
+          _unlessNamed,
+          (bench, async) => bench.enqueue<int, void>(
+            key: 'handled',
+            isExpectedError: _isApi,
+            ifFailed: (state, error, stackTrace) =>
+                throw const ApiException('the handler'),
+            (ctx) async => throw const ApiException('the body'),
+          ),
+        ),
+        'a keepWhile throws when a change re-checks it': (
+          _keepWhile,
+          _unlessNamed,
+          (bench, async) {
+            bench.enqueue<int, void>(
+              key: 'kept',
+              isExpectedError: _isApi,
+              keepWhile: (state) =>
+                  state == 0 ? true : throw const ApiException('the rule'),
+              (ctx) => stage.start<void>('op', null),
+            );
+            async.flushMicrotasks();
+            bench.reflect(1);
+            async.flushMicrotasks();
+            endCall(async, 'op');
+          },
+        ),
+        'unattended work fails': (
+          _unattended,
+          _unlessNamed,
+          (bench, async) {
+            bench.enqueue<int, void>(key: 'hands', isExpectedError: _isApi, (
+              ctx,
+            ) async {
+              ctx.unattended(() => stage.start<void>('work', null));
+            });
+            async.flushMicrotasks();
+            _fail(async, 'work', const ApiException('the work'));
+          },
+        ),
+        'a branch of runAll the group did not throw fails': (
+          _branch,
+          _branchAnswer,
+          (bench, async) {
+            bench.enqueue<int, void>(key: 'group', isExpectedError: _isApi, (
+              ctx,
+            ) async {
+              try {
+                await ctx.runAll([
+                  bench.job<int, void>(
+                    key: 'first',
+                    (child) => child.abandonable(
+                      () => stage.start<void>('first', null),
+                    ),
+                  ),
+                  bench.job<int, void>(
+                    key: 'second',
+                    cancellable: false,
+                    (child) => child.abandonable(
+                      () => stage.start<void>('second', null),
+                    ),
+                  ),
+                ]);
+              } on Object catch (_) {}
+            });
+            async.flushMicrotasks();
+            _fail(async, 'first', const ApiException('first'));
+            _fail(async, 'second', const ApiException('second'));
+          },
+        ),
+      };
+      for (final MapEntry(key: name, value: (error, answers, run))
+          in rows.entries) {
+        test('$name: onError hears it, and nobody answers for it', () {
+          _row(error, '`onError`', answers);
+          late Bench bench;
+          final ran = runFaked((async) {
+            bench = Bench();
+            run(bench, async);
+          });
+
+          expect(bench.heard, isNotEmpty);
+          expect(bench.unanswered, isEmpty);
+          expect(ran.errors, isEmpty);
+        });
+      }
+
+      test('a listener throws: the predicate is not asked', () {
+        _row(_listeners, '`onError`', '`onUnanswered`');
+        _says(
+          'An error that a job names in `isExpectedError` does not reach the '
+          "override, unless a listener threw it: a listener is the caller's "
+          'code, and the predicate is not asked about its errors',
+        );
+        _says(
+          'the errors that no outcome carries, listed under '
+          '[Answering for an error](#answering-for-an-error), all but those '
+          'of a listener',
+        );
+        late Bench bench;
+        final ran = runFaked((async) {
+          bench = Bench();
+          final job =
+              bench.enqueue<int, void>(
+                  key: 'listened',
+                  isExpectedError: _isApi,
+                  (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+                )
+                ..whenCancelled((_) => throw const ApiException('the listener'))
+                ..whenFinished(
+                  (_) => throw const ApiException('the end listener'),
+                )
+                ..ignoreFailure();
+          async.flushMicrotasks();
+          unawaited(job.cancel());
+        });
+
+        const both = ['listened: the listener', 'listened: the end listener'];
+        expect(bench.heard, both);
+        expect(bench.unanswered, both);
+        expect(ran.errors, ['the listener', 'the end listener']);
+      });
+
+      test('a ParallelWaitError: each part on its own', () {
+        _says(
+          'The predicate is asked about each error of the job on its own, '
+          'whether `ifFailed` ran or not',
+        );
+        _says(
+          'A `ParallelWaitError` comes apart first, so '
+          '`error is ParallelWaitError` never matches',
+        );
+        final unanswered = <String, List<String>>{};
+        for (final (name, predicate) in [
+          ('ApiException', _isApi),
+          ('ParallelWaitError', (Object e) => e is ParallelWaitError),
+        ]) {
+          late Bench bench;
+          runFaked((async) {
+            bench = Bench()
+              ..enqueue<int, void>(key: 'both', isExpectedError: predicate, (
+                ctx,
+              ) async {
+                await (
+                  Future<void>.error(const ApiException('expected')),
+                  Future<void>.error(StateError('bug')),
+                ).wait;
+              });
+          });
+          unanswered[name] = bench.unanswered;
+        }
+
+        expect(unanswered, {
+          'ApiException': ['both: bug'],
+          'ParallelWaitError': ['both: expected', 'both: bug'],
+        });
+      });
+
+      test('a cancellation is not asked about', () {
+        _says(
+          'A cancellation is not asked about: a `Cancelled`, and an error '
+          'that `Job.isCancellationError` names, go as before',
+        );
+        var asked = 0;
+        bool counts(Object error) {
+          asked++;
+          return true;
+        }
+
+        late Bench bench;
+        final outcomes = <String>[];
+        final ran = runFaked((async) {
+          bench = Bench();
+          final cancelled = bench.enqueue<int, void>(
+            key: 'cancelled',
+            isExpectedError: counts,
+            (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+          );
+          async.flushMicrotasks();
+          unawaited(cancelled.cancel());
+          async.flushMicrotasks();
+          endCall(async, 'op');
+          outcomes.add('${cancelled.outcome}');
+
+          Job.isCancellationError = (error) => error is _CallStopped;
+          final stopped = bench.enqueue<int, void>(
+            key: 'stopped',
+            isExpectedError: counts,
+            (ctx) => ctx.join(() => stage.start<void>('op', null)),
+          );
+          async.flushMicrotasks();
+          unawaited(stopped.cancel());
+          async.flushMicrotasks();
+          _fail(async, 'op', const _CallStopped());
+          outcomes.add('${stopped.outcome}');
+        });
+
+        expect(outcomes, ['Cancelled(manual)', 'Cancelled(manual)']);
+        expect(asked, 0);
+        expect(bench.heard, ['stopped: the call stopped']);
+        expect(bench.unanswered, isEmpty);
+        expect(ran.errors, isEmpty);
+      });
+
+      test('a predicate that throws names nothing', () {
+        _says(
+          'A predicate that throws names nothing: the error goes on as it '
+          'would without one, and what the predicate threw goes to the zone '
+          'the job was created in',
+        );
+        final handled = <String>[];
+        final where = <String, List<String>>{};
+        late Bench bench;
+        fakeAsync((async) {
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(text(error));
+          bench = Bench();
+          where['the job was created'] = zoneOf(
+            () => bench.enqueue<int, void>(
+              key: 'body',
+              isExpectedError: (error) => throw StateError('the predicate'),
+              (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+            ),
+          );
+          where['the job started'] = zoneOf(async.flushMicrotasks);
+          where['the call failed'] = zoneOf(
+            () => _fail(async, 'op', const ApiException('the call')),
+          );
+          async.flushTimers();
+        });
+
+        expect(where, {
+          'the job was created': ['the predicate'],
+          'the job started': isEmpty,
+          'the call failed': isEmpty,
+        });
+        expect(bench.unanswered, ['body: the call']);
+        expect(handled, ['the call']);
+      });
+
+      test('a child takes the predicate of its job, a broad one too', () {
+        _says(
+          'A child started in the body takes the predicate of its job, '
+          'unless it is made by `job(...)` with one of its own. A broad type '
+          'such as `error is Exception` silences the bugs of every child as '
+          'well',
+        );
+        late Bench bench;
+        final ran = runFaked((async) {
+          bench = Bench();
+          bench.enqueue<int, void>(
+            key: 'parent',
+            isExpectedError: (error) => error is Exception,
+            (ctx) async {
+              ctx
+                ..start(
+                  ctx.child<void>(
+                    key: 'child',
+                    (child) async => throw const FormatException('a bug'),
+                  ),
+                )
+                ..start(
+                  bench.job<int, void>(
+                    key: 'own',
+                    isExpectedError: (error) => error is StateError,
+                    (child) async => throw const FormatException('a bug'),
+                  ),
+                );
+            },
+          );
+        });
+
+        expect(bench.heard, [
+          'child: FormatException: a bug',
+          'own: FormatException: a bug',
+        ]);
+        expect(bench.unanswered, ['own: FormatException: a bug']);
+        expect(ran.errors, ['FormatException: a bug']);
+      });
+
+      test('a continuation answers for the error with its own handle', () {
+        _says(
+          'A continuation answers for the error with its own handle. A caller '
+          'continues this `droppable` `load()` through `shared()`, and what '
+          '`shared()` or `then` returns knows nothing of `isExpectedError`: '
+          'unobserved, it sends the failure to the zone',
+        );
+        final handled = <String>[];
+        final ran = runFaked((async) {
+          Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+              handled.add(text(error));
+          expected.ProfileController(ProfileApi()).load().shared();
+          async.flushMicrotasks();
+          _fail(async, 'fetchName', const ApiException('no network'));
+          Bench()
+              .enqueue<int, void>(
+                key: 'then',
+                isExpectedError: _isApi,
+                (ctx) async => throw const ApiException('the source'),
+              )
+              .then<void>((ctx, value) {});
+        });
+
+        expect(handled, isEmpty, reason: 'the handler is not asked');
+        expect(ran.errors, ['no network', 'the source']);
+      });
+    });
+
+    test('an abandoned call that fails once its job has completed', () {
+      _row(_late, '`onError`', _unlessNamed);
       _says(
         '| Answer | Whoever observes the outcome, then `onUnanswered` of the '
-        'controller | At whoever observes the outcome; otherwise at an '
+        'controller, unless the job names the error in `isExpectedError` | '
+        'At whoever observes the outcome; otherwise at an '
         'override of `onUnanswered` or at `Solo.unansweredHandler`; with '
         'neither, in the creation zone |',
       );
@@ -1615,55 +2147,29 @@ void main() {
           [for (final cell in line.split('|').skip(1).take(3)) cell.trim()],
       ];
 
-      const callbacks =
-          'An error of a disposer, a `ctx.onCancel` callback, a '
-          '`whenCancelled` or `whenFinished` listener, or a state handler of '
-          'a job';
       const fromOutside =
           'A `Cancelled` from outside the body, such as an '
           "abandoned operation that ended in another job's cancellation";
       expect(rows, [
-        [
-          'An error of the body, and the job ends `Failed` with it',
-          '`onError`',
-          'Whoever observes the outcome; `onUnanswered` if nobody does',
-        ],
+        [_body, '`onError`', _bodyAnswer],
         [
           'An error of a start rule: `canStart` throws instead of answering',
           '`onError`',
           'The same: the job ends `Failed` with it',
         ],
-        [
-          'An error of the body, and the job ends `Cancelled`',
-          '`onError`',
-          '`onUnanswered`, unless `ignoreFailure()` was called on the job',
-        ],
-        [
-          'A late error of an operation `abandonable` stopped waiting for',
-          '`onError`',
-          '`onUnanswered`',
-        ],
-        [callbacks, '`onError`', '`onUnanswered`'],
-        [
-          'A `keepWhile` that throws when a change of state re-checks it',
-          '`onError`',
-          '`onUnanswered`',
-        ],
-        [
-          'An error of work handed to `ctx.unattended`',
-          '`onError`',
-          '`onUnanswered`',
-        ],
-        [
-          'An error of a branch of `ctx.runAll` that the group did not throw',
-          '`onError`',
-          '`onUnanswered`, unless `ignoreFailure()` was called on the branch',
-        ],
+        [_cancelledBody, '`onError`', _cancelledBodyAnswer],
+        [_late, '`onError`', _unlessNamed],
+        [_callbacks, '`onError`', _unlessNamed],
+        [_listeners, '`onError`', '`onUnanswered`'],
+        [_keepWhile, '`onError`', _unlessNamed],
+        [_unattended, '`onError`', _unlessNamed],
+        [_branch, '`onError`', _branchAnswer],
         [
           'An error that `Job.isCancellationError` names, on a cancelled job',
           '`onError`',
           'Nobody',
         ],
+        [_named, _namedHeard, 'Nobody'],
         [fromOutside, '`onError`', 'Nobody'],
         [
           'A `Cancelled` the body lets out, such as that of a cancelled child',
@@ -2414,13 +2920,13 @@ void main() {
             profile = controller;
             job = started..ignoreFailure();
             async.flushMicrotasks();
-            _fail(async, 'fetchName', StateError('no network 1'));
+            _fail(async, 'fetchName', const ApiException('no network 1'));
             for (final seconds in [1, 2]) {
               async.elapse(Duration(milliseconds: seconds * 1000 - 1));
               calling.add(stage.isRunning('fetchName'));
               async.elapse(const Duration(milliseconds: 1));
               calling.add(stage.isRunning('fetchName'));
-              final error = StateError('no network ${seconds + 1}');
+              final error = ApiException('no network ${seconds + 1}');
               _fail(async, 'fetchName', error);
             }
           });
@@ -2431,8 +2937,11 @@ void main() {
             false,
             true,
           ], reason: 'the second call a second later, the third two more');
-          expect('${job.outcome}', 'Failed(Bad state: no network 3)');
-          expect('${profile.currentState}', 'Failure(Bad state: no network 3)');
+          expect('${job.outcome}', 'Failed(ApiException: no network 3)');
+          expect(
+            '${profile.currentState}',
+            'Failure(ApiException: no network 3)',
+          );
           expect(profile.heard, [
             'load: no network 3',
           ], reason: "the failures the catch took are nobody else's");
@@ -2447,7 +2956,7 @@ void main() {
             profile = controller;
             job = started;
             async.flushMicrotasks();
-            _fail(async, 'fetchName', StateError('no network'));
+            _fail(async, 'fetchName', const ApiException('no network'));
             async.elapse(const Duration(seconds: 1));
             endCall(async, 'fetchName');
           });
@@ -2545,7 +3054,7 @@ void main() {
         job = profile.load();
         noteEnd(job, async, events);
         async.flushMicrotasks();
-        _fail(async, 'fetchName', StateError('no network'));
+        _fail(async, 'fetchName', const ApiException('no network'));
         async.elapse(const Duration(milliseconds: 500));
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -2569,7 +3078,7 @@ void main() {
         final profile = page.RetryingProfile(ProfileApi());
         noteEnd(profile.load(), async, events);
         async.flushMicrotasks();
-        _fail(async, 'fetchName', StateError('no network'));
+        _fail(async, 'fetchName', const ApiException('no network'));
         sendNext(profile, async, events);
         async.elapse(const Duration(seconds: 1));
         endCall(async, 'fetchName');
@@ -2595,9 +3104,9 @@ void main() {
           ..addListener(() => states.add('${profile.currentState}'));
         profile.load();
         async.flushMicrotasks();
-        _fail(async, 'fetchName', StateError('no network'));
+        _fail(async, 'fetchName', const ApiException('no network'));
         async.elapse(const Duration(seconds: 1));
-        _fail(async, 'fetchName', StateError('no network'));
+        _fail(async, 'fetchName', const ApiException('no network'));
         async.elapse(const Duration(seconds: 2));
         endCall(async, 'fetchName');
       });
@@ -2648,7 +3157,7 @@ void main() {
         final events = <String>[];
         final ran = runFaked((async) {
           final profile = retry(async, events);
-          _fail(async, 'fetchName', StateError('no network'));
+          _fail(async, 'fetchName', const ApiException('no network'));
           async.elapse(const Duration(milliseconds: 300));
           events.add('pending ${profile.pending}');
           unawaited(
@@ -2701,9 +3210,9 @@ void main() {
         final ran = runFaked((async) {
           profile = retry(async, events)
             ..addListener(() => states.add('${profile.currentState}'));
-          _fail(async, 'fetchName', StateError('no network'));
+          _fail(async, 'fetchName', const ApiException('no network'));
           callingAround(async, 1, calling);
-          _fail(async, 'fetchName', StateError('no network'));
+          _fail(async, 'fetchName', const ApiException('no network'));
           callingAround(async, 3, calling);
           endCall(async, 'fetchName');
         });
@@ -2715,9 +3224,9 @@ void main() {
           true,
         ], reason: 'the second call a second later, the third two more');
         expect(states, [
-          'Failure(Bad state: no network)',
+          'Failure(ApiException: no network)',
           'Loading',
-          'Failure(Bad state: no network)',
+          'Failure(ApiException: no network)',
           'Loading',
           'Loaded(Ada Lovelace)',
         ]);
@@ -2731,16 +3240,21 @@ void main() {
         late page.ProfileController profile;
         final ran = runFaked((async) {
           profile = retry(async, events);
-          _fail(async, 'fetchName', StateError('no network 1'));
+          _fail(async, 'fetchName', const ApiException('no network 1'));
           async.elapse(const Duration(seconds: 1));
-          _fail(async, 'fetchName', StateError('no network 2'));
+          _fail(async, 'fetchName', const ApiException('no network 2'));
           async.elapse(const Duration(seconds: 2));
-          _fail(async, 'fetchName', StateError('no network 3'));
+          _fail(async, 'fetchName', const ApiException('no network 3'));
           async.elapse(const Duration(seconds: 5));
         });
 
-        expect(events, ['returned Failed(Bad state: no network 3) at 3000 ms']);
-        expect('${profile.currentState}', 'Failure(Bad state: no network 3)');
+        expect(events, [
+          'returned Failed(ApiException: no network 3) at 3000 ms',
+        ]);
+        expect(
+          '${profile.currentState}',
+          'Failure(ApiException: no network 3)',
+        );
         expect(stage.crashes, ['no network 1', 'no network 2', 'no network 3']);
         expect(ran.errors, isEmpty);
       });
@@ -2773,7 +3287,7 @@ void main() {
         final calling = <bool>[];
         final ran = runFaked((async) {
           final profile = retry(async, events);
-          _fail(async, 'fetchName', StateError('no network'));
+          _fail(async, 'fetchName', const ApiException('no network'));
           async.elapse(const Duration(milliseconds: 300));
           unawaited(profile.cancelAll());
           async.flushMicrotasks();
@@ -2798,7 +3312,7 @@ void main() {
           late int afterPause;
           final ran = runFaked((async) {
             final profile = retry(async, <String>[]);
-            _fail(async, 'fetchName', StateError('no network'));
+            _fail(async, 'fetchName', const ApiException('no network'));
             async.elapse(const Duration(milliseconds: 300));
             unawaited(profile.close());
             async.flushMicrotasks();
@@ -2808,7 +3322,7 @@ void main() {
             final inBody = page.RetryingProfile(ProfileApi());
             inBody.load().ignoreFailure();
             async.flushMicrotasks();
-            _fail(async, 'fetchName', StateError('no network'));
+            _fail(async, 'fetchName', const ApiException('no network'));
             async.elapse(const Duration(milliseconds: 300));
             unawaited(inBody.close());
             async.flushMicrotasks();
@@ -2836,7 +3350,7 @@ void main() {
                 '${profile.currentState} at ${async.elapsed.inMilliseconds}',
               ),
             );
-          _fail(async, 'fetchName', StateError('no network'));
+          _fail(async, 'fetchName', const ApiException('no network'));
           async.elapse(const Duration(milliseconds: 300));
           profile.load().ignoreFailure();
           async.elapse(const Duration(milliseconds: 200));
@@ -2846,7 +3360,7 @@ void main() {
         });
 
         expect(states, [
-          'Failure(Bad state: no network) at 0',
+          'Failure(ApiException: no network) at 0',
           'Loading at 300',
           'Loaded(Ada Lovelace) at 500',
           'Loading at 1000',
@@ -2868,7 +3382,7 @@ void main() {
         final events = <String>[];
         final ran = runFaked((async) {
           final profile = retry(async, events);
-          _fail(async, 'fetchName', StateError('no network'));
+          _fail(async, 'fetchName', const ApiException('no network'));
           async.elapse(const Duration(milliseconds: 300));
           unawaited(profile.close());
           async.elapse(const Duration(seconds: 5));
@@ -3737,11 +4251,13 @@ void main() {
     const answers = 'test/support/errors_page.dart';
     const answer = 'test/support/errors_page_answering.dart';
     const attempts = 'test/support/errors_first_attempts.dart';
+    const expected = 'test/support/errors_page_expected.dart';
     const holders = {
       '## Reporting an error': answers,
       '## Answering for an error': answer,
       '### The first attempt': attempts,
       '### Observing the outcome': answers,
+      '### Naming the expected errors': expected,
       '### Letting cancellation through': answers,
       '### A pause between attempts': answers,
       '### Retrying from the caller': answers,
@@ -3761,7 +4277,11 @@ void main() {
       'every piece of code on the page is a run of lines of these files',
       () {
         expect(
-          codeMissingFrom('doc/errors.md', answers, alsoIn: [answer, attempts]),
+          codeMissingFrom(
+            'doc/errors.md',
+            answers,
+            alsoIn: [answer, attempts, expected],
+          ),
           isEmpty,
         );
       },

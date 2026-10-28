@@ -18,7 +18,7 @@ The sections of the page, by what the application needs:
 | The application needs | What gives it | Section |
 | --- | --- | --- |
 | A report of every error of a job | `onError` of the controller, or of a `SoloObserver` for every controller | [Reporting an error](#reporting-an-error) |
-| A failure kept out of the zone | Observing the outcome: `await job.value` where the error is caught, or `job.ignoreFailure()` | [Handled and unhandled failures](#handled-and-unhandled-failures) |
+| A failure kept out of the zone | Observing the outcome: `await job.value` where the error is caught, or `job.ignoreFailure()`; for the errors a job expects, `isExpectedError` | [Handled and unhandled failures](#handled-and-unhandled-failures) |
 | An answer for an error that no outcome carries, or for a `Failed` nobody observes | `onUnanswered`, or `Solo.unansweredHandler` for the whole application | [Answering for an error](#answering-for-an-error) |
 | A catch that lets a cancellation through | `ctx.check()` at the top of the catch | [Catching errors inside a body](#catching-errors-inside-a-body) |
 | Another attempt after a failure | `ctx.pause` between attempts, or a loop in the caller | [Retrying a failed call](#retrying-a-failed-call) |
@@ -37,7 +37,7 @@ a third way, Dart's own:
 | Route | Who gets the error, in order | Where it ends |
 | --- | --- | --- |
 | Report | `onError` of a `SoloObserver`, then `onError` of the controller, hear it | It does not end there: the hooks hear it and return, and the error goes on along the answer route |
-| Answer | Whoever observes the outcome, then `onUnanswered` of the controller | At whoever observes the outcome; otherwise at an override of `onUnanswered` or at `Solo.unansweredHandler`; with neither, in the creation zone |
+| Answer | Whoever observes the outcome, then `onUnanswered` of the controller, unless the job names the error in `isExpectedError` | At whoever observes the outcome; otherwise at an override of `onUnanswered` or at `Solo.unansweredHandler`; with neither, in the creation zone |
 | Dart's | Whoever holds the future of `job.value` or `ctx.run(child)` | Where that future is handled; unhandled, in the zone, like any future error |
 
 The table below names, for each kind of error, who hears it and who answers for
@@ -59,15 +59,17 @@ the hooks heard it.
 
 | The error | Who hears it | Who answers for it |
 | --- | --- | --- |
-| An error of the body, and the job ends `Failed` with it | `onError` | Whoever observes the outcome; `onUnanswered` if nobody does |
+| An error of the body, and the job ends `Failed` with it | `onError` | Whoever observes the outcome; if nobody does, `onUnanswered`, unless `isExpectedError` names it |
 | An error of a start rule: `canStart` throws instead of answering | `onError` | The same: the job ends `Failed` with it |
-| An error of the body, and the job ends `Cancelled` | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the job |
-| A late error of an operation `abandonable` stopped waiting for | `onError` | `onUnanswered` |
-| An error of a disposer, a `ctx.onCancel` callback, a `whenCancelled` or `whenFinished` listener, or a state handler of a job | `onError` | `onUnanswered` |
-| A `keepWhile` that throws when a change of state re-checks it | `onError` | `onUnanswered` |
-| An error of work handed to `ctx.unattended` | `onError` | `onUnanswered` |
-| An error of a branch of `ctx.runAll` that the group did not throw | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the branch |
+| An error of the body, and the job ends `Cancelled` | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the job or `isExpectedError` names it |
+| A late error of an operation `abandonable` stopped waiting for | `onError` | `onUnanswered`, unless `isExpectedError` names it |
+| An error of a disposer, a `ctx.onCancel` callback or a state handler of a job | `onError` | `onUnanswered`, unless `isExpectedError` names it |
+| An error of a `whenCancelled` or `whenFinished` listener | `onError` | `onUnanswered` |
+| A `keepWhile` that throws when a change of state re-checks it | `onError` | `onUnanswered`, unless `isExpectedError` names it |
+| An error of work handed to `ctx.unattended` | `onError` | `onUnanswered`, unless `isExpectedError` names it |
+| An error of a branch of `ctx.runAll` that the group did not throw | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the branch or `isExpectedError` names it |
 | An error that `Job.isCancellationError` names, on a cancelled job | `onError` | Nobody |
+| An error `isExpectedError` names | `onError`, with `never` | Nobody |
 | A `Cancelled` from outside the body, such as an abandoned operation that ended in another job's cancellation | `onError` | Nobody |
 | A `Cancelled` the body lets out, such as that of a cancelled child | Nobody | Nobody: the job ends `Cancelled` with it |
 | The job's own cancellation, thrown back by an abandoned operation | Nobody | Nobody |
@@ -104,7 +106,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  // ...the jobs from the quick start...
+  // ...the jobs of the quick start, without its `isExpectedError`...
 
   @override
   void onError(
@@ -133,7 +135,9 @@ no error anywhere. Its `answer` says what the job does about the error next:
 with `answered`, `onUnanswered` is asked about it too, unless `ignoreFailure()`
 is called before it is. The other values are in
 [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/error-rules.md#where-each-error-goes)
-on the error rules page of `async_job`.
+on the error rules page of `async_job`. One case of `never` is `solo`'s own and
+is not on that page: an error the job names in `isExpectedError`, as
+[Naming the expected errors](#naming-the-expected-errors) shows.
 
 It hears each error once for each job. An error that a child throws and its
 parent lets through is a failure of both, so the hook hears it twice. The `job`
@@ -144,10 +148,11 @@ hands it to `Solo.unansweredHandler` or the creation zone.
 
 ## Handled and unhandled failures
 
-A screen starts a job of the profile from the quick start, which has no
-reporting hook of its own: `profile.load()`, and nobody waits for the result.
-The network is down, and `fetchName` throws. The application wants the failure
-in the crash reporter, and nothing more.
+A screen starts a job of the profile from the quick start, without its
+`isExpectedError` and with no reporting hook of its own: `profile.load()`, and
+nobody waits for the result. The network is down, and `fetchName` throws an
+`ApiException`. The application wants the failure in the crash reporter, and
+nothing more.
 
 ### The first attempt
 
@@ -170,8 +175,8 @@ final class Failures extends SoloObserver {
 ```
 
 ```text
-report: Bad state: no network
-zone: Bad state: no network
+report: ApiException: no network
+zone: ApiException: no network
 ```
 
 The report goes out, and then the same error reaches the zone. This is what
@@ -195,7 +200,7 @@ profile.load().ignoreFailure();
 ```
 
 ```text
-report: Bad state: no network
+report: ApiException: no network
 ```
 
 Reading `job.done` or `job.value`, or calling `job.ignoreFailure()`, observes
@@ -206,8 +211,72 @@ catching it.
 
 That caller cannot catch one failure. If the job ends `Cancelled` after the
 load failed, `await job.value` throws the `Cancelled`. The failure goes to
-`onUnanswered`, as the next section shows. `ignoreFailure()` drops this failure
-as well: `onError` still hears it, and it goes no further.
+`onUnanswered`, as [Answering for an error](#answering-for-an-error) shows.
+`ignoreFailure()` drops this failure as well: `onError` still hears it, and it
+goes no further.
+
+### Naming the expected errors
+
+The profile knows which of its errors are expected: a network that is down
+makes `fetchName` throw an `ApiException`. Its `load()` names that type in
+`isExpectedError`:
+
+```dart
+Job<String> load() => enqueue<ProfileState, String>(
+  key: 'load',
+  policy: Policy.droppable,
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  isExpectedError: (error) => error is ApiException,
+  ifCancelled: (state, cancelled) => const Initial(),
+  (ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  },
+);
+```
+
+The observer of the first attempt stays, and the screen calls `profile.load()`
+with nobody waiting for the result:
+
+```text
+report: ApiException: no network
+```
+
+`onError` hears the error with `JobErrorAnswer.never`, and nobody is asked to
+answer for it: not `onUnanswered`, not `Solo.unansweredHandler`, not the zone.
+The outcome is still `Failed`, the screen shows the `Failure` of `ifFailed`,
+and `await job.value` still throws the error.
+
+A bug is not an `ApiException`. A reply without a name makes `fetchName` throw
+a `TypeError`, and that error goes the way of the first attempt:
+
+```text
+report: Null check operator used on a null value
+zone: Null check operator used on a null value
+```
+
+The predicate is asked about each error of the job on its own, whether
+`ifFailed` ran or not: the failure of the body, and the errors that no outcome
+carries, listed under [Answering for an error](#answering-for-an-error), all
+but those of a listener. A `ParallelWaitError` comes apart first, so
+`error is ParallelWaitError` never matches. A cancellation is not asked about:
+a `Cancelled`, and an error that `Job.isCancellationError` names, go as before.
+A predicate that throws names nothing: the error goes on as it would without
+one, and what the predicate threw goes to the zone the job was created in.
+
+A child started in the body takes the predicate of its job, unless it is made
+by `job(...)` with one of its own. A broad type such as `error is Exception`
+silences the bugs of every child as well, so keep the predicate a check of the
+types the API throws.
+
+A continuation answers for the error with its own handle. A caller continues
+this `droppable` `load()` through `shared()`, and what `shared()` or `then`
+returns knows nothing of `isExpectedError`: unobserved, it sends the failure to
+the zone, as
+[When a link fails](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/chains.md#when-a-link-fails)
+on the chains page of `async_job` says.
 
 ## Answering for an error
 
@@ -230,7 +299,9 @@ These are the errors that no outcome carries:
 
 - an operation that `abandonable` stopped waiting for, which fails later;
 - what the job calls outside its body: a disposer, a `ctx.onCancel` callback, a
-  `whenCancelled` or `whenFinished` listener, a state handler of a job;
+  state handler of a job;
+- a `whenCancelled` or `whenFinished` listener, which the caller of the job
+  registers;
 - a `keepWhile` that throws when a change of state re-checks it;
 - work handed to `ctx.unattended`;
 - the failure of a branch of `ctx.runAll` that the group did not throw;
@@ -239,6 +310,9 @@ These are the errors that no outcome carries:
 
 The override above answers for them and for a `Failed` nobody observes. They
 reach nothing else. This controller owns what its jobs failed at and says so.
+An error that a job names in `isExpectedError` does not reach the override,
+unless a listener threw it: a listener is the caller's code, and the predicate
+is not asked about its errors.
 
 A controller without such an override keeps the default body. It hands the
 error to `Solo.unansweredHandler`, one handler for the whole application, set
@@ -435,8 +509,9 @@ nothing for the cancellation.
 A pause in the body still belongs to the job. Root jobs run one at a time, so
 the next job of the profile waits through every attempt and every pause between
 them. Where other jobs should run between the attempts, the caller retries
-instead of the body. The job is `load()` of the quick start on the profile of
-[Reporting an error](#reporting-an-error), and it tries once.
+instead of the body. The job is `load()` of the quick start, without its
+`isExpectedError`, on the profile of [Reporting an error](#reporting-an-error),
+and it tries once.
 
 ```dart
 Future<Outcome<String>> loadWithRetries(ProfileController profile) async {

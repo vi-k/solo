@@ -1,11 +1,13 @@
 // The code of `doc/errors.md` and `doc/diagnostics.md`, verbatim, less the
-// first attempts and the two blocks under "Answering for an error", which
-// stand in `errors_page_answering.dart`: the errors page shows two versions
-// of one class, and a library holds one. Every piece of the other blocks is
-// a run of lines of this file, and `errors_rakes_test.dart` and
-// `diagnostics_rakes_test.dart` run it. The pages show observers, a method
-// of a controller and a few statements on their own; here the statements
-// stand in functions and in bodies of methods, marked "Not on the page".
+// first attempts, the two blocks under "Answering for an error", which
+// stand in `errors_page_answering.dart`, and the job of "Naming the expected
+// errors", which stands in `errors_page_expected.dart`: the errors page
+// shows three versions of one class, and a library holds one. Every piece
+// of the other blocks is a run of lines of this file, and
+// `errors_rakes_test.dart` and `diagnostics_rakes_test.dart` run it. The
+// pages show observers, a method of a controller and a few statements on
+// their own; here the statements stand in functions and in bodies of
+// methods, marked "Not on the page".
 // ignore_for_file: unreachable_from_main
 import 'dart:async';
 
@@ -21,8 +23,9 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  // ...the jobs from the quick start...
-  /// Not on the page: the job of the quick start in the README.
+  // ...the jobs of the quick start, without its `isExpectedError`...
+  /// Not on the page: the job of the quick start in the README, without its
+  /// `isExpectedError`.
   Job<String> load() => enqueue<ProfileState, String>(
     key: 'load',
     policy: Policy.droppable,

@@ -318,7 +318,7 @@ abstract class Solo<S extends Object> {
   /// started in the body takes it. Keep it a type check.
   ///
   /// See [Parameters of a job](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#parameters-of-a-job)
-  /// on the reference page, which leads to the section of each parameter.
+  /// and [Naming the expected errors](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#naming-the-expected-errors).
   @protected
   SoloJob<T> job<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
