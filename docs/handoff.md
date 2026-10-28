@@ -9,7 +9,7 @@
 `2026-10-27-release-prep-report.md`. В выпуске `ctx.child` ядра и `answer`
 в `Solo.onError` и `SoloObserver.onError` (пункт 109 `docs/settled.md`). scopo
 0.20.0 под новое ядро вышел тем же днём, тег `v0.20.0` в его репозитории,
-и `flutter_solo` держит `scopo: ^0.20.0`. CI `gate` на `160578a5` зелёный
+и `flutter_solo` 0.5.0 держал `scopo: ^0.20.0`. CI `gate` на `160578a5` зелёный
 во всех пяти заданиях.
 
 Оверрайды в дереве живут с 2026-10-28, «until 0.6.0 is published», — остались
