@@ -54,6 +54,21 @@ void main() {
     expect(missing, isEmpty, reason: 'rows with no pair on the page');
   });
 
+  // No block of the page shows ignore_failure_hides_bugs reporting, while its
+  // silence on two of them is what the guard checks: this shows it is on.
+  test('ignore_failure_hides_bugs reports in the guard', () async {
+    final guard = _Guard()..setUp();
+    try {
+      await guard.check(
+        'a load with isExpectedError',
+        _refresh('profile.load().ignoreFailure();', expectedErrors: true),
+        'ignore_failure_hides_bugs',
+      );
+    } finally {
+      await guard.tearDown();
+    }
+  });
+
   for (final section in sections) {
     group(section.name, () {
       test('pairs each "Don\'t do this" with a "Do this"', () {
@@ -75,6 +90,18 @@ void main() {
           section.unblocked,
           isEmpty,
           reason: '${section.name}: markers with no dart block after them',
+        );
+        expect(
+          section.unclaimed,
+          0,
+          reason: '${section.name}: dart blocks with no marker before them',
+        );
+        // Every section of the page shows a mistake: one without a pair has
+        // a marker spelt some other way, and its blocks would go unchecked.
+        expect(
+          section.pairs,
+          isNotEmpty,
+          reason: '${section.name}: no pair of "Don\'t do this" and "Do this"',
         );
       });
 
@@ -143,6 +170,9 @@ final class _Section {
   /// The markers of this section that no dart block follows.
   final List<String> unblocked = [];
 
+  /// The number of dart blocks of this section that no marker claims.
+  int unclaimed = 0;
+
   /// The pairs of this section: the n-th block of each side together, as far
   /// as both sides go.
   List<_Pair> get pairs {
@@ -180,8 +210,12 @@ final class _Section {
             pending = null;
             code = null;
           }
-        } else if (line.trim() == '```dart' && pending != null) {
-          code = [];
+        } else if (line.trim() == '```dart') {
+          if (pending != null) {
+            code = [];
+          } else if (sections.isNotEmpty) {
+            sections.last.unclaimed++;
+          }
         }
         fenced = !fenced;
         continue;
@@ -223,7 +257,7 @@ String _wrap(String section, int pair, _Side side, String code) =>
       ('Answering for every failure', _, _Side.right) => _refresh(code),
       ('Moving the clock in fakeAsync', _, _) => _fakeClock(code),
       ('A key for each request', _, _) => _profiles(code),
-      _ => throw StateError('$section, pair $pair has no harness'),
+      _ => fail('$section, pair $pair has no harness'),
     };
 
 String _upload(String code) =>
@@ -329,7 +363,10 @@ $code
 
 /// The load names no `isExpectedError`: the page speaks of a job whose
 /// outcome nobody needs, not of its expected errors.
-String _refresh(String code) =>
+///
+/// With [expectedErrors] the load names them, for the test that sees
+/// `ignore_failure_hides_bugs` report in this harness.
+String _refresh(String code, {bool expectedErrors = false}) =>
     '''
 import 'package:solo/solo.dart';
 
@@ -338,6 +375,8 @@ sealed class State {}
 final class Ready extends State {}
 
 class Profile {}
+
+class ApiException implements Exception {}
 
 abstract interface class Api {
   Future<Profile> load();
@@ -348,7 +387,10 @@ late final Api api;
 final class ProfileController extends Solo<State> {
   ProfileController() : super(Ready());
 
-  Job<Profile> load() => enqueue<Ready, Profile>((ctx) => api.load());
+  Job<Profile> load() => enqueue<Ready, Profile>(
+    (ctx) => api.load(),
+    ${expectedErrors ? 'isExpectedError: (e) => e is ApiException,' : ''}
+  );
 }
 
 late final ProfileController profile;
