@@ -1,4 +1,5 @@
-> **Состояние на 2026-10-28:** план, не начат; ждёт владельца.
+> **Состояние на 2026-10-28:** план, не начат; ревью на Opus учтено, ждёт
+> владельца.
 > **Что это:** план реализации второй волны `solo_lints` по дизайну, семь
 > задач: стенд и два исправления, два правила с исправлением одного, сторож
 > страницы ошибок, документы.
@@ -83,14 +84,23 @@
 ### Задача 1: стенд исправлений и `catch_without_check`
 
 Первым шагом — зонд из дизайна: собирается ли контекст исправления в тесте.
-Опорный путь — только публичный API, и он, по чтению исходников, есть:
+Опорный путь — только публичный API. Ревью плана прогнало его зондом на свежих
+версиях и на полу (`analysis_server_plugin` 0.3.14, `analyzer` 12.1.0,
+`analyzer_testing` 0.2.5, `analyzer_plugin` 0.14.8, Dart 3.10.0): в обоих
+случаях одна правка файла и ожидаемый текст. Путь:
 
 - `result` — `ResolvedUnitResult` теста, его ставит `assertDiagnostics` (поле
   есть в `analyzer_testing` 0.2.5 и 0.4.4);
-- `result.session.getResolvedLibrary(result.path)` — `ResolvedLibraryResult`;
-- `CorrectionProducerContext.createResolved(libraryResult:, unitResult:,
-  selectionOffset:, selectionLength:)`
-  из `package:analysis_server_plugin/edit/dart/correction_producer.dart`;
+- `library = result.session.getResolvedLibrary(result.path)` —
+  `ResolvedLibraryResult`; `unitResult` — `library.unitWithPath(result.path)`,
+  а не `result`: это разные объекты;
+- диагноз `d` — из `result.diagnostics`, по коду правила и месту `span`;
+- `CorrectionProducerContext.createResolved(libraryResult: library,
+  unitResult:, diagnostic: d, selectionOffset: d.offset,
+  selectionLength: d.length)`
+  из `package:analysis_server_plugin/edit/dart/correction_producer.dart` —
+  так же, как сервер (`src/correction/fix_processor.dart`,
+  `_addFromProducers`); без `diagnostic:` у продюсера пустой `coveringNode`.
   `DartFixContext` необязателен;
 - `ChangeBuilder(session: result.session)` из
   `package:analyzer_plugin/utilities/change_builder/change_builder_core.dart`,
@@ -98,11 +108,17 @@
   `SourceEdit.applySequence`
   из `package:analyzer_plugin/protocol/protocol_common.dart`.
 
-**Правило по итогу зонда.** Обошлись публичным API — тесты исправлений входят
-в архив и идут на `floor`; в отчёт — что довод дизайна об `src/`
-не подтвердился. Понадобился `src/` — тесты исправлений исключает `.pubignore`,
-как в дизайне. Не собралось вовсе — остановиться и доложить: по дизайну решает
-владелец.
+`fix_base.dart` берёт из `analyzer_testing` только то, что есть в 0.2.5:
+`result`, `assertDiagnostics`, `resolveFile`, `testPackageLibPath`;
+`testFilePath` там приватный.
+
+**Правило по итогу зонда.** Обошлись публичным API и зонд прошёл на полу —
+тесты исправлений входят в архив и идут на `floor`. Это отступление от решения
+дизайна «сторож и тесты исправлений вне архива»: в отчёте оно выносится
+владельцу отдельным пунктом, с доводом — дизайн исключал их из-за `src/`,
+а `src/` не понадобился. Понадобился `src/` — тесты исправлений исключает
+`.pubignore`, как в дизайне. Не собралось вовсе — остановиться и доложить:
+по дизайну решает владелец.
 
 **Files:**
 
@@ -128,7 +144,7 @@
       а не `ProducerGenerator`: тот объявлен в `src/`;
     - `Future<void> assertFix(String code, String span, String expected)` —
       `span` в форме `assertAt` (с `[[ ]]`), правило даёт диагноз ровно там,
-      правка продюсера по этому месту даёт `expected`;
+      правка продюсера по этому диагнозу даёт `expected`;
     - `Future<void> assertNoFix(String code, String span)` — диагноз есть,
       правок нет;
   - `class AddCheck extends ResolvedCorrectionProducer`
@@ -139,8 +155,10 @@
 - [ ] **Шаг 1: зонд.** В `fix_base.dart` — `FixTest` по пути выше. Временный
   продюсер, вставляющий `// probe` в начало файла, и один тест
   на `catch_without_check` проверяют, что путь работает. Прогон:
-  `dart test test/add_check_fix_test.dart` из `packages/solo_lints`. Временный
-  продюсер в коммит не идёт.
+  `dart test test/add_check_fix_test.dart` из `packages/solo_lints`. Потом —
+  на полу: в отдельной копии дерева (`git worktree add --detach`, вне рабочей
+  копии) `dart pub downgrade` и тот же тест
+  на `~/fvm/versions/3.38.1/bin/dart`. Временный продюсер в коммит не идёт.
 
 - [ ] **Шаг 2: тесты `AddCheck`** в `test/add_check_fix_test.dart`:
   - `test_on_object` — `on Object catch (error) {\n    await hw.reset();` →
@@ -170,15 +188,17 @@
 
 - Create: `packages/solo_lints/lib/src/fixes/release_on_the_call.dart`.
 - Modify: `packages/solo_lints/lib/src/rules/release_on_the_call.dart` —
-  `_broughtBy` выносится так, чтобы продюсер нашёл вызов и переменную тем же
-  кодом.
+  `_broughtBy` становится видимой продюсеру функцией и отдаёт ещё и вызов.
 - Modify: `packages/solo_lints/lib/solo_lints.dart`.
 - Create: `packages/solo_lints/test/release_on_the_call_fix_test.dart`.
 
 **Interfaces:**
 
 - Consumes: `FixTest` (задача 1).
-- Produces: `class PassReleaseToCall extends ResolvedCorrectionProducer`,
+- Produces: `broughtBy(Statement statement)` с типом
+  `({MethodInvocation call, Element variable, Element ctx})?`
+  в `release_on_the_call.dart` — прежний `_broughtBy`, правило зовёт его же;
+  `class PassReleaseToCall extends ResolvedCorrectionProducer`,
   `FixKind('solo_lints.fix.passReleaseToCall', 50,
   "Pass the release as '{0}:' of the call")`, `fixArguments` — `['dispose']`
   или `['discard']`.
@@ -197,8 +217,12 @@
   - `test_trailing_comma` (фокус ревью 1) —
     `ctx.join(\n    Database.open,\n  )` → `dispose:` встаёт после висящей
     запятой, результат разбирается без ошибок;
-  - `test_no_fix_for_function_name` — `ctx.onDispose(closeAll);`, где
-    `closeAll` упоминает `db`, → `assertNoFix`.
+  - `test_no_fix_for_other_forms` — аргумент упоминает `db`, но в форме без
+    исправления: отрыв на другой цели `ctx.onDispose(db.pool.close);`
+    (в `_core` — геттер `pool`) и вызов `ctx.onDispose(closerFor(db));` →
+    по `assertNoFix` на каждый. Правило смотрит только на то, упомянута ли
+    переменная в самом аргументе, поэтому `ctx.onDispose(closeAll)` диагноза
+    не даёт вовсе.
 
 - [ ] **Шаг 2: прогон** — красные.
 
@@ -221,8 +245,8 @@
 - Modify: `packages/solo_lints/lib/src/context.dart` — опознание вызовов `Solo`
   и `Policy.droppable`, если их нет.
 - Modify: `packages/solo_lints/lib/solo_lints.dart` —
-  `registerLintRule(KeyPerRequest())`, doc-комментарий класса называет три
-  линта.
+  `registerLintRule(KeyPerRequest())`, doc-комментарий класса называет оба
+  линта; третий добавит задача 5.
 - Create: `packages/solo_lints/test/key_per_request_test.dart`.
 
 **Interfaces:**
@@ -234,10 +258,10 @@
     исправление `"Put the arguments the body reads into the key."`; диагноз
     на выражении ключа, `{0}` — его `toSource()`;
   - для задачи 4 — функция в `key_per_request.dart`, видимая продюсеру:
-    `({Expression key,
-    List<FormalParameterElement> read})? sharedKey( MethodInvocation call)` —
-    ключ и параметры, которые читает тело, в порядке объявления, или `null`,
-    если правило здесь молчит. Правило и продюсер решают одним кодом.
+    `sharedKey(MethodInvocation call)` с типом
+    `({Expression key, List<FormalParameterElement> read})?` — ключ
+    и параметры, которые читает тело, в порядке объявления, или `null`, если
+    правило здесь молчит. Правило и продюсер решают одним кодом.
 
 - [ ] **Шаг 1: тесты** в `test/key_per_request_test.dart` с обвязкой: класс
   `Profiles extends Solo<Ready>`, `enum _Op { load }`, заглушка `api`:
@@ -286,6 +310,9 @@
 
 - [ ] **Шаг 1: тесты:**
   - `test_one_parameter` — `key: _Op.load` → `key: (_Op.load, id)`;
+  - `test_enqueue_job_form` —
+    `enqueueJob(job(key: _Op.load, ...), policy: Policy.droppable)` → ключ
+    в `job(...)` становится `(_Op.load, id)`;
   - `test_two_parameters_in_order` — `load(String id, int page)`, тело читает
     `page`, потом `id` → `(_Op.load, id, page)`;
   - `test_unread_parameter_left_out` — `load(String id, bool force)`, тело
@@ -348,6 +375,11 @@
   - `test_cascade_in_void_callback` —
     `onPressed: () => profiles.load()..ignoreFailure()`, параметр типа
     `void Function()` → диагноз;
+  - `test_cascade_in_void_declaration` —
+    `void reload() => profiles.load()..ignoreFailure();` → диагноз;
+  - `test_cascade_returned` —
+    `SoloJob<Profile> reload() => profiles.load()..ignoreFailure();` и литерал
+    с контекстом `SoloJob<Profile> Function()` → тишина;
   - `test_cascade_kept` — `final job = profiles.load()..ignoreFailure();` →
     тишина;
   - `test_parentheses_and_this` (фокус ревью 2) — `(load()).ignoreFailure();`
@@ -386,15 +418,21 @@
 
 **Interfaces:**
 
-- Consumes: все семь правил пакета; `rule_base.dart` — источники пакетов
-  (`_sources` становится видимым тесту, если нужно).
+- Consumes: все семь правил пакета; `RuleTest` из `rule_base.dart`.
 
-Сторож — наследник `PubPackageResolutionTest` (экспортирует
-`package:analyzer_testing/analysis_rule/analysis_rule.dart`),
-а не `AnalysisRuleTest`: в `setUp` он регистрирует все семь правил
-в `Registry.ruleRegistry` и пишет `analysisOptionsContent(rules: [...])`
-со всеми именами, как `AnalysisRuleTest.setUp` для одного. Источники пакетов —
-как в `RuleTest.setUp`, до `super.setUp()`.
+Сторож — наследник `RuleTest`: тот уже кладёт источники пакетов
+и в `super.setUp()` регистрирует одно правило. После `super.setUp()` сторож
+регистрирует остальные шесть через `Registry.ruleRegistry.registerLintRule`
+из `package:analyzer/src/lint/registry.dart`
+(с `// ignore: implementation_imports`, как сам `analyzer_testing`)
+и переписывает настройки анализа `analysisOptionsContent(rules: [...])`
+со всеми семью именами. `PubPackageResolutionTest` публично не экспортирован.
+Ревью плана проверило этот путь зондом: один файл дал диагнозы двух правил
+на свежих версиях и на полу. Импорт `src/` здесь допустим только потому, что
+сторож не входит в архив. Диагнозы читаются без утверждения —
+`result.diagnostics` после `resolveFile`; ошибки компиляции отделяются
+по серьёзности и по происхождению кода, потому что там же лежат
+и предупреждения вроде неиспользованной переменной.
 
 - [ ] **Шаг 1: тест.** Читает `../solo/doc/mistakes.md` из каталога пакета.
   Пара — «Don't do this:», ближайший за ним блок ```dart, затем «Do this:»
@@ -411,10 +449,15 @@
   - у раздела число «Don't do this» не равно числу «Do this» — падение с именем
     раздела (фокус ревью 5).
 
-  Обвязки — по разделам, на выбор исполнителя. Обязательное: «Answering for
-  every failure» — `profile.load()` без `isExpectedError`; «Moving the clock in
-  fakeAsync» — заглушки `test`, `expect`, `isA` в самой обвязке, потому что
-  `package:test` в источниках теста нет.
+  Обвязка выбирается по разделу, паре и стороне, потому что блоки стоят
+  в разных местах: «Don't do this» раздела «Answering for every failure» —
+  объявление верхнего уровня (класс `Failures`), его «Do this» — инструкция;
+  оба блока «Steps as children» и «A key for each request» — члены класса,
+  наследника `Solo`; остальные — инструкции в теле задачи. Устройство обвязок —
+  на выбор исполнителя. Обязательное: «Answering for every failure» —
+  `profile.load()` без `isExpectedError`; «Moving the clock in fakeAsync» —
+  заглушки `test`, `expect`, `isA` в самой обвязке, потому что `package:test`
+  в источниках теста нет.
 
 - [ ] **Шаг 2: прогон** `dart test test/mistakes_page_test.dart` — зелёный
   на нынешней странице. Проверка, что сторож ловит, — две мутации по одной:
@@ -424,14 +467,17 @@
   вне репозитория, откат — этой копией, не `git checkout`; после отката
   `git diff` по обоим файлам пуст.
 
-- [ ] **Шаг 3: архив.** `.pubignore` исключает сторожа. Из корня:
-  `python3 tool/archive_floor.py stage <каталог вне репозитория>` — в раскладке
-  `solo_lints` нет `test/mistakes_page_test.dart`.
+- [ ] **Шаг 3: прогон пакета** — зелёный.
 
-- [ ] **Шаг 4: прогон пакета** — зелёный.
-
-- [ ] **Шаг 5: коммит**
+- [ ] **Шаг 4: коммит**
   `test(solo_lints): guard the mistakes page with the rules`.
+
+- [ ] **Шаг 5: архив — после коммита.** На грязном дереве пробный
+  `dart pub publish` предупреждает о правленых файлах и роняет `stage`. Поэтому
+  из копии на `HEAD`: `git worktree add --detach <копия> HEAD`, в ней из корня
+  `python3 tool/archive_floor.py stage <каталог вне репозитория>` — в раскладке
+  `solo_lints` нет `test/mistakes_page_test.dart`. Копию затем удалить.
+  Красное — правка отдельным коммитом и повтор.
 
 ### Задача 7: документы
 
@@ -474,11 +520,14 @@
 - [ ] **Шаг 6: проверки.** Из корня: `python3 tool/reflow.py --check`,
   `python3 tool/check_line_width.py`, `python3 tool/check_translations.py`,
   `python3 tool/check_links.py`; ширина новой записи — своим счётом.
-  Из корня же — пол: `python3 tool/archive_floor.py stage <каталог>`
-  и `PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run
-  <каталог>` — зелёные для `solo_lints`.
 
 - [ ] **Шаг 7: коммит** `docs(solo_lints): describe the second wave`.
+
+- [ ] **Шаг 8: пол — после коммита**, из копии на `HEAD`, как в шаге 5 задачи
+  6: `python3 tool/archive_floor.py stage <каталог>`
+  и `PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run
+  <каталог>` — зелёные для `solo_lints`, с тестами исправлений, если они
+  в архиве. Итог — в отчёт отдельным коммитом.
 
 ## Что не трогается
 
