@@ -51,7 +51,7 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitCatchClause(CatchClause node) {
     if (!_takesCancelled(node.exceptionType?.type)) return;
-    final ctx = _contextAround(node);
+    final ctx = bodyContextAround(node);
     if (ctx == null) return;
     final statement = node.parent;
     if (statement is! TryStatement) return;
@@ -73,24 +73,6 @@ class _Visitor extends SimpleAstVisitor<void> {
     return isDartCoreClass(element, 'Object') ||
         isDartCoreClass(element, 'Exception') ||
         isCoreClass(element, 'Outcome');
-  }
-
-  /// The context of the job body around [node], unless [node] is in a
-  /// cleanup, where a checkpoint throws `StateError`, or in a function that
-  /// runs on its own: unattended work, a listener, a timer.
-  static Element? _contextAround(AstNode node) {
-    for (var at = node.parent; at != null; at = at.parent) {
-      if (at is! FunctionExpression) continue;
-      if (cleanupContext(at) != null) return null;
-      final ctx = jobContextOf(at);
-      if (ctx != null) return ctx;
-      // A local function runs when the body calls it, and the action of a
-      // waiting call while the body waits for it.
-      if (at.parent is! FunctionDeclaration && waitingContext(at) == null) {
-        return null;
-      }
-    }
-    return null;
   }
 
   /// Whether [block] waits or reaches a checkpoint of [ctx].

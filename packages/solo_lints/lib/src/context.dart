@@ -221,6 +221,24 @@ Element? waitingContext(FunctionExpression node) {
   return ctx;
 }
 
+/// The context of the job body around [node], unless [node] is in a cleanup,
+/// where a checkpoint throws `StateError`, or in a function that runs on its
+/// own: unattended work, a listener, a timer.
+Element? bodyContextAround(AstNode node) {
+  for (var at = node.parent; at != null; at = at.parent) {
+    if (at is! FunctionExpression) continue;
+    if (cleanupContext(at) != null) return null;
+    final ctx = jobContextOf(at);
+    if (ctx != null) return ctx;
+    // A local function runs when the body calls it, and the action of a
+    // waiting call while the body waits for it.
+    if (at.parent is! FunctionDeclaration && waitingContext(at) == null) {
+      return null;
+    }
+  }
+  return null;
+}
+
 /// The function [argument] stands for: a literal, the declaration of the
 /// local function it names or the literal a final local variable it names
 /// holds; `null` for anything else.
