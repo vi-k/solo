@@ -25,4 +25,4 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   meta: ^1.17.0
-  scopo: ^0.20.0
+  scopo: ^0.21.0
