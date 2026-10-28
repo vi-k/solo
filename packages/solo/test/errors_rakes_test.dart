@@ -2,7 +2,6 @@
 library;
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:meta/meta.dart';
@@ -304,6 +303,9 @@ const _branchAnswer =
 const _unlessNamed = '`onUnanswered`, unless `isExpectedError` names it';
 const _named = 'An error `isExpectedError` names';
 const _namedHeard = '`onError`, with `never`';
+const _namedAnswer =
+    'Whoever observes an outcome that carries it; nobody else: not '
+    '`onUnanswered`, not `Solo.unansweredHandler`, not the zone';
 
 /// Fails [call] of a stub with [error].
 void _fail(FakeAsync async, String call, Object error) {
@@ -1446,7 +1448,7 @@ void main() {
       });
 
       test('onError hears never, and nobody is asked to answer', () {
-        _row(_named, _namedHeard, 'Nobody');
+        _row(_named, _namedHeard, _namedAnswer);
         _says(
           '`onError` hears the error with `JobErrorAnswer.never`, and nobody '
           'is asked to answer for it: not `onUnanswered`, not '
@@ -1505,9 +1507,9 @@ void main() {
         'the lines of the page: a bug goes the way of the first attempt',
         () {
           _says(
-            'A bug is not an `ApiException`. A reply without a name makes '
-            '`fetchName` throw a `TypeError`, and that error goes the way of '
-            'the first attempt',
+            'A bug is not an `ApiException`. Say `fetchName` reads the name of '
+            'the reply with `!`, and a reply comes without one: the `!` throws '
+            'a `TypeError`, and that error goes the way of the first attempt',
           );
           late expected.ProfileController profile;
           final lines = printedBy((async) {
@@ -1846,9 +1848,10 @@ void main() {
         expect(handled, ['the call']);
       });
 
-      test('a child takes the predicate of its job, a broad one too', () {
+      test('a child takes the predicate of its parent, a broad one too', () {
         _says(
-          'A child started in the body takes the predicate of its job, '
+          'A child started in the body takes the predicate of the job that '
+          'started it, '
           'unless it is made by `job(...)` with one of its own. A broad type '
           'such as `error is Exception` silences the bugs of every child as '
           'well',
@@ -1888,16 +1891,20 @@ void main() {
 
       test('a continuation answers for the error with its own handle', () {
         _says(
-          'A continuation answers for the error with its own handle. A caller '
-          'continues this `droppable` `load()` through `shared()`, and what '
-          '`shared()` or `then` returns knows nothing of `isExpectedError`: '
-          'unobserved, it sends the failure to the zone',
+          'A continuation answers for the error with its own handle. '
+          '`load()` is `droppable`, and a `droppable` job is continued only '
+          'through `shared()`: a plain `then` on it throws. The handle that '
+          '`shared()` returns, and a `then` on that handle, know nothing of '
+          '`isExpectedError`: unobserved, they send the failure to the zone',
         );
+        final answers = _Answers();
         final handled = <String>[];
+        late Job<String> load;
         final ran = runFaked((async) {
+          Solo.observer = answers;
           Solo.unansweredHandler = (solo, job, error, stackTrace) =>
               handled.add(text(error));
-          expected.ProfileController(ProfileApi()).load().shared();
+          load = expected.ProfileController(ProfileApi()).load()..shared();
           async.flushMicrotasks();
           _fail(async, 'fetchName', const ApiException('no network'));
           Bench()
@@ -1909,6 +1916,15 @@ void main() {
               .then<void>((ctx, value) {});
         });
 
+        expect(
+          () => load.then<void>((ctx, value) {}),
+          throwsStateError,
+          reason: 'a plain then throws',
+        );
+        expect(answers.heard, [
+          'load: no network (never)',
+          'then: the source (never)',
+        ]);
         expect(handled, isEmpty, reason: 'the handler is not asked');
         expect(ran.errors, ['no network', 'the source']);
       });
@@ -1918,10 +1934,12 @@ void main() {
       _row(_late, '`onError`', _unlessNamed);
       _says(
         '| Answer | Whoever observes the outcome, then `onUnanswered` of the '
-        'controller, unless the job names the error in `isExpectedError` | '
-        'At whoever observes the outcome; otherwise at an '
-        'override of `onUnanswered` or at `Solo.unansweredHandler`; with '
-        'neither, in the creation zone |',
+        'controller; for an error the job names in `isExpectedError`, only '
+        'whoever observes the outcome | At whoever observes the outcome; '
+        'otherwise at an override of `onUnanswered` or at '
+        '`Solo.unansweredHandler`; with neither, in the creation zone. An '
+        'error the job names in `isExpectedError` that nobody observes ends '
+        'nowhere: not at `onUnanswered`, not in the zone |',
       );
       _says('With no handler set, the error goes to the creation zone');
       _says(
@@ -2169,7 +2187,7 @@ void main() {
           '`onError`',
           'Nobody',
         ],
-        [_named, _namedHeard, 'Nobody'],
+        [_named, _namedHeard, _namedAnswer],
         [fromOutside, '`onError`', 'Nobody'],
         [
           'A `Cancelled` the body lets out, such as that of a cancelled child',
@@ -2986,7 +3004,7 @@ void main() {
       _says(
         '`on Object` repeats every failure of the call, a bug in '
         'reading the answer among them. A clause for the failures worth '
-        'repeating, such as `on SocketException`, lets a bug end the '
+        'repeating, such as `on ApiException`, lets a bug end the '
         'job at once. It still needs nothing for the cancellation',
       );
       // Not on the page: the loop of the page with the narrower clause.
@@ -2996,7 +3014,7 @@ void main() {
               final String name;
               try {
                 name = await ctx.abandonable(ProfileApi().fetchName);
-              } on SocketException {
+              } on ApiException {
                 if (attempt == 3) rethrow;
                 await ctx.pause(Duration(seconds: attempt));
                 continue;
@@ -3017,7 +3035,7 @@ void main() {
 
         network = load(Bench());
         async.flushMicrotasks();
-        _fail(async, 'fetchName', const SocketException('no network'));
+        _fail(async, 'fetchName', const ApiException('no network'));
         async.elapse(const Duration(seconds: 1));
         endCall(async, 'fetchName');
 

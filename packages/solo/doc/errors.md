@@ -18,7 +18,7 @@ The sections of the page, by what the application needs:
 | The application needs | What gives it | Section |
 | --- | --- | --- |
 | A report of every error of a job | `onError` of the controller, or of a `SoloObserver` for every controller | [Reporting an error](#reporting-an-error) |
-| A failure kept out of the zone | Observing the outcome: `await job.value` where the error is caught, or `job.ignoreFailure()`; for the errors a job expects, `isExpectedError` | [Handled and unhandled failures](#handled-and-unhandled-failures) |
+| A failure kept out of the zone | Observing the outcome: `await job.value` where the error is caught, or `job.ignoreFailure()`; for the errors a job expects, `isExpectedError` | [Naming the expected errors](#naming-the-expected-errors) |
 | An answer for an error that no outcome carries, or for a `Failed` nobody observes | `onUnanswered`, or `Solo.unansweredHandler` for the whole application | [Answering for an error](#answering-for-an-error) |
 | A catch that lets a cancellation through | `ctx.check()` at the top of the catch | [Catching errors inside a body](#catching-errors-inside-a-body) |
 | Another attempt after a failure | `ctx.pause` between attempts, or a loop in the caller | [Retrying a failed call](#retrying-a-failed-call) |
@@ -37,7 +37,7 @@ a third way, Dart's own:
 | Route | Who gets the error, in order | Where it ends |
 | --- | --- | --- |
 | Report | `onError` of a `SoloObserver`, then `onError` of the controller, hear it | It does not end there: the hooks hear it and return, and the error goes on along the answer route |
-| Answer | Whoever observes the outcome, then `onUnanswered` of the controller, unless the job names the error in `isExpectedError` | At whoever observes the outcome; otherwise at an override of `onUnanswered` or at `Solo.unansweredHandler`; with neither, in the creation zone |
+| Answer | Whoever observes the outcome, then `onUnanswered` of the controller; for an error the job names in `isExpectedError`, only whoever observes the outcome | At whoever observes the outcome; otherwise at an override of `onUnanswered` or at `Solo.unansweredHandler`; with neither, in the creation zone. An error the job names in `isExpectedError` that nobody observes ends nowhere: not at `onUnanswered`, not in the zone |
 | Dart's | Whoever holds the future of `job.value` or `ctx.run(child)` | Where that future is handled; unhandled, in the zone, like any future error |
 
 The table below names, for each kind of error, who hears it and who answers for
@@ -69,7 +69,7 @@ the hooks heard it.
 | An error of work handed to `ctx.unattended` | `onError` | `onUnanswered`, unless `isExpectedError` names it |
 | An error of a branch of `ctx.runAll` that the group did not throw | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the branch or `isExpectedError` names it |
 | An error that `Job.isCancellationError` names, on a cancelled job | `onError` | Nobody |
-| An error `isExpectedError` names | `onError`, with `never` | Nobody |
+| An error `isExpectedError` names | `onError`, with `never` | Whoever observes an outcome that carries it; nobody else: not `onUnanswered`, not `Solo.unansweredHandler`, not the zone |
 | A `Cancelled` from outside the body, such as an abandoned operation that ended in another job's cancellation | `onError` | Nobody |
 | A `Cancelled` the body lets out, such as that of a cancelled child | Nobody | Nobody: the job ends `Cancelled` with it |
 | The job's own cancellation, thrown back by an abandoned operation | Nobody | Nobody |
@@ -249,8 +249,9 @@ answer for it: not `onUnanswered`, not `Solo.unansweredHandler`, not the zone.
 The outcome is still `Failed`, the screen shows the `Failure` of `ifFailed`,
 and `await job.value` still throws the error.
 
-A bug is not an `ApiException`. A reply without a name makes `fetchName` throw
-a `TypeError`, and that error goes the way of the first attempt:
+A bug is not an `ApiException`. Say `fetchName` reads the name of the reply
+with `!`, and a reply comes without one: the `!` throws a `TypeError`, and that
+error goes the way of the first attempt:
 
 ```text
 report: Null check operator used on a null value
@@ -266,15 +267,16 @@ a `Cancelled`, and an error that `Job.isCancellationError` names, go as before.
 A predicate that throws names nothing: the error goes on as it would without
 one, and what the predicate threw goes to the zone the job was created in.
 
-A child started in the body takes the predicate of its job, unless it is made
-by `job(...)` with one of its own. A broad type such as `error is Exception`
-silences the bugs of every child as well, so keep the predicate a check of the
-types the API throws.
+A child started in the body takes the predicate of the job that started it,
+unless it is made by `job(...)` with one of its own. A broad type such as
+`error is Exception` silences the bugs of every child as well, so keep the
+predicate a check of the types the API throws.
 
-A continuation answers for the error with its own handle. A caller continues
-this `droppable` `load()` through `shared()`, and what `shared()` or `then`
-returns knows nothing of `isExpectedError`: unobserved, it sends the failure to
-the zone, as
+A continuation answers for the error with its own handle. `load()` is
+`droppable`, and a `droppable` job is continued only through `shared()`: a
+plain `then` on it throws. The handle that `shared()` returns, and a `then` on
+that handle, know nothing of `isExpectedError`: unobserved, they send the
+failure to the zone, as
 [When a link fails](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/chains.md#when-a-link-fails)
 on the chains page of `async_job` says.
 
@@ -501,7 +503,7 @@ the job, not the error, so the catch needs no clause for the cancellation.
 After the third failure of the network, `rethrow` lets it out, and the job ends
 `Failed` with that error. `on Object` repeats every failure of the call, a bug
 in reading the answer among them. A clause for the failures worth repeating,
-such as `on SocketException`, lets a bug end the job at once. It still needs
+such as `on ApiException`, lets a bug end the job at once. It still needs
 nothing for the cancellation.
 
 ### Retrying from the caller
