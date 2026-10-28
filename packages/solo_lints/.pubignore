@@ -1,2 +1,4 @@
 # Russian translation, kept in the repository but not published.
 README.ru.md
+# Reads packages/solo/doc/, which the archive lacks, and imports analyzer/src.
+test/mistakes_page_test.dart
