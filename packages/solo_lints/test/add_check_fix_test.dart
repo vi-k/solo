@@ -135,5 +135,41 @@ final job = Job<void>((c) async {
   }
 });
 ''',
+    arguments: ['c'],
   );
+
+  Future<void> test_stack_trace_named_as_the_context() => assertNoFix('''
+$_hardware
+final job = Job<void>((ctx) async {
+  try {
+    await ctx.join(hw.open);
+  } catch (e, ctx) {
+    print(ctx);
+  }
+});
+''', '} [[catch]] (e, ctx) {');
+
+  Future<void> test_error_named_as_the_context() => assertNoFix('''
+$_hardware
+final job = Job<void>((ctx) async {
+  try {
+    await ctx.join(hw.open);
+  } catch (ctx) {
+    print(ctx);
+  }
+});
+''', '} [[catch]] (ctx) {');
+
+  Future<void> test_local_named_as_the_context() => assertNoFix('''
+$_hardware
+final job = Job<void>((ctx) async {
+  try {
+    await ctx.join(hw.open);
+  } on Object {
+    await hw.reset();
+    final ctx = 'reset';
+    print(ctx);
+  }
+});
+''', 'on [[Object]] {');
 }

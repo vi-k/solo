@@ -1,6 +1,7 @@
 import 'package:analysis_server_plugin/edit/dart/correction_producer.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/token.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer_plugin/utilities/change_builder/change_builder_core.dart';
 import 'package:analyzer_plugin/utilities/fixes/fixes.dart';
@@ -41,9 +42,12 @@ class AddCheck extends ResolvedCorrectionProducer {
 
   @override
   Future<void> compute(ChangeBuilder builder) async {
-    final block = _clause?.body;
+    final clause = _clause;
     final ctx = _context;
-    if (block == null || ctx == null) return;
+    if (clause == null || ctx == null) return;
+    // At the top of the block the name may stand for something else.
+    if (_namesIn(clause).contains(ctx.displayName)) return;
+    final block = clause.body;
     final open = block.leftBracket;
     final statements = block.statements;
     final eol = utils.endOfLine;
@@ -66,10 +70,44 @@ class AddCheck extends ResolvedCorrectionProducer {
     });
   }
 
+  /// The names [clause] declares where the check goes: its parameters and
+  /// the declarations directly in its block.
+  static Set<String> _namesIn(CatchClause clause) {
+    final names = {
+      ?clause.exceptionParameter?.name.lexeme,
+      ?clause.stackTraceParameter?.name.lexeme,
+    };
+    for (final statement in clause.body.statements) {
+      switch (statement) {
+        case VariableDeclarationStatement(:final variables):
+          names.addAll(variables.variables.map((v) => v.name.lexeme));
+        case FunctionDeclarationStatement(:final functionDeclaration):
+          names.add(functionDeclaration.name.lexeme);
+        case PatternVariableDeclarationStatement(:final declaration):
+          final finder = _PatternNames();
+          declaration.pattern.accept(finder);
+          names.addAll(finder.names);
+        default:
+      }
+    }
+    return names;
+  }
+
   /// Whether [offset] is on the line of [open].
   bool _onLineOf(Token open, int offset) {
     final lines = unitResult.lineInfo;
     return lines.getLocation(open.offset).lineNumber ==
         lines.getLocation(offset).lineNumber;
+  }
+}
+
+/// Collects the names of the variables a pattern declares.
+class _PatternNames extends RecursiveAstVisitor<void> {
+  final names = <String>{};
+
+  @override
+  void visitDeclaredVariablePattern(DeclaredVariablePattern node) {
+    names.add(node.name.lexeme);
+    super.visitDeclaredVariablePattern(node);
   }
 }
