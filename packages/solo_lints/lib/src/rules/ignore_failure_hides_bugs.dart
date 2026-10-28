@@ -15,7 +15,8 @@ class IgnoreFailureHidesBugs extends AnalysisRule {
   /// The diagnostic this rule reports.
   static const LintCode code = LintCode(
     'ignore_failure_hides_bugs',
-    "'ignoreFailure()' also hides the bugs that '{0}' lets through.",
+    "'ignoreFailure()' also hides the bugs that the isExpectedError of '{0}' "
+        'lets through.',
     correctionMessage:
         "Drop 'ignoreFailure()': isExpectedError already keeps the expected "
         'errors quiet.',
@@ -66,7 +67,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
     final owner = _Reduction(context).ownerOf(job);
     if (owner == null) return;
-    rule.reportAtNode(node.methodName, arguments: ["$owner's isExpectedError"]);
+    rule.reportAtNode(node.methodName, arguments: [owner]);
   }
 }
 

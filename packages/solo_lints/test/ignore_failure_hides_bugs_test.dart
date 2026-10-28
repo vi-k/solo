@@ -61,7 +61,7 @@ class IgnoreFailureHidesBugsTest extends RuleTest {
         lint(
           code.indexOf(span) + span.indexOf('ignoreFailure'),
           'ignoreFailure'.length,
-          messageContainsAll: ["'$owner's isExpectedError'"],
+          messageContainsAll: ["the isExpectedError of '$owner' lets"],
         ),
       ]);
 
