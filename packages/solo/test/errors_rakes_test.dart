@@ -1889,11 +1889,46 @@ void main() {
         expect(ran.errors, ['FormatException: a bug']);
       });
 
+      test('a dropped call gets the first job, with its predicate', () {
+        _says(
+          '`load()` is `droppable`, so a dropped call returns the job of the '
+          'first call, together with its predicate',
+        );
+        final answers = _Answers();
+        late Bench bench;
+        late SoloJob<void> first;
+        late SoloJob<void> dropped;
+        final ran = runFaked((async) {
+          Solo.observer = answers;
+          bench = Bench();
+          first = bench.enqueue<int, void>(
+            key: 'load',
+            policy: Policy.droppable,
+            isExpectedError: _isApi,
+            (ctx) => ctx.abandonable(() => stage.start<void>('fetch', null)),
+          );
+          dropped = bench.enqueue<int, void>(
+            key: 'load',
+            policy: Policy.droppable,
+            (ctx) async {},
+          );
+          async.flushMicrotasks();
+          _fail(async, 'fetch', const ApiException('no network'));
+        });
+
+        expect(dropped, same(first), reason: 'the job of the first call');
+        expect(answers.heard, ['load: no network (never)']);
+        expect(bench.unanswered, isEmpty, reason: 'its predicate named it');
+        expect(ran.errors, isEmpty);
+      });
+
       test('a continuation answers for the error with its own handle', () {
         _says(
           'A continuation answers for the error with its own handle. '
-          '`load()` is `droppable`, and a `droppable` job is continued only '
-          'through `shared()`: a plain `then` on it throws. The handle that '
+          '`load()` is `droppable`, so a dropped call returns the job of the '
+          'first call, together with its predicate, and a `droppable` job is '
+          'continued only through `shared()`: a plain `then` on it throws. '
+          'The handle that '
           '`shared()` returns, and a `then` on that handle, know nothing of '
           '`isExpectedError`: unobserved, they send the failure to the zone',
         );

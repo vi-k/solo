@@ -32,6 +32,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// Not let go of in [finished], unlike the handlers above: a [Failed] nobody
   /// observed goes to its answer a microtask after the job is over, and the
   /// answer asks this predicate.
+  ///
+  /// For a child without a predicate of its own, [adoptedBy] fills it with the
+  /// parent's. The predicate is copied rather than read through `_parentJob`,
+  /// because `_parentJob` is let go of in [finished], and the answer for
+  /// a branch or for a [Failed] nobody observed comes later.
   bool Function(Object error)? _isExpectedError;
 
   /// The rules outlive the job on purpose: a context that leaked out of a
@@ -113,8 +118,9 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // not be able to put it in the queue.
     _taken = true;
     _parentJob = parent._job;
-    // A predicate of its own is stronger; a child made by `ctx.child` or
-    // `each` has none and takes the one of the job whose body starts it.
+    // A predicate of its own is stronger; a child without one -- `ctx.child`,
+    // `each`, a `job(...)` made without it -- takes the one of the job whose
+    // body starts it.
     _isExpectedError ??= parent._job._isExpectedError;
   }
 
@@ -307,9 +313,18 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   static final _weakProbe = Expando<bool>();
 
+  /// Notes the verdict for [error], in place of one noted for it before, as
+  /// the [Expando] does.
   void _noteVerdict(Object error, bool expected) {
     if (_isPlain(error)) {
-      (_plainVerdicts ??= []).add((error, expected));
+      final plain = _plainVerdicts ??= [];
+      for (var i = 0; i < plain.length; i++) {
+        if (identical(plain[i].$1, error)) {
+          plain[i] = (error, expected);
+          return;
+        }
+      }
+      plain.add((error, expected));
     } else {
       (_verdicts ??= Expando<bool>())[error] = expected;
     }

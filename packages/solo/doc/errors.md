@@ -273,7 +273,8 @@ unless it is made by `job(...)` with one of its own. A broad check such as
 predicate a check of the types the API throws.
 
 A continuation answers for the error with its own handle. `load()` is
-`droppable`, and a `droppable` job is continued only through `shared()`: a
+`droppable`, so a dropped call returns the job of the first call, together with
+its predicate, and a `droppable` job is continued only through `shared()`: a
 plain `then` on it throws. The handle that `shared()` returns, and a `then` on
 that handle, know nothing of `isExpectedError`: unobserved, they send the
 failure to the zone, as

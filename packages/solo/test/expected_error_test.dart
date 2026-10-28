@@ -350,6 +350,39 @@ void main() {
     });
   });
 
+  test('unattended work throws the string of an observed failure', () {
+    runSolo(answers: true, (solo, journal, async) {
+      final errors = <String>[];
+      var calls = 0;
+      _inZone(errors, () {
+        final job = solo.enqueue<TestState, void>(
+          key: 'load',
+          isExpectedError: (error) => ++calls == 1,
+          (ctx) async {
+            ctx.unattended(() async {
+              await delay(10);
+              // ignore: only_throw_errors
+              throw 'offline';
+            });
+            // ignore: only_throw_errors
+            throw 'offline';
+          },
+        );
+        unawaited(job.value.then<void>((_) {}, onError: (Object _) {}));
+      });
+      async.flushTimers();
+      expect(errors, isEmpty);
+      expect(calls, 2);
+      expect(journal.take(), [
+        '[load] started',
+        '[load] error offline (never)',
+        '[load] finished Failed(offline)',
+        '[load] error offline (answered)',
+        '[load] unanswered offline',
+      ]);
+    });
+  });
+
   test('an error Job.isCancellationError names', () {
     runSolo(answers: true, (solo, journal, async) {
       final errors = <String>[];
@@ -571,6 +604,41 @@ void main() {
           '>> [null: each] finished Failed(ApiError)',
           '> [kid] finished Done(null)',
           '[load] finished Done(null)',
+        ]);
+      });
+    });
+
+    test('a ctx.child made by one job and started by another', () {
+      runSolo(answers: true, (solo, journal, async) {
+        final errors = <String>[];
+        _inZone(errors, () {
+          late final SoloJob<void> kid;
+          solo
+            ..enqueue<TestState, void>(
+              key: 'maker',
+              isExpectedError: _isApiError,
+              (ctx) async {
+                kid = ctx.child(
+                  key: 'kid',
+                  (c) async => throw const ApiError(),
+                );
+              },
+            )
+            ..enqueue<TestState, void>(key: 'starter', (ctx) async {
+              ctx.start(kid);
+            });
+        });
+        async.flushTimers();
+        expect(errors, isEmpty);
+        expect(journal.take(), [
+          '[maker] started',
+          '[maker] finished Done(null)',
+          '[starter] started',
+          '> [kid] started',
+          '> [kid] error ApiError (later)',
+          '> [kid] finished Failed(ApiError)',
+          '[starter] finished Done(null)',
+          '> [kid] unanswered ApiError',
         ]);
       });
     });
