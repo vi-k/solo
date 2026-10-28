@@ -398,6 +398,9 @@ BLE-устройство, плеер, синхронизация), где сос
   `example/`. Реэкспортирует `async_job` целиком, поэтому
   `package:solo/solo.dart` остаётся единственным импортом.
 - `packages/flutter_solo` — Flutter-интеграция.
+- `packages/solo_lints` — плагин анализатора: правила по ошибкам
+  `packages/solo/doc/mistakes.md`. От ядра и `solo` не зависит, их типы узнаёт
+  по имени и библиотеке; `async_job` и `solo` нужны ему только в тестах.
 
 Каждый пакет самодостаточен для pub.dev: свои `pubspec.yaml`, `LICENSE`,
 `README.md`, `CHANGELOG.md`, `analysis_options.yaml`.

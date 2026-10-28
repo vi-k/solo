@@ -59,7 +59,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 # Bottom up: a failure of the package below is the one to read first.
-PACKAGES = ('async_job', 'solo', 'flutter_solo')
+PACKAGES = ('async_job', 'solo', 'solo_lints', 'flutter_solo')
 # What `stage` leaves at the top of a layout, and what tells one from a
 # directory of somebody else's. Not a dot file: it travels with the layout
 # as a CI artifact, and those leave hidden files behind.

@@ -5,6 +5,7 @@ Pairs checked:
   * packages/solo/README.md          <-> packages/solo/README.ru.md
   * packages/async_job/README.md     <-> packages/async_job/README.ru.md
   * packages/flutter_solo/README.md  <-> packages/flutter_solo/README.ru.md
+  * packages/solo_lints/README.md    <-> packages/solo_lints/README.ru.md
   * packages/solo/doc/vs-bloc.md     <-> docs/ru/solo/vs-bloc.md
   * packages/solo/doc/accumulation.md <-> docs/ru/solo/accumulation.md
   * packages/solo/doc/<page>.md    <-> docs/ru/solo/<page>.md
@@ -53,6 +54,10 @@ PAIRS = [
     (
         REPO / "packages" / "flutter_solo" / "README.md",
         REPO / "packages" / "flutter_solo" / "README.ru.md",
+    ),
+    (
+        REPO / "packages" / "solo_lints" / "README.md",
+        REPO / "packages" / "solo_lints" / "README.ru.md",
     ),
     (
         REPO / "packages" / "solo" / "doc" / "vs-bloc.md",
@@ -193,6 +198,10 @@ PAIRS = [
     (
         REPO / "packages" / "flutter_solo" / "CHANGELOG.md",
         REPO / "docs" / "ru" / "flutter_solo" / "CHANGELOG.md",
+    ),
+    (
+        REPO / "packages" / "solo_lints" / "CHANGELOG.md",
+        REPO / "docs" / "ru" / "solo_lints" / "CHANGELOG.md",
     ),
 ]
 

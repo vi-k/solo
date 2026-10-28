@@ -1,0 +1,32 @@
+name: solo_lints
+description: >-
+  Analyzer plugin that catches the common mistakes of async_job and solo:
+  waiting through the context in cleanup, a release registered after the
+  call, a catch that swallows cancellation, a job that waits for its own
+  queue.
+version: 0.1.0
+repository: https://github.com/vi-k/solo/tree/main/packages/solo_lints
+issue_tracker: https://github.com/vi-k/solo/issues
+topics:
+  - lints
+  - analyzer
+  - async
+  - cancellation
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  analysis_server_plugin: ^0.3.14
+  analyzer: '>=12.1.0 <15.0.0'
+
+dev_dependencies:
+  analyzer_testing: '>=0.2.5 <0.5.0'
+  async_job: ^0.5.0
+  clock: ^1.1.2
+  collection: ^1.19.1
+  fake_async: ^1.3.3
+  lints: ^6.1.0
+  solo: ^0.5.0
+  test: ^1.31.1
+  test_reflective_loader: ^0.6.0
