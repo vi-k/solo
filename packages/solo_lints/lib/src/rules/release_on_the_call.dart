@@ -65,9 +65,9 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   void _scan(List<Statement> statements) {
     for (var i = 0; i + 1 < statements.length; i++) {
-      final call = _broughtBy(statements[i]);
-      if (call == null) continue;
-      final (variable, ctx) = call;
+      final brought = broughtBy(statements[i]);
+      if (brought == null) continue;
+      final (:variable, :ctx, call: _) = brought;
       final next = statements[i + 1];
       if (next is! ExpressionStatement) continue;
       final release = next.expression.unParenthesized;
@@ -82,34 +82,35 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
   }
 
-  /// The variable [statement] declares and the context of the call it
-  /// awaits, when [statement] is `final x = await ctx.join(...)` with no
-  /// release of its own.
-  (Element, Element)? _broughtBy(Statement statement) {
-    if (statement is! VariableDeclarationStatement) return null;
-    final variables = statement.variables.variables;
-    if (variables.length != 1) return null;
-    final declaration = variables.single;
-    final initializer = declaration.initializer?.unParenthesized;
-    if (initializer is! AwaitExpression) return null;
-    final call = initializer.expression.unParenthesized;
-    if (call is! MethodInvocation) return null;
-    final ctx = contextNamed(call.realTarget);
-    if (ctx == null || !callsOn(call, ctx, releasingCalls)) return null;
-    final arguments = call.argumentList;
-    if (namedValue(arguments, 'dispose') != null ||
-        namedValue(arguments, 'discard') != null) {
-      return null;
-    }
-    final variable = declaration.declaredFragment?.element;
-    return variable == null ? null : (variable, ctx);
-  }
-
   static bool _mentions(Expression expression, Element variable) {
     final finder = _Mention(variable);
     expression.accept(finder);
     return finder.found;
   }
+}
+
+/// The call, the variable and the context of the call it awaits, when
+/// [statement] is `final x = await ctx.join(...)` with no release of its own.
+({MethodInvocation call, Element variable, Element ctx})? broughtBy(
+  Statement statement,
+) {
+  if (statement is! VariableDeclarationStatement) return null;
+  final variables = statement.variables.variables;
+  if (variables.length != 1) return null;
+  final declaration = variables.single;
+  final initializer = declaration.initializer?.unParenthesized;
+  if (initializer is! AwaitExpression) return null;
+  final call = initializer.expression.unParenthesized;
+  if (call is! MethodInvocation) return null;
+  final ctx = contextNamed(call.realTarget);
+  if (ctx == null || !callsOn(call, ctx, releasingCalls)) return null;
+  final arguments = call.argumentList;
+  if (namedValue(arguments, 'dispose') != null ||
+      namedValue(arguments, 'discard') != null) {
+    return null;
+  }
+  final variable = declaration.declaredFragment?.element;
+  return variable == null ? null : (call: call, variable: variable, ctx: ctx);
 }
 
 class _Mention extends RecursiveAstVisitor<void> {

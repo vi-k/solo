@@ -5,6 +5,7 @@ import 'package:analysis_server_plugin/plugin.dart';
 import 'package:analysis_server_plugin/registry.dart';
 
 import 'src/fixes/add_check.dart';
+import 'src/fixes/release_on_the_call.dart';
 import 'src/rules/await_own_queue.dart';
 import 'src/rules/catch_without_check.dart';
 import 'src/rules/ctx_in_cleanup.dart';
@@ -24,6 +25,7 @@ class SoloLintsPlugin extends Plugin {
     registry
       ..registerWarningRule(CtxInCleanup())
       ..registerWarningRule(ReleaseOnTheCall())
+      ..registerFixForRule(ReleaseOnTheCall.code, PassReleaseToCall.new)
       ..registerWarningRule(SyncFakeAsync())
       ..registerWarningRule(AwaitOwnQueue())
       ..registerLintRule(CatchWithoutCheck())
