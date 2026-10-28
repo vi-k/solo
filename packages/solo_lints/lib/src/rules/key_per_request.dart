@@ -85,6 +85,9 @@ class _Visitor extends SimpleAstVisitor<void> {
   final body = functionOf(bodyArgument);
   if (body == null) return null;
 
+  // The rule does not follow a variable to its value: a key built in a local
+  // may well hold the parameters, so it stays silent.
+  if (_readsLocal(key)) return null;
   final parameters = _parametersAround(call);
   if (_referenced(key, parameters).isNotEmpty) return null;
   final read = _referenced(body, parameters);
@@ -113,19 +116,37 @@ bool _isDroppable(Expression policy) {
 /// [node], in declaration order.
 List<FormalParameterElement> _parametersAround(AstNode node) {
   for (var at = node.parent; at != null; at = at.parent) {
-    final list = switch (at) {
-      MethodDeclaration() => at.parameters,
-      FunctionDeclaration() => at.functionExpression.parameters,
-      _ => null,
-    };
-    if (at is MethodDeclaration || at is FunctionDeclaration) {
-      return [
-        for (final p in list?.parameters ?? const <FormalParameter>[])
-          ?p.declaredFragment?.element,
-      ];
+    // A getter has no parameter list, hence no parameters.
+    final FormalParameterList? list;
+    switch (at) {
+      case MethodDeclaration():
+        list = at.parameters;
+      case FunctionDeclaration():
+        list = at.functionExpression.parameters;
+      default:
+        continue;
     }
+    return [
+      for (final p in list?.parameters ?? const <FormalParameter>[])
+        ?p.declaredFragment?.element,
+    ];
   }
   return const [];
+}
+
+bool _readsLocal(AstNode node) {
+  final finder = _LocalFinder();
+  node.accept(finder);
+  return finder.found;
+}
+
+class _LocalFinder extends RecursiveAstVisitor<void> {
+  bool found = false;
+
+  @override
+  void visitSimpleIdentifier(SimpleIdentifier node) {
+    if (node.element is LocalVariableElement) found = true;
+  }
 }
 
 /// The elements of [parameters] that a simple identifier in [node] names.

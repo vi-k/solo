@@ -134,6 +134,77 @@ $_profiles
     ['key: [[_key]]'],
   );
 
+  Future<void> test_key_from_local_variable() => assertAt('''
+$_profiles
+  Job<Profile> load(String id) {
+    final key = (_Op.load, id);
+    return enqueue<Ready, Profile>(
+      key: key,
+      policy: Policy.droppable,
+      (ctx) => ctx.abandonable(() => api.load(id)),
+    );
+  }
+}
+''', []);
+
+  Future<void> test_body_by_local_function_name() => assertAt(
+    '''
+$_profiles
+  Job<Profile> load(String id) {
+    Future<Profile> body(SoloContext<State, Ready> ctx) => api.load(id);
+    return enqueue<Ready, Profile>(
+      key: _Op.load,
+      policy: Policy.droppable,
+      body,
+    );
+  }
+}
+''',
+    ['key: [[_Op.load]]'],
+  );
+
+  Future<void> test_body_in_final_local_closure() => assertAt(
+    '''
+$_profiles
+  Job<Profile> load(String id) {
+    final body = (SoloContext<State, Ready> ctx) => api.load(id);
+    return enqueue<Ready, Profile>(
+      key: _Op.load,
+      policy: Policy.droppable,
+      body,
+    );
+  }
+}
+''',
+    ['key: [[_Op.load]]'],
+  );
+
+  Future<void> test_dot_shorthand_policy() => assertAt(
+    '''
+$_profiles
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
+    key: _Op.load,
+    policy: .droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
+}
+''',
+    ['key: [[_Op.load]]'],
+  );
+
+  Future<void> test_parenthesised_policy() => assertAt(
+    '''
+$_profiles
+  Job<Profile> load(String id) => enqueue<Ready, Profile>(
+    key: _Op.load,
+    policy: (Policy.droppable),
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
+}
+''',
+    ['key: [[_Op.load]]'],
+  );
+
   Future<void> test_body_is_tear_off() => assertAt('''
 $_profiles
   Job<Profile> load(String id) => enqueue<Ready, Profile>(
