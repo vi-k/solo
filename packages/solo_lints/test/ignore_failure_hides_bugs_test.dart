@@ -115,6 +115,26 @@ final class Profiles extends Solo<State> {
     'load',
   );
 
+  Future<void> test_bare_enqueue_job() => _assertOne(
+    '''
+$_header
+final class Profiles extends Solo<State> {
+  Profiles() : super(Ready());
+
+  void reload() {
+    enqueueJob(
+      job<Ready, Profile>(
+        (ctx) => api.load(),
+        isExpectedError: (e) => e is ApiException,
+      ),
+    ).ignoreFailure();
+  }
+}
+''',
+    'ignoreFailure()',
+    'job',
+  );
+
   Future<void> test_chain() => _assertOne(
     '''
 $_header
@@ -227,6 +247,39 @@ void reload() => profiles.load()..ignoreFailure();
 ''',
     'profiles.load()..ignoreFailure()',
     'load',
+  );
+
+  Future<void> test_cascade_in_parentheses() => assertAt(
+    '''
+$_profiles
+}
+
+void reload() {
+  (profiles.load()..ignoreFailure());
+}
+
+void build() => (profiles.load()..ignoreFailure());
+
+SoloJob<Profile> keep() => (profiles.load()..ignoreFailure());
+''',
+    [
+      'reload() {\n  (profiles.load()..[[ignoreFailure]]',
+      'build() => (profiles.load()..[[ignoreFailure]]',
+    ],
+  );
+
+  Future<void> test_cascade_section_continues() => assertAt(
+    '''
+$_profiles
+}
+
+void reload() {
+  // The IDE sees this while `..ignoreFailure().` is being typed.
+  // ignore: use_of_void_result
+  profiles.load()..ignoreFailure().hashCode;
+}
+''',
+    ['profiles.load()..[[ignoreFailure]]().hashCode'],
   );
 
   Future<void> test_cascade_returned() => assertAt('''

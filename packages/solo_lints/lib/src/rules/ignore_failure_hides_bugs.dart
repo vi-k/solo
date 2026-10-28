@@ -58,9 +58,11 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (job == null) return;
     // `ignoreFailure()` returns void, so after `E.ignoreFailure()` the caller
     // has no job left; a cascade hands the job on unless its value is thrown
-    // away.
-    if (node.isCascaded && !_dropped(node.parent! as CascadeExpression)) {
-      return;
+    // away. A section that goes on after the call, `E..ignoreFailure().x`,
+    // still leaves the cascade the value of `E`.
+    if (node.isCascaded) {
+      final cascade = node.thisOrAncestorOfType<CascadeExpression>();
+      if (cascade == null || !_dropped(cascade)) return;
     }
     final owner = _Reduction(context).ownerOf(job);
     if (owner == null) return;
@@ -68,10 +70,13 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 }
 
-/// Whether the value of [cascade] is thrown away: it is a statement or the
-/// `=>` body of a function returning `void`.
+/// Whether the value of [cascade] is thrown away: it is, in parentheses or
+/// not, a statement or the `=>` body of a function returning `void`.
 bool _dropped(CascadeExpression cascade) {
-  final parent = cascade.parent;
+  var parent = cascade.parent;
+  while (parent is ParenthesizedExpression) {
+    parent = parent.parent;
+  }
   if (parent is ExpressionStatement) return true;
   if (parent is! ExpressionFunctionBody) return false;
   final function = parent.parent;
