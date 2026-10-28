@@ -9,8 +9,9 @@
 
 ### Added
 
-- `isExpectedError` names the errors a job expects: `onError` does not hear
-  them, and a bug still reaches it. See
+- `isExpectedError` names the errors a job expects: `onError` hears them with
+  `JobErrorAnswer.never`, and nobody is asked to answer for them, while a bug
+  still goes to the answerers and the zone. See
   [Naming the expected errors](doc/errors.md#naming-the-expected-errors).
 
 ## 0.5.0
