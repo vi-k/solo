@@ -55,3 +55,8 @@
   `check_links.py`, `check_doc_shape.py`, `check_page_code.py`, сборка сайта
   и её тесты;
 - новые русские абзацы — линтер `humanizer--ru` без ERROR.
+
+Пол на `c99ae07c`: `tool/archive_floor.py stage` — все четыре пакета по 0
+предупреждений, `run` на Flutter 3.38.1 с Dart 3.10.0 — «every archive passes
+its gate on the floor: 6 roots»; сторожа README `solo` и `flutter_solo` читают
+`example/analysis_options.yaml` и в архиве.
