@@ -1,4 +1,5 @@
-> **Состояние на 2026-10-29:** сделано в ветке работы, в `main` не влито.
+> **Состояние на 2026-10-29:** сделано и влито в `main` (`3e3f52ae`),
+> в origin не отправлено.
 > **Что это:** `solo_lints` в примерах `solo` и `flutter_solo`, и что
 > `flutter analyze` начиная с Flutter 3.44 диагностик плагина не показывает.
 > **Связанные записи:** `2026-10-29-solo-lints-release-report.md`,
@@ -73,6 +74,11 @@
   и `dart analyze --fatal-infos` — No issues found; `flutter test` — +6;
 - `check_translations.py`, `reflow.py --check`, `check_line_width.py` —
   зелёные; изменённые русские абзацы — линтер `humanizer--ru` без ERROR.
+
+Пол на `3e3f52ae`: `tool/archive_floor.py stage` — все четыре пакета по 0
+предупреждений, `run` на Flutter 3.38.1 с Dart 3.10.0 — «every archive passes
+its gate on the floor: 6 roots»; пример `solo` +112, пример `flutter_solo` +6,
+их `analyze lib` с плагином в раскладке зелёный.
 
 Что плагин в примерах действительно работает, показал тот же контрольный файл:
 в примере `solo` — находка в тесте выше, в примере `flutter_solo` — находки

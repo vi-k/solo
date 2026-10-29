@@ -46,10 +46,10 @@
 гоняет в примере `flutter_solo` ещё и `dart analyze --fatal-infos`:
 `flutter analyze` начиная с Flutter 3.44 диагностик плагина не показывает.
 README `solo_lints` об этом поправлен, в CHANGELOG — раздел «Unreleased».
-Отчёт — `2026-10-29-example-lints-report.md`. Сделано в ветке
-`worktree-example-lints`; на pub.dev примеры придут со следующими выпусками
-`solo` и `flutter_solo`. Упоминания `solo_lints` в README ядра и `solo` —
-по-прежнему решением владельца.
+Отчёт — `2026-10-29-example-lints-report.md`. Влито в `main`, пол на `3e3f52ae`
+зелёный; на pub.dev примеры придут со следующими выпусками `solo`
+и `flutter_solo`. Упоминания `solo_lints` в README ядра и `solo` — по-прежнему
+решением владельца.
 
 CI с 2026-10-21 стоит на `ubuntu-26.04` во всех заданиях `gate.yml`
 и `site.yml`, а не на `ubuntu-latest`: метка переезжала на Ubuntu 26 без
