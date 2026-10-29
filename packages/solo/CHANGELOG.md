@@ -4,6 +4,8 @@
 
 - The README names the analyzer plugin `solo_lints` in `Install`, and the page
   of common mistakes says that the plugin reports most of them.
+- The diagnostics page says what its observer prints, and that an observer
+  whose log leaves the device prints only what the application chose to send.
 
 ## 0.6.0
 

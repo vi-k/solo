@@ -80,6 +80,12 @@ void main() {
 }
 ```
 
+The observer prints what the application put into its jobs and its state: the
+key and the `describe` of each job, its outcome with the text of an error, and
+the `toString` of the state. When the log leaves the device, for a crash
+reporter, the observer prints only what the application chose to send, such as
+the type of the state rather than the state.
+
 `SoloObserver` is told what the controllers are told, `onStart`, `onFinish`,
 `onError`, `onLog`, `onChange` and `onClose`, for every controller of the
 process, and `onCreate` besides. `onUnanswered` and `onListenerError` stay with

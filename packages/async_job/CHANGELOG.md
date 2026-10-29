@@ -3,6 +3,9 @@
 ### Documentation
 
 - The README names the analyzer plugin `solo_lints` in `Install`.
+- The observing page says that the name of a job goes into the error messages
+  of the core as well, so `key` and `describe` hold an identifier rather than
+  personal data.
 
 ## 0.6.0
 

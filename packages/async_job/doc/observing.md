@@ -80,6 +80,11 @@ make the job's string form, the name that the lines of an observer print:
 Use `key` to identify the job in logs or in the scheduling rules of a library,
 such as the queue policies of `solo`. `describe` adds details to it.
 
+The name goes wherever the job is named: into the lines of observers and of the
+debug channel, and into the error messages of the core. Put an identifier in
+`key` and `describe`, not personal data: the id of a user rather than their
+email.
+
 The jobs the core makes for you take a `key` and a `describe` too: the
 continuation of `then`, the handle of `shared` and the child of `ctx.each`.
 Without a `describe`, each is described by the member that made it, so a
