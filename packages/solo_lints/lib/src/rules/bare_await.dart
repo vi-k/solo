@@ -118,7 +118,7 @@ class _Visitor extends SimpleAstVisitor<void> {
       if (at is FunctionExpression) {
         final ctx = _contextOf(at);
         if (ctx == null || _refusesCancellation(at)) return null;
-        if (catches.any((clause) => _handles(clause, node, ctx))) return null;
+        if (catches.any(_handles)) return null;
         return ctx;
       }
     }
@@ -135,20 +135,19 @@ class _Visitor extends SimpleAstVisitor<void> {
     return isJobContext(element?.type) ? element : null;
   }
 
-  /// Whether [clause] handles a cancellation where [node] waits, so the wait
-  /// is a release that has to run for it: the clause is `on Cancelled`, its
-  /// body ends in `rethrow;`, or [node] comes after the statement by which
-  /// the clause asked the job.
-  static bool _handles(CatchClause clause, AstNode node, Element ctx) {
-    if (isCoreClass(clause.exceptionType?.type?.element, 'Cancelled')) {
-      return true;
-    }
-    final body = clause.body;
-    if (body.statements.isNotEmpty && isRethrow(body.statements.last)) {
-      return true;
-    }
-    final asking = askingStatement(body, ctx);
-    return asking != null && asking.end <= node.offset;
+  /// Whether [clause] handles a cancellation, so its waits are a release
+  /// that has to run for it: the clause is `on Cancelled`, or it takes a
+  /// cancellation and its body ends in `rethrow;`.
+  ///
+  /// A check in the clause does not make it one: it hears a cancellation
+  /// that has come, not one that comes during the wait after it.
+  static bool _handles(CatchClause clause) {
+    final type = clause.exceptionType?.type;
+    if (isCoreClass(type?.element, 'Cancelled')) return true;
+    final statements = clause.body.statements;
+    return takesCancelled(type) &&
+        statements.isNotEmpty &&
+        isRethrow(statements.last);
   }
 
   /// Whether [body] belongs to a job made with `cancellable: false`: the
@@ -236,7 +235,7 @@ class _Waits {
   /// Whether [list] is a literal list of futures that all wait through the
   /// context.
   bool _all(Expression? list) {
-    if (list is! ListLiteral || list.elements.isEmpty) return false;
+    if (list is! ListLiteral) return false;
     return list.elements.every(_element);
   }
 
@@ -253,8 +252,8 @@ class _Waits {
 
   /// Whether [target] is a child the job runs: `ctx.each(...)`, a final
   /// local variable that holds one, or a variable the body passed to
-  /// `ctx.start` earlier. A child of `ctx.child` that nobody started never
-  /// ends.
+  /// `ctx.start` earlier and cannot have replaced since. A child of
+  /// `ctx.child` that nobody started never ends.
   bool _isChild(Expression? target) {
     if (target == null) return false;
     final node = target.unParenthesized;
@@ -262,7 +261,9 @@ class _Waits {
     if (node is! SimpleIdentifier) return false;
     final value = node.element;
     if (value == null) return false;
-    if (_earlier((statement) => _calls(statement, 'start', value))) {
+    final replaceable = value is LocalVariableElement && !value.isFinal;
+    if (!replaceable &&
+        _earlier((statement) => _calls(statement, 'start', value))) {
       return true;
     }
     final initializer = _finalLocalValue(node);
@@ -275,9 +276,27 @@ class _Waits {
     for (final AstNode argument in arguments.arguments) {
       final value = argumentValue(argument).unParenthesized;
       if (value is! SimpleIdentifier || value.element != ctx) continue;
-      if (isJobContext(value.correspondingParameter?.type)) return true;
+      if (isJobContext(_parameterType(arguments, argument, value))) {
+        return true;
+      }
     }
     return false;
+  }
+
+  /// The type of the parameter that [argument] of [arguments] goes to.
+  ///
+  /// A named argument is looked up by its name in the type of the call:
+  /// analyzer 13 and later give the value of one no parameter.
+  static DartType? _parameterType(
+    ArgumentList arguments,
+    AstNode argument,
+    Expression value,
+  ) {
+    final name = argumentName(argument);
+    if (name == null) return value.correspondingParameter?.type;
+    final call = arguments.parent;
+    final type = call is InvocationExpression ? call.staticInvokeType : null;
+    return type is FunctionType ? type.namedParameterTypes[name] : null;
   }
 
   /// Whether [target] is a variable the body has just taken back from the

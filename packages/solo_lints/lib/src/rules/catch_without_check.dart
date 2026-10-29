@@ -4,7 +4,6 @@ import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
-import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer/error/error.dart';
 
 import '../context.dart';
@@ -50,7 +49,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitCatchClause(CatchClause node) {
-    if (!_takesCancelled(node.exceptionType?.type)) return;
+    if (!takesCancelled(node.exceptionType?.type)) return;
     final ctx = bodyContextAround(node);
     if (ctx == null) return;
     final statement = node.parent;
@@ -63,16 +62,6 @@ class _Visitor extends SimpleAstVisitor<void> {
     } else {
       rule.reportAtToken(node.catchKeyword!, arguments: [ctx.displayName]);
     }
-  }
-
-  /// Whether a clause on [type] takes `Cancelled`, which is an
-  /// `Outcome<Never>` and an `Exception`.
-  static bool _takesCancelled(DartType? type) {
-    if (type == null || type is DynamicType) return true;
-    final element = type.element;
-    return isDartCoreClass(element, 'Object') ||
-        isDartCoreClass(element, 'Exception') ||
-        isCoreClass(element, 'Outcome');
   }
 
   /// Whether [block] waits or reaches a checkpoint of [ctx].

@@ -23,18 +23,17 @@
 «давай сразу починим и сделаем»: линт `bare_await` — `await` в теле задачи мимо
 контекста — сделан, README получил абзацы об уровне правила, о `dart fix`
 и о двойных диагнозах Dart 3.12. Дизайн — `2026-10-29-bare-await-design.md`,
-отчёт с ревью и вердиктами — `2026-10-29-bare-await-report.md`, решения 119–125
-`docs/settled.md`. В CHANGELOG `solo_lints` — раздел «Unreleased»; выпуск —
-отдельной связкой по слову владельца. Сообщение сессии tez с диагнозами
-и правилом — после влития.
+отчёт с двумя ревью и вердиктами — `2026-10-29-bare-await-report.md`, решения
+119–127 `docs/settled.md`. Раздел «Registering after a plain `await`»
+`cleanup-rules.md` ядра по слову владельца получил фразу о том, что такое
+ожидание называет `bare_await`. В CHANGELOG `solo_lints` — раздел «Unreleased»;
+выпуск — отдельной связкой по слову владельца. Сообщение сессии tez
+с диагнозами и правилом — после влития.
 
-Открытые вопросы владельцу по `bare_await`. Правило ловит правильный ответ
-раздела «Registering after a plain `await`» страницы
-`packages/async_job/doc/cleanup-rules.md`: страница учит голому `await` перед
-регистрацией, доктрина — ожиданию через контекст; что делать с разделом, решает
-владелец. Код страницы `observing.md` держит `await migrate()` в обёртке
-`test/support/observing_page.dart` и `observing_first_attempts.dart` ядра —
-правка кода страницы, если правило включат в пакетах.
+Открытый вопрос владельцу по `bare_await`: код страницы `observing.md` держит
+`await migrate()` в обёртке `test/support/observing_page.dart`
+и `observing_first_attempts.dart` ядра — правка кода страницы, если правило
+включат в пакетах.
 
 Открытый вопрос владельцу: линты в примерах. Сейчас ни пример `solo`, ни пример
 `flutter_solo` `solo_lints` не подключают; в выпуск 0.6.0 они не попали.

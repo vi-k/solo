@@ -84,6 +84,16 @@ bool isDartCoreClass(Element? element, String name) =>
     element.name == name &&
     element.library.uri.toString() == 'dart:core';
 
+/// Whether a catch clause on [type] takes `Cancelled`, which is an
+/// `Outcome<Never>` and an `Exception`.
+bool takesCancelled(DartType? type) {
+  if (type == null || type is DynamicType) return true;
+  final element = type.element;
+  return isDartCoreClass(element, 'Object') ||
+      isDartCoreClass(element, 'Exception') ||
+      isCoreClass(element, 'Outcome');
+}
+
 /// The context of [node] when it is a job body: its first parameter, if that
 /// is typed `JobContext` or a subtype.
 FormalParameterElement? jobContextOf(FunctionExpression node) {

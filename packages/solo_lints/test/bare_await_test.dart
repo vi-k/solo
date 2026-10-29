@@ -209,6 +209,19 @@ final job = Job<void>((ctx) async {
 });
 ''', []);
 
+  Future<void> test_child_replaced_after_start() => assertAt(
+    '''
+$_api
+final job = Job<void>((ctx) async {
+  var rows = ctx.child((child) => child.join(commit));
+  ctx.start(rows);
+  rows = ctx.child((child) => child.join(commit));
+  await rows.value;
+});
+''',
+    ['[[await]] rows.value'],
+  );
+
   Future<void> test_unstarted_child() => assertAt(
     '''
 $_api
@@ -252,7 +265,10 @@ $_api
 Future<int> inIsolate(JobContext ctx, int Function() work) =>
     ctx.join(() async => work());
 
+Future<int> named({required JobContext ctx}) => ctx.join(commit);
+
 final job = Job<int>((ctx) async {
+  await named(ctx: ctx);
   return await inIsolate(ctx, () => 1);
 });
 ''', []);
@@ -425,15 +441,41 @@ final job = Job<void>((ctx) async {
   } on Cancelled {
     await reset();
     return;
-  } on DeviceError {
+  } on Object {
+    ctx.check();
     await reset();
     rethrow;
-  } on Object {
-    if (ctx.job.isCancelled) rethrow;
-    await reset();
   }
 });
 ''', []);
+
+  // A check hears a cancellation that has come, not one that comes during
+  // the wait after it; a narrow catch does not take a cancellation, so its
+  // release waits as the body does.
+  Future<void> test_catch_that_lets_a_cancellation_wait() => assertAt(
+    '''
+$_api
+final job = Job<void>((ctx) async {
+  for (var attempt = 1; ; attempt++) {
+    try {
+      await ctx.abandonable(commit);
+      return;
+    } on DeviceError {
+      await reset();
+      rethrow;
+    } on Exception {
+      if (ctx.job.isCancelled) rethrow;
+      await reset();
+    } on Object {
+      ctx.check();
+      if (attempt == 3) rethrow;
+      await Future<void>.delayed(Duration(seconds: attempt));
+    }
+  }
+});
+''',
+    ['[[await]] reset', '[[await]] reset', '[[await]] Future'],
+  );
 
   Future<void> test_wildcard_context() async {
     const code =
@@ -487,8 +529,8 @@ final job = Job<void>((ctx) async {
   await pending;
 });
 ''';
-    newFile(testFilePath, code);
-    result = await resolveFile(testFilePath);
+    testFile.writeAsStringSync(code);
+    result = await resolveFile(testFile.path);
     assertDiagnosticsIn(
       [
         for (final diagnostic in result.diagnostics)
@@ -513,6 +555,21 @@ final second = Job<void>((ctx) async {
 }, cancellable: refuse);
 ''', []);
 
+  Future<void> test_body_declared_at_the_top_level_and_passed_twice() =>
+      assertAt(
+        '''
+$_api
+Future<void> backup(JobContext ctx) async {
+  await commit();
+}
+
+final first = Job<void>(backup, cancellable: false);
+
+final second = Job<void>(backup);
+''',
+        ['[[await]] commit()'],
+      );
+
   Future<void> test_collection_elements() => assertAt('''
 $_api
 Job<void> runAll(List<ChildJob<int>> jobs) => Job<void>((ctx) async {
@@ -520,6 +577,7 @@ Job<void> runAll(List<ChildJob<int>> jobs) => Job<void>((ctx) async {
     for (final job in jobs) ctx.run(job),
     if (jobs.isEmpty) ctx.join(commit),
   ]);
+  await Future.wait(<Future<void>>[]);
 });
 ''', []);
 

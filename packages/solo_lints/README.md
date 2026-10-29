@@ -246,19 +246,25 @@ a member of the context of this body: `join`, `abandonable`, `wait`,
 and `cancel()` of a child that `ctx.each` brings or that the body passed to
 `ctx.start` before, and on `Future.wait`, `[...].wait` and `(...).wait` of such
 futures, a conditional of them and a final local variable holding one. A call
-that passes the context to a parameter typed `JobContext` waits through it. A
-release right after `ctx.disown(v)`, on the next line or under
-`if (ctx.disown(v))`, has to run for a cancellation too. It is quiet on a value
-that is not a future, in `finally`, and in a catch that is `on Cancelled`, ends
-in `rethrow;` or has asked the job before the wait. A body of a job made with
-`cancellable: false`, as a literal or a constant, is left alone, although a
-rule of a `solo` state still cancels it. A wait for the controller's own queue
-is reported by `await_own_queue` instead.
+that passes the context to a parameter typed `JobContext`, positional or named,
+waits through it. A release right after `ctx.disown(v)`, on the next line or
+under `if (ctx.disown(v))`, has to run for a cancellation too. It is quiet on a
+value that is not a future, in `finally`, in a catch that is `on Cancelled`,
+and in a catch that takes a cancellation, untyped, `on Object` or
+`on Exception`, and ends in `rethrow;`. A check at the top of a catch is not
+enough: it hears a cancellation that has come, not one that comes during the
+wait after it. A body of a job made with `cancellable: false`, as a literal or
+a constant, is left alone, and so is a top-level function every job of which is
+made so, although a rule of a `solo` state still cancels it. A wait for the
+controller's own queue is reported by `await_own_queue` instead.
 
 A loop of plain waits inside one `ctx.join(() async { ... })` is not reported,
 although a cancellation does not end it either. A child held in a `var` rather
 than a `final`, and a `...` in the list of `Future.wait`, are reported though
-they wait through the context.
+they wait through the context. So are a local function that waits through the
+context itself, where the body awaits its call, a future of the context taken
+further by `timeout` or `then`, `Future.any`, a mapped list such as
+`jobs.map(ctx.run)` and a variable of a pattern.
 
 It is a lint rather than a warning because tests wait in bodies on purpose, to
 cancel a job midway. A project that gates CI on it turns it on as

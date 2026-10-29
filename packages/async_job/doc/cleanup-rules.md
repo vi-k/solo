@@ -265,10 +265,11 @@ outcome: Cancelled(manual)
 Cancellation arriving while `Database.open()` runs cannot interrupt it. The
 body waits the call out, registers what it opened, and the job ends
 `Cancelled`; `onDiscard` closes the database, because the value reached no
-caller. Where the body waits through `ctx.abandonable`, `ctx.join` or
-`ctx.run`, hand the callback to that call, as
-[Registering on arrival](#registering-on-arrival) does. Each of them is a
-checkpoint, and the line under it may never run.
+caller. That wait is what the `bare_await` rule of `solo_lints` reports:
+registration after it is safe, but the job ends no sooner than the call. Where
+the body waits through `ctx.abandonable`, `ctx.join` or `ctx.run`, hand the
+callback to that call, as [Registering on arrival](#registering-on-arrival)
+does. Each of them is a checkpoint, and the line under it may never run.
 
 ## Cleanup order and late results
 
