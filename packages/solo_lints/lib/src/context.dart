@@ -290,3 +290,78 @@ class _FunctionFinder extends RecursiveAstVisitor<void> {
     super.visitVariableDeclaration(node);
   }
 }
+
+/// The call of the enclosing controller's own queue that [waited] waits
+/// for: `method(...).value` and `method(...).done` for a method that returns
+/// a `SoloJob`, and `close()` and `cancelAll()`.
+MethodInvocation? ownQueueCall(Expression waited) {
+  MethodInvocation? call;
+  var jobOf = false;
+  if (waited is PropertyAccess &&
+      const {'value', 'done'}.contains(waited.propertyName.name)) {
+    final target = waited.realTarget.unParenthesized;
+    if (target is MethodInvocation) call = target;
+    jobOf = true;
+  } else if (waited is MethodInvocation &&
+      const {'close', 'cancelAll'}.contains(waited.methodName.name)) {
+    call = waited;
+  }
+  if (call == null) return null;
+  final target = call.realTarget;
+  if (target != null && target is! ThisExpression) return null;
+  final method = call.methodName.element;
+  if (method is! MethodElement) return null;
+  final owner = method.enclosingElement;
+  if (owner is! InterfaceElement || !isSolo(owner.thisType)) return null;
+  // Both close and cancelAll are members of Solo, so a method of the
+  // controller by either name is Solo's or overrides it.
+  if (jobOf && !_returnsSoloJob(call, method)) return null;
+  return call;
+}
+
+/// Whether [call] of [method] brings a `SoloJob`: by its declared type, or
+/// by what the method returns when it is declared in the same file.
+bool _returnsSoloJob(MethodInvocation call, MethodElement method) {
+  if (isSoloJob(call.staticType)) return true;
+  final finder = _MethodFinder(method.baseElement);
+  call.root.accept(finder);
+  final body = finder.found?.body;
+  return body != null &&
+      returnedValues(body).any((value) => isSoloJob(value.staticType));
+}
+
+/// The values [body] returns: its expression, or the values of the return
+/// statements of its block outside the functions declared in it.
+List<Expression> returnedValues(FunctionBody body) {
+  if (body is ExpressionFunctionBody) return [body.expression];
+  if (body is! BlockFunctionBody) return const [];
+  final returns = _Returns();
+  body.block.accept(returns);
+  return returns.values;
+}
+
+class _Returns extends RecursiveAstVisitor<void> {
+  final values = <Expression>[];
+
+  @override
+  void visitFunctionExpression(FunctionExpression node) {}
+
+  @override
+  void visitReturnStatement(ReturnStatement node) {
+    final value = node.expression;
+    if (value != null) values.add(value);
+  }
+}
+
+class _MethodFinder extends RecursiveAstVisitor<void> {
+  final Element method;
+
+  MethodDeclaration? found;
+
+  _MethodFinder(this.method);
+
+  @override
+  void visitMethodDeclaration(MethodDeclaration node) {
+    if (node.declaredFragment?.element == method) found = node;
+  }
+}
