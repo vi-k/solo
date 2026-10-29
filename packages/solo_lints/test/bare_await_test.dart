@@ -207,6 +207,16 @@ final job = Job<void>((ctx) async {
   ctx.start(rows);
   await rows.value;
 });
+
+class Host {
+  late final ChildJob<int> rows;
+
+  Job<void> work() => Job<void>((ctx) async {
+    rows = ctx.child((c) => c.join(commit));
+    ctx.start(rows);
+    await rows.value;
+  });
+}
 ''', []);
 
   Future<void> test_child_replaced_after_start() => assertAt(
@@ -218,8 +228,40 @@ final job = Job<void>((ctx) async {
   rows = ctx.child((child) => child.join(commit));
   await rows.value;
 });
+
+Future<void> body(JobContext ctx, [ChildJob<int>? rows]) async {
+  rows = ctx.child((child) => child.join(commit));
+  ctx.start(rows);
+  rows = ctx.child((child) => child.join(commit));
+  await rows.value;
+}
+
+final second = Job<void>(body);
+
+class Host {
+  late ChildJob<int> rows;
+
+  Job<void> work() => Job<void>((ctx) async {
+    rows = ctx.child((child) => child.join(commit));
+    ctx.start(rows);
+    rows = ctx.child((child) => child.join(commit));
+    await rows.value;
+  });
+}
+
+ChildJob<int> get fresh => throw 0;
+
+final third = Job<void>((ctx) async {
+  ctx.start(fresh);
+  await fresh.value;
+});
 ''',
-    ['[[await]] rows.value'],
+    [
+      '[[await]] rows.value',
+      '[[await]] rows.value',
+      '[[await]] rows.value',
+      '[[await]] fresh.value',
+    ],
   );
 
   Future<void> test_unstarted_child() => assertAt(
@@ -446,6 +488,32 @@ final job = Job<void>((ctx) async {
     await reset();
     rethrow;
   }
+  try {
+    await ctx.join(commit);
+  } catch (_) {
+    for (var i = 0; i < 2; i++) {
+      if (i == 1) break;
+      await reset();
+    }
+    rethrow;
+  }
+  try {
+    await ctx.join(commit);
+  } on Exception {
+    void skip() {
+      return;
+    }
+
+    skip();
+    await reset();
+    rethrow;
+  }
+  try {
+    await ctx.join(commit);
+  } on Outcome<Object?> {
+    await reset();
+    rethrow;
+  }
 });
 ''', []);
 
@@ -475,6 +543,42 @@ final job = Job<void>((ctx) async {
 });
 ''',
     ['[[await]] reset', '[[await]] reset', '[[await]] Future'],
+  );
+
+  // A catch that ends in `rethrow;` but goes on before it, by `continue` or
+  // `return`, waits on the way there, not on the way out.
+  Future<void> test_catch_that_goes_on_before_rethrow() => assertAt(
+    '''
+$_api
+final job = Job<void>((ctx) async {
+  for (var attempt = 1; ; attempt++) {
+    try {
+      await ctx.abandonable(commit);
+      return;
+    } on Object {
+      ctx.check();
+      if (attempt < 3) {
+        await Future<void>.delayed(Duration(seconds: attempt));
+        continue;
+      }
+      rethrow;
+    }
+  }
+});
+
+final fallback = Job<int>((ctx) async {
+  try {
+    return await ctx.join(commit);
+  } on Exception {
+    if (!ctx.job.isCancelled) {
+      await reset();
+      return 0;
+    }
+    rethrow;
+  }
+});
+''',
+    ['[[await]] Future', '[[await]] reset'],
   );
 
   Future<void> test_wildcard_context() async {

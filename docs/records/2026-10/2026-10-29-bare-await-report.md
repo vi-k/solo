@@ -1,8 +1,8 @@
 > **Состояние на 2026-10-29:** сделано в ветке работы, не опубликовано; новая
 > версия `solo_lints` с правилом выходит отдельным выпуском.
 > **Что это:** отчёт о правиле `bare_await` и ответ на отчёт сессии tez: что
-> сделано, что проверено, ревью дизайна и прототипа и повторное ревью
-> переписанного правила, с вердиктами.
+> сделано, что проверено, ревью дизайна и прототипа, повторное ревью
+> переписанного правила и третье ревью правок по нему, с вердиктами.
 > **Связанные записи:** `2026-10-29-bare-await-design.md`,
 > `2026-10-28-solo-lints-report.md`, `2026-10-28-solo-lints-wave-2-report.md`.
 
@@ -40,6 +40,13 @@
 `Future.wait` не называется; редкие формы названы в README и решениях 126
 и 127.
 
+Третье ревью на `d957ca0b` нашло пять пунктов у Opus и один у Codex, и он же —
+второй пункт Opus. По ним широкий `catch` с `rethrow;` в конце проверяется как
+тело, если раньше из него уходят `return`, `break` или `continue`; прежний
+`ctx.start(v)` засчитывается только для финальной переменной или геттера
+финального поля; тесты держат все широкие типы `catch`; README называет
+`on Outcome`.
+
 ## Что проверено
 
 - `dart format`, `dart analyze --fatal-infos` и `dart test` в `solo_lints`:
@@ -47,10 +54,12 @@
 - Мутации: 40 мутаций исключений правила, по одной; каждая роняет тест.
   Выжившую в первом проходе — префикс импорта у `Future.wait` — убил тест
   `test_prefixed_future`. После повторного ревью — 45 мутаций, и каждая роняет
-  тест, `every` на `any` у тела верхнего уровня тоже.
+  тест, `every` на `any` у тела верхнего уровня тоже. После третьего ревью — 10
+  мутаций правок, K1–K10, и каждая роняет тест; выжившую в первом проходе K7,
+  вычисляемый геттер, убил геттер в `test_child_replaced_after_start`.
 - Замер шума по дереву — в записи дизайна; нули примеров подтверждены
   контрольным файлом. После повторного ревью список находок `async_job`
-  и `solo` совпал с прежним построчно.
+  и `solo` совпал с прежним построчно, после третьего — тоже.
 - Пол по коммиту `2449e246`: `tool/archive_floor.py` на Flutter 3.38.1 с Dart
   3.10.0 зелёный по всем пакетам, и набор `solo_lints` на нижних границах,
   analyzer 12.1.0 и analyzer_testing 0.2.5, — 190 тестов зелёные. На `3a61a484`
@@ -701,7 +710,9 @@ asked the job before the wait». Если владелец хочет его о�
 и ждут диагноза. Пункт 8 «пропускает» дизайна и README на обоих языках
 переписаны: проверка слышит отмену, которая уже пришла, а не ту, что придёт
 во время ожидания. На дереве находки совпали с прежними построчно: `async_job`
-215, `solo` 156, примеры 0 с контрольным файлом.
+215, `solo` 156, примеры 0 с контрольным файлом. Итог третьего ревью: форма,
+где широкий `catch` кончается `rethrow;`, а ожидание стоит в ветке с `continue`
+или `return`, жила и теперь называется — находка 1 отчёта Opus третьего ревью.
 
 #### 2. Именованный параметр `JobContext` не засчитывается. Мелко, расходится с дизайном.
 
@@ -825,7 +836,10 @@ final job = Job<void>((ctx) async {
 с `rethrow;` по-прежнему пропускается целиком, не только освобождение, и дизайн
 говорит это прямо; решение — пункт 127. На дереве изменений нет: три находки
 `solo`, которые ревьюер получил, выключив исключение целиком, стоят в широком
-`catch`, и список совпал с прежним построчно.
+`catch`, и список совпал с прежним построчно. Итог третьего ревью: широкий
+`catch` с `rethrow;` проверяется как тело, если до `rethrow;` из него уходят
+`return`, `break` или `continue` (находка 1 отчёта Opus); тесты держат все
+четыре широких типа (находка 3).
 
 #### 5. Дизайн: «`await for` в теле ловится всегда» — неправда. Мелко.
 
@@ -957,7 +971,10 @@ final job = Job<void>((ctx) async {
 не засчитывается для локальной `var`, а не засчитывается только для финальной.
 Разница — в параметре и поле: их тело заменить не может так, как свою `var`,
 и они остаются как были. Тест `test_child_replaced_after_start`; пункт 2
-«пропускает» дизайна говорит про `var`.
+«пропускает» дизайна говорит про `var`. Итог третьего ревью: довод про параметр
+и поле неверен — параметр переприсваивается, поле тоже, — и они больше
+не засчитываются; засчитывается только финальная переменная или геттер
+финального поля (находка 1 отчёта Codex и 2 отчёта Opus).
 
 ### Наблюдение без находки
 
@@ -967,3 +984,739 @@ final job = Job<void>((ctx) async {
 и `ctx.check();` первой строкой гасит оба. Если находку 1 принять, после
 `ctx.check()` такой `await` снова получит `bare_await`, кроме `catch`
 с `rethrow;` в конце.
+
+## Третье ревью
+
+Два ревьюера параллельно, Opus и Codex (`gpt-6-astra`, усилие `xhigh`), каждый
+в своей копии дерева на `d957ca0b`, вершине `main` после повторного ревью.
+Предмет — дифф `3a61a484..2449e246`, правки по повторному ревью: закрывают ли
+они его десять находок, что нового принёс дифф, работает ли тип именованного
+параметра на analyzer 12.1.0. Ниже оба отчёта как есть, кроме путей к временным
+каталогам; под каждой находкой — вердикт. Отчёт Opus пришёл сообщением:
+записать файл ревьюеру не дал харнесс.
+
+Номера мутаций отчётов (M…) — свои у каждого ревьюера. Мутации K1–K10
+в вердиктах — проверка правок третьего ревью, по одной, каждая роняет тест.
+
+### Отчёт Codex
+
+Проверял на коммите:
+
+```text
+d957ca0b docs: note the reply to tez in the handoff
+```
+
+Предмет — дифф `3a61a484..2449e246`. Проверка: чтение кода и документов, зонды
+через `RuleTest`, восемь отдельных мутаций, анализ и исполнение зондов
+на настоящем SDK. Dart — **3.13.0**; analyzer — **14.6.0** из lock-файла
+и **12.1.0** в отдельной копии пакета.
+
+**Осталась одна мелкая находка: №10 закрыта не полностью.** Новых важных
+регрессов не обнаружил.
+
+Расхождение с `AGENTS.md`: по прямому условию задания не обновлял handoff,
+не сохранял отчёт в репозитории и не делал коммит. После проверки дерево
+чистое.
+
+#### Сверка десяти находок второго ревью
+
+| № | Состояние | Чем проверено |
+|---|---|---|
+| 1. Проверка в начале `catch` скрывает последующее ожидание | **Закрыта** | После `ctx.check()` и `if (ctx.job.isCancelled) rethrow` обычные ожидания получают диагноз. Зонд `checks`, мутация M1. |
+| 2. Именованный параметр `JobContext` | **Закрыта** | 12 корректных форм вызова без диагнозов на analyzer 12.1.0 и 14.6.0. Возврат прежнего способа определения параметра роняет тест — M3. Границы вызовов разобраны ниже. |
+| 3. Вызов локальной функции, захватившей контекст | **Закрыта по вердикту** | Зонд `captured` по-прежнему даёт два диагноза. Это теперь явно описано в дизайне, обоих README и решении 126. |
+| 4. Любой `catch` с завершающим `rethrow` | **Закрыта** | Узкий `on DeviceError` получает диагнозы на `await` и `await for`; широкие типы пропускаются. Мутации M2 и M7 обнаружены тестами. Решение 127 не оспариваю. |
+| 5. Формулировка о безусловном обнаружении `await for` | **Закрыта** | Зонд `loop_places`: ноль диагнозов в `finally`, разрешённых `catch`, вложенном действии и теле с `cancellable: false`. Дизайн перечисляет эти исключения. |
+| 6. Тело верхнего уровня и `cancellable: false` | **Закрыта** | Два использования с отказом от отмены — ноль диагнозов; смешанные использования — один. README и перевод соответствуют. |
+| 7. `children.md` вместо `chains.md` | **Закрыта** | Дизайн исправлен; пример находится в `packages/async_job/doc/chains.md:407`. |
+| 8. Выживающая мутация `every` → `any` | **Закрыта** | M6 роняет новый `test_body_declared_at_the_top_level_and_passed_twice`. |
+| 9. Пустой список и редкие формы композиции | **Закрыта по вердикту** | Пустые `Future.wait([])` и `[].wait` проходят; M4 обнаружена тестом. Остальные шесть проверенных форм дают диагнозы на настоящем SDK и описаны как ограничения. |
+| 10. Замена запущенного ребёнка незапущенным | **Закрыта не до конца** | Локальная `var` получает диагноз; изменяемый параметр и поле — нет. На обоих analyzer. Подробности ниже. |
+
+#### Находки
+
+##### 1. Мелко: защита от замены ребёнка не распространяется на параметры и поля
+
+Координаты: `packages/solo_lints/lib/src/rules/bare_await.dart:264`,
+`_Waits._isChild`.
+
+Новое условие признаёт заменяемой только нефинальную `LocalVariableElement`.
+Параметр и идентификатор поля проходят проверку предыдущего `ctx.start(...)`,
+даже если после запуска им присвоен другой ребёнок.
+
+Утверждение вердикта №10, что параметр и поле тело заменить не может, неверно.
+Например:
+
+```dart
+class Host {
+  late ChildJob<int> rows;
+
+  Job<void> work() => Job<void>((ctx) async {
+    rows = ctx.child((c) async => 1);
+    ctx.start(rows);
+    rows = ctx.child((c) async => 2);
+    await rows.value;
+  });
+}
+```
+
+Ожидается новый, незапущенный ребёнок. Предыдущий `ctx.start(rows)` запускал
+другой объект. Отмена родителя это ожидание не завершает.
+
+Зонды через `RuleTest`, одинаково на analyzer 12.1.0 и 14.6.0:
+
+```text
+PROBE replaced_local bare_await: 1; compileErrors=0
+PROBE replaced_parameter bare_await: 0; compileErrors=0
+PROBE replaced_field bare_await: 0; compileErrors=0
+```
+
+Вариант с параметром использует допустимое тело:
+
+```dart
+Future<void> body(
+  JobContext ctx, [
+  ChildJob<int>? rows,
+]) async {
+  rows = ctx.child((c) => c.join(commit));
+  ctx.start(rows);
+  rows = ctx.child((c) => c.join(commit));
+  await rows.value;
+}
+
+final job = Job<void>(body);
+```
+
+Настоящий `dart analyze` с плагином также не сообщает `bare_await` для обоих
+вариантов. Исполнение варианта с полем — отмена после запуска тела, затем
+проверка состояния — печатает:
+
+```text
+cancelled=true, finished=false, replacementRunning=false, replacementFinished=false
+```
+
+Предложение: засчитывать предыдущий `start` только для доказанно неизменной
+ссылки. Консервативный вариант — финальная локальная переменная; более широкий
+требует учитывать присваивания параметрам и изменяемость полей. Добавить оба
+зонда в тесты и исправить обоснование вердикта №10.
+
+**Вердикт ревью:** остаток прежней находки, не новый регресс. Тяжесть мелкая:
+последовательная замена хэндла незапущенным ребёнком — редкая форма. Решения
+119–127 её не разрешают.
+
+**Вердикт.** Принята, сделано шире предложенного: прежний `ctx.start(v)`
+засчитывается только для неизменной ссылки — финальной переменной или геттера
+финального поля (`_fixed` в `bare_await.dart`). Параметр, нефинальное поле
+и вычисляемый геттер, который на каждом чтении даёт нового ребёнка,
+не засчитываются. Цена: запущенный и не заменённый ребёнок в параметре или
+нефинальном поле теперь назван, как `var` в пункте 122. Довод вердикта 10
+повторного ревью был неверен, итог дописан к нему. Тесты: параметр, поле
+и вычисляемый геттер в `test_child_replaced_after_start`, финальное поле
+в `test_children`; мутации K4–K7 роняют тест. Пункт 2 «пропускает» дизайна,
+README и перевод говорят про неизменную ссылку, пункт 122 — про параметр
+и поле.
+
+#### Совместимость и документы
+
+`staticInvokeType` работает одинаково на обеих проверенных версиях analyzer.
+Для следующих именованных вызовов получен `FunctionType` с параметром
+`JobContext`, диагнозов нет:
+
+- функция верхнего уровня;
+- аргумент `(ctx)` в скобках;
+- generic-функция с `C extends JobContext`;
+- метод объекта;
+- вызываемый объект и его явный `.call`;
+- функция, возвращённая getter;
+- функция в локальной переменной;
+- `(named)(ctx: ctx)` и `named.call(ctx: ctx)`;
+- вызов метода через `?.`;
+- непосредственный вызов литерала функции.
+
+Характерный вывод:
+
+```text
+INVOKE named(ctx: ctx) => Future<int> Function({required JobContext ctx})
+```
+
+Границы:
+
+| Форма | Результат |
+|---|---|
+| `dynamic`-функция и её `.call` | `staticInvokeType == dynamic`; исключение не применяется, диагноз есть |
+| Неразрешённый вызов | `InvalidType`; падения нет |
+| Прямой конструктор `Task(ctx: ctx)` или `Task.new(ctx: ctx)` | Это `InstanceCreationExpression`, не `InvocationExpression`; до `_parameterType` правило не доходит |
+| Вызов constructor tear-off: `(Task.new)(ctx: ctx)` или через переменную | Есть `FunctionType`; контекст засчитывается |
+
+Последняя пара проверена на классе `Task implements Future<int>`, который
+передаёт ожидание в `ctx.join`. На обеих версиях прямые конструкторы дают два
+диагноза, tear-off — ноль. Настоящий SDK подтверждает результат. Это прежняя
+граница `_Waits.through`, а не регресс рассматриваемого диффа; отдельной
+находкой её не считаю.
+
+Перенос `takesCancelled` не изменил его вычисление. Штатные тесты и зонды
+`catch_without_check` не показали регресса: широкие `catch` с ожиданием без
+проверки получают диагноз, проверившие контекст — нет; `Cancelled` и узкий
+`DeviceError` пропускаются этим соседним правилом.
+
+Изменённые положения дизайна и обоих README соответствуют проверенному
+поведению. Оговорки решений 126–127 действительно сохранены. Фраза
+в `cleanup-rules.md` тоже соответствует правилу: `await Database.open()` перед
+`ctx.onDiscard(...)` даёт один `bare_await`. Ошибочное обоснование про
+неизменяемость параметров и полей относится к находке выше.
+
+#### ПРОГОН
+
+Команды запускались через `rtk proxy`; ниже приведены сами команды
+и фактические результаты.
+
+##### Обязательные проверки
+
+Из `packages/solo_lints`, после удаления временного теста и восстановления
+исходника:
+
+| Команда | Точная последняя строка |
+|---|---|
+| `dart format --output=none --set-exit-if-changed .` | `Formatted 28 files (0 changed) in 0.09 seconds.` |
+| `dart analyze --fatal-infos` | `No issues found!` |
+| `dart test` | `00:06 +190: All tests passed!` |
+
+Все три завершились с кодом 0. Начальный прогон до зондов также прошёл:
+
+```text
+00:04 +190: All tests passed!
+```
+
+##### Зонды через `RuleTest`
+
+Основная команда:
+
+```sh
+dart test test/zz_probe_test.dart --reporter expanded
+```
+
+В таблице указано число диагнозов выбранного правила. Результаты совпали
+на analyzer 12.1.0 и 14.6.0.
+
+| Зонд | Что проверял | Вывод |
+|---|---|---|
+| `checks` | Проверки отмены перед ожиданием; узкий `catch` с `rethrow` | `bare_await: 4; compileErrors=0` |
+| `named_calls` | 12 форм именованного вызова | `bare_await: 0; compileErrors=0` |
+| `named_unsafe` | Параметр `Object`, вызовы через `dynamic` | `bare_await: 3; compileErrors=0` |
+| `captured` | Локальная функция и замыкание, захватившие `ctx` | `bare_await: 2; compileErrors=0` |
+| `loop_places` | Исключения места для `await for` | `bare_await: 0; compileErrors=0` |
+| `all_false` | Два использования тела с отказом от отмены | `bare_await: 0; compileErrors=0` |
+| `mixed` | Использования тела с отказом и без | `bare_await: 1; compileErrors=0` |
+| `rare_and_empty` | Композиции future и пустые списки | `bare_await: 4; compileErrors=2` |
+| `replaced_local` | Замена локальной `var` после запуска | `bare_await: 1; compileErrors=0` |
+| `replaced_parameter` | Та же замена параметра | `bare_await: 0; compileErrors=0` |
+| `replaced_field` | Та же замена поля | `bare_await: 0; compileErrors=0` |
+| `broad_types` | Untyped, Object, Exception, Outcome, dynamic, typedef, Cancelled, DeviceError | `bare_await: 1; compileErrors=0` |
+| `cleanup_page` | Регистрация после обычного ожидания | `bare_await: 1; compileErrors=0` |
+| `broken_arguments` | Пропущенное значение аргумента, дубликат, неизвестные имена, отсутствующие аргументы | `bare_await: 2; compileErrors=6` |
+| `broken_without_bound` | Самоссылки, взаимные ссылки, незаконченный `on` | `bare_await: 3; compileErrors=6` |
+| `checks`, соседнее правило | Проверки контекста и узкий `catch` | `catch_without_check: 0; compileErrors=0` |
+| `broad_types`, соседнее правило | Матрица типов `catch` | `catch_without_check: 6; compileErrors=0` |
+| `broken_arguments`, соседнее правило | Ошибочные аргументы | `catch_without_check: 0; compileErrors=6` |
+
+В `rare_and_empty` тестовый SDK не предоставляет `Future.any`
+и `Future.timeout`; поэтому результат этого зонда для них непоказателен. Эти
+формы отдельно проверены настоящим SDK.
+
+Зонд `broken_types` с `T extends T` **упал: `Stack Overflow`** на обеих версиях
+analyzer. Повтор с правилом, у которого `registerNodeProcessors` пуст, упал
+так же. Стек идёт через `TypeParameterTypeImpl.asInstanceOf` и разрешение
+типов, до запуска обработчиков линта. Это не дефект рассматриваемого диффа.
+
+Первый запуск временного набора закончился:
+
+```text
+00:01 +17 -2: Some tests failed.
+```
+
+После добавления контрольного пустого правила и отдельного зонда без
+циклической границы:
+
+```text
+00:02 +18 -3: Some tests failed.
+```
+
+Все три падения — один ошибочный `T extends T` под тремя вариантами правила.
+
+В копии с analyzer 12.1.0 запускал:
+
+```sh
+dart test test/bare_await_test.dart test/catch_without_check_test.dart \
+  test/zz_probe_test.dart --reporter expanded
+```
+
+Результат:
+
+```text
+00:03 +76 -3: Some tests failed.
+```
+
+Причина трёх падений та же. Отдельный запуск **только штатных тестов** двух
+правил:
+
+```sh
+dart test test/bare_await_test.dart test/catch_without_check_test.dart \
+  --reporter expanded
+```
+
+завершился:
+
+```text
+00:02 +58: All tests passed!
+```
+
+Конструкторы проверены отдельно на обеих версиях:
+
+```sh
+dart test test/zz_probe_test.dart --plain-name constructors \
+  --reporter expanded
+```
+
+Вывод:
+
+```text
+PROBE constructors bare_await: 2; compileErrors=0
+```
+
+Оба запуска зелёные: `+1: All tests passed!`.
+
+##### Настоящий SDK
+
+В отдельном пакете вне дерева подключён плагин из проверяемого дерева, включены
+`bare_await` и `catch_without_check`.
+
+Первый `dart analyze` **упал** из-за запрета записи:
+
+```text
+PathAccessException: Creation failed, path = '/Users/user/.dartServer/.plugin_manager/e296029f584f87de0d07eaf940f3d549' (OS Error: Operation not permitted, errno = 1)
+```
+
+Повторил с `ANALYZER_STATE_LOCATION_OVERRIDE`, направленным в разрешённый
+scratch-каталог. Результат:
+
+```text
+7 issues found.
+```
+
+Это шесть `bare_await` на `timeout`, `Future.any`, двух вариантах `map`, `then`
+и переменной шаблона, плюс предупреждение о ненужном `?.`. На пустых списках,
+именованных корректных вызовах, заменённых параметре и поле диагнозов
+`bare_await` нет.
+
+Отдельный `dart analyze constructors.dart`:
+
+```text
+2 issues found.
+```
+
+Оба — ожидаемые для текущей реализации `bare_await` на прямых конструкторах.
+
+Исполняемый зонд `dart run runtime.dart` сначала упал
+с `LateInitializationError`: отмена была отправлена до начала тела. После
+переноса отмены за первый асинхронный такт завершился с кодом 0 и напечатал:
+
+```text
+cancelled=true, finished=false, replacementRunning=false, replacementFinished=false
+```
+
+##### Мутации
+
+Каждая мутация запускалась отдельно на analyzer 14.6.0 командой:
+
+```sh
+dart test test/bare_await_test.dart --plain-name <имя> \
+  --reporter expanded
+```
+
+Перед первой мутацией исходник сохранён через `cp` вне дерева. После
+**каждой** — восстановлен через `cp`, затем `cmp` завершился с кодом 0.
+
+| Мутация | Фильтр теста | Результат |
+|---|---|---|
+| M1: вернуть освобождение `catch` по `askingStatement` | `catch_that_lets_a_cancellation_wait` | `00:01 +0 -1: Some tests failed.` |
+| M2: убрать требование `takesCancelled` перед `rethrow` | `catch_that_lets_a_cancellation_wait` | `00:01 +0 -1: Some tests failed.` |
+| M3: для именованного аргумента снова брать `value.correspondingParameter` | `hands_over_the_context` | `00:01 +0 -1: Some tests failed.` |
+| M4: снова запрещать пустой список | `collection_elements` | `00:00 +0 -1: Some tests failed.` |
+| M5: убрать ограничение заменяемой локальной переменной | `child_replaced_after_start` | `00:01 +0 -1: Some tests failed.` |
+| M6: `every(_refuses)` → `any(_refuses)` | `body_declared_at_the_top_level_and_passed_twice` | `00:01 +0 -1: Some tests failed.` |
+| M7: отключить освобождение широкого `catch` с `rethrow` | `catch_that_handles_a_cancellation` | `00:00 +0 -1: Some tests failed.` |
+| M8: убрать защиту от чтения собственного инициализатора | `read_in_its_own_initializer` | `00:01 +0 -1: Some tests failed.`; `Stack Overflow` в `_Waits.through` |
+
+Все восемь обнаружены тестами. M8 отдельно подтверждает, что исправленный тест
+самоссылки действительно исполняет нужный сценарий.
+
+Дополнительные проверки:
+
+```text
+python3 tool/reflow.py --check
+every paragraph is filled to 79 columns
+
+python3 tool/check_line_width.py
+no Markdown line over 79 columns, no blank line doubled
+
+python3 tool/check_translations.py
+no differences
+```
+
+Финальные `git status --short` и `git diff --exit-code` — пустой вывод, код 0.
+Временный тест удалён.
+
+**Итог: 0 важных, 1 мелкая находка. Девять вердиктов подтверждены; №10 закрыт
+не полностью.**
+
+### Отчёт Opus
+
+Проверял в копии дерева, отвязанный HEAD. `git log --oneline -1`:
+`d957ca0b docs: note the reply to tez in the handoff`. Основная среда — Dart
+3.13.0 и analyzer 14.6.0 из `pubspec.lock`. Пол — Dart 3.10.0
+(`~/fvm/versions/3.38.1`) и analyzer 12.1.0.
+
+**Как проверял:**
+- **Зонды через `RuleTest`.** Временные файлы `test/zz_probe_test.dart`,
+  `test/zz_probe_ba_test.dart` и `test/zz_probe_fixtures.dart`. Каждый фрагмент
+  пишется в свой файл `lib/p_<имя>.dart`, разрешается отдельно, и зонд печатает
+  диагнозы линтов.
+  - Прогонялись три правила: текущий `bare_await`, `catch_without_check`
+    и `bare_await` из `3a61a484`.
+  - Старое правило на время лежало в `lib/src/rules/bare_await_old.dart`.
+  - Все временные файлы удалены.
+- **Зонд на настоящем SDK.** Пакет вне дерева. В нём `async_job` по пути
+  из копии и плагин по пути из копии с `bare_await: true`
+  и `catch_without_check: true`, затем `dart analyze`.
+- **Пол.** `git archive` пакета `solo_lints` и `solo/doc` вне дерева. Затем
+  `dart pub get` и `dart pub downgrade <прямые зависимости>`, как делает
+  `tool/archive_floor.py`. Получились analyzer 12.1.0, analyzer_testing 0.2.5,
+  analysis_server_plugin 0.3.14 и analyzer_plugin 0.14.8.
+- **Мутации.** 14 штук по одной, своим скриптом.
+  - До мутаций сделаны копии `bare_await.dart.orig` и `context.dart.orig`.
+  - После каждой файл возвращается `cp` и сверяется `filecmp`.
+  - В конце ещё раз `cmp`.
+- **Документы.** `check_translations.py`, `check_line_width.py`,
+  `reflow.py --check` (общий проход и обе записи `bare-await`),
+  `check_links.py`.
+
+#### Десять находок второго ревью
+
+| № | Состояние | Чем проверено |
+|---|---|---|
+| 1 | закрыта не до конца | Формы находки ловятся: зонд `f1_isCancelled_first_broad` даёт 1 диагноз, старое правило давало 0. Тест `test_catch_that_lets_a_cancellation_wait` держит форму: мутация M2 (вернуть исключение «спросил задачу») его роняет. Жива форма, где широкий `catch` кончается `rethrow;`, а задержка стоит в ветке с `continue` — новая находка 1 |
+| 2 | закрыта | Зонд `f2_named_forms` молчит на всех формах передачи контекста (список ниже таблицы). `obj({required Object ctx})` ловится. Старое правило ловило все 7 вызовов. На analyzer 12.1.0 вывод тот же. Мутация M6 роняет `test_hands_over_the_context`. Неточный комментарий — новая находка 4 |
+| 3 | закрыта документом | Код не менялся. Форма названа в дизайне, в README:264–267, в README.ru:269–272 и в пункте 126 |
+| 4 | закрыта | `f4_narrow_kinds_rethrow` (`on DeviceError`, `on StateError` и `on Error` с `rethrow;`) — 3 диагноза, у старого правила 0. Зонд ревьюера `f4_reviewer_probe` — 3. `f4_broad_kinds_rethrow` (`on Exception`, `on Outcome`, без типа, `on dynamic`) — 0. Мутация M1 роняет тест. Пробел в тестах — новая находка 3 |
+| 5 | закрыта | Прочитан раздел дизайна «Что правило ловит». `_awaitFor` (`bare_await.dart:94–98`) не менялся |
+| 6 | закрыта | Прочитаны README:256–257 и README.ru:262–263. Мутация M7 роняет `test_body_declared_at_the_top_level_and_passed_twice` |
+| 7 | закрыта | В дизайне стоит `chains.md`. `grep "own continuation"` находит только `chains.md:407` |
+| 8 | закрыта | M7 роняет новый тест |
+| 9 | закрыта | `f9_empty_and_any`: `Future.wait(<Future<void>>[])`, `Future.wait([])` и `Future.wait(const <Future<void>>[])` — 0 диагнозов, у старого правила 3. M3 роняет `test_collection_elements`. Остальные формы названы в README и пункте 126 |
+| 10 | закрыта для `var` | M4 роняет `test_child_replaced_after_start`. Довод про параметр неверен и не покрыт тестом — новая находка 2 |
+
+Формы зонда `f2_named_forms`, на которых правило молчит:
+- метод экземпляра и статический метод;
+- обобщённый `<C extends JobContext>` и параметр `JobContext?`;
+- смешанный вызов `both(1, ctx: ctx)`;
+- параметр-функция и локальная функция;
+- `call()`, `super.save(ctx: ctx)` и тир-офф `super.save`.
+
+Регресса `catch_without_check` после переезда `takesCancelled` нет:
+- функция перенесена в `context.dart:87–95` без изменений;
+- набор из 190 тестов зелёный;
+- M12 и M13 роняют тесты `catch_without_check` и `add_check_fix`.
+
+Падений на коде с ошибками нет. Проверены `on Unknown`, `on {`, незакрытый
+`catch`, `named(ctx: ctx, ctx: ctx)`, `named(cxt: ctx)`, `unknown(ctx: ctx)`,
+`named(ctx: )` и незакрытый вызов `named(ctx: ctx`.
+
+#### Новые находки
+
+##### 1. Широкий `catch` с `rethrow;` в конце прячет задержку перед повтором. Важно. Повтор решения 127
+
+**Механика.** `_Visitor._handles` (`bare_await.dart:144–151`) пропускает
+`catch`, если выполнены два условия:
+- `takesCancelled(type)`;
+- последний оператор — `rethrow;`.
+
+Тогда `_bodyContextOf` (`:121`) молчит на всех `await` этого `catch`.
+
+**Почему решение 127 здесь не держит.** Оно называет такие ожидания «путь
+отмены наружу». Это неверно, когда `catch` выходит раньше через `continue`,
+`break` или `return`. Ожидание в такой ветке — задержка перед повтором. Это
+та же ошибка, что в находке 1 второго ревью и в `solo/doc/errors.md:438–477`.
+
+Форма обычная. Страница пишет `if (attempt == 3) rethrow; …; continue;`,
+а обратная запись `if (attempt < 3) { await …; continue; } rethrow;` так же
+естественна.
+
+**Новый довод.** Два правила складываются в ловушку:
+1. На форме без проверки `catch_without_check` справедливо называет `catch`
+   и советует «Make 'ctx.check();' the first line».
+2. Пользователь применяет совет или быстрое исправление `add_check`.
+3. После этого молчат оба правила. `catch_without_check` видит вопрос задаче,
+   `bare_await` видит широкий `catch` с `rethrow;`.
+
+Отмену, которая придёт во время задержки, при этом никто не слышит.
+
+**Зонд** (`RuleTest`, `f1_retry_rethrow_last_checked` и `_unchecked`; во втором
+варианте нет строки `ctx.check();`):
+```dart
+final job = Job<void>((ctx) async {
+  for (var attempt = 1; ; attempt++) {
+    try {
+      await ctx.abandonable(commit);
+      return;
+    } on Object {
+      ctx.check();
+      if (attempt < 3) {
+        await Future<void>.delayed(Duration(seconds: attempt));
+        continue;
+      }
+      rethrow;
+    }
+  }
+});
+```
+
+Вывод `RuleTest`:
+```text
+[bare_await] f1_retry_rethrow_last_checked: 0 lint(s)
+[bare_await] f1_retry_rethrow_last_unchecked: 0 lint(s)
+[catch_without_check] f1_retry_rethrow_last_checked: 0 lint(s)
+[catch_without_check] f1_retry_rethrow_last_unchecked: 1 lint(s)  L6: } on Object {
+[OLD bare_await 3a61a484] f1_retry_rethrow_last_checked: 0 lint(s)
+```
+
+Настоящий SDK, `dart analyze` в пакете зонда. В файле вариант с проверкой
+(строки 10–16), без проверки (26–30) и контрольное `await commit();` (37):
+```text
+info - lib/probe.dart:26:10 - This catch takes the cancellation ... Make 'ctx.check();' the first line of the catch ... - catch_without_check
+info - lib/probe.dart:37:3 - This wait doesn't go through 'ctx' ... - bare_await
+2 issues found.
+```
+
+Это не регресс диффа: старое правило молчало так же. Но вердикт 1 объявляет
+форму закрытой, а README:254–256 обещает «A check at the top of a catch is not
+enough».
+
+**Предложение.** Пропускать по `rethrow;` только `catch`, в теле которого вне
+вложенных функций нет `continue`, `break` и `return`.
+
+**Цена.** Замерена мутацией M14: условие `!_goesOn(clause.body)` и посетитель
+`_Exits`.
+- Набор — `+190: All tests passed!`, сторож страницы ошибок зелёный.
+- Оба варианта зонда дают по диагнозу на `await Future<void>.delayed`.
+- Остальные зонды не изменились.
+- Прогон по дереву `async_job` и `solo` с этой мутацией я не делал.
+
+Тестом закрепить оба варианта зонда. Оговорку добавить в пункт 127, в пункт 8
+дизайна и в README.
+
+**Вердикт.** Принята, повтор решения 127 с новым доводом принят. Сделано как
+предложено, с уточнением: `break` и `continue`, цель которых внутри самого
+`catch`, и `return` вложенной функции выходом не считаются (`_Exits`
+в `bare_await.dart`). Тест `test_catch_that_goes_on_before_rethrow` держит зонд
+ревьюера и ветку с `return`; внутренний цикл с `break` и локальная функция
+с `return` стоят в `test_catch_that_handles_a_cancellation` и ждут тишины.
+Мутации K1–K3 роняют тест. На дереве находки совпали с прежними построчно:
+`async_job` 215, `solo` 156. Пункт 8 «пропускает» дизайна, README, перевод
+и пункт 127 говорят про выход раньше `rethrow;`.
+
+##### 2. Вердикт 10: довод про параметр и поле неверен, признак не покрыт тестом. Мелко
+
+**Механика.** `_Waits._isChild` (`bare_await.dart:264–266`) не засчитывает
+`ctx.start(v)` только для `LocalVariableElement`, который не `final`. Вердикт
+объясняет это так: «их [параметр и поле] тело заменить не может так, как свою
+`var`». Но параметр объемлющей функции переприсваивается, а поле — через
+`this`.
+
+**Зонд:**
+```dart
+Job<void> pair(ChildJob<int> first, ChildJob<int> second) =>
+    Job<void>((ctx) async {
+  ctx.start(first);
+  first = second;
+  await first.value;
+});
+```
+- `f10_parameter_reassigned`: 0 lint(s), 0 других диагнозов.
+- `f10_field_reassigned`: 0 lint(s).
+
+Ждётся незапущенный `second`, то есть ожидание висит вечно. Форма редкая.
+
+**Тест.** Мутация M5 делает параметр и поле «заменяемыми», и набор остаётся
+`+190`.
+
+**Попутно.** Теперь называются `var` без переприсваивания
+(`f10_var_not_reassigned`: 1 диагноз, у старого правила 0) и
+`for (var job in jobs) { ctx.start(job); await job.done; }`
+(`f10_for_var_loop`: 1 против 0). Это сходится с пунктом 2 дизайна
+и пунктом 122. В дереве таких форм нет: у пакетов включены
+`prefer_final_locals` и `prefer_final_in_for_each`.
+
+**Предложение.** Поправить довод вердикта: параметр и поле оставлены ради
+обычной формы `ctx.start(c); await c.value;`, а не потому, что их нельзя
+заменить. Тестом закрепить запущенный параметр, который не переприсвоен: такой
+тест убивает M5.
+
+**Вердикт.** Принята, это находка 1 отчёта Codex; сделано, как сказано в её
+вердикте. Мутация M5 этого отчёта теперь не выживает: K4 («параметр неизменен»)
+роняет `test_child_replaced_after_start`.
+
+##### 3. Тесты `bare_await` держат пропуск широкого `catch` только для `on Object`. Мелко, тест
+
+Пропуск по `rethrow;` проверяется только на `on Object`:
+`test_catch_and_finally` и `test_catch_that_handles_a_cancellation`. Каждая
+из мутаций M8–M11 сужает `_handles` (`bare_await.dart:148`), и с каждой набор
+остаётся `+190`:
+- M8: широкий только `on Object`;
+- M9: без `catch` без типа;
+- M10: без `on Exception`;
+- M11: без `on Outcome`.
+
+Переезд `takesCancelled` защищён тестами `catch_without_check` (M12, M13).
+Но сам пропуск в `bare_await` — нет.
+
+**Предложение.** Добавить в `test_catch_that_handles_a_cancellation` три клаузы
+с `await reset(); rethrow;`: без типа, `on Exception` и `on Outcome`. Зонд
+`f4_broad_kinds_rethrow` на этих формах даёт 0.
+
+**Вердикт.** Принята, сделано как предложено, по форме иначе: три отдельных
+`try` — без типа, `on Exception`, `on Outcome<Object?>` —
+в `test_catch_that_handles_a_cancellation`, потому что `catch` после
+`on Object` недостижим и тест получил бы лишний диагноз. Мутации K8–K10 (без
+типа, `on Exception`, `on Outcome` перестают быть широкими) роняют тест.
+
+##### 4. Комментарий `_parameterType` неверно называет версию analyzer. Мелко
+
+`bare_await.dart:288–289`: «analyzer 13 and later give the value of one no
+parameter».
+
+На полу (analyzer 12.1.0, Dart 3.10.0) мутация, которая берёт
+`value.correspondingParameter?.type`, как до диффа, даёт:
+- `f2_named_forms: 7 lint(s)`, как на 14.6.0;
+- падение `test/bare_await_test.dart`.
+
+Значит, и analyzer 12 не даёт параметр значению именованного аргумента.
+
+**Предложение.** Убрать версию из комментария.
+
+**Вердикт.** Принята. На полу, analyzer 12.1.0 и Dart 3.10.0, мутация
+к `value.correspondingParameter?.type` роняет `test_hands_over_the_context`
+и там: версия в комментарии была неверна. Комментарий `_parameterType` теперь
+без версии.
+
+##### 5. README не называет `on Outcome` среди широких `catch`. Мелко, документ
+
+README:253–254 и README.ru:258–259 перечисляют только «untyped, `on Object` or
+`on Exception`». Дизайн (пункт 8) и `takesCancelled` (`context.dart:92–94`)
+пропускают ещё `on Outcome`. Зонд: `on Outcome { await reset(); rethrow; }` — 0
+диагнозов.
+
+**Предложение.** Дописать `on Outcome` в README и перевод одним коммитом.
+
+**Вердикт.** Принята, сделано как предложено: README и перевод называют
+`on Outcome` среди широких `catch`, тем же предложением — выход раньше
+`rethrow;` из находки 1.
+
+##### Наблюдения без находки
+
+- **`staticInvokeType`.** На 12.1.0 и 14.6.0 вывод одинаковый. Тип не дают:
+  - вызовы через `Function` и `dynamic`: `f2_dynamic_calls` — 4 диагноза,
+    именованный и позиционный ведут себя одинаково;
+  - неразрешённые вызовы: `unknown(ctx: ctx)` молчит, тип там не future; так
+    было и раньше.
+- **Неразрешённый `on Unknown { await reset(); rethrow; }`** теперь считается
+  узким `catch` и даёт диагноз; старое правило молчало. В редакторе это видно,
+  пока тип не дописан, — безобидно.
+- **`cleanup-rules.md` и перевод** говорят то же, что код.
+
+#### ПРОГОН
+
+**`packages/solo_lints` копии.** Гейт запускался до мутаций и после всех
+мутаций, последние строки одинаковые:
+- `dart format --output=none --set-exit-if-changed .` —
+  `Formatted 28 files (0 changed) in 0.03 seconds.`, exit 0;
+- `dart analyze --fatal-infos` — `No issues found!`;
+- `dart test` — `00:04 +190: All tests passed!`.
+
+**Пол** (Dart 3.10.0, analyzer 12.1.0):
+- `dart test` — `00:03 +190: All tests passed!`;
+- `dart analyze lib` — `No issues found!`;
+- первые попытки собрать пол руками падали на транзитивных пакетах,
+  несовместимых с analyzer 12.1.0: `frontend_server.dart.snapshot`,
+  analyzer_testing 0.4.3, analyzer_plugin 0.14.18, dart_style 3.1.9. Это беда
+  стенда, а не пакета.
+
+**Документы:**
+- `check_translations.py` — `dashes: em dashes only` / `no differences`;
+- `check_line_width.py` —
+  `no Markdown line over 79 columns, no blank line doubled`;
+- `reflow.py --check`, и общий проход, и обе записи —
+  `every paragraph is filled to 79 columns`;
+- `check_links.py` — `every document link resolves`.
+
+**Зонды, текущее правило** (в скобках — правило `3a61a484`):
+- `f1_retry_rethrow_last_checked` 0 (0)
+- `f1_retry_rethrow_last_unchecked` 0 (0)
+- `f1_retry_catch_e_is` 1 (1)
+- `f1_isCancelled_first_broad` 1 (0)
+- `f4_broad_kinds_rethrow` 0 (0)
+- `f4_narrow_kinds_rethrow` 3 (0)
+- `f4_reviewer_probe` 3 (0)
+- `f4_narrow_inside_broad` 0 (0)
+- `f4_broad_rethrow_in_block` 0 (0)
+- `f4_broad_throw_with_trace` 1 (1)
+- `err_unresolved_on_type` 1 (0)
+- `err_on_without_type` 1 (0)
+- `err_catch_no_body_end` 0 (0)
+- `f2_named_forms` 1, только `obj(ctx: ctx)` (7)
+- `f2_named_solo_context_and_call` 0 (2)
+- `err_named_errors` 2 (4)
+- `f10_var_not_reassigned` 1 (0)
+- `f10_for_var_loop` 1 (0)
+- `f10_parameter_reassigned` 0 (0)
+- `f10_field_reassigned` 0 (0)
+- `f10_late_final` 0 (0)
+- `f9_empty_and_any` 0 (3)
+- `f2_dynamic_calls` 4 (старое правило не запускал)
+- `f2_super_and_tearoff` 0 (старое правило не запускал)
+
+`catch_without_check` на тех же фрагментах даёт диагноз только на `catch`
+в девяти местах: `f1_retry_rethrow_last_unchecked`, `f1_retry_catch_e_is`,
+во всех четырёх `catch` `f4_broad_kinds_rethrow`, `f4_narrow_inside_broad`,
+`f4_broad_rethrow_in_block`, `f4_broad_throw_with_trace`,
+`err_catch_no_body_end`. На остальных — 0. На полу зонды `f1_*`, `f2_*`
+и `f10_*` дали тот же вывод.
+
+**Мутации.** Полный `dart test` после каждой, итог скрипта `restored, cmp ok`.
+
+| | мутация | итог |
+|---|---|---|
+| M1 | `_handles` без `takesCancelled` | упал `test_catch_that_lets_a_cancellation_wait` |
+| M2 | вернуть исключение «спросил задачу» | упал `test_catch_that_lets_a_cancellation_wait` |
+| M3 | `_all`: снова `\|\| list.elements.isEmpty` | упал `test_collection_elements` |
+| M4 | `replaceable = false` | упал `test_child_replaced_after_start` |
+| M5 | `replaceable` для любой нефинальной переменной и поля | **выжила**, `+190` |
+| M6 | именованный аргумент: `return null` | упал `test_hands_over_the_context` |
+| M7 | `every` → `any` | упал `test_body_declared_at_the_top_level_and_passed_twice` |
+| M8 | широкий только `on Object` | **выжила** |
+| M9 | без `catch` без типа | **выжила** |
+| M10 | без `on Exception` | **выжила** |
+| M11 | без `on Outcome` | **выжила** |
+| M12 | `takesCancelled` без `Outcome` | упал `test_clauses_that_take_cancelled` |
+| M13 | `takesCancelled`: без типа → `false` | упали 3 теста `AddCheckFixTest` и `test_clauses_that_take_cancelled` |
+| M14 | предложение находки 1 | `+190` — это цена правки, а не проверка теста |
+
+На полу мутация через `correspondingParameter` дала `f2_named_forms: 7 lint(s)`
+и уронила `bare_await_test.dart`; файл возвращён, `cmp` совпал.
+
+**Расхождение задания с регламентом.** Одно: файл отчёта не записан, потому что
+харнесс заблокировал Bash. Отчёт целиком в этом сообщении.
+
+#### Итог
+
+5 новых находок: важная — 1 (№1, повтор решения 127 с новым доводом), мелких —
+4 (№2–№5). Из десяти находок второго ревью закрыты 9, не до конца — 1 (№1).

@@ -137,7 +137,9 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   /// Whether [clause] handles a cancellation, so its waits are a release
   /// that has to run for it: the clause is `on Cancelled`, or it takes a
-  /// cancellation and its body ends in `rethrow;`.
+  /// cancellation, its body ends in `rethrow;` and nothing leaves it before
+  /// that end. A wait on the way to a `return`, or to a `continue` of the
+  /// loop around, is a pause before going on, not a release.
   ///
   /// A check in the clause does not make it one: it hears a cancellation
   /// that has come, not one that comes during the wait after it.
@@ -147,7 +149,8 @@ class _Visitor extends SimpleAstVisitor<void> {
     final statements = clause.body.statements;
     return takesCancelled(type) &&
         statements.isNotEmpty &&
-        isRethrow(statements.last);
+        isRethrow(statements.last) &&
+        !_Exits.leave(clause.body);
   }
 
   /// Whether [body] belongs to a job made with `cancellable: false`: the
@@ -261,14 +264,21 @@ class _Waits {
     if (node is! SimpleIdentifier) return false;
     final value = node.element;
     if (value == null) return false;
-    final replaceable = value is LocalVariableElement && !value.isFinal;
-    if (!replaceable &&
+    if (_fixed(value) &&
         _earlier((statement) => _calls(statement, 'start', value))) {
       return true;
     }
     final initializer = _finalLocalValue(node);
     return initializer != null && _isChild(initializer);
   }
+
+  /// Whether [value] names one object for as long as the body runs: a final
+  /// variable or parameter, or the getter of a final field.
+  static bool _fixed(Element value) => switch (value) {
+    VariableElement() => value.isFinal,
+    GetterElement() => value.isOriginVariable && value.variable.isFinal,
+    _ => false,
+  };
 
   /// Whether [arguments] pass the context itself to a parameter typed
   /// `JobContext`, so the call can wait through it.
@@ -286,7 +296,7 @@ class _Waits {
   /// The type of the parameter that [argument] of [arguments] goes to.
   ///
   /// A named argument is looked up by its name in the type of the call:
-  /// analyzer 13 and later give the value of one no parameter.
+  /// the analyzer gives the value of one no parameter.
   static DartType? _parameterType(
     ArgumentList arguments,
     AstNode argument,
@@ -410,6 +420,44 @@ class _ArgumentUses extends RecursiveAstVisitor<void> {
     final parent = node.parent;
     final list = parent is ArgumentList ? parent : parent?.parent;
     if (list is ArgumentList) lists.add(list);
+  }
+}
+
+/// Finds a statement that leaves a block other than through its end: a
+/// `return`, or a `break` or `continue` to a statement around the block.
+/// Functions declared in the block are not part of it.
+class _Exits extends RecursiveAstVisitor<void> {
+  final Block block;
+
+  bool found = false;
+
+  _Exits(this.block);
+
+  /// Whether a statement of [block] leaves it before its end.
+  static bool leave(Block block) {
+    final exits = _Exits(block);
+    block.accept(exits);
+    return exits.found;
+  }
+
+  @override
+  void visitBreakStatement(BreakStatement node) => _goesTo(node.target);
+
+  @override
+  void visitContinueStatement(ContinueStatement node) => _goesTo(node.target);
+
+  @override
+  void visitFunctionExpression(FunctionExpression node) {}
+
+  @override
+  void visitReturnStatement(ReturnStatement node) => found = true;
+
+  void _goesTo(AstNode? target) {
+    if (target == null ||
+        target.offset < block.offset ||
+        target.end > block.end) {
+      found = true;
+    }
   }
 }
 
