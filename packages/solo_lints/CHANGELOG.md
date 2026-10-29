@@ -1,6 +1,9 @@
 ## Unreleased
 
 - The README links to the page of the package on the documentation site.
+- The README says that `dart analyze` shows the diagnostics of the plugin on
+  the root of the package or on single files, but not on a folder below the
+  root, such as `lib`.
 
 ## 0.1.2
 

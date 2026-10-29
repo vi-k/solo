@@ -25,10 +25,12 @@ plugins:
 
 The analysis server fetches the plugin itself, so it is not a dependency in
 `pubspec.yaml`. Plugins need Dart 3.10 or later. `dart analyze` and the editor
-report its diagnostics. `flutter analyze` reports them on Flutter 3.38, but
-from Flutter 3.44 on it shows none of them; in a Flutter package, run
-`dart analyze` for the plugin. An editor sees a change to the `plugins` section
-after its analysis server restarts.
+report its diagnostics. Run `dart analyze` on the root of the package or on
+single files: on a folder below the root, such as `dart analyze lib`, it shows
+none of them. `flutter analyze` reports them on Flutter 3.38, but from Flutter
+3.44 on it shows none of them; in a Flutter package, run `dart analyze` for the
+plugin. An editor sees a change to the `plugins` section after its analysis
+server restarts.
 
 The warnings are on as soon as the plugin is named. The four lints,
 `catch_without_check`, `key_per_request`, `ignore_failure_hides_bugs` and
