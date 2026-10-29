@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - `bare_await`, a lint: an `await` in a job body that waits past the context,
   so a cancellation of the job does not end the wait, and an `await for` that
