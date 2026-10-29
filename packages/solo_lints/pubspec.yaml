@@ -3,7 +3,7 @@ description: >-
   Analyzer plugin for async_job and solo: a wait in cleanup, a late release,
   a catch that takes a cancellation, a job in its own queue, a shared key,
   a needless ignoreFailure().
-version: 0.1.1
+version: 0.1.2
 repository: https://github.com/vi-k/solo/tree/main/packages/solo_lints
 issue_tracker: https://github.com/vi-k/solo/issues
 topics:

@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.2
 
 - The README no longer says that `flutter analyze` reports the diagnostics of
   the plugin: from Flutter 3.44 on it shows none of them, and a Flutter package
