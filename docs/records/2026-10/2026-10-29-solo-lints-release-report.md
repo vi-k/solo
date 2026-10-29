@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-29:** связка выпуска `solo_lints` 0.1.1 идёт; итог —
-> в разделе «Связка» следующим коммитом.
+> **Состояние на 2026-10-29:** `solo_lints` 0.1.1 опубликован на pub.dev;
+> релизный коммит `35de57fa` и аннотированный тег отправлены в origin.
 > **Что это:** выпуск `solo_lints` 0.1.1 — правило `bare_await` и абзацы
 > README об уровне правил, `dart fix` и двойных диагнозах Dart 3.12.
 > **Связанные записи:** `2026-10-29-bare-await-design.md`,
@@ -42,6 +42,24 @@ floor: 6 roots», а полный набор `solo_lints` на analyzer 12.1.0
 
 ## Связка
 
-Связка идёт подряд: коммит `Release solo_lints 0.1.1`, аннотированный тег
-`solo_lints-v0.1.1`, push, `dart pub publish`. Итог — в этом разделе следующим
-коммитом.
+Перед связкой: `git fetch` выполнен, `origin/main` совпадал с веткой
+на `27c5ed41`; тега `solo_lints-v0.1.1` не было ни локально, ни в origin;
+оверрайдов в дереве нет, `dart pub publish --dry-run` на `a886493a` — 0
+предупреждений.
+
+Связка выполнена подряд:
+
+- `a886493a` — подготовка, `35de57fa` — Release solo_lints 0.1.1;
+- аннотированный тег `solo_lints-v0.1.1` указывает на `35de57fa`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/solo_lints-v0.1.1^{}` дают `35de57fa`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/solo_lints version 0.1.1»;
+- API pub.dev вернул `latest: 0.1.1`;
+- CI `gate` на `35de57fa`: `dart`, `flutter`, `floor`, `snippets` и `docs`
+  зелёные.
+
+Пакет: https://pub.dev/packages/solo_lints/versions/0.1.1
+
+Выпуск завершён. Что осталось за ним: страница пакета на сайте документации,
+линты в примерах и упоминание в README ядра и `solo` — решением владельца.
