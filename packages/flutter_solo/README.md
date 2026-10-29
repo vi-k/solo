@@ -80,6 +80,21 @@ import 'package:flutter_solo/listenable.dart';
 [Methods from a second import](#methods-from-a-second-import) says why it is a
 second one.
 
+The analyzer plugin [solo_lints](https://pub.dev/packages/solo_lints) reports
+most of the
+[common mistakes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md)
+of `solo` in the code. Name it in `analysis_options.yaml`:
+
+```yaml
+plugins:
+  solo_lints: ^0.1.1
+```
+
+That turns on its warnings; the lints are turned on by name, as its
+[Install](https://github.com/vi-k/solo/blob/main/packages/solo_lints/README.md#install)
+section shows. From Flutter 3.44 on, `flutter analyze` shows none of its
+diagnostics: run `dart analyze` or read them in the editor.
+
 ## Usage
 
 `ProfileApi` stands for the app's own service: `fetchName()` returns a

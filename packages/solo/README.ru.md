@@ -29,6 +29,19 @@ flutter pub add flutter_solo
 `package:solo/solo.dart` открывает оба API. Чтобы пользоваться примерами ниже,
 предварительно изучать пакет `async_job` не нужно.
 
+Плагин анализатора [solo_lints](https://pub.dev/packages/solo_lints) сообщает
+в коде о большинстве [частых ошибок](../../docs/ru/solo/mistakes.md). Назовите
+его в `analysis_options.yaml`:
+
+```yaml
+plugins:
+  solo_lints: ^0.1.1
+```
+
+Так включаются его предупреждения; линты включаются по имени, как показывает
+его раздел
+[«Установка»](https://github.com/vi-k/solo/blob/main/packages/solo_lints/README.ru.md#установка).
+
 ## Быстрый старт
 
 Контроллер предоставляет методы для операций приложения. Здесь `load()`

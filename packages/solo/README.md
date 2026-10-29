@@ -29,6 +29,19 @@ provides jobs, cancellation and resource cleanup. One import,
 `package:solo/solo.dart`, gives access to both APIs. You do not need to learn
 the underlying package before using the examples below.
 
+The analyzer plugin [solo_lints](https://pub.dev/packages/solo_lints) reports
+most of the [common mistakes](doc/mistakes.md) in the code. Name it in
+`analysis_options.yaml`:
+
+```yaml
+plugins:
+  solo_lints: ^0.1.1
+```
+
+That turns on its warnings; the lints are turned on by name, as its
+[Install](https://github.com/vi-k/solo/blob/main/packages/solo_lints/README.md#install)
+section shows.
+
 ## Quick start
 
 A controller exposes methods for application operations. Here, `load()` loads a

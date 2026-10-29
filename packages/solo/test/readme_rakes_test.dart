@@ -1004,14 +1004,29 @@ void main() {
       },
     );
 
-    test('the fences the checks do not read are the two install commands', () {
-      expect(strayFences('README.md'), ['```sh', '```sh']);
+    test('the fences the checks do not read are the two install commands '
+        'and the plugin', () {
+      expect(strayFences('README.md'), ['```sh', '```sh', '```yaml']);
       expect(
         RegExp(
           r'```sh\n(.*?)\n```',
           dotAll: true,
         ).allMatches(_page()).map((match) => match.group(1)),
         ['dart pub add solo', 'flutter pub add flutter_solo'],
+      );
+      // The example names the plugin, so the README asks for the version
+      // the example is analyzed with.
+      final version = RegExp(
+        r'^  solo_lints:\n    version: (\S+)$',
+        multiLine: true,
+      ).firstMatch(File('example/analysis_options.yaml').readAsStringSync());
+      expect(version, isNotNull);
+      expect(
+        RegExp(
+          r'```yaml\n(.*?)\n```',
+          dotAll: true,
+        ).firstMatch(_page())!.group(1),
+        'plugins:\n  solo_lints: ${version!.group(1)}',
       );
     });
   });

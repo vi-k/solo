@@ -1,3 +1,11 @@
+## Unreleased
+
+### Documentation
+
+- The README names the analyzer plugin `solo_lints` in `Install`, and says to
+  run `dart analyze` for it: from Flutter 3.44 on, `flutter analyze` shows none
+  of its diagnostics.
+
 ## 0.6.0
 
 ### Breaking changes

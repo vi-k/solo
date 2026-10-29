@@ -1483,19 +1483,30 @@ void main() {
       expect(imported, {'dart:async', 'dart:collection', 'package:meta'});
     });
 
-    test('the one block the checks do not run installs this package', () {
+    test('the blocks the checks do not run install this package and name '
+        'the plugin', () {
       final name = RegExp(
         r'^name: (\w+)$',
         multiLine: true,
       ).firstMatch(read('pubspec.yaml'))!.group(1);
       for (final page in readmes) {
-        expect(strayFences(page), ['```sh'], reason: page);
+        expect(strayFences(page), ['```sh', '```yaml'], reason: page);
         expect(
           RegExp(
             r'```sh\n(.*?)\n```',
             dotAll: true,
           ).firstMatch(read(page))!.group(1),
           'dart pub add $name',
+          reason: page,
+        );
+        // The plugin is not a dependency, and its version lives in another
+        // package: the block can only be held to its shape here.
+        expect(
+          RegExp(
+            r'```yaml\n(.*?)\n```',
+            dotAll: true,
+          ).firstMatch(read(page))!.group(1),
+          matches(RegExp(r'^plugins:\n  solo_lints: \^\d+\.\d+\.\d+$')),
           reason: page,
         );
       }

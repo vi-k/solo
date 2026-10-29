@@ -2,7 +2,9 @@
 
 Seven mistakes that compile, run and often pass a first test. Each section
 shows the mistake, says what goes wrong, shows the right way in a few lines and
-links to the section that shows the mistake in full.
+links to the section that shows the mistake in full. The analyzer plugin
+[solo_lints](https://pub.dev/packages/solo_lints) reports most of them in the
+code.
 
 ## Each wait in its place
 

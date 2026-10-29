@@ -15,6 +15,20 @@ unawaited futures leave it alone.
 dart pub add async_job
 ```
 
+The analyzer plugin [solo_lints](https://pub.dev/packages/solo_lints) reports
+mistakes that compile, run and often pass a first test, such as a wait in
+cleanup that never happens or a resource lost to a cancellation. Name it in
+`analysis_options.yaml`:
+
+```yaml
+plugins:
+  solo_lints: ^0.1.1
+```
+
+That turns on its warnings; the lints are turned on by name, as its
+[Install](https://github.com/vi-k/solo/blob/main/packages/solo_lints/README.md#install)
+section shows.
+
 ## Quick start
 
 A job opens a database and reads from it, and somebody cancels it while the

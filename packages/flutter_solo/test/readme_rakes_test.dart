@@ -159,8 +159,22 @@ void main() {
       );
     });
 
-    test('its blocks are dart, but for one line of shell', () {
-      expect(strayFences(_doc), ['```sh']);
+    test('its blocks are dart, but for one line of shell and the plugin', () {
+      expect(strayFences(_doc), ['```sh', '```yaml']);
+      // The example names the plugin, so the README asks for the version
+      // the example is analyzed with.
+      final version = RegExp(
+        r'^  solo_lints:\n    version: (\S+)$',
+        multiLine: true,
+      ).firstMatch(File('example/analysis_options.yaml').readAsStringSync());
+      expect(version, isNotNull);
+      expect(
+        RegExp(
+          r'```yaml\n(.*?)\n```',
+          dotAll: true,
+        ).firstMatch(_page())!.group(1),
+        'plugins:\n  solo_lints: ${version!.group(1)}',
+      );
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
         hasLength(17),

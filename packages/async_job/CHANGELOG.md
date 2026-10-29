@@ -1,3 +1,9 @@
+## Unreleased
+
+### Documentation
+
+- The README names the analyzer plugin `solo_lints` in `Install`.
+
 ## 0.6.0
 
 ### Breaking changes
