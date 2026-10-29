@@ -1,5 +1,5 @@
-> **Состояние на 2026-10-29:** связка выпуска `solo_lints` 0.1.2 идёт:
-> релизный коммит этой записи, тег, push и `dart pub publish`.
+> **Состояние на 2026-10-29:** `solo_lints` 0.1.2 опубликован на pub.dev;
+> релизный коммит `7c1cf906` и аннотированный тег отправлены в origin.
 > **Что это:** выпуск `solo_lints` 0.1.2 — README больше не говорит, что
 > диагностики плагина показывает `flutter analyze`.
 > **Связанные записи:** `2026-10-29-solo-lints-release-report.md`,
@@ -48,6 +48,18 @@
 на `b32bfe73`; тега `solo_lints-v0.1.2` нет ни локально, ни в origin; API
 pub.dev — `latest: 0.1.1`.
 
-Связка идёт: коммит `Release solo_lints 0.1.2` с этой записью, аннотированный
-тег `solo_lints-v0.1.2`, `git push --follow-tags`, `dart pub publish`. Итог
-допишется следующим коммитом.
+Связка выполнена подряд:
+
+- `b32bfe73` — подготовка, `7c1cf906` — Release solo_lints 0.1.2;
+- аннотированный тег `solo_lints-v0.1.2` указывает на `7c1cf906`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/solo_lints-v0.1.2^{}` дают `7c1cf906`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/solo_lints version 0.1.2»;
+- API pub.dev вернул `latest: 0.1.2`;
+- CI `gate` на `7c1cf906`: `dart`, `flutter`, `floor`, `snippets` и `docs`
+  зелёные; `site` тоже.
+
+Пакет: https://pub.dev/packages/solo_lints/versions/0.1.2
+
+Выпуск завершён. Что осталось за ним: страница пакета на сайте документации.
