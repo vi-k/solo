@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.3
 
 - The README links to the page of the package on the documentation site.
 - The README says that `dart analyze` shows the diagnostics of the plugin on
