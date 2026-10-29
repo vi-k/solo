@@ -1,3 +1,9 @@
+## Unreleased
+
+- The README no longer says that `flutter analyze` reports the diagnostics of
+  the plugin: from Flutter 3.44 on it shows none of them, and a Flutter package
+  runs `dart analyze` for the plugin.
+
 ## 0.1.1
 
 - `bare_await`, a lint: an `await` in a job body that waits past the context,

@@ -59,6 +59,9 @@ final class Variants extends Solo<CameraState>
         ctx.emit(const Preparing());
         try {
           await ctx.join(hw.open);
+          // The emit asks the job as it does on the page; the try around it,
+          // there to catch what it throws, hides that from the rule.
+          // ignore: solo_lints/catch_without_check
         } on Object catch (error) {
           try {
             ctx.emit(Broken(error));

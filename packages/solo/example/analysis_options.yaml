@@ -257,3 +257,12 @@ linter:
     # package_names: true # [recommended]
     secure_pubspec_urls: true
     sort_pub_dependencies: true
+
+plugins:
+  solo_lints:
+    version: ^0.1.1
+    diagnostics:
+      catch_without_check: true
+      key_per_request: true
+      ignore_failure_hides_bugs: true
+      bare_await: true

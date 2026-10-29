@@ -15,3 +15,12 @@ analyzer:
     strict-casts: true
     strict-inference: true
     strict-raw-types: true
+
+plugins:
+  solo_lints:
+    version: ^0.1.1
+    diagnostics:
+      catch_without_check: true
+      key_per_request: true
+      ignore_failure_hides_bugs: true
+      bare_await: true

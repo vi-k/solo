@@ -192,11 +192,14 @@ jobs:
       # `flutter analyze` of the package walks the example as well, under
       # the example's own `analysis_options.yaml`. The second run is kept
       # because the regimen lists it, and because a failure then names the
-      # package instead of a path.
+      # package instead of a path. The example names the solo_lints plugin,
+      # and from Flutter 3.44 on `flutter analyze` shows none of its
+      # diagnostics, so `dart analyze` runs there as well.
       - name: Analyze
         run: |
           (cd packages/flutter_solo && flutter analyze)
           (cd packages/flutter_solo/example && flutter analyze)
+          (cd packages/flutter_solo/example && dart analyze --fatal-infos)
 
       - name: Dartdoc
         run: cd packages/flutter_solo && dart doc --dry-run
