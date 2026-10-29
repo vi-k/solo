@@ -11,6 +11,10 @@
 [«Частых ошибок»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md) —
 страницы solo, где каждая ошибка показана рядом с правильным способом.
 
+Эта страница есть
+и на [сайте документации](https://docs.yet-another.dev/ru/solo_lints/),
+с поиском.
+
 ## Установка
 
 Назовите плагин в `analysis_options.yaml` в корне пакета или рабочего

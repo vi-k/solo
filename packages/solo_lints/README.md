@@ -10,6 +10,9 @@ does not end. Most rules stand for a section of
 [Common mistakes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md),
 the page of solo that shows each mistake and the right way side by side.
 
+Also on the [documentation site](https://docs.yet-another.dev/solo_lints/),
+with search.
+
 ## Install
 
 Name the plugin in `analysis_options.yaml` at the root of the package or the

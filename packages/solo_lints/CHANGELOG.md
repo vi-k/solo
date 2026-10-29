@@ -1,3 +1,7 @@
+## Unreleased
+
+- The README links to the page of the package on the documentation site.
+
 ## 0.1.2
 
 - The README no longer says that `flutter analyze` reports the diagnostics of

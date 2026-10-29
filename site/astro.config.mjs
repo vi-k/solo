@@ -49,6 +49,10 @@ export default defineConfig({
             '- `flutter_solo` adds the Flutter face: `SoloBuilder`, ' +
               '`ValueListenable`, `select`, `listen`. Re-exports `solo`.',
             '',
+            '`solo_lints` is an analyzer plugin for code on `async_job` ' +
+              'and `solo`: it reports the common mistakes, named in ' +
+              '`analysis_options.yaml` rather than in `pubspec.yaml`.',
+            '',
             'Cancellation is cooperative: `cancel()` requests it and the ' +
               'body answers at a checkpoint -- `ctx.abandonable`, `ctx.join`, ' +
               '`ctx.uncancellable` or `ctx.check` -- and which one it is ' +
@@ -158,6 +162,13 @@ export default defineConfig({
             page('flutter_solo/mixins', 'Mixins', 'Миксины'),
             page('flutter_solo/testing', 'Testing', 'Тестирование'),
             changelog('flutter_solo'),
+          ],
+        },
+        {
+          label: 'solo_lints',
+          items: [
+            page('solo_lints', 'Overview', 'Обзор'),
+            changelog('solo_lints'),
           ],
         },
       ],

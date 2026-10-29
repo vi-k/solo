@@ -104,11 +104,11 @@ crawling the site or the repository page by page:
 | File | What it holds |
 | --- | --- |
 | `/llms.txt` | The entry point: what the packages are and where the other two files live. |
-| `/llms-full.txt` | Every English page, in order, as plain text, the three changelogs last. |
+| `/llms-full.txt` | Every English page, in order, as plain text, the four changelogs last. |
 | `/llms-small.txt` | The same without the changelogs and with asides and `<details>` stripped. Barely smaller here — these docs are mostly code, and code is kept. |
 
 English only: the plugin takes the default locale, which is what we want
 — an agent asking about `ctx.join` should not get the answer twice.
 The prose at the top of `llms.txt` is set in `astro.config.mjs`; it is the
-first thing an agent reads, so it says what the three packages are and how
+first thing an agent reads, so it says what the packages are and how
 cancellation works before anything else.

@@ -40,6 +40,7 @@ PACKAGES = {
     'solo': 'solo',
     'async_job': 'async_job',
     'flutter_solo': 'flutter_solo',
+    'solo_lints': 'solo_lints',
 }
 
 # Locale -> the path segment it is served under. English is the root.
