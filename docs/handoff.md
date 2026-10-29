@@ -5,7 +5,7 @@
 `solo` и `flutter_solo` 0.6.0 (2026-10-28) и `solo_lints` 0.1.3 (2026-10-29,
 тег `solo_lints-v0.1.3` на `ae6f5103`, запись
 `2026-10-29-solo-lints-release-report-3.md`). Как шли выпуски и работа над
-`solo_lints` — ниже, в «Прежний верх, 2026-10-29».
+`solo_lints` — в `2026-10-29-handoff-archive.md`.
 
 Не выпущено, лежит в «Unreleased» списков изменений и переводов `async_job`,
 `solo` и `flutter_solo`: раздел «Install» README называет `solo_lints`,
