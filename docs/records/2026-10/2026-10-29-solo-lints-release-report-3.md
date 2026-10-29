@@ -1,4 +1,5 @@
-> **Состояние на 2026-10-29:** связка выпуска `solo_lints` 0.1.3 идёт.
+> **Состояние на 2026-10-29:** `solo_lints` 0.1.3 опубликован на pub.dev;
+> релизный коммит `ae6f5103` и аннотированный тег отправлены в origin.
 > **Что это:** выпуск `solo_lints` 0.1.3 — README ссылается на сайт
 > документации и говорит, что `dart analyze` на каталоге ниже корня пакета
 > диагностик плагина не показывает.
@@ -48,3 +49,18 @@ README, версия и список изменений. CI `gate` и сборк
 Перед связкой: `git fetch` выполнен, `origin/main` на `6e68de16`, `main`
 впереди на `0c1e4a20`; тега `solo_lints-v0.1.3` нет ни локально, ни в origin;
 API pub.dev — `latest: 0.1.2`.
+
+Связка выполнена подряд:
+
+- `0c1e4a20` — подготовка, `ae6f5103` — Release solo_lints 0.1.3;
+- аннотированный тег `solo_lints-v0.1.3` указывает на `ae6f5103`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/solo_lints-v0.1.3^{}` дают `ae6f5103`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/solo_lints version 0.1.3»;
+- API pub.dev вернул `latest: 0.1.3`;
+- CI `gate` и сборка сайта на `ae6f5103` зелёные.
+
+Пакет: https://pub.dev/packages/solo_lints/versions/0.1.3
+
+Выпуск завершён.
