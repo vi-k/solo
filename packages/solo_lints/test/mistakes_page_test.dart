@@ -10,6 +10,7 @@ import 'package:analyzer/src/lint/registry.dart';
 import 'package:analyzer_testing/utilities/utilities.dart';
 import 'package:collection/collection.dart';
 import 'package:solo_lints/src/rules/await_own_queue.dart';
+import 'package:solo_lints/src/rules/bare_await.dart';
 import 'package:solo_lints/src/rules/catch_without_check.dart';
 import 'package:solo_lints/src/rules/ctx_in_cleanup.dart';
 import 'package:solo_lints/src/rules/ignore_failure_hides_bugs.dart';
@@ -29,7 +30,7 @@ const _pagePath = '../solo/doc/mistakes.md';
 /// A pair missing here fails its test, so a new section of the page does not
 /// go by unchecked; a pair that a rule starts to report on must name it here.
 const _table = <(String, int), String?>{
-  ('Each wait in its place', 1): null,
+  ('Each wait in its place', 1): 'bare_await',
   ('Each wait in its place', 2): 'ctx_in_cleanup',
   ('Registering a release on the call', 1): 'release_on_the_call',
   ('Letting cancellation through a catch', 1): 'catch_without_check',
@@ -471,8 +472,8 @@ $code
 /// Analyzes code with every rule of the package on.
 ///
 /// [RuleTest] puts the packages in and turns one rule on; this test registers
-/// the other six as the plugin does, each with its own kind, and enables all
-/// seven.
+/// the other seven as the plugin does, each with its own kind, and enables
+/// all eight.
 final class _Guard extends RuleTest {
   static final _warnings = <AbstractAnalysisRule>[
     CtxInCleanup(),
@@ -485,6 +486,7 @@ final class _Guard extends RuleTest {
     CatchWithoutCheck(),
     KeyPerRequest(),
     IgnoreFailureHidesBugs(),
+    BareAwait(),
   ];
 
   @override

@@ -84,71 +84,19 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   /// Whether the catch [body] lets a cancellation out before it acts on it.
   static bool _letsItThrough(Block body, Element ctx) {
-    final statements = body.statements;
-    if (statements.isEmpty) return false;
-    final first = statements.first;
-    if (first is IfStatement &&
-        _isCancelledOf(first.expression, ctx) &&
-        _isRethrowIf(first)) {
-      return true;
-    }
-    // `if (attempt == 3) rethrow;` passes the cancellation on unchanged, so
-    // the statement after it is the first that acts.
-    final acting = statements.skipWhile(_isRethrowIf).firstOrNull;
-    if (acting != null && _isCheckpoint(acting, ctx)) return true;
-    return _leavesAtOnce(body, ctx);
+    if (body.statements.isEmpty) return false;
+    return askingStatement(body, ctx) != null || _leavesAtOnce(body, ctx);
   }
-
-  /// Whether [statement] is a checkpoint of [ctx], as an expression or as
-  /// the value of a variable.
-  static bool _isCheckpoint(Statement statement, Element ctx) {
-    if (statement is ExpressionStatement) {
-      return isCheckpoint(statement.expression, ctx);
-    }
-    if (statement is VariableDeclarationStatement) {
-      final initializer = statement.variables.variables.first.initializer;
-      return initializer != null && isCheckpoint(initializer, ctx);
-    }
-    return false;
-  }
-
-  /// Whether [statement] is `if (...) rethrow;` with no else.
-  static bool _isRethrowIf(Statement statement) =>
-      statement is IfStatement &&
-      statement.elseStatement == null &&
-      _isRethrow(statement.thenStatement);
 
   /// Whether the catch [body] ends in `rethrow;` with nothing on the way that
   /// waits, reaches a checkpoint of [ctx] or leaves the catch otherwise: a
   /// release or a log on the way out holds up nobody and must run for a
   /// cancellation too.
   static bool _leavesAtOnce(Block body, Element ctx) {
-    if (!_isRethrow(body.statements.last)) return false;
+    if (!isRethrow(body.statements.last)) return false;
     final finder = _Cancellation(ctx, exits: true);
     body.accept(finder);
     return !finder.found;
-  }
-
-  /// Whether [statement] is `rethrow;` or a block of nothing else.
-  static bool _isRethrow(Statement statement) {
-    if (statement is Block) {
-      return statement.statements.length == 1 &&
-          _isRethrow(statement.statements.single);
-    }
-    return statement is ExpressionStatement &&
-        statement.expression is RethrowExpression;
-  }
-
-  /// Whether [condition] is `ctx.job.isCancelled`.
-  static bool _isCancelledOf(Expression condition, Element ctx) {
-    final node = condition.unParenthesized;
-    if (node is! PropertyAccess || node.propertyName.name != 'isCancelled') {
-      return false;
-    }
-    final job = node.realTarget;
-    return job is PrefixedIdentifier &&
-        job.identifier.name == 'job' &&
-        contextNamed(job.prefix) == ctx;
   }
 }
 

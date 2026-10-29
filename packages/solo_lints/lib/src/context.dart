@@ -365,3 +365,66 @@ class _MethodFinder extends RecursiveAstVisitor<void> {
     if (node.declaredFragment?.element == method) found = node;
   }
 }
+
+/// The statement by which the catch [body] asks the job of [ctx] whether it
+/// was cancelled before it acts: `if (ctx.job.isCancelled) rethrow;` first,
+/// or a checkpoint first after any `if (...) rethrow;` lines; `null` when the
+/// catch acts first.
+Statement? askingStatement(Block body, Element ctx) {
+  final statements = body.statements;
+  if (statements.isEmpty) return null;
+  final first = statements.first;
+  if (first is IfStatement &&
+      _isCancelledOf(first.expression, ctx) &&
+      isRethrowIf(first)) {
+    return first;
+  }
+  // `if (attempt == 3) rethrow;` passes the cancellation on unchanged, so
+  // the statement after it is the first that acts.
+  for (final statement in statements) {
+    if (isRethrowIf(statement)) continue;
+    return _isCheckpointStatement(statement, ctx) ? statement : null;
+  }
+  return null;
+}
+
+/// Whether [statement] is a checkpoint of [ctx], as an expression or as the
+/// value of a variable.
+bool _isCheckpointStatement(Statement statement, Element ctx) {
+  if (statement is ExpressionStatement) {
+    return isCheckpoint(statement.expression, ctx);
+  }
+  if (statement is VariableDeclarationStatement) {
+    final initializer = statement.variables.variables.first.initializer;
+    return initializer != null && isCheckpoint(initializer, ctx);
+  }
+  return false;
+}
+
+/// Whether [statement] is `if (...) rethrow;` with no else.
+bool isRethrowIf(Statement statement) =>
+    statement is IfStatement &&
+    statement.elseStatement == null &&
+    isRethrow(statement.thenStatement);
+
+/// Whether [statement] is `rethrow;` or a block of nothing else.
+bool isRethrow(Statement statement) {
+  if (statement is Block) {
+    return statement.statements.length == 1 &&
+        isRethrow(statement.statements.single);
+  }
+  return statement is ExpressionStatement &&
+      statement.expression is RethrowExpression;
+}
+
+/// Whether [condition] is `ctx.job.isCancelled`.
+bool _isCancelledOf(Expression condition, Element ctx) {
+  final node = condition.unParenthesized;
+  if (node is! PropertyAccess || node.propertyName.name != 'isCancelled') {
+    return false;
+  }
+  final job = node.realTarget;
+  return job is PrefixedIdentifier &&
+      job.identifier.name == 'job' &&
+      contextNamed(job.prefix) == ctx;
+}

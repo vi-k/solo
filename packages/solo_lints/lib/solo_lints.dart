@@ -19,8 +19,8 @@ import 'src/rules/sync_fake_async.dart';
 /// Registers the rules of solo_lints.
 ///
 /// Warnings are on as soon as the plugin is enabled; the lints
-/// `catch_without_check`, `key_per_request` and `ignore_failure_hides_bugs`
-/// are turned on under `diagnostics:`.
+/// `catch_without_check`, `key_per_request`, `ignore_failure_hides_bugs` and
+/// `bare_await` are turned on under `diagnostics:`.
 class SoloLintsPlugin extends Plugin {
   @override
   String get name => 'solo_lints';

@@ -1,3 +1,14 @@
+## Unreleased
+
+- `bare_await`, a lint: an `await` in a job body that waits past the context,
+  so a cancellation of the job does not end the wait, and an `await for` that
+  reads a stream past `ctx.each`. It is quiet in cleanup, in the actions of
+  `join` and `uncancellable`, in `unattended` work, in `finally`, in a body
+  made with `cancellable: false` and on a release right after `ctx.disown`.
+- The README says how to raise a rule to a warning, that `dart fix` does not
+  apply the quick fixes of a plugin, and that Dart 3.12 prints each diagnostic
+  of the analyzer twice in a package that names a plugin.
+
 ## 0.1.0
 
 Initial release. An analyzer plugin for code built on `async_job` and `solo`,

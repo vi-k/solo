@@ -5,8 +5,8 @@
 [solo](https://pub.dev/packages/solo). It reports the mistakes that compile,
 run and often pass a first test: a wait in cleanup that never happens, a
 resource lost to a cancellation, a catch that resets a working device, a job
-that waits for itself, one key for every request. Most rules stand for a
-section of
+that waits for itself, one key for every request, a wait that a cancellation
+does not end. Most rules stand for a section of
 [Common mistakes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md),
 the page of solo that shows each mistake and the right way side by side.
 
@@ -25,9 +25,9 @@ The analysis server fetches the plugin itself, so it is not a dependency in
 `flutter analyze` and the editor report its diagnostics. An editor sees a
 change to the `plugins` section after its analysis server restarts.
 
-The warnings are on as soon as the plugin is named. The three lints,
-`catch_without_check`, `key_per_request` and `ignore_failure_hides_bugs`, are
-turned on by name:
+The warnings are on as soon as the plugin is named. The four lints,
+`catch_without_check`, `key_per_request`, `ignore_failure_hides_bugs` and
+`bare_await`, are turned on by name:
 
 ```yaml
 plugins:
@@ -37,11 +37,22 @@ plugins:
       catch_without_check: true
       key_per_request: true
       ignore_failure_hides_bugs: true
+      bare_await: true
 ```
+
+A rule takes a severity in place of `true`: `error`, `warning` or `info`.
+`key_per_request: warning` turns the lint on as a warning, and `dart analyze`
+then fails on it, as on any warning. `false` turns a warning off.
 
 A diagnostic is silenced with the name of the plugin in front of the rule:
 `// ignore: solo_lints/ctx_in_cleanup` on the line above it, or
 `// ignore_for_file: solo_lints/ctx_in_cleanup` for the whole file.
+
+The quick fixes are offered in the editor. `dart fix` does not apply them: it
+applies the fixes of the analyzer itself, not those of plugins.
+
+On Dart 3.12, `dart analyze` in a package that names a plugin prints each
+diagnostic of the analyzer itself twice. Dart 3.13 prints it once.
 
 ## Rules
 
@@ -54,6 +65,7 @@ A diagnostic is silenced with the name of the plugin in front of the rule:
 | `await_own_queue` | warning | a job that waits for a job of its own controller's queue |
 | `key_per_request` | lint | one key for a `Policy.droppable` job whose body reads an argument |
 | `ignore_failure_hides_bugs` | lint | `ignoreFailure()` on a job that names its expected errors |
+| `bare_await` | lint | an `await` in a job body that does not go through the context |
 
 ### ctx_in_cleanup
 
@@ -207,6 +219,52 @@ The page of common mistakes has no section for this one. It is a lint rather
 than a warning because a job whose outcome nobody needs, with the reporting
 left to the hooks, may call `ignoreFailure()` on purpose: see
 [Answering for every failure](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#answering-for-every-failure).
+
+### bare_await
+
+```dart
+Job<void> upload(Note note) => enqueue<Ready, void>((ctx) async {
+  await api.upload(note); // bare_await
+  ctx.emit(Ready(note));
+});
+```
+
+A plain `await` does not hear a cancellation: the job is cancelled, and the
+body still waits for the server and goes on to the next line. Wait through the
+context: `ctx.abandonable(() => api.upload(note))` or `ctx.join`, `ctx.pause`
+instead of `Future.delayed`, and `ctx.each` instead of `await for`, which the
+rule reports with a message of its own. Steps that must all run go into
+`ctx.uncancellable`.
+
+The rule looks at a job body, a function literal or a top-level function whose
+first parameter is a `JobContext`, also when it is named `_`. Functions
+declared inside the body are left alone: the actions of `join` and
+`uncancellable`, cleanup, `unattended` work, local functions. A local function
+is reported where the body awaits its call. The rule is quiet on a wait through
+a member of the context of this body: `join`, `abandonable`, `wait`,
+`uncancellable`, `pause`, `run` and `runAll`. It is quiet on `value`, `done`
+and `cancel()` of a child that `ctx.each` brings or that the body passed to
+`ctx.start` before, and on `Future.wait`, `[...].wait` and `(...).wait` of such
+futures, a conditional of them and a final local variable holding one. A call
+that passes the context to a parameter typed `JobContext` waits through it. A
+release right after `ctx.disown(v)`, on the next line or under
+`if (ctx.disown(v))`, has to run for a cancellation too. It is quiet on a value
+that is not a future, in `finally`, and in a catch that is `on Cancelled`, ends
+in `rethrow;` or has asked the job before the wait. A body of a job made with
+`cancellable: false`, as a literal or a constant, is left alone, although a
+rule of a `solo` state still cancels it. A wait for the controller's own queue
+is reported by `await_own_queue` instead.
+
+A loop of plain waits inside one `ctx.join(() async { ... })` is not reported,
+although a cancellation does not end it either. A child held in a `var` rather
+than a `final`, and a `...` in the list of `Future.wait`, are reported though
+they wait through the context.
+
+It is a lint rather than a warning because tests wait in bodies on purpose, to
+cancel a job midway. A project that gates CI on it turns it on as
+`bare_await: warning` and puts `// ignore_for_file: solo_lints/bare_await` into
+the test files that hold a body on a plain wait. See
+[Each wait in its place](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#each-wait-in-its-place).
 
 ## Versions
 
