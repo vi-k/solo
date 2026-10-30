@@ -1,7 +1,10 @@
 # async_job
 
-`async_job` adds cancellation, child tasks and resource cleanup to asynchronous
-Dart code. The package works in pure Dart and depends only on `meta`.
+A `Future` in Dart cannot be cancelled. `async_job` adds cancellation, child
+tasks and resource cleanup to asynchronous Dart code: a cancelled job stops at
+its next checkpoint, runs its cleanup and ends after its children, in the
+manner of structured concurrency. The package works in pure Dart and depends
+only on `meta`.
 
 A `Job<T>` runs a function called its body and records how it ended. Use
 `await job.done` to get its outcome or `await job.value` to get the value
@@ -22,7 +25,7 @@ cleanup that never happens or a resource lost to a cancellation. Name it in
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.1
+  solo_lints: ^0.1.3
 ```
 
 That turns on its warnings; the lints are turned on by name, as its

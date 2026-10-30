@@ -1452,7 +1452,7 @@ void main() {
   group('what the README says of the package', () {
     test('it depends on the one package the README names', () {
       final named = RegExp(
-        r'depends only on `(\w+)`',
+        r'depends\s+only\s+on\s+`(\w+)`',
       ).firstMatch(read('README.md'))!.group(1);
       final pubspec = File('pubspec.yaml').readAsLinesSync();
       final dependencies = [

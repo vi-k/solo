@@ -13,6 +13,9 @@
   release; [Building on the core](doc/extending.md) tells an engine to hold
   `async_job` to one minor version.
 - The README names the analyzer plugin `solo_lints` in `Install`.
+- The description of the package and the first paragraph of the README say what
+  it is for in the words it is searched by: cancelling async work, and
+  structured concurrency.
 - The observing page says that the name of a job goes into the error messages
   of the core as well, so `key` and `describe` hold an identifier rather than
   personal data.

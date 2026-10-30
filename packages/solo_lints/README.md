@@ -20,7 +20,7 @@ workspace:
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.1
+  solo_lints: ^0.1.3
 ```
 
 The analysis server fetches the plugin itself, so it is not a dependency in

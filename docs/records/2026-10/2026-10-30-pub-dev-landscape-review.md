@@ -1221,7 +1221,10 @@ next release», dartdoc в `job_context.dart:75` — «kept for one release»,
 
 Вердикт: страницу GitHub сам не открывал; описание и темы задаются в настройках
 репозитория владельцем, корневой README — правкой в дереве. Ждёт решения
-владельца.
+владельца. Итог 2026-10-30: с согласия владельца описание, сайт и темы
+поставлены через `gh repo edit`, корневой README ставит первым ядро
+`async_job`; подробности — в вердикте Fable F5 записи
+`2026-10-30-prospects-review.md`.
 
 **F5. Low. `solo_lints` без `example/`.** pub.dev: «No example found», 0/10,
 итог 150. Для плагина примером служит `analysis_options.yaml` с `plugins:`
