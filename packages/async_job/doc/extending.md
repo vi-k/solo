@@ -15,8 +15,10 @@ of `async_job.dart`: `engine.dart` exports everything `async_job.dart` does.
 
 The protocol is outside the semantic versioning of the README: the three types
 and their protected members can change in a minor release of `async_job`, and
-the Engine protocol section of its changelog says how. Hold `async_job` to one
-minor version, such as `>=1.0.0 <1.1.0`, and release the engine with each minor
+the Engine protocol section of its changelog says how. A change to a type of
+the main import that an engine has to answer, such as a member of `JobContext`
+its context overrides, is listed there too. Hold `async_job` to one minor
+version, such as `>=1.0.0 <1.1.0`, and release the engine with each minor
 release of the core.
 
 This page builds the job of an engine:

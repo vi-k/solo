@@ -446,7 +446,9 @@ name imported from another package, until one of the imports hides it with
 major release of `solo`. `solo` is also an engine on the protocol of
 `package:async_job/engine.dart`, which can change in a minor release: each
 release of `solo` holds `async_job` to one minor version, and a minor release
-of `async_job` comes with a release of `solo`.
+of `async_job` comes with a minor release of `solo`. A new minor version of
+`async_job` reaches you with that release of `solo`: until it is out, an app
+that asks for the new `async_job` itself does not resolve.
 
 ## Coming from bloc
 
