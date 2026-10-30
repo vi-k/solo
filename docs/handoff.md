@@ -28,7 +28,8 @@ README ядра словами поиска, `solo_lints: ^0.1.3` в README, о�
 `tool/adapter_snippets.py`, на свежих riverpod 3, bloc 9, http и dio. Дизайн,
 ревью работы и итог — `2026-10-30-riverpod-and-bloc-design.md`. Остальное ждёт
 решения; следующий — пункт 4, вход в `solo`: quick start в один экран и рецепт
-«несколько контроллеров на экран».
+«несколько контроллеров на экран». Он начат: дизайн —
+`2026-10-30-solo-quick-start-design.md`, ждёт ревью на Opus.
 
 Следующий выпуск `async_job`, `solo` и `flutter_solo` — 1.0.0, решение
 владельца 2026-10-30: «сразу к 1.0», с него строгий semver. В «Unreleased»
