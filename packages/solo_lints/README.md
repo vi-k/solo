@@ -39,7 +39,7 @@ The warnings are on as soon as the plugin is named. The four lints,
 ```yaml
 plugins:
   solo_lints:
-    version: ^0.1.1
+    version: ^0.1.3
     diagnostics:
       catch_without_check: true
       key_per_request: true
