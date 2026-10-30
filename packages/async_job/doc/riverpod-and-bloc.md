@@ -92,14 +92,16 @@ database for dart closed
 
 When the screen leaves, this works. But riverpod 3 calls `onCancel` when the
 last listener is paused as well as when it is removed, and Flutter pauses the
-listeners of a screen that another route covers. The job ends `Cancelled`, and
-`Cancelled` is an `Exception`: riverpod takes it for a failure and retries the
-provider once the screen is shown again, so the reads start over from the first
-page. With retries turned off, the screen comes back to the error instead.
+listeners of a screen that an opaque route covers. The job ends `Cancelled`,
+and `Cancelled` is an `Exception`: riverpod takes it for a failure and retries
+the provider once the screen is shown again, so the reads start over from the
+first page. With retries turned off, the screen comes back to the error
+instead.
 
 ### Cancelling on disposal
 
-`onDispose` runs once, when the provider is gone for good:
+`onDispose` runs when the state the job serves is thrown away: when the
+provider is disposed and when it rebuilds, but not on a pause:
 
 ```dart
 final rows = FutureProvider.autoDispose.family<List<String>, String>((
@@ -147,8 +149,8 @@ failure to riverpod as well, and the provider retries it like any other.
 ## A notifier that starts again
 
 A notifier that runs a job from a method keeps the current one in a field. The
-next call cancels it before starting another, and the disposal cancels the one
-in flight:
+next call cancels it before starting another. The disposal, which riverpod runs
+before a rebuild as well, cancels the one in flight and clears the field:
 
 ```dart
 final class Search extends AsyncNotifier<List<String>> {
@@ -156,7 +158,10 @@ final class Search extends AsyncNotifier<List<String>> {
 
   @override
   List<String> build() {
-    ref.onDispose(() => _current?.cancel());
+    ref.onDispose(() {
+      unawaited(_current?.cancel());
+      _current = null;
+    });
     return const [];
   }
 
@@ -166,8 +171,8 @@ final class Search extends AsyncNotifier<List<String>> {
     state = const AsyncLoading();
 
     final outcome = await job.done;
-    // A newer search or the disposal owns the state now.
-    if (!ref.mounted || !identical(job, _current)) return;
+    // A newer search, a rebuild or the disposal owns the state now.
+    if (!identical(job, _current)) return;
     state = switch (outcome) {
       Done(:final value) => AsyncData(value),
       Failed(:final error, :final stackTrace) => AsyncError(error, stackTrace),
@@ -196,7 +201,9 @@ state: [da: page 1, da: page 2, da: page 3]
 
 The check before writing the state matters as much as the cancellation. The
 cancelled search still ends, and without the check its `Cancelled` would land
-on top of the search that replaced it.
+on top of the search that replaced it. A rebuild, after `ref.invalidate` for
+one, keeps the notifier and its field, and `ref.mounted` is true again by then:
+only the cleared field tells the old search that the state is no longer its.
 
 ## A handler that restarts
 
@@ -311,17 +318,20 @@ database for abc closed
 ```
 
 The search for `a` stops at the page it was reading, and `close()` stops the
-one for `abc` the same way. Neither waits for that cleanup: `restartable()`
-starts the new handler before it cancels the old one, so the database for `ab`
-opens before the one for `a` closes, and `close()` returns before the database
-for `abc` closes. A resource that can be open only once needs the new search to
-wait for the old one.
+one for `abc` the same way. Neither waits for that cleanup: the emitter does
+not wait for `job.cancel()`, and `restartable()` starts the new handler before
+it even cancels the old one, so the database for `ab` opens before the one for
+`a` closes, and `close()` returns before the database for `abc` closes. A
+resource that can be open only once needs the new search to wait for the old
+one.
 
-`close()` cancels the handlers under any transformer, so `watch` is worth it
-without `restartable()` too. `onError:` is there for a job that ends
-`Cancelled` on its own, by its deadline for one: `forEach` hands it the error,
-and without `onError:` bloc passes the error to `onError` of the bloc and on to
-the zone.
+`close()` cancels the running handlers under `concurrent()`, the default, and
+under `droppable()` and `restartable()`, so `watch` is worth it without
+`restartable()` too. Under `sequential()` it first waits for the running
+handler and the queued events, and there is nothing left to cancel. `onError:`
+is there for a job that ends `Cancelled` on its own, by its deadline for one:
+`forEach` hands it the error, and without `onError:` bloc passes the error to
+`onError` of the bloc and on to the zone.
 
 `watch` is page code, not part of `async_job`: copy it.
 
@@ -405,8 +415,8 @@ it, and the request then runs to its end as it does under the first attempt.
 
 The aborted request still throws: `RequestAbortedException` from http,
 `DioException` of the type `cancel` from dio. `join` passes it on, and it
-reaches the zone as an uncaught error, as every other failure of the body does.
-One line in `main` names the two as the stop of a client:
+reaches the zone as an uncaught error, as does any failure of the body that no
+outcome carries. One line in `main` names the two as the stop of a client:
 
 ```dart
 Job.isCancellationError = (error) =>

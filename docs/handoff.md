@@ -25,9 +25,9 @@ README ядра словами поиска, `solo_lints: ^0.1.3` в README, о�
 `packages/async_job/doc/riverpod-and-bloc.md` с переводом — провайдер, нотифаер
 и обработчик bloc отменяют задачу, запрос http и dio прерывается токеном
 клиента; её код держит третий стенд задания `snippets`,
-`tool/adapter_snippets.py`, на свежих riverpod 3, bloc 9, http и dio. Дизайн
-и итог — `2026-10-30-riverpod-and-bloc-design.md`. Остальное ждёт решения;
-следующий — пункт 4, вход в `solo`: quick start в один экран и рецепт
+`tool/adapter_snippets.py`, на свежих riverpod 3, bloc 9, http и dio. Дизайн,
+ревью работы и итог — `2026-10-30-riverpod-and-bloc-design.md`. Остальное ждёт
+решения; следующий — пункт 4, вход в `solo`: quick start в один экран и рецепт
 «несколько контроллеров на экран».
 
 Следующий выпуск `async_job`, `solo` и `flutter_solo` — 1.0.0, решение

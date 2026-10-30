@@ -276,6 +276,7 @@ Future<void> scenario() async {
 
 # The answer, then the observer twice: as the page has it, and without its
 # filter, which the prose says hears the Cancelled(manual) of the disposal.
+# Then a family query switch, and a pause the job reads on through.
 OBSERVER = snips[f'{PROVIDER}/cancelling-on-disposal/CrashReports']
 UNFILTERED = replaced(
     replaced(OBSERVER, '    if (error is Cancelled) return;\n', ''),
@@ -323,6 +324,25 @@ Future<void> scenario() async {
   screen.close();
   container.dispose();
   require(pagesRead == 1 + 3, 'the query left reads one page: $pagesRead');
+
+  // A covered screen pauses its listener, and the job reads on: onDispose
+  // does not run on a pause, where onCancel would cancel the job and the
+  // retry would read the first page again.
+  pagesRead = 0;
+  final paused = ProviderContainer();
+  final covered = paused.listen(rows('dart'), (_, _) {});
+  await delay(20);
+  covered.pause();
+  await delay(40);
+  covered.resume();
+  await delay(400);
+  require(pagesRead == 3, 'a pause cancels nothing: $pagesRead pages, not 3');
+  require(
+    paused.read(rows('dart')).value?.length == 3,
+    'the job read on through the pause delivers the rows',
+  );
+  covered.close();
+  paused.dispose();
 }
 ''' + RUNNER)
 
@@ -330,9 +350,11 @@ Future<void> scenario() async {
 # A search for 'd', and one for 'da' 15 ms in, while 'd' has its database
 # open and reads its first page. Then the same without the check before
 # the state is written, which the prose says lets the Cancelled of 'd' in.
+# Then a disposal and a rebuild 15 ms into a search: each cancels it, and
+# the rebuilt state stays clear of its Cancelled.
 SEARCH = snips[f'{NOTIFIER}/Search']
-CHECK = ('    // A newer search or the disposal owns the state now.\n'
-         '    if (!ref.mounted || !identical(job, _current)) return;\n')
+CHECK = ('    // A newer search, a rebuild or the disposal owns the state now.\n'
+         '    if (!identical(job, _current)) return;\n')
 UNCHECKED = replaced(
     replaced(replaced(SEARCH, CHECK, ''), 'Search', 'Unchecked', 3),
     'final search =', 'final unchecked =')
@@ -385,6 +407,34 @@ Future<void> scenario() async {
     bare.contains('error: Cancelled(manual)'),
     'without the check the Cancelled of d reaches the state: $bare',
   );
+
+  pagesRead = 0;
+  final disposed = ProviderContainer();
+  final gone = disposed.listen(search, (_, _) {});
+  final searching = disposed.read(search.notifier).search('e');
+  await delay(15);
+  gone.close();
+  disposed.dispose();
+  await searching;
+  await delay(200);
+  require(pagesRead == 1, 'the disposal cancels the search: $pagesRead pages');
+
+  pagesRead = 0;
+  final rebuilt = ProviderContainer();
+  final after = <String>[];
+  final shown = rebuilt.listen(search, (_, next) => after.add('$next'));
+  unawaited(rebuilt.read(search.notifier).search('f'));
+  await delay(15);
+  rebuilt.invalidate(search);
+  await delay(200);
+  require(pagesRead == 1, 'the rebuild cancels the search: $pagesRead pages');
+  require(
+    rebuilt.read(search) is AsyncData<List<String>> &&
+        !after.any((state) => state.contains('Cancelled')),
+    'the rebuilt state stays clear of the Cancelled: $after',
+  );
+  shown.close();
+  rebuilt.dispose();
 }
 ''' + RUNNER)
 
@@ -424,8 +474,13 @@ FILES['bloc_first'] = (
 
 ANSWER = snips[f'{HANDLER}/a-stream-that-cancels-the-job/SearchBloc']
 
-# A job that ends Cancelled on its own, under the answer without its
-# `onError:`, which the prose says hands the error to bloc and the zone.
+# A job that ends Cancelled on its own: under the answer, whose `onError:`
+# puts it into the state, and under the answer without its `onError:`,
+# which the prose says hands the error to the bloc's onError and the zone.
+KEPT = replaced(
+    replaced(ANSWER[ANSWER.index('final class SearchBloc'):],
+             'watch(readRows(event.query))', 'watch(gaveUp())'),
+    'SearchBloc', 'KeptBloc', 2)
 SELF_CANCELLED = replaced(
     replaced(
         replaced(ANSWER[ANSWER.index('final class SearchBloc'):],
@@ -436,11 +491,22 @@ SELF_CANCELLED = replaced(
 
 FILES['bloc_answer'] = (
     BLOC_HEAD + DATABASE + READ_ROWS + EVENTS + ANSWER + SELF_CANCELLED
+    + KEPT
     + '''
 Job<List<String>> gaveUp() => Job((ctx) async {
   await ctx.pause(const Duration(milliseconds: 5));
   throw const Cancelled('gave up');
 });
+
+final heard = <Object>[];
+
+final class HeardBloc extends BareBloc {
+  @override
+  void onError(Object error, StackTrace stackTrace) {
+    heard.add(error);
+    super.onError(error, stackTrace);
+  }
+}
 ''' + TYPING.replace('PAGES', '7').replace(
         'Future<void> scenario() async {', 'Future<void> typing() async {')
     + '''
@@ -450,13 +516,31 @@ Future<void> scenario() async {
 
   final zone = <Object>[];
   await runZonedGuarded(() async {
-    final bloc = BareBloc()..add(const Searched('x'));
+    final bloc = HeardBloc()..add(const Searched('x'));
     await delay(50);
     await bloc.close();
   }, (error, _) => zone.add(error));
   require(
     zone.length == 1 && zone.single is Cancelled,
     "without onError: the job's own Cancelled reaches the zone: $zone",
+  );
+  require(
+    heard.length == 1 && heard.single is Cancelled,
+    "without onError: the bloc's onError hears the Cancelled: $heard",
+  );
+
+  final caught = <Object>[];
+  final errors = <Object?>[];
+  await runZonedGuarded(() async {
+    final bloc = KeptBloc()..add(const Searched('x'));
+    final states = bloc.stream.listen((state) => errors.add(state.error));
+    await delay(50);
+    await states.cancel();
+    await bloc.close();
+  }, (error, _) => caught.add(error));
+  require(
+    caught.isEmpty && errors.length == 1 && errors.single is Cancelled,
+    'onError: puts the Cancelled into the state: $errors, zone $caught',
   );
 
   final kept = <Object?>[];
