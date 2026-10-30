@@ -318,26 +318,27 @@ jobs:
         with:
           sdk: stable
 
-      # Two packages of its own making, and bloc 9 with `bloc_concurrency`
-      # on top of what the other Dart job pulls. The generator carries the
-      # manifests, so it keys the cache along with the packages it resolves
-      # by path.
+      # Packages of its own making: bloc 9 with `bloc_concurrency`, riverpod
+      # 3, http and dio on top of what the other Dart job pulls. The
+      # generators carry the manifests, so they key the cache along with the
+      # packages they resolve by path.
       - uses: actions/cache@v6
         with:
           path: ~/.pub-cache
-          key: pub-snippets-${{ runner.os }}-${{ hashFiles('tool/doc_snippets.py', 'tool/accumulation_snippets.py', 'tool/doc_blocks.py', 'packages/*/pubspec.yaml') }}
+          key: pub-snippets-${{ runner.os }}-${{ hashFiles('tool/doc_snippets.py', 'tool/accumulation_snippets.py', 'tool/adapter_snippets.py', 'tool/doc_blocks.py', 'packages/*/pubspec.yaml') }}
           restore-keys: pub-snippets-${{ runner.os }}-
 
       # Outside the checkout, which is what lets the last step of this job
-      # mean anything: the benches write three packages and never the tree.
+      # mean anything: the benches write four packages and never the tree.
       - name: Build the benches out of the documents
         run: |
           python3 tool/doc_snippets.py "$RUNNER_TEMP/doc-check"
           python3 tool/accumulation_snippets.py "$RUNNER_TEMP/doc-check"
+          python3 tool/adapter_snippets.py "$RUNNER_TEMP/doc-check"
 
       - name: Dependencies
         run: |
-          for package in bloc_check solo_check accumulation_check; do
+          for package in bloc_check solo_check accumulation_check adapters_check; do
             echo "== $package"
             (cd "$RUNNER_TEMP/doc-check/$package" && dart pub get)
           done
@@ -346,10 +347,10 @@ jobs:
       # copied there by the generator: a fragment that passes here is a
       # fragment that would pass inside `packages/solo`. `accumulation_check`
       # takes the same rules with `one_member_abstracts` off, and says why in
-      # the file it writes.
+      # the file it writes. `adapters_check` takes the rules of `async_job`.
       - name: Analyze
         run: |
-          for package in bloc_check solo_check accumulation_check; do
+          for package in bloc_check solo_check accumulation_check adapters_check; do
             echo "== $package"
             (cd "$RUNNER_TEMP/doc-check/$package" && dart analyze --fatal-infos bin/v)
           done
@@ -362,10 +363,13 @@ jobs:
           set -eo pipefail
           : > "$RUNNER_TEMP/vs-bloc.out"
           : > "$RUNNER_TEMP/accumulation.out"
-          for package in bloc_check solo_check accumulation_check; do
+          : > "$RUNNER_TEMP/adapters.out"
+          for package in bloc_check solo_check accumulation_check adapters_check; do
             cd "$RUNNER_TEMP/doc-check/$package"
             if [ "$package" = accumulation_check ]; then
               out="$RUNNER_TEMP/accumulation.out"
+            elif [ "$package" = adapters_check ]; then
+              out="$RUNNER_TEMP/adapters.out"
             else
               out="$RUNNER_TEMP/vs-bloc.out"
             fi
@@ -383,7 +387,8 @@ jobs:
           python3 tool/check_traces.py \
             packages/solo/doc/vs-bloc.md "$RUNNER_TEMP/vs-bloc.out" \
             packages/solo/doc/accumulation.md "$RUNNER_TEMP/accumulation.out" \
-            packages/solo/doc/accumulation-rules.md "$RUNNER_TEMP/accumulation.out"
+            packages/solo/doc/accumulation-rules.md "$RUNNER_TEMP/accumulation.out" \
+            packages/async_job/doc/riverpod-and-bloc.md "$RUNNER_TEMP/adapters.out"
 
       - name: Nothing drifted
         run: |

@@ -19,6 +19,9 @@
 - The observing page says that the name of a job goes into the error messages
   of the core as well, so `key` and `describe` hold an identifier rather than
   personal data.
+- A new page, [With riverpod and bloc](doc/riverpod-and-bloc.md), puts a job
+  under a riverpod provider or notifier and a bloc handler, and aborts an HTTP
+  request of http or dio with the job.
 
 ## 0.6.0
 

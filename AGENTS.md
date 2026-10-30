@@ -226,11 +226,12 @@
 Те же команды гоняет CI — `.github/workflows/gate.yml`, пять заданий: `dart`
 (ядро, его пример и `solo_lints`, без Flutter в PATH — так проверяется заодно
 и обещание «никакого Flutter в ядре»), `flutter` (`flutter_solo` и его пример),
-`floor` (о нём ниже), `snippets` (два стенда, `tool/doc_snippets.py`
-и `tool/accumulation_snippets.py`: собирают код `packages/solo/doc/vs-bloc.md`
-и `packages/solo/doc/accumulation.md` с `accumulation-rules.md` в три пакета
-и прогоняют все драйверы) и `docs` (семь питоновских проверок, сторожа четырёх
-из них — `reflow.py`, `check_line_width.py`, `check_links.py`
+`floor` (о нём ниже), `snippets` (три стенда, `tool/doc_snippets.py`,
+`tool/accumulation_snippets.py` и `tool/adapter_snippets.py`: собирают код
+`packages/solo/doc/vs-bloc.md`, `packages/solo/doc/accumulation.md`
+с `accumulation-rules.md` и `packages/async_job/doc/riverpod-and-bloc.md`
+в четыре пакета и прогоняют все драйверы) и `docs` (семь питоновских проверок,
+сторожа четырёх из них — `reflow.py`, `check_line_width.py`, `check_links.py`
 и `check_dartdoc.py`, сторож `archive_floor_test.py` — и сборка сайта со своим
 сторожем `build_site_test.py`). Триггеры: push в `main`, pull request и ручной
 запуск. Прогон перед коммитом это не отменяет: CI говорит уже после того, как
@@ -267,9 +268,10 @@ PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run <ката
 где пути ведут на соседние раскладки. Пока оверрайды живут, ограничения между
 пакетами `floor` не доказывает.
 
-Адресация блоков у обоих стендов общая — `tool/doc_blocks.py`: фрагмент берётся
-по разделу и по имени, которое объявляет, а не по номеру. Копия этого скрипта
-живёт в скилле `doc-bench`.
+Адресация блоков у всех трёх стендов общая — `tool/doc_blocks.py`: фрагмент
+берётся по разделу и по имени, которое объявляет, а не по номеру. Стенд
+`riverpod-and-bloc` добавляет к ключу подраздел: первая попытка и ответ там
+объявляют один класс. Копия этого скрипта живёт в скилле `doc-bench`.
 
 `snippets` доказывает узкое: что каждый фрагмент документа собирается против
 дерева и доходит до конца. Драйверы при этом не только печатают — в них стоят

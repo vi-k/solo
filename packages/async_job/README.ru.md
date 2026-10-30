@@ -310,6 +310,7 @@ Cancelled(manual)
 | --- | --- |
 | [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и наблюдение за провалом |
 | [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable` |
+| [С riverpod и bloc](../../docs/ru/async_job/riverpod-and-bloc.md) | Задача под провайдером, нотифаером или обработчиком bloc и HTTP-запрос, который она прерывает |
 | [Время](../../docs/ru/async_job/time.md) | `ctx.pause`, срок через `timeout` |
 | [Дети](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.child`, `ctx.run`, `ctx.start` для ребёнка без `await`, глубина дерева |
 | [Группы](../../docs/ru/async_job/groups.md) | `.wait`, `ctx.runAll`, что группа отдаёт обратно |
