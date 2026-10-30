@@ -4,7 +4,9 @@
 > Fable 5.1 и Opus 5.5, на `aa5408dc`. Цифры pub.dev и находки уровня Medium
 > перепроверены моими командами, у каждой находки стоит вердикт. Сделаны
 > Opus F3 и Fable F2 — политика совместимости и снятие `ctx.wait` к 1.0.0
-> (`2026-10-30-one-zero-report.md`); остальные находки ждут решения владельца.
+> (`2026-10-30-one-zero-report.md`); издателя владелец перевёл сам (Opus F5,
+> Fable F3); остальные находки ждут его решения. Повторное ревью с поправкой
+> на возраст — `2026-10-30-prospects-review.md`.
 > **Что это:** ландшафт pub.dev для `async_job`, `solo`, `flutter_solo`
 > и `solo_lints`, три типовые задачи на зондах против bloc, riverpod
 > и `CancelableOperation`, оценки по семи осям, ответ на вопрос «нужны ли
@@ -677,7 +679,9 @@ uploader», и для пакета, который просят взять в о
 
 Вердикт: подтверждаю: `https://pub.dev/api/packages/<имя>/publisher` отдаёт
 `{"publisherId":null}` для всех четырёх. Совпадает с Fable F3. Перенос делает
-владелец на pub.dev, из дерева это не правится.
+владелец на pub.dev, из дерева это не правится. Итог 2026-10-30: владелец
+перевёл все четыре пакета под `yet-another.dev`, API `publisher` отдаёт его;
+проверено в `2026-10-30-prospects-review.md`.
 
 **F6. Low. В pubspec `solo`, `flutter_solo` и `solo_lints` нет поля
 `documentation:`.** У `async_job` оно есть (`packages/async_job/pubspec.yaml`),
@@ -1207,7 +1211,9 @@ next release», dartdoc в `job_context.dart:75` — «kept for one release»,
 который не взят.
 
 Вердикт: подтверждаю, как Opus F5: API `publisher` отдаёт `null` для всех
-четырёх. Перенос делает владелец на pub.dev.
+четырёх. Перенос делает владелец на pub.dev. Итог 2026-10-30: владелец перевёл
+все четыре пакета под `yet-another.dev`, API `publisher` отдаёт его; проверено
+в `2026-10-30-prospects-review.md`.
 
 **F4. Low. Репозиторий без описания и тем, корневой README 859 байт.** GitHub
 `vi-k/solo`: «No description, website, or topics provided», 1 звезда. Поисковик
