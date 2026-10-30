@@ -8,7 +8,10 @@
 ### Documentation
 
 - The README says what each kind of change comes in from 1.0.0 on: a fix in a
-  patch release, an addition in a minor one, a break in a major one.
+  patch release, an addition in a minor one, a break in a major one. The engine
+  protocol of `engine.dart` is outside that promise and can change in a minor
+  release; [Building on the core](doc/extending.md) tells an engine to hold
+  `async_job` to one minor version.
 - The README names the analyzer plugin `solo_lints` in `Install`.
 - The observing page says that the name of a job goes into the error messages
   of the core as well, so `key` and `describe` hold an identifier rather than

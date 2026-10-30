@@ -12,7 +12,9 @@ package's too: see
 ### Documentation
 
 - The README says what each kind of change comes in from 1.0.0 on: a fix in a
-  patch release, an addition in a minor one, a break in a major one.
+  patch release, an addition in a minor one, a break in a major one, and that
+  `solo` comes out with each minor release of `async_job`, whose engine
+  protocol it builds on.
 - The README names the analyzer plugin `solo_lints` in `Install`, and the page
   of common mistakes says that the plugin reports most of them.
 - The diagnostics page says what its observer prints, and that an observer

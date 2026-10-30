@@ -330,19 +330,25 @@ search.
 From 1.0.0 on, `async_job` follows semantic versioning: the constraint `^1.0.0`
 takes every minor and patch release, and they keep code written against 1.0.0
 working, but for the cases below. The public API is what
-`package:async_job/async_job.dart` and `package:async_job/engine.dart` export;
-the text of error messages and of debug output is not part of it. A member that
-goes away is first marked `@Deprecated` in a minor release, with the name to
-use instead, and is removed in the next major one.
+`package:async_job/async_job.dart` exports; the text of error messages and of
+debug output is not part of it. A member that goes away is first marked
+`@Deprecated` in a minor release, with the name to use instead, and is removed
+in the next major one.
 
-A minor release can add a member to a class you extend, such as `JobObserver`
-or `JobBase`, and a member of the same name in your own code then stops
-compiling. It can add a member to an interface you implement for a mock, such
-as `Job` or `JobContext`, and a fake that implements it by hand, rather than
-through `noSuchMethod`, then stops compiling too. The changelog of such a
-release names the members it adds. A new top-level name can clash with the same
-name imported from another package, until one of the imports hides it with
-`hide`.
+A minor release can add a member to a class you extend, such as `JobObserver`,
+and a member of the same name in your own code then stops compiling. It can add
+a member to an interface you implement for a mock, such as `Job` or
+`JobContext`, and a fake that implements it by hand, rather than through
+`noSuchMethod`, then stops compiling too. The changelog of such a release names
+the members it adds. A new top-level name can clash with the same name imported
+from another package, until one of the imports hides it with `hide`.
+
+What `package:async_job/engine.dart` adds, the protocol for building an engine,
+is outside the promise: `JobBase`, `JobContextBase`, `JobStatus` and their
+protected members can change in a minor release, and the Engine protocol
+section of the changelog of that release says how. An engine holds `async_job`
+to one minor version, such as `>=1.0.0 <1.1.0`, and comes out with each minor
+release of it; [Building on the core](doc/extending.md) says the same.
 
 ## solo
 

@@ -443,7 +443,10 @@ name imported from another package, until one of the imports hides it with
 `hide`.
 
 `solo` re-exports `async_job`, so a major release of `async_job` comes with a
-major release of `solo`.
+major release of `solo`. `solo` is also an engine on the protocol of
+`package:async_job/engine.dart`, which can change in a minor release: each
+release of `solo` holds `async_job` to one minor version, and a minor release
+of `async_job` comes with a release of `solo`.
 
 ## Coming from bloc
 

@@ -13,6 +13,12 @@ The three live in `package:async_job/engine.dart`, not in the main import: an
 app that only runs jobs never needs them. An engine imports that file in place
 of `async_job.dart`: `engine.dart` exports everything `async_job.dart` does.
 
+The protocol is outside the semantic versioning of the README: the three types
+and their protected members can change in a minor release of `async_job`, and
+the Engine protocol section of its changelog says how. Hold `async_job` to one
+minor version, such as `>=1.0.0 <1.1.0`, and release the engine with each minor
+release of the core.
+
 This page builds the job of an engine:
 
 - [A job of your own](#a-job-of-your-own): the job, its context and the
