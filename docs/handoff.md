@@ -32,9 +32,12 @@ README ядра словами поиска, `solo_lints: ^0.1.3` в README, о�
 рецепт «A tap that does not wait for a reload» — лайк в своём контроллере,
 отметки снимает перезагрузка. Строки о них — в «Unreleased» списка изменений
 `solo` и перевода. Дизайн, ревью работы и итог —
-`2026-10-30-solo-quick-start-design.md`. Остальное ждёт решения; следующий —
-пункт 5: каналы после 1.0, ответ в bloc#3069 и своё место ядра на сайте (Opus
-F6: «kernel» в `site/content/index.md:25` и `site/astro.config.mjs:45`).
+`2026-10-30-solo-quick-start-design.md`. Из пункта 5 сделан сайт: главная
+открывается двумя входами, `async_job` первым, группа ядра первой в боковой
+панели, слова «kernel» нет; отчёт — `2026-10-31-site-core-entry-report.md`.
+Каналы пункта 5 — статья «what cancelling a Future takes in Dart», посты
+в r/FlutterDev и r/dartlang, ответ в bloc#3069 — владелец 2026-10-31 отложил
+до выпуска 1.0. Остальное ждёт решения; следующий — пункт 6, чего не делать.
 
 Следующий выпуск `async_job`, `solo` и `flutter_solo` — 1.0.0, решение
 владельца 2026-10-30: «сразу к 1.0», с него строгий semver. В «Unreleased»

@@ -34,16 +34,21 @@ export default defineConfig({
         starlightLlmsTxt({
           projectName: 'solo',
           description:
-            'solo manages state and asynchronous work in Dart. A ' +
-            'controller holds one immutable state and runs jobs over it ' +
+            'Cancellation, child tasks and cleanup for asynchronous Dart, ' +
+            'and a controller built on them. A job of async_job stops at ' +
+            'its next checkpoint when cancelled, runs its cleanup and ends ' +
+            'after its children. A solo controller holds one immutable ' +
+            'state and runs jobs over it ' +
             'one at a time; each job declares which states let it start ' +
             'and continue, owns its children and its cleanup, and ends ' +
             'with Done, Failed or Cancelled.',
           details: [
             'Three packages, one dependency:',
             '',
-            '- `async_job` is the kernel: one operation, its children, ' +
-              'its cleanup and cooperative cancellation. Pure Dart.',
+            '- `async_job` is the core: one operation, its children, ' +
+              'its cleanup and cooperative cancellation. Pure Dart; ' +
+              'usable on its own, with no controller, or under riverpod ' +
+              'or bloc.',
             '- `solo` adds the controller: a queue with policies, state ' +
               'rules, event accumulation. Re-exports `async_job`.',
             '- `flutter_solo` adds the Flutter face: `SoloBuilder`, ' +
@@ -68,7 +73,7 @@ export default defineConfig({
               label: 'solo and bloc, side by side',
               url: `${config.site}/solo/vs-bloc/`,
               description:
-                'Ten application scenarios implemented in both packages.',
+                'Eleven controller scenarios implemented in both packages.',
             },
             {
               label: 'Repository',
@@ -87,6 +92,37 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: config.repo },
       ],
       sidebar: [
+        {
+          label: 'async_job',
+          items: [
+            page('async_job', 'Overview', 'Обзор'),
+            page('async_job/outcomes', 'Outcomes', 'Исходы'),
+            page('async_job/cancellation', 'Cancellation', 'Отмена'),
+            page(
+              'async_job/riverpod-and-bloc',
+              'With riverpod and bloc',
+              'С riverpod и bloc',
+            ),
+            page('async_job/time', 'Time', 'Время'),
+            page('async_job/children', 'Children', 'Дети'),
+            page('async_job/groups', 'Groups', 'Группы'),
+            page('async_job/chains', 'Chains', 'Цепочки'),
+            page('async_job/streams', 'Streams', 'Стримы'),
+            page('async_job/cleanup', 'Cleanup', 'Уборка'),
+            page('async_job/cleanup-rules', 'Cleanup rules', 'Правила уборки'),
+            page('async_job/observing', 'Observing', 'Наблюдение'),
+            page('async_job/errors', 'Errors', 'Ошибки'),
+            page('async_job/error-rules', 'Error rules', 'Правила ошибок'),
+            page('async_job/testing', 'Testing', 'Тестирование'),
+            page(
+              'async_job/extending',
+              'Building on the core',
+              'Своё поверх ядра',
+            ),
+            page('async_job/engine', 'An engine of your own', 'Свой движок'),
+            changelog('async_job'),
+          ],
+        },
         {
           label: 'solo',
           items: [
@@ -127,37 +163,6 @@ export default defineConfig({
               'solo и bloc рядом',
             ),
             changelog('solo'),
-          ],
-        },
-        {
-          label: 'async_job',
-          items: [
-            page('async_job', 'Overview', 'Обзор'),
-            page('async_job/outcomes', 'Outcomes', 'Исходы'),
-            page('async_job/cancellation', 'Cancellation', 'Отмена'),
-            page(
-              'async_job/riverpod-and-bloc',
-              'With riverpod and bloc',
-              'С riverpod и bloc',
-            ),
-            page('async_job/time', 'Time', 'Время'),
-            page('async_job/children', 'Children', 'Дети'),
-            page('async_job/groups', 'Groups', 'Группы'),
-            page('async_job/chains', 'Chains', 'Цепочки'),
-            page('async_job/streams', 'Streams', 'Стримы'),
-            page('async_job/cleanup', 'Cleanup', 'Уборка'),
-            page('async_job/cleanup-rules', 'Cleanup rules', 'Правила уборки'),
-            page('async_job/observing', 'Observing', 'Наблюдение'),
-            page('async_job/errors', 'Errors', 'Ошибки'),
-            page('async_job/error-rules', 'Error rules', 'Правила ошибок'),
-            page('async_job/testing', 'Testing', 'Тестирование'),
-            page(
-              'async_job/extending',
-              'Building on the core',
-              'Своё поверх ядра',
-            ),
-            page('async_job/engine', 'An engine of your own', 'Свой движок'),
-            changelog('async_job'),
           ],
         },
         {

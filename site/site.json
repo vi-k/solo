@@ -2,6 +2,6 @@
   "site": "https://docs.yet-another.dev",
   "base": "/",
   "title": "solo",
-  "tagline": "One job at a time, exclusive state, cooperative cancellation.",
+  "tagline": "Cancellation, child tasks and cleanup for asynchronous Dart, and a controller that runs one job at a time.",
   "repo": "https://github.com/vi-k/solo"
 }
