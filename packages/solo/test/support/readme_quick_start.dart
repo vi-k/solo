@@ -1,8 +1,6 @@
-// The code of `README.md` under "Quick start", verbatim: every block of the
-// section but the one that mixes in `SoloStream`, whose body is elided on
-// the page. `readme_rakes_test` runs it.
-// ignore_for_file: unreachable_from_main
-
+// The code of `README.md` under "Quick start", verbatim, and the
+// `ProfileApi` the page describes in words, as
+// `example/bin/quick_start.dart` has it. `readme_rakes_test` runs it.
 import 'package:solo/solo.dart';
 
 sealed class ProfileState {
@@ -23,69 +21,41 @@ final class Loaded extends ProfileState {
   const Loaded(this.name);
 }
 
-final class Failure extends ProfileState {
-  final Object error;
-
-  const Failure(this.error);
-}
-
-final class ApiException implements Exception {
-  final String message;
-
-  const ApiException(this.message);
-
-  @override
-  String toString() => 'ApiException: $message';
-}
-
-class ProfileApi {
-  Future<String> fetchName() =>
-      Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
-}
-
 final class ProfileController extends Solo<ProfileState> {
   final ProfileApi api;
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => enqueue<ProfileState, String>(
-    key: 'load',
-    policy: Policy.droppable,
-    ifFailed: (state, error, stackTrace) => Failure(error),
-    isExpectedError: (error) => error is ApiException,
-    ifCancelled: (state, cancelled) => const Initial(),
-    (ctx) async {
-      ctx.emit(const Loading());
-      final name = await ctx.abandonable(api.fetchName);
-      ctx.emit(Loaded(name));
-      return name;
-    },
-  );
+  Job<String> load() => enqueue((ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  });
 }
 
 Future<void> main() async {
   final profile = ProfileController(ProfileApi());
-  void onChange() => print(profile.currentState);
-  profile.addListener(onChange);
-  try {
-    final job = profile.load();
-    profile.load(); // the existing job is returned
+  profile.addListener(
+    () => print(switch (profile.currentState) {
+      Initial() => 'initial',
+      Loading() => 'loading',
+      Loaded(:final name) => 'loaded $name',
+    }),
+  );
 
-    print(await job.value);
-    if (profile.currentState case Loaded(:final name)) {
-      print(name);
-    }
-  } finally {
-    profile.removeListener(onChange);
-    await profile.close();
-  }
+  print(await profile.load().value);
+
+  // The user pulls to refresh, then cancels the refresh before the answer.
+  final refresh = profile.load();
+  await Future<void>.delayed(const Duration(milliseconds: 10));
+  await refresh.cancel();
+  print(refresh.outcome);
+
+  await profile.close();
 }
 
-Future<void> cancelLoading() async {
-  final profile = ProfileController(ProfileApi());
-  final job = profile.load();
-
-  await job.cancel();
-  print(job.outcome); // Cancelled(manual)
-  await profile.close();
+class ProfileApi {
+  Future<String> fetchName() =>
+      Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
 }

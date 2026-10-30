@@ -1,5 +1,5 @@
 // What the code of `doc/errors.md` and `doc/diagnostics.md` takes for
-// granted: the profile of the quick start and the error its API throws, the
+// granted: the profile of `doc/jobs.md` and the error its API throws, the
 // crash reporter, Sentry, the log, the camera, the slots, the analytics and
 // the logger. Every call of a stub runs until the test ends it, unless its
 // name is in `Stage.endsByItself`, so the order of what happened is the
@@ -89,7 +89,7 @@ final class Stage {
 
 Stage stage = Stage();
 
-// --- The profile of the quick start ---------------------------------------
+// --- The profile of doc/jobs.md -------------------------------------------
 
 sealed class ProfileState {
   const ProfileState();
@@ -127,7 +127,7 @@ final class Failure extends ProfileState {
   String toString() => 'Failure($error)';
 }
 
-/// What the API of the quick start throws when the network is down.
+/// What the API of the profile throws when the network is down.
 final class ApiException implements Exception {
   final String message;
 
@@ -137,7 +137,7 @@ final class ApiException implements Exception {
   String toString() => 'ApiException: $message';
 }
 
-/// The API of the quick start, answering when the test says so.
+/// The API of the profile, answering when the test says so.
 class ProfileApi {
   Future<String> fetchName() => stage.start('fetchName', 'Ada Lovelace');
 }

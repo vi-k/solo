@@ -44,8 +44,10 @@ section shows.
 
 ## Quick start
 
-A controller exposes methods for application operations. Here, `load()` loads a
-profile name and reports progress through four immutable states:
+A screen loads the name of a profile, and the user pulls to refresh and cancels
+the refresh before the answer comes. A controller holds the state of the screen
+and runs its jobs one at a time. `ProfileApi` is the application's client, and
+its `fetchName()` returns the name:
 
 ```dart
 import 'package:solo/solo.dart';
@@ -68,154 +70,66 @@ final class Loaded extends ProfileState {
   const Loaded(this.name);
 }
 
-final class Failure extends ProfileState {
-  final Object error;
-
-  const Failure(this.error);
-}
-```
-
-The example API returns a name after a short delay. Replace it with your
-application's API client. The `fetchName` of a real client throws an
-`ApiException` when the call fails:
-
-```dart
-final class ApiException implements Exception {
-  final String message;
-
-  const ApiException(this.message);
-
-  @override
-  String toString() => 'ApiException: $message';
-}
-
-class ProfileApi {
-  Future<String> fetchName() =>
-      Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
-}
-
 final class ProfileController extends Solo<ProfileState> {
   final ProfileApi api;
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => enqueue<ProfileState, String>(
-    key: 'load',
-    policy: Policy.droppable,
-    ifFailed: (state, error, stackTrace) => Failure(error),
-    isExpectedError: (error) => error is ApiException,
-    ifCancelled: (state, cancelled) => const Initial(),
-    (ctx) async {
-      ctx.emit(const Loading());
-      final name = await ctx.abandonable(api.fetchName);
-      ctx.emit(Loaded(name));
-      return name;
-    },
-  );
+  Job<String> load() => enqueue((ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  });
 }
-```
 
-`enqueue<ProfileState, String>` creates and queues a job. `ProfileState` is the
-job's working type `W`: the states its body works with, which may be narrower
-than the controller's state type `S`. `String` is the job's result type. Both
-can be left to inference: `W` is then the whole of `S`, and the result type is
-what the body returns. The body receives a context, `ctx`, which provides state
-updates and cancellation-aware waiting:
-
-- `ctx.emit` updates the controller's state.
-- `ctx.abandonable` waits for the API response, or throws `Cancelled` if the
-  job accepts cancellation while waiting.
-
-Two optional parameters of `enqueue` give the state to publish when the job
-does not succeed:
-
-- `ifFailed` returns the state to publish if the job fails.
-- `ifCancelled` returns the state to publish if a started job is cancelled.
-
-The state handlers run after the body and its cleanup. In this example, the
-state becomes `Loaded` on success, `Failure` on error, or `Initial` on
-cancellation. Without a handler, the state stays where the body left it: an
-error or a cancellation here would leave `Loading`. A handler that hands back
-the state it was given, the same object, publishes nothing. The job's outcome
-stays `Failed` or `Cancelled` even when a handler updates the state.
-
-`Policy.droppable` and `key: 'load'` make repeated calls share the queued or
-running load. A second call returns the existing job. Once that job finishes,
-another call can start a new load.
-
-The caller uses the returned `Job<String>` to await this particular load:
-
-```dart
 Future<void> main() async {
   final profile = ProfileController(ProfileApi());
-  void onChange() => print(profile.currentState);
-  profile.addListener(onChange);
-  try {
-    final job = profile.load();
-    profile.load(); // the existing job is returned
+  profile.addListener(
+    () => print(switch (profile.currentState) {
+      Initial() => 'initial',
+      Loading() => 'loading',
+      Loaded(:final name) => 'loaded $name',
+    }),
+  );
 
-    print(await job.value);
-    if (profile.currentState case Loaded(:final name)) {
-      print(name);
-    }
-  } finally {
-    profile.removeListener(onChange);
-    await profile.close();
-  }
-}
-```
+  print(await profile.load().value);
 
-`profile.currentState` is available synchronously, and `addListener` calls back
-synchronously too, inside the change itself. `job.value` returns the loaded
-name, or throws the job's error or `Cancelled`. The `finally` block removes the
-listener and closes the controller even if loading fails.
+  // The user pulls to refresh, then cancels the refresh before the answer.
+  final refresh = profile.load();
+  await Future<void>.delayed(const Duration(milliseconds: 10));
+  await refresh.cancel();
+  print(refresh.outcome);
 
-A `Failed` that nobody observes goes on to the zone the job was created in,
-even when `ifFailed` has published a state, unless `Solo.unansweredHandler`
-answers for it. An error the job names in `isExpectedError` goes no further.
-`load` names `ApiException`, so a `profile.load()` that nobody reads and that
-fails with one ends at the `Failure` state; a bug is not an `ApiException`, and
-it still goes on. Reading the job's `done` or `value` observes the outcome, and
-a caller that needs no outcome at all says so with `ignoreFailure()`. See
-[Naming the expected errors](doc/errors.md#naming-the-expected-errors) and
-[Handled and unhandled failures](doc/errors.md#handled-and-unhandled-failures)
-on the errors page.
-
-For a broadcast `stream` as well, delivered on the next microtask, mix in
-`SoloStream`:
-
-```dart
-final class ProfileController extends Solo<ProfileState> with SoloStream {
-  // ...same as above...
-}
-```
-
-See [Observing state](doc/state.md#observing-state) on the state page for the
-full delivery picture, including `SoloListenable` from `flutter_solo`.
-
-Cancellation uses the same job object. This separate example requests
-cancellation immediately, so the job is still in the queue:
-
-```dart
-Future<void> cancelLoading() async {
-  final profile = ProfileController(ProfileApi());
-  final job = profile.load();
-
-  await job.cancel();
-  print(job.outcome); // Cancelled(manual)
   await profile.close();
 }
 ```
 
-`cancel()` waits for the job to finish, including cleanup if it started. A job
-cancelled before its body starts does not call `ifCancelled`. Jobs can start
-child jobs as part of their work; the starting job is their parent and waits
-for them before finishing. The next queued job starts only after the previous
-job finishes its body, children, cleanup and state handler.
+`example/bin/quick_start.dart` runs this block with an API that answers after
+20 ms. It prints:
 
-The guides below explain results, queue policies and cancellation in more
-detail. In particular, cancellation of a job does not automatically stop an API
-request that has already been sent.
+```text
+loading
+loaded Ada Lovelace
+Ada Lovelace
+loading
+Cancelled(manual)
+```
+
+`enqueue` queues a job and hands it back. In the body, `ctx.emit` publishes a
+state, which the listener hears inside the change, and `ctx.abandonable` waits
+for the API and ends the wait at once when the job is cancelled. The caller
+awaits `value` or calls `cancel()`, which returns once the job is over. The
+wait before `cancel()` lets the refresh start: a job cancelled before its body
+runs leaves the state alone. `close()` drops the listener; in Flutter,
+`flutter_solo` has the widgets and a `listen` that hands back a subscription.
+
+The cancelled refresh left the controller at `loading`, and nothing takes it
+out of there.
+[State after failure or cancellation](doc/state.md#state-after-failure-or-cancellation)
+starts from this `load` and gives it the state to publish when a job fails or
+is cancelled. [The profile controller](doc/jobs.md#the-profile-controller) is
+this controller as the guides use it, with the parameters an application adds.
 
 ## The dozen calls
 
@@ -318,9 +232,11 @@ await player.close(mode: SoloCloseMode.drain);
 
 `setVolume` hands back a job too, and the call site drops it on purpose:
 nothing here can answer for a volume the device refuses. Its failure goes on to
-the zone, as [Quick start](#quick-start) says, since no `unansweredHandler` is
-set, and ends this plain Dart program. A caller that can answer for it reads
-the job's `done`, as the call site does for `play`.
+the zone, as
+[Handled and unhandled failures](doc/errors.md#handled-and-unhandled-failures)
+on the errors page has it, since no `unansweredHandler` is set, and ends this
+plain Dart program. A caller that can answer for it reads the job's `done`, as
+the call site does for `play`.
 
 ## Why `currentState` and not `state`
 
@@ -343,6 +259,12 @@ Job<String> reload() => enqueue<Loaded, String>((ctx) async {
   return name;
 });
 ```
+
+`enqueue<Loaded, String>` names two types: the job's working type `W`, the
+states its body works with, which may be narrower than the controller's state
+type `S`, and its result type. Left out, as in the quick start, they are
+inferred: `W` is then the whole of `S`, and the result type is what the body
+returns.
 
 A job body is a closure inside a method of the controller, so every member of
 the controller is in scope there. `ctx.state` is a checkpoint. Before it reads,
@@ -414,6 +336,7 @@ section linked beside it.
 | A widget rebuilds for state it does not use | `SoloSelector` from `flutter_solo` | [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) |
 | The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Pausing the queue](doc/jobs.md#pausing-the-queue) |
 | A job has to start later, and the queue must not wait for it | a `Job` of its own for the wait, cancelled from `cancelAll` and `onClose` | [A delayed start](doc/jobs.md#a-delayed-start) |
+| A tap must not wait for a long reload of the same screen | a controller of its own for the taps, and marks the reload settles | [A tap that does not wait for a reload](doc/jobs.md#a-tap-that-does-not-wait-for-a-reload) |
 | The screen has to show news until the user closes it, and the camera must go on working | a controller of its own for the notices, and an acceptance that names the notice | [A notice the screen accepts](doc/state.md#a-notice-the-screen-accepts) |
 | A stream event arrives a microtask late, and that is too late | `addListener`, which calls back inside the change | [Observing state](doc/state.md#observing-state) |
 

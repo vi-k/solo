@@ -257,33 +257,38 @@ void main() {
   });
 
   group('The fixtures', () {
-    test('the controller is the one of the quick start of the README', () {
+    /// The section of `doc/jobs.md` the page takes its controller from.
+    String profileControllerSection() {
+      final jobs = File('doc/jobs.md').readAsStringSync();
+      final start = jobs.indexOf('\n## The profile controller\n');
+      return jobs.substring(start, jobs.indexOf('\n## ', start + 1));
+    }
+
+    test('the controller is the one of doc/jobs.md', () {
       final block = RegExp(
         r'```dart\n(.*?)\n```',
         dotAll: true,
       ).firstMatch(_page())!;
-      final readme = File('README.md').readAsStringSync();
-      // The page's controller is that of the quick start without its
+      // The page's controller is that of `doc/jobs.md` without its
       // `isExpectedError`.
-      final quickStart = readme
-          .substring(
-            readme.indexOf('\n## Quick start\n'),
-            readme.indexOf('\n## ', readme.indexOf('\n## Quick start\n') + 1),
-          )
-          .replaceAll(RegExp(r'\n *isExpectedError: [^\n]*'), '');
+      final model = profileControllerSection().replaceAll(
+        RegExp(r'\n *isExpectedError: [^\n]*'),
+        '',
+      );
 
       expect(block.group(1), startsWith('final class ProfileController '));
-      expect(quickStart, contains(block.group(1)));
-      _says('drive the `load` of the controller from');
+      expect(model, contains(block.group(1)));
       _says(
-        'in the package README. All but the one under '
+        'drive the `load` of the controller from '
+        '[The profile controller](jobs.md#the-profile-controller) on the '
+        'jobs page. All but the one under '
         '[isExpectedError](#isexpectederror) drive it without its '
         "`isExpectedError`, so that the failure is the test's to read:",
       );
     });
 
     test('the load under "### isExpectedError" is the same load with the '
-        'isExpectedError of the quick start', () {
+        'isExpectedError of doc/jobs.md', () {
       final controller = RegExp(
         r'```dart\n(.*?)\n```',
         dotAll: true,
@@ -305,20 +310,18 @@ void main() {
       expect(predicate.allMatches(load), hasLength(1));
       expect(controller, contains(indented));
 
-      // The predicate line is the one the quick start has.
-      final readme = File('README.md').readAsStringSync();
-      final quickStart = readme.substring(
-        readme.indexOf('\n## Quick start\n'),
-        readme.indexOf('\n## ', readme.indexOf('\n## Quick start\n') + 1),
-      );
-      final quickPredicate = predicate.allMatches(quickStart).toList();
-      expect(quickPredicate, hasLength(1));
+      // The predicate line is the one the profile controller has.
+      final modelPredicate = predicate
+          .allMatches(profileControllerSection())
+          .toList();
+      expect(modelPredicate, hasLength(1));
       expect(
-        quickPredicate.single.group(0)!.trim(),
+        modelPredicate.single.group(0)!.trim(),
         predicate.firstMatch(load)!.group(0)!.trim(),
       );
       _says(
-        'Here the `load` keeps the `isExpectedError` of Quick start, which '
+        'Here the `load` keeps the `isExpectedError` of '
+        '[The profile controller](jobs.md#the-profile-controller), which '
         'names the `ApiException` the fake throws:',
       );
     });

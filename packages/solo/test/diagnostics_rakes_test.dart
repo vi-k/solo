@@ -236,7 +236,7 @@ void main() {
   });
 
   group('Watching every controller', () {
-    test('the observer of the page on the load of the quick start', () {
+    test('the observer of the page on the load of the profile', () {
       late Job<String> job;
       final ran = runFaked((async) {
         page.main();

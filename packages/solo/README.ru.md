@@ -44,9 +44,10 @@ plugins:
 
 ## Быстрый старт
 
-Контроллер предоставляет методы для операций приложения. Здесь `load()`
-загружает имя профиля и сообщает о ходе работы через четыре неизменяемых
-состояния:
+Экран загружает имя профиля, а пользователь тянет экран, чтобы обновить его,
+и отменяет обновление до ответа. Контроллер хранит состояние экрана и выполняет
+его `Job` по одной. `ProfileApi` — клиент приложения, и его `fetchName()`
+возвращает имя:
 
 ```dart
 import 'package:solo/solo.dart';
@@ -69,161 +70,70 @@ final class Loaded extends ProfileState {
   const Loaded(this.name);
 }
 
-final class Failure extends ProfileState {
-  final Object error;
-
-  const Failure(this.error);
-}
-```
-
-API в примере возвращает имя после небольшой задержки. Замените его клиентом
-API вашего приложения. `fetchName` настоящего клиента бросает `ApiException`,
-когда вызов не удался:
-
-```dart
-final class ApiException implements Exception {
-  final String message;
-
-  const ApiException(this.message);
-
-  @override
-  String toString() => 'ApiException: $message';
-}
-
-class ProfileApi {
-  Future<String> fetchName() =>
-      Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
-}
-
 final class ProfileController extends Solo<ProfileState> {
   final ProfileApi api;
 
   ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => enqueue<ProfileState, String>(
-    key: 'load',
-    policy: Policy.droppable,
-    ifFailed: (state, error, stackTrace) => Failure(error),
-    isExpectedError: (error) => error is ApiException,
-    ifCancelled: (state, cancelled) => const Initial(),
-    (ctx) async {
-      ctx.emit(const Loading());
-      final name = await ctx.abandonable(api.fetchName);
-      ctx.emit(Loaded(name));
-      return name;
-    },
-  );
+  Job<String> load() => enqueue((ctx) async {
+    ctx.emit(const Loading());
+    final name = await ctx.abandonable(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
+  });
 }
-```
 
-`enqueue<ProfileState, String>` создаёт `Job` и ставит её в очередь.
-`ProfileState` задаёт рабочий тип `W`: состояния, с которыми работает тело
-`Job`. Это может быть и подтип `S`, типа состояния контроллера. `String` задаёт
-тип результата. Оба аргумента можно оставить выводу типов: тогда `W` — весь
-`S`, а тип результата — то, что возвращает тело. Тело получает контекст `ctx`
-для изменения состояния и ожидания с учётом отмены:
-
-- `ctx.emit` обновляет состояние контроллера.
-- `ctx.abandonable` ждёт ответ API или бросает `Cancelled`, если во время
-  ожидания `Job` принимает отмену.
-
-Два необязательных параметра `enqueue` задают состояние для публикации, если
-`Job` не завершилась успехом:
-
-- `ifFailed` возвращает состояние для публикации при ошибке `Job`.
-- `ifCancelled` возвращает состояние для публикации при отмене начатой `Job`.
-
-Обработчики состояния вызываются после тела и освобождения его ресурсов. В этом
-примере состояние становится `Loaded` при успехе, `Failure` при ошибке или
-`Initial` при отмене. Без обработчика состояние остаётся таким, каким его
-оставило тело: ошибка или отмена здесь оставили бы `Loading`. Обработчик,
-который возвращает полученное состояние, тот же объект, ничего не публикует.
-Исходом `Job` остаётся `Failed` или `Cancelled`, даже когда обработчик
-обновляет состояние.
-
-`Policy.droppable` с `key: 'load'` позволяет повторным вызовам использовать
-ту же загрузку, пока она стоит в очереди или выполняется. Второй вызов
-возвращает существующую `Job`. После её завершения следующий вызов может начать
-новую загрузку.
-
-Вызывающий код ждёт именно эту загрузку через возвращённую `Job<String>`:
-
-```dart
 Future<void> main() async {
   final profile = ProfileController(ProfileApi());
-  void onChange() => print(profile.currentState);
-  profile.addListener(onChange);
-  try {
-    final job = profile.load();
-    profile.load(); // возвращается существующая Job
+  profile.addListener(
+    () => print(switch (profile.currentState) {
+      Initial() => 'initial',
+      Loading() => 'loading',
+      Loaded(:final name) => 'loaded $name',
+    }),
+  );
 
-    print(await job.value);
-    if (profile.currentState case Loaded(:final name)) {
-      print(name);
-    }
-  } finally {
-    profile.removeListener(onChange);
-    await profile.close();
-  }
-}
-```
+  print(await profile.load().value);
 
-`profile.currentState` доступен синхронно, и `addListener` тоже зовёт колбэк
-синхронно, внутри самого изменения. `job.value` возвращает загруженное имя или
-бросает ошибку `Job` либо `Cancelled`. Блок `finally` снимает слушателя
-и закрывает контроллер даже при ошибке загрузки.
+  // Пользователь тянет экран, чтобы обновить его, и отменяет обновление
+  // до ответа.
+  final refresh = profile.load();
+  await Future<void>.delayed(const Duration(milliseconds: 10));
+  await refresh.cancel();
+  print(refresh.outcome);
 
-`Failed`, который никто не наблюдал, уходит в зону, где создана `Job`, если
-за него не отвечает `Solo.unansweredHandler`, — даже когда `ifFailed` уже
-опубликовал состояние. Ошибка, которую `Job` называет в `isExpectedError`,
-дальше не идёт. `load` называет `ApiException`, поэтому `profile.load()`,
-результат которого никто не читает, с такой ошибкой заканчивается на состоянии
-`Failure`; баг — не `ApiException`, и он по-прежнему идёт дальше. Исход
-наблюдает тот, кто читает `done` или `value` этой `Job`, а вызывающий код,
-которому исход не нужен вовсе, говорит об этом через `ignoreFailure()`.
-Подробнее в разделах
-[«Назвать ожидаемые ошибки»](../../docs/ru/solo/errors.md#назвать-ожидаемые-ошибки)
-и [«Обработанные и необработанные ошибки»](../../docs/ru/solo/errors.md#обработанные-и-необработанные-ошибки)
-страницы об ошибках.
-
-Чтобы получать изменения ещё и через broadcast-стрим `stream`, события которого
-приходят на следующей микротаске, подмешайте `SoloStream`:
-
-```dart
-final class ProfileController extends Solo<ProfileState> with SoloStream {
-  // ...то же, что и выше...
-}
-```
-
-Полную картину доставки, включая `SoloListenable` из `flutter_solo`, см.
-в разделе
-[«Наблюдение за состоянием»](../../docs/ru/solo/state.md#наблюдение-за-состоянием)
-страницы о состоянии.
-
-Для отмены используется тот же объект `Job`. Этот отдельный пример запрашивает
-отмену сразу, поэтому `Job` ещё стоит в очереди:
-
-```dart
-Future<void> cancelLoading() async {
-  final profile = ProfileController(ProfileApi());
-  final job = profile.load();
-
-  await job.cancel();
-  print(job.outcome); // Cancelled(manual)
   await profile.close();
 }
 ```
 
-`cancel()` ждёт завершения `Job`, включая освобождение ресурсов, если она
-успела начаться. При отмене до запуска тела `ifCancelled` не вызывается. `Job`
-может запускать дочерние `Job` как часть своей работы; запустившая их `Job`
-является родителем и ждёт их перед собственным завершением. Следующая `Job`
-из очереди запускается только после завершения тела, дочерних `Job`,
-освобождения ресурсов и обработчика состояния предыдущей.
+`example/bin/quick_start.dart` запускает этот блок с API, который отвечает
+через 20 мс. Он печатает:
 
-Страницы ниже подробнее объясняют результаты, политики очереди и отмену.
-В частности, отмена `Job` сама по себе не останавливает запрос к API, который
-уже был отправлен.
+```text
+loading
+loaded Ada Lovelace
+Ada Lovelace
+loading
+Cancelled(manual)
+```
+
+`enqueue` ставит `Job` в очередь и возвращает её. В теле `ctx.emit` публикует
+состояние, и слушатель слышит его внутри самого изменения, а `ctx.abandonable`
+ждёт API и прекращает ожидание сразу, как только `Job` отменяют. Вызывающий код
+ждёт `value` или зовёт `cancel()`, который возвращается, когда `Job`
+завершилась. Ожидание перед `cancel()` даёт обновлению начаться: `Job`,
+отменённая до запуска тела, состояние не трогает. `close()` снимает слушателя;
+во Flutter у `flutter_solo` есть виджеты и `listen`, который возвращает
+подписку.
+
+Отменённое обновление оставило контроллер в `loading`, и ничто его оттуда
+не выведет. Раздел
+[«Состояние после ошибки или отмены»](../../docs/ru/solo/state.md#состояние-после-ошибки-или-отмены)
+начинается с этого `load` и задаёт ему состояние, которое публикуется, когда
+`Job` падает или её отменяют.
+[«Контроллер профиля»](../../docs/ru/solo/jobs.md#контроллер-профиля) — этот же
+контроллер в том виде, в каком им пользуются руководства, с параметрами,
+которые добавляет приложение.
 
 ## Дюжина вызовов
 
@@ -330,10 +240,11 @@ await player.close(mode: SoloCloseMode.drain);
 
 `setVolume` тоже возвращает `Job`, и вызывающий код выбрасывает её намеренно:
 ответить на громкость, которую устройство не приняло, здесь нечем. Её провал
-уходит в зону, как сказано в разделе [«Быстрый старт»](#быстрый-старт), раз
-`unansweredHandler` не задан, и завершает эту программу на чистом Dart. Код,
-которому есть чем ответить, читает `done` этой `Job`, как здесь читают `done`
-у `play`.
+уходит в зону, как сказано в разделе
+[«Обработанные и необработанные ошибки»](../../docs/ru/solo/errors.md#обработанные-и-необработанные-ошибки)
+страницы об ошибках, раз `unansweredHandler` не задан, и завершает эту
+программу на чистом Dart. Код, которому есть чем ответить, читает `done` этой
+`Job`, как здесь читают `done` у `play`.
 
 ## Почему `currentState`, а не `state`
 
@@ -358,6 +269,12 @@ Job<String> reload() => enqueue<Loaded, String>((ctx) async {
   return name;
 });
 ```
+
+`enqueue<Loaded, String>` называет два типа: рабочий тип `W` этой `Job`,
+то есть состояния, с которыми работает её тело, — он может быть уже `S`, типа
+состояния контроллера, — и тип её результата. Если их опустить, как в быстром
+старте, они выводятся: `W` тогда — весь `S`, а тип результата — то, что
+возвращает тело.
 
 Тело `Job` пишется замыканием внутри метода контроллера, поэтому в теле видны
 все члены контроллера. `ctx.state` служит контрольной точкой. Перед чтением он
@@ -428,6 +345,7 @@ Job<String> reload() => enqueue<Loaded, String>((ctx) async {
 | Виджет перестраивается из-за состояния, которым не пользуется | `SoloSelector` из `flutter_solo` | [Выбор одного значения](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md#выбор-одного-значения) |
 | Очередь нужно на время остановить | `Job`, которая ждёт `Completer` в голове очереди | [Пауза очереди](../../docs/ru/solo/jobs.md#пауза-очереди) |
 | Задача должна начаться позже, а очередь не должна её ждать | отдельная `Job` для ожидания, которую отменяют `cancelAll` и `onClose` | [Отложенный старт](../../docs/ru/solo/jobs.md#отложенный-старт) |
+| Нажатие не должно ждать долгой перезагрузки того же экрана | свой контроллер для нажатий и отметки, которые снимает перезагрузка | [Нажатие, которое не ждёт перезагрузки](../../docs/ru/solo/jobs.md#нажатие-которое-не-ждёт-перезагрузки) |
 | Экран должен показывать новость, пока пользователь её не закроет, а камера должна работать дальше | отдельный контроллер для уведомлений и приёмка, которая называет уведомление | [Уведомление, которое принимает экран](../../docs/ru/solo/state.md#уведомление-которое-принимает-экран) |
 | Событие стрима приходит микротаской позже, и это поздно | `addListener`, который зовёт колбэк внутри изменения | [Наблюдение за состоянием](../../docs/ru/solo/state.md#наблюдение-за-состоянием) |
 

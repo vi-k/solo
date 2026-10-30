@@ -162,7 +162,7 @@ _taken_readme = set()
 _taken_testing = set()
 snips = Blocks(doc_blocks.blocks(
     open(DOC).read(), 'dart', doc_blocks.DECLARES['dart']), _taken_doc)
-# Two blocks of the quick start and no more: the rest of that README is
+# The block of the quick start and no more: the rest of that README is
 # built and run inside `packages/solo`, by its own sentinel.
 readme = doc_blocks.blocks(
     open(README).read(), 'dart', doc_blocks.DECLARES['dart'])
@@ -232,32 +232,50 @@ FILES = {}
 
 # ------------------------------------------------- the quick start of solo
 # The import of `solo` is the one line not taken over: this package depends
-# on flutter_solo, which re-exports it.
-_states_imports, _states_body = split_imports(
-    readme['quick-start/ProfileState'])
-assert _states_imports == ["import 'package:solo/solo.dart';"], _states_imports
+# on flutter_solo, which re-exports it. The page describes `ProfileApi` in
+# words; the API is the one `example/bin/quick_start.dart` runs the block
+# with. The block declares `main`, so it stands in a library of its own and
+# the driver calls it.
+_quick_imports, _quick_body = split_imports(
+    readme['quick-start/ProfileController'])
+assert _quick_imports == ["import 'package:solo/solo.dart';"], _quick_imports
+_example = open(os.path.join(
+    REPO, 'packages', 'solo', 'example', 'bin', 'quick_start.dart')).read()
+_quick_api = _example[_example.index('\nclass ProfileApi {'):].strip('\n')
 
-FILES['quick_start_test'] = '\n'.join([
+FILES['quick_start'] = '\n'.join([
     "import 'package:flutter_solo/flutter_solo.dart';",
-    "import 'package:flutter_test/flutter_test.dart';",
     '',
-    _states_body,
-    readme['quick-start/ProfileApi'],
-    '''
-void main() {
-  test('the quick start loads, and a second call gets the same job',
-      () async {
-    final profile = ProfileController(ProfileApi());
-    addTearDown(profile.close);
+    _quick_body,
+    _quick_api,
+    '',
+])
 
-    final job = profile.load();
-    expect(identical(profile.load(), job), isTrue);
-    expect(await job.value, 'Ada Lovelace');
-    expect(profile.currentState, isA<Loaded>());
+FILES['quick_start_test'] = """import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+
+import 'quick_start.dart' as quick;
+
+void main() {
+  test('the quick start prints what the README quotes', () async {
+    final printed = <String>[];
+    await runZoned(
+      quick.main,
+      zoneSpecification: ZoneSpecification(
+        print: (self, parent, zone, line) => printed.add(line),
+      ),
+    );
+    expect(printed, [
+      'loading',
+      'loaded Ada Lovelace',
+      'Ada Lovelace',
+      'loading',
+      'Cancelled(manual)',
+    ]);
   });
 }
-''',
-])
+"""
 
 # ---------------------------------------------------------- both deliveries
 # The drivers of this page close a controller in `addTearDown` and wait for

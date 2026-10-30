@@ -86,7 +86,8 @@ key.
 [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting)
 show where the two part. `Policy.replace` removes queued work with the same key
 while leaving the running job alone. There is no concurrent root-job policy;
-use children or separate controllers for independent concurrent work.
+use children or separate controllers for independent concurrent work, as in
+[A tap that does not wait for a reload](jobs.md#a-tap-that-does-not-wait-for-a-reload).
 
 ## Ordering updates to shared state
 

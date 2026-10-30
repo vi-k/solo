@@ -610,6 +610,8 @@ The profile controller of the
 [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
 in the package README publishes `Loading` before its load starts waiting.
 Something has to take the controller out of it when the load does not arrive.
+The handlers below publish `Failure`, the state that holds the error in
+[The profile controller](jobs.md#the-profile-controller).
 
 ### The first attempt
 
@@ -675,8 +677,9 @@ operation belongs in `ctx.onCancel`, which delivers it at once.
 ### Preserving an incompatible external state
 
 The handler above returns `Initial` whenever the load is cancelled. Extend the
-profile states from the quick start with `Disconnected` in the same library,
-and the connection can now drop while a load is running.
+profile states from [The profile controller](jobs.md#the-profile-controller)
+with `Disconnected` in the same library, and the connection can now drop while
+a load is running.
 
 #### The first attempt
 

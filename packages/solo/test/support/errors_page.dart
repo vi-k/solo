@@ -23,8 +23,8 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  // ...the jobs of the quick start, without its `isExpectedError`...
-  /// Not on the page: the job of the quick start in the README, without its
+  // ...the load() of the profile controller, without its `isExpectedError`...
+  /// Not on the page: the job of `doc/jobs.md`, without its
   /// `isExpectedError`.
   Job<String> load() => enqueue<ProfileState, String>(
     key: 'load',

@@ -2,18 +2,100 @@
 
 A method of a controller queues a job and returns its handle. This page covers
 the handle, the queue and the policies that decide what a second call does to
-the first.
+the first. It opens with the profile controller and ends with a screen whose
+taps need a queue of their own.
+
+## The profile controller
+
+The pages of this package build on one controller: the profile controller of
+the
+[Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
+in the package README, with what a controller in an application adds to it.
+`ProfileApi` returns a name after a short delay; a real client throws an
+`ApiException` when the call fails:
+
+```dart
+import 'package:solo/solo.dart';
+
+sealed class ProfileState {
+  const ProfileState();
+}
+
+final class Initial extends ProfileState {
+  const Initial();
+}
+
+final class Loading extends ProfileState {
+  const Loading();
+}
+
+final class Loaded extends ProfileState {
+  final String name;
+
+  const Loaded(this.name);
+}
+
+final class Failure extends ProfileState {
+  final Object error;
+
+  const Failure(this.error);
+}
+
+final class ApiException implements Exception {
+  final String message;
+
+  const ApiException(this.message);
+
+  @override
+  String toString() => 'ApiException: $message';
+}
+
+class ProfileApi {
+  Future<String> fetchName() =>
+      Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
+}
+
+final class ProfileController extends Solo<ProfileState> {
+  final ProfileApi api;
+
+  ProfileController(this.api) : super(const Initial());
+
+  Job<String> load() => enqueue<ProfileState, String>(
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    isExpectedError: (error) => error is ApiException,
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
+}
+```
+
+`enqueue<ProfileState, String>` names two types. `ProfileState` is the job's
+working type `W`: the states its body works with, which may be narrower than
+the controller's state type `S`. `String` is the job's result type. Left to
+inference, as in the quick start, `W` is the whole of `S` and the result type
+is what the body returns. The rest is what the quick start does not have:
+
+| Parameter | What it does | Where it is explained |
+| --- | --- | --- |
+| `key: 'load'`, `policy: Policy.droppable` | A second `load()` while one is queued or running gets that job back | [Queue and policies](#queue-and-policies) |
+| `ifFailed`, `ifCancelled` | The state to publish when the job fails, `Failure`, or a started job is cancelled, `Initial` | [State after failure or cancellation](state.md#state-after-failure-or-cancellation) |
+| `isExpectedError` | A failure with an `ApiException` that nobody reads ends at `Failure`; any other error that nobody reads goes on to the zone | [Naming the expected errors](errors.md#naming-the-expected-errors) |
 
 ## Jobs and results
 
 A `Job<T>` represents one operation and its eventual outcome. A method of a
 controller queues the work and hands back the handle; `profile.load()` below is
-the one from the
-[Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
-in the package README. Awaiting `done` or `value` of the handle reads how the
-operation ended, it does not set the operation going. The handle is not a
-`Future`: a job can be cancelled, and its failure reaches the controller
-whether or not anybody waits for it.
+the one from [The profile controller](#the-profile-controller). Awaiting `done`
+or `value` of the handle reads how the operation ended, it does not set the
+operation going. The handle is not a `Future`: a job can be cancelled, and its
+failure reaches the controller whether or not anybody waits for it.
 
 ```dart
 switch (await profile.load().done) {
@@ -84,11 +166,11 @@ Job<void> setZoom(double zoom) => enqueue<Ready, void>(
 
 The code of this section and of the ones below belongs to one controller of a
 camera, a `Solo<CameraState>`. The two type arguments of `job` and `enqueue`
-are the working type — the states the body works in, here `Ready`, one of the
-states of the camera — and the type of the result. Left out, the working type
-is the whole of `S`, and the result type is what the body returns.
+are the working type and the type of the result, as in
+[The profile controller](#the-profile-controller); the working type here is
+`Ready`, one of the states of the camera.
 [State and rules](state.md#state-and-rules) on the state page is about the
-first.
+working type.
 
 A `key` is what queue policies match on, and `describe` supplies the label used
 by logs, observers and `toString()`: `Job(key: label)`. Without a description
@@ -555,3 +637,192 @@ shot. A countdown of its own is for a delay that changes from call to call, for
 a start on a signal, and for a wait `queue.clear()` must not touch. See
 [Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready)
 on the accumulation rules page for the window.
+
+## A tap that does not wait for a reload
+
+A feed screen reloads its posts, which takes the server two seconds, and the
+user likes a post meanwhile. The heart should light at once and the like should
+reach the server at once, and a like and an unlike of one post should reach it
+in the order they were tapped. `Feed` holds the posts, each `Post` has an `id`
+and `liked`, and `withLiked` copies the feed with one post changed. `api` is a
+`FeedApi`: its `fetchFeed()` answers two seconds after the request, with the
+likes the server held when the request came, and its `setLiked` answers a
+twentieth of a second after the request, or throws an `ApiException` when the
+request fails.
+
+### The first attempt
+
+```dart
+// The first attempt: the like waits for the reload.
+Job<Feed> reload() =>
+    enqueue<Feed, Feed>(key: 'reload', policy: Policy.droppable, (ctx) async {
+      final feed = await ctx.abandonable(api.fetchFeed);
+      ctx.emit(feed);
+      return feed;
+    });
+
+Job<void> like(String postId, {required bool liked}) =>
+    enqueue<Feed, void>(key: ('like', postId), (ctx) async {
+      ctx.emit(ctx.state.withLiked(postId, liked: liked));
+      await ctx.join(() => api.setLiked(postId, liked: liked));
+    });
+```
+
+Each method has a key of its own, and `droppable` drops a second reload while
+one is on its way. But a key decides only what a second call does to a job with
+the same key, and it lets no job pass another: one root job runs at a time. A
+like tapped 100 ms into the reload starts when the reload has ended. The heart
+lights at 2000 ms, and the like reaches the server then.
+
+### The second attempt
+
+```dart
+// The second attempt: the like goes around the queue.
+Future<void> like(String postId, {required bool liked}) async {
+  externalSetState(currentState.withLiked(postId, liked: liked));
+  await api.setLiked(postId, liked: liked);
+}
+```
+
+`externalSetState` writes the state without waiting for a turn, and the request
+goes at once: the heart lights at 100 ms, and the server confirms the like at
+150 ms. But the reload asked the server at 0 ms, before the like, and at 2000
+ms it publishes what it was told: the heart goes out while the server holds the
+like, and only the next reload lights it again. The same race is
+[Ordering updates to shared state](vs-bloc.md#ordering-updates-to-shared-state)
+on the page comparing the package with bloc.
+
+### A controller for the likes
+
+```dart
+/// A like the screen shows over the feed.
+final class Mark {
+  final bool liked;
+
+  /// The number of the confirmation, or `null` while the like is on its way.
+  final int? confirmation;
+
+  const Mark(this.liked, [this.confirmation]);
+}
+
+final class Marks {
+  final Map<String, Mark> byPost;
+
+  const Marks([this.byPost = const {}]);
+
+  Marks put(String postId, Mark? mark) => Marks({
+    for (final MapEntry(:key, :value) in byPost.entries)
+      if (key != postId) key: value,
+    postId: ?mark,
+  });
+}
+
+final class LikesController extends Solo<Marks> {
+  final FeedApi api;
+  int _confirmations = 0;
+
+  LikesController(this.api) : super(const Marks());
+
+  /// How many likes the server has confirmed so far.
+  int get confirmations => _confirmations;
+
+  Job<void> setLiked(String postId, {required bool liked}) {
+    Mark? before;
+    return enqueue<Marks, void>(
+      // No confirmation: the post shows what it showed before the tap.
+      ifFailed: (marks, error, stackTrace) => marks.put(postId, before),
+      ifCancelled: (marks, cancelled) => marks.put(postId, before),
+      isExpectedError: (error) => error is ApiException,
+      (ctx) async {
+        before = ctx.state.byPost[postId];
+        ctx.emit(ctx.state.put(postId, Mark(liked)));
+        await ctx.join(() => api.setLiked(postId, liked: liked));
+        ctx.emit(ctx.state.put(postId, Mark(liked, ++_confirmations)));
+      },
+    );
+  }
+
+  /// Drops the marks that a reload sent after [seen] confirmations brings.
+  Job<void> settle(int seen) => enqueue<Marks, void>((ctx) async {
+    final kept = {
+      for (final MapEntry(key: postId, value: mark) in ctx.state.byPost.entries)
+        if (mark.confirmation! > seen) postId: mark,
+    };
+    if (kept.length < ctx.state.byPost.length) ctx.emit(Marks(kept));
+  });
+}
+```
+
+The likes get a controller of their own, and its queue holds only short jobs,
+the likes and `settle`, so a like never waits for a reload: the principle of
+[A board of its own](state.md#a-board-of-its-own) on the state page. Its state
+is a mark for each post the user has tapped, and the screen shows the mark over
+what the feed says. The feed tells the likes when a reload has brought the
+server's word:
+
+```dart
+final class FeedController extends Solo<Feed> {
+  final FeedApi api;
+  final LikesController likes;
+
+  FeedController(this.api, this.likes) : super(const Feed([]));
+
+  Job<Feed> reload() =>
+      enqueue<Feed, Feed>(key: 'reload', policy: Policy.droppable, (ctx) async {
+        final seen = likes.confirmations;
+        final feed = await ctx.abandonable(api.fetchFeed);
+        ctx.emit(feed);
+        likes.settle(seen);
+        return feed;
+      });
+}
+
+/// Whether the screen shows [post] liked.
+bool shownLiked(Post post, Marks marks) =>
+    marks.byPost[post.id]?.liked ?? post.liked;
+```
+
+`setLiked` publishes the mark as it starts and then sends the like. A mark
+stays until a reload sent after its confirmation has published: a reload sent
+before brings what the server held before the like. So the feed takes the count
+of confirmations as it sends the reload and hands it to `settle` once the
+reload has published. `settle` stands in the same queue behind the likes, so
+every mark it meets has its number: a like that ends without one puts back the
+mark it found.
+
+`before` is the mark the post had when the like started. When the like fails or
+is cancelled, `ifFailed` or `ifCancelled` puts it back, and the post shows what
+it showed before the tap: a failed unlike brings back a confirmed like. Nobody
+reads the outcome of a tap, so `isExpectedError` names the `ApiException` of a
+failed request, and it does not go on to the zone.
+
+One queue keeps a like and an unlike of one post in order, and the likes of
+different posts as well: a like of a second post waits while the first is on
+its way. For a request of a twentieth of a second that is acceptable; work that
+runs long needs a queue of its own. A second tap on the same post waits the
+same way, and so does its mark: the heart answers the tap once the first like
+is confirmed. So a screen that flips the heart takes the new value from its own
+last tap rather than from `shownLiked`: a third tap during the wait would read
+the heart the second tap has not turned yet and repeat the second tap. The
+screen listens to both controllers. In Flutter, one widget over both takes
+`Listenable.merge` in a `ListenableBuilder`, with `SoloListenable` of
+`flutter_solo` mixed in to each.
+
+The countdown of [A delayed start](#a-delayed-start) suggests another way: the
+wait for the server in a `Job` outside the queue, and only the step that
+publishes the feed in the queue. A like in the same controller then goes at
+once, but the reload still publishes what the server held before the like, and
+the marks are needed all the same. `ctx.unattended` does not help: a like that
+calls it waits in the queue first. Nor does a child, which runs inside the body
+of a job that is already running. The cases:
+
+| What you do | What happens |
+| --- | --- |
+| A like during a reload | The heart lights at once, and the like reaches the server at once. The reload publishes the feed without the like, and the mark stays over it. |
+| The next reload | The feed brings the like, and the mark goes. |
+| A like confirmed, then a reload sent | That reload settles the mark. |
+| A like and an unlike of one post | The server gets them in that order. |
+| The like fails | The post shows what it showed before the tap, and nothing reaches the zone. |
+| The like is cancelled | Once its request has answered, the post shows what it showed before the tap, until a reload brings the server's word. |
+| A second tap on the post while its like is on its way | It waits for the first like to be confirmed, and the heart answers it then. |
+| A like of another post during a slow one | It waits for the first to be confirmed. |

@@ -11,9 +11,9 @@ import 'package:test/test.dart';
 
 import 'support/jobs_first_attempts.dart' as first;
 import 'support/jobs_page.dart' as page;
+import 'support/jobs_profile.dart' as quick;
 import 'support/jobs_stubs.dart';
 import 'support/page_code.dart';
-import 'support/readme_quick_start.dart' as quick;
 import 'support/test_solo.dart';
 
 /// The first attempts of `doc/jobs.md`, and what each one costs.
@@ -26,7 +26,7 @@ import 'support/test_solo.dart';
 /// whose job it was handed in `droppable_recipe_test.dart`, the pause that
 /// works in `queue_pause_recipe_test.dart`.
 
-/// An api of the quick start that answers when the test says so.
+/// The api of the profile controller, answering when the test says so.
 final class _Api extends quick.ProfileApi {
   final _answer = Completer<String>();
 
@@ -191,8 +191,8 @@ void main() {
         final lines = _printed(() {
           unawaited(page.readOutcome(profile));
           async.flushMicrotasks();
-          // The quick start's load is droppable: this is the job the block
-          // is waiting for.
+          // The load of the profile controller is droppable: this is the job
+          // the block is waiting for.
           profile.load().cancel().ignore();
           async.flushTimers();
         });
@@ -1805,7 +1805,11 @@ void main() {
     // attempt would still be found among all of them.
     const answers = 'test/support/jobs_page.dart';
     const firstAttempts = 'test/support/jobs_first_attempts.dart';
+    const model = 'test/support/jobs_profile.dart';
+    const likesAttempts = 'test/support/jobs_likes_attempts.dart';
+    const likes = 'test/support/jobs_likes.dart';
     const holders = {
+      '## The profile controller': model,
       '## Jobs and results': answers,
       '### Creating and scheduling jobs': answers,
       '## Queue and policies': answers,
@@ -1815,6 +1819,9 @@ void main() {
       '#### The second attempt': firstAttempts,
       '#### The handle of the gate': answers,
       '#### A countdown the controller owns': answers,
+      '### The first attempt': likesAttempts,
+      '### The second attempt': likesAttempts,
+      '### A controller for the likes': likes,
     };
     for (final MapEntry(key: heading, value: holder) in holders.entries) {
       test('the code under "$heading" is a run of lines of $holder', () {
@@ -1826,7 +1833,11 @@ void main() {
       'every piece of code on the page is a run of lines of these files',
       () {
         expect(
-          codeMissingFrom('doc/jobs.md', answers, alsoIn: [firstAttempts]),
+          codeMissingFrom(
+            'doc/jobs.md',
+            answers,
+            alsoIn: [firstAttempts, model, likesAttempts, likes],
+          ),
           isEmpty,
         );
       },

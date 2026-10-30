@@ -8,13 +8,13 @@ import 'dart:async';
 
 import 'package:solo/solo.dart';
 
+import 'jobs_profile.dart' show ProfileController;
 import 'jobs_stubs.dart';
-import 'readme_quick_start.dart' show ProfileController;
 import 'test_solo.dart';
 
 enum _Op { load, save, zoom, seek, stop, pause, shoot }
 
-/// The block under "Jobs and results", on the controller of the quick start.
+/// The block under "Jobs and results", on the profile controller.
 Future<void> readOutcome(ProfileController profile) async {
   switch (await profile.load().done) {
     case Done(:final value):

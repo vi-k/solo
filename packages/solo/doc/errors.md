@@ -106,7 +106,7 @@ final class ProfileController extends Solo<ProfileState> {
 
   ProfileController(this.api) : super(const Initial());
 
-  // ...the jobs of the quick start, without its `isExpectedError`...
+  // ...the load() of the profile controller, without its `isExpectedError`...
 
   @override
   void onError(
@@ -148,7 +148,8 @@ hands it to `Solo.unansweredHandler` or the creation zone.
 
 ## Handled and unhandled failures
 
-A screen starts a job of the profile from the quick start, without its
+A screen starts a job of the profile from
+[The profile controller](jobs.md#the-profile-controller), without its
 `isExpectedError` and with no reporting hook of its own: `profile.load()`, and
 nobody waits for the result. The network is down, and `fetchName` throws an
 `ApiException`. The application wants the failure in the crash reporter, and
@@ -512,7 +513,8 @@ nothing for the cancellation.
 A pause in the body still belongs to the job. Root jobs run one at a time, so
 the next job of the profile waits through every attempt and every pause between
 them. Where other jobs should run between the attempts, the caller retries
-instead of the body. The job is `load()` of the quick start, without its
+instead of the body. The job is `load()` of
+[The profile controller](jobs.md#the-profile-controller), without its
 `isExpectedError`, on the profile of [Reporting an error](#reporting-an-error),
 and it tries once.
 

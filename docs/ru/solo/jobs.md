@@ -2,16 +2,100 @@
 
 Метод контроллера ставит задачу в очередь и возвращает её хэндл. Страница
 рассказывает о хэндле, об очереди и о политиках, которые решают, что повторный
-вызов сделает с первым.
+вызов сделает с первым. Она открывается контроллером профиля и заканчивается
+экраном, нажатиям которого нужна своя очередь.
+
+## Контроллер профиля
+
+Страницы этого пакета строятся на одном контроллере: контроллере профиля
+из раздела
+[«Быстрый старт»](https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#быстрый-старт)
+README пакета с тем, что добавляет к нему контроллер в приложении. `ProfileApi`
+возвращает имя после небольшой задержки; настоящий клиент бросает
+`ApiException`, когда вызов не удался:
+
+```dart
+import 'package:solo/solo.dart';
+
+sealed class ProfileState {
+  const ProfileState();
+}
+
+final class Initial extends ProfileState {
+  const Initial();
+}
+
+final class Loading extends ProfileState {
+  const Loading();
+}
+
+final class Loaded extends ProfileState {
+  final String name;
+
+  const Loaded(this.name);
+}
+
+final class Failure extends ProfileState {
+  final Object error;
+
+  const Failure(this.error);
+}
+
+final class ApiException implements Exception {
+  final String message;
+
+  const ApiException(this.message);
+
+  @override
+  String toString() => 'ApiException: $message';
+}
+
+class ProfileApi {
+  Future<String> fetchName() =>
+      Future.delayed(const Duration(milliseconds: 20), () => 'Ada Lovelace');
+}
+
+final class ProfileController extends Solo<ProfileState> {
+  final ProfileApi api;
+
+  ProfileController(this.api) : super(const Initial());
+
+  Job<String> load() => enqueue<ProfileState, String>(
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    isExpectedError: (error) => error is ApiException,
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
+}
+```
+
+`enqueue<ProfileState, String>` называет два типа. `ProfileState` — рабочий тип
+`W` задачи: состояния, с которыми работает её тело; он может быть уже типа
+состояния контроллера `S`. `String` — тип результата задачи. Если оставить их
+выводу типов, как в быстром старте, `W` — весь `S`, а тип результата — то, что
+возвращает тело. Остальное — то, чего в быстром старте нет:
+
+| Параметр | Что делает | Где объяснено |
+| --- | --- | --- |
+| `key: 'load'`, `policy: Policy.droppable` | Второй `load()`, пока первая загрузка стоит в очереди или выполняется, получает её задачу | [Очередь и политики](#очередь-и-политики) |
+| `ifFailed`, `ifCancelled` | Состояние для публикации, когда задача падает, — `Failure`, или когда начатую задачу отменяют, — `Initial` | [Состояние после ошибки или отмены](state.md#состояние-после-ошибки-или-отмены) |
+| `isExpectedError` | Провал с `ApiException`, который никто не читает, заканчивается на `Failure`; любая другая ошибка, которую никто не читает, идёт дальше в зону | [Назвать ожидаемые ошибки](errors.md#назвать-ожидаемые-ошибки) |
 
 ## Задачи и результаты
 
 `Job<T>` представляет одну операцию и её будущий исход. Метод контроллера
 ставит работу в очередь и отдаёт хэндл; `profile.load()` ниже взят из раздела
-[«Быстрый старт»](https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#быстрый-старт)
-README пакета. `await` у `done` или `value` хэндла читает, чем операция
-кончилась, а не запускает её. Хэндл при этом не `Future`: `Job` можно отменить,
-а её ошибка доходит до контроллера независимо от того, ждёт ли её кто-нибудь.
+[«Контроллер профиля»](#контроллер-профиля). `await` у `done` или `value`
+хэндла читает, чем операция кончилась, а не запускает её. Хэндл при этом
+не `Future`: `Job` можно отменить, а её ошибка доходит до контроллера
+независимо от того, ждёт ли её кто-нибудь.
 
 ```dart
 switch (await profile.load().done) {
@@ -83,9 +167,8 @@ Job<void> setZoom(double zoom) => enqueue<Ready, void>(
 
 Код этого раздела и следующих принадлежит одному контроллеру камеры,
 `Solo<CameraState>`. Два аргумента типа у `job` и `enqueue` задают рабочий тип
-и тип результата. Рабочий тип называет состояния, в которых работает тело,
-и здесь это `Ready`, одно из состояний камеры. Без аргументов рабочий тип —
-весь `S`, а тип результата — то, что возвращает тело. О рабочем типе говорит
+и тип результата, как в разделе [«Контроллер профиля»](#контроллер-профиля);
+рабочий тип здесь — `Ready`, одно из состояний камеры. О рабочем типе говорит
 раздел [«Состояние и правила»](state.md#состояние-и-правила) страницы
 о состоянии.
 
@@ -562,3 +645,195 @@ future, который завершается, когда вспышка зар�
 `queue.clear()` касаться не должен. Как устроено окно — в разделе
 [«Выбор момента готовности группы»](accumulation-rules.md#выбор-момента-готовности-группы)
 страницы о правилах накопления.
+
+## Нажатие, которое не ждёт перезагрузки
+
+Экран ленты перезагружает посты, на что у сервера уходит две секунды, а тем
+временем пользователь лайкает пост. Сердечко должно загореться сразу, лайк
+должен сразу дойти до сервера, а лайк и снятие лайка одного поста должны дойти
+до него в том порядке, в каком их нажали. `Feed` хранит посты, у каждого `Post`
+есть `id` и `liked`, а `withLiked` копирует ленту с одним изменённым постом.
+`api` — это `FeedApi`: его `fetchFeed()` отвечает через две секунды после
+запроса — с теми лайками, которые были на сервере, когда запрос пришёл, — а его
+`setLiked` отвечает через двадцатую долю секунды после запроса или бросает
+`ApiException`, когда запрос не удался.
+
+### Первая попытка
+
+```dart
+// Первая попытка: лайк ждёт перезагрузку.
+Job<Feed> reload() =>
+    enqueue<Feed, Feed>(key: 'reload', policy: Policy.droppable, (ctx) async {
+      final feed = await ctx.abandonable(api.fetchFeed);
+      ctx.emit(feed);
+      return feed;
+    });
+
+Job<void> like(String postId, {required bool liked}) =>
+    enqueue<Feed, void>(key: ('like', postId), (ctx) async {
+      ctx.emit(ctx.state.withLiked(postId, liked: liked));
+      await ctx.join(() => api.setLiked(postId, liked: liked));
+    });
+```
+
+У каждого метода свой ключ, и `droppable` отбрасывает вторую перезагрузку, пока
+первая в пути. Но ключ решает только, что второй вызов сделает с задачей
+с тем же ключом, и обойти другую задачу он не даёт: корневые задачи выполняются
+по одной. Лайк, нажатый через 100 мс после начала перезагрузки, начинается,
+когда перезагрузка закончилась. Сердечко загорается на 2000 мс, и тогда же лайк
+доходит до сервера.
+
+### Вторая попытка
+
+```dart
+// Вторая попытка: лайк идёт мимо очереди.
+Future<void> like(String postId, {required bool liked}) async {
+  externalSetState(currentState.withLiked(postId, liked: liked));
+  await api.setLiked(postId, liked: liked);
+}
+```
+
+`externalSetState` пишет состояние, не дожидаясь очереди, и запрос уходит
+сразу: сердечко загорается на 100 мс, а сервер подтверждает лайк на 150 мс.
+Но перезагрузка спросила сервер на 0 мс, до лайка, и на 2000 мс публикует то,
+что ей ответили: сердечко гаснет, хотя лайк на сервере есть, и зажжёт его
+только следующая перезагрузка. Та же гонка разобрана в разделе
+[«Порядок обновлений общего состояния»](vs-bloc.md#порядок-обновлений-общего-состояния)
+на странице, которая сравнивает пакет с bloc.
+
+### Контроллер для лайков
+
+```dart
+/// Лайк, который экран показывает поверх ленты.
+final class Mark {
+  final bool liked;
+
+  /// Номер подтверждения или `null`, пока лайк в пути.
+  final int? confirmation;
+
+  const Mark(this.liked, [this.confirmation]);
+}
+
+final class Marks {
+  final Map<String, Mark> byPost;
+
+  const Marks([this.byPost = const {}]);
+
+  Marks put(String postId, Mark? mark) => Marks({
+    for (final MapEntry(:key, :value) in byPost.entries)
+      if (key != postId) key: value,
+    postId: ?mark,
+  });
+}
+
+final class LikesController extends Solo<Marks> {
+  final FeedApi api;
+  int _confirmations = 0;
+
+  LikesController(this.api) : super(const Marks());
+
+  /// Сколько лайков сервер уже подтвердил.
+  int get confirmations => _confirmations;
+
+  Job<void> setLiked(String postId, {required bool liked}) {
+    Mark? before;
+    return enqueue<Marks, void>(
+      // Подтверждения нет: пост показывает то же, что до нажатия.
+      ifFailed: (marks, error, stackTrace) => marks.put(postId, before),
+      ifCancelled: (marks, cancelled) => marks.put(postId, before),
+      isExpectedError: (error) => error is ApiException,
+      (ctx) async {
+        before = ctx.state.byPost[postId];
+        ctx.emit(ctx.state.put(postId, Mark(liked)));
+        await ctx.join(() => api.setLiked(postId, liked: liked));
+        ctx.emit(ctx.state.put(postId, Mark(liked, ++_confirmations)));
+      },
+    );
+  }
+
+  /// Снимает отметки, которые принесёт перезагрузка, отправленная после
+  /// [seen] подтверждений.
+  Job<void> settle(int seen) => enqueue<Marks, void>((ctx) async {
+    final kept = {
+      for (final MapEntry(key: postId, value: mark) in ctx.state.byPost.entries)
+        if (mark.confirmation! > seen) postId: mark,
+    };
+    if (kept.length < ctx.state.byPost.length) ctx.emit(Marks(kept));
+  });
+}
+```
+
+У лайков свой контроллер, и в его очереди стоят только короткие задачи, лайки
+и `settle`, поэтому лайк никогда не ждёт перезагрузку: это принцип раздела
+[«Своя доска»](state.md#своя-доска) страницы о состоянии. Его состояние —
+отметка для каждого поста, который нажал пользователь, и экран показывает
+отметку поверх того, что говорит лента. Лента сообщает лайкам, когда
+перезагрузка принесла слово сервера:
+
+```dart
+final class FeedController extends Solo<Feed> {
+  final FeedApi api;
+  final LikesController likes;
+
+  FeedController(this.api, this.likes) : super(const Feed([]));
+
+  Job<Feed> reload() =>
+      enqueue<Feed, Feed>(key: 'reload', policy: Policy.droppable, (ctx) async {
+        final seen = likes.confirmations;
+        final feed = await ctx.abandonable(api.fetchFeed);
+        ctx.emit(feed);
+        likes.settle(seen);
+        return feed;
+      });
+}
+
+/// Показывает ли экран лайк у [post].
+bool shownLiked(Post post, Marks marks) =>
+    marks.byPost[post.id]?.liked ?? post.liked;
+```
+
+`setLiked` публикует отметку, как только начинается, а потом отправляет лайк.
+Отметка остаётся, пока не опубликуется перезагрузка, отправленная после её
+подтверждения: перезагрузка, отправленная раньше, приносит то, что было
+на сервере до лайка. Поэтому лента берёт число подтверждений, когда отправляет
+перезагрузку, и отдаёт его `settle`, когда перезагрузка опубликовалась.
+`settle` стоит в той же очереди за лайками, поэтому у каждой отметки, которую
+он видит, номер уже есть: лайк, который кончился без подтверждения, возвращает
+отметку, которую застал.
+
+`before` — отметка, которая была у поста, когда лайк начался. Если лайк
+не прошёл или его отменили, `ifFailed` или `ifCancelled` возвращает её, и пост
+показывает то же, что до нажатия: неудачное снятие лайка возвращает
+подтверждённый лайк. Исход нажатия никто не читает, поэтому `isExpectedError`
+называет `ApiException` неудачного запроса, и дальше в зону он не идёт.
+
+Одна очередь держит по порядку лайк и снятие лайка одного поста, а заодно
+и лайки разных постов: лайк второго поста ждёт, пока первый в пути. Для запроса
+в двадцатую долю секунды это приемлемо; работе, которая идёт долго, нужна своя
+очередь. Так же ждёт и второе нажатие на тот же пост, а с ним и его отметка:
+сердечко отвечает на нажатие, когда первый лайк подтвердится. Поэтому экран,
+который переключает сердечко, берёт новое значение из своего последнего
+нажатия, а не из `shownLiked`: третье нажатие во время ожидания прочтёт
+сердечко, которое второе нажатие ещё не повернуло, и повторит второе нажатие.
+Экран слушает оба контроллера. Во Flutter один виджет над обоими берёт
+`Listenable.merge` в `ListenableBuilder`, а в каждый контроллер подмешан
+`SoloListenable` из `flutter_solo`.
+
+Отсчёт из раздела [«Отложенный старт»](#отложенный-старт) подсказывает другой
+путь: ожидание сервера — в `Job` вне очереди, а в очереди только шаг, который
+публикует ленту. Лайк в том же контроллере тогда уходит сразу, но перезагрузка
+всё равно публикует то, что было на сервере до лайка, и отметки нужны всё
+равно. `ctx.unattended` не помогает: лайк, который его зовёт, сначала ждёт
+в очереди. Не помогает и дочерняя задача: она выполняется внутри тела задачи,
+которая уже идёт. Случаи:
+
+| Что вы делаете | Что происходит |
+| --- | --- |
+| Лайк во время перезагрузки | Сердечко загорается сразу, и лайк сразу доходит до сервера. Перезагрузка публикует ленту без лайка, и отметка остаётся поверх неё. |
+| Следующая перезагрузка | Лента приносит лайк, и отметка уходит. |
+| Лайк подтверждён, потом отправлена перезагрузка | Эта перезагрузка снимает отметку. |
+| Лайк и снятие лайка одного поста | Сервер получает их в этом порядке. |
+| Лайк не прошёл | Пост показывает то же, что до нажатия, и в зону ничего не уходит. |
+| Лайк отменили | Когда его запрос ответит, пост показывает то же, что до нажатия, пока перезагрузка не принесёт слово сервера. |
+| Второе нажатие на пост, пока его лайк в пути | Оно ждёт, пока первый лайк подтвердится, и тогда сердечко на него отвечает. |
+| Лайк другого поста во время медленного | Он ждёт, пока первый подтвердится. |

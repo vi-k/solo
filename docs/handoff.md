@@ -26,10 +26,15 @@ README ядра словами поиска, `solo_lints: ^0.1.3` в README, о�
 и обработчик bloc отменяют задачу, запрос http и dio прерывается токеном
 клиента; её код держит третий стенд задания `snippets`,
 `tool/adapter_snippets.py`, на свежих riverpod 3, bloc 9, http и dio. Дизайн,
-ревью работы и итог — `2026-10-30-riverpod-and-bloc-design.md`. Остальное ждёт
-решения; следующий — пункт 4, вход в `solo`: quick start в один экран и рецепт
-«несколько контроллеров на экран». Он начат: дизайн —
-`2026-10-30-solo-quick-start-design.md`, ждёт ревью на Opus.
+ревью работы и итог — `2026-10-30-riverpod-and-bloc-design.md`. Сделан и пункт
+4, вход в `solo`: quick start README `solo` в один экран; модель документации —
+раздел «The profile controller» в начале `packages/solo/doc/jobs.md`; там же
+рецепт «A tap that does not wait for a reload» — лайк в своём контроллере,
+отметки снимает перезагрузка. Строки о них — в «Unreleased» списка изменений
+`solo` и перевода. Дизайн, ревью работы и итог —
+`2026-10-30-solo-quick-start-design.md`. Остальное ждёт решения; следующий —
+пункт 5: каналы после 1.0, ответ в bloc#3069 и своё место ядра на сайте (Opus
+F6: «kernel» в `site/content/index.md:25` и `site/astro.config.mjs:45`).
 
 Следующий выпуск `async_job`, `solo` и `flutter_solo` — 1.0.0, решение
 владельца 2026-10-30: «сразу к 1.0», с него строгий semver. В «Unreleased»

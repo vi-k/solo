@@ -19,6 +19,15 @@ package's too: see
   of common mistakes says that the plugin reports most of them.
 - The diagnostics page says what its observer prints, and that an observer
   whose log leaves the device prints only what the application chose to send.
+- The quick start of the README fits one screen: a controller, a load, and a
+  refresh cancelled before its answer, with what the program prints;
+  `example/bin/quick_start.dart` runs it. The controller with its key, policy,
+  state handlers and expected errors, which the guides build on, opens the jobs
+  page as [The profile controller](doc/jobs.md#the-profile-controller).
+- The jobs page ends with
+  [A tap that does not wait for a reload](doc/jobs.md#a-tap-that-does-not-wait-for-a-reload):
+  the likes of a feed in a controller of their own, so that a like does not
+  wait behind a reload of the feed.
 
 ## 0.6.0
 

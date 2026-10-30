@@ -8,11 +8,11 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/jobs_profile.dart' as model;
 import 'support/page_code.dart';
 import 'support/readme_player.dart' as tour;
 import 'support/readme_quick_start.dart' as quick;
 import 'support/readme_reload.dart' as reload;
-import 'support/readme_stream.dart' as streamed;
 import 'support/readme_stubs.dart' as stubs;
 
 /// The sentinel of `README.md`.
@@ -21,16 +21,24 @@ import 'support/readme_stubs.dart' as stubs;
 /// and the tests below run it: the quick start, the reload of the section on
 /// `currentState`, the player of "The dozen calls" and its call site. What
 /// the prose and the comments of the page say about that code is pinned
-/// here, next to the code it is said of. The bench `tool/flutter_snippets.py`
-/// builds the two blocks of declarations of the quick start as well; it
-/// checks less, and it needs Flutter.
+/// here, next to the code it is said of. The quick start leads to the
+/// profile controller of `doc/jobs.md`, and what the table under it promises
+/// is pinned here as well. The bench `tool/flutter_snippets.py` builds the
+/// quick start too; it checks less, and it needs Flutter.
 
 /// A state of the quick start, the way a journal would write it.
 String _profile(quick.ProfileState state) => switch (state) {
   quick.Initial() => 'Initial',
   quick.Loading() => 'Loading',
   quick.Loaded(:final name) => 'Loaded($name)',
-  quick.Failure(:final error) => 'Failure($error)',
+};
+
+/// A state of the profile controller of `doc/jobs.md`.
+String _model(model.ProfileState state) => switch (state) {
+  model.Initial() => 'Initial',
+  model.Loading() => 'Loading',
+  model.Loaded(:final name) => 'Loaded($name)',
+  model.Failure(:final error) => 'Failure($error)',
 };
 
 /// The API of the quick start, saying when its request begins and ends.
@@ -46,10 +54,10 @@ class _TracingApi extends quick.ProfileApi {
   }
 }
 
-/// The API of the quick start, offline: its call fails with the
-/// `ApiException` the quick start names in `isExpectedError`.
-class _FailingApi extends quick.ProfileApi {
-  final error = const quick.ApiException('offline');
+/// The API of the profile controller, offline: its call fails with the
+/// `ApiException` the controller names in `isExpectedError`.
+class _FailingApi extends model.ProfileApi {
+  final error = const model.ApiException('offline');
 
   @override
   Future<String> fetchName() async {
@@ -58,28 +66,14 @@ class _FailingApi extends quick.ProfileApi {
   }
 }
 
-/// The API of the quick start with a bug in it: its call throws a
+/// The API of the profile controller with a bug in it: its call throws a
 /// `StateError`, which `isExpectedError` does not name.
-class _BuggyApi extends quick.ProfileApi {
+class _BuggyApi extends model.ProfileApi {
   @override
   Future<String> fetchName() async {
     await Future<void>.delayed(const Duration(milliseconds: 20));
     throw StateError('a bug');
   }
-}
-
-/// The load of the quick start without `ifFailed` and `ifCancelled`.
-final class _Unhandled extends Solo<quick.ProfileState> {
-  final quick.ProfileApi api;
-
-  _Unhandled(this.api) : super(const quick.Initial());
-
-  Job<String> load() => enqueue<quick.ProfileState, String>((ctx) async {
-    ctx.emit(const quick.Loading());
-    final name = await ctx.abandonable(api.fetchName);
-    ctx.emit(quick.Loaded(name));
-    return name;
-  });
 }
 
 /// A controller whose first job fails with a child still running and a
@@ -166,37 +160,52 @@ void main() {
   setUp(() => stubs.stage = stubs.Stage());
 
   group('Quick start', () {
-    test('the first block declares four immutable states', () {
-      final block = RegExp(
-        r'```dart\n(.*?)\n```',
+    test('main prints the lines the page quotes', () {
+      final quoted = RegExp(
+        r'It prints:\n\n```text\n(.*?)\n```',
         dotAll: true,
       ).firstMatch(_page())!.group(1)!;
-      final states = RegExp(
-        r'^final class (\w+) extends ProfileState \{$',
-        multiLine: true,
-      ).allMatches(block).map((match) => match.group(1)).toList();
-      expect(states, hasLength(4));
-      expect(
-        _page(),
-        contains('reports progress through four immutable states'),
-      );
-      for (final state in states) {
-        expect(block, contains('  const $state('), reason: '$state is const');
-      }
-      expect(
-        RegExp(r'^  (?!final |const )\w', multiLine: true).hasMatch(block),
-        isFalse,
-        reason: 'every field is final',
-      );
+      expect(_printed(quick.main), quoted.split('\n'));
+      expect(quoted.split('\n'), [
+        'loading',
+        'loaded Ada Lovelace',
+        'Ada Lovelace',
+        'loading',
+        'Cancelled(manual)',
+      ]);
     });
 
-    test('main prints what the listener hears, then the name twice', () {
-      expect(_printed(quick.main), [
-        "Instance of 'Loading'",
-        "Instance of 'Loaded'",
-        'Ada Lovelace',
-        'Ada Lovelace',
-      ]);
+    test('the example runs the block, with the API the page describes', () {
+      expect(
+        codeMissingFrom(
+          'README.md',
+          'example/bin/quick_start.dart',
+          under: '## Quick start',
+        ),
+        isEmpty,
+      );
+      final api = RegExp(
+        r'^class ProfileApi \{\n.*?\n\}$',
+        dotAll: true,
+        multiLine: true,
+      );
+      final support = File('test/support/readme_quick_start.dart');
+      final example = File('example/bin/quick_start.dart');
+      expect(
+        api.firstMatch(example.readAsStringSync())!.group(0),
+        api.firstMatch(support.readAsStringSync())!.group(0),
+      );
+      expect(
+        api.firstMatch(support.readAsStringSync())!.group(0),
+        contains('Duration(milliseconds: 20)'),
+      );
+      expect(
+        _page().replaceAll(RegExp(r'\s+'), ' '),
+        contains(
+          '`example/bin/quick_start.dart` runs this block with an API that '
+          'answers after 20 ms.',
+        ),
+      );
     });
 
     test('the listener runs inside the change, before the next line', () {
@@ -220,13 +229,63 @@ void main() {
       });
     });
 
+    test('cancel ends the wait at once, returns once the job is over, and '
+        'leaves Loading', () {
+      expect(
+        _page().replaceAll(RegExp(r'\s+'), ' '),
+        contains(
+          'The cancelled refresh left the controller at `loading`, and '
+          'nothing takes it out of there.',
+        ),
+      );
+      fakeAsync((async) {
+        final api = _TracingApi();
+        final profile = quick.ProfileController(api);
+        final job = profile.load();
+        async.elapse(const Duration(milliseconds: 10));
+        String? outcomeWhenBack;
+        job.cancel().then((_) => outcomeWhenBack = '${job.outcome}');
+        async.flushMicrotasks();
+        expect(outcomeWhenBack, 'Cancelled(manual)');
+        expect(api.trace, ['fetch begins'], reason: 'the request runs on');
+        async.flushTimers();
+        expect(api.trace, ['fetch begins', 'fetch ends']);
+        expect(profile.currentState, isA<quick.Loading>());
+        profile.close().ignore();
+        async.flushTimers();
+      });
+    });
+
+    test('a refresh cancelled before its body runs leaves the state alone', () {
+      fakeAsync((async) {
+        final api = _TracingApi();
+        final profile = quick.ProfileController(api);
+        final heard = <String>[];
+        profile.addListener(() => heard.add(_profile(profile.currentState)));
+        final job = profile.load();
+        expect((job as SoloJob<String>).isQueued, isTrue);
+        job.cancel().ignore();
+        async.flushTimers();
+        expect('${job.outcome}', 'Cancelled(manual)');
+        expect(heard, isEmpty, reason: 'the body never ran');
+        expect(api.trace, isEmpty);
+        profile.close().ignore();
+        async.flushTimers();
+      });
+    });
+  });
+
+  group('The profile controller of doc/jobs.md', () {
+    String jobsPage() =>
+        File('doc/jobs.md').readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+
     test('a second call returns the queued job, then the running one', () {
       fakeAsync((async) {
-        final profile = quick.ProfileController(quick.ProfileApi());
+        final profile = model.ProfileController(model.ProfileApi());
         final job = profile.load();
         expect(identical(profile.load(), job), isTrue, reason: 'queued');
         async.elapse(const Duration(milliseconds: 10));
-        expect(profile.currentState, isA<quick.Loading>());
+        expect(profile.currentState, isA<model.Loading>());
         expect(identical(profile.load(), job), isTrue, reason: 'running');
         async.flushTimers();
         expect(job.outcome, isA<Done<String>>());
@@ -242,15 +301,12 @@ void main() {
 
     test('an error publishes Failure, and the outcome stays Failed', () {
       expect(
-        _page().replaceAll(RegExp(r'\s+'), ' '),
-        contains(
-          'The `fetchName` of a real client throws an `ApiException` when '
-          'the call fails:',
-        ),
+        jobsPage(),
+        contains('a real client throws an `ApiException` when the call fails:'),
       );
       fakeAsync((async) {
         final api = _FailingApi();
-        final profile = quick.ProfileController(api);
+        final profile = model.ProfileController(api);
         final job = profile.load();
         Object? thrown;
         job.value.then<void>(
@@ -260,10 +316,7 @@ void main() {
           },
         );
         async.flushTimers();
-        expect(
-          _profile(profile.currentState),
-          'Failure(ApiException: offline)',
-        );
+        expect(_model(profile.currentState), 'Failure(ApiException: offline)');
         expect(job.outcome, isA<Failed>());
         expect(thrown, same(api.error), reason: 'value throws the error');
         profile.close().ignore();
@@ -271,28 +324,13 @@ void main() {
       });
     });
 
-    test('a Failed nobody observes goes to the zone, ifFailed or not, '
-        'unless isExpectedError names its error', () {
-      final prose = _page().replaceAll(RegExp(r'\s+'), ' ');
+    test('a failure nobody reads ends at Failure with an ApiException and '
+        'goes on to the zone otherwise', () {
       expect(
-        prose,
-        allOf(
-          contains(
-            'A `Failed` that nobody observes goes on to the zone the '
-            'job was created in, even when `ifFailed` has published a '
-            'state, unless `Solo.unansweredHandler` answers for it',
-          ),
-          contains(
-            'An error the job names in `isExpectedError` goes no further. '
-            '`load` names `ApiException`, so a `profile.load()` that nobody '
-            'reads and that fails with one ends at the `Failure` state; a '
-            'bug is not an `ApiException`, and it still goes on.',
-          ),
-          contains(
-            "Reading the job's `done` or `value` observes the outcome, and "
-            'a caller that needs no outcome at all says so with '
-            '`ignoreFailure()`.',
-          ),
+        jobsPage(),
+        contains(
+          'A failure with an `ApiException` that nobody reads ends at '
+          '`Failure`; any other error that nobody reads goes on to the zone',
         ),
       );
       final zones = <String, List<String>>{};
@@ -302,17 +340,17 @@ void main() {
       fakeAsync((async) {
         void call(
           String how,
-          quick.ProfileApi api,
-          void Function(quick.ProfileController) use,
+          model.ProfileApi api,
+          void Function(model.ProfileController) use,
         ) {
           final errors = zones[how] = [];
-          final profile = quick.ProfileController(api);
+          final profile = model.ProfileController(api);
           runZonedGuarded(
             () => use(profile),
             (error, stackTrace) => errors.add('$error'),
           );
           async.flushTimers();
-          states[how] = _profile(profile.currentState);
+          states[how] = _model(profile.currentState);
           profile.close().ignore();
           async.flushTimers();
         }
@@ -354,10 +392,10 @@ void main() {
 
     test('a started load cancelled publishes Initial; cancel waits for it', () {
       fakeAsync((async) {
-        final profile = quick.ProfileController(quick.ProfileApi());
+        final profile = model.ProfileController(model.ProfileApi());
         final job = profile.load();
         async.elapse(const Duration(milliseconds: 10));
-        expect(profile.currentState, isA<quick.Loading>());
+        expect(profile.currentState, isA<model.Loading>());
         Object? thrown;
         job.value.then<void>(
           (_) {},
@@ -367,90 +405,12 @@ void main() {
         );
         String? stateWhenBack;
         job.cancel().then((_) {
-          stateWhenBack = _profile(profile.currentState);
+          stateWhenBack = _model(profile.currentState);
         });
         async.flushTimers();
         expect(stateWhenBack, 'Initial', reason: 'the handler ran first');
         expect('${job.outcome}', 'Cancelled(manual)');
         expect(thrown, isA<Cancelled>(), reason: 'value throws Cancelled');
-        profile.close().ignore();
-        async.flushTimers();
-      });
-    });
-
-    test('without a handler an error or a cancel leaves Loading', () {
-      expect(
-        _page().replaceAll(RegExp(r'\s+'), ' '),
-        allOf(
-          contains('Two optional parameters of `enqueue`'),
-          contains(
-            'Without a handler, the state stays where the body left it: '
-            'an error or a cancellation here would leave `Loading`.',
-          ),
-        ),
-      );
-      fakeAsync((async) {
-        final failing = _Unhandled(_FailingApi());
-        final failed = failing.load()..value.ignore();
-        final cancelling = _Unhandled(quick.ProfileApi());
-        final cancelled = cancelling.load()..value.ignore();
-        async.elapse(const Duration(milliseconds: 10));
-        cancelled.cancel().ignore();
-        async.flushTimers();
-        expect(failed.outcome, isA<Failed>());
-        expect('${cancelled.outcome}', 'Cancelled(manual)');
-        expect(failing.currentState, isA<quick.Loading>());
-        expect(cancelling.currentState, isA<quick.Loading>());
-        failing.close().ignore();
-        cancelling.close().ignore();
-        async.flushTimers();
-      });
-    });
-
-    test('cancelLoading prints the outcome its comment quotes', () {
-      final quote = RegExp(
-        r'print\(job\.outcome\); // (.+)',
-      ).firstMatch(_page())!.group(1)!;
-      expect(_printed(quick.cancelLoading), [quote]);
-    });
-
-    test(
-      'the job cancelled there is still queued, and ifCancelled never runs',
-      () {
-        fakeAsync((async) {
-          final api = _TracingApi();
-          final profile = quick.ProfileController(api);
-          final heard = <String>[];
-          profile.addListener(() => heard.add(_profile(profile.currentState)));
-          final job = profile.load();
-          expect((job as SoloJob<String>).isQueued, isTrue);
-          job.cancel().ignore();
-          async.flushTimers();
-          expect('${job.outcome}', 'Cancelled(manual)');
-          expect(
-            heard,
-            isEmpty,
-            reason: 'neither the body nor ifCancelled ran',
-          );
-          expect(api.trace, isEmpty);
-          profile.close().ignore();
-          async.flushTimers();
-        });
-      },
-    );
-
-    test('cancelling a job does not stop the request already sent', () {
-      fakeAsync((async) {
-        final api = _TracingApi();
-        final profile = quick.ProfileController(api);
-        final job = profile.load();
-        async.elapse(const Duration(milliseconds: 5));
-        job.cancel().ignore();
-        async.flushMicrotasks();
-        expect(job.outcome, isA<Cancelled>());
-        expect(api.trace, ['fetch begins']);
-        async.flushTimers();
-        expect(api.trace, ['fetch begins', 'fetch ends']);
         profile.close().ignore();
         async.flushTimers();
       });
@@ -470,33 +430,6 @@ void main() {
           'next job',
         ]);
         ordered.close().ignore();
-        async.flushTimers();
-      });
-    });
-
-    test('SoloStream adds a stream on the next microtask to the listener', () {
-      fakeAsync((async) {
-        final api = _TracingApi();
-        final profile = streamed.ProfileController(api);
-        final subscription = profile.stream.listen(
-          (state) => api.trace.add('stream ${_profile(state)}'),
-        );
-        profile
-          ..addListener(
-            () => api.trace.add('listener ${_profile(profile.currentState)}'),
-          )
-          ..load();
-        async.flushTimers();
-        expect(api.trace, [
-          'listener Loading',
-          'fetch begins',
-          'stream Loading',
-          'fetch ends',
-          'listener Loaded(Ada Lovelace)',
-          'stream Loaded(Ada Lovelace)',
-        ]);
-        subscription.cancel().ignore();
-        profile.close().ignore();
         async.flushTimers();
       });
     });
@@ -983,23 +916,16 @@ void main() {
     test(
       'every piece of code on the page is a run of lines of these files',
       () {
-        final missing = codeMissingFrom(
-          'README.md',
-          'test/support/readme_quick_start.dart',
-          alsoIn: [
-            'test/support/readme_reload.dart',
-            'test/support/readme_player.dart',
-          ],
-        );
-        // The one block whose body the page elides: `readme_stream.dart`
-        // holds it with that body filled in.
-        expect(missing, hasLength(1));
         expect(
-          missing.single,
-          startsWith(
-            'final class ProfileController extends Solo<ProfileState> '
-            'with SoloStream {\n  // ...same as above...\n}',
+          codeMissingFrom(
+            'README.md',
+            'test/support/readme_quick_start.dart',
+            alsoIn: [
+              'test/support/readme_reload.dart',
+              'test/support/readme_player.dart',
+            ],
           ),
+          isEmpty,
         );
       },
     );

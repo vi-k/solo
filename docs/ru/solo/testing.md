@@ -47,10 +47,9 @@
 в dev-зависимости.
 
 Из примеров ниже все, кроме последнего, гоняют `load` контроллера из раздела
-[«Быстрый старт»](https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#быстрый-старт)
-README пакета. Все, кроме примера в разделе
-[isExpectedError](#isexpectederror), гоняют его без `isExpectedError`, чтобы
-провал оставался делом теста:
+[«Контроллер профиля»](jobs.md#контроллер-профиля) страницы о задачах. Все,
+кроме примера в разделе [isExpectedError](#isexpectederror), гоняют его без
+`isExpectedError`, чтобы провал оставался делом теста:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -315,8 +314,9 @@ test('a failed load shows the failure', () async {
 ### isExpectedError
 
 Задача, которая знает, какие её ошибки ожидаемы, называет их
-в `isExpectedError`. Здесь `load` сохраняет `isExpectedError` из «Быстрого
-старта», и этот предикат называет `ApiException`, ошибку фейка:
+в `isExpectedError`. Здесь `load` сохраняет `isExpectedError` из раздела
+[«Контроллер профиля»](jobs.md#контроллер-профиля), и этот предикат называет
+`ApiException`, ошибку фейка:
 
 ```dart
 Job<String> load() => enqueue<ProfileState, String>(

@@ -1,7 +1,8 @@
-// What the profile code of `doc/state.md` takes from the quick start of the
-// README: the profile states and the API. `Disconnected` is the page's own:
-// its block under "Preserving an incompatible external state" adds the class
-// to these states, in the same library, and it stands here verbatim.
+// What the profile code of `doc/state.md` takes from `doc/jobs.md` under
+// "The profile controller": the profile states and the API. `Disconnected` is
+// the page's own: its block under "Preserving an incompatible external state"
+// adds the class to these states, in the same library, and it stands here
+// verbatim.
 import 'dart:async';
 
 sealed class ProfileState {
@@ -41,7 +42,7 @@ String describe(ProfileState state) => switch (state) {
   Disconnected() => 'Disconnected',
 };
 
-/// The API of the quick start, answering when the test says so.
+/// The API of the profile, answering when the test says so.
 class ProfileApi {
   final _answer = Completer<String>();
 

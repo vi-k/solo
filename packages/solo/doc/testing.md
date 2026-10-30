@@ -45,10 +45,9 @@ The tests of the page import `dart:async`,
 `package:test` and `fake_async` as dev dependencies.
 
 Of the examples below, all but the last drive the `load` of the controller from
-[Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
-in the package README. All but the one under
-[isExpectedError](#isexpectederror) drive it without its `isExpectedError`, so
-that the failure is the test's to read:
+[The profile controller](jobs.md#the-profile-controller) on the jobs page. All
+but the one under [isExpectedError](#isexpectederror) drive it without its
+`isExpectedError`, so that the failure is the test's to read:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -312,8 +311,9 @@ by then the test is over. A test that expects such an error sets
 ### isExpectedError
 
 A job that knows which of its errors are expected names them in
-`isExpectedError`. Here the `load` keeps the `isExpectedError` of Quick start,
-which names the `ApiException` the fake throws:
+`isExpectedError`. Here the `load` keeps the `isExpectedError` of
+[The profile controller](jobs.md#the-profile-controller), which names the
+`ApiException` the fake throws:
 
 ```dart
 Job<String> load() => enqueue<ProfileState, String>(

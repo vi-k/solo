@@ -1,13 +1,14 @@
 // The code of `doc/testing.md` that its tests test and test with, verbatim:
 // the controller and the fake of the introduction, and the journal of "The
-// order of what happened". The states and `ProfileApi` are those of the
-// quick start of `README.md`, which the page takes its controller from.
+// order of what happened". The states and `ProfileApi` are those of
+// `doc/jobs.md` under "The profile controller", which the page takes its
+// controller from.
 import 'package:solo/solo.dart';
 
-import 'readme_quick_start.dart'
+import 'jobs_profile.dart'
     show Failure, Initial, Loaded, Loading, ProfileApi, ProfileState;
 
-export 'readme_quick_start.dart'
+export 'jobs_profile.dart'
     show Failure, Initial, Loaded, Loading, ProfileApi, ProfileState;
 
 final class ProfileController extends Solo<ProfileState> {
