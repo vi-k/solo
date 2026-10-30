@@ -64,8 +64,6 @@ final job = Job<void>((ctx) async {
   ctx.onDiscard(() async {
     ctx.check();
     await ctx.abandonable(device.flush);
-    // ignore: deprecated_member_use
-    await ctx.wait(device.flush);
     await ctx.uncancellable(device.flush);
     await ctx.pause();
     ctx.onCancel(() {});
@@ -79,7 +77,6 @@ final job = Job<void>((ctx) async {
     [
       'ctx.check()',
       'ctx.abandonable(device.flush)',
-      'ctx.wait(device.flush)',
       'ctx.uncancellable(device.flush)',
       'ctx.pause()',
       'ctx.onCancel(() {})',

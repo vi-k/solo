@@ -666,6 +666,35 @@ Flutter's.
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |
 | How do I test a screen? | On the fake clock of `testWidgets`: a timer a job waits on, such as the delay of a fake API, fires only when the test moves the clock. [Testing](doc/testing.md) has the three rules that follow from it. |
 
+## Versions
+
+| A change | Comes in |
+| --- | --- |
+| A fix that keeps the public API | a patch release, such as `1.0.1` |
+| A new class, member or optional parameter | a minor release, such as `1.1.0` |
+| A removed or renamed member, a changed signature or documented behaviour | a major release, such as `2.0.0` |
+
+From 1.0.0 on, `flutter_solo` follows semantic versioning: the constraint
+`^1.0.0` takes every minor and patch release, and they keep code written
+against 1.0.0 working, but for the cases below. The public API is what
+`package:flutter_solo/flutter_solo.dart` and
+`package:flutter_solo/listenable.dart` export; the text of error messages and
+of debug output is not part of it. A member that goes away is first marked
+`@Deprecated` in a minor release, with the name to use instead, and is removed
+in the next major one.
+
+A minor release can add a member to a mixin you build on, such as
+`SoloListenable`, and a member of the same name in your own code then stops
+compiling. It can add a member to an interface you implement for a mock, such
+as `JobContext` or `SoloContext`, and a fake that implements it by hand, rather
+than through `noSuchMethod`, then stops compiling too. The changelog of such a
+release names the members it adds. A new top-level name can clash with the same
+name imported from another package, until one of the imports hides it with
+`hide`.
+
+`flutter_solo` re-exports `solo`, so a major release of `solo` or `async_job`
+comes with a major release of `flutter_solo`.
+
 ## solo
 
 [solo](https://pub.dev/packages/solo) is the controller itself: the queue and

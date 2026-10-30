@@ -1,7 +1,20 @@
 ## Unreleased
 
+This package re-exports `solo` and, through it, `async_job`, so their changes
+are its own: see
+[the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
+and
+[the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
+
+### Breaking changes
+
+- **`ctx.wait` of `async_job`, deprecated in favour of `ctx.abandonable` in
+  0.3.0, is removed.**
+
 ### Documentation
 
+- The README says what each kind of change comes in from 1.0.0 on: a fix in a
+  patch release, an addition in a minor one, a break in a major one.
 - The README names the analyzer plugin `solo_lints` in `Install`, and says to
   run `dart analyze` for it: from Flutter 3.44 on, `flutter analyze` shows none
   of its diagnostics.

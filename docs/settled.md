@@ -359,13 +359,16 @@ result», а не «утекло»: значение внутри результ
 надстройка, библиотека остаётся `engine.dart`. Пакет называется `async_job`.
 (2026-09-19, 2026-09-28; `2026-09-28-async-job-vocabulary-report.md`.)
 
-**42. `ctx.wait` переименован в `ctx.abandonable` с устаревшим псевдонимом
-на один выпуск; `join` остаётся.** `Future.wait` ждёт до конца, а `ctx.wait`
-при отмене бросает ожидание. `waitUnlessCancelled` слишком длинно. Псевдоним
-нужен, потому что `ctx.wait` стоит почти в каждом теле. `Job.ignore()` стал
-`Job.ignoreFailure()` сразу, без псевдонима: его путали с `Future.ignore()`.
-(2026-10-05, 2026-10-07; `2026-10-05-ctx-abandonable-design.md`,
-`2026-10-07-ignore-failure-rename-report.md`.)
+**42. `ctx.wait` переименован в `ctx.abandonable`, псевдоним снимается в 1.0.0;
+`join` остаётся.** `Future.wait` ждёт до конца, а `ctx.wait` при отмене бросает
+ожидание. `waitUnlessCancelled` слишком длинно. Псевдоним жил с 0.3.0, потому
+что `ctx.wait` стоял почти в каждом теле, и пережил обещанный срок в один
+выпуск; владелец снял его в ближайшем ломающем выпуске — 1.0.0. Правила
+`solo_lints` `wait` помнят: плагин служит и пользователям ядра 0.x, а на 1.0
+имя ни с чем не совпадёт. `Job.ignore()` стал `Job.ignoreFailure()` сразу, без
+псевдонима: его путали с `Future.ignore()`. (2026-10-05, 2026-10-07,
+2026-10-30; `2026-10-05-ctx-abandonable-design.md`,
+`2026-10-07-ignore-failure-rename-report.md`, `2026-10-30-one-zero-report.md`.)
 
 **43. Пауза в теле — `ctx.pause`, член `JobContext`.**
 До `ctx.abandonable(() => Future.delayed(...))` трудно додуматься. `Job.each` —

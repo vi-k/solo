@@ -72,17 +72,6 @@ abstract interface class JobContext {
     FutureOr<void> Function(T value)? discard,
   });
 
-  /// The former name of [abandonable], kept for one release.
-  ///
-  /// Does what [abandonable] does; only the [StateError] of a call made
-  /// after the job has finished names `wait`.
-  @Deprecated('Use abandonable')
-  Future<T> wait<T>(
-    FutureOr<T> Function() action, {
-    FutureOr<void> Function(T value)? dispose,
-    FutureOr<void> Function(T value)? discard,
-  });
-
   /// Runs [action], waits for all of it, and gives up only afterwards.
   ///
   /// For a call that must not be left in flight: a device command, a write
@@ -1019,21 +1008,6 @@ abstract class JobContextBase implements JobContext {
       return true;
     }
     return false;
-  }
-
-  /// The former name of [abandonable], kept for one release.
-  ///
-  /// Does what [abandonable] does; only the [StateError] of a call made
-  /// after the job has finished names `wait`.
-  @Deprecated('Use abandonable')
-  @override
-  Future<T> wait<T>(
-    FutureOr<T> Function() action, {
-    FutureOr<void> Function(T value)? dispose,
-    FutureOr<void> Function(T value)? discard,
-  }) async {
-    throwIfFinished('wait');
-    return abandonable(action, dispose: dispose, discard: discard);
   }
 
   @override

@@ -1,0 +1,9 @@
+# Use local solo and async_job until 1.0.0 is published.
+# The overrides of `packages/flutter_solo` do not reach here: pub applies
+# only the ones of the package it resolves, and a path dependency brings
+# its `pubspec.yaml` alone.
+dependency_overrides:
+  solo:
+    path: ../../solo
+  async_job:
+    path: ../../async_job

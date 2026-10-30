@@ -417,6 +417,34 @@ section linked beside it.
 | The screen has to show news until the user closes it, and the camera must go on working | a controller of its own for the notices, and an acceptance that names the notice | [A notice the screen accepts](doc/state.md#a-notice-the-screen-accepts) |
 | A stream event arrives a microtask late, and that is too late | `addListener`, which calls back inside the change | [Observing state](doc/state.md#observing-state) |
 
+## Versions
+
+| A change | Comes in |
+| --- | --- |
+| A fix that keeps the public API | a patch release, such as `1.0.1` |
+| A new class, member or optional parameter | a minor release, such as `1.1.0` |
+| A removed or renamed member, a changed signature or documented behaviour | a major release, such as `2.0.0` |
+
+From 1.0.0 on, `solo` follows semantic versioning: the constraint `^1.0.0`
+takes every minor and patch release, and they keep code written against 1.0.0
+working, but for the cases below. The public API is what
+`package:solo/solo.dart` and `package:solo/listeners.dart` export; the text of
+error messages and of debug output is not part of it. A member that goes away
+is first marked `@Deprecated` in a minor release, with the name to use instead,
+and is removed in the next major one.
+
+A minor release can add a member to a class you extend, such as `Solo` or
+`SoloObserver`, and a member of the same name in your own code then stops
+compiling. It can add a member to an interface you implement for a mock, such
+as `JobContext` or `SoloContext`, and a fake that implements it by hand, rather
+than through `noSuchMethod`, then stops compiling too. The changelog of such a
+release names the members it adds. A new top-level name can clash with the same
+name imported from another package, until one of the imports hides it with
+`hide`.
+
+`solo` re-exports `async_job`, so a major release of `async_job` comes with a
+major release of `solo`.
+
 ## Coming from bloc
 
 Callers invoke controller methods and receive a job for each operation. Queue

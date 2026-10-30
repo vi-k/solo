@@ -1,0 +1,4 @@
+# Use async_job from this checkout until 1.0.0 is published.
+dependency_overrides:
+  async_job:
+    path: ../async_job
