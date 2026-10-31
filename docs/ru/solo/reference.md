@@ -34,7 +34,7 @@ README пакета `async_job`, а `value`, `done` или `cancel()` задач
 | `isDraining` | Проходит ли ещё очередь `close()` с дренажом | [«Три способа остановиться»](cancellation.md#три-способа-остановиться) |
 | `isFinished` | Закончилось ли закрытие, после которого состояние больше не меняется | [«externalSetState»](state.md#externalsetstate) |
 | `pending` | Что держит контроллер прямо сейчас, в том числе идущая задача, или `null` | [«Что удерживает контроллер»](diagnostics.md#что-удерживает-контроллер) |
-| `cancelAll()` | Очищает очередь и отменяет работающую задачу; контроллер остаётся открытым | [«Три способа остановиться»](cancellation.md#три-способа-остановиться) |
+| `cancelAll()` | Очищает очередь и отменяет работающую задачу; контроллер остаётся открытым. С `force: true` убирает и задачи в очереди, созданные с `cancellable: false`, а `reason:` задаёт причину, с которой кончается каждая снятая задача | [«Три способа остановиться»](cancellation.md#три-способа-остановиться) |
 | `close()` | Перестаёт принимать работу и закрывается, отменяя то, что ждёт в очереди и работает, или, с `mode: SoloCloseMode.drain`, сначала проходя очередь | [«Три способа остановиться»](cancellation.md#три-способа-остановиться) |
 
 ### Чем пользуется подкласс
@@ -93,8 +93,8 @@ README пакета `async_job`, а `value`, `done` или `cancel()` задач
 | `merge` | `accumulate` | Обязательная, синхронная и чистая функция, которая сливает пришедшее событие со значением группы | [«Запуск, отмена и ошибки»](accumulation-rules.md#запуск-отмена-и-ошибки) |
 | `canStart` | `enqueue`, `job`, `collect`, `accumulate` | Спрашивается один раз, перед самым стартом задачи, а `false` кончает её `Cancelled(rules: canStart)` | [«Правила»](state.md#правила) |
 | `keepWhile` | `enqueue`, `job`, `collect`, `accumulate` | Держит задачу, пока состояние это позволяет, а `false` отменяет её с `Cancelled(rules: keepWhile)` | [«Правила»](state.md#правила) |
-| `cancellable` | `enqueue`, `job`, `collect`, `accumulate` | `false` отклоняет ручную отмену, отмену родителя и закрытие | [«Вся задача»](cancellation.md#вся-задача) |
-| `timeout` | `enqueue`, `job`, `collect`, `accumulate` | Срок, отсчитанный от старта тела, по истечении которого задача кончается `Cancelled(timeout)` | [«Срок задачи»](cancellation.md#срок-задачи) |
+| `cancellable` | `enqueue`, `job`, `collect`, `accumulate` | `false` отклоняет ручную отмену и отмену родителя, а закрытие — когда задача уже работает: стоящую в очереди `close()` убирает | [«Вся задача»](cancellation.md#вся-задача) |
+| `timeout` | `enqueue`, `job`, `collect`, `accumulate` | Срок, отсчитанный от старта тела, по истечении которого задача кончается `Cancelled(timeout)`; с `cancellable: false` вызов бросает `ArgumentError` | [«Срок задачи»](cancellation.md#срок-задачи) |
 | `ifFailed` | `enqueue`, `job`, `collect`, `accumulate` | Состояние, которое записывается, когда задача упала, после того как закончились тело, его дети и очистка | [«Обработчики»](state.md#обработчики) |
 | `isExpectedError` | `enqueue`, `job`, `collect`, `accumulate` | Называет ошибки, которых задача ждёт: названную ошибку слышит `onError` с `never`, а отвечать за неё никого не просят | [«Назвать ожидаемые ошибки»](errors.md#назвать-ожидаемые-ошибки) |
 | `ifCancelled` | `enqueue`, `job`, `collect`, `accumulate` | Состояние, которое записывается, когда задачу отменили, после того как закончились тело, его дети и очистка | [«Обработчики»](state.md#обработчики) |
@@ -166,11 +166,13 @@ README пакета `async_job`. Здесь контрольные точки я
 
 | Тип | Что это | Где |
 | --- | --- | --- |
-| `Policy` | Что `enqueueJob` и `enqueue` делают с задачей, чей ключ уже ждёт в очереди или работает: `sequential`, `droppable`, `replace` или `restart` | [«Очередь и политики»](jobs.md#очередь-и-политики) |
+| `Policy` | Что `enqueueJob` и `enqueue` делают с задачей, чей ключ уже ждёт в очереди или работает: `sequential`, `droppable`, `keepLatest` или `restart` | [«Очередь и политики»](jobs.md#очередь-и-политики) |
 | `SoloCloseMode` | Как останавливается `close()`: `cancel` или `drain` | [«Три способа остановиться»](cancellation.md#три-способа-остановиться) |
+| `SoloUnansweredHandler` | Тип `Solo.unansweredHandler`: функция от контроллера, задачи, ошибки и её стека | [«Ответ за ошибку»](errors.md#ответ-за-ошибку) |
 | `SoloObserver` | Что принимает `Solo.observer`, один наблюдатель или несколько, объединённых `SoloObserver.all`: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` и `onClose` каждого контроллера, плюс `onCreate` | [«Наблюдение за всеми контроллерами»](diagnostics.md#наблюдение-за-всеми-контроллерами) |
 | `SoloTransition` | Одно изменение состояния: состояния до и после, задача, которая его сделала, и ревизия, которая растёт на единицу с каждым изменением | [«Наблюдение за всеми контроллерами»](diagnostics.md#наблюдение-за-всеми-контроллерами) |
-| `SoloPending` | Что возвращает `pending`: `SoloPendingJob` со своей `SoloPhase`, `SoloPendingQueue` или `SoloPendingStream` | [«Что удерживает контроллер»](diagnostics.md#что-удерживает-контроллер) |
+| `SoloPending` | Что возвращает `pending`: `SoloPendingJob` со своими `job` и `phase`, `SoloPendingQueue` со своими `jobs` или `SoloPendingStream` | [«Что удерживает контроллер»](diagnostics.md#что-удерживает-контроллер) |
+| `SoloPhase` | Где стоит задача `SoloPendingJob`: `body`, `children` или `cleanup` | [«Что удерживает контроллер»](diagnostics.md#что-удерживает-контроллер) |
 | `SoloStream` | Миксин, который добавляет broadcast-стрим `stream` состояний | [«Наблюдение за состоянием»](state.md#наблюдение-за-состоянием) |
 | `AccumulationPolicy` | В какую ждущую группу входит событие: `join`, `adjacent` или `replace` | [«Выбор места присоединения событий»](accumulation-rules.md#выбор-места-присоединения-событий) |
 | `AccumulationTiming` | Когда группа может стартовать: `debounce` или `throttle` | [«Выбор момента готовности группы»](accumulation-rules.md#выбор-момента-готовности-группы) |

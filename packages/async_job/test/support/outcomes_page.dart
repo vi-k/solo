@@ -66,7 +66,7 @@ CancelReason origin(Cancelled cancelled) {
   var reason = cancelled.reason;
   while (true) {
     if (reason
-        case HandlerCancelReason(:final cause?) ||
+        case BodyCancelReason(:final cause?) ||
             ParentCancelReason(:final cause?) ||
             ChainCancelReason(:final cause)) {
       reason = cause.reason;

@@ -176,9 +176,9 @@ Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
 });
 ```
 
-Manual cancellation, parent cancellation and closing are held while an
-`uncancellable` action runs. The job does not accept those requests yet, so a
-checkpoint inside the section does not throw on them, and the receipt reaches
+Manual cancellation, parent cancellation, closing and a deadline are held while
+an `uncancellable` action runs. The job does not accept those requests yet, so
+a checkpoint inside the section does not throw on them, and the receipt reaches
 the state. The job's cancellation callbacks and its child cancellation cascade
 are delayed as well.
 
@@ -202,11 +202,13 @@ Job<void> flush() =>
     enqueue<Ready, void>(cancellable: false, (ctx) => device.flush());
 ```
 
-`cancellable: false` on a job refuses the requests a section holds — manual
-cancellation, parent cancellation and closing — altogether. While such a job
-waits in the queue, `queue.remove`, `queue.removeWhere`, `queue.clear` and
-`cancelAll()` leave it in place; called with `force: true`, they take it out.
-`close()` drops it from the queue too, and waits for it once it is running.
+`cancellable: false` on a job refuses manual cancellation, parent cancellation
+and closing altogether. It takes no `timeout`: the deadline is a cancellation
+the job would refuse, so a call that gives both throws `ArgumentError`. While
+such a job waits in the queue, `queue.remove`, `queue.removeWhere`,
+`queue.clear` and `cancelAll()` leave it in place; called with `force: true`,
+they take it out. `close()` drops it from the queue too, and waits for it once
+it is running.
 
 The flag counts only once the engine holds the job: a job that `job` made and
 `enqueueJob` never queued is cancelled like any other. A queued job that turned
@@ -249,8 +251,9 @@ waits for the third and the fourth as well. The cleanup waits with `join`,
 which belongs to the body, and the body is over by the time cleanup runs:
 `join` throws `StateError`, and the flush never happens. That does not depend
 on how the job ended — an upload that finished `Done` leaves the buffer
-unflushed as well. The error is told to the controller's `onError` hook and
-then handed to `Solo.unansweredHandler`, or to the zone when no handler is set;
+unflushed as well. The error is told to the controller's `onError` hook, and
+then `onUnanswered` is asked to answer for it, which by default hands it on to
+`Solo.unansweredHandler` or to the zone;
 [Answering for an error](errors.md#answering-for-an-error) on the errors page
 has the whole route.
 
@@ -335,13 +338,13 @@ a `Cancelled` with each one prints:
 | --- | --- | --- |
 | `ManualCancelReason` | `cancel()`, `cancelAll()`, `queue.remove`, `queue.removeWhere` or `queue.clear` called without a reason | `Cancelled(manual)` |
 | `ParentCancelReason` | the parent was cancelled, and the cancellation passed down to the child | `Cancelled(parent)` |
-| `HandlerCancelReason` | the body gave up: it threw `Cancelled` itself, or let the cancellation of a child out | `Cancelled(handler: why)` for `throw Cancelled('why')`; for a child's cancellation, the child and how it ended: `Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))` |
+| `BodyCancelReason` | the body gave up: it threw `Cancelled` itself, or let the cancellation of a child out | `Cancelled(body: why)` for `throw Cancelled('why')`; for a child's cancellation, the child and how it ended: `Cancelled(body: Job(_Op.upload): Cancelled(rules: canStart))` |
 | `ChainCancelReason` | the cancellation came along a chain of `then` | `Cancelled(chain)` |
 | `SiblingCancelReason` | another branch of `ctx.runAll` failed or was cancelled, or the group itself hit an error, and the group stopped the rest | `Cancelled(sibling)` |
 | `RulesCancelReason` | the state left the working type, `canStart` or `keepWhile` said no, or `ctx.stateAs` found another type | `Cancelled(rules: is not Ready)`, `Cancelled(rules: canStart)`, `Cancelled(rules: keepWhile)` |
 | `ClosedCancelReason` | `close()`, or a job enqueued after it | `Cancelled(closed)` |
 | `DuplicateCancelReason` | `Policy.droppable` found a job with the same key and handed that one back | `Cancelled(duplicate)` |
-| `ReplacedCancelReason` | `Policy.replace` or `Policy.restart` put a newer job with the same key in its place | `Cancelled(replaced)` |
+| `ReplacedCancelReason` | `Policy.keepLatest` or `Policy.restart` put a newer job with the same key in its place | `Cancelled(replaced)` |
 | `TimeoutCancelReason` | the deadline given with `timeout` ran out | `Cancelled(timeout)` |
 
 Inspect the type, as the first case above does; `name` is a display label, not
@@ -361,9 +364,10 @@ function to unregister it. The listener is called:
 Successful and failed jobs release these listeners without calling them.
 
 What a listener throws goes the way an error of cleanup goes: to the `onError`
-hook, and on to `Solo.unansweredHandler` or the zone. So does what a
-`ctx.onCancel` callback throws. An `async` listener is not awaited, and an
-error of its future goes straight to the zone, past the hook.
+hook, and on to `onUnanswered`, which by default hands it to
+`Solo.unansweredHandler` or the zone. So does what a `ctx.onCancel` callback
+throws. An `async` listener is not awaited, and an error of its future goes
+straight to the zone, past the hook.
 
 ## A deadline of a job
 

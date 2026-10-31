@@ -492,7 +492,7 @@ void main() {
             .having(
               (cancelled) => cancelled.reason,
               'reason',
-              isA<HandlerCancelReason>().having(
+              isA<BodyCancelReason>().having(
                 (reason) => reason.cause,
                 'cause',
                 same(branch.outcome),
@@ -1350,7 +1350,7 @@ final parent = Job<void>((ctx) async {
         isA<Cancelled>().having(
           (cancelled) => cancelled.reason,
           'reason',
-          isA<HandlerCancelReason>().having(
+          isA<BodyCancelReason>().having(
             (reason) => reason.cause,
             'cause',
             same(outside.outcome),

@@ -271,7 +271,7 @@ void main() {
         'child done',
         'cleanup',
       ]);
-      expect(seen!.reason, isA<HandlerCancelReason>());
+      expect(seen!.reason, isA<BodyCancelReason>());
       expect(seen!.description, 'no photo');
       expect(seen!.stackTrace, isNotNull);
       expect(job.outcome, same(seen));

@@ -3,6 +3,12 @@ part of 'job_base.dart';
 /// Cancellations a chain passes along, drained by the call that queued the
 /// first of them. One queue for continuations and handles of [Job.shared]:
 /// a chain may alternate the two.
+///
+/// One queue for every chain, too, so a listener that runs while it drains
+/// sees the order of the queue: a `whenCancelled` of one link that cancels a
+/// link of another chain finds the continuation of that link not cancelled
+/// yet. It is cancelled by the time the drain ends, which is before the call
+/// that started it returns.
 final _chainCancellations = Queue<void Function()>();
 var _drainingChainCancellations = false;
 

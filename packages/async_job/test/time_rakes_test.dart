@@ -485,7 +485,7 @@ void main() {
     test('the clause rethrows a thumbnail somebody else cancelled', () {
       stage.thumbnail = Thumbnail.isCancelled;
       expect(watch(page.thumbnailWithADeadline), [
-        'outcome: Cancelled(handler: Job(thumbnail): Cancelled(manual))',
+        'outcome: Cancelled(body: Job(thumbnail): Cancelled(manual))',
       ]);
     });
 
@@ -508,7 +508,7 @@ void main() {
           });
 
           final child = key == null ? 'Job()' : 'Job($key)';
-          expect(outcome, 'Cancelled(handler: $child: Cancelled(timeout))');
+          expect(outcome, 'Cancelled(body: $child: Cancelled(timeout))');
           if (key == null) {
             expect(quotedAfter('a child without one prints as'), child);
           } else {

@@ -140,7 +140,7 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// queue policies govern the root jobs of the controller, and the child is
   /// not one. All other behavior is [JobContext.each]'s.
   @override
-  Job<void> each<T>(
+  SoloJob<void> each<T>(
     Stream<T> stream,
     FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData, {
     Object? key,
@@ -158,7 +158,7 @@ final class _SoloContext<S extends Object, W extends S, R>
   Solo<S> get _solo => _job._solo;
 
   @override
-  Job<void> createEachJob(
+  SoloJob<void> createEachJob(
     Future<void> Function(JobContext ctx) body, {
     Object? key,
     String Function()? describe,
@@ -196,18 +196,22 @@ final class _SoloContext<S extends Object, W extends S, R>
     timeout: timeout,
   );
 
+  // The core hands back the child that `createEachJob` above made, and that
+  // one is a `SoloJob`.
   @override
-  Job<void> each<T>(
+  SoloJob<void> each<T>(
     Stream<T> stream,
     FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData, {
     Object? key,
     String Function()? describe,
-  }) => super.each(
-    stream,
-    (child, event) => onData(child as SoloContext<S, W>, event),
-    key: key,
-    describe: describe,
-  );
+  }) =>
+      super.each(
+            stream,
+            (child, event) => onData(child as SoloContext<S, W>, event),
+            key: key,
+            describe: describe,
+          )
+          as SoloJob<void>;
 
   @override
   void check() {

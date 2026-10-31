@@ -218,7 +218,7 @@ Job<Profile> load(String id) => enqueue<Ready, Profile>(
 // replace: the queued zoom goes, a running one is left alone.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
   key: _Op.zoom,
-  policy: Policy.replace,
+  policy: Policy.keepLatest,
   (ctx) => ctx.join(() => camera.zoom(zoom)),
 );
 
@@ -236,8 +236,8 @@ Job<void> seek(Duration position) =>
 | --- | --- |
 | `Policy.sequential` | Add the new job to the queue. |
 | `Policy.droppable` | Return the existing job, queued or the running root job; discard the new one. |
-| `Policy.replace` | Enqueue the new job, then remove cancellable queued jobs with that key: their cancellation already sees the new one queued. |
-| `Policy.restart` | Do the same as `replace` and request cancellation of the running root job with that key. |
+| `Policy.keepLatest` | Enqueue the new job, then remove cancellable queued jobs with that key: their cancellation already sees the new one queued. |
+| `Policy.restart` | Do the same as `keepLatest` and request cancellation of the running root job with that key. |
 
 A root job holds the queue until its body, its children, its cleanup and its
 state handler — the `ifFailed` or `ifCancelled` it was given — have finished.
@@ -245,10 +245,10 @@ Until then no other root job starts. The children it waits for are its own:
 they run inside it and never stand in the queue; they are described on the page
 [Children and chains](children.md). A policy does not apply to child jobs.
 
-A job that `replace` or `restart` removes ends `Cancelled(replaced)`, whose
-reason is a `ReplacedCancelReason`: the queued zoom that `replace` takes out,
-the running seek that `restart` cancels. `droppable` drops the new job, and
-that one ends `Cancelled(duplicate)`, as shown below. For `droppable` the
+A job that `keepLatest` or `restart` removes ends `Cancelled(replaced)`, whose
+reason is a `ReplacedCancelReason`: the queued zoom that `keepLatest` takes
+out, the running seek that `restart` cancels. `droppable` drops the new job,
+and that one ends `Cancelled(duplicate)`, as shown below. For `droppable` the
 running job is the existing one for as long as it has not been cancelled. One
 that has already accepted a cancellation is on its way out and will not do the
 work, so a call that finds it queues a job of its own.
@@ -385,6 +385,8 @@ only — the running job is not theirs to touch — and they preserve jobs with
 `cancellable: false` unless called with `force: true`. What they remove ends
 `Cancelled(manual)`, or with the `reason:` the caller passes; `cancelAll`,
 which clears the queue and cancels the running job as well, takes one too.
+`queue`, `lastJobWhere` and `current` are protected: they are for the methods
+of the controller, and a caller outside it has `cancelAll()`.
 
 The order in `jobs` is not the order jobs will run in. A job waiting for an
 accumulation window can be passed by a ready one standing behind it, so the

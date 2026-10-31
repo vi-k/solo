@@ -49,12 +49,14 @@ Job<void> track() => enqueue<Ready, void>(
 );
 ```
 
-`ctx.each(stream, onData)` creates and returns a child `Job<void>` that owns
-the subscription. Each event callback receives that child's context. Use it for
-state access and cancellation-aware operations. Returning the child's `.value`
-makes stream and callback errors propagate into the parent body. Use `.done` to
-inspect the outcome, or retain the returned job and call its `cancel()` to stop
-only this subscription.
+`ctx.each(stream, onData)` creates and returns a child `SoloJob<void>` that
+owns the subscription. Each event callback receives that child's context. Use
+it for state access and cancellation-aware operations. Returning the child's
+`.value` makes stream and callback errors propagate into the parent body. Use
+`.done` to inspect the outcome. To stop only this subscription, retain the
+returned job and call its `cancel()`, and have the body await `.done` rather
+than `.value`: a `Cancelled` from `.value` cancels the parent as well, as
+below.
 
 The child ends when the source sends `onDone`, so an open stream with no events
 is a child still running. The parent waits for its children with or without an

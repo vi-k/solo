@@ -1128,10 +1128,10 @@ void main() {
         bench.heard,
         unorderedEquals([
           'waits: a failure',
-          'waits: Cancelled(handler: a)',
-          'waits: Cancelled(handler: b)',
-          'waits: Cancelled(handler: c)',
-          'waits: Cancelled(handler: alone)',
+          'waits: Cancelled(body: a)',
+          'waits: Cancelled(body: b)',
+          'waits: Cancelled(body: c)',
+          'waits: Cancelled(body: alone)',
         ]),
       );
     });
@@ -1540,8 +1540,8 @@ void main() {
           ),
         ),
         'a start rule throws': (
-          'An error of a start rule: `canStart` throws instead of '
-              'answering',
+          'An error of a start rule: `canStart`, or `keepWhile` asked at '
+              'the start, throws instead of answering',
           'The same: the job ends `Failed` with it',
           (bench, async) => bench.enqueue<int, void>(
             key: 'rule',
@@ -1616,6 +1616,17 @@ void main() {
             ifFailed: (state, error, stackTrace) =>
                 throw const ApiException('the handler'),
             (ctx) async => throw const ApiException('the body'),
+          ),
+        ),
+        'a keepWhile asked at the start throws': (
+          'An error of a start rule: `canStart`, or `keepWhile` asked at '
+              'the start, throws instead of answering',
+          'The same: the job ends `Failed` with it',
+          (bench, async) => bench.enqueue<int, void>(
+            key: 'kept at the start',
+            isExpectedError: _isApi,
+            keepWhile: (state) => throw const ApiException('the rule'),
+            (ctx) async {},
           ),
         ),
         'a keepWhile throws when a change re-checks it': (
@@ -2028,7 +2039,7 @@ void main() {
           _fail(async, 'op', const Cancelled('of another job'));
         });
 
-        const line = 'abandons: Cancelled(handler: of another job)';
+        const line = 'abandons: Cancelled(body: of another job)';
         expect(bench.heard, [line]);
         expect(watching.heard, [line]);
         expect(bench.unanswered, isEmpty);
@@ -2203,13 +2214,12 @@ void main() {
       const fromOutside =
           'A `Cancelled` from outside the body, such as an '
           "abandoned operation that ended in another job's cancellation";
+      const startRule =
+          'An error of a start rule: `canStart`, or `keepWhile` asked at '
+          'the start, throws instead of answering';
       expect(rows, [
         [_body, '`onError`', _bodyAnswer],
-        [
-          'An error of a start rule: `canStart` throws instead of answering',
-          '`onError`',
-          'The same: the job ends `Failed` with it',
-        ],
+        [startRule, '`onError`', 'The same: the job ends `Failed` with it'],
         [_cancelledBody, '`onError`', _cancelledBodyAnswer],
         [_late, '`onError`', _unlessNamed],
         [_callbacks, '`onError`', _unlessNamed],

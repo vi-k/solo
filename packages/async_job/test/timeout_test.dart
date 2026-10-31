@@ -517,7 +517,7 @@ void main() {
       final cause = (sibling as SiblingCancelReason).cause as Cancelled;
       expect(cause.reason, isA<TimeoutCancelReason>());
       final parentOutcome = parent.outcome! as Cancelled;
-      expect(parentOutcome.reason, isA<HandlerCancelReason>());
+      expect(parentOutcome.reason, isA<BodyCancelReason>());
     });
   });
 
@@ -635,7 +635,7 @@ void main() {
       async.flushTimers();
       expect(
         '${job.outcome}',
-        'Cancelled(handler: Job(step): Cancelled(timeout))',
+        'Cancelled(body: Job(step): Cancelled(timeout))',
       );
     });
   });
@@ -858,7 +858,7 @@ void main() {
         cleanup.complete();
         section.complete();
         async.flushMicrotasks();
-        expect('${job.outcome}', 'Cancelled(handler: gave up)');
+        expect('${job.outcome}', 'Cancelled(body: gave up)');
       });
     });
   });

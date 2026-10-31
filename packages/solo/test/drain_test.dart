@@ -309,7 +309,7 @@ void main() {
 
   // The other policies with a key bring new work, and a drain takes none:
   // the queued job is neither replaced nor restarted.
-  for (final policy in [Policy.sequential, Policy.replace, Policy.restart]) {
+  for (final policy in [Policy.sequential, Policy.keepLatest, Policy.restart]) {
     test('a $policy call during a drain is refused and leaves the queue', () {
       runSolo((solo, journal, async) {
         SoloJob<void> keyed() => solo.enqueue<TestState, void>(

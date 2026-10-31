@@ -15,7 +15,7 @@ void main() {
       final old = solo.enqueue<TestState, void>(key: 'same', (ctx) async {});
       final incoming = solo.job<TestState, void>(key: 'same', (ctx) async {});
       old.whenCancelled((_) => incoming.cancel().ignore());
-      solo.enqueueJob(incoming, policy: Policy.replace);
+      solo.enqueueJob(incoming, policy: Policy.keepLatest);
       expect(incoming.isFinished, isTrue);
       expect(incoming.isQueued, isFalse);
       var ran = false;

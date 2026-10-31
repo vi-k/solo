@@ -108,17 +108,17 @@ final class TimeoutCancelReason extends CancelReason {
 
 /// The body cancelled itself, directly or by letting a child's cancellation
 /// escape.
-final class HandlerCancelReason extends CancelReason {
+final class BodyCancelReason extends CancelReason {
   /// The child's cancellation when it escaped through the parent's body.
   ///
   /// `null` for an ordinary `throw Cancelled(...)` by the body itself.
   final Cancelled? cause;
 
   /// Creates a body cancellation reason with its optional [cause].
-  const HandlerCancelReason({this.cause});
+  const BodyCancelReason({this.cause});
 
   @override
-  String get name => 'handler';
+  String get name => 'body';
 }
 
 /// The result of a job: [Done], [Failed] or [Cancelled].
@@ -183,7 +183,7 @@ final class Failed extends Outcome<Never> {
 /// the job has accepted a cancellation — the ones that only register a
 /// cleanup go on working — and stored in [Job.outcome]. A body may also
 /// `throw Cancelled('why')` to cancel itself; the core records that as
-/// [HandlerCancelReason] and cancels the children of that body.
+/// [BodyCancelReason] and cancels the children of that body.
 ///
 /// A `catch` in a body takes a cancellation along with the failures:
 /// `on Object`, a `catch` with no type and `on Exception` all catch it, and
@@ -209,7 +209,7 @@ final class Cancelled extends Outcome<Never> implements Exception {
 
   /// Cancels the current job from its body: `throw Cancelled('why')`.
   const Cancelled([this.description])
-    : reason = const HandlerCancelReason(),
+    : reason = const BodyCancelReason(),
       started = true,
       stackTrace = null;
 
@@ -223,7 +223,7 @@ final class Cancelled extends Outcome<Never> implements Exception {
   /// job's cancellation through — `await other.value` on a job it does not
   /// own — hands that job's reason to its own outcome, where it reads as
   /// though somebody cancelled this one. Only a child of this job is
-  /// wrapped in a [HandlerCancelReason] naming its cause; for anything
+  /// wrapped in a [BodyCancelReason] naming its cause; for anything
   /// else, wrap it by hand or catch it.
   ///
   /// [started] matters only where the cancellation becomes an outcome as

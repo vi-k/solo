@@ -142,10 +142,10 @@ final class CameraController extends Solo<CameraState> {
     (ctx) async => ctx.emit(ctx.state.copyWith(paused: false)),
   );
 
-  /// Only the last requested zoom matters: `replace` drops queued ones.
+  /// Only the last requested zoom matters: `keepLatest` drops queued ones.
   Job<void> setZoom(double zoom) => enqueue<Ready, void>(
     key: CameraKey.setZoom,
-    policy: Policy.replace,
+    policy: Policy.keepLatest,
     describe: () => 'zoom: $zoom',
     canStart: (state) => !state.paused,
     (ctx) async {

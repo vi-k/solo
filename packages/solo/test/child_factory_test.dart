@@ -85,7 +85,7 @@ void main() {
         solo.externalSetState(const Preparing(progress: 60));
         async.flushTimers();
         expect(child.outcome, cancelledBy<RulesCancelReason>());
-        expect(runner.outcome, cancelledBy<HandlerCancelReason>());
+        expect(runner.outcome, cancelledBy<BodyCancelReason>());
       });
     });
 
@@ -102,7 +102,7 @@ void main() {
           ..ignoreFailure();
         async.flushTimers();
         expect(child.outcome, cancelledBy<RulesCancelReason>());
-        expect(runner.outcome, cancelledBy<HandlerCancelReason>());
+        expect(runner.outcome, cancelledBy<BodyCancelReason>());
       });
     });
 

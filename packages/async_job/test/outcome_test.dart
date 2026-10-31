@@ -18,9 +18,9 @@ void main() {
     expect(reports[second], 'second');
   });
 
-  test('the public Cancelled constructor is a handler signal', () {
+  test('the public Cancelled constructor is a body signal', () {
     const cancelled = Cancelled('no photo');
-    expect(cancelled.reason, isA<HandlerCancelReason>());
+    expect(cancelled.reason, isA<BodyCancelReason>());
     expect(cancelled.started, isTrue);
     expect(cancelled.description, 'no photo');
     expect(cancelled.stackTrace, isNull);
@@ -36,7 +36,7 @@ void main() {
   });
 
   test('toString shows the reason and the description', () {
-    expect(const Cancelled().toString(), 'Cancelled(handler)');
+    expect(const Cancelled().toString(), 'Cancelled(body)');
     expect(const Done(42).toString(), 'Done(42)');
     expect(const Done<void>(null).toString(), 'Done(null)');
     expect(
@@ -59,7 +59,7 @@ void main() {
       Cancelled(:final reason) => 'cancelled $reason',
     };
     expect(describe(const Done(1)), 'done 1');
-    expect(describe(const Cancelled()), 'cancelled handler');
+    expect(describe(const Cancelled()), 'cancelled body');
     expect(
       describe(Failed(StateError('x'), StackTrace.empty)),
       'failed Bad state: x',

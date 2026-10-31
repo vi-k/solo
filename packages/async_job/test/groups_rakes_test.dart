@@ -567,7 +567,7 @@ void main() {
           expect(parent.outcome, isA<Cancelled>());
           expect(
             (parent.outcome! as Cancelled).reason,
-            isA<HandlerCancelReason>(),
+            isA<BodyCancelReason>(),
           );
         });
       },
@@ -634,10 +634,7 @@ void main() {
 
         async.elapse(const Duration(milliseconds: 40));
 
-        expect(
-          (parent.outcome! as Cancelled).reason,
-          isA<HandlerCancelReason>(),
-        );
+        expect((parent.outcome! as Cancelled).reason, isA<BodyCancelReason>());
         expect(
           (images.outcome! as Cancelled).reason,
           isA<ParentCancelReason>(),

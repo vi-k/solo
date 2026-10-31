@@ -115,7 +115,7 @@ void main() {
       async.flushMicrotasks();
       expect(journal.take(), [
         '[job] started',
-        '[job] finished Cancelled(handler: no photo)',
+        '[job] finished Cancelled(body: no photo)',
       ]);
       final outcome = job.outcome! as Cancelled;
       expect(outcome.started, isTrue);

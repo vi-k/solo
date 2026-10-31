@@ -222,12 +222,12 @@ print(message);
 ```
 
 ```text
-cancelled: handler
+cancelled: body
 ```
 
 Запрос отменил `fetch`, а не `report`. Отмена `fetch` вышла через тело
 `report`, и `report` кончилась собственным `Cancelled` с причиной
-`HandlerCancelReason`: её тело отменило само себя. `RequestCancelReason` лежит
+`BodyCancelReason`: её тело отменило само себя. `RequestCancelReason` лежит
 на шаг глубже, в `cause` этой причины.
 
 ### По цепочке `cause`
@@ -237,7 +237,7 @@ CancelReason origin(Cancelled cancelled) {
   var reason = cancelled.reason;
   while (true) {
     if (reason
-        case HandlerCancelReason(:final cause?) ||
+        case BodyCancelReason(:final cause?) ||
             ParentCancelReason(:final cause?) ||
             ChainCancelReason(:final cause)) {
       reason = cause.reason;
@@ -267,7 +267,7 @@ request failed: Bad state: token expired
 | Причина | Кто получает и когда | Что хранит `cause` | Идёт ли по нему `origin` |
 | --- | --- | --- | --- |
 | `ParentCancelReason` | дочерняя задача, когда до неё доходит отмена родителя | `Cancelled` родителя | да |
-| `HandlerCancelReason` | родитель, когда отмена дочерней задачи выходит через его тело | `Cancelled` дочерней задачи | да |
+| `BodyCancelReason` | родитель, когда отмена дочерней задачи выходит через его тело | `Cancelled` дочерней задачи | да |
 | `ChainCancelReason` | задача в цепочке `then`, когда до неё доходит отмена соседа | `Cancelled` соседа | да |
 | `SiblingCancelReason` | ветка `ctx.runAll`, когда группа проваливается и останавливает остальные ветки | то, из-за чего остановилась группа: ошибку или отмену, которой кончилась другая ветка, или ошибку самой группы | нет, `origin` возвращает сам `SiblingCancelReason` |
 
@@ -279,14 +279,14 @@ request failed: Bad state: token expired
 не ограничена, и её `ChainCancelReason` вложены друг в друга на всю её длину,
 поэтому `origin` проходит по ним циклом: длинная цепочка не стоит ему стека.
 
-Тело, которое ждёт `value` чужой задачи, `HandlerCancelReason` для неё
+Тело, которое ждёт `value` чужой задачи, `BodyCancelReason` для неё
 не получает. Отмена чужой задачи проходит с причиной как есть, и исход читается
 как `Cancelled(manual)` у задачи, у которой `cancel` никто не вызывал.
 
 Кроме причины `reason`, `Cancelled` содержит флаг `started`, необязательное
 описание `description` и стектрейс отмены. Флаг `started` показывает, успело ли
 тело запуститься или отмена произошла до запуска. Встроенные классы причин:
-`ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`,
+`ManualCancelReason`, `ParentCancelReason`, `BodyCancelReason`,
 `ChainCancelReason`, `SiblingCancelReason` и `TimeoutCancelReason`; все они
 наследуют `CancelReason`. `TimeoutCancelReason` получает задача, у которой
 вышел срок, заданный через `timeout`, как показывает раздел
@@ -297,10 +297,10 @@ request failed: Bad state: token expired
 сравниваются по идентичности, но класс может определить равенство по данным.
 
 Тело может бросить `Cancelled.by(reason: reason)` с явной причиной или
-`Cancelled('why')` с причиной `HandlerCancelReason`. Стектрейс ошибки,
-сохранённый в причине, отделён от стектрейса отмены:
-`RequestCancelReason.stackTrace` указывает, где упал запрос,
-а `Cancelled.stackTrace` указывает, откуда пришла отмена.
+`Cancelled('why')` с причиной `BodyCancelReason`. Стектрейс ошибки, сохранённый
+в причине, отделён от стектрейса отмены: `RequestCancelReason.stackTrace`
+указывает, где упал запрос, а `Cancelled.stackTrace` указывает, откуда пришла
+отмена.
 
 ## Реакция до исхода
 

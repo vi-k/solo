@@ -132,8 +132,8 @@ What the parent does to its children depends on how it ends:
 A child's error comes back through the future `ctx.run` returned, with the
 child's stack trace, and so does its `Cancelled`. A child's `Cancelled` that
 the body lets out of `await ctx.run(child)` or `child.value` cancels the
-parent. The parent then ends with a `HandlerCancelReason` whose description
-names the child.
+parent. The parent then ends with a `BodyCancelReason` whose description names
+the child.
 
 ## A child the body does not await
 

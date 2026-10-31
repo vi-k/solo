@@ -9,8 +9,10 @@ A job that fails ends `Failed`. Three parts of the code deal with its error:
 When nobody observes the outcome, `onUnanswered` answers for the error. By
 default it sends the error to the creation zone, the zone the job was created
 in. There it is an uncaught error, and in the root zone an uncaught error can
-end the application. Some errors have no outcome to ride on, and `onUnanswered`
-answers for those as well. The first section,
+end the application. In a Flutter app it goes on to
+`PlatformDispatcher.onError`, and the README of `flutter_solo` has the rest of
+its road. Some errors have no outcome to ride on, and `onUnanswered` answers
+for those as well. The first section,
 [Where each error goes](#where-each-error-goes), lists every kind.
 
 The sections of the page, by what the application needs:
@@ -60,7 +62,7 @@ the hooks heard it.
 | The error | Who hears it | Who answers for it |
 | --- | --- | --- |
 | An error of the body, and the job ends `Failed` with it | `onError` | Whoever observes the outcome; if nobody does, `onUnanswered`, unless `isExpectedError` names it |
-| An error of a start rule: `canStart` throws instead of answering | `onError` | The same: the job ends `Failed` with it |
+| An error of a start rule: `canStart`, or `keepWhile` asked at the start, throws instead of answering | `onError` | The same: the job ends `Failed` with it |
 | An error of the body, and the job ends `Cancelled` | `onError` | `onUnanswered`, unless `ignoreFailure()` was called on the job or `isExpectedError` names it |
 | A late error of an operation `abandonable` stopped waiting for | `onError` | `onUnanswered`, unless `isExpectedError` names it |
 | An error of a disposer, a `ctx.onCancel` callback or a state handler of a job | `onError` | `onUnanswered`, unless `isExpectedError` names it |

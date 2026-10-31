@@ -565,7 +565,7 @@ void main() {
             solo.enqueue<TestState, void>(
               (ctx) async {},
               key: 'events',
-              policy: Policy.replace,
+              policy: Policy.keepLatest,
             );
           case 'restart':
             solo.enqueue<TestState, void>(

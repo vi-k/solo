@@ -104,10 +104,11 @@ state: Preparing()
 
 The working type is the state the job's rules require for as long as it runs,
 and `enqueue<Initial, void>` requires `Initial`. The body's first `emit` leaves
-it, and the job ends `Cancelled` before `hw.open` is ever called: the hardware
-log stays empty. The controller is left in `Preparing`, and the next `init()`
-is dropped at its start for the same reason — the camera can no longer be
-opened at all.
+it, the `join` on the next line is a checkpoint that finds the state outside
+`Initial`, and the job ends `Cancelled` before `hw.open` is ever called: the
+hardware log stays empty. The controller is left in `Preparing`, and the next
+`init()` is dropped at its start for the same reason — the camera can no longer
+be opened at all.
 
 ### A working type wide enough
 
@@ -360,12 +361,12 @@ zoom 4.0: begin
 zoom 4.0: end
 ```
 
-### Policy.replace
+### Policy.keepLatest
 
 ```dart
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
   key: CameraKey.setZoom,
-  policy: Policy.replace,
+  policy: Policy.keepLatest,
   describe: () => 'zoom: $zoom',
   canStart: (state) => !state.paused,
   (ctx) async {
@@ -375,8 +376,8 @@ Job<void> setZoom(double zoom) => enqueue<Ready, void>(
 );
 ```
 
-`replace` queues the new job and then drops the queued one with the same key,
-so the same three calls reach the hardware once:
+`keepLatest` queues the new job and then drops the queued one with the same
+key, so the same three calls reach the hardware once:
 
 ```text
 [setZoom: zoom: 2.0] dropped Cancelled(replaced)

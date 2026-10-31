@@ -55,7 +55,7 @@ mixin CameraParts on Solo<CameraState> {
 
   Job<void> setZoom(double zoom) => enqueue<Ready, void>(
     key: CameraKey.setZoom,
-    policy: Policy.replace,
+    policy: Policy.keepLatest,
     describe: () => 'zoom: $zoom',
     canStart: (state) => !state.paused,
     (ctx) async {

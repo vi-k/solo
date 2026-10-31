@@ -210,7 +210,9 @@ final class Player extends Solo<PlayerState> {
 ```
 
 At the call site a job is a handle: await its outcome, or cancel it as the
-quick start does.
+quick start does. A job is not a `Future`, so `await player.play('t-1')`
+compiles and waits for nothing; the core set of `package:lints` flags it with
+`await_only_futures`. Await `done` or `value`.
 
 ```dart
 final player = Player(api, device);
@@ -237,6 +239,11 @@ the zone, as
 on the errors page has it, since no `unansweredHandler` is set, and ends this
 plain Dart program. A caller that can answer for it reads the job's `done`, as
 the call site does for `play`.
+
+A job that the rules of its working type turn down at its start ends
+`Cancelled` with a `RulesCancelReason`, not `Failed`. That is no error: neither
+`onError` nor the zone hears of it, and the outcome is what says so.
+`Solo.debug` traces the drop too.
 
 ## Why `currentState` and not `state`
 
@@ -347,14 +354,18 @@ section linked beside it.
 | A fix that keeps the public API | a patch release, such as `1.0.1` |
 | A new class, member or optional parameter | a minor release, such as `1.1.0` |
 | A removed or renamed member, a changed signature or documented behaviour | a major release, such as `2.0.0` |
+| A new value of an enum or a new subclass of a sealed class | a major release, such as `2.0.0` |
 
 From 1.0.0 on, `solo` follows semantic versioning: the constraint `^1.0.0`
 takes every minor and patch release, and they keep code written against 1.0.0
 working, but for the cases below. The public API is what
 `package:solo/solo.dart` and `package:solo/listeners.dart` export; the text of
-error messages and of debug output is not part of it. A member that goes away
-is first marked `@Deprecated` in a minor release, with the name to use instead,
-and is removed in the next major one.
+error messages and of debug output is not part of it. `listeners.dart` is the
+listener list a controller notifies through, for a package that builds a
+delivery of its own on top of `solo`, as `flutter_solo` does; an application
+listens through `Solo.addListener` and does not need it. A member that goes
+away is first marked `@Deprecated` in a minor release, with the name to use
+instead, and is removed in the next major one.
 
 A minor release can add a member to a class you extend, such as `Solo` or
 `SoloObserver`, and a member of the same name in your own code then stops
@@ -364,6 +375,14 @@ than through `noSuchMethod`, then stops compiling too. The changelog of such a
 release names the members it adds. A new top-level name can clash with the same
 name imported from another package, until one of the imports hides it with
 `hide`.
+
+A `switch` over a `Policy`, a `SoloPhase`, a `SoloCloseMode`, an
+`AccumulationPolicy` or a `SoloPending` can be exhaustive, and a new value of
+one of these enums or a new subclass of the sealed `SoloPending` would make it
+stop compiling: these come only in a major release, as the same changes to
+`Outcome` and `JobErrorAnswer` of `async_job` do. `CancelReason` is open, and a
+minor release can add a reason, so a `switch` over reasons keeps a default
+case.
 
 `solo` re-exports `async_job`, so a major release of `async_job` comes with a
 major release of `solo`. `solo` is also an engine on the protocol of

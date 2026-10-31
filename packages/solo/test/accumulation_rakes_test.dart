@@ -1326,13 +1326,13 @@ void main() {
       expect(device.heard, ['pause at 50 ms', 'chime at 150 ms']);
     });
 
-    test('Policy.replace does not help two jobs that share no key', () {
+    test('Policy.keepLatest does not help two jobs that share no key', () {
       _says(
-        '`Policy.replace` does not help: it removes jobs with the same '
+        '`Policy.keepLatest` does not help: it removes jobs with the same '
         'key, and these two do not share one',
       );
       final run = _tap(
-        (device) => KeyedPlayer(device, Policy.replace, oneKey: false),
+        (device) => KeyedPlayer(device, Policy.keepLatest, oneKey: false),
         (c) => c.resume(),
         (c) => c.pause(),
       );

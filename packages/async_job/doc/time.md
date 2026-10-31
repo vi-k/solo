@@ -76,7 +76,9 @@ with it:
 Without a duration, `ctx.pause()` comes back on the next turn of the event
 loop: a place for a long calculation to let other work run and to hear a
 cancellation. Inside `ctx.uncancellable` the cancellation is held like any
-other, and the pause runs its whole length.
+other, and the pause runs its whole length. A negative duration counts as zero,
+as it does for `Future.delayed`: unlike a `timeout`, `ctx.pause` does not throw
+for it.
 
 ## A deadline
 
@@ -248,6 +250,5 @@ pattern and no `when`, so the clause takes every `Cancelled`. The pattern goes
 into an `if` inside it: it matches the reason of the deadline and takes its
 duration. The `else` rethrows what is not the deadline: the job's own
 cancellation, and a thumbnail somebody else cancelled. Let out, the child's
-deadline ends the parent
-`Cancelled(handler: Job(thumbnail): Cancelled(timeout))`. The key is there for
-that line: a child without one prints as `Job()`.
+deadline ends the parent `Cancelled(body: Job(thumbnail): Cancelled(timeout))`.
+The key is there for that line: a child without one prints as `Job()`.

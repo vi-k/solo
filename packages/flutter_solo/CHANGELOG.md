@@ -10,6 +10,8 @@ and
 
 - **`ctx.wait` of `async_job`, deprecated in favour of `ctx.abandonable` in
   0.3.0, is removed.**
+- **`Policy.replace` of `solo` is renamed `Policy.keepLatest`, and
+  `HandlerCancelReason` of `async_job` is renamed `BodyCancelReason`.**
 
 ### Documentation
 
@@ -18,6 +20,11 @@ and
 - The README names the analyzer plugin `solo_lints` in `Install`, and says to
   run `dart analyze` for it: from Flutter 3.44 on, `flutter analyze` shows none
   of its diagnostics.
+- The README says that a new value of an enum or a new subclass of a sealed
+  class comes in a major release, and that on `close()` a running job made with
+  `cancellable: false` runs to its end while a queued one is dropped.
+- The mixins page says that an `await for` over the `stream` holds `close()`
+  with `SoloStream`, with `SoloListenable` or without it.
 
 ## 0.6.0
 

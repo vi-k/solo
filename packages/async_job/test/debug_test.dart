@@ -60,6 +60,38 @@ void main() {
     );
   });
 
+  test('a wait for a deferred job nobody started is traced once', () {
+    final traces = <String>[];
+    Job.debug = traces.add;
+    fakeAsync((async) {
+      final job = Job.deferred<int>(key: 'later', (ctx) async => 1);
+      job.done.ignore();
+      job.value.ignore();
+      async.flushMicrotasks();
+      expect(traces, ['Job(later) awaited before start']);
+      job.start();
+      job.done.ignore();
+      async.flushMicrotasks();
+    });
+    expect(traces, [
+      'Job(later) awaited before start',
+      'Job(later) started',
+      'Job(later) finished: Done(1)',
+    ]);
+  });
+
+  test('a child the parent runs is not traced as awaited before start', () {
+    final traces = <String>[];
+    Job.debug = traces.add;
+    fakeAsync((async) {
+      Job<void>(key: 'parent', (ctx) async {
+        await ctx.run(ctx.child(key: 'child', (ctx) async {}));
+      });
+      async.flushMicrotasks();
+    });
+    expect(traces, isNot(contains(contains('awaited before start'))));
+  });
+
   test('an error is traced on both paths, observer or none', () {
     final traces = <String>[];
     Job.debug = traces.add;
@@ -426,7 +458,7 @@ void main() {
     expect(
       traces,
       contains(
-        'Job(j) was finished as Cancelled(handler: by hand) with '
+        'Job(j) was finished as Cancelled(body: by hand) with '
         '1 conditional cleanup left aside',
       ),
     );
@@ -567,7 +599,7 @@ void main() {
 
     test('a job finished by hand while it unwinds says that instead', () {
       const aside =
-          'Job(open) was finished as Cancelled(handler: by hand) '
+          'Job(open) was finished as Cancelled(body: by hand) '
           'with 1 conditional cleanup left aside';
       late ProbeJob<String?> job;
       expect(
@@ -639,7 +671,7 @@ void main() {
     expect(
       traces,
       contains(
-        'Job(branch) was finished as Cancelled(handler: by hand) with '
+        'Job(branch) was finished as Cancelled(body: by hand) with '
         '1 conditional cleanup left aside',
       ),
       reason: 'the barrier between the two passes is a way out of its own',

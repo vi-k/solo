@@ -1945,13 +1945,32 @@ void main() {
       expect(heard, ['Loaded(written while closing)']);
       expect(closed, isTrue);
       _says(
-        'a job made with `cancellable: false` turns the cancellation down '
-        'and runs to its end',
+        'a running job made with `cancellable: false` turns the '
+        'cancellation down and runs to its end',
       );
       _says(
         'from `ifCancelled` or from the body of a job that turned the '
         'cancellation down',
       );
+    });
+
+    testWidgets('a queued job made with cancellable: false is dropped', (
+      tester,
+    ) async {
+      final bench = Bench();
+      bench
+          .go<Profile, void>(
+            (ctx) => ctx.pause(const Duration(milliseconds: 10)),
+          )
+          .ignoreFailure();
+      final queued = bench.go<Profile, void>(cancellable: false, (ctx) async {
+        ctx.emit(Loaded('never written'));
+      })..ignoreFailure();
+      await tester.pump();
+
+      await bench.close();
+      expect('${queued.outcome}', 'Cancelled(closed)');
+      _says('and a queued one is dropped');
     });
 
     testWidgets('the screen lets go of the controller without waiting', (

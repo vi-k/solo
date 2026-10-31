@@ -342,10 +342,10 @@ await tail.value; // tail наблюдать вам.
 `tail.cancel()`, пока ребёнок ещё загружает, идёт назад по цепочке, как описано
 в разделе [«Отмена цепочки»](#отмена-цепочки), и просит ребёнка отмениться.
 `ctx.run(child)` бросает отмену ребёнка в тело родителя, и родитель тоже
-кончается `Cancelled`, с `HandlerCancelReason`:
+кончается `Cancelled`, с `BodyCancelReason`:
 
 ```text
-parent: Cancelled(handler: Job(): Cancelled(chain)), child: Cancelled(chain)
+parent: Cancelled(body: Job(): Cancelled(chain)), child: Cancelled(chain)
 ```
 
 Ошибка продолжения касается только его самого. Наблюдайте его через `value`,

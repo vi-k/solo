@@ -506,7 +506,7 @@ try {
 ```
 
 A clause that rethrows every `Cancelled` ends the job too. If it is a child's
-`Cancelled`, the job ends with the reason `HandlerCancelReason`; if it is the
+`Cancelled`, the job ends with the reason `BodyCancelReason`; if it is the
 `Cancelled` an operation got from `value` of a cancelled job, the job ends with
 that job's own reason. The page on outcomes takes these reasons apart in
 [Why a job was cancelled](outcomes.md#why-a-job-was-cancelled).

@@ -795,7 +795,7 @@ void main() {
 
         expect(seen, [
           'onCancel, the section open: true',
-          'the wait in the section threw Cancelled(handler: gave up)',
+          'the wait in the section threw Cancelled(body: gave up)',
         ]);
         expect(job.outcome, isA<Cancelled>());
       });
@@ -1107,7 +1107,7 @@ void main() {
     });
 
     for (final (form, outcome) in [
-      ('rethrow', 'Cancelled(handler: Job(): Cancelled(manual))'),
+      ('rethrow', 'Cancelled(body: Job(): Cancelled(manual))'),
       ('check', 'Done(page without a thumbnail)'),
     ]) {
       test('an optional child cancelled on its own, with $form', () {

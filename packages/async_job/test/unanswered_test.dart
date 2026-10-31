@@ -1529,7 +1529,7 @@ void main() {
       });
       expect(observer.seen, [
         'onError: Bad state: a',
-        'onError: Cancelled(handler: between)',
+        'onError: Cancelled(body: between)',
         'onError: Bad state: b',
         'onUnanswered: Bad state: a',
         'onUnanswered: Bad state: b',
@@ -1589,9 +1589,9 @@ void main() {
       expect(
         observer.seen,
         unorderedEquals([
-          'onError: Cancelled(handler: thrown by cleanup)',
-          'onError: Cancelled(handler: a)',
-          'onError: Cancelled(handler: b)',
+          'onError: Cancelled(body: thrown by cleanup)',
+          'onError: Cancelled(body: a)',
+          'onError: Cancelled(body: b)',
         ]),
         reason: 'answers: $answers',
       );

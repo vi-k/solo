@@ -789,7 +789,7 @@ void main() {
         );
         camera.enqueue<Ready, void>(
           key: 'k',
-          policy: Policy.replace,
+          policy: Policy.keepLatest,
           (ctx) async {},
         );
 
@@ -802,7 +802,7 @@ void main() {
         );
         expect(
           _page(),
-          contains('| `Policy.replace` | Enqueue the new job, then remove'),
+          contains('| `Policy.keepLatest` | Enqueue the new job, then remove'),
         );
         expect(
           File('lib/src/policy.dart').readAsStringSync(),
@@ -825,7 +825,7 @@ void main() {
         final removed = camera.enqueue<Ready, void>(key: 'k', (ctx) async {});
         final replacement = camera.enqueue<Ready, void>(
           key: 'k',
-          policy: Policy.replace,
+          policy: Policy.keepLatest,
           (ctx) async => stage.trace.add('replacement runs'),
         );
 
@@ -931,7 +931,11 @@ void main() {
       },
     );
 
-    for (final policy in [Policy.droppable, Policy.replace, Policy.restart]) {
+    for (final policy in [
+      Policy.droppable,
+      Policy.keepLatest,
+      Policy.restart,
+    ]) {
       test('${policy.name} does not see a child with the same key', () {
         fakeAsync((async) {
           final camera = page.CameraController();
@@ -1289,7 +1293,11 @@ void main() {
       });
     });
 
-    for (final policy in [Policy.droppable, Policy.replace, Policy.restart]) {
+    for (final policy in [
+      Policy.droppable,
+      Policy.keepLatest,
+      Policy.restart,
+    ]) {
       test('${policy.name} with a null key throws ArgumentError', () {
         fakeAsync((async) {
           final camera = page.CameraController();

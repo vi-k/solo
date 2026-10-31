@@ -498,6 +498,49 @@ void main() {
         expect(over, isTrue);
       });
     });
+
+    group('a second each on a single-subscription stream', () {
+      const listened = 'Bad state: Stream has already been listened to.';
+
+      test('of Job.each fails its job, not the call', () {
+        final zone = <String>[];
+        late Job<void> second;
+        runZonedGuarded(() {
+          fakeAsync((async) {
+            final messages = StreamController<String>();
+            Job.each(messages.stream, (ctx, message) {});
+            second = Job.each(messages.stream, (ctx, message) {});
+            async.flushMicrotasks();
+            messages.close().ignore();
+            async.flushMicrotasks();
+          });
+        }, (error, _) => zone.add('$error'));
+        expect('${second.outcome}', 'Failed($listened)');
+        expect(zone, [listened], reason: 'where a failure nobody reads goes');
+      });
+
+      test('of ctx.each fails the job it makes, not the call', () {
+        fakeAsync((async) {
+          final messages = StreamController<String>();
+          Object? thrown;
+          late Job<void> second;
+          Job<void>((ctx) async {
+            ctx.each(messages.stream, (ctx, message) {});
+            try {
+              second = ctx.each(messages.stream, (ctx, message) {})
+                ..ignoreFailure();
+            } on Object catch (error) {
+              thrown = error;
+            }
+          }).ignoreFailure();
+          async.flushMicrotasks();
+          expect(thrown, isNull);
+          expect('${second.outcome}', 'Failed($listened)');
+          messages.close().ignore();
+          async.flushMicrotasks();
+        });
+      });
+    });
   });
 
   test('every piece of code on the page is a run of lines of this file', () {

@@ -2023,7 +2023,7 @@ abstract class JobBase<T> implements Job<T> {
         if (_pendingCancel case final pending?) {
           return pending;
         }
-        final own = _handlerCancel(cancelled, stackTrace);
+        final own = _bodyCancel(cancelled, stackTrace);
         // Read again: putting the cancellation into words runs the caller's
         // code -- the child's `toString`, with its key and `describe` or an
         // engine's own, and `onError` when that throws -- and code that
@@ -2580,7 +2580,7 @@ abstract class JobBase<T> implements Job<T> {
 
   /// The body threw [thrown] without being marked cancelled: either its own
   /// `throw Cancelled(...)` or a child's cancellation via `child.value`.
-  Cancelled _handlerCancel(Cancelled thrown, StackTrace stackTrace) {
+  Cancelled _bodyCancel(Cancelled thrown, StackTrace stackTrace) {
     final child = _outcomeChild[thrown];
     if (child != null) {
       final marked = <(Object, StackTrace)>[];
@@ -2598,7 +2598,7 @@ abstract class JobBase<T> implements Job<T> {
         notifyError(error, stackTrace);
       }
       return Cancelled.by(
-        reason: HandlerCancelReason(cause: thrown),
+        reason: BodyCancelReason(cause: thrown),
         description: description,
         stackTrace: stackTrace,
       );
@@ -2903,8 +2903,36 @@ final class _DeferredJob<T> extends _Job<T> implements DeferredJob<T> {
     super.observer,
   });
 
+  /// Whether [_traceAwaitedBeforeStart] has said its line already.
+  bool _awaitedBeforeStart = false;
+
   @override
   void start() => super.start();
+
+  @override
+  Future<Outcome<T>> get done {
+    _traceAwaitedBeforeStart();
+    return super.done;
+  }
+
+  @override
+  Future<T> get value {
+    _traceAwaitedBeforeStart();
+    return super.value;
+  }
+
+  /// Says, once, that somebody waits for a job nobody has started.
+  ///
+  /// Such a wait never ends, and without this line the trace of
+  /// [Job.debug] holds nothing of the job at all: its first line comes from
+  /// the start.
+  void _traceAwaitedBeforeStart() {
+    if (_awaitedBeforeStart || status != JobStatus.created) {
+      return;
+    }
+    _awaitedBeforeStart = true;
+    JobBase._debug(() => '$this awaited before start');
+  }
 }
 
 /// Whether a failure has been answered for; one for every job that carries

@@ -139,7 +139,7 @@ Job(parent): Cancelled(manual)
 Ошибка ребёнка приходит через future, которую вернул `ctx.run`, со стеком
 ребёнка, и его `Cancelled` тоже. `Cancelled` ребёнка, который тело выпускает
 из `await ctx.run(child)` или `child.value`, отменяет родителя. Тогда родитель
-кончается с `HandlerCancelReason`, в описании которого назван ребёнок.
+кончается с `BodyCancelReason`, в описании которого назван ребёнок.
 
 ## Ребёнок без `await`
 

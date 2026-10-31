@@ -639,7 +639,7 @@ void main() {
       _says('With the state paused, nothing is uploaded and `resend` ends:');
     });
 
-    test('handler: in the trace is the reason of a body that lets it out', () {
+    test('body: in the trace is the reason of a body that lets it out', () {
       late Job<void> job;
       final errors = _zone((async) {
         job = page.Resending(const Ready(paused: true)).resend(7)
@@ -650,7 +650,7 @@ void main() {
       expect(errors, isEmpty);
       expect(
         (job.outcome! as Cancelled).reason,
-        isA<HandlerCancelReason>().having(
+        isA<BodyCancelReason>().having(
           (reason) => reason.cause,
           'cause',
           isA<Cancelled>().having(
@@ -661,10 +661,9 @@ void main() {
         ),
       );
       _says(
-        '`handler:` in that line is not a state handler of `enqueue`. It is '
-        '`HandlerCancelReason`, the reason the core gives a body that lets '
-        'the cancellation of its child out, and after it come the child '
-        'and the cancellation it ended with.',
+        '`body:` in that line is `BodyCancelReason`: the core gives it to '
+        'a body that lets the cancellation of its child out, and after it '
+        'come the child and the cancellation it ended with.',
       );
       _says(
         '[Cancellation details](cancellation.md#cancellation-details) has '
@@ -1042,9 +1041,9 @@ void main() {
       expect(_seen, ['caught Cancelled(manual), the parent cancelled false']);
       expect(
         '${parent.outcome}',
-        'Cancelled(handler: Job(child): Cancelled(manual))',
+        'Cancelled(body: Job(child): Cancelled(manual))',
       );
-      expect((parent.outcome! as Cancelled).reason, isA<HandlerCancelReason>());
+      expect((parent.outcome! as Cancelled).reason, isA<BodyCancelReason>());
     });
 
     test('a parent that works beside its child: their writes interleave', () {
@@ -1667,7 +1666,7 @@ void main() {
         expect(
           _seen.skip(4).single,
           'Job(parent) finished '
-          'Cancelled(handler: Job(b): Cancelled(rules: canStart))',
+          'Cancelled(body: Job(b): Cancelled(rules: canStart))',
         );
         _says(
           'each branch of a group answers to its start rules as a child '

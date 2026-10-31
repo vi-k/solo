@@ -84,9 +84,10 @@ key.
 [Restarting one operation within a shared queue](#restarting-one-operation-within-a-shared-queue),
 [Awaiting a particular request](#awaiting-a-particular-request) and
 [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting)
-show where the two part. `Policy.replace` removes queued work with the same key
-while leaving the running job alone. There is no concurrent root-job policy;
-use children or separate controllers for independent concurrent work, as in
+show where the two part. `Policy.keepLatest` removes queued work with the same
+key while leaving the running job alone. There is no concurrent root-job
+policy; use children or separate controllers for independent concurrent work,
+as in
 [A tap that does not wait for a reload](jobs.md#a-tap-that-does-not-wait-for-a-reload).
 
 ## Ordering updates to shared state
@@ -291,9 +292,10 @@ There is nothing to remember here about transformers or the order events are
 processed in: there is no transformer to pass and no scheduling to choose. The
 root jobs of a controller run one at a time, and that is the only way they run.
 Ready jobs start in the order they were added. Two things change that order,
-and each happens only where the code asks for it. `first: true` puts a job
-ahead of what is waiting, and a job waiting for an accumulation window can be
-passed by a ready one standing behind it. Both are on the jobs page, in
+and each happens only where the code asks for it. `enqueueJob` with
+`first: true` puts a job ahead of what is waiting, and a job waiting for an
+accumulation window can be passed by a ready one standing behind it. Both are
+on the jobs page, in
 [Working the queue directly](jobs.md#working-the-queue-directly). Adding
 another queued method preserves the ordering, because the queue is one per
 controller rather than one per command; no arrangement of the methods can give
@@ -924,12 +926,14 @@ still remains cancelled. The error then goes to the controller's `onError` hook
 and on to `onUnanswered`, as any failure of the body of a cancelled job does,
 unless the application has named it once in `Job.isCancellationError`.
 
-The traces are those of the bloc answer above: `[play, seek 3, pause]` for the
-drag, and `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` when
-`seek 1` is already active. `pause` and `play` remain in the same queue with
-their default sequential policy. The token is local to the `seek` body, and
-callers can inspect the outcome of each `seek`, including `Cancelled(replaced)`
-for a replaced request.
+`with SoloStream` adds the `stream` of states these traces are read from; the
+policy does not need it. The traces are those of the bloc answer above:
+`[play, seek 3, pause]` for the drag, and
+`[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` when `seek 1` is
+already active. `pause` and `play` remain in the same queue with their default
+sequential policy. The token is local to the `seek` body, and callers can
+inspect the outcome of each `seek`, including `Cancelled(replaced)` for a
+replaced request.
 
 **What solo gives:** with `Policy.restart` on `seek` only, the device gets
 `[play, seek 3, pause]`, a `seek` in flight stops before its replacement
@@ -1660,6 +1664,8 @@ for the very work it makes worthless. `externalSetState` updates state
 immediately and checks running bodies against their rules. Here,
 `enqueue<SignedIn, void>` permits the build only while state is `SignedIn`, so
 the revocation cancels it with `Cancelled(rules: is not SignedIn)`.
+`with SoloStream` adds the `stream` of states the outcome is read from here;
+`externalSetState` does not need it.
 
 `externalSetState` is for a fact that has already happened: the session is
 gone, and no job waiting in line can change that. A request to do something —

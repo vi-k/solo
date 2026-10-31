@@ -10,7 +10,9 @@ A `Job<T>` runs a function called its body and records how it ended. Use
 `await job.done` to get its outcome or `await job.value` to get the value
 returned by the body. `Job` itself does not implement `Future`: a job started
 without `await` is ordinary use rather than a forgotten wait, and the lints for
-unawaited futures leave it alone.
+unawaited futures leave it alone. For the same reason `await job` compiles and
+waits for nothing; the core set of `package:lints` flags it with
+`await_only_futures`.
 
 ## Install
 
@@ -330,6 +332,7 @@ search.
 | A fix that keeps the public API | a patch release, such as `1.0.1` |
 | A new class, member or optional parameter | a minor release, such as `1.1.0` |
 | A removed or renamed member, a changed signature or documented behaviour | a major release, such as `2.0.0` |
+| A new value of an enum or a new subclass of a sealed class | a major release, such as `2.0.0` |
 
 From 1.0.0 on, `async_job` follows semantic versioning: the constraint `^1.0.0`
 takes every minor and patch release, and they keep code written against 1.0.0
@@ -346,6 +349,12 @@ a member to an interface you implement for a mock, such as `Job` or
 `noSuchMethod`, then stops compiling too. The changelog of such a release names
 the members it adds. A new top-level name can clash with the same name imported
 from another package, until one of the imports hides it with `hide`.
+
+A `switch` over an `Outcome` or a `JobErrorAnswer` can be exhaustive, and a new
+subclass of the sealed `Outcome` or a new value of the enum would make it stop
+compiling: these come only in a major release. `CancelReason` is open, and a
+minor release can add a reason, so a `switch` over reasons keeps a default
+case.
 
 What `package:async_job/engine.dart` adds, the protocol for building an engine,
 is outside the promise: `JobBase`, `JobContextBase`, `JobStatus` and their

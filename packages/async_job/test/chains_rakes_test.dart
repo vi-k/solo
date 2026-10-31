@@ -800,7 +800,7 @@ ${page.adoptedTail}
         async.flushTimers();
         final text = File('doc/chains.md').readAsStringSync();
         final quoted = RegExp(
-          r'with `HandlerCancelReason`:\n\n```text\n(.*?)\n```',
+          r'with `BodyCancelReason`:\n\n```text\n(.*?)\n```',
           dotAll: true,
         );
         expect(

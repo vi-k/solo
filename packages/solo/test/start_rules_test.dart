@@ -573,7 +573,7 @@ void main() {
 
   test('a job put back from a policy hook is refused', () {
     runSolo((solo, journal, async) {
-      // `replace` drops the job that was queued, and its finish hook runs
+      // `keepLatest` drops the job that was queued, and its finish hook runs
       // while the incoming one is on its way into the queue.
       Object? refused;
       var once = true;
@@ -592,7 +592,7 @@ void main() {
         ..enqueue<Initial, void>(key: 'blocker', (ctx) async => pause(ctx, 50))
         ..enqueueJob(solo.job<Initial, void>(key: 'old', (ctx) async {}));
       incoming = solo.job<Initial, void>(key: 'old', (ctx) async {});
-      solo.enqueueJob(incoming, policy: Policy.replace);
+      solo.enqueueJob(incoming, policy: Policy.keepLatest);
       async.flushTimers();
       expect(refused, isA<StateError>());
       expect(solo.queue.length, 0);

@@ -217,7 +217,7 @@ void main() {
       final job = Job<void>((ctx) async => throw const Cancelled('no photo'));
       async.flushMicrotasks();
       final outcome = job.outcome! as Cancelled;
-      expect(outcome.reason, isA<HandlerCancelReason>());
+      expect(outcome.reason, isA<BodyCancelReason>());
       expect(outcome.description, 'no photo');
       expect(outcome.started, isTrue);
     });

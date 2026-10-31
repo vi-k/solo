@@ -32,7 +32,11 @@ reaches the server or the device, and what the controller's state ends up as.
 `collect` and `accumulate` both take three type arguments, `<W, E, T>`: the
 working type `W`, as in `enqueue`, the event type `E` and the result type `T`,
 and return a `SoloAccumulator<E, T>`. Create it once in your controller, then
-call its `add(event)` method from the controller's public methods.
+call its `add(event)` method from the controller's public methods. The recipes
+keep it in a `late final` field: `collect` and `accumulate` are methods of the
+controller, which a plain field initializer cannot call, and an accumulator
+made anew on every call groups nothing, because events combine only within one
+accumulator.
 
 The accumulator owns the input of a queued job. Adding an event does not run
 the handler or change controller state. The events that share one job are a
@@ -640,7 +644,7 @@ default.
 
 Where `resume` and `pause` are genuinely different operations rather than one
 command with a value, they are ordinary jobs with keys of their own.
-`Policy.replace` does not help: it removes jobs with the same key, and these
+`Policy.keepLatest` does not help: it removes jobs with the same key, and these
 two do not share one. The controller's own queue is what removes them:
 
 ```dart

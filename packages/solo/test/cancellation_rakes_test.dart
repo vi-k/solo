@@ -1665,17 +1665,17 @@ void main() {
         },
       );
 
-      test('HandlerCancelReason: a body that throws Cancelled', () {
+      test('BodyCancelReason: a body that throws Cancelled', () {
         fakeAsync((async) {
           final job = Bench().enqueue<Ready, void>(
             (ctx) async => throw const Cancelled('why'),
           );
           async.flushMicrotasks();
 
-          expect('${job.outcome}', 'Cancelled(handler: why)');
-          expect(_reason(job), isA<HandlerCancelReason>());
+          expect('${job.outcome}', 'Cancelled(body: why)');
+          expect(_reason(job), isA<BodyCancelReason>());
           expect(
-            _printedAs()['HandlerCancelReason'],
+            _printedAs()['BodyCancelReason'],
             allOf(
               contains("`${job.outcome}` for `throw Cancelled('why')`"),
               isNot(contains('reason')),
@@ -1684,7 +1684,7 @@ void main() {
         });
       });
 
-      test('HandlerCancelReason: a body that lets out the cancellation of a '
+      test('BodyCancelReason: a body that lets out the cancellation of a '
           'child, with the cause', () {
         fakeAsync((async) {
           final bench = Bench();
@@ -1703,7 +1703,7 @@ void main() {
 
           expect(
             _reason(job),
-            isA<HandlerCancelReason>().having(
+            isA<BodyCancelReason>().having(
               (reason) => reason.cause,
               'cause',
               same(child.outcome),
@@ -1713,7 +1713,7 @@ void main() {
         });
       });
 
-      test('HandlerCancelReason: prints the child and how it ended', () {
+      test('BodyCancelReason: prints the child and how it ended', () {
         fakeAsync((async) {
           final bench = Bench();
           final job = bench.enqueue<Ready, void>(
@@ -1729,10 +1729,10 @@ void main() {
 
           expect(
             '${job.outcome}',
-            'Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))',
+            'Cancelled(body: Job(_Op.upload): Cancelled(rules: canStart))',
           );
           expect(
-            _printedAs()['HandlerCancelReason'],
+            _printedAs()['BodyCancelReason'],
             contains(
               "for a child's cancellation, the child and how it ended: "
               '`${job.outcome}`',
@@ -1908,7 +1908,7 @@ void main() {
           );
           final replacing = bench.enqueueJob(
             bench.job<Ready, void>(key: 'load', (ctx) async {}),
-            policy: Policy.replace,
+            policy: Policy.keepLatest,
           );
 
           expect(_reason(queued), isA<ReplacedCancelReason>());
@@ -1958,7 +1958,7 @@ void main() {
             '`queue.clear`',
           ],
           'ParentCancelReason': ['the parent was cancelled'],
-          'HandlerCancelReason': [
+          'BodyCancelReason': [
             'threw `Cancelled` itself',
             'the cancellation of a child',
           ],
@@ -1972,7 +1972,7 @@ void main() {
           ],
           'ClosedCancelReason': ['`close()`', 'a job enqueued after it'],
           'DuplicateCancelReason': ['`Policy.droppable`'],
-          'ReplacedCancelReason': ['`Policy.replace`', '`Policy.restart`'],
+          'ReplacedCancelReason': ['`Policy.keepLatest`', '`Policy.restart`'],
           'TimeoutCancelReason': ['`timeout`'],
         };
         final when = _when();
@@ -1995,7 +1995,7 @@ void main() {
         expect(_printedAs().keys, [
           'ManualCancelReason',
           'ParentCancelReason',
-          'HandlerCancelReason',
+          'BodyCancelReason',
           'ChainCancelReason',
           'SiblingCancelReason',
           'RulesCancelReason',
@@ -2042,7 +2042,7 @@ void main() {
           expect(heard, isEmpty);
 
           _end(async, 'step');
-          expect(heard, ['Cancelled(handler: reason)']);
+          expect(heard, ['Cancelled(body: reason)']);
           expect(job.isFinished, isFalse, reason: 'its child still runs');
           _end(async, 'child');
           expect(job.outcome, isA<Cancelled>());
@@ -2965,7 +2965,7 @@ void main() {
           'ctx.onCancel',
         ]);
         expect(_reason(child), isA<ParentCancelReason>());
-        expect('${job.outcome}', 'Cancelled(handler: reason)');
+        expect('${job.outcome}', 'Cancelled(body: reason)');
         expect(bench.isClosed, isFalse, reason: 'no controller call was made');
         _end(async, 'child');
       });

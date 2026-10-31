@@ -121,7 +121,7 @@ void main() {
         () {
           fakeAsync((async) {
             final solo = PlainSolo<int>(0);
-            final first = load(solo, Policy.replace);
+            final first = load(solo, Policy.keepLatest);
             final second = load(solo);
             expect(identical(first, second), isTrue);
             expect(() => _plainThen(second), _throwing(_droppable));
@@ -190,7 +190,7 @@ void main() {
           final solo = PlainSolo<int>(0);
           for (final policy in [
             Policy.sequential,
-            Policy.replace,
+            Policy.keepLatest,
             Policy.restart,
           ]) {
             final next = load(

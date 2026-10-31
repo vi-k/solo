@@ -34,7 +34,7 @@ the subclass.
 | `isDraining` | Whether a `close()` that drains is still running the queue | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isFinished` | Whether closing has finished and the state can no longer change | [externalSetState](state.md#externalsetstate) |
 | `pending` | What is holding the controller right now, a running job included, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
-| `cancelAll()` | Clears the queue and cancels the running job; the controller stays open | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `cancelAll()` | Clears the queue and cancels the running job; the controller stays open. `force: true` removes queued jobs made with `cancellable: false` too, and `reason:` names the reason every job it ends carries | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `close()` | Stops taking work and closes, cancelling what is queued and running or, with `mode: SoloCloseMode.drain`, running the queue first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 
 ### What the subclass uses
@@ -92,8 +92,8 @@ parameters after it. The first type argument of each is the working type, in
 | `merge` | `accumulate` | A required, synchronous and pure function that merges an incoming event into the value of the group | [Start, cancellation and errors](accumulation-rules.md#start-cancellation-and-errors) |
 | `canStart` | `enqueue`, `job`, `collect`, `accumulate` | Asked once as the job is about to start, ending it `Cancelled(rules: canStart)` on `false` | [The rules](state.md#the-rules) |
 | `keepWhile` | `enqueue`, `job`, `collect`, `accumulate` | Keeps the job while the state allows it, and on `false` cancels it `Cancelled(rules: keepWhile)` | [The rules](state.md#the-rules) |
-| `cancellable` | `enqueue`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing | [A whole job](cancellation.md#a-whole-job) |
-| `timeout` | `enqueue`, `job`, `collect`, `accumulate` | A deadline counted from the start of the body, after which the job ends `Cancelled(timeout)` | [A deadline of a job](cancellation.md#a-deadline-of-a-job) |
+| `cancellable` | `enqueue`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation and the parent's, and closing once the job runs: a queued one `close()` drops | [A whole job](cancellation.md#a-whole-job) |
+| `timeout` | `enqueue`, `job`, `collect`, `accumulate` | A deadline counted from the start of the body, after which the job ends `Cancelled(timeout)`; with `cancellable: false` the call throws `ArgumentError` | [A deadline of a job](cancellation.md#a-deadline-of-a-job) |
 | `ifFailed` | `enqueue`, `job`, `collect`, `accumulate` | The state to write when the job fails, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
 | `isExpectedError` | `enqueue`, `job`, `collect`, `accumulate` | Names the errors the job expects: one it names is heard by `onError` with `never`, and nobody is asked to answer for it | [Naming the expected errors](errors.md#naming-the-expected-errors) |
 | `ifCancelled` | `enqueue`, `job`, `collect`, `accumulate` | The state to write when the job is cancelled, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
@@ -164,11 +164,13 @@ field: events combine only within one accumulator, even under the same key.
 
 | Type | What it is | Where |
 | --- | --- | --- |
-| `Policy` | What `enqueueJob` and `enqueue` do with a job whose key is already queued or running: `sequential`, `droppable`, `replace` or `restart` | [Queue and policies](jobs.md#queue-and-policies) |
+| `Policy` | What `enqueueJob` and `enqueue` do with a job whose key is already queued or running: `sequential`, `droppable`, `keepLatest` or `restart` | [Queue and policies](jobs.md#queue-and-policies) |
 | `SoloCloseMode` | How `close()` stops: `cancel` or `drain` | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `SoloUnansweredHandler` | The type of `Solo.unansweredHandler`: a function of the controller, the job, the error and its stack trace | [Answering for an error](errors.md#answering-for-an-error) |
 | `SoloObserver` | What `Solo.observer` takes, one or several joined by `SoloObserver.all`: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate` | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](diagnostics.md#watching-every-controller) |
-| `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `SoloPhase`, a `SoloPendingQueue` or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
+| `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `job` and `phase`, a `SoloPendingQueue` with its `jobs`, or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
+| `SoloPhase` | Where the job of a `SoloPendingJob` stands: `body`, `children` or `cleanup` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `SoloStream` | A mixin that adds a broadcast `stream` of the states | [Observing state](state.md#observing-state) |
 | `AccumulationPolicy` | Which waiting group an event joins: `join`, `adjacent` or `replace` | [Choosing where events join](accumulation-rules.md#choosing-where-events-join) |
 | `AccumulationTiming` | When a group may start: `debounce` or `throttle` | [Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready) |

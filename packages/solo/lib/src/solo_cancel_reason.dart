@@ -40,9 +40,9 @@ final class DuplicateCancelReason extends SoloCancelReason {
   String get name => 'duplicate';
 }
 
-/// [Solo.enqueueJob] under `Policy.replace` or `Policy.restart` put a newer job
-/// with the same key in this one's place: took it out of the queue, or, under
-/// `restart`, cancelled it while it ran.
+/// [Solo.enqueueJob] under `Policy.keepLatest` or `Policy.restart` put a newer
+/// job with the same key in this one's place: took it out of the queue, or,
+/// under `restart`, cancelled it while it ran.
 ///
 /// A reason of its own, apart from [ManualCancelReason]: nobody asked for
 /// this job to stop, a later call with its key stands in for it.

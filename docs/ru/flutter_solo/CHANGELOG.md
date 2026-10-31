@@ -9,6 +9,8 @@
 
 - **`ctx.wait` из `async_job`, устаревший с 0.3.0 в пользу `ctx.abandonable`,
   удалён.**
+- **`Policy.replace` из `solo` переименован в `Policy.keepLatest`,
+  а `HandlerCancelReason` из `async_job` — в `BodyCancelReason`.**
 
 ### Документация
 
@@ -17,6 +19,11 @@
 - README называет плагин анализатора `solo_lints` в разделе «Установка» и велит
   проверять его через `dart analyze`: начиная с Flutter 3.44 `flutter analyze`
   не показывает ни одной его диагностики.
+- README говорит, что новое значение перечисления или новый подкласс
+  запечатанного класса выходит в мажорном выпуске и что на `close()` работающая
+  задача с `cancellable: false` доходит до конца, а ждущая в очереди снимается.
+- Страница о миксинах говорит, что `await for` по `stream` держит `close()`
+  с `SoloStream`, с `SoloListenable` или без него.
 
 ## 0.6.0
 

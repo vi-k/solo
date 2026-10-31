@@ -176,7 +176,7 @@ Job<void> commit(String entry) => enqueue<Ready, void>((ctx) async {
 });
 ```
 
-Ручная отмена, отмена родителя и закрытие удерживаются, пока выполняется
+Ручная отмена, отмена родителя, закрытие и срок удерживаются, пока выполняется
 действие `uncancellable`. `Job` эти запросы пока не принимает, поэтому
 контрольная точка внутри секции на них не бросает, и квитанция доходит
 до состояния. Колбэки отмены и передача отмены детям тоже откладываются.
@@ -201,11 +201,12 @@ Job<void> flush() =>
     enqueue<Ready, void>(cancellable: false, (ctx) => device.flush());
 ```
 
-`cancellable: false` у `Job` полностью отклоняет запросы, которые секция
-удерживает: ручную отмену, отмену родителя и закрытие. Пока такая `Job` ждёт
-в очереди, `queue.remove`, `queue.removeWhere`, `queue.clear` и `cancelAll()`
-оставляют её на месте; с `force: true` они её убирают. `close()` тоже убирает
-её из очереди, а работающую дожидается.
+`cancellable: false` у `Job` полностью отклоняет ручную отмену, отмену родителя
+и закрытие. `timeout` такой `Job` не дают: срок — это отмена, которую она
+отклонила бы, поэтому вызов, где есть и то и другое, бросает `ArgumentError`.
+Пока такая `Job` ждёт в очереди, `queue.remove`, `queue.removeWhere`,
+`queue.clear` и `cancelAll()` оставляют её на месте; с `force: true` они её
+убирают. `close()` тоже убирает её из очереди, а работающую дожидается.
 
 Флаг действует, только когда `Job` держит движок: `Job`, которую создал `job`,
 а `enqueueJob` так и не поставил в очередь, отменяется как любая другая.
@@ -249,8 +250,8 @@ Job<void> upload(List<int> chunks) => enqueue<Ready, void>((ctx) async {
 и к началу уборки тело уже закончилось: `join` бросает `StateError`, и сброса
 не происходит. От исхода `Job` это не зависит: загрузка, закончившаяся `Done`,
 тоже оставляет буфер несброшенным. Об ошибке узнаёт хук `onError` контроллера,
-а затем она уходит в `Solo.unansweredHandler` или, если обработчик не задан,
-в зону; весь маршрут описан в разделе
+а затем `onUnanswered` просят за неё ответить, и по умолчанию он передаёт её
+дальше, в `Solo.unansweredHandler` или в зону; весь маршрут описан в разделе
 [«Ответ за ошибку»](errors.md#ответ-за-ошибку) страницы об ошибках.
 
 ### Каждое ожидание на своём месте
@@ -335,13 +336,13 @@ switch (job.outcome) {
 | --- | --- | --- |
 | `ManualCancelReason` | `cancel()`, `cancelAll()`, `queue.remove`, `queue.removeWhere` или `queue.clear`, вызванные без причины | `Cancelled(manual)` |
 | `ParentCancelReason` | отменили родителя, и отмена дошла до ребёнка | `Cancelled(parent)` |
-| `HandlerCancelReason` | тело сдалось: само бросило `Cancelled` или выпустило отмену ребёнка | `Cancelled(handler: why)` для `throw Cancelled('why')`; для отмены ребёнка — сам ребёнок и то, чем он кончился: `Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))` |
+| `BodyCancelReason` | тело сдалось: само бросило `Cancelled` или выпустило отмену ребёнка | `Cancelled(body: why)` для `throw Cancelled('why')`; для отмены ребёнка — сам ребёнок и то, чем он кончился: `Cancelled(body: Job(_Op.upload): Cancelled(rules: canStart))` |
 | `ChainCancelReason` | отмена пришла по цепочке `then` | `Cancelled(chain)` |
 | `SiblingCancelReason` | другая ветка `ctx.runAll` упала или была отменена либо сбой случился у самой группы, и группа остановила остальные | `Cancelled(sibling)` |
 | `RulesCancelReason` | состояние вышло из рабочего типа, `canStart` или `keepWhile` ответили «нет» либо `ctx.stateAs` нашёл другой тип | `Cancelled(rules: is not Ready)`, `Cancelled(rules: canStart)`, `Cancelled(rules: keepWhile)` |
 | `ClosedCancelReason` | `close()` или `Job`, поставленная в очередь после него | `Cancelled(closed)` |
 | `DuplicateCancelReason` | `Policy.droppable` нашёл `Job` с тем же ключом и вернул её | `Cancelled(duplicate)` |
-| `ReplacedCancelReason` | `Policy.replace` или `Policy.restart` поставили на её место более новую `Job` с тем же ключом | `Cancelled(replaced)` |
+| `ReplacedCancelReason` | `Policy.keepLatest` или `Policy.restart` поставили на её место более новую `Job` с тем же ключом | `Cancelled(replaced)` |
 | `TimeoutCancelReason` | истёк срок, заданный через `timeout` | `Cancelled(timeout)` |
 
 Проверяйте тип, как первая ветка `switch` выше; `name` служит подписью,
@@ -361,9 +362,10 @@ switch (job.outcome) {
 Успешные и провалившиеся `Job` удаляют слушатели без вызова.
 
 То, что слушатель бросил, идёт тем же путём, что ошибка уборки: в хук
-`onError`, а затем в `Solo.unansweredHandler` или в зону. Так же идёт и то, что
-бросил колбэк `ctx.onCancel`. У `async`-слушателя future никто не ждёт, и её
-ошибка уходит прямо в зону, мимо хука.
+`onError`, а затем в `onUnanswered`, который по умолчанию передаёт её
+в `Solo.unansweredHandler` или в зону. Так же идёт и то, что бросил колбэк
+`ctx.onCancel`. У `async`-слушателя future никто не ждёт, и её ошибка уходит
+прямо в зону, мимо хука.
 
 ## Срок задачи
 

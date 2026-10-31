@@ -222,12 +222,12 @@ print(message);
 ```
 
 ```text
-cancelled: handler
+cancelled: body
 ```
 
 The request cancelled `fetch`, not `report`. The cancellation of `fetch`
 escaped through the body of `report`, and `report` ended with a `Cancelled` of
-its own, whose reason is `HandlerCancelReason`: its body cancelled itself. The
+its own, whose reason is `BodyCancelReason`: its body cancelled itself. The
 `RequestCancelReason` is one step down, in the `cause` of that reason.
 
 ### Following the cause
@@ -237,7 +237,7 @@ CancelReason origin(Cancelled cancelled) {
   var reason = cancelled.reason;
   while (true) {
     if (reason
-        case HandlerCancelReason(:final cause?) ||
+        case BodyCancelReason(:final cause?) ||
             ParentCancelReason(:final cause?) ||
             ChainCancelReason(:final cause)) {
       reason = cause.reason;
@@ -267,7 +267,7 @@ Four reasons have a `cause`:
 | Reason | Who gets it, and when | `cause` holds | Does `origin` follow it? |
 | --- | --- | --- | --- |
 | `ParentCancelReason` | a child, when its parent's cancellation cascades to it | the parent's `Cancelled` | yes |
-| `HandlerCancelReason` | a parent, when a child's cancellation escapes through its body | the child's `Cancelled` | yes |
+| `BodyCancelReason` | a parent, when a child's cancellation escapes through its body | the child's `Cancelled` | yes |
 | `ChainCancelReason` | a job in a chain of `then`, when a neighbour's cancellation is forwarded to it | the neighbour's `Cancelled` | yes |
 | `SiblingCancelReason` | a branch of `ctx.runAll`, when the group fails and stops the other branches | what the group stopped for: the error or the cancellation another branch ended with, or an error of the group itself | no, `origin` returns the `SiblingCancelReason` itself |
 
@@ -279,15 +279,14 @@ the parent's `TimeoutCancelReason`. A chain of `then` has no limit on its
 length, and its `ChainCancelReason`s nest as deep as the chain is long, so
 `origin` walks them in a loop: a long chain costs it no stack.
 
-A body that awaits `value` of a job it does not own gets no
-`HandlerCancelReason` for it. That job's cancellation goes through with its
-reason as it is, and the outcome reads `Cancelled(manual)` for a job nobody
-called `cancel` on.
+A body that awaits `value` of a job it does not own gets no `BodyCancelReason`
+for it. That job's cancellation goes through with its reason as it is, and the
+outcome reads `Cancelled(manual)` for a job nobody called `cancel` on.
 
 Besides the `reason`, `Cancelled` contains a `started` flag, an optional
 `description` and the stack trace of the cancellation. `started` tells you
 whether the body ran or was cancelled before start. The built-in reason classes
-are `ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`,
+are `ManualCancelReason`, `ParentCancelReason`, `BodyCancelReason`,
 `ChainCancelReason`, `SiblingCancelReason` and `TimeoutCancelReason`.
 `TimeoutCancelReason` is what a job gets when the deadline given with `timeout`
 runs out, as [A deadline](time.md#a-deadline) shows. All extend `CancelReason`.
@@ -297,8 +296,8 @@ property is a label for logs and does not determine equality. Reasons use
 identity equality unless their class defines value equality.
 
 The body can throw `Cancelled.by(reason: reason)` to use an explicit reason, or
-`Cancelled('why')` to use `HandlerCancelReason`. An error's stack trace stored
-in a reason is separate from the cancellation's stack trace:
+`Cancelled('why')` to use `BodyCancelReason`. An error's stack trace stored in
+a reason is separate from the cancellation's stack trace:
 `RequestCancelReason.stackTrace` is where the request failed, and
 `Cancelled.stackTrace` is where the cancellation came from.
 

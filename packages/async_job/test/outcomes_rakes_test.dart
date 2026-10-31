@@ -34,7 +34,7 @@ const quoted = [
     'status redrawn: Failed(Bad state: disk full)',
     'zone: Bad state: disk full',
   ],
-  ['cancelled: handler'],
+  ['cancelled: body'],
   ['request failed: Bad state: token expired'],
   ['step finished', 'cleanup', 'cancelling: manual'],
   ['cancelling: manual', 'step finished', 'cleanup'],
@@ -418,8 +418,8 @@ void main() {
 
       expect(lines, quoted[5]);
       final reason = (jobs.report.outcome! as Cancelled).reason;
-      expect(reason, isA<HandlerCancelReason>());
-      expect((reason as HandlerCancelReason).cause, same(jobs.fetch.outcome));
+      expect(reason, isA<BodyCancelReason>());
+      expect((reason as BodyCancelReason).cause, same(jobs.fetch.outcome));
     });
 
     test('origin follows the cause down to the request', () {
@@ -501,7 +501,7 @@ void main() {
       expect(named, [
         '$ManualCancelReason',
         '$ParentCancelReason',
-        '$HandlerCancelReason',
+        '$BodyCancelReason',
         '$ChainCancelReason',
         '$SiblingCancelReason',
         '$TimeoutCancelReason',
@@ -548,8 +548,8 @@ void main() {
         async.flushTimers();
 
         final reason = page.origin(job.outcome! as Cancelled);
-        expect(reason, isA<HandlerCancelReason>());
-        expect((reason as HandlerCancelReason).cause, isNull);
+        expect(reason, isA<BodyCancelReason>());
+        expect((reason as BodyCancelReason).cause, isNull);
       });
     });
 
@@ -840,7 +840,7 @@ void main() {
           'own onCancel',
           'listener',
           'child ended',
-          'Cancelled(handler: why)',
+          'Cancelled(body: why)',
         ]);
       });
     });
@@ -880,7 +880,7 @@ void main() {
             'own onCancel',
             'listener',
             'other child ended',
-            'Cancelled(handler: Job(): Cancelled(manual))',
+            'Cancelled(body: Job(): Cancelled(manual))',
           ]);
         });
       },

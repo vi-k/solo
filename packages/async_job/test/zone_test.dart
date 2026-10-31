@@ -515,10 +515,10 @@ void main() {
     expect(
       journal.lines.where((line) => line.contains('error')).toList(),
       const <String>[
-        '[job] error Cancelled(handler: onCancel)',
-        '[job] error Cancelled(handler: disposer)',
-        '[job] error Cancelled(handler: unattended)',
-        '[job] error Cancelled(handler: late action)',
+        '[job] error Cancelled(body: onCancel)',
+        '[job] error Cancelled(body: disposer)',
+        '[job] error Cancelled(body: unattended)',
+        '[job] error Cancelled(body: late action)',
       ],
       reason: 'held back from the zone, not from whoever listens',
     );
@@ -557,7 +557,7 @@ void main() {
         });
       }, (error, stackTrace) => caught.add(error));
       expect(caught.map((error) => '$error').toList(), [
-        'Cancelled(handler: as a failure)',
+        'Cancelled(body: as a failure)',
       ]);
     },
   );

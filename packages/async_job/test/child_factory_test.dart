@@ -75,9 +75,9 @@ void main() {
         )..ignoreFailure();
         async.flushTimers();
         final reason = (parent.outcome! as Cancelled).reason;
-        expect(reason, isA<HandlerCancelReason>());
+        expect(reason, isA<BodyCancelReason>());
         expect(
-          (reason as HandlerCancelReason).cause!.reason,
+          (reason as BodyCancelReason).cause!.reason,
           isA<TimeoutCancelReason>(),
         );
       });

@@ -189,7 +189,7 @@ void main() {
       child.cancel(reason: reason).ignore();
       async.flushTimers();
       final parentReason =
-          (parent.outcome! as Cancelled).reason as HandlerCancelReason;
+          (parent.outcome! as Cancelled).reason as BodyCancelReason;
       expect(parentReason.cause, same(child.outcome));
       expect(parentReason.cause!.reason, same(reason));
     });
@@ -233,7 +233,7 @@ void main() {
       expect(parent.isFinished, isTrue);
       expect(disposed, isTrue);
       final parentReason =
-          (parent.outcome! as Cancelled).reason as HandlerCancelReason;
+          (parent.outcome! as Cancelled).reason as BodyCancelReason;
       expect(parentReason.cause!.reason, same(reason));
       expect(errors, [isA<StateError>()]);
     });

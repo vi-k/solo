@@ -61,9 +61,9 @@ above follows the progress of the upload. [Streams](streams.md) is about such
 children in a controller: what a subscription made by hand in a body does, how
 long the child holds the queue, and how to follow another controller.
 
-`api` and `analytics` belong to the application these examples come from, and
-`Ready` is the state its controller works in, with the fields `sent`, `path`
-and `paused`.
+`api` and `analytics` belong to the application these examples come from, `_Op`
+is its enum of job keys, and `Ready` is the state its controller works in, with
+the fields `sent`, `path` and `paused`.
 
 ## The future of `ctx.run`
 
@@ -184,7 +184,7 @@ Job<String> resend(int item) =>
 With the state paused, nothing is uploaded and `resend` ends:
 
 ```text
-Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))
+Cancelled(body: Job(_Op.upload): Cancelled(rules: canStart))
 ```
 
 A child the start rules turn away never runs. It is adopted first — parent and
@@ -195,11 +195,11 @@ cancellation. It joins no waiting list, so the parent waits for nothing; the
 future of `ctx.run` carries that cancellation all the same, and it is what ends
 `resend` above.
 
-`handler:` in that line is not a state handler of `enqueue`. It is
-`HandlerCancelReason`, the reason the core gives a body that lets the
-cancellation of its child out, and after it come the child and the cancellation
-it ended with. [Cancellation details](cancellation.md#cancellation-details) has
-every reason and how it prints.
+`body:` in that line is `BodyCancelReason`: the core gives it to a body that
+lets the cancellation of its child out, and after it come the child and the
+cancellation it ended with.
+[Cancellation details](cancellation.md#cancellation-details) has every reason
+and how it prints.
 
 The rules `canStart` and `keepWhile`, when they throw themselves, are the other
 case. The error is the rule's own, the child ends `Failed` with it, and

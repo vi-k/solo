@@ -321,3 +321,9 @@ Three things are different from the child:
   every cancellation, and `cancel()` does not return until the job ends by
   itself: the stream ends or fails, or the callback throws — a `Cancelled`
   included. On a stream that never ends, that is the only way out.
+
+Both `each` take a single-subscription stream once, as `listen` does. A second
+`each` on a stream that is already listened to does not throw from the call:
+the job it makes ends `Failed` with the `StateError` of `listen`,
+`Bad state: Stream has already been listened to.`, and the failure goes where
+any other goes.

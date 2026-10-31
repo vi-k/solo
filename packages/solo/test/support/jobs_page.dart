@@ -70,7 +70,7 @@ final class CameraController extends Solo<CameraState>
   // replace: the queued zoom goes, a running one is left alone.
   Job<void> setZoom(double zoom) => enqueue<Ready, void>(
     key: _Op.zoom,
-    policy: Policy.replace,
+    policy: Policy.keepLatest,
     (ctx) => ctx.join(() => camera.zoom(zoom)),
   );
 

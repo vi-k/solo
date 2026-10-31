@@ -733,7 +733,7 @@ void main() {
         expect(job.isFinished, isFalse, reason: 'its child still runs');
         expect(job.held, isNull, reason: 'the job already accepted its own');
         async.flushTimers();
-        expect((job.outcome! as Cancelled).reason, isA<HandlerCancelReason>());
+        expect((job.outcome! as Cancelled).reason, isA<BodyCancelReason>());
       });
     },
   );

@@ -206,7 +206,7 @@ final class JoiningPlayer extends Solo<Playback> {
 
 /// The two commands as ordinary jobs under one of the queue's own
 /// policies, with keys of their own or with one key for both.
-/// "`Policy.replace` does not help" and "give both commands one key and
+/// "`Policy.keepLatest` does not help" and "give both commands one key and
 /// `Policy.restart`" are said of these.
 final class KeyedPlayer extends Solo<Playback> {
   final PlayerDevice device;

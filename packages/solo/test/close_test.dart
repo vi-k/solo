@@ -226,7 +226,7 @@ void main() {
       Solo.observer = _ClosingObserver(solo, key: 'x');
       final incoming = solo.enqueue<TestState, void>(
         key: 'x',
-        policy: Policy.replace,
+        policy: Policy.keepLatest,
         (ctx) async {},
       );
       Solo.observer = journal;
@@ -258,7 +258,7 @@ void main() {
       );
       final incoming = solo.enqueue<TestState, void>(
         key: 'x',
-        policy: Policy.replace,
+        policy: Policy.keepLatest,
         (ctx) async {},
       );
       Solo.observer = journal;

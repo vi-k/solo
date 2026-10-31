@@ -409,7 +409,7 @@ void main() {
     // Both reached the hook; neither reached the zone. Without the
     // `error is! Cancelled` guard the zone would hold them too.
     expect(solo.errors, [
-      'Cancelled(handler: mine)',
+      'Cancelled(body: mine)',
       'Cancelled(rules: keepWhile)',
     ]);
     expect(caught, isEmpty);

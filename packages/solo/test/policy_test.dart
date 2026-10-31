@@ -38,7 +38,7 @@ SoloJob<void> restartable(TestSolo solo, int n) => solo.enqueue<Special, void>(
 SoloJob<void> replaceable(TestSolo solo, int n) => solo.enqueue<Special, void>(
   key: 'replace',
   describe: () => '$n',
-  policy: Policy.replace,
+  policy: Policy.keepLatest,
   (ctx) async {
     await delay(100);
     final count = ctx.state.sequentialCount + 1;
@@ -406,7 +406,11 @@ void main() {
 
   test('a policy other than sequential requires a key', () {
     runSolo((solo, journal, async) {
-      for (final policy in [Policy.droppable, Policy.replace, Policy.restart]) {
+      for (final policy in [
+        Policy.droppable,
+        Policy.keepLatest,
+        Policy.restart,
+      ]) {
         expect(
           () => solo.enqueue<TestState, void>(policy: policy, (ctx) async {}),
           throwsArgumentError,
@@ -421,7 +425,7 @@ void main() {
     expect(Policy.values, [
       Policy.sequential,
       Policy.droppable,
-      Policy.replace,
+      Policy.keepLatest,
       Policy.restart,
     ]);
   });
@@ -487,7 +491,7 @@ void main() {
       });
     });
 
-    for (final policy in [Policy.replace, Policy.restart]) {
+    for (final policy in [Policy.keepLatest, Policy.restart]) {
       test('${policy.name} from its rule removes it before it starts', () {
         runSolo((solo, journal, async) {
           late final SoloJob<void> first;
@@ -526,13 +530,13 @@ void main() {
           canStart: (state) {
             solo.enqueueJob(
               solo.job<TestState, void>(key: 'b', (ctx) async {}),
-              policy: Policy.replace,
+              policy: Policy.keepLatest,
             );
             return true;
           },
           (ctx) async {},
         );
-        solo.enqueueJob(first, policy: Policy.replace);
+        solo.enqueueJob(first, policy: Policy.keepLatest);
         async.flushTimers();
         expect(journal.take(), [
           '[a] started',
@@ -600,13 +604,13 @@ void main() {
                 describe: () => 'second',
                 (ctx) async {},
               ),
-              policy: Policy.replace,
+              policy: Policy.keepLatest,
             );
             return true;
           },
           (ctx) async {},
         );
-        solo.enqueueJob(first, policy: Policy.replace);
+        solo.enqueueJob(first, policy: Policy.keepLatest);
         async.flushTimers();
         expect(journal.take(), [
           '[k: first] started',
@@ -622,7 +626,7 @@ void main() {
   // `enqueueJob` that replaces it, and that code may ask for the same key
   // again. The job asked for last is the one that has to run last.
   group('a job queued from the code of a job it replaces', () {
-    for (final policy in [Policy.replace, Policy.restart]) {
+    for (final policy in [Policy.keepLatest, Policy.restart]) {
       for (final hook in ['onFinish', 'whenCancelled']) {
         for (final running in [false, if (policy == Policy.restart) true]) {
           final where = running ? 'running' : 'queued';

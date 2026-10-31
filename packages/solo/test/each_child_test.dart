@@ -39,6 +39,20 @@ void main() {
     });
   });
 
+  test('each hands back a SoloJob, as child does', () {
+    runSolo((solo, journal, async) {
+      final seen = <bool>[];
+      solo.enqueue<NotDisposed, void>((ctx) async {
+        // `isQueued` is a member of `SoloJob`: this line compiles only
+        // while `each` is typed to return one.
+        final child = ctx.each(const Stream<int>.empty(), (child, event) {});
+        seen.add(child.isQueued);
+      });
+      async.flushMicrotasks();
+      expect(seen, [false]);
+    });
+  });
+
   test('a child emits after the parent body returned and holds the queue', () {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();

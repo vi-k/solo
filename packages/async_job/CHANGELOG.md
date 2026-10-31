@@ -4,6 +4,16 @@
 
 - **`ctx.wait`, deprecated in favour of `ctx.abandonable` in 0.3.0, is
   removed.**
+- **`HandlerCancelReason` is renamed `BodyCancelReason`, and its `name`, which
+  outcomes and traces print, is `body` instead of `handler`.** The reason says
+  that the body cancelled itself, directly or by letting the cancellation of a
+  child out.
+
+### Added
+
+- `Job.debug` prints `awaited before start` the first time `done` or `value` of
+  a `Job.deferred` is awaited while nobody has started it: such a wait never
+  ends.
 
 ### Documentation
 
@@ -22,6 +32,16 @@
 - A new page, [With riverpod and bloc](doc/riverpod-and-bloc.md), puts a job
   under a riverpod provider or notifier and a bloc handler, and aborts an HTTP
   request of http or dio with the job.
+- The README says that a new value of an enum or a new subclass of a sealed
+  class comes in a major release, and that a switch over `CancelReason`, which
+  is open, keeps a default case.
+- The README says that a job is not a `Future`: `await job` waits for nothing,
+  and the `await_only_futures` rule of `package:lints` flags it.
+- The streams page says what a second `each` on a single-subscription stream
+  does: the job it makes fails, and the call does not throw.
+- The time page says that a negative pause counts as zero.
+- The error rules page names the `Job.debug` line of a deferred job awaited
+  before its start.
 
 ## 0.6.0
 

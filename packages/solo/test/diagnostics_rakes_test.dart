@@ -233,6 +233,25 @@ void main() {
         'Job(zoom) finished: Done(null)',
       ]);
     });
+
+    test('a job the rules turn down at its start is traced as dropped', () {
+      final ran = runFaked((async) {
+        page.traceTheEngine();
+        Bench()
+            .enqueue<int, void>(
+              key: 'zoom',
+              canStart: (state) => false,
+              (ctx) async {},
+            )
+            .ignoreFailure();
+      });
+
+      expect(ran.printed, [
+        'enqueue Job(zoom)',
+        'drop Job(zoom): Cancelled(rules: canStart)',
+        'queue has no ready jobs',
+      ]);
+    });
   });
 
   group('Watching every controller', () {

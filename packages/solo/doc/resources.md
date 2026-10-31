@@ -319,8 +319,8 @@ The release happens either way, and the waiting method decides only when.
    with nobody waiting for either.
 
 A late error from the call or from the disposer is told to the controller's
-`onError` hook and then handed to `Solo.unansweredHandler`, or to the zone when
-no handler is set.
+`onError` hook, and then `onUnanswered` is asked to answer for it, which by
+default hands it on to `Solo.unansweredHandler` or to the zone.
 
 ### The wait that stays with it
 
@@ -367,8 +367,8 @@ that long, and it alone covers the time after the body returns and while its
 children finish.
 
 An error thrown by cleanup is told to the controller's `onError` hook and to
-`Solo.observer`. Then it is handed to `Solo.unansweredHandler`, or to the zone
-when no handler is set.
+`Solo.observer`. Then `onUnanswered` is asked to answer for it, which by
+default hands it on to `Solo.unansweredHandler` or to the zone.
 [Answering for an error](errors.md#answering-for-an-error) on the errors page
 has the whole route. A `Cancelled` thrown by cleanup is told to the same two
 and goes no further: a cancellation is a decision somebody made, not a failure.

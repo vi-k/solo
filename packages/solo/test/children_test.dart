@@ -114,7 +114,7 @@ void main() {
       });
       async.flushTimers();
       const parentOutcome =
-          '[parent] finished Cancelled(handler: Job(child): '
+          '[parent] finished Cancelled(body: Job(child): '
           'Cancelled(rules: is not Working))';
       expect(journal.take(), [
         '[parent] started',
@@ -235,7 +235,7 @@ void main() {
       solo.externalSetState(const Preparing(progress: 50));
       async.elapse(const Duration(milliseconds: 50));
       const parentOutcome =
-          '[parent] finished Cancelled(handler: Job(child): '
+          '[parent] finished Cancelled(body: Job(child): '
           'Cancelled(rules: keepWhile))';
       expect(journal.take(), [
         '[parent] started',
@@ -653,7 +653,7 @@ void attempt(SoloJob<void> job) => job.start();
       async.flushTimers();
       expect(
         parent.outcome.toString(),
-        'Cancelled(handler: Job(): Cancelled(rules: is not Working))',
+        'Cancelled(body: Job(): Cancelled(rules: is not Working))',
       );
     });
   });
@@ -847,7 +847,7 @@ void attempt(SoloJob<void> job) => job.start();
         async.flushTimers();
 
         expect(handled, [
-          'ifCancelled Cancelled(handler: Job(a): Cancelled(manual))',
+          'ifCancelled Cancelled(body: Job(a): Cancelled(manual))',
         ]);
         expect(
           journal.take(),

@@ -355,7 +355,7 @@ void main() {
         ),
       );
 
-      expect(lines, ['outcome: Cancelled(handler: Job(): Cancelled(manual))']);
+      expect(lines, ['outcome: Cancelled(body: Job(): Cancelled(manual))']);
       expect(
         reason,
         isA<SiblingCancelReason>().having(
@@ -1030,7 +1030,7 @@ void main() {
         ),
         [
           'zone: Bad state: describe failed',
-          'outcome: Cancelled(handler: $named: Cancelled(manual))',
+          'outcome: Cancelled(body: $named: Cancelled(manual))',
         ],
       );
     });
@@ -1044,7 +1044,7 @@ void main() {
         ),
         [
           'zone: Bad state: name failed',
-          'outcome: Cancelled(handler: child cancellation)',
+          'outcome: Cancelled(body: child cancellation)',
         ],
       );
     });
@@ -1193,7 +1193,7 @@ void main() {
               throw const Cancelled('gave up');
             }),
           ),
-          ['outcome: Cancelled(handler: gave up)'],
+          ['outcome: Cancelled(body: gave up)'],
         );
         expect(
           quotable(

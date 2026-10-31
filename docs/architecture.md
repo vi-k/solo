@@ -47,7 +47,7 @@ BLE-устройство, плеер, синхронизация), где сос
   задача, у которой инвариант уже нарушен, не стартует вовсе, вместо того чтобы
   стартовать и умереть на первом чтении.
 - **Очередь** — объект первого класса. Наследник контроллера видит её
-  и распоряжается ею напрямую; политики `droppable`, `replace`, `restart` —
+  и распоряжается ею напрямую; политики `droppable`, `keepLatest`, `restart` —
   сахар для случая одного ключа.
 - **Накопитель** `SoloAccumulator<E, T>` — созданная один раз фабрика ожидающих
   групп. `collect` собирает список, `accumulate` синхронно сворачивает события
@@ -424,7 +424,7 @@ BLE-устройство, плеер, синхронизация), где сос
 - `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled`
   с публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
   открытый абстрактный `CancelReason`, причины `ManualCancelReason`,
-  `ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason`,
+  `ParentCancelReason`, `BodyCancelReason`, `ChainCancelReason`,
   `TimeoutCancelReason` и `SiblingCancelReason`. `TimeoutCancelReason` ставит
   истёкший срок задачи, в её `timeout` лежит сам срок. `SiblingCancelReason`
   ставит группа `ctx.runAll` веткам, которые останавливает: когда другая ветка

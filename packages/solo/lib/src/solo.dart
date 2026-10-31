@@ -468,11 +468,11 @@ abstract class Solo<S extends Object> {
   /// [Policy.restart] waits at the tail like any other, so a job enqueued
   /// `first` after it starts ahead of it.
   ///
-  /// [Policy.replace] and [Policy.restart] queue [job] before they cancel the
-  /// jobs it replaces, whose `onFinish` and cancellation listeners run inside
-  /// this call: a job they queue under the key replaces [job] in turn. A hook
-  /// that does so on every cancellation, a replacement too, runs out of stack;
-  /// such a hook leaves a [ReplacedCancelReason] alone.
+  /// [Policy.keepLatest] and [Policy.restart] queue [job] before they cancel
+  /// the jobs it replaces, whose `onFinish` and cancellation listeners run
+  /// inside this call: a job they queue under the key replaces [job] in turn.
+  /// A hook that does so on every cancellation, a replacement too, runs out of
+  /// stack; such a hook leaves a [ReplacedCancelReason] alone.
   ///
   /// Throws [StateError] if [job] was already enqueued or run, and
   /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has no
@@ -602,7 +602,7 @@ abstract class Solo<S extends Object> {
       final name = '$current';
       return '$line while $name is running: it starts after $name ends';
     });
-    if (policy == Policy.replace || policy == Policy.restart) {
+    if (policy == Policy.keepLatest || policy == Policy.restart) {
       // What the cancelled jobs' code does to this one is the queue's usual
       // business from here: a cancellation removes it, a `close` drops it
       // with the rest.
@@ -1331,14 +1331,17 @@ abstract class Solo<S extends Object> {
           continue;
         }
         if (rejection != null) {
-          job._drop(
-            Cancelled.by(
-              reason: const RulesCancelReason(),
-              started: false,
-              description: rejection,
-              stackTrace: StackTrace.current,
-            ),
+          final cancelled = Cancelled.by(
+            reason: const RulesCancelReason(),
+            started: false,
+            description: rejection,
+            stackTrace: StackTrace.current,
           );
+          // Said here, where the queue lets the job go: the line after it,
+          // if any, is `queue has no ready jobs`, which reads as if the job
+          // had never been queued.
+          _debug(() => 'drop $job: $cancelled');
+          job._drop(cancelled);
           continue;
         }
         if (job.isFinished) {

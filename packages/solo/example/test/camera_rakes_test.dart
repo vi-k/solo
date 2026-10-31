@@ -669,8 +669,10 @@ void main() {
       final attempt = _part(_opening, _first);
       _says(
         attempt,
-        "The body's first `emit` leaves it, and the job ends `Cancelled` "
-        'before `hw.open` is ever called: the hardware log stays empty.',
+        "The body's first `emit` leaves it, the `join` on the next line is "
+        'a checkpoint that finds the state outside `Initial`, and the job '
+        'ends `Cancelled` before `hw.open` is ever called: the hardware log '
+        'stays empty.',
       );
       _says(
         attempt,
@@ -1344,11 +1346,12 @@ void main() {
       });
     });
 
-    test('replace keeps only the last queued zoom', () {
-      final answer = _part(_zoom, '### Policy.replace');
+    test('keepLatest keeps only the last queued zoom', () {
+      final answer = _part(_zoom, '### Policy.keepLatest');
       _says(
         answer,
-        '`replace` queues the new job and then drops the queued one with the '
+        '`keepLatest` queues the new job and then drops the queued one with '
+        'the '
         'same key, so the same three calls reach the hardware once:',
       );
       camera(CameraController.new, (camera, hw, journal, async) {
@@ -1392,7 +1395,7 @@ void main() {
 
     test('replace lets the running zoom finish', () {
       _says(
-        _part(_zoom, '### Policy.replace'),
+        _part(_zoom, '### Policy.keepLatest'),
         'The job that is already running is left to finish. When '
         '`setZoom(3)` and `setZoom(4)` arrive while the zoom to 2 is in '
         'flight, the lens still goes to 2, the request for 3 is dropped, '
@@ -1424,7 +1427,7 @@ void main() {
 
     test('a paused camera does not take the command', () {
       _says(
-        _part(_zoom, '### Policy.replace'),
+        _part(_zoom, '### Policy.keepLatest'),
         '`canStart` keeps a paused camera from taking the command at all.',
       );
       camera(CameraController.new, (camera, hw, journal, async) {
@@ -2750,7 +2753,7 @@ void main() {
         '### A working type wide enough': page,
         '### The handlers of enqueue': page,
         '### keepWhile': 'the example',
-        '### Policy.replace': 'the example',
+        '### Policy.keepLatest': 'the example',
         _shot: 'the example',
         '### Checking in the body': page,
         '### Awaiting the disposal': page,

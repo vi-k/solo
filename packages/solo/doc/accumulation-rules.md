@@ -159,8 +159,8 @@ The move starts a fresh debounce window and preserves the accumulator's
 throttle interval. It applies to a queued group, including one configured with
 `cancellable: false` — a move is not a removal, and the flag has nothing to
 refuse. A running group is never moved: it stops accepting events when the
-queue takes it. The ordinary queue's `Policy.replace` has its own cancellation
-rules; `AccumulationPolicy` is a separate enum.
+queue takes it. The ordinary queue's `Policy.keepLatest` has its own
+cancellation rules; `AccumulationPolicy` is a separate enum.
 
 The accumulator's identity determines which groups can combine. Two
 accumulators with the same `key` remain separate. The key still labels their

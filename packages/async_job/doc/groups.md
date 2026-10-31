@@ -50,9 +50,9 @@ faults. This is what happens:
 1. The outcome is decided by a race. `Future.wait` keeps the first error that
    reaches it and lets the rest go quietly. Say `rows` fails and `images` ends
    `Cancelled`. If the failure comes first, the parent ends `Failed`. If the
-   cancellation comes first, the parent ends `Cancelled(HandlerCancelReason)`,
-   and the failure of `rows` is nowhere in the outcome. Only the child's
-   observer hears it then. The core does not hand it to
+   cancellation comes first, the parent ends `Cancelled(BodyCancelReason)`, and
+   the failure of `rows` is nowhere in the outcome. Only the child's observer
+   hears it then. The core does not hand it to
    [the zone](errors.md#where-errors-go): the body waited for the future of
    `run`, so the core counts the failure as looked at. Where neither the parent
    nor its children have an observer, the error is lost.

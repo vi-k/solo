@@ -85,10 +85,10 @@ void main() {
       final outcome = await job.done;
       expect(outcome, isA<Cancelled>());
       final result = outcome as Cancelled;
-      expect(result.reason, isA<HandlerCancelReason>());
+      expect(result.reason, isA<BodyCancelReason>());
       expect(result.description, 'why');
       expect(result.stackTrace, same(branchTrace));
-      expect(result.reason, isA<HandlerCancelReason>());
+      expect(result.reason, isA<BodyCancelReason>());
       expect(notifications, 1);
     });
 
@@ -106,7 +106,7 @@ void main() {
       final result = outcome as Cancelled;
       expect(result.description, 'why');
       expect(result.stackTrace, same(branchTrace));
-      expect(result.reason, isA<HandlerCancelReason>());
+      expect(result.reason, isA<BodyCancelReason>());
     });
 
     fakeAsyncTest(
@@ -146,10 +146,7 @@ void main() {
         expect(outcome, isA<Cancelled>());
         final result = outcome as Cancelled;
         expect(result.description, contains('child'));
-        expect(
-          (result.reason as HandlerCancelReason).cause,
-          same(child.outcome),
-        );
+        expect((result.reason as BodyCancelReason).cause, same(child.outcome));
         expect((third.outcome! as Cancelled).reason, isA<ParentCancelReason>());
       },
     );
@@ -375,7 +372,7 @@ void main() {
         final outcome = await job.done;
         expect(outcome, isA<Cancelled>());
         expect((outcome as Cancelled).description, 'first position');
-        expect(outcome.reason, isA<HandlerCancelReason>());
+        expect(outcome.reason, isA<BodyCancelReason>());
       },
     );
 
@@ -400,7 +397,7 @@ void main() {
       final outcome = await parent.done;
       expect(outcome, isA<Cancelled>());
       final result = outcome as Cancelled;
-      expect(result.reason, isA<HandlerCancelReason>());
+      expect(result.reason, isA<BodyCancelReason>());
       expect(result.description, 'foreign first');
     });
 
@@ -1022,7 +1019,7 @@ void main() {
         final outcome = await continuation.done;
         expect(outcome, isA<Cancelled>());
         expect((outcome as Cancelled).description, 'continuation stopped');
-        expect(outcome.reason, isA<HandlerCancelReason>());
+        expect(outcome.reason, isA<BodyCancelReason>());
       },
     );
   });
@@ -1166,7 +1163,7 @@ void main() {
         final outcome = await job.done;
         expect(outcome, isA<Cancelled>());
         expect((outcome as Cancelled).description, 'second future');
-        expect(outcome.reason, isA<HandlerCancelReason>());
+        expect(outcome.reason, isA<BodyCancelReason>());
       },
     );
 

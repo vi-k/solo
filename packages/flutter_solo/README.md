@@ -525,16 +525,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 ```
 
 `close()` cancels whatever is queued or running. A running body stops at its
-next context call, which is what makes leaving the screen cheap; a job made
-with `cancellable: false` turns the cancellation down and runs to its end. Once
-the close is over, it drops every listener and stops notifying for good. Until
-then the listeners still hear what the closing jobs write, from `ifCancelled`
-or from the body of a job that turned the cancellation down. The screen does
-not wait for that: `SoloBuilder` lets go of the controller in its own
-`dispose`. `close()` is safe on either side of `super.dispose()`. Even with
-`SoloListenable` a controller is not a `ChangeNotifier`: the method is
-`close()`, not `dispose()`, and it returns a `Future` that completes when the
-job has actually stopped.
+next context call, which is what makes leaving the screen cheap; a running job
+made with `cancellable: false` turns the cancellation down and runs to its end,
+and a queued one is dropped. Once the close is over, it drops every listener
+and stops notifying for good. Until then the listeners still hear what the
+closing jobs write, from `ifCancelled` or from the body of a job that turned
+the cancellation down. The screen does not wait for that: `SoloBuilder` lets go
+of the controller in its own `dispose`. `close()` is safe on either side of
+`super.dispose()`. Even with `SoloListenable` a controller is not a
+`ChangeNotifier`: the method is `close()`, not `dispose()`, and it returns a
+`Future` that completes when the job has actually stopped.
 
 A controller shared by several screens lives where the other objects they share
 live: a `get_it` registration, an `InheritedWidget` above those screens, a
@@ -673,6 +673,7 @@ Flutter's.
 | A fix that keeps the public API | a patch release, such as `1.0.1` |
 | A new class, member or optional parameter | a minor release, such as `1.1.0` |
 | A removed or renamed member, a changed signature or documented behaviour | a major release, such as `2.0.0` |
+| A new value of an enum or a new subclass of a sealed class | a major release, such as `2.0.0` |
 
 From 1.0.0 on, `flutter_solo` follows semantic versioning: the constraint
 `^1.0.0` takes every minor and patch release, and they keep code written

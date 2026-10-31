@@ -131,7 +131,10 @@ try {
 
 `ctx.check()` throws the job's `Cancelled` if the job has accepted one,
 whatever error the catch took. A clause for the error, `on Cancelled`, is not
-enough: a call stopped through a token throws an error of its own. See
+enough: a call stopped through a token throws an error of its own. A catch that
+only publishes a failure state, `ctx.emit(Broken(error))`, gains nothing
+either: on a cancelled job the `emit` throws the `Cancelled` again, and a final
+failure state belongs to the `ifFailed` parameter of `enqueue`. See
 [Catching errors inside a body](errors.md#catching-errors-inside-a-body) on the
 errors page.
 

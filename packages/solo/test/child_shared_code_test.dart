@@ -121,8 +121,8 @@ void main() {
         )..ignoreFailure();
         final next = solo.enqueue<TestState, void>((ctx) async {});
         async.flushTimers();
-        expect(parent.outcome, cancelledBy<HandlerCancelReason>());
-        expect(cancelledParents, [cancelledBy<HandlerCancelReason>()]);
+        expect(parent.outcome, cancelledBy<BodyCancelReason>());
+        expect(cancelledParents, [cancelledBy<BodyCancelReason>()]);
         expect(next.outcome, isA<Done<void>>());
       });
     });

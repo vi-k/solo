@@ -303,7 +303,7 @@ void main() {
               );
             });
             _see(
-              'SoloJob ${child is SoloJob}, child ${child.isChild}, '
+              'queued ${child.isQueued}, child ${child.isChild}, '
               'level ${child.level}, key ${child.key}, '
               'describe ${child.describe()}',
             );
@@ -315,7 +315,7 @@ void main() {
 
         expect(errors, isEmpty);
         expect(_seen, [
-          'SoloJob true, child true, level 1, key null, describe each',
+          'queued false, child true, level 1, key null, describe each',
           'the job of that context is Job(each)',
           'its state is Ready(sent: 0, position: 0, path: )',
         ]);
@@ -428,8 +428,10 @@ void main() {
             'track Done(null)',
           ]);
           _says(
-            'Use `.done` to inspect the outcome, or retain the returned '
-            'job and call its `cancel()` to stop only this subscription.',
+            'To stop only this subscription, retain the returned job and '
+            'call its `cancel()`, and have the body await `.done` rather '
+            'than `.value`: a `Cancelled` from `.value` cancels the parent '
+            'as well, as below.',
           );
           _says(
             'Cancelling only the child does not directly cancel the '
@@ -455,7 +457,7 @@ void main() {
         expect(errors, isEmpty);
         expect(
           '${job.outcome}',
-          'Cancelled(handler: Job(each): Cancelled(manual))',
+          'Cancelled(body: Job(each): Cancelled(manual))',
         );
         _says(
           "An uncaught `Cancelled` from the child's `.value` does "

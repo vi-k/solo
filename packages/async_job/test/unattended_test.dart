@@ -141,7 +141,7 @@ void main() {
     });
     expect(journal.take(), [
       '[j] started',
-      '[j] error Cancelled(handler: mine)',
+      '[j] error Cancelled(body: mine)',
       '[j] finished Done(null)',
     ]);
   });
@@ -174,7 +174,7 @@ void main() {
     }
 
     expect(run(own: false), isEmpty);
-    expect(run(own: true), ['[j] error Cancelled(handler: child quits)']);
+    expect(run(own: true), ['[j] error Cancelled(body: child quits)']);
   });
 
   test('a child of another job cancelled by its own parent is an error', () {

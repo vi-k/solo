@@ -311,7 +311,7 @@ void main() {
       });
       async.flushTimers();
       final outcome = parent.outcome! as Cancelled;
-      expect(outcome.reason, isA<HandlerCancelReason>());
+      expect(outcome.reason, isA<BodyCancelReason>());
       expect(outcome.description, 'Job(child): Cancelled(manual)');
     });
   });
@@ -329,7 +329,7 @@ void main() {
       async.flushTimers();
       expect(
         parent.outcome.toString(),
-        'Cancelled(handler: Job(): Cancelled(manual))',
+        'Cancelled(body: Job(): Cancelled(manual))',
       );
     });
   });
@@ -356,7 +356,7 @@ void main() {
         expect('$child', named);
         expect(
           parent.outcome.toString(),
-          'Cancelled(handler: $named: Cancelled(manual))',
+          'Cancelled(body: $named: Cancelled(manual))',
         );
       });
     });
@@ -373,7 +373,7 @@ void main() {
       async.flushTimers();
       expect(
         parent.outcome.toString(),
-        'Cancelled(handler: Named<thumbnail>: Cancelled(manual))',
+        'Cancelled(body: Named<thumbnail>: Cancelled(manual))',
       );
     });
   });
@@ -406,7 +406,7 @@ void main() {
         async.flushTimers();
         expect(
           parent.outcome.toString(),
-          'Cancelled(handler: Job(a): Cancelled(dropped))',
+          'Cancelled(body: Job(a): Cancelled(dropped))',
         );
       });
     });
@@ -444,7 +444,7 @@ void main() {
       expect([a.outcome, b.outcome], [same(shared), same(shared)]);
       expect(
         parent.outcome.toString(),
-        'Cancelled(handler: Job(b): Cancelled(dropped))',
+        'Cancelled(body: Job(b): Cancelled(dropped))',
         reason: 'the body waited for a: this is what the report is about',
       );
       expect(zone, [reported]);

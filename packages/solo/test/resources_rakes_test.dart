@@ -1509,8 +1509,9 @@ void main() {
       test('a late error from the call is told to onError, then the zone', () {
         _says(
           'A late error from the call or from the disposer is told to the '
-          "controller's `onError` hook and then handed to "
-          '`Solo.unansweredHandler`, or to the zone when no handler is set',
+          "controller's `onError` hook, and then `onUnanswered` is asked to "
+          'answer for it, which by default hands it on to '
+          '`Solo.unansweredHandler` or to the zone',
         );
         late first.TempAbandoner keeper;
         final errors = _zone((async) {
@@ -1968,8 +1969,9 @@ void main() {
         () {
           _says(
             "An error thrown by cleanup is told to the controller's `onError` "
-            'hook and to `Solo.observer`. Then it is handed to '
-            '`Solo.unansweredHandler`, or to the zone when no handler is set',
+            'hook and to `Solo.observer`. Then `onUnanswered` is asked to '
+            'answer for it, which by default hands it on to '
+            '`Solo.unansweredHandler` or to the zone',
           );
           _says('cleanup that throws leaves a `Done` job `Done`');
           final watching = _Watching();

@@ -270,7 +270,7 @@ void main() {
     test('the correspondences name what the engine has', () {
       expect(
         Policy.values.map((policy) => policy.name),
-        containsAll(['sequential', 'droppable', 'restart', 'replace']),
+        containsAll(['sequential', 'droppable', 'restart', 'keepLatest']),
       );
       _says('`Policy.sequential`, `Policy.droppable` and `Policy.restart`');
       _says('| `BlocObserver` | `SoloObserver` |');

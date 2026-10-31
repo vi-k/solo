@@ -386,7 +386,7 @@ void main() {
       async.flushTimers();
       expect(
         order,
-        ['onCancel', 'step stopped: Cancelled(handler: gave up)'],
+        ['onCancel', 'step stopped: Cancelled(body: gave up)'],
         reason:
             'the body accepted its own cancellation, which no section holds',
       );

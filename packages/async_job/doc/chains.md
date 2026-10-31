@@ -340,10 +340,10 @@ The other way round, the continuation does reach its source while the source
 runs. `tail.cancel()` while the child still loads travels back along the chain,
 as [Cancelling a chain](#cancelling-a-chain) describes, and asks the child to
 cancel. `ctx.run(child)` throws the child's cancellation into the parent's
-body, and the parent ends `Cancelled` too, with `HandlerCancelReason`:
+body, and the parent ends `Cancelled` too, with `BodyCancelReason`:
 
 ```text
-parent: Cancelled(handler: Job(): Cancelled(chain)), child: Cancelled(chain)
+parent: Cancelled(body: Job(): Cancelled(chain)), child: Cancelled(chain)
 ```
 
 A failure in the continuation is nobody's business but its own. Observe it

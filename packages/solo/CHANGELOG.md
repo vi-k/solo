@@ -8,6 +8,19 @@ package's too: see
 
 - **`ctx.wait` of `async_job`, deprecated in favour of `ctx.abandonable` in
   0.3.0, is removed.**
+- **`Policy.replace` is renamed `Policy.keepLatest`.** The name says what stays
+  in the queue: the latest of the queued jobs with that key. A removed job
+  still ends `Cancelled(replaced)` with a `ReplacedCancelReason`, and
+  `AccumulationPolicy.replace` keeps its name.
+- **`HandlerCancelReason` of `async_job` is renamed `BodyCancelReason`, and its
+  `name` is `body` instead of `handler`.**
+- **`SoloContext.each` returns `SoloJob<void>`, as `SoloContext.child` does.**
+  A class that implements `SoloContext` itself returns that type too.
+
+### Added
+
+- `Solo.debug` prints `drop` with the job and its `Cancelled` when the rules of
+  its working type turn a job down at its start.
 
 ### Documentation
 
@@ -28,6 +41,26 @@ package's too: see
   [A tap that does not wait for a reload](doc/jobs.md#a-tap-that-does-not-wait-for-a-reload):
   the likes of a feed in a controller of their own, so that a like does not
   wait behind a reload of the feed.
+- The README says that a new value of an enum or a new subclass of a sealed
+  class comes in a major release, names the enums and sealed classes of the
+  package, and says who `package:solo/listeners.dart` is for.
+- The README says that a job is not a `Future`, and that a job the rules turn
+  down at its start ends `Cancelled` with a `RulesCancelReason`, not `Failed`.
+- The reference page lists `cancelAll` with `force` and `reason`, the fields of
+  `SoloPending`, `SoloPhase` and `SoloUnansweredHandler`.
+- The pages of cancellation, resources and errors give the whole route of an
+  error nobody answers for: `onUnanswered`, then `Solo.unansweredHandler` or
+  the zone. The errors page names `keepWhile` asked at the start among the
+  start rules, and says where the error goes on in a Flutter app.
+- The pages of jobs, streams, children, accumulation, camera and mistakes say
+  what a reader of the examples needs: that `queue`, `lastJobWhere` and
+  `current` are protected, that `ctx.each` returns a `SoloJob<void>`, what
+  `_Op` is, why an accumulator lives in a `late final` field, which line of the
+  camera cancels the job, and that a catch publishing a failure state gains
+  nothing on a cancelled job.
+- The cancellation page says that an `uncancellable` section holds a deadline
+  as well, and that a job made with `cancellable: false` takes no `timeout`: a
+  call that gives both throws `ArgumentError`.
 
 ## 0.6.0
 

@@ -43,16 +43,18 @@ enum Policy {
   /// on the jobs page.
   droppable,
 
-  /// Append, then remove queued jobs with the same key.
+  /// Append, then remove queued jobs with the same key, so that only the
+  /// latest of them waits.
   ///
   /// The `onFinish` and cancellation listeners of the removed jobs already see
-  /// the new job queued. The running root job is left alone, and so is a
-  /// queued job created with `cancellable: false` — the removal is the one
-  /// `SoloQueue.removeWhere` does without `force`. A removed job ends
+  /// the new job queued. The running root job is left alone to go on to its
+  /// end, and so is a queued job created with `cancellable: false` — the
+  /// removal is the one `SoloQueue.removeWhere` does without `force`. To
+  /// cancel the running one as well, use [restart]. A removed job ends
   /// `Cancelled(replaced)`, whose reason is a `ReplacedCancelReason`.
-  replace,
+  keepLatest,
 
-  /// Like [replace], and also cancel the running root job with the same
+  /// Like [keepLatest], and also cancel the running root job with the same
   /// key without waiting for it — unless that one was created with
   /// `cancellable: false`, which refuses.
   ///

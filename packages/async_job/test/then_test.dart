@@ -476,7 +476,7 @@ void main() {
       final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
       async.flushMicrotasks();
       expect(a.outcome, isA<Done<int>>());
-      expect((b.outcome! as Cancelled).reason, isA<HandlerCancelReason>());
+      expect((b.outcome! as Cancelled).reason, isA<BodyCancelReason>());
       final reason = (c.outcome! as Cancelled).reason as ChainCancelReason;
       expect(reason.cause, same(b.outcome));
     });
