@@ -2921,11 +2921,12 @@ final class _DeferredJob<T> extends _Job<T> implements DeferredJob<T> {
     return super.value;
   }
 
-  /// Says, once, that somebody waits for a job nobody has started.
+  /// Says, once, that somebody reads [done] or [value] of a job nobody has
+  /// started.
   ///
-  /// Such a wait never ends, and without this line the trace of
-  /// [Job.debug] holds nothing of the job at all: its first line comes from
-  /// the start.
+  /// A wait for it does not end until somebody starts or cancels the job, and
+  /// a job nobody starts would leave nothing in the trace of [Job.debug]
+  /// without this line: its first line comes from the start.
   void _traceAwaitedBeforeStart() {
     if (_awaitedBeforeStart || status != JobStatus.created) {
       return;

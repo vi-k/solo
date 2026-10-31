@@ -1330,6 +1330,19 @@ abstract class Solo<S extends Object> {
           job._drop(Failed(error, stackTrace));
           continue;
         }
+        if (job.isFinished) {
+          // The rules are the caller's code, and one of them ended this
+          // job while answering: `cancel()` on a job that has not started
+          // finishes it where it stands, and a `cancelAll` or a `close`
+          // from in there reaches it through `_inTransition`. Launching it
+          // now would throw `has already finished` from the core and
+          // leave the pump holding a finished `_current` — the queue would
+          // never move again. This comes before the rejection: a rule that
+          // ended the job and then turned it down has not dropped it, and a
+          // `drop` line would name an outcome the job does not have.
+          _debug(() => 'start $job: ended while the rules were asked');
+          continue;
+        }
         if (rejection != null) {
           final cancelled = Cancelled.by(
             reason: const RulesCancelReason(),
@@ -1342,17 +1355,6 @@ abstract class Solo<S extends Object> {
           // had never been queued.
           _debug(() => 'drop $job: $cancelled');
           job._drop(cancelled);
-          continue;
-        }
-        if (job.isFinished) {
-          // The rules are the caller's code, and one of them ended this
-          // job while answering: `cancel()` on a job that has not started
-          // finishes it where it stands, and a `cancelAll` or a `close`
-          // from in there reaches it through `_inTransition`. Launching it
-          // now would throw `has already finished` from the core and
-          // leave the pump holding a finished `_current` — the queue would
-          // never move again.
-          _debug(() => 'start $job: ended while the rules were asked');
           continue;
         }
         _current = job;

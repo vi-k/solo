@@ -80,6 +80,25 @@ void main() {
     ]);
   });
 
+  for (final read in ['done', 'value']) {
+    test('a read of $read alone is traced as awaited before start', () {
+      final traces = <String>[];
+      Job.debug = traces.add;
+      fakeAsync((async) {
+        final job = Job.deferred<int>(key: 'later', (ctx) async => 1);
+        if (read == 'done') {
+          job.done.ignore();
+        } else {
+          job.value.ignore();
+        }
+        async.flushMicrotasks();
+        expect(traces, ['Job(later) awaited before start']);
+        job.cancel().ignore();
+        async.flushMicrotasks();
+      });
+    });
+  }
+
   test('a child the parent runs is not traced as awaited before start', () {
     final traces = <String>[];
     Job.debug = traces.add;

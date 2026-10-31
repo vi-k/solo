@@ -20,7 +20,7 @@ package's too: see
 ### Added
 
 - `Solo.debug` prints `drop` with the job and its `Cancelled` when the rules of
-  its working type turn a job down at its start.
+  its working type turn a queued job down at its start.
 
 ### Documentation
 

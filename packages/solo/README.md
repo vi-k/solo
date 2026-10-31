@@ -243,7 +243,7 @@ the call site does for `play`.
 A job that the rules of its working type turn down at its start ends
 `Cancelled` with a `RulesCancelReason`, not `Failed`. That is no error: neither
 `onError` nor the zone hears of it, and the outcome is what says so.
-`Solo.debug` traces the drop too.
+`Solo.debug` traces the drop of a queued job too.
 
 ## Why `currentState` and not `state`
 

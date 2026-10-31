@@ -299,7 +299,12 @@ negative one counts as zero»), так что поведение докумен�
 `done` или `value`, пока она в статусе `created`. Это переопределение `done`
 и `value` у `_DeferredJob` в `job_base.dart`; dartdoc `Job.debug` и страница
 `error-rules.md` с переводом о нём говорят, два теста — в `debug_test.dart`.
-Коммит «fix: settle the public API of 1.0.0 after the Fable review».
+Коммит «fix: settle the public API of 1.0.0 after the Fable review». Слова
+«такое ожидание не кончается никогда» независимое ревью опровергло: ожидание
+кончается, когда задачу запустят или отменят. Коммит «fix: close the
+independent review of the 1.0.0 wave» поправил их в dartdoc, на странице,
+в списке изменений и переводах и добавил по тесту на каждый геттер;
+подробности — `2026-10-31-fable-review-wave-report.md`.
 
 ### C3. Каскад отмены по цепочке откладывается внутри одного синхронного вызова
 

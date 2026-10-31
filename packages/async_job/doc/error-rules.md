@@ -109,11 +109,11 @@ Job.debug = print;
 
 The channel prints the start, the cancellation and the end of every job. It
 also prints each error the job hands to its observer, whether the job has an
-observer or not, and says so when the error goes on to the zone. A wait for a
-job of `Job.deferred` that nobody has started gets a line too,
-`Job() awaited before start`: that wait never ends, and the job prints nothing
-else. The first attempt of [Where errors go](errors.md#where-errors-go), under
-the channel:
+observer or not, and says so when the error goes on to the zone. Reading `done`
+or `value` of a `Job.deferred` that nobody has started gets a line too,
+`Job() awaited before start`: a wait for such a job does not end until somebody
+starts or cancels it, and a job nobody starts prints nothing else. The first
+attempt of [Where errors go](errors.md#where-errors-go), under the channel:
 
 ```text
 Job() started

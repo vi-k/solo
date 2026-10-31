@@ -20,8 +20,10 @@
 строках, они — в конце записи.
 
 Как я принимал — так же: находки сверены с деревом, принятые держит новый или
-исправленный тест, отказы сверены по чтению. Ревьюер сам отдавал страницы
-субагентам и сверял их находки, это он говорит в первом абзаце отчёта.
+исправленный тест, отказы сверены по чтению. Зонды ревьюера жили в его клоне
+и в репозиторий не перенесены: их вывод процитирован в находках. Ревьюер сам
+отдавал страницы субагентам и сверял их находки, это он говорит в первом абзаце
+отчёта.
 
 Ниже — отчёт ревьюера без правок прозы.
 
@@ -166,7 +168,10 @@ settle the public API of 1.0.0 after the Fable review».
 dartdoc говорит, что в очереди ждёт только последняя задача с ключом, второй
 называет `restart` для идущей. `ReplacedCancelReason`, `Cancelled(replaced)`
 и `AccumulationPolicy.replace` остались. Коммит «fix: settle the public API of
-1.0.0 after the Fable review».
+1.0.0 after the Fable review». Переименование пропустило комментарий
+`// replace:` в коде `jobs.md`, его перевод и сторож страницы; их поправил
+коммит «fix: close the independent review of the 1.0.0 wave», подробности —
+`2026-10-31-fable-review-wave-report.md`.
 
 **B5. Хуки с позиционными параметрами нельзя расширить.** Место:
 `packages/solo/lib/src/solo.dart`,
@@ -215,7 +220,11 @@ the controller», а дроп — событие очереди. Предлаг�
 Вердикт: принято, как предложено: в `_pump` перед `job._drop` строка
 `drop $job: $cancelled`; тест «a job the rules turn down at its start is traced
 as dropped» в `diagnostics_rakes_test.dart`. Коммит «fix: settle the public API
-of 1.0.0 after the Fable review».
+of 1.0.0 after the Fable review». Независимое ревью нашло, что правило, которое
+само кончило задачу и затем отказало, давало `drop` с исходом, которого
+у задачи нет. Коммит «fix: close the independent review of the 1.0.0 wave»
+проверяет `job.isFinished` до отказа, тест — в том же файле; подробности —
+`2026-10-31-fable-review-wave-report.md`.
 
 Проверено зондами и находкой не стало (`test/probe_mechanics_test.dart`,
 `probe_cancel_test.dart`, `probe_habits_test.dart`): `externalSetState`
@@ -548,7 +557,9 @@ after the Fable review».
 Вердикт: принято: абзац README `solo` о том, что отказ правил на старте
 кончается `Cancelled` с `RulesCancelReason`, и строка `Solo.debug` по C1.
 Раздела в `mistakes.md` нет, решение 143. Коммит «fix: settle the public API of
-1.0.0 after the Fable review».
+1.0.0 after the Fable review». README и список изменений обещали строку `drop`
+для любой отклонённой задачи, а пишет её только очередь; коммит «fix: close the
+independent review of the 1.0.0 wave» сузил обещание до задачи из очереди.
 
 **A3. Low. `Policy.replace` вместо `Policy.restart`.** См. B4: зонд H2 под
 `replace` — двойная загрузка, `Loaded(2)`, ничего не сообщено.

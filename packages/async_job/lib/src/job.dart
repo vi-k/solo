@@ -135,8 +135,9 @@ abstract interface class Job<T> {
   ///
   /// Every job reports here, one made by an engine included: the start, a
   /// cancellation, an error and where it went, the outcome and a value handed
-  /// over. A job of [Job.deferred] also reports the first wait for it through
-  /// [done] or [value] while nobody has started it: such a wait never ends.
+  /// over. A job of [Job.deferred] also reports the first read of [done] or
+  /// [value] while nobody has started it: a wait for such a job does not end
+  /// until somebody starts or cancels it.
   ///
   /// ```dart
   /// Job.debug = print;

@@ -68,7 +68,7 @@ void main() {
       });
     });
 
-    test('let out, it ends the parent as a handler cancellation', () {
+    test('let out, it ends the parent as a body cancellation', () {
       fakeAsync((async) {
         final parent = Job<int>(
           (ctx) => ctx.run(ctx.child(step(50), timeout: ms(10))),

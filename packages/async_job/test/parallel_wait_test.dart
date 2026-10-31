@@ -628,7 +628,7 @@ void main() {
     );
 
     fakeAsyncTest(
-      'each turns a handler cancellation into a parent cancellation',
+      'each turns a body cancellation into a parent cancellation',
       () async {
         final controller = StreamController<int>();
         const cancelled = Cancelled('handler stopped');

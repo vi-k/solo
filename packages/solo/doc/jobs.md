@@ -215,7 +215,7 @@ Job<Profile> load(String id) => enqueue<Ready, Profile>(
   (ctx) => ctx.abandonable(() => api.load(id)),
 );
 
-// replace: the queued zoom goes, a running one is left alone.
+// keepLatest: the queued zoom goes, a running one is left alone.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
   key: _Op.zoom,
   policy: Policy.keepLatest,

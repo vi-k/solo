@@ -1,8 +1,9 @@
-> **Состояние на 2026-10-31:** сделано и смержено в `main` коммитом «fix:
-> settle the public API of 1.0.0 after the Fable review»; не опубликовано.
+> **Состояние на 2026-10-31:** сделано и смержено в `main` коммитами «fix:
+> settle the public API of 1.0.0 after the Fable review» и «fix: close the
+> independent review of the 1.0.0 wave»; не опубликовано.
 > **Что это:** отчёт о волне правок по полному ревью перед 1.0.0: два
 > переименования, сужение `SoloContext.each`, две строки отладки, правки
-> документов и решения 135–143.
+> документов, решения 135–143 и независимое ревью волны.
 > **Связанные записи:** `2026-10-31-async-job-project-review.md`,
 > `2026-10-31-solo-project-review.md` (ревью, по которому шла волна),
 > `2026-10-30-one-zero-report.md` (подготовка 1.0.0).
@@ -99,3 +100,43 @@ README о `await job` и об отказе правил на старте; пр�
 `close_sinks` в новом тесте стримов, строку `Listeners`, две цитаты маршрута
 ошибки, строку таблицы ошибок и цитату README `flutter_solo`. Все исправлены,
 итог прогона — в `docs/handoff.md`.
+
+## Независимое ревью
+
+Коммит волны прошёл ревью Opus 5.5, субагента Claude Code, в отдельной копии
+дерева на этом коммите: код, полнота переименований, правда новой прозы,
+переводы, вердикты и решения 135–143. Ревьюер проверял зондами и мутациями;
+зонды не сохранены, их вывод назван ниже. Девять находок, все приняты и закрыты
+коммитом «fix: close the independent review of the 1.0.0 wave».
+
+- R1, High. Dartdoc `Job.debug`, `error-rules.md`, список изменений `async_job`
+  и переводы говорили, что ожидание неначатой отложенной задачи «never ends».
+  Зонд: прочитанный `value`, потом `start()`, дают
+  `[Job(d) awaited before start, Job(d) started, Job(d) finished: Done(7)]`.
+  Строку даёт чтение, а ожидание кончается, когда задачу запустят или отменят;
+  так теперь и сказано во всех местах.
+- R2, Medium. Комментарий `// replace:` над `Policy.keepLatest` в коде
+  `jobs.md`, в переводе и в стороже страницы `jobs_page.dart` — теперь
+  `// keepLatest:`.
+- R3, Medium. Правило `canStart`, которое само зовёт `cancelAll()` или
+  `close()` и отвечает `false`, давало `drop Job(…): Cancelled(rules: …)`,
+  а исход у задачи `Cancelled(manual)` или `Cancelled(closed)`. `_pump` теперь
+  проверяет `job.isFinished` до отказа и пишет
+  `start Job(…): ended while the rules were asked`. Тест «a job its own rule
+  ends and then turns down is not traced as dropped»
+  в `diagnostics_rakes_test.dart`; на коде волны он падает.
+- R4, Low. Тест строки `awaited before start` читал оба геттера сразу,
+  и мутация, снявшая трассу с одного из них, проходила. Два теста, по одному
+  на `done` и `value`, в `debug_test.dart`.
+- R5, Low. README `solo` и список изменений обещали строку `drop` для любой
+  отклонённой задачи, а пишет её только очередь: дочерняя задача, которую
+  правила не пустили, строки не получает. Обещание сужено до задачи из очереди,
+  код не тронут.
+- R6, Low. Список изменений `flutter_solo` называл два ломающих изменения
+  реэкспорта из четырёх; теперь названы и `SoloContext.each`, и `name` `body`.
+- R7, Low. Перевод README `solo`: «сказать об этом может только исход» спорил
+  со следующей фразой о `Solo.debug`; теперь «и говорит об этом исход».
+- R8, Low. Два имени теста в `async_job` говорили «handler cancellation»;
+  теперь «body cancellation».
+- R9, Low. Запись `2026-10-31-solo-project-review.md` не говорила, что зонды
+  Fable не сохранены; фраза добавлена, как в записи ядра.

@@ -10,8 +10,11 @@ and
 
 - **`ctx.wait` of `async_job`, deprecated in favour of `ctx.abandonable` in
   0.3.0, is removed.**
-- **`Policy.replace` of `solo` is renamed `Policy.keepLatest`, and
-  `HandlerCancelReason` of `async_job` is renamed `BodyCancelReason`.**
+- **`Policy.replace` of `solo` is renamed `Policy.keepLatest`.**
+- **`HandlerCancelReason` of `async_job` is renamed `BodyCancelReason`, and its
+  `name` is `body` instead of `handler`.**
+- **`SoloContext.each` of `solo` returns `SoloJob<void>`, as
+  `SoloContext.child` does.**
 
 ### Documentation
 

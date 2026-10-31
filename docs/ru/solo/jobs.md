@@ -216,7 +216,7 @@ Job<Profile> load(String id) => enqueue<Ready, Profile>(
   (ctx) => ctx.abandonable(() => api.load(id)),
 );
 
-// replace: ожидающий зум уходит, работающий остаётся нетронутым.
+// keepLatest: ожидающий зум уходит, работающий остаётся нетронутым.
 Job<void> setZoom(double zoom) => enqueue<Ready, void>(
   key: _Op.zoom,
   policy: Policy.keepLatest,

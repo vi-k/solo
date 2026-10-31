@@ -12,8 +12,8 @@
 ### Added
 
 - `Job.debug` prints `awaited before start` the first time `done` or `value` of
-  a `Job.deferred` is awaited while nobody has started it: such a wait never
-  ends.
+  a `Job.deferred` is read while nobody has started it: a wait for such a job
+  does not end until somebody starts or cancels it.
 
 ### Documentation
 

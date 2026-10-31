@@ -252,6 +252,30 @@ void main() {
         'queue has no ready jobs',
       ]);
     });
+
+    test('a job its own rule ends and then turns down is not traced as '
+        'dropped', () {
+      late final SoloJob<void> job;
+      final ran = runFaked((async) {
+        page.traceTheEngine();
+        final bench = Bench();
+        job = bench.enqueue<int, void>(
+          key: 'zoom',
+          canStart: (state) {
+            bench.cancelAll().ignore();
+            return false;
+          },
+          (ctx) async {},
+        )..ignoreFailure();
+      });
+
+      expect(ran.printed, isNot(contains(startsWith('drop'))));
+      expect(
+        ran.printed,
+        contains('start Job(zoom): ended while the rules were asked'),
+      );
+      expect('${job.outcome}', 'Cancelled(manual)');
+    });
   });
 
   group('Watching every controller', () {
