@@ -1,4 +1,4 @@
-## Unreleased
+## 1.0.0
 
 This package re-exports `solo` and, through it, `async_job`, so their changes
 are its own: see
