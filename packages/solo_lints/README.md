@@ -20,7 +20,7 @@ workspace:
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.3
+  solo_lints: ^0.1.4
 ```
 
 The analysis server fetches the plugin itself, so it is not a dependency in
@@ -39,7 +39,7 @@ The warnings are on as soon as the plugin is named. The four lints,
 ```yaml
 plugins:
   solo_lints:
-    version: ^0.1.3
+    version: ^0.1.4
     diagnostics:
       catch_without_check: true
       key_per_request: true
@@ -85,11 +85,11 @@ ctx.onDispose(() async {
 Cleanup runs after the body, where `join` throws `StateError`, so the buffer
 stays unflushed however the job ended. Wait there with a plain `await`. The
 rule looks into the functions given to `ctx.onDispose` and `ctx.onDiscard` and
-to `dispose:` and `discard:` of `join`, `abandonable`, `wait` and `run`,
-literals, and local functions and final variables holding a literal passed by
-name, and reports the members that throw there: the checkpoints, `onCancel`,
-`start` and `each`. `onDispose`, `onDiscard`, `disown`, `log` and `unattended`
-are left alone. See
+to `dispose:` and `discard:` of `join`, `abandonable` and `run`, literals, and
+local functions and final variables holding a literal passed by name, and
+reports the members that throw there: the checkpoints, `onCancel`, `start` and
+`each`. `onDispose`, `onDiscard`, `disown`, `log` and `unattended` are left
+alone. See
 [Each wait in its place](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#each-wait-in-its-place).
 
 ### release_on_the_call
@@ -102,8 +102,8 @@ ctx.onDispose(db.close); // release_on_the_call
 A cancellation during the open throws before the second line, and the open
 database is lost. Pass the release to the call that brings the resource:
 `ctx.join(Database.open, dispose: (db) => db.close())`. The rule takes `join`,
-`abandonable`, `wait` and `run` with no release of their own, followed at once
-by `onDispose` or `onDiscard` that mentions the variable. See
+`abandonable` and `run` with no release of their own, followed at once by
+`onDispose` or `onDiscard` that mentions the variable. See
 [Registering a release on the call](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#registering-a-release-on-the-call).
 
 The quick fix removes the `onDispose` or `onDiscard` and passes the release to
@@ -129,13 +129,13 @@ try {
 `Exception` or `Outcome`, takes it along with the failures it was written for,
 and a cancelled job resets a camera nobody broke. Make `ctx.check()` the first
 line of the catch. The rule looks at a job body, at the local functions
-declared in it and at the actions it waits for through `join`, `abandonable`,
-`wait` and `uncancellable`; cleanup and unattended work are left alone. It is
-quiet when the try block neither awaits nor reaches a checkpoint, and when the
-catch begins with a checkpoint, after any `if (...) rethrow;` lines, begins
-with `if (ctx.job.isCancelled) rethrow;`, or ends in `rethrow;` with no wait
-and no checkpoint on the way, as a synchronous release or a log does. It is a
-lint rather than a warning because a catch that has to wait for a release on a
+declared in it and at the actions it waits for through `join`, `abandonable`
+and `uncancellable`; cleanup and unattended work are left alone. It is quiet
+when the try block neither awaits nor reaches a checkpoint, and when the catch
+begins with a checkpoint, after any `if (...) rethrow;` lines, begins with
+`if (ctx.job.isCancelled) rethrow;`, or ends in `rethrow;` with no wait and no
+checkpoint on the way, as a synchronous release or a log does. It is a lint
+rather than a warning because a catch that has to wait for a release on a
 cancellation too is reported as well: there `ctx.check()` first would leave the
 resource behind, and the catch keeps its lines under an `// ignore:`. See
 [Letting cancellation through a catch](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#letting-cancellation-through-a-catch).
@@ -173,7 +173,7 @@ instead. The rule takes a method of the same controller that brings a
 `SoloJob`, by its declared type or by what it returns when it is declared in
 the same file, and `close()` and `cancelAll()`. It looks at the body of a
 `SoloContext` job queued on this controller, what the body returns included, at
-the actions that body waits for through `join`, `abandonable`, `wait` and
+the actions that body waits for through `join`, `abandonable` and
 `uncancellable`, and at its cleanup, which the queue waits for as well. A mixin
 `on Solo` is the controller too. See
 [Steps as children](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#steps-as-children).
@@ -248,24 +248,23 @@ first parameter is a `JobContext`, also when it is named `_`. Functions
 declared inside the body are left alone: the actions of `join` and
 `uncancellable`, cleanup, `unattended` work, local functions. A local function
 is reported where the body awaits its call. The rule is quiet on a wait through
-a member of the context of this body: `join`, `abandonable`, `wait`,
-`uncancellable`, `pause`, `run` and `runAll`. It is quiet on `value`, `done`
-and `cancel()` of a child that `ctx.each` brings or that the body passed to
-`ctx.start` before in a final variable or a final field, and on `Future.wait`,
-`[...].wait` and `(...).wait` of such futures, a conditional of them and a
-final local variable holding one. A call that passes the context to a parameter
-typed `JobContext`, positional or named, waits through it. A release right
-after `ctx.disown(v)`, on the next line or under `if (ctx.disown(v))`, has to
-run for a cancellation too. It is quiet on a value that is not a future, in
-`finally`, in a catch that is `on Cancelled`, and in a catch that takes a
-cancellation, untyped, `on Object`, `on Exception` or `on Outcome`, and ends in
-`rethrow;` with no `return` and no `break` or `continue` out of it before. A
-check at the top of a catch is not enough: it hears a cancellation that has
-come, not one that comes during the wait after it. A body of a job made with
-`cancellable: false`, as a literal or a constant, is left alone, and so is a
-top-level function every job of which is made so, although a rule of a `solo`
-state still cancels it. A wait for the controller's own queue is reported by
-`await_own_queue` instead.
+a member of the context of this body: `join`, `abandonable`, `uncancellable`,
+`pause`, `run` and `runAll`. It is quiet on `value`, `done` and `cancel()` of a
+child that `ctx.each` brings or that the body passed to `ctx.start` before in a
+final variable or a final field, and on `Future.wait`, `[...].wait` and
+`(...).wait` of such futures, a conditional of them and a final local variable
+holding one. A call that passes the context to a parameter typed `JobContext`,
+positional or named, waits through it. A release right after `ctx.disown(v)`,
+on the next line or under `if (ctx.disown(v))`, has to run for a cancellation
+too. It is quiet on a value that is not a future, in `finally`, in a catch that
+is `on Cancelled`, and in a catch that takes a cancellation, untyped,
+`on Object`, `on Exception` or `on Outcome`, and ends in `rethrow;` with no
+`return` and no `break` or `continue` out of it before. A check at the top of a
+catch is not enough: it hears a cancellation that has come, not one that comes
+during the wait after it. A body of a job made with `cancellable: false`, as a
+literal or a constant, is left alone, and so is a top-level function every job
+of which is made so, although a rule of a `solo` state still cancels it. A wait
+for the controller's own queue is reported by `await_own_queue` instead.
 
 A loop of plain waits inside one `ctx.join(() async { ... })` is not reported,
 although a cancellation does not end it either. A child held in a `var`, a
@@ -291,4 +290,5 @@ stay silent until a release lifts the bound.
 The rules know the types of async_job and solo by their names and the libraries
 they come from, without depending on either package. On a version of those
 packages where a name has changed, a rule stays silent rather than reports code
-that is right.
+that is right. The rules also know `wait`, the name of `abandonable` before
+async_job 1.0, so they check code on 0.x the same way.

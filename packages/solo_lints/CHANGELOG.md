@@ -1,3 +1,11 @@
+## 0.1.4
+
+- The tests run against async_job and solo 1.0.0; the rules have not changed.
+- The README no longer names `wait` among the members of the context, since
+  async_job 1.0 has no `ctx.wait`. Its Versions section says that the rules
+  still know `wait`, the name of `abandonable` before 1.0.
+- The blocks of the README ask for this version.
+
 ## 0.1.3
 
 - The README links to the page of the package on the documentation site.
