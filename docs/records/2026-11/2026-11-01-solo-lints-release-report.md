@@ -1,5 +1,5 @@
-> **Состояние на 2026-11-01:** выполняется связка выпуска `solo_lints`
-> 0.1.4; итог допишется отдельным коммитом после публикации.
+> **Состояние на 2026-11-01:** `solo_lints` 0.1.4 опубликован на pub.dev;
+> релизный коммит `43f28973` и аннотированный тег отправлены в origin.
 > **Что это:** подготовка патча `solo_lints` 0.1.4 под `async_job` и `solo`
 > 1.0.0.
 > **Связанные записи:** `2026-11-01-solo-release-report.md`,
@@ -68,5 +68,20 @@ floor: 6 roots». `solo_lints` опускает `analysis_server_plugin`, `analy
 который уходит в origin вместе с релизным. Тега `solo_lints-v0.1.4` нет
 ни локально, ни в origin; на pub.dev `latest: 0.1.3`.
 
-Коммит `Release solo_lints 0.1.4`, аннотированный тег `solo_lints-v0.1.4`, push
-и `dart pub publish` — подряд; итог ниже.
+Связка выполнена подряд:
+
+- `16f01711` — подготовка, `43f28973` — Release solo_lints 0.1.4;
+- аннотированный тег `solo_lints-v0.1.4` указывает на `43f28973`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/solo_lints-v0.1.4^{}` дают `43f28973`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/solo_lints version 0.1.4»;
+- API pub.dev вернул `latest: 0.1.4`;
+- CI `gate` на `43f28973`: `dart`, `flutter`, `snippets` и `docs` зелёные
+  с первой попытки; `floor` в ней снят с аннотацией «GitHub Actions has
+  encountered an internal error when running your job» на шаге прогона пола,
+  перезапуск одного задания зелёный. Сборка сайта на `43f28973` зелёная.
+
+Пакет: https://pub.dev/packages/solo_lints/versions/0.1.4
+
+Выпуск завершён.
