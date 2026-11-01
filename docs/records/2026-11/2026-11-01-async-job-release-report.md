@@ -1,5 +1,5 @@
-> **Состояние на 2026-11-01:** выполняется связка выпуска `async_job` 1.0.0;
-> итог допишется отдельным коммитом после публикации.
+> **Состояние на 2026-11-01:** `async_job` 1.0.0 опубликован на pub.dev;
+> релизный коммит `584a6545` и аннотированный тег отправлены в origin.
 > **Что это:** выполнение разрешённой владельцем связки выпуска `async_job`.
 > **Связанные записи:** `2026-10-30-one-zero-report.md`,
 > `2026-10-31-fable-review-wave-report.md`,
@@ -33,5 +33,19 @@
 
 ## Связка
 
-Коммит `Release async_job 1.0.0`, аннотированный тег `async_job-v1.0.0`, push
-и `dart pub publish` — подряд; итог ниже.
+Связка выполнена подряд:
+
+- `584a6545` — Release async_job 1.0.0;
+- аннотированный тег `async_job-v1.0.0` указывает на `584a6545`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/async_job-v1.0.0^{}` дают `584a6545`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/async_job version 1.0.0»;
+- API pub.dev вернул `latest: 1.0.0`;
+- CI `gate` на `584a6545`: `dart`, `flutter`, `floor`, `snippets` и `docs`
+  зелёные. `site` на этот push не запускался: его пути push не задел.
+
+Пакет: https://pub.dev/packages/async_job/versions/1.0.0
+
+Выпуск завершён. Следом вышел `solo` 1.0.0,
+`2026-11-01-solo-release-report.md`.
