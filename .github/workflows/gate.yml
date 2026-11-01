@@ -375,7 +375,9 @@ jobs:
             fi
             for driver in bin/v/*.dart; do
               echo "== $package/$driver"
-              dart run "$driver" | tee -a "$out"
+              # A driver that hangs fails here, under its own name, and
+              # not when the job runs out of time.
+              timeout 300 dart run "$driver" | tee -a "$out"
             done
           done
 

@@ -596,9 +596,13 @@ final class SlowServer {
         gone = true;
         print('server: client hung up');
         exchange.hungUp.complete();
+        // The client is gone, so this side closes too: a socket left open
+        // keeps the driver running after `main` has ended.
+        socket.destroy();
       },
       onError: (Object _) {
         gone = true;
+        socket.destroy();
       },
     );
     unawaited(
