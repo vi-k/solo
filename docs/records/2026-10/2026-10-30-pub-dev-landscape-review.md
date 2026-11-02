@@ -11,8 +11,10 @@
 > (`2026-10-30-riverpod-and-bloc-design.md`); поле `documentation:` и пример
 > `solo_lints` — Opus F6 и F7, Fable F5 и F6, 2026-11-02, до выпуска; фраза
 > README `solo` о `W` — Opus F1 и Fable F1, 2026-11-02, без правила линта;
-> сравнение `solo` с riverpod, остаток Opus F2, владелец 2026-11-02 велел
-> писать; остальные находки ждут его решения.
+> сравнение `solo` с riverpod, остаток Opus F2, по слову владельца 2026-11-02 —
+> страница `packages/solo/doc/riverpod.md`
+> (`2026-11-02-riverpod-page-design.md`); остальные находки ждут его
+> решения.
 > Повторное ревью с поправкой на возраст — `2026-10-30-prospects-review.md`.
 > **Что это:** ландшафт pub.dev для `async_job`, `solo`, `flutter_solo`
 > и `solo_lints`, три типовые задачи на зондах против bloc, riverpod
@@ -655,7 +657,16 @@ riverpod: 4 257 758 загрузок за 30 дней, bloc: 2 448 471. Поис
 другим путём — страницей ядра `packages/async_job/doc/riverpod-and-bloc.md`,
 которая не просит менять слой состояния (Fable F2 записи
 `2026-10-30-prospects-review.md`). Сравнения `solo` с riverpod нет; оно
-по-прежнему ждёт решения владельца.
+по-прежнему ждёт решения владельца. Итог 2026-11-02: по слову владельца
+сравнение написано рамкой «что `async_job` и `solo` добавляют к riverpod» —
+страница `packages/solo/doc/riverpod.md` «solo under riverpod» с переводом
+`docs/ru/solo/riverpod.md`; её код собирает и прогоняет стенд
+`tool/riverpod_snippets.py` в задании `snippets`. Ловушки riverpod —
+`2026-11-02-riverpod-pain-points-research.md`, дизайн —
+`2026-11-02-riverpod-page-design.md`, план —
+`2026-11-02-riverpod-page-plan.md`; первый коммит страницы — «docs: start the
+riverpod page of solo with a controller under a provider». Решение 133
+`docs/settled.md` дополнено.
 
 **F3. Medium. Темп ломающих выпусков.** `async_job` 0.3.0 (2026-10-22), 0.4.0
 (10-25), 0.5.0 (10-27), 0.6.0 (10-28). У каждого

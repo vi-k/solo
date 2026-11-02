@@ -306,8 +306,7 @@ and testing are for a controller about to ship, the common mistakes are a list
 to check against, and the reference names every member with the section that
 explains it. Flutter is for a controller behind a screen, the camera example
 puts the pages together in one controller, solo and bloc side by side is for a
-reader who comes from bloc, and solo under riverpod for one who stays on
-riverpod.
+reader who comes from bloc, solo under riverpod for one who stays on it.
 
 | Page | What it covers |
 | --- | --- |
@@ -411,11 +410,3 @@ injection, persistence or state equality filtering. If work needs cancellation
 and cleanup but no state rules or controller queue,
 [async_job](https://pub.dev/packages/async_job) can be used directly. For a
 value with no asynchronous lifecycle, a `ValueNotifier` may suffice.
-
-## With riverpod
-
-An app on riverpod keeps its providers, its cache and `AsyncValue`. A `solo`
-controller goes under a provider where the work has an order to keep and a
-resource to close. [solo under riverpod](doc/riverpod.md) shows the bridge
-between the two, a camera closed when the screen goes and a form sent once,
-each next to what riverpod alone does there.
