@@ -23,8 +23,9 @@ the root zone, and a bare `fakeAsync` never lets them complete. The request
 driver runs on real time against a raw socket on loopback, and its order is
 held by awaits, not by margins of time.
 
-Blocks are addressed as in tool/doc_blocks.py, by section and by the name a
-block declares, with one step more: a `###` subsection is part of the key.
+Blocks are addressed by tool/doc_blocks.py, by section and by the name a
+block declares, with one step more: a `###` subsection is part of the key
+(`subsection_blocks`).
 The page puts a first attempt and its answer in one section under one class
 name, and the subsection is what tells them apart --
 'a-handler-that-restarts/the-first-attempt/SearchBloc'.
@@ -69,48 +70,7 @@ dev_dependencies:
 OPTIONS = 'include: async_job_rules.yaml\n'
 
 
-def page_blocks(text):
-    """{section/[subsection/]name: source}, a repeated key poisoned."""
-    found = {}
-    for section, body in doc_blocks.sections(text):
-        for index, part in enumerate(re.split(r'\n### ', body)):
-            prefix = section
-            if index:
-                prefix += '/' + doc_blocks.slug(part.split('\n')[0])
-            # One subsection as a page of one section named 'x'.
-            inner = doc_blocks.blocks(
-                '\n## x\n' + part, 'dart', doc_blocks.DECLARES['dart'])
-            for key, block in inner.items():
-                full = prefix + '/' + key.split('/', 1)[1]
-                found[full] = doc_blocks.POISONED if full in found else block
-    return found
-
-
-class Blocks(dict):
-    """The blocks of the page, and which of them a driver has taken."""
-
-    def __init__(self, found):
-        super().__init__(found)
-        self.taken = set()
-
-    def __getitem__(self, key):
-        self.taken.add(key)
-        block = super().__getitem__(key)
-        assert block is not doc_blocks.POISONED, f'{key} is declared twice'
-        return block
-
-    def unbuilt(self):
-        """The first line of every block no driver took by any of its keys."""
-        built = {id(dict.__getitem__(self, key)) for key in self.taken}
-        left = {}
-        for key in self:
-            source = dict.__getitem__(self, key)
-            if id(source) not in built:
-                left[id(source)] = source.split('\n')[0]
-        return sorted(left.values())
-
-
-snips = Blocks(page_blocks(open(DOC).read()))
+snips = doc_blocks.Blocks(doc_blocks.subsection_blocks(open(DOC).read()))
 if ROOT == '--list':
     for key in snips:
         poisoned = dict.__getitem__(snips, key) is doc_blocks.POISONED
