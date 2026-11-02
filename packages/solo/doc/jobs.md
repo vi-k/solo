@@ -78,9 +78,11 @@ final class ProfileController extends Solo<ProfileState> {
 
 `enqueue<ProfileState, String>` names two types. `ProfileState` is the job's
 working type `W`: the states its body works with, which may be narrower than
-the controller's state type `S`. `String` is the job's result type. Left to
-inference, as in the quick start, `W` is the whole of `S` and the result type
-is what the body returns. The rest is what the quick start does not have:
+the controller's state type `S`. `String` is the job's result type. Left out,
+as in the quick start, the result type is what the body returns, and the job
+runs with the whole of `S` as its working type; in the body, though,
+`ctx.state` is then `Object?`, so a body that reads it names both types. The
+rest is what the quick start does not have:
 
 | Parameter | What it does | Where it is explained |
 | --- | --- | --- |

@@ -137,6 +137,39 @@ final class _Numbers extends Solo<int> {
   void set(int value) => externalSetState(value);
 }
 
+/// The static type of [value], as the compiler saw it where it was passed.
+String _staticType<T>(T value) => '$T';
+
+/// Jobs of the quick start's states, one with its two types left out and
+/// one whose body publishes a state outside its working type.
+final class _Typed extends Solo<quick.ProfileState> {
+  _Typed(super.initial);
+
+  /// What the body of [untyped] saw: the static type of `ctx.state` and the
+  /// state it read.
+  late (String, Object?) seen;
+
+  /// Whether the body of [leaving] got past its `emit`: the emit itself does
+  /// not cancel the job.
+  bool emitted = false;
+
+  /// Whether the body of [leaving] got past its read of `ctx.state`.
+  bool readPast = false;
+
+  Job<String> untyped() => enqueue((ctx) async {
+    final state = ctx.state;
+    seen = (_staticType(state), state);
+    return 'read';
+  });
+
+  Job<void> leaving() => enqueue<quick.Loaded, void>((ctx) async {
+    ctx.emit(const quick.Loading());
+    emitted = true;
+    final state = ctx.state;
+    readPast = state.name.isNotEmpty;
+  });
+}
+
 /// What [body] printed, run to its end under fake time.
 List<String> _printed(Future<void> Function() body) {
   final lines = <String>[];
@@ -509,6 +542,33 @@ void main() {
         });
       },
     );
+
+    test(
+      'left out, the working type is the whole of S, but not in the body',
+      () {
+        fakeAsync((async) {
+          final typed = _Typed(const quick.Initial());
+          final job = typed.untyped();
+          async.flushTimers();
+          expect('${job.outcome}', 'Done(read)', reason: 'Initial is let in');
+          expect(typed.seen.$1, 'Object?', reason: 'ctx.state in the body');
+          expect(typed.seen.$2, isA<quick.Initial>());
+        });
+      },
+    );
+
+    test('a body that emits outside its working type is cancelled at the '
+        'next checkpoint', () {
+      fakeAsync((async) {
+        final typed = _Typed(const quick.Loaded('Ada Lovelace'));
+        final job = typed.leaving();
+        async.flushTimers();
+        expect('${job.outcome}', 'Cancelled(rules: is not Loaded)');
+        expect(typed.currentState, isA<quick.Loading>());
+        expect(typed.emitted, isTrue, reason: 'the emit goes through');
+        expect(typed.readPast, isFalse, reason: 'the read throws');
+      });
+    });
 
     test('the controller has no member named state', () {
       open(const quick.Loaded('Ada Lovelace'));

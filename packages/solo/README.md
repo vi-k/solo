@@ -269,9 +269,14 @@ Job<String> reload() => enqueue<Loaded, String>((ctx) async {
 
 `enqueue<Loaded, String>` names two types: the job's working type `W`, the
 states its body works with, which may be narrower than the controller's state
-type `S`, and its result type. Left out, as in the quick start, they are
-inferred: `W` is then the whole of `S`, and the result type is what the body
-returns.
+type `S`, and its result type. The working type holds from the start of the job
+to its end: a body that emits a state outside `W` is cancelled at its next
+checkpoint, as
+[Reading and updating state](doc/state.md#reading-and-updating-state) shows.
+Left out, as in the quick start, the result type is what the body returns, and
+the job runs with the whole of `S` as its working type. The compiler does not
+see that `W`, though: in the body `ctx.state` is then `Object?`, not
+`ProfileState`. A body that reads `ctx.state` names both types.
 
 A job body is a closure inside a method of the controller, so every member of
 the controller is in scope there. `ctx.state` is a checkpoint. Before it reads,

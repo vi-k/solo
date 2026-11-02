@@ -1,6 +1,10 @@
 ## Unreleased
 
 - `pubspec.yaml` names the documentation site, and pub.dev links to it.
+- The README and `doc/jobs.md` no longer say that an `enqueue` without type
+  arguments works with the whole of `S` in its body: there `ctx.state` is
+  `Object?`. The README also says that the working type holds from the start of
+  the job to its end.
 
 ## 1.0.0
 
