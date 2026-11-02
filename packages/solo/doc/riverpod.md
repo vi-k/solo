@@ -20,9 +20,9 @@ apart:
 | A form sent twice | `Policy.droppable` | [A form sent once](#a-form-sent-once) |
 
 The debounce of riverpod's [guide](https://riverpod.dev/docs/how_to/cancel)
-throws an exception of its own after the disposal, and the app can pass it over
-in an observer by its type. `async_job` gives every piece of code that type
-already: `Cancelled`.
+throws `Exception('Cancelled')` after the disposal. An app that wants to tell
+that cancellation from a failure by its type throws a class of its own;
+`async_job` gives every piece of code that type already: `Cancelled`.
 
 Each section opens with the version riverpod's own documentation leads to and
 shows what that code does. The states and traces under the fragments are what
@@ -148,9 +148,12 @@ The screen reads the state with `select`: the provider itself changes nothing
 but notifies, and `select` hands the screen each new `currentState`. A
 `StreamProvider` over the stream of `SoloStream` would not do: the stream
 carries changes, not the state the camera is in when the screen subscribes. In
-Flutter the screen can also take the controller with `ref.watch(camera)` and
-build from it with `SoloBuilder` of
-[`flutter_solo`](https://pub.dev/packages/flutter_solo).
+Flutter the screen can also take the controller with
+`ref.watch(camera.select((camera) => camera))` and build from it with
+`SoloBuilder` of [`flutter_solo`](https://pub.dev/packages/flutter_solo). The
+`select` matters: the bridge notifies the listeners of `camera` on every change
+of state, and a widget with `ref.watch(camera)` would rebuild with each of
+them.
 
 ## A camera closed when the screen goes
 
@@ -170,17 +173,21 @@ final camera = FutureProvider.autoDispose<Device>((ref) async {
 });
 ```
 
-The screen leaves 10 ms in, while the device opens:
+The screen leaves 10 ms in, while the device opens; an observer of the
+container prints what fails:
 
 ```text
 screen left at 10 ms
 device: open 1 start, open 1 done
+observer: UnmountedRefException
 ```
 
-The device stays open, and nothing reports it. riverpod disposes the provider
-when the screen leaves, and the `onDispose` that would close the device is not
-registered yet: the line that registers it waits behind the `await`. When the
-opening ends, the provider is gone.
+The device stays open. riverpod disposes the provider when the screen leaves,
+and the `onDispose` that would close the device is not registered yet: the line
+that registers it waits behind the `await`. When the opening ends, the provider
+is gone, and that line throws `UnmountedRefException`. A `ProviderObserver`
+sees it in `providerDidFail`, as a `Ref` used after its disposal; nothing names
+the open device.
 
 ### A flag before the await
 
@@ -404,9 +411,8 @@ device: open 1 start, open 1 done, close 1
 
 A rebuild of the provider closes the controller and cancels its jobs:
 `ref.invalidate`, or a change in a provider the bridge reads with `ref.watch`.
-So the provider reads what the controller depends on with `ref.read`, unless a
-change there should close it. Here the screen stays while the camera is open,
-and the provider is invalidated; the screen gets a new controller, in `Closed`:
+Here the screen stays while the camera is open, and the provider is
+invalidated; the screen gets a new controller, in `Closed`:
 
 ```text
 camera invalidated

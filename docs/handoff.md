@@ -38,8 +38,10 @@
 `2026-11-02-riverpod-pain-points-research.md`, дизайн —
 `2026-11-02-riverpod-page-design.md`, план —
 `2026-11-02-riverpod-page-plan.md`. Её код собирает и прогоняет стенд
-`tool/riverpod_snippets.py`, четвёртый в задании `snippets`. На pub.dev она
-придёт с выпуском `solo`: в его `CHANGELOG.md` она в «Unreleased».
+`tool/riverpod_snippets.py`, четвёртый в задании `snippets`. Работа прошла
+независимое ревью Opus; шесть отложенных находок Minor ждут решения владельца —
+раздел «Ревью работы» записи дизайна. На pub.dev она придёт с выпуском `solo`:
+в его `CHANGELOG.md` она в «Unreleased».
 
 Дальше по слову владельца — черновики анонса 1.0: статья «what cancelling a
 Future takes in Dart», посты в r/FlutterDev и r/dartlang, ответ в bloc#3069

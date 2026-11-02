@@ -196,9 +196,12 @@ String shown(CameraState state) => switch (state) {
   _ => '${state.runtimeType}',
 };
 
+int rebuilds = 0;
+
 Future<Outcome<void>?> leave(int milliseconds) async {
   final seen = <String>[];
   Job<void>? opened;
+  rebuilds = 0;
   await guarded(() async {
     final container = ProviderContainer();
     final screen = container.listen(
@@ -206,9 +209,16 @@ Future<Outcome<void>?> leave(int milliseconds) async {
       (_, state) => seen.add(shown(state)),
       fireImmediately: true,
     );
+    // A widget that takes the controller to build from it with SoloBuilder,
+    // the way the page says.
+    final builder = container.listen(
+      camera.select((camera) => camera),
+      (_, _) => rebuilds++,
+    );
     opened = container.read(camera).open();
     await delay(milliseconds);
     print('screen left at $milliseconds ms');
+    builder.close();
     screen.close();
     await delay(200);
     container.dispose();
@@ -221,11 +231,24 @@ Future<Outcome<void>?> leave(int milliseconds) async {
 '''
 
 # A screen that listens to a provider of the device itself and leaves
-# `milliseconds` in. It prints the device log.
+# `milliseconds` in, under an observer that keeps what fails. It prints the
+# device log.
 WATCHER = '''
+final failed = <Object>[];
+
+final class Watcher extends ProviderObserver {
+  @override
+  void providerDidFail(
+    ProviderObserverContext context,
+    Object error,
+    StackTrace stackTrace,
+  ) => failed.add(error);
+}
+
 Future<void> leave(int milliseconds) async {
+  failed.clear();
   await guarded(() async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(observers: [Watcher()]);
     final screen = container.listen(camera, (_, _) {});
     await delay(milliseconds);
     print('screen left at $milliseconds ms');
@@ -275,6 +298,8 @@ Future<void> scenario() async {
   require(zone.isEmpty, 'nothing reaches the zone: $zone');
   require(outcome is Cancelled, 'the closing cancels the opening: $outcome');
   require(alive.isEmpty, 'the device opened late is closed: $alive');
+  require(rebuilds == 0, 'the widget with SoloBuilder is not rebuilt: '
+      '$rebuilds');
 }
 ''' + RUNNER)
 
@@ -287,8 +312,14 @@ FILES['camera_naive'] = (
     + DEVICE + WATCHER + '''
 Future<void> scenario() async {
   await leave(10);
+  final names = failed.map((error) => '${error.runtimeType}');
+  print('observer: ${names.join(', ')}');
   require(alive.length == 1, 'the device stays open: $alive');
   require(zone.isEmpty, 'nothing reaches the zone: $zone');
+  require(
+    names.length == 1 && names.single == 'UnmountedRefException',
+    'the late onDispose reaches the observer: $names',
+  );
 }
 ''' + RUNNER)
 
