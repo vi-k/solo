@@ -80,6 +80,7 @@ def replaced(source, old, new, count=1):
 
 
 CONTROLLER = 'a-controller-under-a-provider'
+CAMERA_SECTION = 'a-camera-closed-when-the-scree'
 
 HEAD = """import 'dart:async';
 
@@ -88,14 +89,18 @@ import 'package:riverpod/riverpod.dart';
 import 'package:solo/solo.dart';
 """
 
+# The drivers of riverpod alone, without a controller.
+RIVERPOD_HEAD = HEAD.replace("import 'package:solo/solo.dart';\n", '')
+
 # The device of the page: opening it takes 50 ms, closing it is at once.
 # `alive` holds the devices opened and not closed, `log` what happened to
 # each. The drivers act between those marks, never on one: two events on
 # the same millisecond of virtual time run in an order real time would not
-# keep.
+# keep. What reaches the zone of a screen is in `zone`.
 DEVICE = '''
 final alive = <int>{};
 final log = <String>[];
+final zone = <Object>[];
 var _opened = 0;
 
 final class Device {
@@ -125,10 +130,22 @@ void require(bool condition, String message) {
   if (!condition) throw StateError(message);
 }
 
-String shown(CameraState state) => switch (state) {
-  Ready(:final device) => 'Ready(${device.id})',
-  _ => '${state.runtimeType}',
-};
+/// Runs [screen] in a zone of its own, with a fresh device log. The zone is
+/// not awaited -- a guarded body that fails never completes -- and the
+/// driver waits on a completer the body completes in `finally`.
+Future<void> guarded(Future<void> Function() screen) {
+  log.clear();
+  _opened = 0;
+  final ended = Completer<void>();
+  runZonedGuarded(() async {
+    try {
+      await screen();
+    } finally {
+      ended.complete();
+    }
+  }, (error, _) => zone.add(error));
+  return ended.future;
+}
 '''
 
 # The `main` of every driver; the driver itself is `scenario`. The same
@@ -169,42 +186,62 @@ Future<void> main() async {
 }
 '''
 
-# A screen that opens the camera and leaves `LEAVE` ms in, run in a zone of
-# its own: what reaches the zone is in `zone`. The zone is not awaited -- a
-# guarded body that fails never completes -- and the driver waits on a
-# completer the body completes in `finally`.
-LEAVES = '''
-final zone = <Object>[];
-final seen = <String>[];
-Job<void>? opened;
+# A screen that opens the camera and leaves `milliseconds` in, watching
+# the state the way the page says. It prints the outcome of the opening,
+# the states the screen saw and the device log.
+SCREEN = '''
+String shown(CameraState state) => switch (state) {
+  Ready(:final device) => 'Ready(${device.id})',
+  _ => '${state.runtimeType}',
+};
 
-Future<void> leave(int milliseconds) {
-  final ended = Completer<void>();
-  runZonedGuarded(() async {
-    try {
-      final container = ProviderContainer();
-      final screen = container.listen(
-        camera.select((camera) => camera.currentState),
-        (_, state) => seen.add(shown(state)),
-        fireImmediately: true,
-      );
-      opened = container.read(camera).open();
-      await delay(milliseconds);
-      print('screen left');
-      screen.close();
-      await delay(200);
-      container.dispose();
-    } finally {
-      ended.complete();
-    }
-  }, (error, _) => zone.add(error));
-  return ended.future;
+Future<Outcome<void>?> leave(int milliseconds) async {
+  final seen = <String>[];
+  Job<void>? opened;
+  await guarded(() async {
+    final container = ProviderContainer();
+    final screen = container.listen(
+      camera.select((camera) => camera.currentState),
+      (_, state) => seen.add(shown(state)),
+      fireImmediately: true,
+    );
+    opened = container.read(camera).open();
+    await delay(milliseconds);
+    print('screen left at $milliseconds ms');
+    screen.close();
+    await delay(200);
+    container.dispose();
+  });
+  print('outcome: ${opened?.outcome}');
+  print('states: ${seen.join(', ')}');
+  print('device: ${log.join(', ')}');
+  return opened?.outcome;
+}
+'''
+
+# A screen that listens to a provider of the device itself and leaves
+# `milliseconds` in. It prints the device log.
+WATCHER = '''
+Future<void> leave(int milliseconds) async {
+  await guarded(() async {
+    final container = ProviderContainer();
+    final screen = container.listen(camera, (_, _) {});
+    await delay(milliseconds);
+    print('screen left at $milliseconds ms');
+    screen.close();
+    await delay(200);
+    container.dispose();
+  });
+  print('device: ${log.join(', ')}');
 }
 '''
 
 STATES = snips[f'{CONTROLLER}/CameraState']
 assert STATES is snips[f'{CONTROLLER}/Ready']
 CAMERA = snips[f'{CONTROLLER}/Camera']
+
+ANSWER = snips[f'{CONTROLLER}/removing-the-listener/'
+               'final-camera-provider-autodisp']
 
 FILES = {}
 
@@ -215,7 +252,7 @@ FILES['bridge_first'] = (
     HEAD + STATES + CAMERA
     + snips[f'{CONTROLLER}/the-first-attempt/'
             'the-first-attempt-the-controll']
-    + DEVICE + LEAVES + '''
+    + DEVICE + SCREEN + '''
 Future<void> scenario() async {
   await leave(10);
   require(zone.length == 1, 'one error reaches the zone: $zone');
@@ -231,19 +268,68 @@ Future<void> scenario() async {
 ''' + RUNNER)
 
 FILES['bridge'] = (
-    HEAD + STATES + CAMERA
-    + snips[f'{CONTROLLER}/removing-the-listener/'
-            'final-camera-provider-autodisp']
-    + DEVICE + LEAVES + '''
+    HEAD + STATES + CAMERA + ANSWER + DEVICE + SCREEN + '''
 Future<void> scenario() async {
-  await leave(10);
-  final outcome = opened!.outcome;
-  print('outcome: $outcome');
-  print('states: ${seen.join(', ')}');
-  print('device: ${log.join(', ')}');
+  final outcome = await leave(10);
   require(zone.isEmpty, 'nothing reaches the zone: $zone');
   require(outcome is Cancelled, 'the closing cancels the opening: $outcome');
   require(alive.isEmpty, 'the device opened late is closed: $alive');
+}
+''' + RUNNER)
+
+# ----------------------------------------------------------------- camera
+# riverpod alone: the screen leaves 10 ms in, while the device opens, and
+# the provider registers its cleanup only after the await.
+FILES['camera_naive'] = (
+    RIVERPOD_HEAD + snips[f'{CAMERA_SECTION}/the-first-attempt/'
+                 'the-first-attempt-the-cleanup-']
+    + DEVICE + WATCHER + '''
+Future<void> scenario() async {
+  await leave(10);
+  require(alive.length == 1, 'the device stays open: $alive');
+  require(zone.isEmpty, 'nothing reaches the zone: $zone');
+}
+''' + RUNNER)
+
+# riverpod's own recipe: a flag set on disposal before the await. The
+# screen leaves while the device opens, and after it opened.
+FILES['camera_flag'] = (
+    RIVERPOD_HEAD + snips[f'{CAMERA_SECTION}/a-flag-before-the-await/'
+                 'final-camera-futureprovider-au']
+    + DEVICE + WATCHER + '''
+Future<void> scenario() async {
+  await leave(10);
+  require(alive.isEmpty, 'leaving while it opens closes it: $alive');
+  await leave(80);
+  require(alive.isEmpty, 'leaving after it opened closes it: $alive');
+  require(zone.isEmpty, 'nothing reaches the zone: $zone');
+}
+''' + RUNNER)
+
+# The controller of the first section, left 80 ms in: the opening is over,
+# close() has no job to cancel, and nothing closes the device.
+FILES['camera_late'] = (
+    HEAD + STATES + CAMERA + ANSWER + DEVICE + SCREEN + '''
+Future<void> scenario() async {
+  final outcome = await leave(80);
+  require(outcome is Done, 'the opening was over: $outcome');
+  require(alive.length == 1, 'the device stays open: $alive');
+  require(zone.isEmpty, 'nothing reaches the zone: $zone');
+}
+''' + RUNNER)
+
+# The controller with onClose, left while the device opens and after.
+FILES['camera_on_close'] = (
+    HEAD + STATES + snips[f'{CAMERA_SECTION}/onclose/Camera'] + ANSWER
+    + DEVICE + SCREEN + '''
+Future<void> scenario() async {
+  final early = await leave(10);
+  require(early is Cancelled, 'the closing cancels the opening: $early');
+  require(alive.isEmpty, 'discard closes the late device: $alive');
+  final late = await leave(80);
+  require(late is Done, 'the opening was over: $late');
+  require(alive.isEmpty, 'onClose closes the open device: $alive');
+  require(zone.isEmpty, 'nothing reaches the zone: $zone');
 }
 ''' + RUNNER)
 

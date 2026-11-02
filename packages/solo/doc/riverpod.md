@@ -81,10 +81,14 @@ final camera = Provider.autoDispose<Camera>((ref) {
 ```
 
 The screen opens the camera and leaves 10 ms later, while the device is still
-opening:
+opening. `outcome` is that of the job `open()` returned, `states` are what the
+screen saw, and `device` is what happened to the device:
 
 ```text
-screen left
+screen left at 10 ms
+outcome: Cancelled(closed)
+states: Closed, Opening
+device: open 1 start, open 1 done, close 1
 zone: Cannot use the Ref of Provider<Camera> after it has been disposed.
 ```
 
@@ -109,12 +113,10 @@ final camera = Provider.autoDispose<Camera>((ref) {
 // The screen: ref.watch(camera.select((camera) => camera.currentState))
 ```
 
-The same screen leaves 10 ms in. `outcome` is that of the job `open()`
-returned, `states` are what the screen saw, and `device` is what happened to
-the device:
+The same screen leaves 10 ms in:
 
 ```text
-screen left
+screen left at 10 ms
 outcome: Cancelled(closed)
 states: Closed, Opening
 device: open 1 start, open 1 done, close 1
@@ -132,3 +134,134 @@ carries changes, not the state the camera is in when the screen subscribes. In
 Flutter the screen can also take the controller with `ref.watch(camera)` and
 build from it with `SoloBuilder` of
 [`flutter_solo`](https://pub.dev/packages/flutter_solo).
+
+## A camera closed when the screen goes
+
+The screen opens the camera when it appears and closes it when it goes,
+whichever moment that is: while the device is still opening or after it opened.
+Without the controller, riverpod holds the device in a provider of its own and
+closes it in `onDispose`.
+
+### The first attempt
+
+```dart
+// The first attempt: the cleanup is registered after the await.
+final camera = FutureProvider.autoDispose<Device>((ref) async {
+  final device = await Device.open();
+  ref.onDispose(device.close);
+  return device;
+});
+```
+
+The screen leaves 10 ms in, while the device opens:
+
+```text
+screen left at 10 ms
+device: open 1 start, open 1 done
+```
+
+The device stays open, and nothing reports it. riverpod disposes the provider
+when the screen leaves, and the `onDispose` that would close the device is not
+registered yet: the line that registers it waits behind the `await`. When the
+opening ends, the provider is gone.
+
+### A flag before the await
+
+riverpod's guide to [cancelling](https://riverpod.dev/docs/how_to/cancel) has
+the provider note its disposal before the first `await` and check after it:
+
+```dart
+final camera = FutureProvider.autoDispose<Device>((ref) async {
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  final device = await Device.open();
+  if (disposed) {
+    await device.close();
+    throw StateError('the screen left while the camera opened');
+  }
+  ref.onDispose(device.close);
+  return device;
+});
+```
+
+The screen leaves 10 ms in, and then, with a fresh provider, 80 ms in:
+
+```text
+screen left at 10 ms
+device: open 1 start, open 1 done, close 1
+screen left at 80 ms
+device: open 1 start, open 1 done, close 1
+```
+
+This works: the device is closed on either side of the opening. The cleanup
+lives in two places, the check after the `await` and the `onDispose` that
+follows it, and the order is the author's to keep: the flag is registered
+before the `await`.
+
+### Leaving after the camera opened
+
+Under the controller of the first section, leaving while the device opens
+closes it: `discard` takes the device that arrives for a cancelled job. The
+same screen leaving 80 ms in, after the opening:
+
+```text
+screen left at 80 ms
+outcome: Done(null)
+states: Closed, Opening, Ready(1)
+device: open 1 start, open 1 done
+```
+
+The device stays open. `close()` cancels the controller's jobs, and by then the
+opening has ended `Done`: there is nothing left to cancel. The device in
+`Ready` is the controller's now, not a job's, and `close()` does not close it.
+
+### onClose
+
+```dart
+final class Camera extends Solo<CameraState> {
+  Camera() : super(const Closed());
+
+  Job<void> open() => enqueue<CameraState, void>(
+    key: #camera,
+    policy: Policy.restart,
+    ifCancelled: (state, cancelled) => const Closed(),
+    (ctx) async {
+      ctx.emit(const Opening());
+      final device = await ctx.join(
+        Device.open,
+        discard: (device) => device.close(),
+      );
+      ctx.emit(Ready(device));
+    },
+  );
+
+  @override
+  void onClose() {
+    if (currentState case Ready(:final device)) {
+      unawaited(device.close());
+    }
+  }
+}
+```
+
+The screen leaves 10 ms in, and then, with a fresh provider, 80 ms in:
+
+```text
+screen left at 10 ms
+outcome: Cancelled(closed)
+states: Closed, Opening
+device: open 1 start, open 1 done, close 1
+screen left at 80 ms
+outcome: Done(null)
+states: Closed, Opening, Ready(1)
+device: open 1 start, open 1 done, close 1
+```
+
+`onClose` runs once, when every job of the controller is over, and closes the
+device the state holds. Leaving during the opening goes as before: the job ends
+`Cancelled`, `ifCancelled` publishes `Closed`, and `discard` closes the device.
+Neither a flag nor the order of the registrations is left to the author:
+`discard` at the place the device is taken holds the race between the leave and
+the opening, and `onClose` holds what the controller keeps after that. A
+controller whose closing is a job of its own, one that waits for the hardware,
+is in [Disposing of the camera](camera.md#disposing-of-the-camera).
