@@ -265,3 +265,104 @@ device: open 1 start, open 1 done, close 1
 устройство берётся, а то, что контроллер держит после этого, — `onClose`.
 Контроллер, у которого закрытие — отдельная задача, ждущая оборудование,
 разобран в разделе [Освобождение камеры](camera.md#освобождение-камеры).
+
+## Форма, которую отправляют один раз
+
+Форма отправляет сообщение на сервер, и второе нажатие, пока сообщение в пути,
+не должно отправить его снова. `send` изображает API: он отвечает через 30 мс
+квитанцией с номером своего вызова.
+
+### Первая попытка
+
+Для отправки формы в riverpod 3 есть мутации, пока экспериментальные,
+в `package:riverpod/experimental/mutation.dart`. Их документация на время
+`MutationPending` заменяет кнопку индикатором загрузки. Вызывающий, который
+идёт не через эту кнопку, читает то же состояние перед тем, как запустить
+мутацию:
+
+```dart
+// Первая попытка: каждый вызывающий проверяет мутацию перед запуском.
+final sendMessage = Mutation<String>();
+
+Future<String?> submit(ProviderContainer container, String text) async {
+  if (container.read(sendMessage) is MutationPending) return null;
+  return sendMessage.run(container, (_) => send(text));
+}
+```
+
+Во Flutter те же строки берут `WidgetRef` экрана. Экран отправляет `'hi'`,
+а затем `'bye'`, пока `'hi'` в пути:
+
+```text
+right after the first: MutationPending<String>()
+first: sent hi #1
+second: null
+calls: 1
+```
+
+Охрана работает: `run` переводит мутацию в `MutationPending` до того, как
+вернуть управление, и второй вызов застаёт её там. Отличие от ответа ниже
+узкое. Второй вызывающий получает `null`, а не квитанцию ушедшего сообщения.
+И охрана живёт в каждом вызывающем, а не в мутации: её документация говорит,
+что мутации пока никак не ограничивают параллельные вызовы, и вызывающий без
+проверки отправит сообщение второй раз.
+
+### Policy.droppable
+
+Форма — контроллер под провайдером, так же как камера в первом разделе:
+
+```dart
+sealed class MessageState {
+  const MessageState();
+}
+
+final class Editing extends MessageState {
+  const Editing();
+}
+
+final class Sent extends MessageState {
+  const Sent(this.receipt);
+
+  final String receipt;
+}
+```
+
+```dart
+final class MessageForm extends Solo<MessageState> {
+  MessageForm() : super(const Editing());
+
+  Job<String> submit(String text) => enqueue<MessageState, String>(
+    key: #submit,
+    policy: Policy.droppable,
+    (ctx) async {
+      final receipt = await ctx.join(() => send(text));
+      ctx.emit(Sent(receipt));
+      return receipt;
+    },
+  );
+}
+```
+
+Те же `'hi'` и `'bye'`, и каждый вызывающий ждёт `value` той задачи, которую
+вернул его `submit`:
+
+```text
+same job: true
+first: sent hi #1
+second: sent hi #1
+calls: 1
+state: Sent(sent hi #1)
+```
+
+Вызов, пришедший, пока идёт задача его ключа, получает при `Policy.droppable`
+эту же задачу, и API вызывается один раз. Оба вызывающих ждут `value` одной
+задачи и получают квитанцию. Вызывающий, который продолжает через `then`, берёт
+задачу через `shared()`, как объясняет раздел
+[Очередь и политики](jobs.md#очередь-и-политики). Отправка идёт через
+`ctx.join`: сообщение — работа, которая должна закончиться, прежде чем очередь
+двинется дальше. Под `ctx.abandonable` отменённая отправка шла бы и после конца
+своей задачи, а следующий `submit` начал бы вторую, пока первая ещё в пути.
+
+Цена `droppable` — оборотная сторона того же правила: второй вызов с другими
+аргументами тоже получает первую задачу. `'bye'`, набранное, пока `'hi'` было
+в пути, так и не уходит, а его вызывающий получает квитанцию `'hi'`.

@@ -81,6 +81,7 @@ def replaced(source, old, new, count=1):
 
 CONTROLLER = 'a-controller-under-a-provider'
 CAMERA_SECTION = 'a-camera-closed-when-the-scree'
+FORM = 'a-form-sent-once'
 
 HEAD = """import 'dart:async';
 
@@ -330,6 +331,105 @@ Future<void> scenario() async {
   require(late is Done, 'the opening was over: $late');
   require(alive.isEmpty, 'onClose closes the open device: $alive');
   require(zone.isEmpty, 'nothing reaches the zone: $zone');
+}
+''' + RUNNER)
+
+# ------------------------------------------------------------------- form
+MUTATION_HEAD = HEAD.replace(
+    "import 'package:riverpod/riverpod.dart';\n",
+    "import 'package:riverpod/experimental/mutation.dart';\n"
+    "import 'package:riverpod/riverpod.dart';\n")
+
+# The API of the page: it answers in 30 ms with a receipt numbered by its
+# call, the number taken before the wait.
+SEND = '''
+int calls = 0;
+
+Future<String> send(String text) async {
+  final call = ++calls;
+  await Future<void>.delayed(const Duration(milliseconds: 30));
+  return 'sent $text #$call';
+}
+
+void require(bool condition, String message) {
+  if (!condition) throw StateError(message);
+}
+'''
+
+MUTATION = snips[f'{FORM}/the-first-attempt/submit']
+
+# What the page quotes from riverpod's own documentation: a mutation run
+# twice without the guard sends twice. Should riverpod start restricting
+# concurrent calls, this turns red, and the quote goes from the page.
+FILES['form_unguarded'] = (
+    # The block declares submit, which this driver leaves alone.
+    '// ignore_for_file: unreachable_from_main\n\n'
+    + MUTATION_HEAD.replace("import 'package:solo/solo.dart';\n", '')
+    + MUTATION + SEND + '''
+Future<void> scenario() async {
+  final container = ProviderContainer();
+  final button = container.listen(sendMessage, (_, _) {});
+  await Future.wait([
+    sendMessage.run(container, (_) => send('hi')),
+    sendMessage.run(container, (_) => send('bye')),
+  ]);
+  print('without the guard: calls: $calls');
+  require(calls == 2, 'a mutation does not restrict calls: $calls');
+  button.close();
+  container.dispose();
+}
+''' + RUNNER)
+
+# The guard of the page: 'hi', then 'bye' while 'hi' is on its way.
+FILES['form_mutation'] = (
+    MUTATION_HEAD.replace("import 'package:solo/solo.dart';\n", '')
+    + MUTATION + SEND + '''
+Future<void> scenario() async {
+  final container = ProviderContainer();
+  final button = container.listen(sendMessage, (_, _) {});
+  final first = submit(container, 'hi');
+  final pending = container.read(sendMessage);
+  print('right after the first: $pending');
+  final second = submit(container, 'bye');
+  final firstReceipt = await first;
+  final secondReceipt = await second;
+  print('first: $firstReceipt');
+  print('second: $secondReceipt');
+  print('calls: $calls');
+  require(pending is MutationPending, 'run is pending at once: $pending');
+  require(calls == 1, 'the guard sends once: $calls');
+  require(
+    firstReceipt == 'sent hi #1' && secondReceipt == null,
+    'the second caller gets null: $firstReceipt, $secondReceipt',
+  );
+  button.close();
+  container.dispose();
+}
+''' + RUNNER)
+
+FILES['form_droppable'] = (
+    HEAD.replace("import 'package:riverpod/riverpod.dart';\n", '') + snips[f'{FORM}/policy-droppable/MessageState']
+    + snips[f'{FORM}/policy-droppable/MessageForm'] + SEND + '''
+Future<void> scenario() async {
+  final form = MessageForm();
+  final first = form.submit('hi');
+  final second = form.submit('bye');
+  print('same job: ${identical(first, second)}');
+  final firstReceipt = await first.value;
+  final secondReceipt = await second.value;
+  print('first: $firstReceipt');
+  print('second: $secondReceipt');
+  print('calls: $calls');
+  final state = form.currentState;
+  print('state: ${state is Sent ? 'Sent(${state.receipt})' : state}');
+  require(identical(first, second), 'droppable hands out the same job');
+  require(calls == 1, 'the form sends once: $calls');
+  require(
+    firstReceipt == 'sent hi #1' && secondReceipt == 'sent hi #1',
+    'both callers get the receipt of hi: $firstReceipt, $secondReceipt',
+  );
+  require(state is Sent && state.receipt == 'sent hi #1', 'state: $state');
+  await form.close();
 }
 ''' + RUNNER)
 

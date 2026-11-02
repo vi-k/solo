@@ -265,3 +265,105 @@ Neither a flag nor the order of the registrations is left to the author:
 the opening, and `onClose` holds what the controller keeps after that. A
 controller whose closing is a job of its own, one that waits for the hardware,
 is in [Disposing of the camera](camera.md#disposing-of-the-camera).
+
+## A form sent once
+
+The form sends a message to the server, and a second tap while the message is
+on its way must not send it again. `send` stands for the API: it answers in 30
+ms with a receipt numbered by its call.
+
+### The first attempt
+
+riverpod 3 has mutations for the submission of a form, still experimental, in
+`package:riverpod/experimental/mutation.dart`. Their documentation swaps the
+button for a progress indicator while the mutation is `MutationPending`. A
+caller that does not go through that button reads the same state before it runs
+the mutation:
+
+```dart
+// The first attempt: each caller checks the mutation before it runs.
+final sendMessage = Mutation<String>();
+
+Future<String?> submit(ProviderContainer container, String text) async {
+  if (container.read(sendMessage) is MutationPending) return null;
+  return sendMessage.run(container, (_) => send(text));
+}
+```
+
+In Flutter the same lines take the `WidgetRef` of the screen. The screen sends
+`'hi'`, and then `'bye'` while `'hi'` is on its way:
+
+```text
+right after the first: MutationPending<String>()
+first: sent hi #1
+second: null
+calls: 1
+```
+
+The guard works: `run` puts the mutation into `MutationPending` before it
+returns, and the second call finds it there. What sets it apart from the answer
+below is narrow. The second caller gets `null`, not the receipt of the message
+that went. And the guard lives in each caller, not in the mutation: its
+documentation says that "mutations do not restrict concurrent calls in any
+capacity", and a caller without the check sends the message a second time.
+
+### Policy.droppable
+
+The form is a controller, under a provider the way the camera is in the first
+section:
+
+```dart
+sealed class MessageState {
+  const MessageState();
+}
+
+final class Editing extends MessageState {
+  const Editing();
+}
+
+final class Sent extends MessageState {
+  const Sent(this.receipt);
+
+  final String receipt;
+}
+```
+
+```dart
+final class MessageForm extends Solo<MessageState> {
+  MessageForm() : super(const Editing());
+
+  Job<String> submit(String text) => enqueue<MessageState, String>(
+    key: #submit,
+    policy: Policy.droppable,
+    (ctx) async {
+      final receipt = await ctx.join(() => send(text));
+      ctx.emit(Sent(receipt));
+      return receipt;
+    },
+  );
+}
+```
+
+The same `'hi'` and `'bye'`, each awaiting the `value` of the job its `submit`
+returned:
+
+```text
+same job: true
+first: sent hi #1
+second: sent hi #1
+calls: 1
+state: Sent(sent hi #1)
+```
+
+A call that comes while a job of its key runs gets that job back under
+`Policy.droppable`, and the API is called once. Both callers await the `value`
+of one job and get the receipt. A caller that goes on with `then` takes the job
+through `shared()` instead, as [Queue and policies](jobs.md#queue-and-policies)
+explains. The send goes through `ctx.join`: a message is work that has to
+finish before the queue moves on. Under `ctx.abandonable` a cancelled send
+would go on after its job ended, and the next `submit` would start a second one
+while the first is still on its way.
+
+The price of `droppable` is the other side of the same rule: a second call with
+other arguments gets the first job as well. The `'bye'` typed while `'hi'` was
+on its way is never sent, and its caller gets the receipt of `'hi'`.
