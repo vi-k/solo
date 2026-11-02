@@ -74,6 +74,19 @@ void nameTheStop() {
   };
 }
 
+/// Names the first error it is asked about and no other, and returns the
+/// errors it is asked about, in order: one object asked about twice gets
+/// two different verdicts.
+List<Object> nameOnlyTheFirst() {
+  final objects = <Object>[];
+  Job.isCancellationError = (error) {
+    asked.add('$error');
+    objects.add(error);
+    return objects.length == 1;
+  };
+  return objects;
+}
+
 /// Runs [body] under fake time in a zone of its own and returns what
 /// reached that zone.
 List<String> zoneOf(void Function(FakeAsync async) body) {
@@ -284,6 +297,56 @@ void main() {
         'onUnanswered: Bad state: database locked',
       ]);
       expect(envelopeZone, ['Bad state: database locked']);
+    });
+
+    test('one object twice in an envelope: a verdict for each time', () {
+      final objects = nameOnlyTheFirst();
+      final failure = StateError('connection reset');
+      final heard = Heard();
+      final zone = run(
+        () => Job<void>(observer: heard, (ctx) async {
+          try {
+            await ctx.join(() => delay(20));
+          } on Cancelled catch (_, stackTrace) {
+            throw ParallelWaitError<List<Object?>, List<AsyncError?>>(
+              [null, null],
+              [
+                AsyncError(failure, stackTrace),
+                AsyncError(failure, stackTrace),
+              ],
+            );
+          }
+        }),
+      );
+      expect(objects, [same(failure), same(failure)]);
+      expect(heard.seen, [
+        'onError: Bad state: connection reset',
+        'onError: Bad state: connection reset',
+        'onUnanswered: Bad state: connection reset',
+      ]);
+      expect(zone, ['Bad state: connection reset']);
+    });
+
+    test('one object in two errors of a job: a verdict for each', () {
+      final objects = nameOnlyTheFirst();
+      final failure = StateError('connection reset');
+      final heard = Heard();
+      final zone = run(
+        () => Job<void>(observer: heard, (ctx) async {
+          ctx.onDispose(() => throw failure);
+          await ctx.join(() async {
+            await delay(20);
+            throw failure;
+          });
+        }),
+      );
+      expect(objects, [same(failure), same(failure)]);
+      expect(heard.seen, [
+        'onError: Bad state: connection reset',
+        'onError: Bad state: connection reset',
+        'onUnanswered: Bad state: connection reset',
+      ]);
+      expect(zone, ['Bad state: connection reset']);
     });
 
     test('the errors no outcome carries of a cancelled job', () {
