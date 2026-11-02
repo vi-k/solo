@@ -1,6 +1,6 @@
-> **Состояние на 2026-11-02:** `flutter_solo` 1.0.0 подготовлен коммитом
-> `235bb05f`; выполняется связка его выпуска по слову владельца, итог
-> допишется отдельным коммитом после публикации.
+> **Состояние на 2026-11-02:** `flutter_solo` 1.0.0 опубликован на pub.dev;
+> подготовка `235bb05f`, релизный коммит `76ad6343` и аннотированный тег
+> отправлены в origin.
 > **Что это:** снятие оверрайдов `flutter_solo` и подготовка его выпуска
 > 1.0.0 после выхода scopo под ядро 1.0.
 > **Связанные записи:** `2026-11-01-solo-release-report.md`,
@@ -71,5 +71,20 @@ flutter_solo 1.0.0», состоящим только из просьбы опу
 ни в `origin`; на pub.dev `latest` у `flutter_solo` — 0.6.0;
 `pubspec_overrides.yaml` у пакета и примера нет.
 
-Коммит `Release flutter_solo 1.0.0`, аннотированный тег `flutter_solo-v1.0.0`,
-push и `flutter pub publish` — подряд; итог ниже.
+Связка выполнена подряд:
+
+- `235bb05f` и `e6cf5a82` — подготовка, `76ad6343` — Release flutter_solo
+  1.0.0;
+- аннотированный тег `flutter_solo-v1.0.0` указывает на `76ad6343`;
+- `origin/main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/flutter_solo-v1.0.0^{}` дают `76ad6343`;
+- `flutter pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/flutter_solo version 1.0.0»;
+- API pub.dev вернул `latest: 1.0.0`;
+- CI `gate` на `76ad6343`: `dart`, `flutter`, `floor`, `snippets` и `docs`
+  зелёные с первой попытки. Сборка сайта не запускалась: связка не трогала
+  файлов, по которым она срабатывает.
+
+Пакет: https://pub.dev/packages/flutter_solo/versions/1.0.0
+
+Выпуск завершён.
