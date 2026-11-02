@@ -1,3 +1,7 @@
+## Unreleased
+
+- `pubspec.yaml` names the documentation site, and pub.dev links to it.
+
 ## 1.0.0
 
 This package re-exports `solo` and, through it, `async_job`, so their changes

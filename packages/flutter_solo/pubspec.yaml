@@ -4,6 +4,7 @@ description: >-
   cooperative cancellation, rebuilds through SoloBuilder or ValueListenable.
 version: 1.0.0
 repository: https://github.com/vi-k/solo/tree/main/packages/flutter_solo
+documentation: https://docs.yet-another.dev/flutter_solo/
 issue_tracker: https://github.com/vi-k/solo/issues
 topics:
   - state-management

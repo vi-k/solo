@@ -1,3 +1,9 @@
+## Unreleased
+
+- The package has an example: a recorder with three mistakes, the lines the
+  plugin reports and the same job fixed.
+- `pubspec.yaml` names the documentation site, and pub.dev links to it.
+
 ## 0.1.4
 
 - The tests run against async_job and solo 1.0.0; the rules have not changed.

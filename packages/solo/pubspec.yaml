@@ -4,6 +4,7 @@ description: >-
   declarative rules and cooperative cancellation. Pure Dart.
 version: 1.0.0
 repository: https://github.com/vi-k/solo/tree/main/packages/solo
+documentation: https://docs.yet-another.dev/solo/
 issue_tracker: https://github.com/vi-k/solo/issues
 topics:
   - state-management

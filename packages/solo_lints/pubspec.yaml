@@ -5,6 +5,7 @@ description: >-
   a needless ignoreFailure().
 version: 0.1.4
 repository: https://github.com/vi-k/solo/tree/main/packages/solo_lints
+documentation: https://docs.yet-another.dev/solo_lints/
 issue_tracker: https://github.com/vi-k/solo/issues
 topics:
   - lints
