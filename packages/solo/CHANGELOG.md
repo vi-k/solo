@@ -5,6 +5,9 @@
   arguments works with the whole of `S` in its body: there `ctx.state` is
   `Object?`. The README also says that the working type holds from the start of
   the job to its end.
+- A new page, `doc/riverpod.md`, shows a controller under a riverpod provider:
+  the bridge between the two, a camera closed when the screen goes, a form sent
+  once, and what the controller costs there.
 
 ## 1.0.0
 

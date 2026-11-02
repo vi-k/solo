@@ -76,6 +76,13 @@ export default defineConfig({
                 'Eleven controller scenarios implemented in both packages.',
             },
             {
+              label: 'solo under riverpod',
+              url: `${config.site}/solo/riverpod/`,
+              description:
+                'A controller under a riverpod provider, next to what ' +
+                'riverpod alone does.',
+            },
+            {
               label: 'Repository',
               url: config.repo,
               description: 'Source, examples and tests.',
@@ -162,6 +169,7 @@ export default defineConfig({
               'solo and bloc, side by side',
               'solo и bloc рядом',
             ),
+            page('solo/riverpod', 'solo under riverpod', 'solo под riverpod'),
             changelog('solo'),
           ],
         },
