@@ -334,6 +334,71 @@ Future<void> scenario() async {
 }
 ''' + RUNNER)
 
+# ------------------------------------------------------------------ price
+# The camera with onClose under its provider, as the page leaves it.
+CLOSING = HEAD + STATES + snips[f'{CAMERA_SECTION}/onclose/Camera'] + ANSWER
+
+# A read with no listener: the provider makes the controller and disposes
+# of it at once, and the opening ends cancelled.
+FILES['price_read'] = CLOSING + DEVICE + '''
+Future<void> scenario() async {
+  Job<void>? opened;
+  await guarded(() async {
+    final container = ProviderContainer();
+    opened = container.read(camera).open();
+    await delay(200);
+    container.dispose();
+  });
+  final outcome = opened?.outcome;
+  print('read without a listener');
+  print('outcome: $outcome');
+  print('device: ${log.join(', ')}');
+  require(outcome is Cancelled, 'the controller closed at once: $outcome');
+  require(alive.isEmpty, 'the device opened late is closed: $alive');
+  require(zone.isEmpty, 'nothing reaches the zone: $zone');
+}
+''' + RUNNER
+
+# The screen stays; the camera is open, and the provider is invalidated.
+FILES['price_invalidate'] = CLOSING + DEVICE + '''
+String shown(CameraState state) => switch (state) {
+  Ready(:final device) => 'Ready(${device.id})',
+  _ => '${state.runtimeType}',
+};
+
+Future<void> scenario() async {
+  final seen = <String>[];
+  late Camera first;
+  late Camera second;
+  await guarded(() async {
+    final container = ProviderContainer();
+    final screen = container.listen(
+      camera.select((camera) => camera.currentState),
+      (_, state) => seen.add(shown(state)),
+      fireImmediately: true,
+    );
+    first = container.read(camera);
+    unawaited(first.open().done);
+    await delay(80);
+    print('camera invalidated');
+    container.invalidate(camera);
+    await delay(200);
+    second = container.read(camera);
+    screen.close();
+    await delay(200);
+    container.dispose();
+  });
+  print('states: ${seen.join(', ')}');
+  print('device: ${log.join(', ')}');
+  print('the first controller finished: ${first.isFinished}');
+  require(first.isFinished, 'invalidate closes the controller');
+  require(!identical(first, second), 'the provider made a new controller');
+  require(seen.last == 'Closed', 'the screen sees the new one: $seen');
+  require(alive.isEmpty, 'onClose closes the device: $alive');
+  require(zone.isEmpty, 'nothing reaches the zone: $zone');
+}
+''' + RUNNER
+
 # ------------------------------------------------------------------- form
 MUTATION_HEAD = HEAD.replace(
     "import 'package:riverpod/riverpod.dart';\n",

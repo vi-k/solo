@@ -7,6 +7,23 @@ provider when the work there has an order to keep and a resource to close. A
 its state through it, and the provider's disposal closes it. The code runs
 against riverpod 3 in pure Dart: `flutter_riverpod` hands out the same `Ref`.
 
+Where riverpod leaves the work to the app, this page and its neighbours take it
+apart:
+
+| The trap in riverpod | What answers it | Where |
+| --- | --- | --- |
+| A `Ref` used after an `await` in a method of a notifier, a field checked against the current call | A method of a controller holds no `Ref`, and the `emit` of a cancelled job never reaches the state | [A notifier that starts again](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/riverpod-and-bloc.md#a-notifier-that-starts-again) |
+| A provider disposed while its work runs | `ref.onDispose(job.cancel)` | [A provider that is gone](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/riverpod-and-bloc.md#a-provider-that-is-gone) |
+| A debounce made of a flag and a throw after the disposal | `ctx.pause` in a job under the provider; in `solo`, `accumulate` with `debounce` | [A pause of the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/time.md#a-pause-of-the-job), [A search that fires on every keystroke](accumulation.md#a-search-that-fires-on-every-keystroke) |
+| The state of a controller on the screen | `ref.notifyListeners` and `select` | [A controller under a provider](#a-controller-under-a-provider) |
+| A resource taken before its cleanup is registered | `discard` where it is taken, `onClose` for what the controller keeps | [A camera closed when the screen goes](#a-camera-closed-when-the-screen-goes) |
+| A form sent twice | `Policy.droppable` | [A form sent once](#a-form-sent-once) |
+
+The debounce of riverpod's [guide](https://riverpod.dev/docs/how_to/cancel)
+throws an exception of its own after the disposal, and the app can pass it over
+in an observer by its type. `async_job` gives every piece of code that type
+already: `Cancelled`.
+
 Each section opens with the version riverpod's own documentation leads to and
 shows what that code does. The states and traces under the fragments are what
 the code prints when it runs.
@@ -367,3 +384,48 @@ while the first is still on its way.
 The price of `droppable` is the other side of the same rule: a second call with
 other arguments gets the first job as well. The `'bye'` typed while `'hi'` was
 on its way is never sent, and its caller gets the receipt of `'hi'`.
+
+## What you take on
+
+The controller adds a layer. The provider holds the controller, the controller
+holds the state, and the state is a type of the controller, not an
+`AsyncValue`. The bridge of the first section is code of the app, one per
+controller, and the `removeListener` in its `onDispose` is not optional.
+
+The provider decides how long the controller lives. A `ref.read` of an
+`autoDispose` provider with no listener makes a controller and disposes of it
+right away, and the job it was asked for ends `Cancelled`:
+
+```text
+read without a listener
+outcome: Cancelled(closed)
+device: open 1 start, open 1 done, close 1
+```
+
+A rebuild of the provider closes the controller and cancels its jobs:
+`ref.invalidate`, or a change in a provider the bridge reads with `ref.watch`.
+So the provider reads what the controller depends on with `ref.read`, unless a
+change there should close it. Here the screen stays while the camera is open,
+and the provider is invalidated; the screen gets a new controller, in `Closed`:
+
+```text
+camera invalidated
+states: Closed, Opening, Ready(1), Closed
+device: open 1 start, open 1 done, close 1
+the first controller finished: true
+```
+
+riverpod does not retry a failed job of the controller: its retry is for a
+provider that fails to build, and the provider of a controller does not fail. A
+retry is written in the body of the job, as
+[Retrying a failed call](errors.md#retrying-a-failed-call) shows.
+
+`Policy.droppable` loses the arguments of a second call, as the form shows. And
+`solo` is one more dependency with a model of its own: a queue, keys, policies,
+state rules.
+
+`solo` is not needed for one operation under a provider: that is a job of
+`async_job`, as
+[With riverpod and bloc](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/riverpod-and-bloc.md)
+shows. Nor for a request riverpod keeps per argument with a provider family:
+riverpod alone does that.
