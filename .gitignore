@@ -27,3 +27,6 @@ site/node_modules/
 site/dist/
 site/.astro/
 site/src/content/docs/
+
+# The owner's local to-do list in the repository root
+/TODO.md
