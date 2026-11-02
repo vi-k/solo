@@ -1,6 +1,6 @@
 > **Состояние на 2026-11-02:** сделано и смержено в `main` коммитом
-> «test: give one error object a verdict each time it is asked about»;
-> не отправлено.
+> «test: give one error object a verdict each time it is asked about»,
+> отправлено в origin по слову владельца.
 > **Что это:** два теста `async_job` на то, что `Job.isCancellationError`
 > выносит вердикт каждому появлению ошибки, а не объекту.
 > **Связанные записи:** `2026-11-01-async-job-release-report.md`.
