@@ -37,8 +37,9 @@
 - страница `packages/solo/doc/riverpod.md` «что `async_job` и `solo` добавляют
   к riverpod» — остаток Opus F2, рамку владелец выбрал 2026-11-02. Проблемные
   места riverpod — `2026-11-02-riverpod-pain-points-research.md`, дизайн —
-  `2026-11-02-riverpod-page-design.md`, пересмотрен по ревью Opus. Следующий
-  шаг — одобрение дизайна владельцем, затем план;
+  `2026-11-02-riverpod-page-design.md`, пересмотрен по ревью Opus. Дизайн
+  владелец одобрил 2026-11-02, план — `2026-11-02-riverpod-page-plan.md`;
+  следующий шаг — просмотр плана владельцем и выбор способа исполнения;
 - черновики анонса 1.0: статья «what cancelling a Future takes in Dart», посты
   в r/FlutterDev и r/dartlang, ответ в bloc#3069 со ссылкой на страницу
   `riverpod-and-bloc.md` ядра. Публикует владелец сам, агент готовит тексты.
