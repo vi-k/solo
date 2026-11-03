@@ -57,9 +57,11 @@
 второй фазой отдельным дизайном, если владелец согласится. Ставка на ядро,
 из которой выросли две страницы, с того же дня — раздел «Ставка — ядро»
 `AGENTS.md` и решение 144 `docs/settled.md`; сайт разделён на темы `async_job`
-и `solo`, `2026-11-03-core-first-report.md`. Ближайший сосед —
-`packages/async_job/doc/riverpod-and-bloc.md`, четыре раздела о задаче под
-провайдером, нотифаером и обработчиком bloc.
+и `solo`, `2026-11-03-core-first-report.md`; темы держит тест
+`TheSidebarTopics` в `tool/build_site_test.py`. Открыт вопрос владельцу: место
+`solo_lints` — сейчас в теме `solo`, хотя README ядра ставит его в установку
+(решение 129). Ближайший сосед — `packages/async_job/doc/riverpod-and-bloc.md`,
+четыре раздела о задаче под провайдером, нотифаером и обработчиком bloc.
 
 Дальше по слову владельца — черновики анонса 1.0: статья «what cancelling a
 Future takes in Dart», посты в r/FlutterDev и r/dartlang, ответ в bloc#3069

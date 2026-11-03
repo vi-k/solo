@@ -6,6 +6,7 @@ Run from the repository root:
 """
 
 import pathlib
+import re
 import sys
 import unittest
 
@@ -334,6 +335,31 @@ class ALinkToThePageItself(unittest.TestCase):
         text = f'# solo\n\n```\n{link}\n```\n\n| {link} |\n'
         built = page(text, 'packages/solo/README.md')
         self.assertEqual(built.count(link), 2)
+
+
+class TheSidebarTopics(unittest.TestCase):
+    # The starlight-sidebar-topics plugin fails `astro build` on a page that
+    # no topic lists. The gate builds the pages but not Astro, so the lists
+    # in astro.config.mjs are held against the pages here.
+    def test_every_page_is_listed_and_every_entry_is_a_page(self):
+        config = (build_site.SITE / 'astro.config.mjs').read_text(
+            encoding='utf-8'
+        )
+        listed = set(re.findall(r"\bpage\(\s*'([^']+)'", config))
+        listed |= {
+            f'{segment}/changelog'
+            for segment in re.findall(r"\bchangelog\(\s*'([^']+)'\)", config)
+        }
+        pages = set()
+        for _, out, _, locale in build_site.sources():
+            if locale != 'en':
+                continue
+            slug = out[: -len('.md')]
+            if slug.endswith('/index'):
+                slug = slug[: -len('/index')]
+            pages.add(slug)
+        self.assertEqual(sorted(pages - listed), [], 'pages no topic lists')
+        self.assertEqual(sorted(listed - pages), [], 'entries with no page')
 
 
 if __name__ == '__main__':

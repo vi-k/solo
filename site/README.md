@@ -16,11 +16,11 @@ header pairs a page with its translation, and `check_translations.py`
 keeps the two sides mirroring each other, so the pairing cannot go stale.
 
 A changelog is a page of its package in both languages, at
-`<package>/changelog/` and last in the package's group of the sidebar. The
-English one is the package's `CHANGELOG.md`; its translation lies in
-`docs/ru/<package>/` beside the translated guides. A changelog opens with
-the heading of a version, so the build gives the page its title, "Changelog"
-or «Список изменений».
+`<package>/changelog/` and the package's last page in the sidebar of its topic.
+The English one is the package's `CHANGELOG.md`; its translation lies in
+`docs/ru/<package>/` beside the translated guides. A changelog opens with the
+heading of a version, so the build gives the page its title, "Changelog" or
+«Список изменений».
 
 This says nothing about what pub.dev gets: `README.ru.md` stays excluded
 by each package's `.pubignore`, and the other translations live outside

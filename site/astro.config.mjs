@@ -9,7 +9,7 @@ import config from './site.json' with { type: 'json' };
 /** One sidebar entry, named in both languages. */
 const page = (slug, label, ru) => ({ slug, label, translations: { ru } });
 
-/** The changelog of a package: the last entry of its group. */
+/** The changelog of a package: the last page of its part of a topic. */
 const changelog = (segment) =>
   page(`${segment}/changelog`, 'Changelog', 'Список изменений');
 
@@ -129,7 +129,7 @@ export default defineConfig({
   trailingSlash: 'always',
   integrations: [
     starlight({
-      title: config.title,
+      title: { en: config.title, ru: 'async_job и solo' },
       description: config.tagline,
       plugins: [
         // Publishes /llms.txt, /llms-full.txt and /llms-small.txt: the
