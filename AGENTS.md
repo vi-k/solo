@@ -313,10 +313,12 @@ PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run <ката
 правка лежит рядом в дереве.
 
 Поэтому между выпусками в дереве живут файлы `pubspec_overrides.yaml` —
-у `packages/solo`, у `packages/solo/example`, у `packages/solo_lints`,
-у `packages/flutter_solo` и у `packages/flutter_solo/example`. Они под гитом,
-а не в `.gitignore`: их состояние — часть состояния репозитория. Первой строкой
-в каждом комментарий о том, до чего оверрайд живёт. Оверрайд
+у `packages/solo`, у `packages/solo/example`, у `packages/async_job_lints`,
+у `packages/solo_lints`, у `packages/flutter_solo`
+и у `packages/flutter_solo/example`. Они под гитом, а не в `.gitignore`: их
+состояние — часть состояния репозитория. Первой строкой в каждом комментарий
+о том, до чего оверрайд живёт. Оверрайды обоих пакетов линтов ведут
+на `async_job` и `solo`: против них идут тесты правил. Оверрайд
 `packages/solo_lints` ведёт ещё и на `async_job_lints`: от него `solo_lints`
 зависит во время работы.
 

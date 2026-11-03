@@ -4,8 +4,10 @@
   `release_on_the_call`, `catch_without_check`, `sync_fake_async` and
   `bare_await`, and the quick fixes of `release_on_the_call` and
   `catch_without_check` come from solo_lints 0.1.4 and behave as they did
-  there, with one change: `bare_await` reports a wait for a job of the own
-  queue of a solo controller, which solo_lints leaves to `await_own_queue`.
+  there, with two changes: `bare_await` reports a wait for a job of the own
+  queue of a solo controller, which solo_lints leaves to `await_own_queue`, and
+  the ids of the quick fixes begin with `async_job_lints.fix.` instead of
+  `solo_lints.fix.`.
 - `package:async_job_lints/plugin_api.dart` registers the rules in another
   plugin, for analyzer plugins built on top of this one.
 - The package has an example: a recorder on async_job with three mistakes, the

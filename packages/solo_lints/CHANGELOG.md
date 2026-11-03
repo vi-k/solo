@@ -4,8 +4,11 @@
   `catch_without_check`, `sync_fake_async` and `bare_await`, come from the new
   package `async_job_lints`, for code on async_job alone. This plugin includes
   them under the same names, so `diagnostics:` and `// ignore:` stay as they
-  are. Their changes are listed in the changelog of `async_job_lints`. Name one
-  of the two plugins, not both.
+  are. Their changes are listed in the changelog of `async_job_lints`. The ids
+  of the quick fixes of `release_on_the_call` and `catch_without_check` begin
+  with `async_job_lints.fix.` instead of `solo_lints.fix.`, so an editor
+  binding that names an old id needs the new one. Name one of the two plugins,
+  not both.
 - The README describes the package as the plugin for solo and flutter_solo, and
   the rules of the core link to the README of `async_job_lints`.
 - The package has an example: a recorder with three mistakes, the lines the
