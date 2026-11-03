@@ -150,7 +150,10 @@ jobs:
       # alone and both in either order, with the `ignore` comments applied.
       # A rule solo_lints forgets to register, a rule of the core reported
       # twice when both are named, or an `ignore` that goes to the wrong
-      # plugin turns it red.
+      # plugin turns it red. A set of one plugin that is red points at the
+      # code; a set of two that alone is red after a new SDK points at how
+      # the server runs two plugins, which decision 145 of docs/settled.md
+      # does not promise the user.
       - name: Plugins
         run: timeout 900 python3 tool/plugin_probe.py
 

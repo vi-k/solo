@@ -2,7 +2,9 @@
 // ignore_for_file: non_constant_identifier_names
 
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
+import 'package:async_job_lints/plugin_api.dart';
 import 'package:solo_lints/solo_lints.dart';
+import 'package:solo_lints/src/fixes/key_per_request.dart';
 import 'package:test/test.dart';
 import 'package:test_reflective_loader/test_reflective_loader.dart';
 
@@ -46,6 +48,22 @@ void main() {
       'catch_without_check',
       'key_per_request',
     });
+  });
+
+  // The tests of the fixes make the producers directly, so a fix registered
+  // for the wrong rule shows only here. The fixes of the core are those
+  // registerAsyncJobLints registers; the one of solo_lints is its own.
+  test('each fix is registered for its own rule', () {
+    final core = RecordingRegistry();
+    registerAsyncJobLints(core);
+    final fixes = _registered().fixes;
+    for (final rule in ['release_on_the_call', 'catch_without_check']) {
+      expect(identical(fixes[rule], core.fixes[rule]), isTrue, reason: rule);
+    }
+    expect(
+      identical(fixes['key_per_request'], PutArgumentsIntoKey.new),
+      isTrue,
+    );
   });
 
   defineReflectiveSuite(() {

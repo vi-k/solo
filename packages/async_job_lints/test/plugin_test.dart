@@ -1,5 +1,7 @@
 import 'package:async_job_lints/async_job_lints.dart';
 import 'package:async_job_lints/plugin_api.dart';
+import 'package:async_job_lints/src/fixes/add_check.dart';
+import 'package:async_job_lints/src/fixes/release_on_the_call.dart';
 import 'package:async_job_lints/src/rules/bare_await.dart';
 import 'package:test/test.dart';
 
@@ -29,6 +31,18 @@ void main() {
       unorderedEquals(['catch_without_check', 'bare_await']),
     );
     expect(registry.fixedRules, {'release_on_the_call', 'catch_without_check'});
+    // The tests of the fixes make the producers directly, so a fix registered
+    // for the wrong rule shows only here.
+    expect(
+      identical(registry.fixes['release_on_the_call'], PassReleaseToCall.new),
+      isTrue,
+      reason: 'release_on_the_call',
+    );
+    expect(
+      identical(registry.fixes['catch_without_check'], AddCheck.new),
+      isTrue,
+      reason: 'catch_without_check',
+    );
   }
 
   test('the five rules of the core are registered, each with its kind', () {

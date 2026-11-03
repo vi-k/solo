@@ -107,6 +107,10 @@
   `dart test` из `packages/solo/example/`. Тесты Flutter-пакета —
   `flutter test` из `packages/flutter_solo`, его примера — `flutter test`
   из `packages/flutter_solo/example/`.
+- Правишь то, как плагины регистрируют правила, — гоняй
+  `python3 tool/plugin_probe.py` и на полу:
+  `PATH=~/fvm/versions/3.38.1/bin:$PATH`. Гейт гоняет зонд только на свежем
+  stable.
 - Асинхронность тестируется через `FakeAsync` (`package:fake_async`), время
   сдвигается явно. Исключение — тесты `async_job` на настоящих миллисекундах:
   они остаются по решению 82 из `docs/settled.md` и переходят на `fakeAsync`

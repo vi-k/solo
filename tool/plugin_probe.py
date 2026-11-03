@@ -30,6 +30,16 @@ solo_lints as `await_own_queue` only. With both, the instances of both
 plugins run on Dart 3.13 and one on Dart 3.10, so `bare_await` there
 depends on the SDK and the order and is not compared.
 
+When the diagnostics differ from the marks, the probe prints the other
+lines `dart analyze` gave: a plugin that did not load says why there.
+
+A set of one plugin that goes red points at the code of the plugins. A
+set of two that goes red alone, after a new SDK, points at how the server
+runs two plugins: that is not a promise to the user, who names one, as
+decision 145 of `docs/settled.md` says. The gate runs the probe on the
+latest stable SDK only; after a change to how the plugins register their
+rules, run it on the floor SDK by hand as well.
+
 `--fixes` asks the server for quick fixes, through the language server
 protocol, at each diagnostic of a rule that has one, and counts the
 actions titled with the message of the fix. Named alone, a plugin is
@@ -91,6 +101,8 @@ FIXES = {
 MARK = re.compile(r'\S.*\s// (\w+)(?: unless (\w+))?$')
 
 WAIT_FOR_DIAGNOSTICS = 120
+# How many other lines of `dart analyze` a mismatch prints.
+REST = 40
 
 
 def marks():
@@ -171,19 +183,24 @@ def run(command, cwd):
 
 
 def analyze(user):
-    """The (rule, line) pairs of the eight rules `dart analyze` reports."""
+    """The (rule, line) pairs of the eight rules `dart analyze` reports.
+
+    Also the other lines of its output: a plugin that does not load says why
+    there, and a mismatch prints them.
+    """
     # Diagnostics make the exit code non-zero; that is not a failure here.
     result = subprocess.run(['dart', 'analyze', '--format=machine'],
                             cwd=user, capture_output=True, text=True)
     pairs = []
+    rest = []
     for line in (result.stdout + result.stderr).splitlines():
         fields = line.split('|')
-        if len(fields) < 8 or not fields[3].endswith('fixture.dart'):
-            continue
-        rule = fields[2].lower()
-        if rule in RULES:
-            pairs.append((rule, int(fields[4])))
-    return sorted(pairs)
+        if (len(fields) >= 8 and fields[3].endswith('fixture.dart')
+                and fields[2].lower() in RULES):
+            pairs.append((fields[2].lower(), int(fields[4])))
+        elif line.strip():
+            rest.append(line)
+    return sorted(pairs), rest
 
 
 def compare(plugins, got, marked):
@@ -374,7 +391,13 @@ def main():
             (user / 'analysis_options.yaml').write_text(
                 options(plugins, solo_lints))
             name = ', '.join(plugins)
-            if not compare(plugins, analyze(user), marked):
+            pairs, rest = analyze(user)
+            if not compare(plugins, pairs, marked):
+                print('  the rest of the output of dart analyze:')
+                for line in rest[:REST]:
+                    print(f'    {line}')
+                if len(rest) > REST:
+                    print(f'    ... and {len(rest) - REST} lines more')
                 print(f'FAILED {name}')
                 failed = True
                 break

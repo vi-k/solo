@@ -112,7 +112,7 @@ crawling the site or the repository page by page:
 | File | What it holds |
 | --- | --- |
 | `/llms.txt` | The entry point: what the packages are and where the other two files live. |
-| `/llms-full.txt` | Every English page, in order, as plain text, the four changelogs last. |
+| `/llms-full.txt` | Every English page, in order, as plain text, the five changelogs last. |
 | `/llms-small.txt` | The same without the changelogs and with asides and `<details>` stripped. Barely smaller here — these docs are mostly code, and code is kept. |
 
 English only: the plugin takes the default locale, which is what we want — an

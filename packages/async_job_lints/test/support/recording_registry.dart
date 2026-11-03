@@ -14,14 +14,24 @@ final class RecordingRegistry implements PluginRegistry {
   /// The rules registered as lints, in order.
   final lints = <AbstractAnalysisRule>[];
 
-  final _fixed = <DiagnosticCode>[];
+  final _fixed = <(DiagnosticCode, Function)>[];
+
+  /// The fix generators by the name of the rule they are registered for.
+  ///
+  /// A generator registered for a code no rule reports is kept under the name
+  /// of the code, so that it shows instead of going missing.
+  Map<String, Function> get fixes => {
+    for (final (code, generator) in _fixed)
+      [
+                for (final rule in [...warnings, ...lints])
+                  if (rule.diagnosticCodes.contains(code)) rule.name,
+              ].singleOrNull ??
+              '$code':
+          generator,
+  };
 
   /// The names of the rules a fix is registered for.
-  Set<String> get fixedRules => {
-    for (final code in _fixed)
-      for (final rule in [...warnings, ...lints])
-        if (rule.diagnosticCodes.contains(code)) rule.name,
-  };
+  Set<String> get fixedRules => fixes.keys.toSet();
 
   /// The registered rule named [name].
   AbstractAnalysisRule rule(String name) =>
@@ -35,7 +45,7 @@ final class RecordingRegistry implements PluginRegistry {
 
   @override
   void registerFixForRule(DiagnosticCode code, Function generator) =>
-      _fixed.add(code);
+      _fixed.add((code, generator));
 
   @override
   Never noSuchMethod(Invocation invocation) =>
