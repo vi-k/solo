@@ -1,5 +1,5 @@
 ---
-title: solo
+title: async_job и solo
 description: Отмена, дочерние задачи и освобождение ресурсов для асинхронного Dart и контроллер, который выполняет по одной задаче за раз.
 template: splash
 editUrl: false

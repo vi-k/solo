@@ -26,6 +26,15 @@ This says nothing about what pub.dev gets: `README.ru.md` stays excluded
 by each package's `.pubignore`, and the other translations live outside
 the packages.
 
+The sidebar has two topics, each a site of its own to the reader:
+`async_job`, the core, and `solo`, which brings `flutter_solo` and
+`solo_lints` along. A page shows the sidebar of its topic only, and a switch
+above it leads to the other one. The split is made by the
+[starlight-sidebar-topics](https://github.com/HiDeoo/starlight-sidebar-topics)
+plugin in `astro.config.mjs`; a new page has to be listed in the `items` of
+its topic, or the build fails on it. The home page has no sidebar and belongs
+to neither.
+
 ## Running it
 
 From the repository root:

@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
+import starlightSidebarTopics from 'starlight-sidebar-topics';
 
 import config from './site.json' with { type: 'json' };
 
@@ -11,6 +12,110 @@ const page = (slug, label, ru) => ({ slug, label, translations: { ru } });
 /** The changelog of a package: the last entry of its group. */
 const changelog = (segment) =>
   page(`${segment}/changelog`, 'Changelog', 'Список изменений');
+
+// The sidebar is split by package, so that each reads as a site of its
+// own: async_job, the core, comes first and needs nothing of solo; solo
+// brings flutter_solo and solo_lints along. The home page is a splash
+// page without a sidebar and belongs to neither.
+const topics = [
+  {
+    label: 'async_job',
+    link: '/async_job/',
+    items: [
+      page('async_job', 'Overview', 'Обзор'),
+      page('async_job/outcomes', 'Outcomes', 'Исходы'),
+      page('async_job/cancellation', 'Cancellation', 'Отмена'),
+      page(
+        'async_job/riverpod-and-bloc',
+        'With riverpod and bloc',
+        'С riverpod и bloc',
+      ),
+      page('async_job/time', 'Time', 'Время'),
+      page('async_job/children', 'Children', 'Дети'),
+      page('async_job/groups', 'Groups', 'Группы'),
+      page('async_job/chains', 'Chains', 'Цепочки'),
+      page('async_job/streams', 'Streams', 'Стримы'),
+      page('async_job/cleanup', 'Cleanup', 'Уборка'),
+      page('async_job/cleanup-rules', 'Cleanup rules', 'Правила уборки'),
+      page('async_job/observing', 'Observing', 'Наблюдение'),
+      page('async_job/errors', 'Errors', 'Ошибки'),
+      page('async_job/error-rules', 'Error rules', 'Правила ошибок'),
+      page('async_job/testing', 'Testing', 'Тестирование'),
+      page(
+        'async_job/extending',
+        'Building on the core',
+        'Своё поверх ядра',
+      ),
+      page('async_job/engine', 'An engine of your own', 'Свой движок'),
+      changelog('async_job'),
+    ],
+  },
+  {
+    label: 'solo',
+    link: '/solo/',
+    items: [
+      {
+        label: 'solo',
+        items: [
+          page('solo', 'Overview', 'Обзор'),
+          page('solo/jobs', 'Jobs and the queue', 'Задачи и очередь'),
+          page('solo/state', 'State', 'Состояние'),
+          page('solo/cancellation', 'Cancellation', 'Отмена'),
+          page(
+            'solo/resources',
+            'Resources and cleanup',
+            'Ресурсы и освобождение',
+          ),
+          page(
+            'solo/children',
+            'Children and chains',
+            'Дочерние задачи и цепочки',
+          ),
+          page('solo/streams', 'Streams', 'Стримы'),
+          page(
+            'solo/accumulation',
+            'Event accumulation',
+            'Накопление событий',
+          ),
+          page(
+            'solo/accumulation-rules',
+            'Accumulation rules',
+            'Правила накопления',
+          ),
+          page('solo/diagnostics', 'Diagnostics', 'Диагностика'),
+          page('solo/errors', 'Errors', 'Ошибки'),
+          page('solo/testing', 'Testing', 'Тестирование'),
+          page('solo/mistakes', 'Common mistakes', 'Частые ошибки'),
+          page('solo/reference', 'Reference', 'Справочник'),
+          page('solo/camera', 'Camera example', 'Пример камеры'),
+          page(
+            'solo/vs-bloc',
+            'solo and bloc, side by side',
+            'solo и bloc рядом',
+          ),
+          page('solo/riverpod', 'solo under riverpod', 'solo под riverpod'),
+          changelog('solo'),
+        ],
+      },
+      {
+        label: 'flutter_solo',
+        items: [
+          page('flutter_solo', 'Overview', 'Обзор'),
+          page('flutter_solo/mixins', 'Mixins', 'Миксины'),
+          page('flutter_solo/testing', 'Testing', 'Тестирование'),
+          changelog('flutter_solo'),
+        ],
+      },
+      {
+        label: 'solo_lints',
+        items: [
+          page('solo_lints', 'Overview', 'Обзор'),
+          changelog('solo_lints'),
+        ],
+      },
+    ],
+  },
+];
 
 // Content under src/content/docs/ is generated from the packages by
 // `python3 tool/build_site.py` and is not kept in git. The packages stay
@@ -32,7 +137,7 @@ export default defineConfig({
         // crawl the repository page by page. English only -- the plugin
         // takes the default locale, which is what we want here.
         starlightLlmsTxt({
-          projectName: 'solo',
+          projectName: config.title,
           description:
             'Cancellation, child tasks and cleanup for asynchronous Dart, ' +
             'and a controller built on them. A job of async_job stops at ' +
@@ -89,6 +194,7 @@ export default defineConfig({
             },
           ],
         }),
+        starlightSidebarTopics(topics),
       ],
       defaultLocale: 'root',
       locales: {
@@ -97,98 +203,6 @@ export default defineConfig({
       },
       social: [
         { icon: 'github', label: 'GitHub', href: config.repo },
-      ],
-      sidebar: [
-        {
-          label: 'async_job',
-          items: [
-            page('async_job', 'Overview', 'Обзор'),
-            page('async_job/outcomes', 'Outcomes', 'Исходы'),
-            page('async_job/cancellation', 'Cancellation', 'Отмена'),
-            page(
-              'async_job/riverpod-and-bloc',
-              'With riverpod and bloc',
-              'С riverpod и bloc',
-            ),
-            page('async_job/time', 'Time', 'Время'),
-            page('async_job/children', 'Children', 'Дети'),
-            page('async_job/groups', 'Groups', 'Группы'),
-            page('async_job/chains', 'Chains', 'Цепочки'),
-            page('async_job/streams', 'Streams', 'Стримы'),
-            page('async_job/cleanup', 'Cleanup', 'Уборка'),
-            page('async_job/cleanup-rules', 'Cleanup rules', 'Правила уборки'),
-            page('async_job/observing', 'Observing', 'Наблюдение'),
-            page('async_job/errors', 'Errors', 'Ошибки'),
-            page('async_job/error-rules', 'Error rules', 'Правила ошибок'),
-            page('async_job/testing', 'Testing', 'Тестирование'),
-            page(
-              'async_job/extending',
-              'Building on the core',
-              'Своё поверх ядра',
-            ),
-            page('async_job/engine', 'An engine of your own', 'Свой движок'),
-            changelog('async_job'),
-          ],
-        },
-        {
-          label: 'solo',
-          items: [
-            page('solo', 'Overview', 'Обзор'),
-            page('solo/jobs', 'Jobs and the queue', 'Задачи и очередь'),
-            page('solo/state', 'State', 'Состояние'),
-            page('solo/cancellation', 'Cancellation', 'Отмена'),
-            page(
-              'solo/resources',
-              'Resources and cleanup',
-              'Ресурсы и освобождение',
-            ),
-            page(
-              'solo/children',
-              'Children and chains',
-              'Дочерние задачи и цепочки',
-            ),
-            page('solo/streams', 'Streams', 'Стримы'),
-            page(
-              'solo/accumulation',
-              'Event accumulation',
-              'Накопление событий',
-            ),
-            page(
-              'solo/accumulation-rules',
-              'Accumulation rules',
-              'Правила накопления',
-            ),
-            page('solo/diagnostics', 'Diagnostics', 'Диагностика'),
-            page('solo/errors', 'Errors', 'Ошибки'),
-            page('solo/testing', 'Testing', 'Тестирование'),
-            page('solo/mistakes', 'Common mistakes', 'Частые ошибки'),
-            page('solo/reference', 'Reference', 'Справочник'),
-            page('solo/camera', 'Camera example', 'Пример камеры'),
-            page(
-              'solo/vs-bloc',
-              'solo and bloc, side by side',
-              'solo и bloc рядом',
-            ),
-            page('solo/riverpod', 'solo under riverpod', 'solo под riverpod'),
-            changelog('solo'),
-          ],
-        },
-        {
-          label: 'flutter_solo',
-          items: [
-            page('flutter_solo', 'Overview', 'Обзор'),
-            page('flutter_solo/mixins', 'Mixins', 'Миксины'),
-            page('flutter_solo/testing', 'Testing', 'Тестирование'),
-            changelog('flutter_solo'),
-          ],
-        },
-        {
-          label: 'solo_lints',
-          items: [
-            page('solo_lints', 'Overview', 'Обзор'),
-            changelog('solo_lints'),
-          ],
-        },
       ],
     }),
   ],

@@ -1,5 +1,5 @@
 ---
-title: solo
+title: async_job and solo
 description: Cancellation, child tasks and cleanup for asynchronous Dart, and a controller that runs one job at a time.
 template: splash
 editUrl: false
