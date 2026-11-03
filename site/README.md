@@ -9,11 +9,11 @@ stands in — a README's "Also on the documentation site" — is dropped. The
 packages stay the single source of truth, so the site cannot drift from what
 ships on pub.dev.
 
-Both languages are published. English is the root locale and comes from
-the packages; Russian lives under `/ru/` and comes from each package's
-`README.ru.md` and from `docs/ru/<package>/`. The language picker in the
-header pairs a page with its translation, and `check_translations.py`
-keeps the two sides mirroring each other, so the pairing cannot go stale.
+Both languages are published. English is the root locale and comes from the
+packages; Russian lives under `/ru/` and comes from each package's
+`README.ru.md` and from `docs/ru/<package>/`. The language picker in the header
+pairs a page with its translation, and `check_translations.py` keeps the two
+sides mirroring each other, so the pairing cannot go stale.
 
 A changelog is a page of its package in both languages, at
 `<package>/changelog/` and the package's last page in the sidebar of its topic.
@@ -22,18 +22,18 @@ The English one is the package's `CHANGELOG.md`; its translation lies in
 heading of a version, so the build gives the page its title, "Changelog" or
 «Список изменений».
 
-This says nothing about what pub.dev gets: `README.ru.md` stays excluded
-by each package's `.pubignore`, and the other translations live outside
-the packages.
+This says nothing about what pub.dev gets: `README.ru.md` stays excluded by
+each package's `.pubignore`, and the other translations live outside the
+packages.
 
-The sidebar has two topics, each a site of its own to the reader:
-`async_job`, the core, and `solo`, which brings `flutter_solo` and
+The sidebar has two topics, each a site of its own to the reader: `async_job`,
+the core, with `async_job_lints`, and `solo`, which brings `flutter_solo` and
 `solo_lints` along. A page shows the sidebar of its topic only, and a switch
 above it leads to the other one. The split is made by the
 [starlight-sidebar-topics](https://github.com/HiDeoo/starlight-sidebar-topics)
-plugin in `astro.config.mjs`; a new page has to be listed in the `items` of
-its topic, or the build fails on it. The home page has no sidebar and belongs
-to neither.
+plugin in `astro.config.mjs`; a new page has to be listed in the `items` of its
+topic, or the build fails on it. The home page has no sidebar and belongs to
+neither.
 
 ## Running it
 
@@ -56,8 +56,8 @@ Re-run `build_site.py` after editing any README, changelog or page in `doc/`;
 
 ## Settings
 
-`site.json` holds everything that changes between deployments, and both
-the Astro config and `build_site.py` read it:
+`site.json` holds everything that changes between deployments, and both the
+Astro config and `build_site.py` read it:
 
 | Field | What it is |
 | --- | --- |
@@ -66,44 +66,43 @@ the Astro config and `build_site.py` read it:
 | `title`, `tagline` | The site's name and its one-line description. |
 | `repo` | The repository, for the GitHub link and for "Edit this page". |
 
-`build_site.py` writes page links with `base` in front, so changing it in
-one place moves the whole site.
+`build_site.py` writes page links with `base` in front, so changing it in one
+place moves the whole site.
 
 ## Publishing
 
-`.github/workflows/site.yml` builds and deploys on every push to `main`
-that touches a README, a changelog, a `doc/` page, a translation of any of
-them, this folder or the assembler.
-**Settings → Pages → Source** is set to *GitHub Actions*.
+`.github/workflows/site.yml` builds and deploys on every push to `main` that
+touches a README, a changelog, a `doc/` page, a translation of any of them,
+this folder or the assembler. **Settings → Pages → Source** is set to *GitHub
+Actions*.
 
-The domain is `docs.yet-another.dev`. A subdomain needs one DNS record —
-`docs` as a `CNAME` to `vi-k.github.io` — and the apex stays free for
-whatever else lives there.
+The domain is `docs.yet-another.dev`. A subdomain needs one DNS record — `docs`
+as a `CNAME` to `vi-k.github.io` — and the apex stays free for whatever else
+lives there.
 
 The domain itself is a **Pages setting**, not a file. A deployment made by
 GitHub Actions does not read `CNAME` out of the artifact the way a
-branch-published site does, so `public/CNAME` only ends up served as a
-plain file. Set the domain once, in Settings → Pages → Custom domain, or
-with `gh api -X PUT repos/vi-k/solo/pages -f cname=docs.yet-another.dev`.
-The file is kept beside it so the intended domain is visible in the
-repository, and so a branch-published copy of this site would land on the
-same name.
+branch-published site does, so `public/CNAME` only ends up served as a plain
+file. Set the domain once, in Settings → Pages → Custom domain, or with
+`gh api -X PUT repos/vi-k/solo/pages -f cname=docs.yet-another.dev`. The file
+is kept beside it so the intended domain is visible in the repository, and so a
+branch-published copy of this site would land on the same name.
 
-Moving the site elsewhere is three edits: `site` and `base` in
-`site.json`, and `public/CNAME`. An apex domain would need four `A`
-records (185.199.108–111.153) and four `AAAA`
-(2606:50c0:8000–8003::153) instead of the single `CNAME`.
+Moving the site elsewhere is three edits: `site` and `base` in `site.json`, and
+`public/CNAME`. An apex domain would need four `A` records
+(185.199.108–111.153) and four `AAAA` (2606:50c0:8000–8003::153) instead of the
+single `CNAME`.
 
 `.dev` is in the HSTS preload list, so browsers reach it over HTTPS only.
-GitHub issues the certificate itself once the DNS record resolves; until
-then the address does not open at all, and "Enforce HTTPS" in the Pages
-settings stays greyed out. It can take up to 24 hours, usually minutes.
+GitHub issues the certificate itself once the DNS record resolves; until then
+the address does not open at all, and "Enforce HTTPS" in the Pages settings
+stays greyed out. It can take up to 24 hours, usually minutes.
 
 ## Search
 
-Built in, through [Pagefind](https://pagefind.app): it indexes the
-generated HTML at build time and needs no service and no key. It indexes
-each language separately, so a search in Russian returns Russian pages.
+Built in, through [Pagefind](https://pagefind.app): it indexes the generated
+HTML at build time and needs no service and no key. It indexes each language
+separately, so a search in Russian returns Russian pages.
 
 ## For agents
 
@@ -116,8 +115,8 @@ crawling the site or the repository page by page:
 | `/llms-full.txt` | Every English page, in order, as plain text, the four changelogs last. |
 | `/llms-small.txt` | The same without the changelogs and with asides and `<details>` stripped. Barely smaller here — these docs are mostly code, and code is kept. |
 
-English only: the plugin takes the default locale, which is what we want
-— an agent asking about `ctx.join` should not get the answer twice.
-The prose at the top of `llms.txt` is set in `astro.config.mjs`; it is the
-first thing an agent reads, so it says what the packages are and how
-cancellation works before anything else.
+English only: the plugin takes the default locale, which is what we want — an
+agent asking about `ctx.join` should not get the answer twice. The prose at the
+top of `llms.txt` is set in `astro.config.mjs`; it is the first thing an agent
+reads, so it says what the packages are and how cancellation works before
+anything else.

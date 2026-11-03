@@ -1,3 +1,10 @@
+## Unreleased
+
+### Documentation
+
+- The README names the analyzer plugin `async_job_lints` in `Install`, which
+  holds the rules for code on `async_job`; code on `solo` names `solo_lints`.
+
 ## 1.0.0
 
 ### Breaking changes

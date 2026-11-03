@@ -42,9 +42,12 @@ hero:
 | [async_job](async_job/) | Отмена, дочерние задачи и освобождение ресурсов для одной асинхронной операции. Чистый Dart, зависит только от `meta`. |
 | [solo](solo/) | Контроллер поверх `async_job`: очередь с политиками, правила состояния, дети, накопление. Чистый Dart. |
 | [flutter_solo](flutter_solo/) | Лицо `solo` для Flutter: `SoloBuilder`, `ValueListenable`, `select`, `listen`. |
-| [solo_lints](solo_lints/) | Плагин анализатора: сообщает о частых ошибках в коде на `async_job` и `solo`. |
+| [async_job_lints](async_job_lints/) | Плагин анализатора: сообщает о частых ошибках в коде на `async_job`. |
+| [solo_lints](solo_lints/) | Плагин анализатора для кода на `solo`: правила `async_job_lints` и правила контроллера. |
 
 `solo` реэкспортирует `async_job`, а `flutter_solo` — `solo`, поэтому
 достаточно одной зависимости: `async_job`, если нужна только отмена, `solo` или
-`flutter_solo`, если нужен контроллер. `solo_lints` — не зависимость: его
-называют в `analysis_options.yaml`.
+`flutter_solo`, если нужен контроллер. Плагины — не зависимости:
+в `analysis_options.yaml` называют один из них, `async_job_lints` для кода
+на `async_job` или `solo_lints`, который включает его правила, для кода
+на `solo`.

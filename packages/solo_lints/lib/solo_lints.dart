@@ -1,4 +1,5 @@
-/// The rules of solo_lints, registered by [SoloLintsPlugin].
+/// The rules of solo_lints for code on solo, registered by [SoloLintsPlugin]:
+/// those of async_job_lints for the core and three of the controller.
 library;
 
 import 'package:analysis_server_plugin/plugin.dart';
@@ -10,7 +11,7 @@ import 'src/rules/await_own_queue.dart';
 import 'src/rules/ignore_failure_hides_bugs.dart';
 import 'src/rules/key_per_request.dart';
 
-/// Registers the rules of solo_lints.
+/// Registers the rules of async_job_lints and the three of solo_lints.
 ///
 /// Warnings are on as soon as the plugin is enabled; the lints
 /// `catch_without_check`, `key_per_request`, `ignore_failure_hides_bugs` and

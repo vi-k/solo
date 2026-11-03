@@ -1,8 +1,8 @@
 name: solo_lints
 description: >-
-  Analyzer plugin for async_job and solo: a wait in cleanup, a late release,
-  a catch that takes a cancellation, a job in its own queue, a shared key,
-  a needless ignoreFailure().
+  Analyzer plugin for solo and flutter_solo: a job in its own queue, a shared
+  key, a needless ignoreFailure(), and the rules of async_job_lints for the
+  core.
 version: 0.1.4
 repository: https://github.com/vi-k/solo/tree/main/packages/solo_lints
 documentation: https://docs.yet-another.dev/solo_lints/

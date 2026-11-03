@@ -20,19 +20,21 @@ waits for nothing; the core set of `package:lints` flags it with
 dart pub add async_job
 ```
 
-The analyzer plugin [solo_lints](https://pub.dev/packages/solo_lints) reports
-mistakes that compile, run and often pass a first test, such as a wait in
-cleanup that never happens or a resource lost to a cancellation. Name it in
+The analyzer plugin [async_job_lints](https://pub.dev/packages/async_job_lints)
+reports mistakes that compile, run and often pass a first test, such as a wait
+in cleanup that never happens or a resource lost to a cancellation. Name it in
 `analysis_options.yaml`:
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.3
+  async_job_lints: ^0.1.0
 ```
 
 That turns on its warnings; the lints are turned on by name, as its
-[Install](https://github.com/vi-k/solo/blob/main/packages/solo_lints/README.md#install)
-section shows.
+[Install](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#install)
+section shows. Code built on [solo](https://pub.dev/packages/solo) names
+[solo_lints](https://pub.dev/packages/solo_lints) instead: it includes these
+rules and adds those of the controller.
 
 ## Quick start
 

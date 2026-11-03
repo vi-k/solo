@@ -1506,7 +1506,7 @@ void main() {
             r'```yaml\n(.*?)\n```',
             dotAll: true,
           ).firstMatch(read(page))!.group(1),
-          matches(RegExp(r'^plugins:\n  solo_lints: \^\d+\.\d+\.\d+$')),
+          matches(RegExp(r'^plugins:\n  async_job_lints: \^\d+\.\d+\.\d+$')),
           reason: page,
         );
       }

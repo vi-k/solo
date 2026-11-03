@@ -20,19 +20,22 @@
 dart pub add async_job
 ```
 
-Плагин анализатора [solo_lints](https://pub.dev/packages/solo_lints) сообщает
-об ошибках, которые компилируются, работают и часто проходят первый тест, —
-например, об ожидании в уборке, которое так и не случается, или о ресурсе,
-потерянном при отмене. Назовите его в `analysis_options.yaml`:
+Плагин анализатора [async_job_lints](https://pub.dev/packages/async_job_lints)
+сообщает об ошибках, которые компилируются, работают и часто проходят первый
+тест, — например, об ожидании в уборке, которое так и не случается, или
+о ресурсе, потерянном при отмене. Назовите его в `analysis_options.yaml`:
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.3
+  async_job_lints: ^0.1.0
 ```
 
 Так включаются его предупреждения; линты включаются по имени, как показывает
 его раздел
-[«Установка»](https://github.com/vi-k/solo/blob/main/packages/solo_lints/README.ru.md#установка).
+[«Установка»](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#установка).
+Код на [solo](https://pub.dev/packages/solo) называет вместо него
+[solo_lints](https://pub.dev/packages/solo_lints): тот включает эти правила
+и добавляет правила контроллера.
 
 ## Быстрый старт
 

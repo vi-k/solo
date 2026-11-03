@@ -1,5 +1,13 @@
 ## Unreleased
 
+- The five rules of the core, `ctx_in_cleanup`, `release_on_the_call`,
+  `catch_without_check`, `sync_fake_async` and `bare_await`, come from the new
+  package `async_job_lints`, for code on async_job alone. This plugin includes
+  them under the same names, so `diagnostics:` and `// ignore:` stay as they
+  are. Their changes are listed in the changelog of `async_job_lints`. Name one
+  of the two plugins, not both.
+- The README describes the package as the plugin for solo and flutter_solo, and
+  the rules of the core link to the README of `async_job_lints`.
 - The package has an example: a recorder with three mistakes, the lines the
   plugin reports and the same job fixed.
 - `pubspec.yaml` names the documentation site, and pub.dev links to it.

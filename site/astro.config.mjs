@@ -14,40 +14,52 @@ const changelog = (segment) =>
   page(`${segment}/changelog`, 'Changelog', 'Список изменений');
 
 // The sidebar is split by package, so that each reads as a site of its
-// own: async_job, the core, comes first and needs nothing of solo; solo
-// brings flutter_solo and solo_lints along. The home page is a splash
-// page without a sidebar and belongs to neither.
+// own: async_job, the core, comes first and needs nothing of solo, with
+// async_job_lints along; solo brings flutter_solo and solo_lints along.
+// The home page is a splash page without a sidebar and belongs to neither.
 const topics = [
   {
     label: 'async_job',
     link: '/async_job/',
     items: [
-      page('async_job', 'Overview', 'Обзор'),
-      page('async_job/outcomes', 'Outcomes', 'Исходы'),
-      page('async_job/cancellation', 'Cancellation', 'Отмена'),
-      page(
-        'async_job/riverpod-and-bloc',
-        'With riverpod and bloc',
-        'С riverpod и bloc',
-      ),
-      page('async_job/time', 'Time', 'Время'),
-      page('async_job/children', 'Children', 'Дети'),
-      page('async_job/groups', 'Groups', 'Группы'),
-      page('async_job/chains', 'Chains', 'Цепочки'),
-      page('async_job/streams', 'Streams', 'Стримы'),
-      page('async_job/cleanup', 'Cleanup', 'Уборка'),
-      page('async_job/cleanup-rules', 'Cleanup rules', 'Правила уборки'),
-      page('async_job/observing', 'Observing', 'Наблюдение'),
-      page('async_job/errors', 'Errors', 'Ошибки'),
-      page('async_job/error-rules', 'Error rules', 'Правила ошибок'),
-      page('async_job/testing', 'Testing', 'Тестирование'),
-      page(
-        'async_job/extending',
-        'Building on the core',
-        'Своё поверх ядра',
-      ),
-      page('async_job/engine', 'An engine of your own', 'Свой движок'),
-      changelog('async_job'),
+      {
+        label: 'async_job',
+        items: [
+          page('async_job', 'Overview', 'Обзор'),
+          page('async_job/outcomes', 'Outcomes', 'Исходы'),
+          page('async_job/cancellation', 'Cancellation', 'Отмена'),
+          page(
+            'async_job/riverpod-and-bloc',
+            'With riverpod and bloc',
+            'С riverpod и bloc',
+          ),
+          page('async_job/time', 'Time', 'Время'),
+          page('async_job/children', 'Children', 'Дети'),
+          page('async_job/groups', 'Groups', 'Группы'),
+          page('async_job/chains', 'Chains', 'Цепочки'),
+          page('async_job/streams', 'Streams', 'Стримы'),
+          page('async_job/cleanup', 'Cleanup', 'Уборка'),
+          page('async_job/cleanup-rules', 'Cleanup rules', 'Правила уборки'),
+          page('async_job/observing', 'Observing', 'Наблюдение'),
+          page('async_job/errors', 'Errors', 'Ошибки'),
+          page('async_job/error-rules', 'Error rules', 'Правила ошибок'),
+          page('async_job/testing', 'Testing', 'Тестирование'),
+          page(
+            'async_job/extending',
+            'Building on the core',
+            'Своё поверх ядра',
+          ),
+          page('async_job/engine', 'An engine of your own', 'Свой движок'),
+          changelog('async_job'),
+        ],
+      },
+      {
+        label: 'async_job_lints',
+        items: [
+          page('async_job_lints', 'Overview', 'Обзор'),
+          changelog('async_job_lints'),
+        ],
+      },
     ],
   },
   {
@@ -159,9 +171,11 @@ export default defineConfig({
             '- `flutter_solo` adds the Flutter face: `SoloBuilder`, ' +
               '`ValueListenable`, `select`, `listen`. Re-exports `solo`.',
             '',
-            '`solo_lints` is an analyzer plugin for code on `async_job` ' +
-              'and `solo`: it reports the common mistakes, named in ' +
-              '`analysis_options.yaml` rather than in `pubspec.yaml`.',
+            '`async_job_lints` is an analyzer plugin for code on ' +
+              '`async_job`, and `solo_lints` one for code on `solo` that ' +
+              'includes its rules: each reports the common mistakes, ' +
+              'named in `analysis_options.yaml` rather than in ' +
+              '`pubspec.yaml`. A package names one of the two.',
             '',
             'Cancellation is cooperative: `cancel()` requests it and the ' +
               'body answers at a checkpoint -- `ctx.abandonable`, `ctx.join`, ' +

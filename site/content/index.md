@@ -39,9 +39,12 @@ in both packages.
 | [async_job](async_job/) | Cancellation, child tasks and cleanup for one asynchronous operation. Pure Dart, depends only on `meta`. |
 | [solo](solo/) | The controller over `async_job`: a queue with policies, state rules, children, accumulation. Pure Dart. |
 | [flutter_solo](flutter_solo/) | The Flutter face of `solo`: `SoloBuilder`, `ValueListenable`, `select`, `listen`. |
-| [solo_lints](solo_lints/) | An analyzer plugin that reports the common mistakes in code on `async_job` and `solo`. |
+| [async_job_lints](async_job_lints/) | An analyzer plugin that reports the common mistakes in code on `async_job`. |
+| [solo_lints](solo_lints/) | The analyzer plugin for code on `solo`: the rules of `async_job_lints` and those of the controller. |
 
 `solo` re-exports `async_job`, and `flutter_solo` re-exports `solo`, so one
 dependency is enough: `async_job` when cancellation is all you need, `solo` or
-`flutter_solo` when you need a controller. `solo_lints` is not a dependency: it
-is named in `analysis_options.yaml`.
+`flutter_solo` when you need a controller. The two plugins are not
+dependencies: one of them is named in `analysis_options.yaml`,
+`async_job_lints` for code on `async_job`, or `solo_lints`, which includes its
+rules, for code on `solo`.

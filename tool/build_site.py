@@ -39,6 +39,7 @@ HAND_WRITTEN = SITE / 'content'
 PACKAGES = {
     'solo': 'solo',
     'async_job': 'async_job',
+    'async_job_lints': 'async_job_lints',
     'flutter_solo': 'flutter_solo',
     'solo_lints': 'solo_lints',
 }
