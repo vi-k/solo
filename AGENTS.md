@@ -239,19 +239,21 @@
 в `docs/conventions.md`.
 
 Те же команды гоняет CI — `.github/workflows/gate.yml`, пять заданий: `dart`
-(ядро, его пример и `solo_lints`, без Flutter в PATH — так проверяется заодно
-и обещание «никакого Flutter в ядре»), `flutter` (`flutter_solo` и его пример),
-`floor` (о нём ниже), `snippets` (четыре стенда, `tool/doc_snippets.py`,
-`tool/accumulation_snippets.py`, `tool/adapter_snippets.py`
-и `tool/riverpod_snippets.py`: собирают код `packages/solo/doc/vs-bloc.md`,
-`packages/solo/doc/accumulation.md` с `accumulation-rules.md`,
-`packages/async_job/doc/riverpod-and-bloc.md` и `packages/solo/doc/riverpod.md`
-в пять пакетов и прогоняют все драйверы) и `docs` (семь питоновских проверок,
-сторожа четырёх из них — `reflow.py`, `check_line_width.py`, `check_links.py`
-и `check_dartdoc.py`, сторож `archive_floor_test.py` — и сборка сайта со своим
-сторожем `build_site_test.py`). Триггеры: push в `main`, pull request и ручной
-запуск. Прогон перед коммитом это не отменяет: CI говорит уже после того, как
-правка в `main`.
+(ядро, его пример, `async_job_lints` и `solo_lints`, без Flutter в PATH — так
+проверяется заодно и обещание «никакого Flutter в ядре»; шаг «Plugins» гоняет
+оба плагина из дерева через сервер анализа, `tool/plugin_probe.py`), `flutter`
+(`flutter_solo` и его пример), `floor` (о нём ниже), `snippets` (четыре стенда,
+`tool/doc_snippets.py`, `tool/accumulation_snippets.py`,
+`tool/adapter_snippets.py` и `tool/riverpod_snippets.py`: собирают код
+`packages/solo/doc/vs-bloc.md`, `packages/solo/doc/accumulation.md`
+с `accumulation-rules.md`, `packages/async_job/doc/riverpod-and-bloc.md`
+и `packages/solo/doc/riverpod.md` в пять пакетов и прогоняют все драйверы)
+и `docs` (семь питоновских проверок, сторожа четырёх из них — `reflow.py`,
+`check_line_width.py`, `check_links.py` и `check_dartdoc.py`, сторож
+`archive_floor_test.py` — и сборка сайта со своим сторожем
+`build_site_test.py`). Триггеры: push в `main`, pull request и ручной запуск.
+Прогон перед коммитом это не отменяет: CI говорит уже после того, как правка
+в `main`.
 
 `floor` проверяет не дерево, а то, что получит пользователь: архив, без
 dev-зависимостей, на полу. `tool/archive_floor.py stage <каталог>` раскладывает
@@ -266,9 +268,9 @@ dev-зависимостей, на полу. `tool/archive_floor.py stage <ка�
 тот же `downgrade` и набор. После каждого `downgrade` скрипт читает
 `pubspec.lock` и краснеет, если зависимость не дошла до нижней границы;
 краснеет и на пакете без тестов в архиве. Задание ставит Flutter 3.38.1 с его
-Dart 3.10.0 — один SDK на все четыре пакета; скрипт сверяет SDK с полом
+Dart 3.10.0 — один SDK на все пять пакетов; скрипт сверяет SDK с полом
 из `pubspec.yaml` и на другом SDK краснеет, поэтому пол поднимают
-в `pubspec.yaml` всех четырёх и в задании одним коммитом.
+в `pubspec.yaml` всех пяти и в задании одним коммитом.
 
 Локально пол лежит в `~/fvm/versions/3.38.1`. Каталог раскладки — вне
 репозитория: новый, пустой или с прежней раскладкой; в чужой непустой каталог
@@ -313,7 +315,9 @@ PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run <ката
 у `packages/solo`, у `packages/solo/example`, у `packages/solo_lints`,
 у `packages/flutter_solo` и у `packages/flutter_solo/example`. Они под гитом,
 а не в `.gitignore`: их состояние — часть состояния репозитория. Первой строкой
-в каждом комментарий о том, до чего оверрайд живёт.
+в каждом комментарий о том, до чего оверрайд живёт. Оверрайд
+`packages/solo_lints` ведёт ещё и на `async_job_lints`: от него `solo_lints`
+зависит во время работы.
 
 Последний нужен именно отдельным файлом: pub применяет оверрайды только того
 пакета, который разрешает, а путевая зависимость приносит с собой один свой
@@ -352,10 +356,14 @@ PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run <ката
 выпусками живут оверрайды, ломающая правка ядра роняет загрузку одного
 `test/readme_scopo_test.dart`: остальные сторожа README от scopo не зависят.
 
-`solo_lints` во время работы от ядра не зависит, но его тесты идут против
-`async_job` и `solo`, и после снятия оверрайдов — против опубликованных.
-Поэтому он выходит после того выпуска ядра и `solo`, под имена которого
-подогнаны правила; на scopo и `flutter_solo` он не оглядывается.
+`async_job_lints` и `solo_lints` во время работы от ядра не зависят, но их
+тесты идут против `async_job` и `solo`, и после снятия оверрайдов — против
+опубликованных. Поэтому `async_job_lints` выходит после того выпуска ядра
+и `solo`, под имена которых подогнаны правила, а `solo_lints` — после
+`async_job_lints`, от которого зависит; на scopo и `flutter_solo` они
+не оглядываются. Минорный выпуск `async_job_lints` 0.x доходит до пользователя
+`solo_lints` только с выпуском `solo_lints` под новое ограничение, патч доходит
+сам.
 
 Разрешение на публикацию — только явное и только на эту связку. Оно
 не переносится на следующий релиз, не наследуется от прошлого раза

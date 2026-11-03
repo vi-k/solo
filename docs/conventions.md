@@ -100,10 +100,10 @@
 
 ## Тесты
 
-- `dart test` из `packages/async_job`, из `packages/solo`
-  и из `packages/solo_lints`. Тесты примера — `dart test`
-  из `packages/solo/example/`. Тесты Flutter-пакета — `flutter test`
-  из `packages/flutter_solo`, его примера — `flutter test`
+- `dart test` из `packages/async_job`, из `packages/solo`,
+  из `packages/async_job_lints` и из `packages/solo_lints`. Тесты примера —
+  `dart test` из `packages/solo/example/`. Тесты Flutter-пакета —
+  `flutter test` из `packages/flutter_solo`, его примера — `flutter test`
   из `packages/flutter_solo/example/`.
 - Асинхронность тестируется через `FakeAsync` (`package:fake_async`), время
   сдвигается явно. Исключение — тесты `async_job` на настоящих миллисекундах:
@@ -168,8 +168,9 @@
   `async_job` в пределах минора (`>=1.0.0 <1.1.0`) и выходят с каждым минором
   ядра; выпуск `solo` под минор ядра — минор `solo`. Мажор `async_job` тянет
   мажор `solo` и `flutter_solo`, мажор `solo` — мажор `flutter_solo`: верхние
-  пакеты реэкспортируют нижние. `solo_lints` под правило не подпадает, пока он
-  0.x.
+  пакеты реэкспортируют нижние. `async_job_lints` и `solo_lints` под правило
+  не подпадают, пока они 0.x: минор `async_job_lints` — ломающий для
+  `solo_lints`, и `solo_lints` выходит под него своим выпуском.
 - `docs/records/` — история: каталог на месяц (`2026-09/`), в нём файлы
   `YYYY-MM-DD-name-kind.md` с шапкой о состоянии. Правила именования и шапка
   описаны в `AGENTS.md`.
