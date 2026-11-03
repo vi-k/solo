@@ -26,7 +26,13 @@ import pathlib
 import re
 import sys
 
-PACKAGES = ('async_job', 'solo', 'solo_lints', 'flutter_solo')
+PACKAGES = (
+    'async_job',
+    'solo',
+    'async_job_lints',
+    'solo_lints',
+    'flutter_solo',
+)
 PARAGRAPH = 10
 BLOCK = 30
 

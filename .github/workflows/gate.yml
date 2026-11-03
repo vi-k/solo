@@ -107,7 +107,7 @@ jobs:
       # The example is a package of its own, with a resolution of its own.
       - name: Dependencies
         run: |
-          for package in packages/async_job packages/solo packages/solo/example packages/solo_lints; do
+          for package in packages/async_job packages/solo packages/solo/example packages/async_job_lints packages/solo_lints; do
             echo "== $package"
             (cd "$package" && dart pub get)
           done
@@ -119,13 +119,14 @@ jobs:
         run: |
           (cd packages/async_job && dart format --output=none --set-exit-if-changed lib test example)
           (cd packages/solo && dart format --output=none --set-exit-if-changed lib test example)
+          (cd packages/async_job_lints && dart format --output=none --set-exit-if-changed lib test)
           (cd packages/solo_lints && dart format --output=none --set-exit-if-changed lib test)
 
       # `dart analyze` exits 0 on an info, and two of them once passed this
       # step green. `flutter analyze` fails on one already.
       - name: Analyze
         run: |
-          for package in packages/async_job packages/solo packages/solo/example packages/solo_lints; do
+          for package in packages/async_job packages/solo packages/solo/example packages/async_job_lints packages/solo_lints; do
             echo "== $package"
             (cd "$package" && dart analyze --fatal-infos)
           done
@@ -134,14 +135,24 @@ jobs:
         run: |
           (cd packages/async_job && dart doc --dry-run)
           (cd packages/solo && dart doc --dry-run)
+          (cd packages/async_job_lints && dart doc --dry-run)
           (cd packages/solo_lints && dart doc --dry-run)
 
       - name: Tests
         run: |
-          for package in packages/async_job packages/solo packages/solo/example packages/solo_lints; do
+          for package in packages/async_job packages/solo packages/solo/example packages/async_job_lints packages/solo_lints; do
             echo "== $package"
             (cd "$package" && dart test)
           done
+
+      # The tests call the rules directly. This runs the plugins the way a
+      # user gets them: built by the analysis server from the tree, named
+      # alone and both in either order, with the `ignore` comments applied.
+      # A rule solo_lints forgets to register, a rule of the core reported
+      # twice when both are named, or an `ignore` that goes to the wrong
+      # plugin turns it red.
+      - name: Plugins
+        run: timeout 900 python3 tool/plugin_probe.py
 
       # `git status --porcelain` rather than `git diff --exit-code`: the
       # latter compares what is tracked and says nothing about a file a step
