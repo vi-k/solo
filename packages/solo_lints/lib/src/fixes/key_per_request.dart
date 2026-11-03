@@ -5,8 +5,8 @@ import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer_plugin/utilities/change_builder/change_builder_core.dart';
 import 'package:analyzer_plugin/utilities/fixes/fixes.dart';
 import 'package:analyzer_plugin/utilities/range_factory.dart';
+import 'package:async_job_lints/plugin_api.dart';
 
-import '../context.dart';
 import '../rules/key_per_request.dart';
 
 /// Puts the parameters that the body of a job reads into the key reported by

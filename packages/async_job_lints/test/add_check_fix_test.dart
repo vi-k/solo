@@ -3,8 +3,8 @@
 
 import 'package:analysis_server_plugin/edit/dart/correction_producer.dart';
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
-import 'package:solo_lints/src/fixes/add_check.dart';
-import 'package:solo_lints/src/rules/catch_without_check.dart';
+import 'package:async_job_lints/src/fixes/add_check.dart';
+import 'package:async_job_lints/src/rules/catch_without_check.dart';
 import 'package:test_reflective_loader/test_reflective_loader.dart';
 
 import 'support/fix_base.dart';

@@ -20,6 +20,7 @@ dependencies:
   analysis_server_plugin: ^0.3.14
   analyzer: '>=12.1.0 <15.0.0'
   analyzer_plugin: '>=0.14.8 <0.15.0'
+  async_job_lints: ^0.1.0
 
 dev_dependencies:
   analyzer_testing: '>=0.2.5 <0.5.0'

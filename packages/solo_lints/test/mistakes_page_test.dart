@@ -9,16 +9,10 @@ import 'package:analyzer/error/error.dart';
 import 'package:analyzer/src/lint/registry.dart';
 import 'package:analyzer_testing/utilities/utilities.dart';
 import 'package:collection/collection.dart';
-import 'package:solo_lints/src/rules/await_own_queue.dart';
-import 'package:solo_lints/src/rules/bare_await.dart';
-import 'package:solo_lints/src/rules/catch_without_check.dart';
-import 'package:solo_lints/src/rules/ctx_in_cleanup.dart';
-import 'package:solo_lints/src/rules/ignore_failure_hides_bugs.dart';
-import 'package:solo_lints/src/rules/key_per_request.dart';
-import 'package:solo_lints/src/rules/release_on_the_call.dart';
-import 'package:solo_lints/src/rules/sync_fake_async.dart';
+import 'package:solo_lints/solo_lints.dart';
 import 'package:test/test.dart';
 
+import 'support/recording_registry.dart';
 import 'support/rule_base.dart';
 
 /// The page of mistakes, as seen from the package directory.
@@ -475,19 +469,15 @@ $code
 /// the other seven as the plugin does, each with its own kind, and enables
 /// all eight.
 final class _Guard extends RuleTest {
-  static final _warnings = <AbstractAnalysisRule>[
-    CtxInCleanup(),
-    ReleaseOnTheCall(),
-    SyncFakeAsync(),
-    AwaitOwnQueue(),
-  ];
+  static final _registry = () {
+    final registry = RecordingRegistry();
+    SoloLintsPlugin().register(registry);
+    return registry;
+  }();
 
-  static final _lints = <AbstractAnalysisRule>[
-    CatchWithoutCheck(),
-    KeyPerRequest(),
-    IgnoreFailureHidesBugs(),
-    BareAwait(),
-  ];
+  static final _warnings = _registry.warnings;
+
+  static final _lints = _registry.lints;
 
   @override
   AbstractAnalysisRule get underTest => _lints.first;

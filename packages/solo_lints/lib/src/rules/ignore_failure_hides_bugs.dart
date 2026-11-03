@@ -6,8 +6,7 @@ import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer/error/error.dart';
-
-import '../context.dart';
+import 'package:async_job_lints/plugin_api.dart';
 
 /// Reports `ignoreFailure()` on a job that names its expected errors with
 /// `isExpectedError`, when nothing else takes the job.

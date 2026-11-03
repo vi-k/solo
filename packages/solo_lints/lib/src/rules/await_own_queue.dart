@@ -5,8 +5,7 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/error/error.dart';
-
-import '../context.dart';
+import 'package:async_job_lints/plugin_api.dart';
 
 /// Reports a job of a controller that waits for a job of the same
 /// controller's queue, or for its `close` or `cancelAll`.

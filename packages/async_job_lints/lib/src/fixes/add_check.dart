@@ -12,7 +12,7 @@ import '../context.dart';
 /// `catch_without_check`, with `ctx` the context of the job body.
 class AddCheck extends ResolvedCorrectionProducer {
   static const _kind = FixKind(
-    'solo_lints.fix.addCheck',
+    'async_job_lints.fix.addCheck',
     50,
     "Add '{0}.check();' as the first line of the catch",
   );

@@ -5,8 +5,7 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/error/error.dart';
-
-import '../context.dart';
+import 'package:async_job_lints/plugin_api.dart';
 
 /// Reports a `Policy.droppable` job whose key is the same for every call
 /// while its body reads the arguments of the call.

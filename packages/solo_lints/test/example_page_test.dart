@@ -2,29 +2,18 @@ import 'dart:io';
 
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/error/error.dart';
-import 'package:solo_lints/src/rules/await_own_queue.dart';
-import 'package:solo_lints/src/rules/bare_await.dart';
-import 'package:solo_lints/src/rules/catch_without_check.dart';
-import 'package:solo_lints/src/rules/ctx_in_cleanup.dart';
-import 'package:solo_lints/src/rules/ignore_failure_hides_bugs.dart';
-import 'package:solo_lints/src/rules/key_per_request.dart';
-import 'package:solo_lints/src/rules/release_on_the_call.dart';
-import 'package:solo_lints/src/rules/sync_fake_async.dart';
+import 'package:solo_lints/solo_lints.dart';
 import 'package:test/test.dart';
 
+import 'support/recording_registry.dart';
 import 'support/rule_base.dart';
 
-/// Every rule of the package, each run on its own over the blocks.
-final _rules = <AbstractAnalysisRule Function()>[
-  CtxInCleanup.new,
-  ReleaseOnTheCall.new,
-  SyncFakeAsync.new,
-  AwaitOwnQueue.new,
-  CatchWithoutCheck.new,
-  KeyPerRequest.new,
-  IgnoreFailureHidesBugs.new,
-  BareAwait.new,
-];
+/// Every rule the plugin registers, fresh for each run over the blocks.
+List<AbstractAnalysisRule> _rules() {
+  final registry = RecordingRegistry();
+  SoloLintsPlugin().register(registry);
+  return [...registry.warnings, ...registry.lints];
+}
 
 /// The start of the method the second dart block replaces in the first.
 const _record = '  Job<void> record(';
@@ -93,8 +82,9 @@ List<String> _blocks(String page, String language) => [
 /// compiler, so an error means the page shows code that does not build.
 Future<Set<String>> _reported(String code) async {
   final reported = <String>{};
-  for (final rule in _rules) {
-    final run = _Run(rule())..setUp();
+  final count = _rules().length;
+  for (var index = 0; index < count; index++) {
+    final run = _Run(_rules()[index])..setUp();
     try {
       run.testFile.writeAsStringSync(code);
       final result = await run.resolveFile(run.testFile.path);

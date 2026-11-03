@@ -14,7 +14,7 @@ import '../rules/release_on_the_call.dart';
 /// `discard:` of the call that brings the resource.
 class PassReleaseToCall extends ResolvedCorrectionProducer {
   static const _kind = FixKind(
-    'solo_lints.fix.passReleaseToCall',
+    'async_job_lints.fix.passReleaseToCall',
     50,
     "Pass the release as '{0}:' of the call",
   );

@@ -2,7 +2,7 @@
 // ignore_for_file: non_constant_identifier_names
 
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
-import 'package:solo_lints/src/rules/catch_without_check.dart';
+import 'package:async_job_lints/src/rules/catch_without_check.dart';
 import 'package:test_reflective_loader/test_reflective_loader.dart';
 
 import 'support/rule_base.dart';

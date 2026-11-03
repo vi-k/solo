@@ -3,18 +3,12 @@ library;
 
 import 'package:analysis_server_plugin/plugin.dart';
 import 'package:analysis_server_plugin/registry.dart';
+import 'package:async_job_lints/plugin_api.dart';
 
-import 'src/fixes/add_check.dart';
 import 'src/fixes/key_per_request.dart';
-import 'src/fixes/release_on_the_call.dart';
 import 'src/rules/await_own_queue.dart';
-import 'src/rules/bare_await.dart';
-import 'src/rules/catch_without_check.dart';
-import 'src/rules/ctx_in_cleanup.dart';
 import 'src/rules/ignore_failure_hides_bugs.dart';
 import 'src/rules/key_per_request.dart';
-import 'src/rules/release_on_the_call.dart';
-import 'src/rules/sync_fake_async.dart';
 
 /// Registers the rules of solo_lints.
 ///
@@ -27,17 +21,13 @@ class SoloLintsPlugin extends Plugin {
 
   @override
   void register(PluginRegistry registry) {
+    // The rules of the core come from async_job_lints; await_own_queue says
+    // what bare_await would at a wait for the own queue.
+    registerAsyncJobLints(registry, ownQueueReportedElsewhere: true);
     registry
-      ..registerWarningRule(CtxInCleanup())
-      ..registerWarningRule(ReleaseOnTheCall())
-      ..registerFixForRule(ReleaseOnTheCall.code, PassReleaseToCall.new)
-      ..registerWarningRule(SyncFakeAsync())
       ..registerWarningRule(AwaitOwnQueue())
-      ..registerLintRule(CatchWithoutCheck())
-      ..registerFixForRule(CatchWithoutCheck.code, AddCheck.new)
       ..registerLintRule(KeyPerRequest())
       ..registerFixForRule(KeyPerRequest.code, PutArgumentsIntoKey.new)
-      ..registerLintRule(IgnoreFailureHidesBugs())
-      ..registerLintRule(BareAwait());
+      ..registerLintRule(IgnoreFailureHidesBugs());
   }
 }

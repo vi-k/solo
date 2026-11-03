@@ -34,13 +34,20 @@ class BareAwait extends MultiAnalysisRule {
   );
 
   /// Creates the rule.
-  BareAwait()
+  ///
+  /// With [ownQueueReportedElsewhere], a wait for a job of the controller's
+  /// own queue is left to another rule.
+  BareAwait({this.ownQueueReportedElsewhere = false})
     : super(
         name: 'bare_await',
         description:
             'A job body waits through its context, where a cancellation '
             'reaches the wait.',
       );
+
+  /// Whether a rule of another plugin reports a wait for a job of the
+  /// controller's own queue, so that this rule stays quiet on it.
+  final bool ownQueueReportedElsewhere;
 
   @override
   List<DiagnosticCode> get diagnosticCodes => const [code, loopCode];
@@ -70,7 +77,7 @@ const _waiting = {
 };
 
 class _Visitor extends SimpleAstVisitor<void> {
-  final MultiAnalysisRule rule;
+  final BareAwait rule;
 
   _Visitor(this.rule);
 
@@ -78,9 +85,12 @@ class _Visitor extends SimpleAstVisitor<void> {
   void visitAwaitExpression(AwaitExpression node) {
     final ctx = _bodyContextOf(node);
     if (ctx == null || _Waits(ctx, node).through(node.expression)) return;
-    // A wait for the controller's own queue is a deadlock, and
-    // await_own_queue says so at the same await.
-    if (ownQueueCall(node.expression.unParenthesized) != null) return;
+    // A wait for the controller's own queue is a deadlock. A plugin on top
+    // that reports it at the same await asks this rule to stay quiet.
+    if (rule.ownQueueReportedElsewhere &&
+        ownQueueCall(node.expression.unParenthesized) != null) {
+      return;
+    }
     _report(node.awaitKeyword, BareAwait.code, ctx);
   }
 

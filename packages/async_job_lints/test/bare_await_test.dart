@@ -3,7 +3,7 @@
 
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/error/error.dart';
-import 'package:solo_lints/src/rules/bare_await.dart';
+import 'package:async_job_lints/src/rules/bare_await.dart';
 import 'package:test_reflective_loader/test_reflective_loader.dart';
 
 import 'support/rule_base.dart';
@@ -11,6 +11,7 @@ import 'support/rule_base.dart';
 void main() {
   defineReflectiveSuite(() {
     defineReflectiveTests(BareAwaitTest);
+    defineReflectiveTests(BareAwaitOwnQueueReportedElsewhereTest);
   });
 }
 
@@ -697,7 +698,12 @@ final job = Job<void>((ctx) async {
 });
 ''', []);
 
-  Future<void> test_own_queue() => assertAt('''
+  // Nothing else reports this deadlock unless a plugin on top says so.
+  Future<void> test_own_queue() => assertAt(_ownQueue, ['[[await]] close()']);
+}
+
+/// A wait for a job of the controller's own queue.
+const _ownQueue = '''
 import 'package:solo/solo.dart';
 
 final class Desk extends Solo<int> {
@@ -707,5 +713,13 @@ final class Desk extends Solo<int> {
     await close();
   });
 }
-''', []);
+''';
+
+@reflectiveTest
+class BareAwaitOwnQueueReportedElsewhereTest extends RuleTest {
+  @override
+  AbstractAnalysisRule get underTest =>
+      BareAwait(ownQueueReportedElsewhere: true);
+
+  Future<void> test_own_queue() => assertAt(_ownQueue, []);
 }
