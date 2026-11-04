@@ -1,5 +1,5 @@
-> **Состояние на 2026-11-04:** релизный коммит «Release solo_lints 0.1.5»
-> готов, публикация идёт следом той же связкой.
+> **Состояние на 2026-11-04:** `solo_lints` 0.1.5 опубликован на pub.dev;
+> релизный коммит `a089dd04` и аннотированный тег отправлены в origin.
 > **Что это:** подготовка патча `solo_lints` 0.1.5, который зависит
 > от опубликованного `async_job_lints` 0.1.0.
 > **Связанные записи:** `2026-11-04-async-job-lints-release-report.md`,
@@ -58,3 +58,19 @@ its gate on the floor: 7 roots». `solo_lints` опускает
 впереди на три коммита — Node 26 для сборки сайта, подготовка и записи, — они
 уходят в origin вместе с релизным. Тега `solo_lints-v0.1.5` нет ни локально,
 ни в origin; на pub.dev `latest: 0.1.4`.
+
+Связка выполнена подряд:
+
+- `a089dd04` — Release solo_lints 0.1.5;
+- аннотированный тег `solo_lints-v0.1.5` указывает на `a089dd04`;
+- `main` и тег отправлены, соответствие подтверждено `ls-remote`:
+  `refs/heads/main` и `refs/tags/solo_lints-v0.1.5^{}` дают `a089dd04`;
+- `dart pub publish --force` завершился успешно, сервер подтвердил загрузку:
+  «Successfully uploaded https://pub.dev/packages/solo_lints version 0.1.5»;
+- API pub.dev вернул `latest: 0.1.5`, издатель — `yet-another.dev`;
+- CI `gate` на `a089dd04` зелёный; сборка сайта на нём зелёная — первая после
+  перехода на Node 26.
+
+Пакет: https://pub.dev/packages/solo_lints/versions/0.1.5
+
+Выпуск завершён.
