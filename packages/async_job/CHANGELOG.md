@@ -9,6 +9,10 @@
   restart, releasing a resource returned after cancellation — and shows each
   with bloc alone and with a job in the handler. The scenarios where the queue
   of bloc is what has to change are a table.
+- "A deadline for one step" on the time page calls `ctx.check()` first in the
+  clause that catches the child's deadline. Without it, a job whose own
+  `timeout` ran out before `ctx.run` took its own `Cancelled(timeout)` for the
+  child's and went on: the reason of a deadline does not say whose it is.
 
 ## 1.0.0
 

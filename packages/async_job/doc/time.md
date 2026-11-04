@@ -231,6 +231,7 @@ final thumbnail = ctx.child<String>(
 try {
   return 'page with ${await ctx.run(thumbnail)}';
 } on Cancelled catch (cancelled) {
+  ctx.check();
   if (cancelled.reason case TimeoutCancelReason(:final timeout)) {
     return 'page without a thumbnail after ${timeout.inMilliseconds} ms';
   } else {
@@ -246,9 +247,13 @@ outcome: Done(page without a thumbnail after 15 ms)
 The child ends `Cancelled(timeout)`, and `ctx.run` throws that cancellation
 into the body of the parent. The parent itself is not cancelled: the deadline
 ran out for the child. A `catch` clause in Dart filters by type alone, with no
-pattern and no `when`, so the clause takes every `Cancelled`. The pattern goes
-into an `if` inside it: it matches the reason of the deadline and takes its
-duration. The `else` rethrows what is not the deadline: the job's own
-cancellation, and a thumbnail somebody else cancelled. Let out, the child's
-deadline ends the parent `Cancelled(body: Job(thumbnail): Cancelled(timeout))`.
-The key is there for that line: a child without one prints as `Job()`.
+pattern and no `when`, so the clause takes every `Cancelled`. `ctx.check()`
+comes first in it and throws the job's own cancellation, because the reason of
+a deadline does not say whose deadline it is: a job whose own `timeout` ran out
+before `ctx.run` gets its own `Cancelled(timeout)` from it up front, and
+without the check would take it for the thumbnail's and go on. The pattern goes
+into an `if` after it: it matches the reason of the deadline and takes its
+duration. The `else` rethrows a thumbnail somebody else cancelled. Let out, the
+child's deadline ends the parent
+`Cancelled(body: Job(thumbnail): Cancelled(timeout))`. The key is there for
+that line: a child without one prints as `Job()`.

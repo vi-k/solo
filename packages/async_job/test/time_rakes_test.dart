@@ -430,6 +430,26 @@ void main() {
       ]);
     });
 
+    test('the clause lets out a deadline of the job that ran out first', () {
+      late final String outcome;
+      String? returned;
+      fakeAsync((async) {
+        final job = Job<String>(timeout: const Duration(milliseconds: 10), (
+          ctx,
+        ) async {
+          // A plain wait: the deadline of the job runs out meanwhile, and
+          // `ctx.run` throws the job's own `Cancelled(timeout)` up front.
+          await delay(20);
+          return returned = await page.pageWithAThumbnail(ctx);
+        });
+        async.flushTimers();
+        outcome = '${job.outcome}';
+      });
+
+      expect(returned, isNull);
+      expect(outcome, 'Cancelled(timeout)');
+    });
+
     test('a request a section holds past the body goes with the timer', () {
       late final String outcome;
       fakeAsync((async) {

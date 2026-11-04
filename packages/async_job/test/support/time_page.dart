@@ -123,24 +123,26 @@ Job<Database> deadlineOfTheJob() {
 
 /// "A deadline for one step": the thumbnail is a child with a deadline, and
 /// the page goes out without it when the deadline runs out.
-Job<String> thumbnailWithADeadline() {
-  final job = Job<String>(observer: printing, (ctx) async {
-    // #docregion
-    final thumbnail = ctx.child<String>(
-      renderThumbnail,
-      key: 'thumbnail',
-      timeout: const Duration(milliseconds: 15),
-    );
-    try {
-      return 'page with ${await ctx.run(thumbnail)}';
-    } on Cancelled catch (cancelled) {
-      if (cancelled.reason case TimeoutCancelReason(:final timeout)) {
-        return 'page without a thumbnail after ${timeout.inMilliseconds} ms';
-      } else {
-        rethrow;
-      }
+Job<String> thumbnailWithADeadline() =>
+    Job<String>(observer: printing, pageWithAThumbnail);
+
+/// The body of [thumbnailWithADeadline], for a job a test makes itself.
+Future<String> pageWithAThumbnail(JobContext ctx) async {
+  // #docregion
+  final thumbnail = ctx.child<String>(
+    renderThumbnail,
+    key: 'thumbnail',
+    timeout: const Duration(milliseconds: 15),
+  );
+  try {
+    return 'page with ${await ctx.run(thumbnail)}';
+  } on Cancelled catch (cancelled) {
+    ctx.check();
+    if (cancelled.reason case TimeoutCancelReason(:final timeout)) {
+      return 'page without a thumbnail after ${timeout.inMilliseconds} ms';
+    } else {
+      rethrow;
     }
-    // #enddocregion
-  });
-  return job;
+  }
+  // #enddocregion
 }
