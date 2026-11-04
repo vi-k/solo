@@ -384,16 +384,16 @@ Python 3 для стенда и проверок; Starlight для сайта.
 `2026-11-03-bloc-pages-design.md`, шапки этого плана и отчёта,
 `docs/handoff.md`.
 
-- [ ] **Шаг 1.** Решение 133 — дописать по разделу «Что ещё меняется» дизайна,
+- [x] **Шаг 1.** Решение 133 — дописать по разделу «Что ещё меняется» дизайна,
   со ссылкой на дизайн и слова владельца 2026-11-03.
-- [ ] **Шаг 2.** Проверки задания `docs` целиком: `reflow.py --check`,
+- [x] **Шаг 2.** Проверки задания `docs` целиком: `reflow.py --check`,
   `check_line_width.py`, `check_doc_shape.py`, `check_dartdoc.py`,
   `check_page_code.py`, `check_translations.py`, `check_links.py`, `python3 -m
   unittest tool/archive_floor_test.py tool/build_site_test.py
   tool/check_links_test.py`, `build_site.py`; все пять стендов `snippets`
   с прогоном драйверов и `check_traces.py` по семи документам, как
   в `gate.yml`.
-- [ ] **Шаг 3.** Handoff: в «следующие шаги» — вторая фаза страницы riverpod
+- [x] **Шаг 3.** Handoff: в «следующие шаги» — вторая фаза страницы riverpod
   по предложению дизайна. Коммит
   `docs: record the bloc pages in the decisions and the handoff`.
 - [ ] **Шаг 4.** Независимое ревью готовой работы — агент на Opus в своей копии
