@@ -111,6 +111,7 @@ const topics = [
             'solo и bloc рядом',
           ),
           page('solo/riverpod', 'solo under riverpod', 'solo под riverpod'),
+          page('solo/bloc', 'solo under bloc', 'solo под bloc'),
           changelog('solo'),
         ],
       },
@@ -198,6 +199,12 @@ export default defineConfig({
               url: `${config.site}/async_job/bloc/`,
               description:
                 'A job in a bloc handler, next to what bloc alone does.',
+            },
+            {
+              label: 'solo under bloc',
+              url: `${config.site}/solo/bloc/`,
+              description:
+                'A controller under a bloc, next to what bloc alone does.',
             },
             {
               label: 'solo and bloc, side by side',

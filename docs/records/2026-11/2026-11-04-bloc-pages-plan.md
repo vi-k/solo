@@ -2,8 +2,8 @@
 
 > **Состояние на 2026-11-04:** план написан по одобренному дизайну и прошёл
 > независимое ревью Opus: все находки приняты, задачи поправлены по ним
-> (раздел «Ревью плана»). Задачи 1–4 исполнены — отчёт
-> `2026-11-04-bloc-pages-report.md`; задачи 5–8 впереди.
+> (раздел «Ревью плана»). Задачи 1–5 исполнены — отчёт
+> `2026-11-04-bloc-pages-report.md`; задачи 6–8 впереди.
 > **Что это:** план двух страниц — `packages/async_job/doc/bloc.md`
 > и `packages/solo/doc/bloc.md`, их общего стенда `tool/bloc_snippets.py`
 > в задании `snippets`, переводов, входов, сайта и правок записей.
@@ -307,7 +307,7 @@ Python 3 для стенда и проверок; Starlight для сайта.
 `SOLO_BRIDGES = 'the-bridges'`, `CLOSING` (тот же слаг, что у ядра), подраздел
 ответа — `with-a-controller-under-the-bl`; сверить по `--list`.
 
-- [ ] **Шаг 1. Драйверы.**
+- [x] **Шаг 1. Драйверы.**
   - `solo_bridge_states`: мост задачи 1; `require` — то же, что в шаге 4 задачи
     1.
   - `solo_closing_bloc`: тот же `ChatBloc`, что у ядра (блок страницы `solo`,
@@ -319,8 +319,8 @@ Python 3 для стенда и проверок; Starlight для сайта.
   - `solo_closing_bloc_first`: тот же bloc с обратным порядком, `super.close()`
     первым; `require`: `sent == [hi, bye]` и два состояния после `close()` —
     очередь bloc прогнана через контроллер.
-- [ ] **Шаг 2.** Генерация падает.
-- [ ] **Шаг 3. Текст.** Заголовок, вступление, `## The bridges`: `watch`
+- [x] **Шаг 2.** Генерация падает.
+- [x] **Шаг 3. Текст.** Заголовок, вступление, `## The bridges`: `watch`
   и ссылка на `riverpod-and-bloc.md` ядра, мост состояний под трансформером
   по умолчанию, почему не `Bloc.emit` из слушателя
   (`invalid_use_of_visible_for_testing_member`), методы `solo` возвращают `Job`
@@ -328,12 +328,12 @@ Python 3 для стенда и проверок; Starlight для сайта.
   порядок `close()` — контроллер первым, и почему; в конце — «What stays with
   bloc:» и ссылка на раздел «Closing and cancelling in-flight work»
   `vs-bloc.md` по заголовку.
-- [ ] **Шаг 4.** Генерация, анализ, прогон с `--enable-asserts`, `check_traces`
+- [x] **Шаг 4.** Генерация, анализ, прогон с `--enable-asserts`, `check_traces`
   по обеим страницам, `check_doc_shape.py`.
-- [ ] **Шаг 5. CI.** `gate.yml`: драйверы `solo_*` — в `bloc-pages-solo.out`
+- [x] **Шаг 5. CI.** `gate.yml`: драйверы `solo_*` — в `bloc-pages-solo.out`
   со своим `: >`, пара страницы `solo` в `check_traces`. `AGENTS.md`: второй
   документ стенда.
-- [ ] **Шаг 6.** Reflow, ширина, handoff, коммит
+- [x] **Шаг 6.** Reflow, ширина, handoff, коммит
   `docs: start solo under bloc with the bridges and closing`.
 
 ### Задача 6. Остальные разделы страницы `solo` и итоговая таблица

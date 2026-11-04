@@ -383,6 +383,7 @@ jobs:
           : > "$RUNNER_TEMP/adapters.out"
           : > "$RUNNER_TEMP/riverpod.out"
           : > "$RUNNER_TEMP/bloc-pages-core.out"
+          : > "$RUNNER_TEMP/bloc-pages-solo.out"
           for package in bloc_check solo_check accumulation_check adapters_check riverpod_check bloc_pages_check; do
             cd "$RUNNER_TEMP/doc-check/$package"
             if [ "$package" = accumulation_check ]; then
@@ -405,9 +406,16 @@ jobs:
             fi
             for driver in bin/v/*.dart; do
               echo "== $package/$driver"
+              # The two bloc pages quote lines that only differ by the
+              # page, and each is held to the output of its own drivers.
+              into="$out"
+              case "$package/$driver" in
+                bloc_pages_check/bin/v/solo_*)
+                  into="$RUNNER_TEMP/bloc-pages-solo.out" ;;
+              esac
               # A driver that hangs fails here, under its own name, and
               # not when the job runs out of time.
-              timeout 300 $run "$driver" | tee -a "$out"
+              timeout 300 $run "$driver" | tee -a "$into"
             done
           done
 
@@ -422,7 +430,8 @@ jobs:
             packages/solo/doc/accumulation-rules.md "$RUNNER_TEMP/accumulation.out" \
             packages/async_job/doc/riverpod-and-bloc.md "$RUNNER_TEMP/adapters.out" \
             packages/solo/doc/riverpod.md "$RUNNER_TEMP/riverpod.out" \
-            packages/async_job/doc/bloc.md "$RUNNER_TEMP/bloc-pages-core.out"
+            packages/async_job/doc/bloc.md "$RUNNER_TEMP/bloc-pages-core.out" \
+            packages/solo/doc/bloc.md "$RUNNER_TEMP/bloc-pages-solo.out"
 
       - name: Nothing drifted
         run: |

@@ -24,7 +24,9 @@ done, and a run without them would let that pass.
 
 The drivers of the core page are named `core_*` and build files with no
 `package:solo` in them: the page is complete without solo, and the script
-stops if one of its drivers imports it.
+stops if one of its drivers imports it. The drivers of the solo page are
+named `solo_*`; the gate keeps their output apart, since the two pages
+quote lines that only differ by the page.
 
 The drivers run on virtual time, under the runner of
 tool/adapter_snippets.py with the clock of tool/doc_snippets.py: a close
@@ -49,6 +51,8 @@ ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/bloc-pages-check'
 CORE = os.path.join(REPO, 'packages', 'async_job', 'doc', 'bloc.md')
 NEIGHBOUR = os.path.join(REPO, 'packages', 'async_job', 'doc',
                          'riverpod-and-bloc.md')
+SOLO = os.path.join(REPO, 'packages', 'solo', 'doc', 'bloc.md')
+VS_BLOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'vs-bloc.md')
 
 # The majors the pages name, resolved at their newest on the SDK of the
 # job. async_job is a dependency of its own, since the core drivers import
@@ -85,8 +89,9 @@ dependency_overrides:
 OPTIONS = 'include: async_job_rules.yaml\n'
 
 core = doc_blocks.Blocks(doc_blocks.subsection_blocks(open(CORE).read()))
+solo = doc_blocks.Blocks(doc_blocks.subsection_blocks(open(SOLO).read()))
 if ROOT == '--list':
-    for page, blocks in (('core', core),):
+    for page, blocks in (('core', core), ('solo', solo)):
         for key in blocks:
             poisoned = dict.__getitem__(blocks, key) is doc_blocks.POISONED
             print(page, key, '(declared twice)' if poisoned else '')
@@ -370,7 +375,7 @@ Future<void> scenario() async {
   final afterClose = <ChatState>[];
   var closing = false;
   await guarded(() async {
-    final bloc = ChatBloc(api);
+    final bloc = chatBloc(api);
     final states = bloc.stream.listen((state) {
       if (closing) afterClose.add(state);
     });
@@ -388,36 +393,49 @@ Future<void> scenario() async {
         'reply ${bloc.state.reply}, reads ${api.reads}');
   });
   require(zone.isEmpty, '$name: nothing may reach the zone: $zone');
+  check(api, afterClose);
+}
+
+late int tookMs;
+
+/// What the guard of bloc alone keeps: the queued message is still sent,
+/// and no reply reaches the state or the server.
+void requireGuarded(Api api, List<ChatState> afterClose) {
   require('${api.sent}' == '[hi, bye]',
       '$name: the queued message must still be sent');
   require(afterClose.isEmpty,
       '$name: no state may follow close(): $afterClose');
   require(api.reads == 0, '$name: no read may be reported');
-  check();
 }
-
-late int tookMs;
 '''
 
-FILES['core_closing_bloc'] = (
-    BLOC_HEAD + HELPERS + CHAT_API + EVENTS + core[f'{ALONE}/ChatBloc'] + '''
+# The bloc of a driver from its api.
+CHAT_BLOC = 'ChatBloc chatBloc(Api api) => ChatBloc(api);\n'
+
+# close() waits for the call in flight and then for the queued one.
+CHAT_ALONE = '''
 const name = 'with bloc alone';
 
-/// close() waits for the call in flight and then for the queued one.
-void check() {
+void check(Api api, List<ChatState> afterClose) {
+  requireGuarded(api, afterClose);
   require(tookMs == sendMs - closeAtMs + sendMs,
       'bloc alone: close must wait for both calls');
 }
-''' + CHAT_SCENARIO + RUNNER)
+'''
+
+FILES['core_closing_bloc'] = (
+    BLOC_HEAD + HELPERS + CHAT_API + EVENTS + core[f'{ALONE}/ChatBloc']
+    + CHAT_BLOC + CHAT_ALONE + CHAT_SCENARIO + RUNNER)
 
 FILES['core_closing_job'] = (
     CORE_HEAD + HELPERS + CHAT_API + EVENTS + core[f'{WITH_JOB}/ChatBloc']
-    + '''
+    + CHAT_BLOC + '''
 const name = 'with a job';
 
 /// close() skips what is left of the call in flight, and waits for the
 /// queued one: shorter than bloc alone by the rest of "hi".
-void check() {
+void check(Api api, List<ChatState> afterClose) {
+  requireGuarded(api, afterClose);
   require(tookMs == sendMs,
       'with a job: close must wait only for the queued call');
 }
@@ -724,12 +742,135 @@ Future<void> settle() async {
 }
 ''' + PREVIEWING + RUNNER)
 
+
+# ============================================================= solo page
+SOLO_BRIDGES = 'the-bridges'
+SOLO_ALONE = f'{CLOSING}/with-bloc-alone'
+SOLO_UNDER = f'{CLOSING}/with-a-controller-under-the-bl'
+
+SOLO_HEAD = BLOC_HEAD.replace(
+    "import 'package:fake_async/fake_async.dart';\n",
+    "import 'package:fake_async/fake_async.dart';\n"
+    "import 'package:solo/solo.dart';\n")
+assert 'package:solo' in SOLO_HEAD
+
+# The bridge uses no transformer of bloc_concurrency.
+SOLO_PLAIN_HEAD = SOLO_HEAD.replace(
+    "import 'package:bloc_concurrency/bloc_concurrency.dart';\n", '')
+
+# The controller of the closing section is the one of vs-bloc.md: a reader
+# who comes from there knows the code.
+SOLO_CHAT = solo[f'{SOLO_UNDER}/ChatController']
+vs_bloc = doc_blocks.subsection_blocks(open(VS_BLOC).read())
+assert SOLO_CHAT.rstrip('\n') in vs_bloc[
+    'closing-and-cancelling-in-flig/solo/ChatController'], (
+    'the ChatController of the bloc page is not the one of vs-bloc.md')
+
+# ------------------------------------------------------------ the bridges
+# The controller counts to 2, is reset twice -- the second reset publishes
+# the state it already has -- and counts to 3; the bloc is closed 35 ms
+# in, after the first step of the last count.
+FILES['solo_bridge_states'] = (
+    SOLO_PLAIN_HEAD + HELPERS + solo[f'{SOLO_BRIDGES}/Counter']
+    + solo[f'{SOLO_BRIDGES}/CounterBloc'] + '''
+Future<void> scenario() async {
+  final published = <int>[];
+  final states = <int>[];
+  late Counter counter;
+  late CounterBloc bloc;
+  late int tookMs;
+  await guarded(() async {
+    counter = Counter();
+    final listened = counter.stream.listen(published.add);
+    bloc = CounterBloc(counter);
+    final followed = bloc.stream.listen(states.add);
+    bloc
+      ..add(const CountTo(2))
+      ..add(const Reset())
+      ..add(const Reset())
+      ..add(const CountTo(3));
+    await delay(35);
+    final started = nowMs();
+    await bloc.close();
+    tookMs = nowMs() - started;
+    await delay(50);
+    await followed.cancel();
+    await listened.cancel();
+  });
+  print('controller $published');
+  print('bloc       $states');
+  print('close took ${tookMs}ms, bloc.state ${bloc.state}, '
+      'counter.isClosed ${counter.isClosed}, bloc.isClosed ${bloc.isClosed}');
+  require('$published' == '[1, 2, 0, 0, 1]',
+      'the controller must publish every state: $published');
+  require('$states' == '[1, 2, 0, 1]',
+      'the bloc must follow the controller but for the equal state: $states');
+  require(bloc.state == 1, 'the bloc must end at the last state');
+  require(counter.isClosed, 'close() of the bloc must close the controller');
+  require(bloc.isClosed, 'the bloc must be closed');
+  require(tookMs == 0, 'close must not wait for the count: ${tookMs}ms');
+  require(zone.isEmpty, 'nothing may reach the zone: $zone');
+}
+''' + RUNNER)
+
+# ---------------------------------------------------------------- closing
+SOLO_EVENTS = solo[f'{CLOSING}/ChatEvent']
+assert SOLO_EVENTS is solo[f'{CLOSING}/ChatState']
+
+FILES['solo_closing_bloc'] = (
+    BLOC_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + solo[f'{SOLO_ALONE}/ChatBloc']
+    + CHAT_BLOC + CHAT_ALONE + CHAT_SCENARIO + RUNNER)
+
+SOLO_CHAT_BLOC = solo[f'{SOLO_UNDER}/ChatBloc']
+CONTROLLER_BLOC = (
+    'ChatBloc chatBloc(Api api) => ChatBloc(StreamedChat(api));\n')
+
+# The controller closed first: "hi" is cancelled at ctx.abandonable, and
+# "bye", held by sequential(), reaches a closed controller and ends with no
+# call.
+FILES['solo_closing_controller'] = (
+    SOLO_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT + SOLO_CHAT_BLOC
+    + CONTROLLER_BLOC + '''
+const name = 'with a controller';
+
+void check(Api api, List<ChatState> afterClose) {
+  require('${api.sent}' == '[hi]', '$name: "bye" must not be sent');
+  require(afterClose.isEmpty,
+      '$name: no state may follow close(): $afterClose');
+  require(api.reads == 0, '$name: no read may be reported');
+  require(tookMs == 0, '$name: close must not wait for the call');
+}
+''' + CHAT_SCENARIO + RUNNER)
+
+# The other order: super.close() first runs the queue of sequential()
+# through an open controller, and both replies are published and read.
+CLOSE_ORDER = '''    await _chat.close();
+    return super.close();
+'''
+assert SOLO_CHAT_BLOC.count(CLOSE_ORDER) == 1, 'the close of the page moved'
+FILES['solo_closing_bloc_first'] = (
+    SOLO_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT
+    + SOLO_CHAT_BLOC.replace(CLOSE_ORDER, '''    await super.close();
+    return _chat.close();
+''') + CONTROLLER_BLOC + '''
+const name = 'with super.close() first';
+
+void check(Api api, List<ChatState> afterClose) {
+  require('${api.sent}' == '[hi, bye]',
+      '$name: the queue of bloc must run through the controller');
+  require(afterClose.length == 2,
+      '$name: both replies must be published: $afterClose');
+}
+''' + CHAT_SCENARIO + RUNNER)
+
 for key, body in FILES.items():
     if key.startswith('core_'):
         assert 'package:solo' not in body, f'{key} imports solo'
 
 unbuilt = core.unbuilt()
 assert not unbuilt, f'blocks of the core page no driver builds: {unbuilt}'
+unbuilt = solo.unbuilt()
+assert not unbuilt, f'blocks of the solo page no driver builds: {unbuilt}'
 
 d = f'{ROOT}/bloc_pages_check/bin/v'
 os.makedirs(d, exist_ok=True)
