@@ -41,9 +41,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Node 26 brings npm 11. The npm 10 of Node 22 rejects a lock file
+      # written by a newer npm: `npm ci` asks for entries the newer one
+      # drops.
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
           cache-dependency-path: site/package-lock.json
 
