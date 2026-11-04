@@ -539,7 +539,7 @@ Future<void> scenario() async {
       if (gap > 0) await delay(gap);
       bloc.add(Flash([for (var i = 0; i < 4; i++) Chunk(100 * upload + i)]));
     }
-    await settle();
+    await waitOut();
     require(ble.inFlight == 0, 'every write must have ended');
     print('uploads at 0, 30 and ${30 + gaps[2]} ms: written '
         '${ble.written}, ${ble.maxInFlight} write at a time at most, '
@@ -592,7 +592,7 @@ FILES['core_write_bloc'] = (
     + '''
 Bloc<Flash, FirmwareState> firmwareBloc(Ble ble) => LockedFirmwareBloc(ble);
 
-Future<void> settle() => delay(200);
+Future<void> waitOut() => delay(200);
 ''' + FLASHING + RUNNER)
 
 FILES['core_write_job'] = (
@@ -600,7 +600,7 @@ FILES['core_write_job'] = (
     + core[f'{WRITE_JOB}/FirmwareBloc'] + '''
 Bloc<Flash, FirmwareState> firmwareBloc(Ble ble) => FirmwareBloc(ble);
 
-Future<void> settle() async {
+Future<void> waitOut() async {
   await requireEnded(3);
   watched.clear();
 }
@@ -695,7 +695,7 @@ Future<void> scenario() async {
       await bloc.close();
       trace.add('closed');
     }
-    await settle();
+    await waitOut();
     final releases = [for (final buffer in decoder.buffers) buffer.releases];
     if (closing) {
       print('close while both decode: $trace');
@@ -724,7 +724,7 @@ FILES['core_resource_bloc'] = (
 Bloc<OpenPreview, PreviewState> previewBloc(Decoder decoder) =>
     GuardedPreviewBloc(decoder);
 
-Future<void> settle() => delay(100);
+Future<void> waitOut() => delay(100);
 ''' + PREVIEWING + RUNNER)
 
 FILES['core_resource_job'] = (
@@ -735,7 +735,7 @@ Bloc<OpenPreview, PreviewState> previewBloc(Decoder decoder) =>
 
 /// The jobs end before the late buffer arrives: it is released when it
 /// does, after the jobs.
-Future<void> settle() async {
+Future<void> waitOut() async {
   await requireEnded(2);
   watched.clear();
   await delay(100);
@@ -757,6 +757,15 @@ assert 'package:solo' in SOLO_HEAD
 # The bridge uses no transformer of bloc_concurrency.
 SOLO_PLAIN_HEAD = SOLO_HEAD.replace(
     "import 'package:bloc_concurrency/bloc_concurrency.dart';\n", '')
+
+# `follow` and `settle` of The bridges: every bloc of the page with a
+# controller under it uses them, and every driver of such a bloc has them.
+# The block is addressed by `settle`: `follow<S extends Object>(` has its
+# type parameters before the parenthesis.
+SOLO_BRIDGE_FUNCTIONS = solo[f'{SOLO_BRIDGES}/settle']
+assert 'Future<void> follow<S extends Object>(' in SOLO_BRIDGE_FUNCTIONS
+SOLO_HEAD += SOLO_BRIDGE_FUNCTIONS
+SOLO_PLAIN_HEAD += SOLO_BRIDGE_FUNCTIONS
 
 # The controller of the closing section is the one of vs-bloc.md: a reader
 # who comes from there knows the code.
@@ -813,6 +822,45 @@ Future<void> scenario() async {
 }
 ''' + RUNNER)
 
+# The controller publishes 5 after the constructor of the bloc read its
+# state and before the handler of _Started subscribed: the bloc starts at
+# 0 and has to reach 5 all the same.
+FILES['solo_bridge_late'] = (
+    SOLO_PLAIN_HEAD + HELPERS + solo[f'{SOLO_BRIDGES}/Counter']
+    + solo[f'{SOLO_BRIDGES}/CounterBloc'] + '''
+final class PresetCounter extends Counter {
+  Job<void> preset(int value) =>
+      enqueue<int, void>((ctx) async => ctx.emit(value));
+}
+
+Future<void> scenario() async {
+  final states = <int>[];
+  late int initial;
+  late int current;
+  late int followed;
+  await guarded(() async {
+    final counter = PresetCounter();
+    final presetting = counter.preset(5);
+    final bloc = CounterBloc(counter);
+    initial = bloc.state;
+    final listening = bloc.stream.listen(states.add);
+    await presetting.done;
+    await delay(5);
+    current = counter.currentState;
+    followed = bloc.state;
+    await listening.cancel();
+    await bloc.close();
+  });
+  print('a state published while the bloc is created: the bloc starts at '
+      '$initial, counter.currentState $current, bloc.state $followed');
+  require(initial == 0, 'the constructor must read the state before 5');
+  require(current == 5, 'the controller must publish 5');
+  require(followed == 5, 'the bloc must reach the state of the controller');
+  require('$states' == '[5]', 'the bloc must publish 5 once: $states');
+  require(zone.isEmpty, 'nothing may reach the zone: $zone');
+}
+''' + RUNNER)
+
 # ---------------------------------------------------------------- closing
 SOLO_EVENTS = solo[f'{CLOSING}/ChatEvent']
 assert SOLO_EVENTS is solo[f'{CLOSING}/ChatState']
@@ -862,6 +910,50 @@ void check(Api api, List<ChatState> afterClose) {
       '$name: both replies must be published: $afterClose');
 }
 ''' + CHAT_SCENARIO + RUNNER)
+
+# A call that fails: `settle` throws the Failed outcome again, and it
+# reaches the zone as the failure of bloc alone does.
+FILES['solo_closing_controller_failed'] = (
+    SOLO_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT + SOLO_CHAT_BLOC
+    + CONTROLLER_BLOC + "\nconst name = 'with a controller';\n"
+    + FAILING.replace('ChatBloc(Api(offline: true))',
+                      'chatBloc(Api(offline: true))')
+    + RUNNER)
+assert 'chatBloc(Api(offline: true))' in FILES[
+    'solo_closing_controller_failed']
+
+# Without sequential() the queue of the controller holds the order of the
+# messages, and the order of close() decides nothing: both orders send
+# "hi" alone.
+SEQUENTIAL_SEND = '''    on<SendMessage>(
+      (e, emit) => settle(_chat.send(e.text)),
+      transformer: sequential(),
+    );
+'''
+assert SOLO_CHAT_BLOC.count(SEQUENTIAL_SEND) == 1, 'the send of the page moved'
+DEFAULT_CHAT_BLOC = SOLO_CHAT_BLOC.replace(
+    SEQUENTIAL_SEND,
+    '    on<SendMessage>((e, emit) => settle(_chat.send(e.text)));\n')
+DEFAULT_CHECK = '''
+void check(Api api, List<ChatState> afterClose) {
+  require('${api.sent}' == '[hi]', '$name: "bye" must not be sent');
+  require(afterClose.isEmpty,
+      '$name: no state may follow close(): $afterClose');
+  require(api.reads == 0, '$name: no read may be reported');
+}
+'''
+FILES['solo_closing_default'] = (
+    SOLO_PLAIN_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT
+    + DEFAULT_CHAT_BLOC + CONTROLLER_BLOC
+    + "\nconst name = 'the default registration';\n" + DEFAULT_CHECK
+    + CHAT_SCENARIO + RUNNER)
+FILES['solo_closing_default_bloc_first'] = (
+    SOLO_PLAIN_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT
+    + DEFAULT_CHAT_BLOC.replace(CLOSE_ORDER, '''    await super.close();
+    return _chat.close();
+''') + CONTROLLER_BLOC
+    + "\nconst name = 'the default registration, super.close() first';\n"
+    + DEFAULT_CHECK + CHAT_SCENARIO + RUNNER)
 
 # The rest of the solo page takes the Bloc answer and the controller of a
 # section of vs-bloc.md as they are there, and the generator holds them to
@@ -1097,6 +1189,7 @@ Future<void> scenario() async {
       print('$name, seeks ${positions.join(', ')}: $calls');
       require('$calls' == drags[positions.last == 3 ? 0 : 1],
           '$name, seeks $positions: $calls');
+      requireFollowed(bloc);
       await bloc.close();
     }
     trace.clear();
@@ -1108,6 +1201,7 @@ Future<void> scenario() async {
     require('$trace' ==
         '[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]',
         '$name: the seek in flight must stop first: $trace');
+    requireFollowed(seeking);
     await seeking.close();
   });
   require(zone.isEmpty, '$name: nothing may reach the zone: $zone');
@@ -1126,6 +1220,8 @@ const name = 'with bloc alone';
 const drags = ['[play, seek 3, pause]', '[play, seek 1, seek 1, pause]'];
 
 PlayerBloc playerBloc() => PlayerBloc(Player());
+
+void requireFollowed(PlayerBloc bloc) {}
 ''' + SEEKING + RUNNER)
 
 FILES['solo_restarting_controller'] = (
@@ -1137,7 +1233,15 @@ const name = 'with a controller';
 
 const drags = ['[play, seek 3, pause]', '[play, seek 1, pause]'];
 
-PlayerBloc playerBloc() => PlayerBloc(PlayerController(Player()));
+late PlayerController controller;
+
+PlayerBloc playerBloc() =>
+    PlayerBloc(controller = PlayerController(Player()));
+
+/// The bridge of states: the bloc ends at the state of its controller.
+void requireFollowed(PlayerBloc bloc) => require(
+    bloc.state == controller.currentState,
+    '$name: the bloc must follow the controller: ${bloc.state}');
 ''' + SEEKING + RUNNER)
 
 # ---------------------------------------------------------------- removing
@@ -1253,6 +1357,7 @@ Future<void> scenario() async {
       final bloc = deviceBloc(Ble());
       events.forEach(bloc.add);
       await delay(300);
+      requireFollowed(bloc);
       await bloc.close();
     });
     final last = label == 'a read after disconnect';
@@ -1282,6 +1387,8 @@ const expected = {
 };
 
 DeviceBloc deviceBloc(Ble ble) => DeviceBloc(ble);
+
+void requireFollowed(DeviceBloc bloc) {}
 ''' + LEAVING + RUNNER)
 
 # The bridges of the answer share its block with the bloc, and the first
@@ -1306,8 +1413,15 @@ const expected = {
   'a read after disconnect': '[connect, disconnect], the zone []',
 };
 
+late StreamedDevice controller;
+
 SequentialDeviceBloc deviceBloc(Ble ble) =>
-    SequentialDeviceBloc(StreamedDevice(ble));
+    SequentialDeviceBloc(controller = StreamedDevice(ble));
+
+/// The bridge of states: the bloc ends at the state of its controller.
+void requireFollowed(Bloc<DeviceEvent, DeviceState> bloc) => require(
+    bloc.state == controller.currentState,
+    '$name: the bloc must follow the controller: ${bloc.state}');
 ''' + LEAVING + RUNNER)
 
 FILES['solo_removing_controller'] = (
@@ -1322,7 +1436,14 @@ const expected = {
   'a read after disconnect': '[connect, disconnect], the zone []',
 };
 
-DeviceBloc deviceBloc(Ble ble) => DeviceBloc(StreamedDevice(ble));
+late StreamedDevice controller;
+
+DeviceBloc deviceBloc(Ble ble) => DeviceBloc(controller = StreamedDevice(ble));
+
+/// The bridge of states: the bloc ends at the state of its controller.
+void requireFollowed(Bloc<DeviceEvent, DeviceState> bloc) => require(
+    bloc.state == controller.currentState,
+    '$name: the bloc must follow the controller: ${bloc.state}');
 ''' + LEAVING + RUNNER)
 
 # ---------------------------------------------------------------- external
@@ -1576,7 +1697,7 @@ FILES['solo_write_bloc'] = (
 Bloc<FirmwareEvent, FirmwareState> firmwareBloc(Ble ble) =>
     LockedFirmwareBloc(ble);
 
-Future<void> settle() => delay(200);
+Future<void> waitOut() => delay(200);
 ''' + FLASHING + RUNNER)
 
 FILES['solo_write_controller'] = (
@@ -1602,7 +1723,7 @@ Bloc<FirmwareEvent, FirmwareState> firmwareBloc(Ble ble) =>
 
 /// The replaced uploads end Cancelled(replaced), and the last one is done
 /// once its handler is.
-Future<void> settle() async {
+Future<void> waitOut() async {
   await delay(200);
   require(jobs.length == 3, 'every upload must reach the controller');
   for (final (index, job) in jobs.indexed) {

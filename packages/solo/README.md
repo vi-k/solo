@@ -305,8 +305,8 @@ resources, children, streams, accumulation and its rules. Diagnostics, errors
 and testing are for a controller about to ship, the common mistakes are a list
 to check against, and the reference names every member with the section that
 explains it. Flutter is for a controller behind a screen, the camera example
-joins them in one controller, solo and bloc side by side is for a reader who
-comes from bloc, solo under riverpod and solo under bloc for one who stays.
+joins them in one controller, solo and bloc side by side is for one who comes
+from bloc, solo under riverpod and solo under bloc for one who stays on either.
 
 | Page | What it covers |
 | --- | --- |

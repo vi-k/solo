@@ -2,35 +2,23 @@
 
 Bloc может отдать свою работу контроллеру `solo` и оставить себе всё остальное
 от bloc: события, трансформеры, состояние, которое читает экран. Каждый раздел
-ниже берёт одно требование приложения на bloc 9 с `bloc_concurrency`,
+ниже берёт одно требование приложения на bloc 9.2.1 с `bloc_concurrency`,
 показывает ответ одного bloc, затем тот же bloc с контроллером под ним
 и говорит, что контроллер снимает с кода и что остаётся на bloc. Контроллеры —
 из разделов Solo страницы [«solo и bloc рядом»](vs-bloc.md), где каждый из них
 стоит без bloc. Код идёт на чистом Dart, а состояния и трассы под ним — то, что
 этот код печатает.
 
-Разделы — требования, в которых контроллер под bloc оставляет коду меньше
-работы:
-
-- событиям, которые обновляют одно состояние, нужна одна регистрация
-  с `sequential()` —
-  [«Порядок обновлений общего состояния»](#порядок-обновлений-общего-состояния);
-- `close()` при `sequential()` ждёт идущий вызов и отправляет каждое сообщение
-  из очереди —
-  [«Закрытие и отмена начатой работы»](#закрытие-и-отмена-начатой-работы);
-- перетаскивание, которое вернулось к позиции, перематывает на неё дважды —
-  [«Перезапуск одной операции в общей очереди»](#перезапуск-одной-операции-в-общей-очереди);
-- чтение батареи ушедшего экрана доходит до устройства, а чтение за отключением
-  падает —
-  [«Удаление выбранной ожидающей работы»](#удаление-выбранной-ожидающей-работы);
-- отзыв сессии требует своего события и проверки состояния по обе стороны
-  от `await` —
-  [«Реакция на независимое внешнее изменение состояния»](#реакция-на-независимое-внешнее-изменение-состояния);
-- замена загрузки не должна писать, пока идёт запись заменённой —
-  [«Завершение начатой записи перед перезапуском»](#завершение-начатой-записи-перед-перезапуском).
-
-Сценарии, где ответ остаётся за bloc, собраны в разделе
-[«Где ответ остаётся за bloc»](#где-ответ-остаётся-за-bloc).
+Разделы берут шесть требований, в которых контроллер под bloc оставляет коду
+меньше работы. У одного bloc событиям, которые обновляют одно состояние, нужна
+одна регистрация с `sequential()`, `close()` при `sequential()` ждёт идущий
+вызов и отправляет каждое сообщение из очереди, а перетаскивание, которое
+вернулось к позиции, перематывает на неё дважды. Чтение батареи ушедшего экрана
+доходит до устройства, а чтение за отключением падает; отзыв сессии требует
+своего события и проверки состояния по обе стороны от `await`; а загрузки
+прошивки берут общую для обработчиков блокировку, чтобы замена не писала, пока
+идёт запись, которую она заменяет. Сценарии, где ответ остаётся за bloc,
+собраны в разделе [«Где ответ остаётся за bloc»](#где-ответ-остаётся-за-bloc).
 
 ## Мосты
 
@@ -53,7 +41,33 @@ final class Counter extends Solo<int> with SoloStream<int> {
 }
 ```
 
-Bloc публикует их из обработчика собственного события, которое добавляет
+Мосты держат две функции приложения, и ими пользуется каждый bloc этой
+страницы, под которым стоит контроллер. `follow` публикует состояния
+контроллера в bloc, начиная с того, которое у контроллера сейчас, а `settle`
+ждёт задачу и бросает её провал заново:
+
+```dart
+/// Публикует состояния [controller] через [emit], начиная с того, которое
+/// у контроллера сейчас; [state] — состояние bloc.
+Future<void> follow<S extends Object>(
+  Emitter<S> emit,
+  S state,
+  SoloStream<S> controller,
+) {
+  final following = emit.forEach(controller.stream, onData: (next) => next);
+  if (controller.currentState != state) emit(controller.currentState);
+  return following;
+}
+
+/// Ждёт [job] и бросает её провал заново.
+Future<void> settle(Job<Object?> job) async {
+  if (await job.done case Failed(:final error, :final stackTrace)) {
+    Error.throwWithStackTrace(error, stackTrace);
+  }
+}
+```
+
+Bloc публикует состояния из обработчика собственного события, которое добавляет
 конструктор и которое работает, пока bloc жив:
 
 ```dart
@@ -76,11 +90,9 @@ final class _Started extends CounterEvent {
 
 class CounterBloc extends Bloc<CounterEvent, int> {
   CounterBloc(this._counter) : super(_counter.currentState) {
-    on<_Started>(
-      (e, emit) => emit.forEach(_counter.stream, onData: (state) => state),
-    );
-    on<CountTo>((e, emit) => _counter.countTo(e.target).done);
-    on<Reset>((e, emit) => _counter.reset().done);
+    on<_Started>((e, emit) => follow(emit, state, _counter));
+    on<CountTo>((e, emit) => settle(_counter.countTo(e.target)));
+    on<Reset>((e, emit) => settle(_counter.reset()));
     add(const _Started());
   }
 
@@ -94,11 +106,22 @@ class CounterBloc extends Bloc<CounterEvent, int> {
 }
 ```
 
-Обработчики `CountTo` и `Reset` ждут задачи контроллера, как любые задачи.
-Метод контроллера возвращает `Job`, и обработчик ждёт `job.done`, который
-никогда не бросает и возвращает исход. `job.value` задачи, которую отменил
-закрывающийся контроллер, бросает `Cancelled`, и, раз поймать его некому,
-ошибка уходит в `onError` bloc и дальше в зону, как показывает раздел
+`Counter` подмешивает `SoloStream` там, где объявлен. Разделы ниже берут
+контроллеры страницы «рядом», объявленные без примеси, и добавляют её в своём
+классе, например
+`final class StreamedNotes = NotesController with SoloStream<NotesState>;`. Эти
+контроллеры — финальные классы, поэтому такой класс собирается только
+в библиотеке контроллера. `_Started` расширяет запечатанное семейство событий,
+как `CounterEvent`, и объявляется в библиотеке семейства.
+
+Обработчики `CountTo` и `Reset` ждут задачи контроллера через `settle`.
+`job.done` никогда не бросает: он возвращает исход и помечает задачу
+наблюдённой, поэтому обработчик, который только ждёт его, теряет провал задачи,
+и о нём не узнают ни `onError` bloc, ни зона. `settle` бросает исход `Failed`
+заново, и ошибка идёт путём любой ошибки обработчика — в `onError` bloc
+и дальше в зону. Задача, которую отменил закрывающийся контроллер, кончается
+`Cancelled`, и `settle` даёт обработчику закончиться тихо, тогда как
+`job.value` бросил бы `Cancelled`, как показывает раздел
 [«Мост»](../async_job/bloc.md#мост) страницы `async_job`.
 
 Bloc считает до 2, дважды сбрасывается и считает до 3, а экран закрывает его
@@ -110,16 +133,20 @@ bloc       [1, 2, 0, 1]
 close took 0ms, bloc.state 1, counter.isClosed true, bloc.isClosed true
 ```
 
-Bloc публикует каждое состояние контроллера, кроме равного предыдущему: его
-bloc отбрасывает, как отбрасывает любой такой `emit`, а `SoloStream` публикует.
-`close()` bloc закрывает контроллер, и контроллер отменяет счёт на `ctx.pause`.
-Закрытый контроллер закрывает свой стрим, и вместе с ним заканчивается
-`emit.forEach`. Почему контроллер закрывается первым, разобрано в разделе
+Bloc публикует каждое состояние контроллера, кроме второго `0`: bloc, который
+уже сделал `emit`, отбрасывает состояние, равное своему, а `SoloStream` его
+публикует. `follow` сначала подписывается, а затем сравнивает состояния,
+поэтому bloc начинает с состояния, которое у контроллера на момент подписки,
+даже если контроллер сменил его после того, как конструктор bloc прочёл
+`currentState`. `close()` bloc закрывает контроллер, и контроллер отменяет счёт
+на `ctx.pause`. Закрытый контроллер закрывает свой стрим, и вместе с ним
+заканчивается `emit.forEach`. Bloc этой страницы закрывают контроллер первым;
+где порядок важен, разобрано в разделе
 [«Закрытие и отмена начатой работы»](#закрытие-и-отмена-начатой-работы).
 
 `_counter.stream.listen(emit)` в конструкторе было бы короче, но `emit`
-у bloc — для его обработчиков и тестов, и анализатор сообщает о таком вызове
-как о `invalid_use_of_visible_for_testing_member`.
+у bloc — для самого bloc и тестов, и анализатор сообщает о таком вызове как
+о `invalid_use_of_visible_for_testing_member`.
 
 ## Порядок обновлений общего состояния
 
@@ -202,11 +229,9 @@ final class _Started extends NotesEvent {}
 
 class NotesBloc extends Bloc<NotesEvent, NotesState> {
   NotesBloc(this._notes) : super(_notes.currentState) {
-    on<_Started>(
-      (e, emit) => emit.forEach(_notes.stream, onData: (state) => state),
-    );
-    on<UploadNote>((e, emit) => _notes.upload(e.note).done);
-    on<RefreshList>((e, emit) => _notes.refresh().done);
+    on<_Started>((e, emit) => follow(emit, state, _notes));
+    on<UploadNote>((e, emit) => settle(_notes.upload(e.note)));
+    on<RefreshList>((e, emit) => settle(_notes.refresh()));
     add(_Started());
   }
 
@@ -328,11 +353,9 @@ final class _Started extends ChatEvent {
 
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc(this._chat) : super(_chat.currentState) {
-    on<_Started>(
-      (e, emit) => emit.forEach(_chat.stream, onData: (state) => state),
-    );
+    on<_Started>((e, emit) => follow(emit, state, _chat));
     on<SendMessage>(
-      (e, emit) => _chat.send(e.text).done,
+      (e, emit) => settle(_chat.send(e.text)),
       transformer: sequential(),
     );
     add(const _Started());
@@ -367,8 +390,11 @@ with super.close() first: close took 100ms, sent [hi, bye], reply reply to bye, 
 ```
 
 Что остаётся на bloc: порядок в `close()` — сначала контроллер, затем
-`super.close()`. Обработчик не проверяет `isClosed`: ответ и прочтение — задачи
-контроллера, а закрытый контроллер не выполняет ни то, ни другое.
+`super.close()`, — пока у регистрации остаётся `sequential()`. С регистрацией,
+которую bloc даёт по умолчанию, как в других разделах, порядок сообщений держит
+очередь контроллера, и при обоих порядках `close()` уходит одно «hi».
+Обработчик не проверяет `isClosed`: ответ и прочтение — задачи контроллера,
+а закрытый контроллер не выполняет ни то, ни другое.
 
 ## Перезапуск одной операции в общей очереди
 
@@ -430,7 +456,7 @@ with bloc alone, seek 3 15 ms after seek 1: [seek 1 start, seek 1 stopped, seek 
 ```
 
 Перемотка, которая не самая новая, возвращается, а самая новая — это позиция,
-которую сравнивают по значению. Перетаскивание, вернувшееся к 1, пропускает
+которую сравнивают по значению. Перетаскивание, вернувшееся к 1, не отбрасывает
 свою первую перемотку на 1, и плеер перематывает на 1 дважды.
 
 ### Контроллер под bloc
@@ -475,12 +501,10 @@ final class _Started extends PlayerCommand {}
 
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
   PlayerBloc(this._player) : super(_player.currentState) {
-    on<_Started>(
-      (e, emit) => emit.forEach(_player.stream, onData: (state) => state),
-    );
-    on<Play>((e, emit) => _player.play().done);
-    on<Pause>((e, emit) => _player.pause().done);
-    on<Seek>((e, emit) => _player.seek(e.position).done);
+    on<_Started>((e, emit) => follow(emit, state, _player));
+    on<Play>((e, emit) => settle(_player.play()));
+    on<Pause>((e, emit) => settle(_player.pause()));
+    on<Seek>((e, emit) => settle(_player.seek(e.position)));
     add(_Started());
   }
 
@@ -504,8 +528,9 @@ with a controller, seek 3 15 ms after seek 1: [seek 1 start, seek 1 stopped, see
 а `ctx.onCancel` передаёт отмену токену. Заменяется задача, а не позиция:
 перетаскивание, вернувшееся к 1, перематывает на 1 один раз.
 
-Что остаётся на bloc: регистрация на каждую команду, и больше ничего.
-Ни `_newestSeek`, ни поля для токена, ни проверки после `await`, ни `onEvent`.
+Что остаётся на bloc: регистрация на каждую команду, кроме мостов, и больше
+ничего. Ни `_newestSeek`, ни поля для токена, ни проверки после `await`,
+ни `onEvent`.
 
 ## Удаление выбранной ожидающей работы
 
@@ -584,19 +609,17 @@ with bloc alone, a read after disconnect: [connect, disconnect], the zone [Bad s
 // не находит в очереди контроллера чтения, которое можно снять.
 class SequentialDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   SequentialDeviceBloc(this._device) : super(_device.currentState) {
-    on<_Started>(
-      (e, emit) => emit.forEach(_device.stream, onData: (state) => state),
-    );
+    on<_Started>((e, emit) => follow(emit, state, _device));
     on<DeviceEvent>((e, emit) async {
       switch (e) {
         case Connect():
-          await _device.connect().done;
+          await settle(_device.connect());
         case ReadBattery():
-          await _device.readBattery().done;
+          await settle(_device.readBattery());
         case Rename(:final name):
-          await _device.rename(name).done;
+          await settle(_device.rename(name));
         case Disconnect():
-          await _device.disconnect().done;
+          await settle(_device.disconnect());
         case _Started():
       }
     }, transformer: sequential());
@@ -687,13 +710,11 @@ final class _Started extends DeviceEvent {
 
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   DeviceBloc(this._device) : super(_device.currentState) {
-    on<_Started>(
-      (e, emit) => emit.forEach(_device.stream, onData: (state) => state),
-    );
-    on<Connect>((e, emit) => _device.connect().done);
-    on<ReadBattery>((e, emit) => _device.readBattery().done);
-    on<Rename>((e, emit) => _device.rename(e.name).done);
-    on<Disconnect>((e, emit) => _device.disconnect().done);
+    on<_Started>((e, emit) => follow(emit, state, _device));
+    on<Connect>((e, emit) => settle(_device.connect()));
+    on<ReadBattery>((e, emit) => settle(_device.readBattery()));
+    on<Rename>((e, emit) => settle(_device.rename(e.name)));
+    on<Disconnect>((e, emit) => settle(_device.disconnect()));
     add(const _Started());
   }
 
@@ -793,17 +814,15 @@ final class ReportController extends Solo<ReportState> with SoloStream {
 }
 ```
 
-У bloc одна регистрация — для сборки:
+Кроме мостов, у bloc одна регистрация — для сборки:
 
 ```dart
 final class _Started extends ReportEvent {}
 
 class ReportBloc extends Bloc<ReportEvent, ReportState> {
   ReportBloc(this._report) : super(_report.currentState) {
-    on<_Started>(
-      (e, emit) => emit.forEach(_report.stream, onData: (state) => state),
-    );
-    on<BuildReport>((e, emit) => _report.build(e.range).done);
+    on<_Started>((e, emit) => follow(emit, state, _report));
+    on<BuildReport>((e, emit) => settle(_report.build(e.range)));
     add(_Started());
   }
 
@@ -910,7 +929,8 @@ final class FirmwareController extends Solo<FirmwareState> {
 }
 ```
 
-У bloc одна регистрация, с трансформером, который bloc даёт по умолчанию:
+Кроме мостов, у bloc одна регистрация, с трансформером, который bloc даёт
+по умолчанию:
 
 ```dart
 final class StreamedFirmware = FirmwareController
@@ -920,10 +940,8 @@ final class _Started extends FirmwareEvent {}
 
 class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   FirmwareBloc(this._firmware) : super(_firmware.currentState) {
-    on<_Started>(
-      (e, emit) => emit.forEach(_firmware.stream, onData: (state) => state),
-    );
-    on<Flash>((e, emit) => _firmware.flash(e.chunks).done);
+    on<_Started>((e, emit) => follow(emit, state, _firmware));
+    on<Flash>((e, emit) => settle(_firmware.flash(e.chunks)));
     add(_Started());
   }
 
