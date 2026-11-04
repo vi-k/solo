@@ -33,6 +33,11 @@ const topics = [
             'With riverpod and bloc',
             'С riverpod и bloc',
           ),
+          page(
+            'async_job/bloc',
+            'async_job in a bloc app',
+            'async_job в приложении на bloc',
+          ),
           page('async_job/time', 'Time', 'Время'),
           page('async_job/children', 'Children', 'Дети'),
           page('async_job/groups', 'Groups', 'Группы'),

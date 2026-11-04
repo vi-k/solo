@@ -2,8 +2,8 @@
 
 > **Состояние на 2026-11-04:** план написан по одобренному дизайну и прошёл
 > независимое ревью Opus: все находки приняты, задачи поправлены по ним
-> (раздел «Ревью плана»). Задача 1 исполнена — отчёт
-> `2026-11-04-bloc-pages-report.md`; задачи 2–8 впереди.
+> (раздел «Ревью плана»). Задачи 1 и 2 исполнены — отчёт
+> `2026-11-04-bloc-pages-report.md`; задачи 3–8 впереди.
 > **Что это:** план двух страниц — `packages/async_job/doc/bloc.md`
 > и `packages/solo/doc/bloc.md`, их общего стенда `tool/bloc_snippets.py`
 > в задании `snippets`, переводов, входов, сайта и правок записей.
@@ -173,7 +173,7 @@ Python 3 для стенда и проверок; Starlight для сайта.
 `### With a controller under the bloc` (`solo`), последний абзац раздела
 начинается с «What stays with bloc:».
 
-- [ ] **Шаг 1. Драйверы со сторожами раньше текста.**
+- [x] **Шаг 1. Драйверы со сторожами раньше текста.**
   - `core_bridge_sequential`: обработчик под `sequential()`, два события,
     `close()` во время первого; `require`: оба обработчика дошли до конца,
     задачи не отменены — `close()` прогнал очередь.
@@ -191,8 +191,8 @@ Python 3 для стенда и проверок; Starlight для сайта.
 
   Блок трассы, собранный из вывода двух драйверов, сходится, только если они
   соседи по алфавиту и печатают ровно свои строки.
-- [ ] **Шаг 2.** `python3 tool/bloc_snippets.py <tmp>` падает: блоков нет.
-- [ ] **Шаг 3. Текст.** Заголовок, вступление одним абзацем (для кого, что bloc
+- [x] **Шаг 2.** `python3 tool/bloc_snippets.py <tmp>` падает: блоков нет.
+- [x] **Шаг 3. Текст.** Заголовок, вступление одним абзацем (для кого, что bloc
   остаётся, обещание «states and traces under the code are what that code
   prints»; список ловушек — заглушкой до задачи 3). `## The bridge`: `watch`
   одним блоком из `riverpod-and-bloc.md` байт в байт, ссылка туда за разбором,
@@ -202,11 +202,11 @@ Python 3 для стенда и проверок; Starlight для сайта.
   из исхода. Раздел о закрытии по форме выше; довод — «трасса лучше»: `close()`
   не ждёт вызов в полёте, но ждёт вызов каждого сообщения из очереди; числа —
   из вывода стенда; честно — `isClosed` и очередь остаются на bloc.
-- [ ] **Шаг 4.** Генерация, `dart pub get`, `dart analyze --fatal-infos bin/v`,
+- [x] **Шаг 4.** Генерация, `dart pub get`, `dart analyze --fatal-infos bin/v`,
   прогон драйверов с `dart run --enable-asserts`;
   `python3 tool/check_traces.py packages/async_job/doc/bloc.md <вывод>`;
   `python3 tool/check_doc_shape.py`.
-- [ ] **Шаг 5. CI.** В `gate.yml`, задание `snippets`: ключ кеша
+- [x] **Шаг 5. CI.** В `gate.yml`, задание `snippets`: ключ кеша
   (`tool/bloc_snippets.py`), строка генератора, `bloc_pages_check` в трёх
   циклах, драйверы `core_*` — `dart run --enable-asserts` в свой вывод
   `bloc-pages-core.out` (ветка `elif`),
@@ -214,7 +214,7 @@ Python 3 для стенда и проверок; Starlight для сайта.
   в `check_traces` — пара страницы ядра с `bloc-pages-core.out`, комментарий
   «the benches write five packages» — six. Комментарий о правилах анализа:
   пакет берёт правила `async_job`.
-- [ ] **Шаг 6.** Reflow, ширина, handoff, коммит
+- [x] **Шаг 6.** Reflow, ширина, handoff, коммит
   `docs: start the bloc page of async_job with the bridge and closing`.
 
 ### Задача 3. Остальные разделы страницы ядра и итоговая таблица

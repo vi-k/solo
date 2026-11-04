@@ -339,21 +339,22 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.pub-cache
-          key: pub-snippets-${{ runner.os }}-${{ hashFiles('tool/doc_snippets.py', 'tool/accumulation_snippets.py', 'tool/adapter_snippets.py', 'tool/riverpod_snippets.py', 'tool/doc_blocks.py', 'packages/*/pubspec.yaml') }}
+          key: pub-snippets-${{ runner.os }}-${{ hashFiles('tool/doc_snippets.py', 'tool/accumulation_snippets.py', 'tool/adapter_snippets.py', 'tool/riverpod_snippets.py', 'tool/bloc_snippets.py', 'tool/doc_blocks.py', 'packages/*/pubspec.yaml') }}
           restore-keys: pub-snippets-${{ runner.os }}-
 
       # Outside the checkout, which is what lets the last step of this job
-      # mean anything: the benches write five packages and never the tree.
+      # mean anything: the benches write six packages and never the tree.
       - name: Build the benches out of the documents
         run: |
           python3 tool/doc_snippets.py "$RUNNER_TEMP/doc-check"
           python3 tool/accumulation_snippets.py "$RUNNER_TEMP/doc-check"
           python3 tool/adapter_snippets.py "$RUNNER_TEMP/doc-check"
           python3 tool/riverpod_snippets.py "$RUNNER_TEMP/doc-check"
+          python3 tool/bloc_snippets.py "$RUNNER_TEMP/doc-check"
 
       - name: Dependencies
         run: |
-          for package in bloc_check solo_check accumulation_check adapters_check riverpod_check; do
+          for package in bloc_check solo_check accumulation_check adapters_check riverpod_check bloc_pages_check; do
             echo "== $package"
             (cd "$RUNNER_TEMP/doc-check/$package" && dart pub get)
           done
@@ -362,11 +363,11 @@ jobs:
       # copied there by the generator: a fragment that passes here is a
       # fragment that would pass inside `packages/solo`. `accumulation_check`
       # takes the same rules with `one_member_abstracts` off, and says why in
-      # the file it writes. `adapters_check` takes the rules of `async_job`,
-      # `riverpod_check` those of `solo`.
+      # the file it writes. `adapters_check` and `bloc_pages_check` take the
+      # rules of `async_job`, `riverpod_check` those of `solo`.
       - name: Analyze
         run: |
-          for package in bloc_check solo_check accumulation_check adapters_check riverpod_check; do
+          for package in bloc_check solo_check accumulation_check adapters_check riverpod_check bloc_pages_check; do
             echo "== $package"
             (cd "$RUNNER_TEMP/doc-check/$package" && dart analyze --fatal-infos bin/v)
           done
@@ -381,7 +382,8 @@ jobs:
           : > "$RUNNER_TEMP/accumulation.out"
           : > "$RUNNER_TEMP/adapters.out"
           : > "$RUNNER_TEMP/riverpod.out"
-          for package in bloc_check solo_check accumulation_check adapters_check riverpod_check; do
+          : > "$RUNNER_TEMP/bloc-pages-core.out"
+          for package in bloc_check solo_check accumulation_check adapters_check riverpod_check bloc_pages_check; do
             cd "$RUNNER_TEMP/doc-check/$package"
             if [ "$package" = accumulation_check ]; then
               out="$RUNNER_TEMP/accumulation.out"
@@ -389,14 +391,23 @@ jobs:
               out="$RUNNER_TEMP/adapters.out"
             elif [ "$package" = riverpod_check ]; then
               out="$RUNNER_TEMP/riverpod.out"
+            elif [ "$package" = bloc_pages_check ]; then
+              out="$RUNNER_TEMP/bloc-pages-core.out"
             else
               out="$RUNNER_TEMP/vs-bloc.out"
+            fi
+            # Asserts are on for the bloc pages: bloc says through them that
+            # a handler emitted after it was done, and their drivers hold
+            # the pages to that.
+            run="dart run"
+            if [ "$package" = bloc_pages_check ]; then
+              run="dart run --enable-asserts"
             fi
             for driver in bin/v/*.dart; do
               echo "== $package/$driver"
               # A driver that hangs fails here, under its own name, and
               # not when the job runs out of time.
-              timeout 300 dart run "$driver" | tee -a "$out"
+              timeout 300 $run "$driver" | tee -a "$out"
             done
           done
 
@@ -410,7 +421,8 @@ jobs:
             packages/solo/doc/accumulation.md "$RUNNER_TEMP/accumulation.out" \
             packages/solo/doc/accumulation-rules.md "$RUNNER_TEMP/accumulation.out" \
             packages/async_job/doc/riverpod-and-bloc.md "$RUNNER_TEMP/adapters.out" \
-            packages/solo/doc/riverpod.md "$RUNNER_TEMP/riverpod.out"
+            packages/solo/doc/riverpod.md "$RUNNER_TEMP/riverpod.out" \
+            packages/async_job/doc/bloc.md "$RUNNER_TEMP/bloc-pages-core.out"
 
       - name: Nothing drifted
         run: |
