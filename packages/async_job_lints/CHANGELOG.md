@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - The message of `bare_await` and its section of the README no longer set
   `ctx.join` beside `ctx.abandonable` and `ctx.pause` as a wait that a
