@@ -54,8 +54,9 @@ NEIGHBOUR = os.path.join(REPO, 'packages', 'async_job', 'doc',
 SOLO = os.path.join(REPO, 'packages', 'solo', 'doc', 'bloc.md')
 VS_BLOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'vs-bloc.md')
 
-# The majors the pages name, resolved at their newest on the SDK of the
-# job. async_job is a dependency of its own, since the core drivers import
+# The versions the pages name, resolved at their newest on the SDK of the
+# job: bloc 9.2.1 is the first whose `isClosed` is true while close() runs
+# the queue out, and the closing sections stand on it. async_job is a dependency of its own, since the core drivers import
 # it, and an override as well, since solo from the tree asks for a released
 # one.
 PUBSPEC = """name: bloc_pages_check
@@ -67,7 +68,7 @@ environment:
 dependencies:
   async_job:
     path: {async_job}
-  bloc: ^9.0.0
+  bloc: ^9.2.1
   bloc_concurrency: ^0.3.0
   fake_async: ^1.3.1
   solo:
@@ -727,18 +728,33 @@ Bloc<OpenPreview, PreviewState> previewBloc(Decoder decoder) =>
 Future<void> waitOut() => delay(100);
 ''' + PREVIEWING + RUNNER)
 
+# The trace is the one of bloc alone, so the end of each job is kept
+# apart: the length of the trace when it ended.
+assert RECORDING.count('  watched.add(job);\n') == 1
+ENDING = RECORDING.replace('  watched.add(job);\n', '''  watched.add(job);
+  final index = watched.length - 1;
+  unawaited(job.done.then((_) => endedAt[index] = trace.length));
+''') + '''
+final endedAt = <int, int>{};
+'''
+
 FILES['core_resource_job'] = (
-    CORE_HEAD + HELPERS + RECORDING + PREVIEW
+    CORE_HEAD + HELPERS + ENDING + PREVIEW
     + core[f'{RESOURCE_JOB}/PreviewBloc'] + '''
 Bloc<OpenPreview, PreviewState> previewBloc(Decoder decoder) =>
     PreviewBloc(decoder);
 
 /// The jobs end before the late buffer arrives: it is released when it
-/// does, after the jobs.
+/// does, after the jobs. ctx.abandonable does not wait for the decoder.
 Future<void> waitOut() async {
   await requireEnded(2);
+  final ended = Map.of(endedAt);
   watched.clear();
+  endedAt.clear();
   await delay(100);
+  require(ended[0]! <= trace.indexOf('ready 1'),
+      'the job of clip 1 must end before its buffer arrives: $trace, '
+      'ended at ${ended[0]}');
 }
 ''' + PREVIEWING + RUNNER)
 

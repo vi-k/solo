@@ -2,24 +2,18 @@
 
 A bloc handler can run its work as a job and keep everything else of bloc: the
 events, the transformers, the states. Each section below takes one requirement
-of an app on bloc 9 with `bloc_concurrency`, shows the answer of bloc alone and
-then the same handler with a job in it, and says what the job takes off the
+of an app on bloc 9.2.1 with `bloc_concurrency`, shows the answer of bloc alone
+and then the same handler with a job in it, and says what the job takes off the
 code and what stays with bloc. The code runs in pure Dart, and the states and
 traces under it are what that code prints.
 
-The sections, each a requirement where a job in the handler leaves the code
-less to do:
-
-- `close()` under `sequential()` waits for the call in flight —
-  [Closing and cancelling in-flight work](#closing-and-cancelling-in-flight-work);
-- a replacement upload must not write while the replaced one's write is
-  pending —
-  [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting);
-- a buffer that arrives after its handler was replaced must still be released —
-  [Releasing a resource returned after cancellation](#releasing-a-resource-returned-after-cancellation).
-
-The scenarios where the queue of bloc is what has to change are listed in
-[Where the queue is the problem](#where-the-queue-is-the-problem).
+The sections take three requirements where a job in the handler leaves the code
+less to do. With bloc alone, `close()` under `sequential()` waits for the call
+in flight, the uploads of firmware take a lock shared by the handlers, so that
+a replacement does not write while the write it replaces is pending, and a
+buffer that arrives after its handler was replaced must still be released. The
+scenarios where bloc keeps its own answer are listed in
+[Where bloc keeps its answer](#where-bloc-keeps-its-answer).
 
 ## The bridge
 
@@ -50,9 +44,9 @@ Stream<T> watch<T>(Job<T> job) {
 
 Two things of bloc decide where it is enough. `restartable()` cancels the
 subscription of the handler it replaces, and `close()` cancels the
-subscriptions of every running handler under `concurrent()`, the default, under
-`droppable()` and under `restartable()`: there the job is cancelled with no
-line of your own, and `close()` returns at once.
+subscriptions of every running handler under the default of bloc, which
+`concurrent()` repeats, under `droppable()` and under `restartable()`: there
+the job is cancelled with no line of your own, and `close()` returns at once.
 
 ```text
 concurrent: close took 0ms, the job Cancelled(manual)
@@ -198,7 +192,9 @@ with bloc alone, the call fails: the zone [Bad state: send: offline], reply null
 
 What stays with bloc: the `isClosed` check after the await, since a queued
 message still gets its answer while `close()` runs, and the queue itself:
-`sequential()` sends every message waiting in it.
+`sequential()` sends every message waiting in it. The check needs bloc 9.2.1:
+before it, `isClosed` stays `false` until `close()` has run the queue out, and
+the reply to "bye" reaches the state.
 
 ## Finishing an in-flight write before restarting
 
@@ -300,7 +296,8 @@ handler is replaced its job throws at the next `join` and emits nothing more.
 
 What stays with bloc: one rule instead of the lock and the checks of
 `emit.isDone` — the field is read and written before the first await of the
-handler.
+handler. As with the lock, every handler that writes to the device has to keep
+the rule: wait for the job in `_flashing` and put its own job there.
 
 ## Releasing a resource returned after cancellation
 
@@ -379,22 +376,25 @@ What stays with bloc: no `try`/`finally` around the buffer. The release is
 declared where the buffer is acquired, and an exit added to the handler later
 cannot lose it.
 
-## Where the queue is the problem
+## Where bloc keeps its answer
 
-The other scenarios of [solo compared with bloc](../../solo/doc/vs-bloc.md) get
-no section here: in each, what the code of a bloc app has to keep is about the
-queue of bloc, and a job inside a handler does not change it. Where a queue is
-the answer, [solo under bloc](../../solo/doc/bloc.md) puts a controller of
-`solo` under the bloc and says, scenario by scenario, what it takes off the
-code.
+The other scenarios of
+[solo compared with bloc](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md)
+get no section here: in each, what the code of a bloc app has to keep is bloc's
+own — its queue, its emitter, its `add` or its observer — and a job inside a
+handler does not change it. Where a queue is the answer, as in ordering the
+updates, restarting one operation, removing pending work and reacting to an
+external change,
+[solo under bloc](https://github.com/vi-k/solo/blob/main/packages/solo/doc/bloc.md)
+puts a controller of `solo` under the bloc and says what it takes off the code.
 
 | Scenario | What stays with bloc |
 | --- | --- |
-| [Ordering updates to shared state](../../solo/doc/vs-bloc.md#ordering-updates-to-shared-state) | one registration with `sequential()` for the events that update the same state: the order is the order of the queue |
-| [An observer fails during a state update](../../solo/doc/vs-bloc.md#an-observer-fails-during-a-state-update) | the guard inside the observer: the failure is the observer's, not the work's |
-| [Leaving a loading state when the work is cancelled](../../solo/doc/vs-bloc.md#leaving-a-loading-state-when-the-work-is-cancelled) | the reset from the handler of `CancelRefresh`: the replaced handler's emitter is done, whatever its job does |
-| [Restarting one operation within a shared queue](../../solo/doc/vs-bloc.md#restarting-one-operation-within-a-shared-queue) | `_newestSeek`, the token of the `seek` in flight and the check after the await: which `seek` is still wanted is a question about the events waiting in the queue |
-| [Typed methods with queued execution](../../solo/doc/vs-bloc.md#typed-methods-with-queued-execution) | function events and methods that return `void`: the job is created in the handler, after `add` has returned |
-| [Removing selected pending work](../../solo/doc/vs-bloc.md#removing-selected-pending-work) | the generations through `Expando`: the work to remove is events in the queue, which have no job yet |
-| [Awaiting a particular request](../../solo/doc/vs-bloc.md#awaiting-a-particular-request) | the completer on the event: `add` returns nothing, and the job is created after it |
-| [Reacting to an independent external state change](../../solo/doc/vs-bloc.md#reacting-to-an-independent-external-state-change) | the second registration and the check after the await; a job in a field can take the check's place, with its cancellation from the handler of the external change and its outcome to sort out, and the trace stays the same |
+| [Ordering updates to shared state](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md#ordering-updates-to-shared-state) | one registration with `sequential()` for the events that update the same state: the order is the order of the queue |
+| [An observer fails during a state update](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md#an-observer-fails-during-a-state-update) | the guard inside the observer: the failure is the observer's, not the work's |
+| [Leaving a loading state when the work is cancelled](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md#leaving-a-loading-state-when-the-work-is-cancelled) | the reset from the handler of `CancelRefresh`: the replaced handler's emitter is done, whatever its job does |
+| [Restarting one operation within a shared queue](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md#restarting-one-operation-within-a-shared-queue) | `_newestSeek`, the token of the `seek` in flight and the check after the await: which `seek` is still wanted is a question about the events waiting in the queue |
+| [Typed methods with queued execution](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md#typed-methods-with-queued-execution) | function events and methods that return `void`: the job is created in the handler, after `add` has returned |
+| [Removing selected pending work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md#removing-selected-pending-work) | the generations through `Expando`: the work to remove is events in the queue, which have no job yet |
+| [Awaiting a particular request](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md#awaiting-a-particular-request) | the completer on the event: `add` returns nothing, and the job is created after it |
+| [Reacting to an independent external state change](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md#reacting-to-an-independent-external-state-change) | the second registration and the check after the await; a job in a field can take the check's place, with its cancellation from the handler of the external change and its outcome to sort out, and the trace stays the same |
