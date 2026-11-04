@@ -383,7 +383,10 @@ cannot lose it.
 
 The other scenarios of [solo compared with bloc](../../solo/doc/vs-bloc.md) get
 no section here: in each, what the code of a bloc app has to keep is about the
-queue of bloc, and a job inside a handler does not change it.
+queue of bloc, and a job inside a handler does not change it. Where a queue is
+the answer, [solo under bloc](../../solo/doc/bloc.md) puts a controller of
+`solo` under the bloc and says, scenario by scenario, what it takes off the
+code.
 
 | Scenario | What stays with bloc |
 | --- | --- |
