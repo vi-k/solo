@@ -1,6 +1,6 @@
 > **Состояние на 2026-11-04:** подготовка `async_job_lints` 0.1.1
-> закоммичена (`bc87e9ac`) и влита в `main`; публикация ждёт отдельного слова
-> владельца.
+> закоммичена (`bc87e9ac`); связка идёт по слову владельца «опубликуй
+> async_job_lints 0.1.1».
 > **Что это:** подготовка патча `async_job_lints` 0.1.1 с новой подсказкой
 > `bare_await`.
 > **Связанные записи:** `2026-11-04-async-job-lints-release-report.md`,
@@ -70,3 +70,13 @@ that must not hear a cancellation until they end in 'ctx.uncancellable'.
 floor: 7 roots». `async_job_lints` опускает `analysis_server_plugin`,
 `analyzer` и `analyzer_plugin` до нижних границ, его набор из архива — +114;
 `solo_lints` идёт против опубликованного `async_job_lints` 0.1.0, +71.
+
+## Связка
+
+Владелец разрешил публикацию отдельным запросом «опубликуй async_job_lints
+0.1.1», состоящим только из просьбы опубликовать. Перед связкой: `git fetch`
+выполнен, `main` впереди `origin/main` на пять коммитов — запись о выпуске
+`solo_lints` 0.1.5, отложенный патч ядра в handoff, правка подсказки,
+подготовка и эта запись; они уходят в origin вместе с релизным. Тега
+`async_job_lints-v0.1.1` нет ни локально, ни в origin; на pub.dev
+`latest: 0.1.0`.
