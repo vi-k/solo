@@ -1,3 +1,11 @@
+## Unreleased
+
+- The message of `bare_await` and its section of the README no longer set
+  `ctx.join` beside `ctx.abandonable` and `ctx.pause` as a wait that a
+  cancellation cuts short, with only `ctx.uncancellable` for steps that must
+  run to the end. `join` waits for the whole call and throws only after it; the
+  message and the README now say what each of the four is for.
+
 ## 0.1.0
 
 - The first release. The five rules for code on async_job, `ctx_in_cleanup`,

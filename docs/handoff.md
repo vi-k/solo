@@ -24,6 +24,10 @@
 2. Зонд по версии: пакет-пользователь называет `solo_lints: ^0.1.5`
    и `async_job_lints: ^0.1.0` по `version:`, каждый один и оба; итог —
    в отчёт.
+3. Патч `async_job_lints`, раздел «Unreleased» его `CHANGELOG.md`: подсказка
+   `bare_await` и его раздел README больше не ставят `ctx.join` в один ряд
+   с `abandonable` и `pause` как ожидание, которое обрывает отмена. Правка
+   только текстовая, ограничений не меняет; спешки нет.
 
 Страница `solo` о riverpod написана 2026-11-02. Бэклог пуст. Опубликованы
 на pub.dev: `async_job` и `solo` 1.0.0 (2026-11-01, по слову владельца, теги
@@ -61,10 +65,10 @@
 и `doc/jobs.md` о рабочем типе `W`: без аргументов типа в теле `ctx.state` —
 `Object?`, и `W` действует от старта задачи до её конца (Opus F1 и Fable F1,
 без правила линта). На pub.dev это придёт с выпусками: у трёх пакетов
-в `CHANGELOG.md` раздел «Unreleased», по нему это патчи. Страница
-`packages/solo/doc/riverpod.md` «solo under riverpod», остаток Opus F2,
-написана 2026-11-02 по слову владельца: ловушки riverpod —
-`2026-11-02-riverpod-pain-points-research.md`, дизайн —
+в `CHANGELOG.md` раздел «Unreleased», по нему это патчи; четвёртый такой —
+у `async_job_lints`, пункт 3 выше. Страница `packages/solo/doc/riverpod.md`
+«solo under riverpod», остаток Opus F2, написана 2026-11-02 по слову владельца:
+ловушки riverpod — `2026-11-02-riverpod-pain-points-research.md`, дизайн —
 `2026-11-02-riverpod-page-design.md`, план —
 `2026-11-02-riverpod-page-plan.md`. Её код собирает и прогоняет стенд
 `tool/riverpod_snippets.py`, четвёртый в задании `snippets`. Работа прошла

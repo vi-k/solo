@@ -19,8 +19,10 @@ class BareAwait extends MultiAnalysisRule {
     "This wait doesn't go through '{0}', so a cancellation of the job doesn't "
         'end it.',
     correctionMessage:
-        "Wait through '{0}.join', '{0}.abandonable' or '{0}.pause', or put "
-        "the steps that must all run in '{0}.uncancellable'.",
+        "Wait through '{0}.join' for a call that must finish, "
+        "'{0}.abandonable' for one the job may leave in flight or "
+        "'{0}.pause' for a delay, or put the steps that must not hear a "
+        "cancellation until they end in '{0}.uncancellable'.",
     uniqueName: 'LintCode.bare_await',
   );
 
