@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.5
 
 - The five rules of the core, `ctx_in_cleanup`, `release_on_the_call`,
   `catch_without_check`, `sync_fake_async` and `bare_await`, come from the new
@@ -14,6 +14,7 @@
 - The package has an example: a recorder with three mistakes, the lines the
   plugin reports and the same job fixed.
 - `pubspec.yaml` names the documentation site, and pub.dev links to it.
+- The blocks of the README ask for this version.
 
 ## 0.1.4
 
