@@ -1,25 +1,25 @@
 # solo under bloc
 
-A bloc can hand its work to a `solo` controller and keep everything else of
-bloc: the events, the transformers, the state a screen reads. Each section
-below takes one requirement of an app on bloc 9.2.1 with `bloc_concurrency`,
-shows the answer of bloc alone and then the same bloc with a controller under
-it, and says what the controller takes off the code and what stays with bloc.
-The controllers are the ones of the Solo sections of
+A bloc can hand its work to a `solo` controller and keep the events and the
+state a screen reads; its registrations go back to the default of bloc. Each
+section below takes one requirement of an app on bloc 9.2.1 with
+`bloc_concurrency`, shows the answer of bloc alone and then the same bloc with
+a controller under it, and says what the controller takes off the code and what
+stays with bloc. The controllers are the ones of the Solo sections of
 [solo and bloc, side by side](vs-bloc.md), where each of them stands without
 bloc. The code runs in pure Dart, and the states and traces under it are what
 that code prints.
 
-The sections take six requirements where a controller under the bloc leaves the
-code less to do. With bloc alone, the events that update one state need one
-registration with `sequential()`, `close()` under `sequential()` waits for the
-call in flight and sends every queued message, and a drag that comes back to a
-position seeks to it twice. A battery read of a screen that left reaches the
-device, and a read behind the disconnect fails; a revoked session takes an
-event of its own and a check of the state on both sides of the await; and the
-uploads of firmware take a lock shared by the handlers, so that a replacement
-does not write while the write it replaces is pending. The scenarios where the
-bloc keeps its own answer are listed in
+The controller costs every bloc a few lines of its own and brings rules, which
+[The bridges](#the-bridges) names. The sections take three requirements where
+bloc alone needs a workaround. During a drag a new seek stops the one in
+flight, and bloc alone keeps the newest seek and the token of the one in flight
+in fields and stops it from `onEvent`. A disconnect drops the battery reads
+still waiting, and bloc alone stamps every event with the screen it was added
+for. A firmware upload that replaces another must wait for the write in flight,
+and bloc alone takes a lock that every handler writing to the device shares. An
+app with one such problem is best left on bloc alone. The scenarios where bloc
+keeps its own answer are listed in
 [Where bloc keeps its answer](#where-bloc-keeps-its-answer).
 
 ## The bridges
@@ -111,7 +111,7 @@ class CounterBloc extends Bloc<CounterEvent, int> {
 `Counter` takes `SoloStream` where it is declared. The sections below take the
 controllers of the side-by-side page, declared without the mixin, and add it in
 a class of their own, such as
-`final class StreamedNotes = NotesController with SoloStream<NotesState>;`.
+`final class StreamedDevice = DeviceController with SoloStream<DeviceState>;`.
 Those controllers are final classes, so such a class compiles only in the
 library of the controller. `_Started` extends a sealed family of events, as
 `CounterEvent` is, and is declared in the library of the family.
@@ -141,262 +141,35 @@ bloc starts from the state the controller has at the subscription, even when
 the controller changed it after the constructor of the bloc read
 `currentState`. `close()` of the bloc closes the controller, and the controller
 cancels the count at `ctx.pause`. The closed controller closes its stream, and
-`emit.forEach` ends with it. The blocs of this page close the controller first;
-where the order matters is taken apart in
-[Closing and cancelling in-flight work](#closing-and-cancelling-in-flight-work).
+`emit.forEach` ends with it.
 
 `_counter.stream.listen(emit)` in the constructor would be shorter, but `emit`
 of a bloc is for bloc itself and tests, and the analyzer reports such a call as
 `invalid_use_of_visible_for_testing_member`.
 
-## Ordering updates to shared state
+Every bloc pays for the bridges: a class that adds `SoloStream` to its
+controller, the event `_Started` with its registration and its `add`, and an
+override of `close()`; `follow` and `settle` are written once for the app. The
+rules above come with them, and three more.
 
-A user uploads a note and refreshes the list. A refresh that starts before the
-upload ends reads the old list, and publishing it after the upload removes the
-new note. The upload takes 40 ms, the list is read when the call starts and
-comes back 60 ms later, and the screen adds the upload and the refresh one
-right after the other. The events and the state are the ones of
-[Ordering updates to shared state](vs-bloc.md#ordering-updates-to-shared-state).
+The state belongs to the controller, and the bloc publishes a copy of it. A
+handler that calls `emit` itself parts the bloc from the controller, until the
+next state of the controller replaces what it published. A `BlocObserver` sees
+every transition on `_Started`, whose handler publishes them all, and not on
+the event that asked for the work. `seed` of `blocTest` emits into the bloc,
+and `follow` replaces it with the state of the controller: a test starts from
+the state its controller has.
 
-### With bloc alone
+`close()` of the bloc has to close the controller. A bloc closed without it
+leaves the controller open, and the jobs of the controller go on: the count
+goes on after the bloc is closed.
 
-Both events go through one registration with `sequential()`:
-
-```dart
-class NotesBloc extends Bloc<NotesEvent, NotesState> {
-  final Api _api;
-
-  NotesBloc(this._api) : super(const NotesState()) {
-    on<NotesEvent>((e, emit) async {
-      switch (e) {
-        case UploadNote(:final note):
-          emit(state.copyWith(uploading: true));
-          await _api.upload(note);
-          emit(state.copyWith(notes: [...state.notes, note], uploading: false));
-        case RefreshList():
-          final serverNotes = await _api.list();
-          emit(state.copyWith(notes: serverNotes));
-      }
-    }, transformer: sequential());
-  }
-}
-```
-
-```text
-with bloc alone: the list read [n0, n1], NotesState([n0, n1], uploading: false)
-```
-
-The queue of bloc starts the refresh once the upload has ended, and the list is
-read after the server took the note. The order is held by the registration: the
-events that update one state share it, under `sequential()`. With a
-registration of its own for each event the refresh runs alongside the upload,
-as the first attempt of the same section of
-[solo and bloc, side by side](vs-bloc.md#ordering-updates-to-shared-state)
-shows.
-
-### With a controller under the bloc
-
-The calls go to the controller of that section:
-
-```dart
-final class NotesController extends Solo<NotesState> {
-  final Api _api;
-
-  NotesController(this._api) : super(const NotesState());
-
-  Job<void> upload(Note note) => enqueue<NotesState, void>(key: 'upload', (
-    ctx,
-  ) async {
-    ctx.emit(ctx.state.copyWith(uploading: true));
-    await ctx.join(() => _api.upload(note));
-    ctx.emit(
-      ctx.state.copyWith(notes: [...ctx.state.notes, note], uploading: false),
-    );
-  });
-
-  Job<void> refresh() => enqueue<NotesState, void>(key: 'refresh', (ctx) async {
-    final serverNotes = await ctx.abandonable(_api.list);
-    ctx.emit(ctx.state.copyWith(notes: serverNotes));
-  });
-}
-```
-
-The bloc takes the bridges of [The bridges](#the-bridges), and each event keeps
-the registration bloc gives it by default:
-
-```dart
-final class StreamedNotes = NotesController with SoloStream<NotesState>;
-
-final class _Started extends NotesEvent {}
-
-class NotesBloc extends Bloc<NotesEvent, NotesState> {
-  NotesBloc(this._notes) : super(_notes.currentState) {
-    on<_Started>((e, emit) => follow(emit, state, _notes));
-    on<UploadNote>((e, emit) => settle(_notes.upload(e.note)));
-    on<RefreshList>((e, emit) => settle(_notes.refresh()));
-    add(_Started());
-  }
-
-  final StreamedNotes _notes;
-
-  @override
-  Future<void> close() async {
-    await _notes.close();
-    return super.close();
-  }
-}
-```
-
-```text
-with a controller: the list read [n0, n1], NotesState([n0, n1], uploading: false)
-```
-
-The two handlers run at the same time, and the order holds: each hands its
-command to the controller when its event arrives, and the queue of the
-controller starts the refresh once the upload has ended.
-
-What stays with bloc: no rule about registrations. A registration for each
-event, the code bloc leads to, is right as it is: the order is the order of the
-queue of the controller.
-
-## Closing and cancelling in-flight work
-
-A user sends a chat message and leaves the screen before the reply arrives. The
-old operation must not update a closed screen or report the reply as read: the
-user never saw it. The API answers a message in 50 ms; the events and the
-state:
-
-```dart
-sealed class ChatEvent {
-  const ChatEvent();
-}
-
-class SendMessage extends ChatEvent {
-  const SendMessage(this.text);
-  final String text;
-}
-
-class MarkReplyRead extends ChatEvent {
-  const MarkReplyRead();
-}
-
-class ChatState {
-  const ChatState([this.reply]);
-  final String? reply;
-  ChatState withReply(String reply) => ChatState(reply);
-}
-```
-
-In the traces below the user sends "hi" and "bye", and the screen closes the
-bloc 10 ms later: "hi" is in flight, "bye" waits in the queue.
-
-### With bloc alone
-
-A sequential handler checks closure after its await:
-
-```dart
-class ChatBloc extends Bloc<ChatEvent, ChatState> {
-  final Api _api;
-
-  ChatBloc(this._api) : super(const ChatState()) {
-    on<SendMessage>((e, emit) async {
-      final reply = await _api.send(e.text);
-      if (isClosed) return;
-      emit(state.withReply(reply));
-      add(const MarkReplyRead());
-    }, transformer: sequential());
-    on<MarkReplyRead>((e, emit) => _api.markRead(), transformer: sequential());
-  }
-}
-```
-
-```text
-with bloc alone: close took 90ms, sent [hi, bye], reply null, reads 0
-```
-
-The guard keeps the reply off the state and the read off the server. Closing
-still waits for the call in flight and then runs the queue: "bye" is sent while
-`close()` runs, and `close()` returns after its answer, which the guard turns
-away as well.
-
-### With a controller under the bloc
-
-The calls go to the controller of
-[Closing and cancelling in-flight work](vs-bloc.md#closing-and-cancelling-in-flight-work),
-and the reply and the read are its jobs:
-
-```dart
-final class ChatController extends Solo<ChatState> {
-  final Api _api;
-
-  ChatController(this._api) : super(const ChatState());
-
-  Job<void> send(String text) =>
-      enqueue<ChatState, void>(key: 'send', (ctx) async {
-        final reply = await ctx.abandonable(() => _api.send(text));
-        ctx.emit(ctx.state.withReply(reply));
-        markReplyRead();
-      });
-
-  Job<void> markReplyRead() =>
-      enqueue<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
-}
-```
-
-The bloc keeps its events and its `sequential()`, takes the stream from the
-controller with `SoloStream`, and closes the controller before itself:
-
-```dart
-final class StreamedChat = ChatController with SoloStream<ChatState>;
-
-final class _Started extends ChatEvent {
-  const _Started();
-}
-
-class ChatBloc extends Bloc<ChatEvent, ChatState> {
-  ChatBloc(this._chat) : super(_chat.currentState) {
-    on<_Started>((e, emit) => follow(emit, state, _chat));
-    on<SendMessage>(
-      (e, emit) => settle(_chat.send(e.text)),
-      transformer: sequential(),
-    );
-    add(const _Started());
-  }
-
-  final StreamedChat _chat;
-
-  @override
-  Future<void> close() async {
-    await _chat.close();
-    return super.close();
-  }
-}
-```
-
-```text
-with a controller: close took 0ms, sent [hi], reply null, reads 0
-```
-
-Closing the controller cancels "hi" at `ctx.abandonable`, before the reply and
-the read. `sequential()` still starts the handler for "bye", and the closed
-controller ends its job `Cancelled(closed)` without a call. Then
-`super.close()` finds nothing to wait for.
-
-The order is what holds it. With `super.close()` first, `sequential()` runs its
-queue through a controller that is still open, and the requirement is lost
-twice over: both messages go to the API, and both replies reach the state of
-the closing bloc and are reported read.
-
-```text
-with super.close() first: close took 100ms, sent [hi, bye], reply reply to bye, reads 2
-```
-
-What stays with bloc: the order of `close()` — the controller first, then
-`super.close()` — as long as the registration keeps `sequential()`. With the
-registration bloc gives by default, as in the other sections, the queue of the
-controller holds the order of the messages, and both orders of `close()` send
-"hi" alone. The handler checks no `isClosed`: the reply and the read are jobs
-of the controller, and a closed controller runs neither.
+And every event keeps the registration bloc gives it by default. A transformer
+such as `sequential()` holds an event until the handler before it has ended, so
+the job of the event reaches the controller only then, and the queue of the
+controller, which replaces and removes jobs, holds one at a time. The first
+attempt of [Removing selected pending work](#removing-selected-pending-work)
+keeps `sequential()` and finds nothing to remove.
 
 ## Restarting one operation within a shared queue
 
@@ -457,9 +230,12 @@ with bloc alone, seeks 1, 2, 1: [play, seek 1, seek 1, pause]
 with bloc alone, seek 3 15 ms after seek 1: [seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]
 ```
 
-A seek that is not the newest returns, and the newest is a position compared by
-value. A drag that comes back to 1 lets its first seek to 1 through, and the
-player seeks to 1 twice.
+A seek that is not the newest returns. The newest is a position compared by
+value, so a drag that comes back to 1 lets its first seek to 1 through, and the
+player seeks to 1 twice; a bloc that keeps the newest `Seek` event itself and
+compares it with `identical` seeks to 1 once. Either way the bloc keeps two
+fields, checks the token after the await and stops the seek in flight from
+`onEvent`.
 
 ### With a controller under the bloc
 
@@ -532,7 +308,9 @@ job, not a position: a drag that comes back to 1 seeks to 1 once.
 
 What stays with bloc: a registration for each command besides the bridges, and
 nothing else. No `_newestSeek`, no field for the token, no check after the
-await and no `onEvent`.
+await and no `onEvent`. Without the bridges the same controller is the Solo
+answer of
+[Restarting one operation within a shared queue](vs-bloc.md#restarting-one-operation-within-a-shared-queue).
 
 ## Removing selected pending work
 
@@ -596,7 +374,8 @@ with bloc alone, a read after disconnect: [connect, disconnect], the zone [Bad s
 The screen that leaves loses its read. Two screens that add one const instance
 share its stamp: the second overwrites the first, and the read of the screen
 that left reaches the device. A read added after the disconnect carries the new
-stamp, reaches a device that is gone, and its error goes to the zone.
+stamp, reaches a device that is gone, and its error goes to the zone. A check
+of `state.online` before the read turns that one away; the shared stamp stays.
 
 ### The first attempt
 
@@ -742,113 +521,8 @@ and stays.
 What stays with bloc: a registration for each command, since under one
 registration with `sequential()` there is nothing in the queue of the
 controller to remove. No `Expando`, no stamps and no check in the handler.
-
-## Reacting to an independent external state change
-
-A user asks for a report, and the session is revoked on another device while
-the report is built. The state must turn `SignedOut` at once, and no report may
-be published over it. A report takes 50 ms from data already on the device, the
-screen asks for two, and the session is revoked 20 ms in. The events and the
-states are the ones of
-[Reacting to an independent external state change](vs-bloc.md#reacting-to-an-independent-external-state-change).
-
-### With bloc alone
-
-The revocation is an event with a registration of its own, and the build checks
-the state on both sides of its await:
-
-```dart
-class ReportBloc extends Bloc<ReportEvent, ReportState> {
-  final Reports _reports;
-  final Auth _auth;
-
-  ReportBloc(this._reports, this._auth) : super(SignedIn()) {
-    _auth.onRevoked = (reason) => add(SessionRevoked(reason));
-    on<SessionRevoked>((e, emit) => emit(SignedOut(e.reason)));
-    on<BuildReport>((e, emit) async {
-      if (state is! SignedIn) return;
-      final report = await _reports.build(e.range);
-      if (state is! SignedIn) return;
-      emit(Ready(report));
-    }, transformer: sequential());
-  }
-
-  @override
-  Future<void> close() {
-    _auth.onRevoked = null;
-    return super.close();
-  }
-}
-```
-
-```text
-with bloc alone: states [SignedOut(signed out elsewhere)], built 1, the zone []
-```
-
-The first report is built and dropped by the check after the await, and the
-second is not started.
-
-### With a controller under the bloc
-
-The calls go to the controller of that section, which has its `stream` and
-takes the revocation from the callback with `externalSetState`:
-
-```dart
-final class ReportController extends Solo<ReportState> with SoloStream {
-  final Reports _reports;
-  final Auth _auth;
-
-  ReportController(this._reports, this._auth) : super(const SignedIn()) {
-    _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
-  }
-
-  Job<void> build(Range range) =>
-      enqueue<SignedIn, void>(key: 'report', (ctx) async {
-        final report = await ctx.join(() => _reports.build(range));
-        ctx.emit(Ready(report));
-      });
-
-  @override
-  void onClose() {
-    _auth.onRevoked = null;
-  }
-}
-```
-
-Besides the bridges, the bloc has one registration, for the build:
-
-```dart
-final class _Started extends ReportEvent {}
-
-class ReportBloc extends Bloc<ReportEvent, ReportState> {
-  ReportBloc(this._report) : super(_report.currentState) {
-    on<_Started>((e, emit) => follow(emit, state, _report));
-    on<BuildReport>((e, emit) => settle(_report.build(e.range)));
-    add(_Started());
-  }
-
-  final ReportController _report;
-
-  @override
-  Future<void> close() async {
-    await _report.close();
-    return super.close();
-  }
-}
-```
-
-```text
-with a controller: states [SignedOut(signed out elsewhere)], built 1, the zone []
-```
-
-`SignedOut` reaches the bloc through the bridge. `build` runs only on
-`SignedIn`: the first job waits for its report and ends without publishing it,
-the second does not start, and both end `Cancelled(rules: is not SignedIn)`,
-which the handler gets from `done`.
-
-What stays with bloc: nothing for the revocation. No `SessionRevoked` with its
-registration, and no check of the state before or after the await: the rule is
-declared on `build`.
+Without the bridges the same controller is the Solo answer of
+[Removing selected pending work](vs-bloc.md#removing-selected-pending-work).
 
 ## Finishing an in-flight write before restarting
 
@@ -964,18 +638,23 @@ before it starts and writes nothing, and both replaced uploads end
 `Cancelled(replaced)`.
 
 What stays with bloc: no lock, no check of `emit.isDone` and no
-`restartable()`: the replacement is the policy of `flash`.
+`restartable()`: the replacement is the policy of `flash`. Without the bridges
+the same controller is the Solo answer of
+[Finishing an in-flight write before restarting](vs-bloc.md#finishing-an-in-flight-write-before-restarting).
 
 ## Where bloc keeps its answer
 
 The other scenarios of [solo and bloc, side by side](vs-bloc.md) get no section
-here: in each, a controller under the bloc leaves the code of the bloc as much
-to do.
+here. In each, bloc alone answers in a few lines of its own, and a controller
+under the bloc takes off less than the bridges add.
 
 | Scenario | What stays with bloc |
 | --- | --- |
+| [Ordering updates to shared state](vs-bloc.md#ordering-updates-to-shared-state) | one registration with `sequential()` for the events that update one state: the queue of bloc starts the refresh once the upload has ended |
 | [An observer fails during a state update](vs-bloc.md#an-observer-fails-during-a-state-update) | the guard inside the observer: the observer is bloc's, and the states of a controller reach it through the same `emit` |
+| [Closing and cancelling in-flight work](vs-bloc.md#closing-and-cancelling-in-flight-work) | a check of `isClosed` before the call as well as after it: `close()` waits for the call in flight alone, the queued message is not sent, and no reply is published or reported read |
 | [Leaving a loading state when the work is cancelled](vs-bloc.md#leaving-a-loading-state-when-the-work-is-cancelled) | the reset from the handler of `CancelRefresh`: a controller that restarts the refresh resets the state between two starts as well, and the screen shows `Initial` for a moment |
 | [Typed methods with queued execution](vs-bloc.md#typed-methods-with-queued-execution) | function events and methods that return `void`: `add` returns nothing, and the `Job` of the controller stays in the handler |
 | [Awaiting a particular request](vs-bloc.md#awaiting-a-particular-request) | the completer on the event: the caller cannot wait for a `Job` that `add` does not return |
+| [Reacting to an independent external state change](vs-bloc.md#reacting-to-an-independent-external-state-change) | the revocation as an event with a registration of its own, and a check of the state on both sides of the await of the build |
 | [Releasing a resource returned after cancellation](vs-bloc.md#releasing-a-resource-returned-after-cancellation) | the `try`/`finally` around the buffer: a controller declares the release as `dispose` where the buffer is acquired, and the trace is the same |

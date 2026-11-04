@@ -45,10 +45,11 @@ ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/bloc-pages-check'
 SOLO = os.path.join(REPO, 'packages', 'solo', 'doc', 'bloc.md')
 VS_BLOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'vs-bloc.md')
 
-# The versions the pages name, resolved at their newest on the SDK of the
+# The versions the page names, resolved at their newest on the SDK of the
 # job: bloc 9.2.1 is the first whose `isClosed` is true while close() runs
-# the queue out, and the closing section stands on it. async_job is an
-# override, since solo from the tree asks for a released one.
+# the queue out, and the closing row of the table of the page stands on
+# it. async_job is an override, since solo from the tree asks for a
+# released one.
 PUBSPEC = """name: bloc_pages_check
 publish_to: none
 
@@ -121,40 +122,6 @@ Future<void> guarded(Future<void> Function() body) {
 }
 '''
 
-# The chat of the closing section, the API of tool/doc_snippets.py with
-# its delay named: a message takes `sendMs` to answer. `offline` makes
-# every call fail when its time is up.
-CHAT_API = '''
-const sendMs = 50;
-
-class Api {
-  Api({this.offline = false});
-
-  final bool offline;
-
-  /// Reads reported to the server. A reply the user never saw must not be
-  /// one of them.
-  int reads = 0;
-
-  /// Messages the server was asked to deliver, and the ones it answered.
-  final sent = <String>[];
-  final answered = <String>[];
-
-  Future<String> send(String text) async {
-    sent.add(text);
-    await delay(sendMs);
-    if (offline) throw StateError('send: offline');
-    answered.add(text);
-    return 'reply to $text';
-  }
-
-  Future<void> markRead() async {
-    reads++;
-    await delay(10);
-  }
-}
-'''
-
 # The `main` of every driver; the driver itself is `scenario`. The runner of
 # tool/adapter_snippets.py, which says why the clock is elapsed from outside
 # the fake zone, with `nowMs()` of tool/doc_snippets.py over it.
@@ -201,82 +168,6 @@ Future<void> main() async {
 FILES = {}
 
 # ------------------------------------------------- fakes of the sections
-CLOSING = 'closing-and-cancelling-in-flig'
-
-# "hi" in flight, "bye" queued, close() 10 ms in. One line, the same shape
-# for both answers: how long close() took, what the server was asked to
-# send, the reply published and the reads reported. States published after
-# close() began are counted apart.
-CHAT_SCENARIO = '''
-const closeAtMs = 10;
-
-Future<void> scenario() async {
-  final api = Api();
-  final afterClose = <ChatState>[];
-  var closing = false;
-  await guarded(() async {
-    final bloc = chatBloc(api);
-    final states = bloc.stream.listen((state) {
-      if (closing) afterClose.add(state);
-    });
-    bloc
-      ..add(const SendMessage('hi'))
-      ..add(const SendMessage('bye'));
-    await delay(closeAtMs);
-    closing = true;
-    final started = nowMs();
-    await bloc.close();
-    tookMs = nowMs() - started;
-    await delay(2 * sendMs);
-    await states.cancel();
-    print('$name: close took ${tookMs}ms, sent ${api.sent}, '
-        'reply ${bloc.state.reply}, reads ${api.reads}');
-  });
-  require(zone.isEmpty, '$name: nothing may reach the zone: $zone');
-  check(api, afterClose);
-}
-
-late int tookMs;
-
-/// What the guard of bloc alone keeps: the queued message is still sent,
-/// and no reply reaches the state or the server.
-void requireGuarded(Api api, List<ChatState> afterClose) {
-  require('${api.sent}' == '[hi, bye]',
-      '$name: the queued message must still be sent');
-  require(afterClose.isEmpty,
-      '$name: no state may follow close(): $afterClose');
-  require(api.reads == 0, '$name: no read may be reported');
-}
-'''
-
-# The bloc of a driver from its api.
-CHAT_BLOC = 'ChatBloc chatBloc(Api api) => ChatBloc(api);\n'
-
-# close() waits for the call in flight and then for the queued one.
-CHAT_ALONE = '''
-const name = 'with bloc alone';
-
-void check(Api api, List<ChatState> afterClose) {
-  requireGuarded(api, afterClose);
-  require(tookMs == sendMs - closeAtMs + sendMs,
-      'bloc alone: close must wait for both calls');
-}
-'''
-
-# A call that fails: it reaches the zone.
-FAILING = '''
-Future<void> scenario() async {
-  await guarded(() async {
-    final bloc = ChatBloc(Api(offline: true))..add(const SendMessage('hi'));
-    await delay(2 * sendMs);
-    print('$name, the call fails: the zone $zone, reply ${bloc.state.reply}');
-    await bloc.close();
-  });
-  require('$zone' == '[Bad state: send: offline]',
-      '$name: the failure must reach the zone');
-}
-'''
-
 # The device of tool/doc_snippets.py, its write of 20 ms, with the wire
 # counted: how many writes are in flight at once, and at most.
 FIRMWARE = '''
@@ -367,8 +258,6 @@ Future<void> scenario() async {
 
 # ============================================================= solo page
 SOLO_BRIDGES = 'the-bridges'
-SOLO_ALONE = f'{CLOSING}/with-bloc-alone'
-SOLO_UNDER = f'{CLOSING}/with-a-controller-under-the-bl'
 
 SOLO_HEAD = BLOC_HEAD.replace(
     "import 'package:fake_async/fake_async.dart';\n",
@@ -389,13 +278,7 @@ assert 'Future<void> follow<S extends Object>(' in SOLO_BRIDGE_FUNCTIONS
 SOLO_HEAD += SOLO_BRIDGE_FUNCTIONS
 SOLO_PLAIN_HEAD += SOLO_BRIDGE_FUNCTIONS
 
-# The controller of the closing section is the one of vs-bloc.md: a reader
-# who comes from there knows the code.
-SOLO_CHAT = solo[f'{SOLO_UNDER}/ChatController']
 vs_bloc = doc_blocks.subsection_blocks(open(VS_BLOC).read())
-assert SOLO_CHAT.rstrip('\n') in vs_bloc[
-    'closing-and-cancelling-in-flig/solo/ChatController'], (
-    'the ChatController of the bloc page is not the one of vs-bloc.md')
 
 # ------------------------------------------------------------ the bridges
 # The controller counts to 2, is reset twice -- the second reset publishes
@@ -483,99 +366,154 @@ Future<void> scenario() async {
 }
 ''' + RUNNER)
 
-# ---------------------------------------------------------------- closing
-SOLO_EVENTS = solo[f'{CLOSING}/ChatEvent']
-assert SOLO_EVENTS is solo[f'{CLOSING}/ChatState']
-
-FILES['solo_closing_bloc'] = (
-    BLOC_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + solo[f'{SOLO_ALONE}/ChatBloc']
-    + CHAT_BLOC + CHAT_ALONE + CHAT_SCENARIO + RUNNER)
-
-SOLO_CHAT_BLOC = solo[f'{SOLO_UNDER}/ChatBloc']
-CONTROLLER_BLOC = (
-    'ChatBloc chatBloc(Api api) => ChatBloc(StreamedChat(api));\n')
-
-# The controller closed first: "hi" is cancelled at ctx.abandonable, and
-# "bye", held by sequential(), reaches a closed controller and ends with no
-# call.
-FILES['solo_closing_controller'] = (
-    SOLO_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT + SOLO_CHAT_BLOC
-    + CONTROLLER_BLOC + '''
-const name = 'with a controller';
-
-void check(Api api, List<ChatState> afterClose) {
-  require('${api.sent}' == '[hi]', '$name: "bye" must not be sent');
-  require(afterClose.isEmpty,
-      '$name: no state may follow close(): $afterClose');
-  require(api.reads == 0, '$name: no read may be reported');
-  require(tookMs == 0, '$name: close must not wait for the call');
+# A job that fails: `settle` throws the Failed outcome again, and it goes
+# to the zone as any error of a handler.
+FILES['solo_bridge_failed'] = (
+    SOLO_PLAIN_HEAD + HELPERS + solo[f'{SOLO_BRIDGES}/Counter']
+    + solo[f'{SOLO_BRIDGES}/CounterBloc'] + '''
+final class BrokenCounter extends Counter {
+  @override
+  Job<void> countTo(int target) => enqueue<int, void>((ctx) async {
+    throw StateError('count: broken');
+  });
 }
-''' + CHAT_SCENARIO + RUNNER)
 
-# The other order: super.close() first runs the queue of sequential()
-# through an open controller, and both replies are published and read.
-CLOSE_ORDER = '''    await _chat.close();
+Future<void> scenario() async {
+  await guarded(() async {
+    final bloc = CounterBloc(BrokenCounter())..add(const CountTo(1));
+    await delay(20);
+    await bloc.close();
+  });
+  print('a job that fails: the zone $zone');
+  require('$zone' == '[Bad state: count: broken]',
+      'the failure of the job must reach the zone: $zone');
+}
+''' + RUNNER)
+
+# A handler that emits by itself parts the bloc from the controller until
+# the next state of the controller; the observer sees every state of the
+# controller on _Started.
+FILES['solo_bridge_emit'] = (
+    SOLO_PLAIN_HEAD + HELPERS + solo[f'{SOLO_BRIDGES}/Counter']
+    + solo[f'{SOLO_BRIDGES}/CounterBloc'] + '''
+final class Clear extends CounterEvent {
+  const Clear();
+}
+
+class ClearingBloc extends CounterBloc {
+  ClearingBloc(super.counter) {
+    on<Clear>((e, emit) => emit(0));
+  }
+}
+
+String nameOf(Object? event) => switch (event) {
+  Clear() => 'Clear',
+  CountTo() => 'CountTo',
+  Reset() => 'Reset',
+  _Started() => '_Started',
+  _ => '$event',
+};
+
+final class Transitions extends BlocObserver {
+  final seen = <String>[];
+
+  @override
+  void onTransition(
+    Bloc<dynamic, dynamic> bloc,
+    Transition<dynamic, dynamic> transition,
+  ) {
+    super.onTransition(bloc, transition);
+    seen.add('${nameOf(transition.event)}: '
+        '${transition.currentState}->${transition.nextState}');
+  }
+}
+
+Future<void> scenario() async {
+  final transitions = Transitions();
+  Bloc.observer = transitions;
+  late String cleared;
+  late String counted;
+  await guarded(() async {
+    final counter = Counter();
+    final bloc = ClearingBloc(counter)..add(const CountTo(2));
+    await delay(30);
+    bloc.add(const Clear());
+    await delay(5);
+    cleared = 'bloc.state ${bloc.state}, controller ${counter.currentState}';
+    bloc.add(const CountTo(3));
+    await delay(30);
+    counted = 'bloc.state ${bloc.state}, controller ${counter.currentState}';
+    await bloc.close();
+  });
+  print('after Clear: $cleared');
+  print('after CountTo(3): $counted');
+  print('transitions: ${transitions.seen}');
+  require(cleared == 'bloc.state 0, controller 2',
+      'the handler of Clear must part the bloc from the controller: $cleared');
+  require(counted == 'bloc.state 3, controller 3',
+      'the next state of the controller must replace it: $counted');
+  require('${transitions.seen}' ==
+      '[_Started: 0->1, _Started: 1->2, Clear: 2->0, _Started: 0->3]',
+      'every state of the controller comes on _Started: ${transitions.seen}');
+  require(zone.isEmpty, 'nothing may reach the zone: $zone');
+}
+''' + RUNNER)
+
+# `seed` of blocTest emits into the bloc right after `build`
+# (bloc_test-10.0.0/lib/src/bloc_test.dart:202), and follow replaces it.
+FILES['solo_bridge_seed'] = (
+    SOLO_PLAIN_HEAD + HELPERS + solo[f'{SOLO_BRIDGES}/Counter']
+    + solo[f'{SOLO_BRIDGES}/CounterBloc'] + '''
+Future<void> scenario() async {
+  late String seeded;
+  await guarded(() async {
+    final counter = Counter();
+    // What blocTest does with `seed: () => 9`.
+    final bloc = CounterBloc(counter)
+      // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+      ..emit(9);
+    await delay(5);
+    seeded = 'bloc.state ${bloc.state}, controller ${counter.currentState}';
+    await bloc.close();
+  });
+  print('seeded 9: $seeded');
+  require(seeded == 'bloc.state 0, controller 0',
+      'follow must replace the seed with the state of the controller');
+  require(zone.isEmpty, 'nothing may reach the zone: $zone');
+}
+''' + RUNNER)
+
+# A bloc without the override of close() leaves the controller open, and
+# the count goes on.
+CLOSE_OVERRIDE = '''
+  @override
+  Future<void> close() async {
+    await _counter.close();
     return super.close();
+  }
 '''
-assert SOLO_CHAT_BLOC.count(CLOSE_ORDER) == 1, 'the close of the page moved'
-FILES['solo_closing_bloc_first'] = (
-    SOLO_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT
-    + SOLO_CHAT_BLOC.replace(CLOSE_ORDER, '''    await super.close();
-    return _chat.close();
-''') + CONTROLLER_BLOC + '''
-const name = 'with super.close() first';
-
-void check(Api api, List<ChatState> afterClose) {
-  require('${api.sent}' == '[hi, bye]',
-      '$name: the queue of bloc must run through the controller');
-  require(afterClose.length == 2,
-      '$name: both replies must be published: $afterClose');
+assert solo[f'{SOLO_BRIDGES}/CounterBloc'].count(CLOSE_OVERRIDE) == 1
+FILES['solo_bridge_unclosed'] = (
+    SOLO_PLAIN_HEAD + HELPERS + solo[f'{SOLO_BRIDGES}/Counter']
+    + solo[f'{SOLO_BRIDGES}/CounterBloc'].replace(CLOSE_OVERRIDE, '') + '''
+Future<void> scenario() async {
+  late String after;
+  await guarded(() async {
+    final counter = Counter();
+    final bloc = CounterBloc(counter)..add(const CountTo(5));
+    await delay(15);
+    await bloc.close();
+    await delay(60);
+    after = 'controller ${counter.currentState}, '
+        'counter.isClosed ${counter.isClosed}';
+    await counter.close();
+  });
+  print('closed without its controller, 60 ms later: $after');
+  require(after == 'controller 5, counter.isClosed false',
+      'the count must go on after the bloc is closed: $after');
+  require(zone.isEmpty, 'nothing may reach the zone: $zone');
 }
-''' + CHAT_SCENARIO + RUNNER)
-
-# A call that fails: `settle` throws the Failed outcome again, and it
-# reaches the zone as the failure of bloc alone does.
-FILES['solo_closing_controller_failed'] = (
-    SOLO_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT + SOLO_CHAT_BLOC
-    + CONTROLLER_BLOC + "\nconst name = 'with a controller';\n"
-    + FAILING.replace('ChatBloc(Api(offline: true))',
-                      'chatBloc(Api(offline: true))')
-    + RUNNER)
-assert 'chatBloc(Api(offline: true))' in FILES[
-    'solo_closing_controller_failed']
-
-# Without sequential() the queue of the controller holds the order of the
-# messages, and the order of close() decides nothing: both orders send
-# "hi" alone.
-SEQUENTIAL_SEND = '''    on<SendMessage>(
-      (e, emit) => settle(_chat.send(e.text)),
-      transformer: sequential(),
-    );
-'''
-assert SOLO_CHAT_BLOC.count(SEQUENTIAL_SEND) == 1, 'the send of the page moved'
-DEFAULT_CHAT_BLOC = SOLO_CHAT_BLOC.replace(
-    SEQUENTIAL_SEND,
-    '    on<SendMessage>((e, emit) => settle(_chat.send(e.text)));\n')
-DEFAULT_CHECK = '''
-void check(Api api, List<ChatState> afterClose) {
-  require('${api.sent}' == '[hi]', '$name: "bye" must not be sent');
-  require(afterClose.isEmpty,
-      '$name: no state may follow close(): $afterClose');
-  require(api.reads == 0, '$name: no read may be reported');
-}
-'''
-FILES['solo_closing_default'] = (
-    SOLO_PLAIN_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT
-    + DEFAULT_CHAT_BLOC + CONTROLLER_BLOC
-    + "\nconst name = 'the default registration';\n" + DEFAULT_CHECK
-    + CHAT_SCENARIO + RUNNER)
-FILES['solo_closing_default_bloc_first'] = (
-    SOLO_PLAIN_HEAD + HELPERS + CHAT_API + SOLO_EVENTS + SOLO_CHAT
-    + DEFAULT_CHAT_BLOC.replace(CLOSE_ORDER, '''    await super.close();
-    return _chat.close();
-''') + CONTROLLER_BLOC
-    + "\nconst name = 'the default registration, super.close() first';\n"
-    + DEFAULT_CHECK + CHAT_SCENARIO + RUNNER)
+''' + RUNNER)
 
 # The rest of the solo page takes the Bloc answer and the controller of a
 # section of vs-bloc.md as they are there, and the generator holds them to
@@ -614,105 +552,6 @@ List<String> callsOf(List<String> trace) => [
     if (entry.endsWith(' start')) entry.substring(0, entry.length - 6),
 ];
 '''
-
-# --------------------------------------------------------------- ordering
-ORDERING = section('Ordering updates to shared state')
-
-# The upload takes 40 ms and the list 60; the list is read when the call
-# starts, so an answer in flight is what the server held then.
-NOTES = '''
-class Note {
-  Note(this.id);
-
-  final String id;
-
-  @override
-  String toString() => id;
-}
-
-class Api {
-  final _server = <Note>[Note('n0')];
-
-  /// What each call of [list] read, as it read it.
-  final reads = <List<Note>>[];
-
-  Future<void> upload(Note note) async {
-    await delay(40);
-    _server.add(note);
-  }
-
-  Future<List<Note>> list() async {
-    final snapshot = List<Note>.of(_server);
-    reads.add(snapshot);
-    await delay(60);
-    return snapshot;
-  }
-}
-
-sealed class NotesEvent {}
-
-class UploadNote extends NotesEvent {
-  UploadNote(this.note);
-
-  final Note note;
-}
-
-class RefreshList extends NotesEvent {}
-
-final class NotesState {
-  const NotesState({this.notes = const [], this.uploading = false});
-
-  final List<Note> notes;
-  final bool uploading;
-
-  NotesState copyWith({List<Note>? notes, bool? uploading}) => NotesState(
-    notes: notes ?? this.notes,
-    uploading: uploading ?? this.uploading,
-  );
-
-  @override
-  String toString() => 'NotesState($notes, uploading: $uploading)';
-}
-'''
-
-# The screen adds an upload and a refresh one right after the other.
-NOTING = '''
-Future<void> scenario() async {
-  final api = Api();
-  await guarded(() async {
-    final bloc = notesBloc(api)
-      ..add(UploadNote(Note('n1')))
-      ..add(RefreshList());
-    await delay(300);
-    print('$name: the list read ${api.reads.single}, ${bloc.state}');
-    require('${api.reads}' == '[[n0, n1]]',
-        '$name: the list must be read after the upload');
-    require('${bloc.state}' == 'NotesState([n0, n1], uploading: false)',
-        '$name: the note must stay');
-    await bloc.close();
-  });
-  require(zone.isEmpty, '$name: nothing may reach the zone: $zone');
-}
-'''
-
-FILES['solo_ordering_bloc'] = (
-    BLOC_HEAD + HELPERS + NOTES
-    + from_vs_bloc(f'{ORDERING}/{ALONE_SUB}/NotesBloc', ORDERING, 'bloc')
-    + '''
-const name = 'with bloc alone';
-
-NotesBloc notesBloc(Api api) => NotesBloc(api);
-''' + NOTING + RUNNER)
-
-FILES['solo_ordering_controller'] = (
-    SOLO_PLAIN_HEAD + HELPERS + NOTES
-    + from_vs_bloc(f'{ORDERING}/{UNDER_SUB}/NotesController', ORDERING,
-                   'solo')
-    + solo[f'{ORDERING}/{UNDER_SUB}/NotesBloc'] + '''
-const name = 'with a controller';
-
-NotesBloc notesBloc(Api api) => NotesBloc(StreamedNotes(api));
-''' + NOTING + RUNNER)
 
 # ------------------------------------------------------------- restarting
 RESTARTING = section('Restarting one operation within a shared queue')
@@ -840,6 +679,30 @@ const name = 'with bloc alone';
 /// The newest position is compared by value, and a drag that comes back
 /// lets the first seek to 1 through.
 const drags = ['[play, seek 3, pause]', '[play, seek 1, seek 1, pause]'];
+
+PlayerBloc playerBloc() => PlayerBloc(Player());
+
+void requireFollowed(PlayerBloc bloc) {}
+''' + SEEKING + RUNNER)
+
+# The bloc of bloc alone that keeps the newest Seek itself and compares it
+# with identical: a drag that comes back to 1 seeks to 1 once.
+PLAYER_BLOC = from_vs_bloc(f'{RESTARTING}/{ALONE_SUB}/PlayerBloc', RESTARTING,
+                           'bloc')
+KEPT_EVENT = PLAYER_BLOC
+for old, new in [
+    ('  Duration? _newestSeek;\n', '  Seek? _newestSeek;\n'),
+    ('          if (position != _newestSeek) return;\n',
+     '          if (!identical(command, _newestSeek)) return;\n'),
+    ('      _newestSeek = event.position;\n', '      _newestSeek = event;\n'),
+]:
+    assert KEPT_EVENT.count(old) == 1, old
+    KEPT_EVENT = KEPT_EVENT.replace(old, new)
+FILES['solo_restarting_bloc_identical'] = (
+    BLOC_HEAD + HELPERS + PLAYER + BLOC_PLAYER_STATE + KEPT_EVENT + '''
+const name = 'with bloc alone, the newest Seek kept';
+
+const drags = ['[play, seek 3, pause]', '[play, seek 1, pause]'];
 
 PlayerBloc playerBloc() => PlayerBloc(Player());
 
@@ -1013,6 +876,31 @@ DeviceBloc deviceBloc(Ble ble) => DeviceBloc(ble);
 void requireFollowed(DeviceBloc bloc) {}
 ''' + LEAVING + RUNNER)
 
+# A check of state.online before the read turns away the read behind the
+# disconnect; the shared const read still reaches the device.
+STAMP_CHECK = '          if (_stampOf[e] != _screen) return;\n'
+DEVICE_BLOC = solo[f'{REMOVING}/{ALONE_SUB}/DeviceBloc']
+assert DEVICE_BLOC.count(STAMP_CHECK) == 1
+FILES['solo_removing_bloc_online'] = (
+    BLOC_HEAD + HELPERS + DEVICE + BLOC_DEVICE_STATE
+    + DEVICE_BLOC.replace(
+        STAMP_CHECK,
+        '          if (_stampOf[e] != _screen || !state.online) return;\n')
+    + '''
+const name = 'with bloc alone and a check of state.online';
+
+const expected = {
+  'leaving': '[connect, rename kitchen, disconnect]',
+  'a shared const read':
+      '[connect, battery, rename kitchen, disconnect, connect, battery]',
+  'a read after disconnect': '[connect, disconnect], the zone []',
+};
+
+DeviceBloc deviceBloc(Ble ble) => DeviceBloc(ble);
+
+void requireFollowed(DeviceBloc bloc) {}
+''' + LEAVING + RUNNER)
+
 # The bridges of the answer share its block with the bloc, and the first
 # attempt is built on them.
 DEVICE_CONTROLLER = (
@@ -1067,189 +955,6 @@ void requireFollowed(Bloc<DeviceEvent, DeviceState> bloc) => require(
     bloc.state == controller.currentState,
     '$name: the bloc must follow the controller: ${bloc.state}');
 ''' + LEAVING + RUNNER)
-
-# ---------------------------------------------------------------- external
-EXTERNAL = section('Reacting to an independent external state change')
-
-# A build takes 50 ms from data on the device; a revoked session cannot
-# stop it.
-REPORTS = '''
-class Range {
-  const Range(this.days);
-
-  final int days;
-}
-
-class Report {
-  const Report(this.days);
-
-  final int days;
-
-  @override
-  String toString() => 'Report($days days)';
-}
-
-class Reports {
-  int built = 0;
-
-  Future<Report> build(Range range) async {
-    await delay(50);
-    built++;
-    return Report(range.days);
-  }
-}
-
-class Auth {
-  void Function(String reason)? onRevoked;
-
-  void revoke(String reason) => onRevoked?.call(reason);
-}
-
-sealed class ReportEvent {}
-
-class BuildReport extends ReportEvent {
-  BuildReport(this.range);
-
-  final Range range;
-}
-
-class SessionRevoked extends ReportEvent {
-  SessionRevoked(this.reason);
-
-  final String reason;
-}
-'''
-
-BLOC_REPORT_STATE = '''
-sealed class ReportState {}
-
-class SignedIn extends ReportState {
-  @override
-  String toString() => 'SignedIn';
-}
-
-class Ready extends ReportState {
-  Ready(this.report);
-
-  final Report report;
-
-  @override
-  String toString() => 'Ready($report)';
-}
-
-class SignedOut extends ReportState {
-  SignedOut(this.reason);
-
-  final String reason;
-
-  @override
-  String toString() => 'SignedOut($reason)';
-}
-'''
-
-SOLO_REPORT_STATE = '''
-sealed class ReportState {
-  const ReportState();
-}
-
-final class SignedIn extends ReportState {
-  const SignedIn();
-
-  @override
-  String toString() => 'SignedIn';
-}
-
-final class Ready extends ReportState {
-  const Ready(this.report);
-
-  final Report report;
-
-  @override
-  String toString() => 'Ready($report)';
-}
-
-final class SignedOut extends ReportState {
-  const SignedOut(this.reason);
-
-  final String reason;
-
-  @override
-  String toString() => 'SignedOut($reason)';
-}
-'''
-
-# Two builds asked for; the session is revoked 20 ms into the first.
-REVOKING = '''
-Future<void> scenario() async {
-  final reports = Reports();
-  final auth = Auth();
-  final states = <ReportState>[];
-  await guarded(() async {
-    final bloc = reportBloc(reports, auth);
-    final listening = bloc.stream.listen(states.add);
-    bloc
-      ..add(BuildReport(const Range(30)))
-      ..add(BuildReport(const Range(30)));
-    await delay(20);
-    auth.revoke('signed out elsewhere');
-    await delay(200);
-    await checkJobs();
-    await listening.cancel();
-    await bloc.close();
-  });
-  print('$name: states $states, built ${reports.built}, the zone $zone');
-  require('$states' == '[SignedOut(signed out elsewhere)]',
-      '$name: no report may follow the revocation: $states');
-  require(reports.built == 1, '$name: the second build must not run');
-  require(zone.isEmpty, '$name: nothing may reach the zone: $zone');
-}
-'''
-
-FILES['solo_external_bloc'] = (
-    BLOC_HEAD + HELPERS + REPORTS + BLOC_REPORT_STATE
-    + from_vs_bloc(f'{EXTERNAL}/{ALONE_SUB}/ReportBloc', EXTERNAL, 'bloc')
-    + '''
-const name = 'with bloc alone';
-
-ReportBloc reportBloc(Reports reports, Auth auth) => ReportBloc(reports, auth);
-
-Future<void> checkJobs() async {}
-''' + REVOKING + RUNNER)
-
-FILES['solo_external_controller'] = (
-    SOLO_PLAIN_HEAD + HELPERS + REPORTS + SOLO_REPORT_STATE
-    + from_vs_bloc(f'{EXTERNAL}/{UNDER_SUB}/ReportController', EXTERNAL,
-                   'solo')
-    + solo[f'{EXTERNAL}/{UNDER_SUB}/ReportBloc'] + '''
-const name = 'with a controller';
-
-/// The jobs the handlers of the bloc wait for.
-final jobs = <Job<void>>[];
-
-final class RecordedReport extends ReportController {
-  RecordedReport(super.reports, super.auth);
-
-  @override
-  Job<void> build(Range range) {
-    final job = super.build(range);
-    jobs.add(job);
-    return job;
-  }
-}
-
-ReportBloc reportBloc(Reports reports, Auth auth) =>
-    ReportBloc(RecordedReport(reports, auth));
-
-/// Both builds end Cancelled by the rule of the controller.
-Future<void> checkJobs() async {
-  require(jobs.length == 2, '$name: both builds must reach the controller');
-  for (final job in jobs) {
-    final outcome = await job.done;
-    require('$outcome' == 'Cancelled(rules: is not SignedIn)',
-        '$name: a build must end by the rule: $outcome');
-  }
-}
-''' + REVOKING + RUNNER)
 
 # ------------------------------------------------------------------ write
 WRITE = section('Finishing an in-flight write before restarting')

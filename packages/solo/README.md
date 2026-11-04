@@ -327,7 +327,7 @@ from bloc, solo under riverpod and solo under bloc for one who stays on either.
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
 | [solo and bloc, side by side](doc/vs-bloc.md) | Eleven scenarios in both packages |
 | [solo under riverpod](doc/riverpod.md) | A controller under a provider: the bridge, a camera closed when the screen goes, a form sent once |
-| [solo under bloc](doc/bloc.md) | A controller under a bloc: the bridges, six requirements where the controller leaves the bloc less to do |
+| [solo under bloc](doc/bloc.md) | A controller under a bloc: the bridges and what they cost, three requirements where the controller takes a workaround off the bloc |
 
 ## Recipes
 

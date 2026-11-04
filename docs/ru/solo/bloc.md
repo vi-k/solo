@@ -1,24 +1,25 @@
 # solo под bloc
 
-Bloc может отдать свою работу контроллеру `solo` и оставить себе всё остальное
-от bloc: события, трансформеры, состояние, которое читает экран. Каждый раздел
-ниже берёт одно требование приложения на bloc 9.2.1 с `bloc_concurrency`,
-показывает ответ одного bloc, затем тот же bloc с контроллером под ним
-и говорит, что контроллер снимает с кода и что остаётся на bloc. Контроллеры —
-из разделов Solo страницы [«solo и bloc рядом»](vs-bloc.md), где каждый из них
-стоит без bloc. Код идёт на чистом Dart, а состояния и трассы под ним — то, что
-этот код печатает.
+Bloc может отдать свою работу контроллеру `solo` и оставить себе события
+и состояние, которое читает экран; регистрации возвращаются к тем, что bloc
+даёт по умолчанию. Каждый раздел ниже берёт одно требование приложения на bloc
+9.2.1 с `bloc_concurrency`, показывает ответ одного bloc, затем тот же bloc
+с контроллером под ним и говорит, что контроллер снимает с кода и что остаётся
+на bloc. Контроллеры — из разделов Solo страницы
+[«solo и bloc рядом»](vs-bloc.md), где каждый из них стоит без bloc. Код идёт
+на чистом Dart, а состояния и трассы под ним — то, что этот код печатает.
 
-Разделы берут шесть требований, в которых контроллер под bloc оставляет коду
-меньше работы. У одного bloc событиям, которые обновляют одно состояние, нужна
-одна регистрация с `sequential()`, `close()` при `sequential()` ждёт идущий
-вызов и отправляет каждое сообщение из очереди, а перетаскивание, которое
-вернулось к позиции, перематывает на неё дважды. Чтение батареи ушедшего экрана
-доходит до устройства, а чтение за отключением падает; отзыв сессии требует
-своего события и проверки состояния по обе стороны от `await`; а загрузки
-прошивки берут общую для обработчиков блокировку, чтобы замена не писала, пока
-идёт запись, которую она заменяет. Сценарии, где ответ остаётся за bloc,
-собраны в разделе [«Где ответ остаётся за bloc»](#где-ответ-остаётся-за-bloc).
+Контроллер стоит каждому bloc нескольких строк и приносит свои правила; их
+называет раздел [«Мосты»](#мосты). Разделы берут три требования, в которых
+одному bloc нужен обходной приём. Во время перетаскивания новая перемотка
+останавливает идущую, и один bloc держит в полях самую новую перемотку и токен
+идущей и останавливает её из `onEvent`. Отключение снимает ожидающие чтения
+батареи, и один bloc метит каждое событие экраном, для которого его добавили.
+Загрузка прошивки, которая заменяет другую, должна дождаться идущей записи,
+и один bloc берёт блокировку, общую для всех обработчиков, которые пишут
+в устройство. Приложение с одной такой проблемой лучше оставить на одном bloc.
+Сценарии, где ответ остаётся за bloc, собраны в разделе
+[«Где ответ остаётся за bloc»](#где-ответ-остаётся-за-bloc).
 
 ## Мосты
 
@@ -109,8 +110,8 @@ class CounterBloc extends Bloc<CounterEvent, int> {
 `Counter` подмешивает `SoloStream` там, где объявлен. Разделы ниже берут
 контроллеры страницы «рядом», объявленные без примеси, и добавляют её в своём
 классе, например
-`final class StreamedNotes = NotesController with SoloStream<NotesState>;`. Эти
-контроллеры — финальные классы, поэтому такой класс собирается только
+`final class StreamedDevice = DeviceController with SoloStream<DeviceState>;`.
+Эти контроллеры — финальные классы, поэтому такой класс собирается только
 в библиотеке контроллера. `_Started` расширяет запечатанное семейство событий,
 как `CounterEvent`, и объявляется в библиотеке семейства.
 
@@ -139,261 +140,36 @@ Bloc публикует каждое состояние контроллера, 
 даже если контроллер сменил его после того, как конструктор bloc прочёл
 `currentState`. `close()` bloc закрывает контроллер, и контроллер отменяет счёт
 на `ctx.pause`. Закрытый контроллер закрывает свой стрим, и вместе с ним
-заканчивается `emit.forEach`. Bloc этой страницы закрывают контроллер первым;
-где порядок важен, разобрано в разделе
-[«Закрытие и отмена начатой работы»](#закрытие-и-отмена-начатой-работы).
+заканчивается `emit.forEach`.
 
 `_counter.stream.listen(emit)` в конструкторе было бы короче, но `emit`
 у bloc — для самого bloc и тестов, и анализатор сообщает о таком вызове как
 о `invalid_use_of_visible_for_testing_member`.
 
-## Порядок обновлений общего состояния
+Каждый bloc платит за мосты: класс, который добавляет `SoloStream` к его
+контроллеру, событие `_Started` с его регистрацией и его `add`
+и переопределённый `close()`; `follow` и `settle` пишутся один раз
+на приложение. С ними приходят правила выше и ещё три.
 
-Пользователь отправляет заметку и обновляет список. Обновление, которое
-началось до конца отправки, читает старый список, и его публикация после
-отправки удаляет новую заметку. Отправка идёт 40 мс, список читается в начале
-вызова и возвращается через 60 мс, а экран добавляет отправку и обновление одно
-за другим. События и состояние — из раздела
-[«Порядок обновлений общего состояния»](vs-bloc.md#порядок-обновлений-общего-состояния).
+Состоянием владеет контроллер, а bloc публикует его копию. Обработчик, который
+сам зовёт `emit`, разводит bloc с контроллером, пока следующее состояние
+контроллера не заменит опубликованное. `BlocObserver` видит каждый переход
+на `_Started`, чей обработчик их все и публикует, а не на событии, которое
+попросило о работе. `seed` у `blocTest` делает `emit` в bloc, и `follow`
+заменяет его состоянием контроллера: тест начинает с того состояния, которое
+у его контроллера.
 
-### Только bloc
+`close()` bloc должен закрыть контроллер. Bloc, закрытый без этого, оставляет
+контроллер открытым, и задачи контроллера идут дальше: счёт продолжается после
+закрытия bloc.
 
-Оба события идут через одну регистрацию с `sequential()`:
-
-```dart
-class NotesBloc extends Bloc<NotesEvent, NotesState> {
-  final Api _api;
-
-  NotesBloc(this._api) : super(const NotesState()) {
-    on<NotesEvent>((e, emit) async {
-      switch (e) {
-        case UploadNote(:final note):
-          emit(state.copyWith(uploading: true));
-          await _api.upload(note);
-          emit(state.copyWith(notes: [...state.notes, note], uploading: false));
-        case RefreshList():
-          final serverNotes = await _api.list();
-          emit(state.copyWith(notes: serverNotes));
-      }
-    }, transformer: sequential());
-  }
-}
-```
-
-```text
-with bloc alone: the list read [n0, n1], NotesState([n0, n1], uploading: false)
-```
-
-Очередь bloc запускает обновление, когда отправка закончилась, и список
-читается после того, как сервер принял заметку. Порядок держит регистрация:
-события, которые обновляют одно состояние, делят её под `sequential()`.
-Со своей регистрацией у каждого события обновление идёт параллельно
-с отправкой, как показывает первая попытка того же раздела
-[«solo и bloc рядом»](vs-bloc.md#порядок-обновлений-общего-состояния).
-
-### Контроллер под bloc
-
-Вызовы уходят контроллеру того раздела:
-
-```dart
-final class NotesController extends Solo<NotesState> {
-  final Api _api;
-
-  NotesController(this._api) : super(const NotesState());
-
-  Job<void> upload(Note note) => enqueue<NotesState, void>(key: 'upload', (
-    ctx,
-  ) async {
-    ctx.emit(ctx.state.copyWith(uploading: true));
-    await ctx.join(() => _api.upload(note));
-    ctx.emit(
-      ctx.state.copyWith(notes: [...ctx.state.notes, note], uploading: false),
-    );
-  });
-
-  Job<void> refresh() => enqueue<NotesState, void>(key: 'refresh', (ctx) async {
-    final serverNotes = await ctx.abandonable(_api.list);
-    ctx.emit(ctx.state.copyWith(notes: serverNotes));
-  });
-}
-```
-
-Bloc берёт мосты из раздела [«Мосты»](#мосты), и каждое событие сохраняет
-регистрацию, которую bloc даёт по умолчанию:
-
-```dart
-final class StreamedNotes = NotesController with SoloStream<NotesState>;
-
-final class _Started extends NotesEvent {}
-
-class NotesBloc extends Bloc<NotesEvent, NotesState> {
-  NotesBloc(this._notes) : super(_notes.currentState) {
-    on<_Started>((e, emit) => follow(emit, state, _notes));
-    on<UploadNote>((e, emit) => settle(_notes.upload(e.note)));
-    on<RefreshList>((e, emit) => settle(_notes.refresh()));
-    add(_Started());
-  }
-
-  final StreamedNotes _notes;
-
-  @override
-  Future<void> close() async {
-    await _notes.close();
-    return super.close();
-  }
-}
-```
-
-```text
-with a controller: the list read [n0, n1], NotesState([n0, n1], uploading: false)
-```
-
-Два обработчика идут одновременно, а порядок держится: каждый отдаёт команду
-контроллеру, когда приходит его событие, и очередь контроллера запускает
-обновление, когда отправка закончилась.
-
-Что остаётся на bloc: никакого правила о регистрациях. Регистрация на каждое
-событие, код, к которому ведёт bloc, верна как есть: порядок — это порядок
-очереди контроллера.
-
-## Закрытие и отмена начатой работы
-
-Пользователь отправляет сообщение в чат и уходит с экрана до ответа. Старая
-операция не должна обновлять закрытый экран или отмечать ответ прочитанным:
-пользователь его не видел. API отвечает на сообщение за 50 мс; события
-и состояние:
-
-```dart
-sealed class ChatEvent {
-  const ChatEvent();
-}
-
-class SendMessage extends ChatEvent {
-  const SendMessage(this.text);
-  final String text;
-}
-
-class MarkReplyRead extends ChatEvent {
-  const MarkReplyRead();
-}
-
-class ChatState {
-  const ChatState([this.reply]);
-  final String? reply;
-  ChatState withReply(String reply) => ChatState(reply);
-}
-```
-
-В трассах ниже пользователь отправляет «hi» и «bye», и экран закрывает bloc
-через 10 мс: «hi» в полёте, «bye» ждёт в очереди.
-
-### Только bloc
-
-Последовательный обработчик проверяет закрытие после своего `await`:
-
-```dart
-class ChatBloc extends Bloc<ChatEvent, ChatState> {
-  final Api _api;
-
-  ChatBloc(this._api) : super(const ChatState()) {
-    on<SendMessage>((e, emit) async {
-      final reply = await _api.send(e.text);
-      if (isClosed) return;
-      emit(state.withReply(reply));
-      add(const MarkReplyRead());
-    }, transformer: sequential());
-    on<MarkReplyRead>((e, emit) => _api.markRead(), transformer: sequential());
-  }
-}
-```
-
-```text
-with bloc alone: close took 90ms, sent [hi, bye], reply null, reads 0
-```
-
-Проверка не пускает ответ в состояние, а прочтение — на сервер. Закрытие всё
-равно ждёт идущий вызов и затем прогоняет очередь: «bye» отправляется, пока
-идёт `close()`, и `close()` возвращается после его ответа, который проверка
-тоже отбрасывает.
-
-### Контроллер под bloc
-
-Вызовы уходят контроллеру раздела
-[«Закрытие и отмена начатой работы»](vs-bloc.md#закрытие-и-отмена-начатой-работы),
-и ответ и прочтение — его задачи:
-
-```dart
-final class ChatController extends Solo<ChatState> {
-  final Api _api;
-
-  ChatController(this._api) : super(const ChatState());
-
-  Job<void> send(String text) =>
-      enqueue<ChatState, void>(key: 'send', (ctx) async {
-        final reply = await ctx.abandonable(() => _api.send(text));
-        ctx.emit(ctx.state.withReply(reply));
-        markReplyRead();
-      });
-
-  Job<void> markReplyRead() =>
-      enqueue<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
-}
-```
-
-Bloc сохраняет свои события и свой `sequential()`, берёт стрим у контроллера
-с `SoloStream` и закрывает контроллер раньше себя:
-
-```dart
-final class StreamedChat = ChatController with SoloStream<ChatState>;
-
-final class _Started extends ChatEvent {
-  const _Started();
-}
-
-class ChatBloc extends Bloc<ChatEvent, ChatState> {
-  ChatBloc(this._chat) : super(_chat.currentState) {
-    on<_Started>((e, emit) => follow(emit, state, _chat));
-    on<SendMessage>(
-      (e, emit) => settle(_chat.send(e.text)),
-      transformer: sequential(),
-    );
-    add(const _Started());
-  }
-
-  final StreamedChat _chat;
-
-  @override
-  Future<void> close() async {
-    await _chat.close();
-    return super.close();
-  }
-}
-```
-
-```text
-with a controller: close took 0ms, sent [hi], reply null, reads 0
-```
-
-Закрытие контроллера отменяет «hi» на `ctx.abandonable`, до ответа и прочтения.
-`sequential()` всё равно запускает обработчик для «bye», и закрытый контроллер
-заканчивает его задачу `Cancelled(closed)` без вызова. Затем `super.close()`
-не находит, чего ждать.
-
-Держит это порядок. Если `super.close()` идёт первым, `sequential()` прогоняет
-свою очередь через контроллер, который ещё открыт, и требование теряется
-дважды: оба сообщения уходят в API, а оба ответа доходят до состояния
-закрывающегося bloc и отмечаются прочитанными.
-
-```text
-with super.close() first: close took 100ms, sent [hi, bye], reply reply to bye, reads 2
-```
-
-Что остаётся на bloc: порядок в `close()` — сначала контроллер, затем
-`super.close()`, — пока у регистрации остаётся `sequential()`. С регистрацией,
-которую bloc даёт по умолчанию, как в других разделах, порядок сообщений держит
-очередь контроллера, и при обоих порядках `close()` уходит одно «hi».
-Обработчик не проверяет `isClosed`: ответ и прочтение — задачи контроллера,
-а закрытый контроллер не выполняет ни то, ни другое.
+И каждое событие сохраняет регистрацию, которую bloc даёт ему по умолчанию.
+Трансформер вроде `sequential()` держит событие, пока не закончится обработчик
+перед ним, поэтому задача события доходит до контроллера только тогда,
+и в очереди контроллера, который заменяет и снимает задачи, их по одной. Первая
+попытка раздела
+[«Удаление выбранной ожидающей работы»](#удаление-выбранной-ожидающей-работы)
+оставляет `sequential()` и не находит, что снимать.
 
 ## Перезапуск одной операции в общей очереди
 
@@ -454,9 +230,12 @@ with bloc alone, seeks 1, 2, 1: [play, seek 1, seek 1, pause]
 with bloc alone, seek 3 15 ms after seek 1: [seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]
 ```
 
-Перемотка, которая не самая новая, возвращается, а самая новая — это позиция,
-которую сравнивают по значению. Перетаскивание, вернувшееся к 1, не отбрасывает
-свою первую перемотку на 1, и плеер перематывает на 1 дважды.
+Перемотка, которая не самая новая, возвращается. Самая новая — это позиция,
+которую сравнивают по значению, поэтому перетаскивание, вернувшееся к 1,
+не отбрасывает свою первую перемотку на 1, и плеер перематывает на 1 дважды;
+bloc, который держит само событие `Seek` и сравнивает его через `identical`,
+перематывает на 1 один раз. Так или иначе bloc держит два поля, проверяет токен
+после `await` и останавливает идущую перемотку из `onEvent`.
 
 ### Контроллер под bloc
 
@@ -529,7 +308,8 @@ with a controller, seek 3 15 ms after seek 1: [seek 1 start, seek 1 stopped, see
 
 Что остаётся на bloc: регистрация на каждую команду, кроме мостов, и больше
 ничего. Ни `_newestSeek`, ни поля для токена, ни проверки после `await`,
-ни `onEvent`.
+ни `onEvent`. Без мостов тот же контроллер — ответ Solo раздела
+[«Перезапуск одной операции в общей очереди»](vs-bloc.md#перезапуск-одной-операции-в-общей-очереди).
 
 ## Удаление выбранной ожидающей работы
 
@@ -595,7 +375,8 @@ with bloc alone, a read after disconnect: [connect, disconnect], the zone [Bad s
 экземпляр, делят его метку: второй экран перезаписывает метку первого, и чтение
 ушедшего экрана доходит до устройства. Чтение, добавленное после отключения,
 несёт новую метку, доходит до устройства, которого уже нет, и его ошибка уходит
-в зону.
+в зону. Проверка `state.online` перед чтением отсекает это чтение; общая метка
+остаётся.
 
 ### Первая попытка
 
@@ -739,114 +520,9 @@ a registration per command, a read after disconnect: [connect, disconnect], the 
 
 Что остаётся на bloc: регистрация на каждую команду, потому что под одной
 регистрацией с `sequential()` в очереди контроллера снимать нечего.
-Ни `Expando`, ни меток, ни проверки в обработчике.
-
-## Реакция на независимое внешнее изменение состояния
-
-Пользователь просит отчёт, и сессию отзывают с другого устройства, пока отчёт
-собирается. Состояние должно сразу стать `SignedOut`, и ни один отчёт не должен
-публиковаться поверх него. Отчёт собирается 50 мс из данных, уже лежащих
-на устройстве, экран просит два, а сессию отзывают через 20 мс. События
-и состояния — из раздела
-[«Реакция на независимое внешнее изменение состояния»](vs-bloc.md#реакция-на-независимое-внешнее-изменение-состояния).
-
-### Только bloc
-
-Отзыв — событие со своей регистрацией, а сборка проверяет состояние по обе
-стороны от своего `await`:
-
-```dart
-class ReportBloc extends Bloc<ReportEvent, ReportState> {
-  final Reports _reports;
-  final Auth _auth;
-
-  ReportBloc(this._reports, this._auth) : super(SignedIn()) {
-    _auth.onRevoked = (reason) => add(SessionRevoked(reason));
-    on<SessionRevoked>((e, emit) => emit(SignedOut(e.reason)));
-    on<BuildReport>((e, emit) async {
-      if (state is! SignedIn) return;
-      final report = await _reports.build(e.range);
-      if (state is! SignedIn) return;
-      emit(Ready(report));
-    }, transformer: sequential());
-  }
-
-  @override
-  Future<void> close() {
-    _auth.onRevoked = null;
-    return super.close();
-  }
-}
-```
-
-```text
-with bloc alone: states [SignedOut(signed out elsewhere)], built 1, the zone []
-```
-
-Первый отчёт собирается и отбрасывается проверкой после `await`, а второй
-не начинается.
-
-### Контроллер под bloc
-
-Вызовы уходят контроллеру того раздела, у которого есть `stream` и который
-берёт отзыв из колбэка через `externalSetState`:
-
-```dart
-final class ReportController extends Solo<ReportState> with SoloStream {
-  final Reports _reports;
-  final Auth _auth;
-
-  ReportController(this._reports, this._auth) : super(const SignedIn()) {
-    _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
-  }
-
-  Job<void> build(Range range) =>
-      enqueue<SignedIn, void>(key: 'report', (ctx) async {
-        final report = await ctx.join(() => _reports.build(range));
-        ctx.emit(Ready(report));
-      });
-
-  @override
-  void onClose() {
-    _auth.onRevoked = null;
-  }
-}
-```
-
-Кроме мостов, у bloc одна регистрация — для сборки:
-
-```dart
-final class _Started extends ReportEvent {}
-
-class ReportBloc extends Bloc<ReportEvent, ReportState> {
-  ReportBloc(this._report) : super(_report.currentState) {
-    on<_Started>((e, emit) => follow(emit, state, _report));
-    on<BuildReport>((e, emit) => settle(_report.build(e.range)));
-    add(_Started());
-  }
-
-  final ReportController _report;
-
-  @override
-  Future<void> close() async {
-    await _report.close();
-    return super.close();
-  }
-}
-```
-
-```text
-with a controller: states [SignedOut(signed out elsewhere)], built 1, the zone []
-```
-
-`SignedOut` доходит до bloc через мост. `build` выполняется только
-в `SignedIn`: первая задача дожидается своего отчёта и заканчивается,
-не опубликовав его, вторая не начинается, и обе кончаются
-`Cancelled(rules: is not SignedIn)`, который обработчик получает из `done`.
-
-Что остаётся на bloc: ничего для отзыва. Ни `SessionRevoked` с его
-регистрацией, ни проверки состояния до или после `await`: правило объявлено
-у `build`.
+Ни `Expando`, ни меток, ни проверки в обработчике. Без мостов тот же
+контроллер — ответ Solo раздела
+[«Удаление выбранной ожидающей работы»](vs-bloc.md#удаление-выбранной-ожидающей-работы).
 
 ## Завершение начатой записи перед перезапуском
 
@@ -961,17 +637,23 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 ничего не пишет, а обе заменённые загрузки кончаются `Cancelled(replaced)`.
 
 Что остаётся на bloc: ни блокировки, ни проверки `emit.isDone`,
-ни `restartable()`: замена — политика `flash`.
+ни `restartable()`: замена — политика `flash`. Без мостов тот же контроллер —
+ответ Solo раздела
+[«Завершение начатой записи перед перезапуском»](vs-bloc.md#завершение-начатой-записи-перед-перезапуском).
 
 ## Где ответ остаётся за bloc
 
-Остальным сценариям из [«solo и bloc рядом»](vs-bloc.md) раздела здесь нет:
-в каждом контроллер под bloc оставляет коду bloc столько же работы.
+Остальным сценариям из [«solo и bloc рядом»](vs-bloc.md) раздела здесь нет.
+В каждом один bloc отвечает несколькими своими строками, а контроллер под bloc
+снимает меньше, чем добавляют мосты.
 
 | Сценарий | Что остаётся на bloc |
 | --- | --- |
+| [Порядок обновлений общего состояния](vs-bloc.md#порядок-обновлений-общего-состояния) | одна регистрация с `sequential()` для событий, которые обновляют одно состояние: очередь bloc запускает обновление, когда отправка закончилась |
 | [Ошибка наблюдателя при обновлении состояния](vs-bloc.md#ошибка-наблюдателя-при-обновлении-состояния) | защита внутри наблюдателя: наблюдатель принадлежит bloc, и состояния контроллера доходят до него через тот же `emit` |
+| [Закрытие и отмена начатой работы](vs-bloc.md#закрытие-и-отмена-начатой-работы) | проверка `isClosed` и до вызова, и после него: `close()` ждёт только идущий вызов, сообщение из очереди не отправляется, а ответ не публикуется и не отмечается прочитанным |
 | [Выход из состояния загрузки при отмене работы](vs-bloc.md#выход-из-состояния-загрузки-при-отмене-работы) | сброс из обработчика `CancelRefresh`: контроллер, который перезапускает обновление, сбрасывает состояние и между двумя стартами, и экран на миг показывает `Initial` |
 | [Типизированные методы с выполнением через очередь](vs-bloc.md#типизированные-методы-с-выполнением-через-очередь) | функции-события и методы, которые возвращают `void`: `add` ничего не возвращает, и `Job` контроллера остаётся в обработчике |
 | [Ожидание конкретного запроса](vs-bloc.md#ожидание-конкретного-запроса) | completer на событии: вызывающий не может ждать `Job`, которого `add` не возвращает |
+| [Реакция на независимое внешнее изменение состояния](vs-bloc.md#реакция-на-независимое-внешнее-изменение-состояния) | отзыв сессии как событие со своей регистрацией и проверка состояния по обе стороны от `await` построения отчёта |
 | [Освобождение ресурса, полученного после отмены](vs-bloc.md#освобождение-ресурса-полученного-после-отмены) | `try`/`finally` вокруг буфера: контроллер объявляет освобождение как `dispose` там, где буфер получен, и трасса та же |

@@ -82,26 +82,30 @@
 придёт с выпуском `solo`: в его `CHANGELOG.md` она в «Unreleased».
 
 Страница `packages/solo/doc/bloc.md` «solo under bloc» — контроллер `solo` под
-bloc, с переводом, входами в README, CHANGELOG и `vs-bloc.md` и стендом
-`tool/bloc_snippets.py`, пятым в задании `snippets`. Сделана 2026-11-04 вместе
-со страницей ядра «async_job in a bloc app»; дизайн —
-`2026-11-03-bloc-pages-design.md`, план — `2026-11-04-bloc-pages-plan.md`,
-отчёт — `2026-11-04-bloc-pages-report.md`. Страница ядра в тот же день снята
-по слову владельца: ревью дизайна её переделки,
-`2026-11-04-core-bloc-page-rework-design.md`, показало, что один bloc
-останавливает работу стримом с `onCancel`, а где задача сильнее — в шагах
+bloc в трёх сценариях, где он снимает обходной приём одного bloc, —
+«Restarting», «Removing» и «Finishing», — с мостами и их ценой, с переводом,
+входами в README, CHANGELOG и `vs-bloc.md` и стендом `tool/bloc_snippets.py`,
+пятым в задании `snippets`. Сделана 2026-11-04 вместе со страницей ядра
+«async_job in a bloc app»; дизайн — `2026-11-03-bloc-pages-design.md`, план —
+`2026-11-04-bloc-pages-plan.md`, отчёт — `2026-11-04-bloc-pages-report.md`.
+Страница ядра в тот же день снята по слову владельца: ревью дизайна её
+переделки, `2026-11-04-core-bloc-page-rework-design.md`, показало, что один
+bloc останавливает работу стримом с `onCancel`, а где задача сильнее — в шагах
 по ресурсам, — bloc ни при чём. К пользователю bloc ядро идёт разделом «A
 handler that restarts» `packages/async_job/doc/riverpod-and-bloc.md`, решение
-133 `docs/settled.md`. Страница `solo` называет bloc 9.2.1: проверка `isClosed`
-в разделах закрытия держится с этой версии; на pub.dev она придёт с выпуском
-`solo`, в его `CHANGELOG.md` она в «Unreleased». Ставка на ядро с того же дня —
-раздел «Ставка — ядро» `AGENTS.md` и решение 144 `docs/settled.md`; сайт
-разделён на темы `async_job` и `solo`, `2026-11-03-core-first-report.md`; темы
-держит тест `TheSidebarTopics` в `tool/build_site_test.py`. Вопрос о месте
-`solo_lints` снимает разделение линтов: он остаётся в теме `solo`, у ядра —
-`async_job_lints`. Ближайший сосед —
-`packages/async_job/doc/riverpod-and-bloc.md`, четыре раздела о задаче под
-провайдером, нотифаером и обработчиком bloc.
+133 `docs/settled.md`. Страницу `solo` в тот же день сузило ревью простоты
+`2026-11-04-bloc-pages-simplicity-report.md` по слову владельца «Узкая
+страница»: «Ordering», «Closing» и «Reacting» ушли в таблицу «Where bloc keeps
+its answer» с ответом одного bloc. Страница называет bloc 9.2.1: строка таблицы
+о закрытии, проверка `isClosed` до вызова, держится с этой версии; на pub.dev
+она придёт с выпуском `solo`, в его `CHANGELOG.md` она в «Unreleased». Ставка
+на ядро с того же дня — раздел «Ставка — ядро» `AGENTS.md` и решение 144
+`docs/settled.md`; сайт разделён на темы `async_job` и `solo`,
+`2026-11-03-core-first-report.md`; темы держит тест `TheSidebarTopics`
+в `tool/build_site_test.py`. Вопрос о месте `solo_lints` снимает разделение
+линтов: он остаётся в теме `solo`, у ядра — `async_job_lints`. Ближайший
+сосед — `packages/async_job/doc/riverpod-and-bloc.md`, четыре раздела о задаче
+под провайдером, нотифаером и обработчиком bloc.
 
 Дальше по слову владельца — черновики анонса 1.0: статья «what cancelling a
 Future takes in Dart», посты в r/FlutterDev и r/dartlang, ответ в bloc#3069
@@ -116,17 +120,10 @@ Future takes in Dart», посты в r/FlutterDev и r/dartlang, ответ в 
 ядра о bloc снята именно потому, что сильнейший ответ одного bloc делал задачу
 ненужной.
 
-Сейчас — сужение страницы `solo` о bloc по ревью простоты
-`2026-11-04-bloc-pages-simplicity-report.md` и слову владельца 2026-11-04
-«Узкая страница»: остаются мосты, и цена слоя названа первой; остаются разделы
-«Restarting», «Removing» и «Finishing», где контроллер снимает обходные приёмы
-одного bloc; «Ordering», «Closing» и «Reacting» уходят в таблицу «Where bloc
-keeps its answer» с ответом одного bloc; вступление прямо говорит, что при
-одной такой проблеме bloc лучше оставить как есть. Применяются принятые находки
-I4–I6, M1, M3 и M4; C3 и I1 закрываются переносом в таблицу. Работа идёт
-на ветке `worktree-core-bloc-rework`; снятие страницы ядра — её первый коммит.
-Дальше — правки, полная проверка, ревью готовой работы на Opus, слияние
-в `main`.
+Сейчас — ревью готовой работы на ветке `worktree-core-bloc-rework`: снятие
+страницы ядра о bloc и сужение страницы `solo`, все находки ревью простоты
+закрыты, полная проверка зелёная. Ревью — независимое, на Opus, по копии
+дерева; затем вердикты по его находкам и слияние в `main`.
 
 Следующая работа после неё — короткий вход у `async_job`, пункт 3 первого
 списка `2026-10-30-pub-dev-landscape-review.md`: владелец 2026-11-02 отложил
