@@ -52,6 +52,7 @@ environment:
   sdk: ^3.10.0
 
 dependencies:
+  async: ^2.13.0
   async_job:
     path: {async_job}
   bloc: ^9.0.0
@@ -512,6 +513,97 @@ Future<void> scenario() async {
   require(kept.isNotEmpty && kept.last == null, 'readRows ends Done');
 }
 ''' + RUNNER)
+
+# A handler with a single call needs no job: the expression of the prose,
+# built as written there, is a stream whose cancellation cancels the
+# client's own token, and restartable() and close() stop the call through
+# it. 'a', then 'ab' 30 ms in, and close() 15 ms later; a call takes three
+# steps of 20 ms and watches its token between them.
+STOPPING_STREAM = (
+    'CancelableOperation.fromFuture(call, onCancel: token.cancel).asStream()')
+assert f'`{STOPPING_STREAM}`' in open(DOC).read(), 'the prose moved'
+FILES['bloc_single_call'] = '''import 'dart:async';
+
+import 'package:async/async.dart';
+import 'package:bloc/bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:fake_async/fake_async.dart';
+
+Future<void> delay(int milliseconds) =>
+    Future<void>.delayed(Duration(milliseconds: milliseconds));
+
+void require(bool condition, String message) {
+  if (!condition) throw StateError(message);
+}
+
+final trace = <String>[];
+
+/// A client's own cancel token: the call watches it and returns.
+final class CancelToken {
+  bool cancelled = false;
+
+  void cancel() => cancelled = true;
+}
+
+Future<String> search(String query, CancelToken token) async {
+  trace.add('$query started');
+  for (var step = 0; step < 3; step++) {
+    await delay(20);
+    if (token.cancelled) {
+      trace.add('$query aborted');
+      return '';
+    }
+  }
+  trace.add('$query answered');
+  return 'rows of $query';
+}
+
+final class Query {
+  const Query(this.text);
+
+  final String text;
+}
+
+final class SingleCallBloc extends Bloc<Query, String> {
+  SingleCallBloc() : super('') {
+    on<Query>((event, emit) {
+      final token = CancelToken();
+      final call = search(event.text, token);
+      return emit.forEach(
+        ''' + STOPPING_STREAM + ''',
+        onData: (rows) => rows,
+      );
+    }, transformer: restartable());
+  }
+}
+
+Future<void> scenario() async {
+  final zone = <Object>[];
+  final ended = Completer<void>();
+  late SingleCallBloc bloc;
+  unawaited(runZonedGuarded(() async {
+    try {
+      bloc = SingleCallBloc()..add(const Query('a'));
+      await delay(30);
+      bloc.add(const Query('ab'));
+      await delay(15);
+      await bloc.close();
+      trace.add('closed');
+      await delay(100);
+    } finally {
+      ended.complete();
+    }
+  }, (error, _) => zone.add(error)));
+  await ended.future;
+  print('a single call: $trace, state "${bloc.state}", zone $zone');
+  require(
+    '$trace' == '[a started, ab started, a aborted, closed, ab aborted]',
+    'restartable() and close() stop the call: $trace',
+  );
+  require(bloc.state.isEmpty, 'no rows may be published: ${bloc.state}');
+  require(zone.isEmpty, 'nothing may reach the zone: $zone');
+}
+''' + RUNNER
 
 # ------------------------------------------------------------------ request
 # Real time against a raw socket: it says when the client hangs up, and

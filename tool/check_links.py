@@ -59,11 +59,10 @@ the next line as any phrase does, and a line read alone would miss it.
 Dartdoc does not lead up either: `async_job` explaining `runAll` has no
 business sending its reader to a page of `solo`.
 
-One guide page leads up on purpose, and it is named in `LEADS_UP`: the
-bloc page of `async_job` sends its reader to `solo` for the scenarios whose
-answer is a queue. The core links the package above it only where the
-answer needs one -- decision 144 of `docs/settled.md` -- and that page is
-where such answers are. Its translation is let through with it.
+A guide page that leads up on purpose is named in `LEADS_UP`, and its
+translation is let through with it: the core links the package above it
+only where the answer needs one, decision 144 of `docs/settled.md`. No
+page does so now.
 """
 
 import json
@@ -85,7 +84,7 @@ BLOB = BLOB.rstrip('/') + '/blob/main/'
 
 
 # (package, file name) of every guide page allowed to lead up.
-LEADS_UP = {('async_job', 'bloc.md')}
+LEADS_UP: set[tuple[str, str]] = set()
 
 
 DEPENDENCIES = re.compile(r'^dependencies:\n((?:[ \t].*\n|\n)*)', re.M)

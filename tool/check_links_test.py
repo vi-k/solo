@@ -306,7 +306,7 @@ class ThePackageAbove(LinkCase):
             )
 
     def test_the_pages_that_answer_with_the_queue(self):
-        self.assertEqual(check_links.LEADS_UP, {('async_job', 'bloc.md')})
+        self.assertEqual(check_links.LEADS_UP, set())
 
     def test_a_guide_page_naming_the_package_on_pub(self):
         page = self.write(

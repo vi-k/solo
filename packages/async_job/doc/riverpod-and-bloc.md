@@ -344,8 +344,8 @@ stop the call through it. A job pays off when the handler takes several steps,
 as `readRows` opens a database and reads it page by page: every `ctx.join` is a
 point where the work stops, and the database closes by the `dispose` written
 where it opens. With bloc alone the handler checks `emit.isDone` before every
-page and closes the database in a `finally`, and a check it misses lets the
-reads run to the end.
+page and closes the database in a `finally`, and without the check the reads
+run to the end.
 
 ## A request to abort
 

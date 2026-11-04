@@ -148,9 +148,10 @@ of a bloc is for bloc itself and tests, and the analyzer reports such a call as
 `invalid_use_of_visible_for_testing_member`.
 
 Every bloc pays for the bridges: a class that adds `SoloStream` to its
-controller, the event `_Started` with its registration and its `add`, and an
-override of `close()`; `follow` and `settle` are written once for the app. The
-rules above come with them, and three more.
+controller, unless the controller is declared with it, the event `_Started`
+with its registration and its `add`, and an override of `close()`; `follow` and
+`settle` are written once for the app. The rules above come with them, and
+three more.
 
 The state belongs to the controller, and the bloc publishes a copy of it. A
 handler that calls `emit` itself parts the bloc from the controller, until the
@@ -652,7 +653,7 @@ under the bloc takes off less than the bridges add.
 | --- | --- |
 | [Ordering updates to shared state](vs-bloc.md#ordering-updates-to-shared-state) | one registration with `sequential()` for the events that update one state: the queue of bloc starts the refresh once the upload has ended |
 | [An observer fails during a state update](vs-bloc.md#an-observer-fails-during-a-state-update) | the guard inside the observer: the observer is bloc's, and the states of a controller reach it through the same `emit` |
-| [Closing and cancelling in-flight work](vs-bloc.md#closing-and-cancelling-in-flight-work) | a check of `isClosed` before the call as well as after it: `close()` waits for the call in flight alone, the queued message is not sent, and no reply is published or reported read |
+| [Closing and cancelling in-flight work](vs-bloc.md#closing-and-cancelling-in-flight-work) | the Bloc answer there with a check of `isClosed` before the call as well as after it: `close()` waits for the call in flight alone, the queued message is not sent, and no reply is published or reported read |
 | [Leaving a loading state when the work is cancelled](vs-bloc.md#leaving-a-loading-state-when-the-work-is-cancelled) | the reset from the handler of `CancelRefresh`: a controller that restarts the refresh resets the state between two starts as well, and the screen shows `Initial` for a moment |
 | [Typed methods with queued execution](vs-bloc.md#typed-methods-with-queued-execution) | function events and methods that return `void`: `add` returns nothing, and the `Job` of the controller stays in the handler |
 | [Awaiting a particular request](vs-bloc.md#awaiting-a-particular-request) | the completer on the event: the caller cannot wait for a `Job` that `add` does not return |

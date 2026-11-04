@@ -122,6 +122,40 @@ Future<void> guarded(Future<void> Function() body) {
 }
 '''
 
+# The chat of the closing row of the table, the API of tool/doc_snippets.py with
+# its delay named: a message takes `sendMs` to answer. `offline` makes
+# every call fail when its time is up.
+CHAT_API = '''
+const sendMs = 50;
+
+class Api {
+  Api({this.offline = false});
+
+  final bool offline;
+
+  /// Reads reported to the server. A reply the user never saw must not be
+  /// one of them.
+  int reads = 0;
+
+  /// Messages the server was asked to deliver, and the ones it answered.
+  final sent = <String>[];
+  final answered = <String>[];
+
+  Future<String> send(String text) async {
+    sent.add(text);
+    await delay(sendMs);
+    if (offline) throw StateError('send: offline');
+    answered.add(text);
+    return 'reply to $text';
+  }
+
+  Future<void> markRead() async {
+    reads++;
+    await delay(10);
+  }
+}
+'''
+
 # The `main` of every driver; the driver itself is `scenario`. The runner of
 # tool/adapter_snippets.py, which says why the clock is elapsed from outside
 # the fake zone, with `nowMs()` of tool/doc_snippets.py over it.
@@ -460,7 +494,7 @@ Future<void> scenario() async {
 ''' + RUNNER)
 
 # `seed` of blocTest emits into the bloc right after `build`
-# (bloc_test-10.0.0/lib/src/bloc_test.dart:202), and follow replaces it.
+# (bloc_test-10.0.0/lib/src/bloc_test.dart:203), and follow replaces it.
 FILES['solo_bridge_seed'] = (
     SOLO_PLAIN_HEAD + HELPERS + solo[f'{SOLO_BRIDGES}/Counter']
     + solo[f'{SOLO_BRIDGES}/CounterBloc'] + '''
@@ -1061,6 +1095,103 @@ Future<void> waitOut() async {
   jobs.clear();
 }
 ''' + FLASHING + RUNNER)
+
+# ------------------------------------------------------------------ table
+# The closing row: the Bloc answer of vs-bloc.md with a check of isClosed
+# before the call as well. "bye" waits under sequential() and finds the bloc
+# closed; close() waits for "hi" alone. It holds from bloc 9.2.1 on.
+CLOSING = 'closing-and-cancelling-in-flig'
+
+# The events and the state of the closing section of vs-bloc.md, which keeps
+# them with its fakes.
+CHAT_EVENTS = '''
+sealed class ChatEvent {
+  const ChatEvent();
+}
+
+class SendMessage extends ChatEvent {
+  const SendMessage(this.text);
+  final String text;
+}
+
+class MarkReplyRead extends ChatEvent {
+  const MarkReplyRead();
+}
+
+class ChatState {
+  const ChatState([this.reply]);
+  final String? reply;
+  ChatState withReply(String reply) => ChatState(reply);
+}
+'''
+
+# "hi" in flight, "bye" queued, close() 10 ms in. One line, the same shape
+# for both answers: how long close() took, what the server was asked to
+# send, the reply published and the reads reported. States published after
+# close() began are counted apart.
+CHAT_SCENARIO = '''
+const closeAtMs = 10;
+
+Future<void> scenario() async {
+  final api = Api();
+  final afterClose = <ChatState>[];
+  var closing = false;
+  await guarded(() async {
+    final bloc = chatBloc(api);
+    final states = bloc.stream.listen((state) {
+      if (closing) afterClose.add(state);
+    });
+    bloc
+      ..add(const SendMessage('hi'))
+      ..add(const SendMessage('bye'));
+    await delay(closeAtMs);
+    closing = true;
+    final started = nowMs();
+    await bloc.close();
+    tookMs = nowMs() - started;
+    await delay(2 * sendMs);
+    await states.cancel();
+    print('$name: close took ${tookMs}ms, sent ${api.sent}, '
+        'reply ${bloc.state.reply}, reads ${api.reads}');
+  });
+  require(zone.isEmpty, '$name: nothing may reach the zone: $zone');
+  check(api, afterClose);
+}
+
+late int tookMs;
+
+/// What the guard of bloc alone keeps: the queued message is still sent,
+/// and no reply reaches the state or the server.
+void requireGuarded(Api api, List<ChatState> afterClose) {
+  require('${api.sent}' == '[hi, bye]',
+      '$name: the queued message must still be sent');
+  require(afterClose.isEmpty,
+      '$name: no state may follow close(): $afterClose');
+  require(api.reads == 0, '$name: no read may be reported');
+}
+'''
+
+# The bloc of a driver from its api.
+CHAT_BLOC = 'ChatBloc chatBloc(Api api) => ChatBloc(api);\n'
+
+SEND = '      final reply = await _api.send(e.text);\n'
+CHAT_BLOC_ALONE = vs_bloc[f'{CLOSING}/bloc/ChatBloc']
+assert CHAT_BLOC_ALONE.count(SEND) == 1, 'the send of vs-bloc.md moved'
+FILES['solo_table_closing'] = (
+    BLOC_HEAD + HELPERS + CHAT_API + CHAT_EVENTS
+    + CHAT_BLOC_ALONE.replace(SEND, '      if (isClosed) return;\n' + SEND)
+    + CHAT_BLOC + '''
+const name = 'isClosed before and after the call';
+
+void check(Api api, List<ChatState> afterClose) {
+  require('${api.sent}' == '[hi]', '$name: "bye" must not be sent');
+  require(afterClose.isEmpty,
+      '$name: no state may follow close(): $afterClose');
+  require(api.reads == 0, '$name: no read may be reported');
+  require(tookMs == sendMs - closeAtMs,
+      '$name: close must wait for the call in flight alone: ${tookMs}ms');
+}
+''' + CHAT_SCENARIO + RUNNER)
 
 unbuilt = solo.unbuilt()
 assert not unbuilt, f'blocks of the solo page no driver builds: {unbuilt}'
