@@ -335,6 +335,10 @@ is there for a job that ends `Cancelled` on its own, by its deadline for one:
 
 `watch` is page code, not part of `async_job`: copy it.
 
+What else a job in a bloc handler takes off the code — closing a bloc with a
+call in flight, a write that has to end before the next one starts, a resource
+that arrives after cancellation — is in [async_job in a bloc app](bloc.md).
+
 ## A request to abort
 
 A job fetches a report from a server that takes 300 ms to answer. When the job

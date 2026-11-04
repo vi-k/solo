@@ -2,8 +2,8 @@
 
 > **Состояние на 2026-11-04:** план написан по одобренному дизайну и прошёл
 > независимое ревью Opus: все находки приняты, задачи поправлены по ним
-> (раздел «Ревью плана»). Задачи 1–3 исполнены — отчёт
-> `2026-11-04-bloc-pages-report.md`; задачи 4–8 впереди.
+> (раздел «Ревью плана»). Задачи 1–4 исполнены — отчёт
+> `2026-11-04-bloc-pages-report.md`; задачи 5–8 впереди.
 > **Что это:** план двух страниц — `packages/async_job/doc/bloc.md`
 > и `packages/solo/doc/bloc.md`, их общего стенда `tool/bloc_snippets.py`
 > в задании `snippets`, переводов, входов, сайта и правок записей.
@@ -276,19 +276,19 @@ Python 3 для стенда и проверок; Starlight для сайта.
   `packages/async_job/CHANGELOG.md` и `docs/ru/async_job/CHANGELOG.md`
   («Unreleased» / «Не выпущено»).
 
-- [ ] **Шаг 1.** Пара в `PAIRS`; `python3 tool/check_translations.py` краснеет:
+- [x] **Шаг 1.** Пара в `PAIRS`; `python3 tool/check_translations.py` краснеет:
   перевода нет.
-- [ ] **Шаг 2.** Перевод страницы, строк README и CHANGELOG, фразы
+- [x] **Шаг 2.** Перевод страницы, строк README и CHANGELOG, фразы
   `riverpod-and-bloc.md`; фрагменты кода — те же байты, кроме комментариев.
   Изменённые абзацы — линтер `humanizer--ru`, ноль `ERROR`.
-- [ ] **Шаг 3.** `python3 tool/check_doc_shape.py` зелёный (README ядра).
-- [ ] **Шаг 4.** Сайт: запись `optionalLinks` для `async_job/bloc`
+- [x] **Шаг 3.** `python3 tool/check_doc_shape.py` зелёный (README ядра).
+- [x] **Шаг 4.** Сайт: запись `optionalLinks` для `async_job/bloc`
   в `site/astro.config.mjs`, раньше записей `solo`;
   `python3 tool/build_site.py`, `python3 -m unittest tool/build_site_test.py`;
   `async_job/bloc` на обоих языках в теме `async_job` — глазом по конфигу, тест
   тему не проверяет.
-- [ ] **Шаг 5.** Числа прозы против фейков стенда — список в отчёт.
-- [ ] **Шаг 6.** `check_translations.py`, reflow, ширина, `check_links.py`;
+- [x] **Шаг 5.** Числа прозы против фейков стенда — список в отчёт.
+- [x] **Шаг 6.** `check_translations.py`, reflow, ширина, `check_links.py`;
   коммит
   `docs: translate the bloc page of async_job and link it from the README,
   the changelog and the riverpod page`.

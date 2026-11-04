@@ -4,6 +4,11 @@
 
 - The README names the analyzer plugin `async_job_lints` in `Install`, which
   holds the rules for code on `async_job`; code on `solo` names `solo_lints`.
+- A new guide, [async_job in a bloc app](doc/bloc.md), takes three requirements
+  of a bloc app — closing with a call in flight, finishing a write before a
+  restart, releasing a resource returned after cancellation — and shows each
+  with bloc alone and with a job in the handler. The scenarios where the queue
+  of bloc is what has to change are a table.
 
 ## 1.0.0
 

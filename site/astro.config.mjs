@@ -194,6 +194,12 @@ export default defineConfig({
           exclude: ['**/changelog'],
           optionalLinks: [
             {
+              label: 'async_job in a bloc app',
+              url: `${config.site}/async_job/bloc/`,
+              description:
+                'A job in a bloc handler, next to what bloc alone does.',
+            },
+            {
               label: 'solo and bloc, side by side',
               url: `${config.site}/solo/vs-bloc/`,
               description:

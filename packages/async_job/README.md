@@ -313,6 +313,7 @@ search.
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and observing a failure |
 | [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable` |
 | [With riverpod and bloc](doc/riverpod-and-bloc.md) | A job under a provider, a notifier or a bloc handler, and an HTTP request it aborts |
+| [In a bloc app](doc/bloc.md) | Closing with a call in flight, a write before a restart, a resource after cancellation: bloc alone and a job in the handler |
 | [Time](doc/time.md) | `ctx.pause`, a deadline with `timeout` |
 | [Children](doc/children.md) | `Job.deferred`, `ctx.child`, `ctx.run`, `ctx.start` for a child the body does not await, how deep a tree goes |
 | [Groups](doc/groups.md) | `.wait`, `ctx.runAll`, what a group hands back |
