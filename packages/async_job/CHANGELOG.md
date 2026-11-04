@@ -4,11 +4,6 @@
 
 - The README names the analyzer plugin `async_job_lints` in `Install`, which
   holds the rules for code on `async_job`; code on `solo` names `solo_lints`.
-- A new guide, [async_job in a bloc app](doc/bloc.md), takes three requirements
-  of a bloc app — closing with a call in flight, finishing a write before a
-  restart, releasing a resource returned after cancellation — and shows each
-  with bloc alone and with a job in the handler. The scenarios where the queue
-  of bloc is what has to change are a table.
 - "A deadline for one step" on the time page calls `ctx.check()` first in the
   clause that catches the child's deadline. Without it, a job whose own
   `timeout` ran out before `ctx.run` took its own `Cancelled(timeout)` for the

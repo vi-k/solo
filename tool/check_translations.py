@@ -205,10 +205,6 @@ PAIRS = [
         REPO / "docs" / "ru" / "async_job" / "riverpod-and-bloc.md",
     ),
     (
-        REPO / "packages" / "async_job" / "doc" / "bloc.md",
-        REPO / "docs" / "ru" / "async_job" / "bloc.md",
-    ),
-    (
         REPO / "packages" / "async_job" / "CHANGELOG.md",
         REPO / "docs" / "ru" / "async_job" / "CHANGELOG.md",
     ),

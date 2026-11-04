@@ -248,14 +248,14 @@
 `tool/adapter_snippets.py`, `tool/riverpod_snippets.py`
 и `tool/bloc_snippets.py`: собирают код `packages/solo/doc/vs-bloc.md`,
 `packages/solo/doc/accumulation.md` с `accumulation-rules.md`,
-`packages/async_job/doc/riverpod-and-bloc.md`, `packages/solo/doc/riverpod.md`,
-`packages/async_job/doc/bloc.md` и `packages/solo/doc/bloc.md` в шесть пакетов
-и прогоняют все драйверы) и `docs` (семь питоновских проверок, сторожа четырёх
-из них — `reflow.py`, `check_line_width.py`, `check_links.py`
-и `check_dartdoc.py`, сторож `archive_floor_test.py` — и сборка сайта со своим
-сторожем `build_site_test.py`). Триггеры: push в `main`, pull request и ручной
-запуск. Прогон перед коммитом это не отменяет: CI говорит уже после того, как
-правка в `main`.
+`packages/async_job/doc/riverpod-and-bloc.md`, `packages/solo/doc/riverpod.md`
+и `packages/solo/doc/bloc.md` в шесть пакетов и прогоняют все драйверы)
+и `docs` (семь питоновских проверок, сторожа четырёх из них — `reflow.py`,
+`check_line_width.py`, `check_links.py` и `check_dartdoc.py`, сторож
+`archive_floor_test.py` — и сборка сайта со своим сторожем
+`build_site_test.py`). Триггеры: push в `main`, pull request и ручной запуск.
+Прогон перед коммитом это не отменяет: CI говорит уже после того, как правка
+в `main`.
 
 `floor` проверяет не дерево, а то, что получит пользователь: архив, без
 dev-зависимостей, на полу. `tool/archive_floor.py stage <каталог>` раскладывает
@@ -290,7 +290,7 @@ PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run <ката
 
 Адресация блоков у всех пяти стендов общая — `tool/doc_blocks.py`: фрагмент
 берётся по разделу и по имени, которое объявляет, а не по номеру. Стенды
-`riverpod-and-bloc`, `riverpod` и страниц о bloc добавляют к ключу подраздел
+`riverpod-and-bloc`, `riverpod` и страницы о bloc добавляют к ключу подраздел
 (`subsection_blocks` там же): первая попытка и ответ на их страницах объявляют
 одно имя. Копия этого скрипта живёт в скилле `doc-bench`.
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Builds runnable scenarios from the bloc pages of async_job and solo.
+"""Builds runnable scenarios from the bloc page of solo.
 
 Every snippet is copied byte-identical out of the markdown and wrapped in a
-runnable file: fakes above it, a driver below it. The page of async_job
-says what a job in a bloc handler takes off the code and what stays with
-bloc; the drivers hold both with `require`, so a bloc that starts closing
-otherwise turns the run red instead of printing something else.
+runnable file: fakes above it, a driver below it. The page says what a
+controller under a bloc takes off the code and what stays with bloc; the
+drivers hold both with `require`, so a bloc that starts closing otherwise
+turns the run red instead of printing something else.
 
 Usage, from the repository root:
 
@@ -17,16 +17,10 @@ bloc_pages_check, with async_job and solo from the tree. Then:
 
     dart pub get
     dart analyze --fatal-infos bin/v
-    dart run --enable-asserts bin/v/core_closing_job.dart   # and so on
+    dart run --enable-asserts bin/v/solo_bridge_states.dart   # and so on
 
 Asserts are on: bloc says through them that a handler emitted after it was
 done, and a run without them would let that pass.
-
-The drivers of the core page are named `core_*` and build files with no
-`package:solo` in them: the page is complete without solo, and the script
-stops if one of its drivers imports it. The drivers of the solo page are
-named `solo_*`; the gate keeps their output apart, since the two pages
-quote lines that only differ by the page.
 
 The drivers run on virtual time, under the runner of
 tool/adapter_snippets.py with the clock of tool/doc_snippets.py: a close
@@ -35,8 +29,8 @@ number drift.
 
 Blocks are addressed by `subsection_blocks` of tool/doc_blocks.py: section,
 `###` subsection and the name a block declares. The answer of bloc alone
-and the answer with a job declare the same bloc, and the subsection tells
-them apart.
+and the answer with a controller declare the same bloc, and the subsection
+tells them apart.
 
 Every `dart` block of a page is built: the script stops if one of them
 went into no driver.
@@ -48,17 +42,13 @@ import doc_blocks
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/bloc-pages-check'
-CORE = os.path.join(REPO, 'packages', 'async_job', 'doc', 'bloc.md')
-NEIGHBOUR = os.path.join(REPO, 'packages', 'async_job', 'doc',
-                         'riverpod-and-bloc.md')
 SOLO = os.path.join(REPO, 'packages', 'solo', 'doc', 'bloc.md')
 VS_BLOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'vs-bloc.md')
 
 # The versions the pages name, resolved at their newest on the SDK of the
 # job: bloc 9.2.1 is the first whose `isClosed` is true while close() runs
-# the queue out, and the closing sections stand on it. async_job is a dependency of its own, since the core drivers import
-# it, and an override as well, since solo from the tree asks for a released
-# one.
+# the queue out, and the closing section stands on it. async_job is an
+# override, since solo from the tree asks for a released one.
 PUBSPEC = """name: bloc_pages_check
 publish_to: none
 
@@ -66,8 +56,6 @@ environment:
   sdk: ^3.10.0
 
 dependencies:
-  async_job:
-    path: {async_job}
   bloc: ^9.2.1
   bloc_concurrency: ^0.3.0
   fake_async: ^1.3.1
@@ -89,46 +77,22 @@ dependency_overrides:
 # inside the package.
 OPTIONS = 'include: async_job_rules.yaml\n'
 
-core = doc_blocks.Blocks(doc_blocks.subsection_blocks(open(CORE).read()))
 solo = doc_blocks.Blocks(doc_blocks.subsection_blocks(open(SOLO).read()))
 if ROOT == '--list':
-    for page, blocks in (('core', core), ('solo', solo)):
-        for key in blocks:
-            poisoned = dict.__getitem__(blocks, key) is doc_blocks.POISONED
-            print(page, key, '(declared twice)' if poisoned else '')
+    for key in solo:
+        poisoned = dict.__getitem__(solo, key) is doc_blocks.POISONED
+        print(key, '(declared twice)' if poisoned else '')
     sys.exit(0)
-
-BRIDGE = 'the-bridge'
-CLOSING = 'closing-and-cancelling-in-flig'
-ALONE = f'{CLOSING}/with-bloc-alone'
-WITH_JOB = f'{CLOSING}/with-a-job-in-the-handler'
-
-# `watch` is the neighbour's, taken apart there: the page repeats it, and
-# the copy has to stay the same bytes. It declares no name doc_blocks sees
-# -- `watch<T>(` has its type parameters before the parenthesis -- so it is
-# addressed by its first line, and found in the neighbour inside the block
-# of `SearchBloc`.
-WATCH = core[f'{BRIDGE}/the-value-of-job-as-a-stream-c']
-assert WATCH.startswith('/// The value of [job] as a stream.')
-neighbour = doc_blocks.subsection_blocks(open(NEIGHBOUR).read())
-assert WATCH.rstrip('\n') in neighbour[
-    'a-handler-that-restarts/a-stream-that-cancels-the-job/SearchBloc'], (
-    'the watch of the bloc page is not the one of riverpod-and-bloc.md')
 
 # Every driver carries the helpers and the clock whether it uses them or
 # not, so the analyzer is told that they are shared.
-CORE_HEAD = """// ignore_for_file: unreachable_from_main
+BLOC_HEAD = """// ignore_for_file: unreachable_from_main
 import 'dart:async';
 
-import 'package:async_job/async_job.dart';
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:fake_async/fake_async.dart';
 """
-
-# The drivers of bloc alone, without a job.
-BLOC_HEAD = CORE_HEAD.replace("import 'package:async_job/async_job.dart';\n",
-                              '')
 
 # What every driver needs: a delay, a check that fails the run and a zone
 # of its own. The zone is not awaited -- a guarded body that fails never
@@ -236,133 +200,8 @@ Future<void> main() async {
 
 FILES = {}
 
-# ----------------------------------------------------------------- bridge
-# A job that takes 100 ms unless it is cancelled, under the bridge.
-WORK = '''
-final outcomes = <Job<int>>[];
-
-Job<int> work(int n) {
-  final job = Job<int>((ctx) async {
-    await ctx.abandonable(() => delay(100));
-    return n;
-  });
-  outcomes.add(job);
-  return job;
-}
-
-final class Load {
-  const Load(this.n);
-
-  final int n;
-}
-
-final class Loader extends Bloc<Load, int> {
-  Loader(EventTransformer<Load>? transformer) : super(0) {
-    on<Load>((event, emit) async {
-      await emit.forEach(
-        watch(work(event.n)),
-        onData: (n) => n,
-        onError: (_, _) => state,
-      );
-    }, transformer: transformer);
-  }
-}
-'''
-
-# Every transformer but sequential() cancels the subscriptions of forEach on
-# close(), and restartable() the one of the handler it replaces: the job is
-# cancelled with no line of the page's own.
-FILES['core_bridge_cancelled'] = (CORE_HEAD + HELPERS + WATCH + WORK + '''
-Future<void> scenario() async {
-  for (final (name, transformer) in [
-    ('concurrent', null),
-    ('droppable', droppable<Load>()),
-    ('restartable', restartable<Load>()),
-  ]) {
-    outcomes.clear();
-    final bloc = Loader(transformer)..add(const Load(1));
-    await delay(10);
-    final closing = nowMs();
-    await bloc.close();
-    final took = nowMs() - closing;
-    final outcome = await outcomes.single.done;
-    print('$name: close took ${took}ms, the job $outcome');
-    require(took == 0, '$name close must not wait for the job');
-    require(outcome is Cancelled, '$name close must cancel the job');
-  }
-
-  outcomes.clear();
-  final bloc = Loader(restartable<Load>())..add(const Load(1));
-  await delay(10);
-  bloc.add(const Load(2));
-  await delay(150);
-  final first = await outcomes.first.done;
-  print('restartable, a second load: the first job $first, state '
-      '${bloc.state}');
-  require(first is Cancelled, 'restartable must cancel the replaced job');
-  require(bloc.state == 2, 'the second job must be the one published');
-  await bloc.close();
-}
-''' + RUNNER)
-
-# sequential() cancels nothing on close(): it waits for the running
-# handler and runs the queued event, and both jobs run to their end.
-FILES['core_bridge_sequential'] = (CORE_HEAD + HELPERS + WATCH + WORK + '''
-Future<void> scenario() async {
-  final bloc = Loader(sequential<Load>())
-    ..add(const Load(1))
-    ..add(const Load(2));
-  await delay(10);
-  final closing = nowMs();
-  await bloc.close();
-  final took = nowMs() - closing;
-  final ended = [for (final job in outcomes) await job.done];
-  print('sequential: close took ${took}ms, the jobs $ended');
-  require(ended.every((outcome) => outcome is Done),
-      'sequential close must let every job end');
-  require(took == 190, 'sequential close must run the queue out');
-}
-''' + RUNNER)
-
-# The job in a field, cancelled from close() under sequential(), and the
-# handler awaiting its value: the Cancelled it throws reaches the zone.
-FILES['core_bridge_value'] = (CORE_HEAD + HELPERS + '''
-final class ValueLoader extends Bloc<int, int> {
-  ValueLoader() : super(0) {
-    on<int>((n, emit) async {
-      final job = _loading = Job<int>((ctx) async {
-        await ctx.abandonable(() => delay(100));
-        return n;
-      });
-      emit(await job.value);
-    }, transformer: sequential());
-  }
-
-  Job<int>? _loading;
-
-  @override
-  Future<void> close() async {
-    await _loading?.cancel();
-    return super.close();
-  }
-}
-
-Future<void> scenario() async {
-  await guarded(() async {
-    final bloc = ValueLoader()..add(1);
-    await delay(10);
-    await bloc.close();
-    await delay(10);
-  });
-  print('job.value under close: the zone $zone');
-  require(zone.length == 1 && zone.single is Cancelled,
-      'a cancelled job.value must throw Cancelled to the zone');
-}
-''' + RUNNER)
-
-# ---------------------------------------------------------------- closing
-EVENTS = core[f'{CLOSING}/ChatEvent']
-assert EVENTS is core[f'{CLOSING}/ChatState']
+# ------------------------------------------------- fakes of the sections
+CLOSING = 'closing-and-cancelling-in-flig'
 
 # "hi" in flight, "bye" queued, close() 10 ms in. One line, the same shape
 # for both answers: how long close() took, what the server was asked to
@@ -424,26 +263,7 @@ void check(Api api, List<ChatState> afterClose) {
 }
 '''
 
-FILES['core_closing_bloc'] = (
-    BLOC_HEAD + HELPERS + CHAT_API + EVENTS + core[f'{ALONE}/ChatBloc']
-    + CHAT_BLOC + CHAT_ALONE + CHAT_SCENARIO + RUNNER)
-
-FILES['core_closing_job'] = (
-    CORE_HEAD + HELPERS + CHAT_API + EVENTS + core[f'{WITH_JOB}/ChatBloc']
-    + CHAT_BLOC + '''
-const name = 'with a job';
-
-/// close() skips what is left of the call in flight, and waits for the
-/// queued one: shorter than bloc alone by the rest of "hi".
-void check(Api api, List<ChatState> afterClose) {
-  requireGuarded(api, afterClose);
-  require(tookMs == sendMs,
-      'with a job: close must wait only for the queued call');
-}
-''' + CHAT_SCENARIO + RUNNER)
-
-# A call that fails: the answer with a job throws it again from the
-# handler, so it reaches the zone as the bloc alone's own failure does.
+# A call that fails: it reaches the zone.
 FAILING = '''
 Future<void> scenario() async {
   await guarded(() async {
@@ -456,19 +276,6 @@ Future<void> scenario() async {
       '$name: the failure must reach the zone');
 }
 '''
-
-FILES['core_closing_bloc_failed'] = (
-    BLOC_HEAD + HELPERS + CHAT_API + EVENTS + core[f'{ALONE}/ChatBloc']
-    + "\nconst name = 'with bloc alone';\n" + FAILING + RUNNER)
-
-FILES['core_closing_job_failed'] = (
-    CORE_HEAD + HELPERS + CHAT_API + EVENTS + core[f'{WITH_JOB}/ChatBloc']
-    + "\nconst name = 'with a job';\n" + FAILING + RUNNER)
-
-# ------------------------------------------------------------------ write
-WRITE = 'finishing-an-in-flight-write-b'
-WRITE_ALONE = f'{WRITE}/with-bloc-alone'
-WRITE_JOB = f'{WRITE}/with-a-job-in-the-handler'
 
 # The device of tool/doc_snippets.py, its write of 20 ms, with the wire
 # counted: how many writes are in flight at once, and at most.
@@ -556,207 +363,6 @@ Future<void> scenario() async {
   require(zone.isEmpty, 'nothing may reach the zone: $zone');
 }
 '''
-
-# The page's watch under another name, and a watch over it that records
-# every job a handler hands it: the drivers read the outcomes of jobs the
-# page's code keeps to itself.
-assert 'Stream<T> watch<T>(Job<T> job) {' in WATCH
-RECORDING = WATCH.replace('Stream<T> watch<T>(Job<T> job) {',
-                          'Stream<T> _watched<T>(Job<T> job) {') + '''
-final watched = <Job<Object?>>[];
-
-Stream<T> watch<T>(Job<T> job) {
-  watched.add(job);
-  return _watched(job);
-}
-
-/// Each of [count] events has its job, and every job ends at Done or
-/// Cancelled: a Failed one is an error the watch of a replaced handler had
-/// nobody left to hand to. A handler restartable() lets in after it
-/// cancels another starts when that cancellation is done, and its job with
-/// it, so the jobs are counted before they are awaited.
-Future<void> requireEnded(int count) async {
-  for (var waited = 0; watched.length < count; waited++) {
-    require(waited < 1000, 'only ${watched.length} of $count jobs started');
-    await delay(1);
-  }
-  for (final job in watched) {
-    final outcome = await job.done;
-    require(outcome is Done || outcome is Cancelled,
-        'a job must not fail: $outcome');
-  }
-}
-'''
-
-FILES['core_write_bloc'] = (
-    BLOC_HEAD + HELPERS + FIRMWARE + core[f'{WRITE_ALONE}/LockedFirmwareBloc']
-    + '''
-Bloc<Flash, FirmwareState> firmwareBloc(Ble ble) => LockedFirmwareBloc(ble);
-
-Future<void> waitOut() => delay(200);
-''' + FLASHING + RUNNER)
-
-FILES['core_write_job'] = (
-    CORE_HEAD + HELPERS + RECORDING + FIRMWARE
-    + core[f'{WRITE_JOB}/FirmwareBloc'] + '''
-Bloc<Flash, FirmwareState> firmwareBloc(Ble ble) => FirmwareBloc(ble);
-
-Future<void> waitOut() async {
-  await requireEnded(3);
-  watched.clear();
-}
-''' + FLASHING + RUNNER)
-
-# --------------------------------------------------------------- resource
-RESOURCE = 'releasing-a-resource-returned-'
-RESOURCE_ALONE = f'{RESOURCE}/with-bloc-alone'
-RESOURCE_JOB = f'{RESOURCE}/with-a-job-in-the-handler'
-
-# The decoder of the vs-bloc probe: clip 1 takes 50 ms, clip 2 takes 20,
-# so the second answers first. One trace for the calls and the buffers.
-PREVIEW = '''
-final trace = <String>[];
-
-class Clip {
-  const Clip(this.id);
-
-  final int id;
-}
-
-/// A native PCM buffer. Releasing it is not optional.
-class Buffer {
-  Buffer(this.clip);
-
-  final Clip clip;
-  int releases = 0;
-
-  int waveform() {
-    trace.add('sample ${clip.id}');
-    return clip.id;
-  }
-
-  Future<void> release() async {
-    releases++;
-    trace.add('release ${clip.id}');
-  }
-}
-
-class Decoder {
-  final buffers = <Buffer>[];
-
-  Future<Buffer> open(Clip clip) async {
-    trace.add('open ${clip.id}');
-    await delay(clip.id == 1 ? 50 : 20);
-    final buffer = Buffer(clip);
-    buffers.add(buffer);
-    trace.add('ready ${clip.id}');
-    return buffer;
-  }
-}
-
-final class OpenPreview {
-  const OpenPreview(this.clip);
-
-  final Clip clip;
-}
-
-sealed class PreviewState {
-  const PreviewState();
-}
-
-final class NoPreview extends PreviewState {
-  const NoPreview();
-
-  @override
-  String toString() => 'NoPreview';
-}
-
-final class Preview extends PreviewState {
-  const Preview(this.waveform);
-
-  final int waveform;
-
-  @override
-  String toString() => 'Preview($waveform)';
-}
-'''
-
-# Clip 2 opened 5 ms after clip 1; then the same with close() 10 ms in,
-# while both decode. Each buffer is released once, the current one too.
-PREVIEWING = '''
-Future<void> scenario() async {
-  for (final closing in [false, true]) {
-    trace.clear();
-    final decoder = Decoder();
-    final bloc = previewBloc(decoder)..add(const OpenPreview(Clip(1)));
-    await delay(5);
-    bloc.add(const OpenPreview(Clip(2)));
-    if (closing) {
-      await delay(5);
-      await bloc.close();
-      trace.add('closed');
-    }
-    await waitOut();
-    final releases = [for (final buffer in decoder.buffers) buffer.releases];
-    if (closing) {
-      print('close while both decode: $trace');
-      require('$trace' ==
-          '[open 1, open 2, closed, ready 2, release 2, ready 1, release 1]',
-          'close: $trace');
-    } else {
-      print('a second clip while the first decodes: $trace, '
-          'state ${bloc.state}');
-      require('$trace' ==
-          '[open 1, open 2, ready 2, sample 2, release 2, ready 1, release 1]',
-          'a second clip: $trace');
-      require('${bloc.state}' == 'Preview(2)', 'the current clip must show');
-      await bloc.close();
-    }
-    require('$releases' == '[1, 1]',
-        'every buffer must be released once: $releases');
-  }
-  require(zone.isEmpty, 'nothing may reach the zone: $zone');
-}
-'''
-
-FILES['core_resource_bloc'] = (
-    BLOC_HEAD + HELPERS + PREVIEW + core[f'{RESOURCE_ALONE}/GuardedPreviewBloc']
-    + '''
-Bloc<OpenPreview, PreviewState> previewBloc(Decoder decoder) =>
-    GuardedPreviewBloc(decoder);
-
-Future<void> waitOut() => delay(100);
-''' + PREVIEWING + RUNNER)
-
-# The trace is the one of bloc alone, so the end of each job is kept
-# apart: the length of the trace when it ended.
-assert RECORDING.count('  watched.add(job);\n') == 1
-ENDING = RECORDING.replace('  watched.add(job);\n', '''  watched.add(job);
-  final index = watched.length - 1;
-  unawaited(job.done.then((_) => endedAt[index] = trace.length));
-''') + '''
-final endedAt = <int, int>{};
-'''
-
-FILES['core_resource_job'] = (
-    CORE_HEAD + HELPERS + ENDING + PREVIEW
-    + core[f'{RESOURCE_JOB}/PreviewBloc'] + '''
-Bloc<OpenPreview, PreviewState> previewBloc(Decoder decoder) =>
-    PreviewBloc(decoder);
-
-/// The jobs end before the late buffer arrives: it is released when it
-/// does, after the jobs. ctx.abandonable does not wait for the decoder.
-Future<void> waitOut() async {
-  await requireEnded(2);
-  final ended = Map.of(endedAt);
-  watched.clear();
-  endedAt.clear();
-  await delay(100);
-  require(ended[0]! <= trace.indexOf('ready 1'),
-      'the job of clip 1 must end before its buffer arrives: $trace, '
-      'ended at ${ended[0]}');
-}
-''' + PREVIEWING + RUNNER)
 
 
 # ============================================================= solo page
@@ -1646,10 +1252,9 @@ Future<void> checkJobs() async {
 ''' + REVOKING + RUNNER)
 
 # ------------------------------------------------------------------ write
-SOLO_WRITE = section('Finishing an in-flight write before restarting')
-assert SOLO_WRITE == WRITE
+WRITE = section('Finishing an in-flight write before restarting')
 
-# The device of the core drivers with the events of vs-bloc.md.
+# The device of FIRMWARE with the events of vs-bloc.md.
 FIRMWARE_EVENTS = FIRMWARE.split('final class Flash {')[0] + '''
 sealed class FirmwareEvent {}
 
@@ -1752,12 +1357,6 @@ Future<void> waitOut() async {
 }
 ''' + FLASHING + RUNNER)
 
-for key, body in FILES.items():
-    if key.startswith('core_'):
-        assert 'package:solo' not in body, f'{key} imports solo'
-
-unbuilt = core.unbuilt()
-assert not unbuilt, f'blocks of the core page no driver builds: {unbuilt}'
 unbuilt = solo.unbuilt()
 assert not unbuilt, f'blocks of the solo page no driver builds: {unbuilt}'
 

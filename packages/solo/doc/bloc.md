@@ -123,9 +123,7 @@ neither `onError` of the bloc nor the zone hears of it. `settle` throws a
 `Failed` outcome again, and the error goes the way of any error of a handler,
 to `onError` of the bloc and on to the zone. A job the closing controller
 cancelled ends `Cancelled`, and `settle` lets the handler end quietly, where
-`job.value` would throw `Cancelled`, as
-[The bridge](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/bloc.md#the-bridge)
-on the page of `async_job` shows.
+`job.value` would throw `Cancelled`.
 
 The bloc counts to 2, is reset twice and counts to 3, and the screen closes it
 35 ms in, after the first step of the last count:
@@ -980,4 +978,4 @@ to do.
 | [Leaving a loading state when the work is cancelled](vs-bloc.md#leaving-a-loading-state-when-the-work-is-cancelled) | the reset from the handler of `CancelRefresh`: a controller that restarts the refresh resets the state between two starts as well, and the screen shows `Initial` for a moment |
 | [Typed methods with queued execution](vs-bloc.md#typed-methods-with-queued-execution) | function events and methods that return `void`: `add` returns nothing, and the `Job` of the controller stays in the handler |
 | [Awaiting a particular request](vs-bloc.md#awaiting-a-particular-request) | the completer on the event: the caller cannot wait for a `Job` that `add` does not return |
-| [Releasing a resource returned after cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/bloc.md#releasing-a-resource-returned-after-cancellation) | what a job in the handler leaves, on the page of `async_job`: the release is declared where the buffer is acquired, and a controller takes nothing more off |
+| [Releasing a resource returned after cancellation](vs-bloc.md#releasing-a-resource-returned-after-cancellation) | the `try`/`finally` around the buffer: a controller declares the release as `dispose` where the buffer is acquired, and the trace is the same |

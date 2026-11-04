@@ -33,11 +33,6 @@ const topics = [
             'With riverpod and bloc',
             'С riverpod и bloc',
           ),
-          page(
-            'async_job/bloc',
-            'async_job in a bloc app',
-            'async_job в приложении на bloc',
-          ),
           page('async_job/time', 'Time', 'Время'),
           page('async_job/children', 'Children', 'Дети'),
           page('async_job/groups', 'Groups', 'Группы'),
@@ -194,12 +189,6 @@ export default defineConfig({
           demote: ['**/changelog'],
           exclude: ['**/changelog'],
           optionalLinks: [
-            {
-              label: 'async_job in a bloc app',
-              url: `${config.site}/async_job/bloc/`,
-              description:
-                'A job in a bloc handler, next to what bloc alone does.',
-            },
             {
               label: 'solo under bloc',
               url: `${config.site}/solo/bloc/`,

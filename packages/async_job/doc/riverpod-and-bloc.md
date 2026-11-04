@@ -335,9 +335,17 @@ is there for a job that ends `Cancelled` on its own, by its deadline for one:
 
 `watch` is page code, not part of `async_job`: copy it.
 
-What else a job in a bloc handler takes off the code — closing a bloc with a
-call in flight, a write that has to end before the next one starts, a resource
-that arrives after cancellation — is in [async_job in a bloc app](bloc.md).
+A handler with a single call needs no job for this. Any stream whose
+cancellation stops the call goes into `emit.forEach` the same way —
+`CancelableOperation.fromFuture(call, onCancel: token.cancel).asStream()` of
+`package:async`, with the client's own token as in
+[A request to abort](#a-request-to-abort) — and `restartable()` and `close()`
+stop the call through it. A job pays off when the handler takes several steps,
+as `readRows` opens a database and reads it page by page: every `ctx.join` is a
+point where the work stops, and the database closes by the `dispose` written
+where it opens. With bloc alone the handler checks `emit.isDone` before every
+page and closes the database in a `finally`, and a check it misses lets the
+reads run to the end.
 
 ## A request to abort
 
