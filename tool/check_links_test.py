@@ -279,6 +279,35 @@ class ThePackageAbove(LinkCase):
         )
         self.assertEqual(self.problems(page), [])
 
+    def test_a_page_that_answers_with_the_queue(self):
+        # Decision 144: the core links `solo` where the answer needs a
+        # queue, and its bloc page has those answers.
+        named = {('core', 'bloc.md')}
+        with mock.patch.object(check_links, 'LEADS_UP', named):
+            page = self.write(
+                'packages/core/doc/bloc.md',
+                'See [it](../../middle/doc/errors.md).\n',
+            )
+            translation = self.write(
+                'docs/ru/core/bloc.md', 'См. [это](../middle/errors.md).\n'
+            )
+            other = self.write(
+                'packages/core/doc/observing.md',
+                'See [it](../../middle/doc/errors.md).\n',
+            )
+            self.assertEqual(self.problems(page), [])
+            self.assertEqual(self.problems(translation), [])
+            self.assertEqual(
+                self.problems(other),
+                [
+                    'a page of core leads up to middle: '
+                    '../../middle/doc/errors.md'
+                ],
+            )
+
+    def test_the_pages_that_answer_with_the_queue(self):
+        self.assertEqual(check_links.LEADS_UP, {('async_job', 'bloc.md')})
+
     def test_a_guide_page_naming_the_package_on_pub(self):
         page = self.write(
             'packages/core/doc/observing.md',

@@ -446,6 +446,284 @@ FILES['core_closing_job_failed'] = (
     CORE_HEAD + HELPERS + CHAT_API + EVENTS + core[f'{WITH_JOB}/ChatBloc']
     + "\nconst name = 'with a job';\n" + FAILING + RUNNER)
 
+# ------------------------------------------------------------------ write
+WRITE = 'finishing-an-in-flight-write-b'
+WRITE_ALONE = f'{WRITE}/with-bloc-alone'
+WRITE_JOB = f'{WRITE}/with-a-job-in-the-handler'
+
+# The device of tool/doc_snippets.py, its write of 20 ms, with the wire
+# counted: how many writes are in flight at once, and at most.
+FIRMWARE = '''
+class Chunk {
+  const Chunk(this.index);
+
+  final int index;
+}
+
+class Ble {
+  final written = <int>[];
+  int inFlight = 0;
+  int maxInFlight = 0;
+
+  // A BLE write cannot be told to stop: the chunk handed to the stack
+  // lands, and the only way to keep the wire clear is to wait for it.
+  Future<void> write(Chunk chunk) async {
+    inFlight++;
+    if (inFlight > maxInFlight) maxInFlight = inFlight;
+    await delay(20);
+    written.add(chunk.index);
+    inFlight--;
+  }
+}
+
+final class Flash {
+  const Flash(this.chunks);
+
+  final List<Chunk> chunks;
+}
+
+sealed class FirmwareState {
+  const FirmwareState();
+}
+
+final class Idle extends FirmwareState {
+  const Idle();
+
+  @override
+  String toString() => 'Idle';
+}
+
+final class Flashing extends FirmwareState {
+  const Flashing(this.written, this.total);
+
+  final int written;
+  final int total;
+
+  @override
+  String toString() => '$written/$total';
+}
+'''
+
+# Three uploads of four chunks, the second 30 ms after the first and the
+# third 5 ms or no time after the second: the second is replaced while it
+# waits for the first one's write. One line, the same for both answers.
+FLASHING = '''
+Future<void> scenario() async {
+  for (final gaps in [
+    [0, 30, 5],
+    [0, 30, 0],
+  ]) {
+    final ble = Ble();
+    final bloc = firmwareBloc(ble);
+    final states = <FirmwareState>[];
+    final listening = bloc.stream.listen(states.add);
+    for (final (upload, gap) in gaps.indexed) {
+      if (gap > 0) await delay(gap);
+      bloc.add(Flash([for (var i = 0; i < 4; i++) Chunk(100 * upload + i)]));
+    }
+    await settle();
+    require(ble.inFlight == 0, 'every write must have ended');
+    print('uploads at 0, 30 and ${30 + gaps[2]} ms: written '
+        '${ble.written}, ${ble.maxInFlight} write at a time at most, '
+        'states $states');
+    require(ble.maxInFlight == 1, 'two writes overlapped');
+    require('${ble.written}' == '[0, 1, 200, 201, 202, 203]',
+        'the replaced uploads must stop and the last one write it all');
+    require('$states' == '[1/4, 1/4, 2/4, 3/4, 4/4]',
+        'no state of a replaced upload may follow the new one: $states');
+    await listening.cancel();
+    await bloc.close();
+  }
+  require(zone.isEmpty, 'nothing may reach the zone: $zone');
+}
+'''
+
+# The page's watch under another name, and a watch over it that records
+# every job a handler hands it: the drivers read the outcomes of jobs the
+# page's code keeps to itself.
+assert 'Stream<T> watch<T>(Job<T> job) {' in WATCH
+RECORDING = WATCH.replace('Stream<T> watch<T>(Job<T> job) {',
+                          'Stream<T> _watched<T>(Job<T> job) {') + '''
+final watched = <Job<Object?>>[];
+
+Stream<T> watch<T>(Job<T> job) {
+  watched.add(job);
+  return _watched(job);
+}
+
+/// Each of [count] events has its job, and every job ends at Done or
+/// Cancelled: a Failed one is an error the watch of a replaced handler had
+/// nobody left to hand to. A handler restartable() lets in after it
+/// cancels another starts when that cancellation is done, and its job with
+/// it, so the jobs are counted before they are awaited.
+Future<void> requireEnded(int count) async {
+  for (var waited = 0; watched.length < count; waited++) {
+    require(waited < 1000, 'only ${watched.length} of $count jobs started');
+    await delay(1);
+  }
+  for (final job in watched) {
+    final outcome = await job.done;
+    require(outcome is Done || outcome is Cancelled,
+        'a job must not fail: $outcome');
+  }
+}
+'''
+
+FILES['core_write_bloc'] = (
+    BLOC_HEAD + HELPERS + FIRMWARE + core[f'{WRITE_ALONE}/LockedFirmwareBloc']
+    + '''
+Bloc<Flash, FirmwareState> firmwareBloc(Ble ble) => LockedFirmwareBloc(ble);
+
+Future<void> settle() => delay(200);
+''' + FLASHING + RUNNER)
+
+FILES['core_write_job'] = (
+    CORE_HEAD + HELPERS + RECORDING + FIRMWARE
+    + core[f'{WRITE_JOB}/FirmwareBloc'] + '''
+Bloc<Flash, FirmwareState> firmwareBloc(Ble ble) => FirmwareBloc(ble);
+
+Future<void> settle() async {
+  await requireEnded(3);
+  watched.clear();
+}
+''' + FLASHING + RUNNER)
+
+# --------------------------------------------------------------- resource
+RESOURCE = 'releasing-a-resource-returned-'
+RESOURCE_ALONE = f'{RESOURCE}/with-bloc-alone'
+RESOURCE_JOB = f'{RESOURCE}/with-a-job-in-the-handler'
+
+# The decoder of the vs-bloc probe: clip 1 takes 50 ms, clip 2 takes 20,
+# so the second answers first. One trace for the calls and the buffers.
+PREVIEW = '''
+final trace = <String>[];
+
+class Clip {
+  const Clip(this.id);
+
+  final int id;
+}
+
+/// A native PCM buffer. Releasing it is not optional.
+class Buffer {
+  Buffer(this.clip);
+
+  final Clip clip;
+  int releases = 0;
+
+  int waveform() {
+    trace.add('sample ${clip.id}');
+    return clip.id;
+  }
+
+  Future<void> release() async {
+    releases++;
+    trace.add('release ${clip.id}');
+  }
+}
+
+class Decoder {
+  final buffers = <Buffer>[];
+
+  Future<Buffer> open(Clip clip) async {
+    trace.add('open ${clip.id}');
+    await delay(clip.id == 1 ? 50 : 20);
+    final buffer = Buffer(clip);
+    buffers.add(buffer);
+    trace.add('ready ${clip.id}');
+    return buffer;
+  }
+}
+
+final class OpenPreview {
+  const OpenPreview(this.clip);
+
+  final Clip clip;
+}
+
+sealed class PreviewState {
+  const PreviewState();
+}
+
+final class NoPreview extends PreviewState {
+  const NoPreview();
+
+  @override
+  String toString() => 'NoPreview';
+}
+
+final class Preview extends PreviewState {
+  const Preview(this.waveform);
+
+  final int waveform;
+
+  @override
+  String toString() => 'Preview($waveform)';
+}
+'''
+
+# Clip 2 opened 5 ms after clip 1; then the same with close() 10 ms in,
+# while both decode. Each buffer is released once, the current one too.
+PREVIEWING = '''
+Future<void> scenario() async {
+  for (final closing in [false, true]) {
+    trace.clear();
+    final decoder = Decoder();
+    final bloc = previewBloc(decoder)..add(const OpenPreview(Clip(1)));
+    await delay(5);
+    bloc.add(const OpenPreview(Clip(2)));
+    if (closing) {
+      await delay(5);
+      await bloc.close();
+      trace.add('closed');
+    }
+    await settle();
+    final releases = [for (final buffer in decoder.buffers) buffer.releases];
+    if (closing) {
+      print('close while both decode: $trace');
+      require('$trace' ==
+          '[open 1, open 2, closed, ready 2, release 2, ready 1, release 1]',
+          'close: $trace');
+    } else {
+      print('a second clip while the first decodes: $trace, '
+          'state ${bloc.state}');
+      require('$trace' ==
+          '[open 1, open 2, ready 2, sample 2, release 2, ready 1, release 1]',
+          'a second clip: $trace');
+      require('${bloc.state}' == 'Preview(2)', 'the current clip must show');
+      await bloc.close();
+    }
+    require('$releases' == '[1, 1]',
+        'every buffer must be released once: $releases');
+  }
+  require(zone.isEmpty, 'nothing may reach the zone: $zone');
+}
+'''
+
+FILES['core_resource_bloc'] = (
+    BLOC_HEAD + HELPERS + PREVIEW + core[f'{RESOURCE_ALONE}/GuardedPreviewBloc']
+    + '''
+Bloc<OpenPreview, PreviewState> previewBloc(Decoder decoder) =>
+    GuardedPreviewBloc(decoder);
+
+Future<void> settle() => delay(100);
+''' + PREVIEWING + RUNNER)
+
+FILES['core_resource_job'] = (
+    CORE_HEAD + HELPERS + RECORDING + PREVIEW
+    + core[f'{RESOURCE_JOB}/PreviewBloc'] + '''
+Bloc<OpenPreview, PreviewState> previewBloc(Decoder decoder) =>
+    PreviewBloc(decoder);
+
+/// The jobs end before the late buffer arrives: it is released when it
+/// does, after the jobs.
+Future<void> settle() async {
+  await requireEnded(2);
+  watched.clear();
+  await delay(100);
+}
+''' + PREVIEWING + RUNNER)
+
 for key, body in FILES.items():
     if key.startswith('core_'):
         assert 'package:solo' not in body, f'{key} imports solo'

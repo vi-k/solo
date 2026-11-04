@@ -58,6 +58,12 @@ taken off, before links and fences are looked for: a link's text wraps to
 the next line as any phrase does, and a line read alone would miss it.
 Dartdoc does not lead up either: `async_job` explaining `runAll` has no
 business sending its reader to a page of `solo`.
+
+One guide page leads up on purpose, and it is named in `LEADS_UP`: the
+bloc page of `async_job` sends its reader to `solo` for the scenarios whose
+answer is a queue. The core links the package above it only where the
+answer needs one -- decision 144 of `docs/settled.md` -- and that page is
+where such answers are. Its translation is let through with it.
 """
 
 import json
@@ -76,6 +82,10 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 # The repository's address is the site's setting, so one place names it.
 BLOB = json.loads((REPO / 'site' / 'site.json').read_text())['repo']
 BLOB = BLOB.rstrip('/') + '/blob/main/'
+
+
+# (package, file name) of every guide page allowed to lead up.
+LEADS_UP = {('async_job', 'bloc.md')}
 
 
 DEPENDENCIES = re.compile(r'^dependencies:\n((?:[ \t].*\n|\n)*)', re.M)
@@ -143,6 +153,8 @@ def anchors(path):
 
 def offenders(path):
     package, guide = place(path)
+    if (package, path.name) in LEADS_UP:
+        guide = False
     above = built_on().get(package, set()) if guide else set()
     fenced = False
     for number, line in enumerate(path.read_text().split('\n'), start=1):
