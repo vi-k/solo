@@ -90,11 +90,12 @@ job, alerts fail: [server: profile 1 started, server: feed 1 started, server: al
 
 Перезапуск в 5 мс и `close()` в 15 мс: у первой попытки все шесть запросов
 отвечают после `closed`, у токенов и у задачи все шесть прерваны до `closed`.
-Строк: 13, 33, 16. У одного bloc — токен на каждую часть, `eagerError: true`,
-отмена всех токенов в `catch`, ветка `on Aborted` перед общим `catch`, поле
-списка, `_stop()` в начале обработчика и в `close()`. У задачи — `ctx.runAll`,
-который сам отменяет остальные ветки при первом провале, и токен в каждой
-ветке; поля и `close()` нет.
+Строк: 13, 25, 16. Сильнейший ответ одного bloc — один токен на все три
+запроса, как позволяет dio: `eagerError: true`, отмена токена в `catch`, ветка
+`on Aborted` перед общим `catch`, поле и `close()`. Версия с токеном на каждую
+часть и списком в поле даёт ту же трассу в 33 строках и в сравнение не идёт.
+У задачи — `ctx.runAll`, который сам отменяет остальные ветки при первом
+провале, и токен в каждой ветке; поля и `close()` нет.
 
 **C. Срок, после которого экспорт останавливается.** Экспорту 100 мс, сервер
 отвечает за 300 мс; по истечении срока экспорт прерывается на сервере,
@@ -149,7 +150,7 @@ job, past the limit: [server: export 1 started, server: export 1 aborted, state 
    раздел не разбирает, а ведёт к «A request to abort» страницы
    `riverpod-and-bloc.md`; с dio строки те же, что там.
 4. **«Parts that stop together»** — сценарий B. Первая попытка — `Future.wait`.
-   Ответ одного bloc — токены, `eagerError`, отмена соседей в `catch`, поле
+   Ответ одного bloc — общий токен, `eagerError`, отмена токена в `catch`, поле
    и `close()`. Задача — `ctx.runAll` с токеном в каждой ветке. Раздел ведёт
    к «When one failure makes the rest pointless» страницы `groups.md` за тем,
    что `runAll` бросает и чем отличается от `Future.wait`.
@@ -269,39 +270,30 @@ class JobBloc extends Bloc<Searched, String> {
 B, один bloc и задача:
 
 ```dart
-class TokenBloc extends Bloc<Opened, String> {
-  TokenBloc() : super('') {
+class OneTokenBloc extends Bloc<Opened, String> {
+  OneTokenBloc() : super('') {
     on<Opened>((e, emit) async {
-      _stop();
-      final tokens = _tokens = [for (final _ in parts) CancelToken()];
+      _token?.cancel();
+      final token = _token = CancelToken();
       try {
         final values = await Future.wait([
-          for (final (i, name) in parts.indexed)
-            part(name, e.round, token: tokens[i]),
+          for (final name in parts) part(name, e.round, token: token),
         ], eagerError: true);
         emit(values.join(', '));
       } on Aborted {
         return;
       } catch (error) {
-        for (final token in tokens) {
-          token.cancel();
-        }
+        token.cancel();
         emit('failed: $error');
       }
     }, transformer: restartable());
   }
 
-  List<CancelToken> _tokens = const [];
-
-  void _stop() {
-    for (final token in _tokens) {
-      token.cancel();
-    }
-  }
+  CancelToken? _token;
 
   @override
   Future<void> close() {
-    _stop();
+    _token?.cancel();
     return super.close();
   }
 }
