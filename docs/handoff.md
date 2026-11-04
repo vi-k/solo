@@ -24,11 +24,6 @@
 2. Зонд по версии: пакет-пользователь называет `solo_lints: ^0.1.5`
    и `async_job_lints: ^0.1.0` по `version:`, каждый один и оба; итог —
    в отчёт.
-3. `async_job_lints` 0.1.1 выпускается по слову владельца 2026-11-04 «опубликуй
-   async_job_lints 0.1.1»: подсказка `bare_await` и его раздел README больше
-   не ставят `ctx.join` в один ряд с `abandonable` и `pause` как ожидание,
-   которое обрывает отмена. `solo_lints` не выпускается, патч дойдёт до него
-   сам. Запись — `2026-11-04-async-job-lints-0-1-1-release-report.md`.
 
 Страница `solo` о riverpod написана 2026-11-02. Бэклог пуст. Опубликованы
 на pub.dev: `async_job` и `solo` 1.0.0 (2026-11-01, по слову владельца, теги
@@ -40,9 +35,13 @@
 по слову владельца, тег `solo_lints-v0.1.4` на `43f28973`, запись
 `2026-11-01-solo-lints-release-report.md`), `async_job_lints` 0.1.0
 (2026-11-04, по слову владельца, тег `async_job_lints-v0.1.0` на `d74c0bf2`,
-запись `2026-11-04-async-job-lints-release-report.md`) и `solo_lints` 0.1.5
+запись `2026-11-04-async-job-lints-release-report.md`), `solo_lints` 0.1.5
 (2026-11-04, по слову владельца, тег `solo_lints-v0.1.5` на `a089dd04`, запись
-`2026-11-04-solo-lints-release-report.md`). Как шли выпуски и работа над
+`2026-11-04-solo-lints-release-report.md`) и `async_job_lints` 0.1.1
+(2026-11-04, по слову владельца, тег `async_job_lints-v0.1.1` на `0e60e2b3`,
+запись `2026-11-04-async-job-lints-0-1-1-release-report.md`): подсказка
+`bare_await` больше не ставит `ctx.join` в один ряд с прерываемыми ожиданиями;
+`solo_lints` получает её сам, по `^0.1.0`. Как шли выпуски и работа над
 `solo_lints` — в `2026-10-29-handoff-archive.md`. `flutter_solo` 1.0.0 вышел
 после scopo 1.0.0 под ядро 1.0. `solo_lints` вышел патчем, а не 1.0.0, потому
 что README опубликованных ядра и `solo` просят `solo_lints: ^0.1.3`.

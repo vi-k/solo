@@ -1,6 +1,5 @@
-> **Состояние на 2026-11-04:** подготовка `async_job_lints` 0.1.1
-> закоммичена (`bc87e9ac`); связка идёт по слову владельца «опубликуй
-> async_job_lints 0.1.1».
+> **Состояние на 2026-11-04:** `async_job_lints` 0.1.1 опубликован на pub.dev;
+> релизный коммит `0e60e2b3` и аннотированный тег отправлены в origin.
 > **Что это:** подготовка патча `async_job_lints` 0.1.1 с новой подсказкой
 > `bare_await`.
 > **Связанные записи:** `2026-11-04-async-job-lints-release-report.md`,
@@ -80,3 +79,10 @@ floor: 7 roots». `async_job_lints` опускает `analysis_server_plugin`,
 подготовка и эта запись; они уходят в origin вместе с релизным. Тега
 `async_job_lints-v0.1.1` нет ни локально, ни в origin; на pub.dev
 `latest: 0.1.0`.
+
+Связка: релизный коммит `0e60e2b3` «Release async_job_lints 0.1.1»,
+аннотированный тег `async_job_lints-v0.1.1` на нём, `git push --follow-tags`
+отправил `main` (`a089dd04..0e60e2b3`) и тег. `dart pub publish` из чистого
+дерева: «Successfully uploaded https://pub.dev/packages/async_job_lints version
+0.1.1». API pub.dev отдаёт версию 0.1.1 с датой 2026-11-04T12:02:00Z, издатель
+пакета — `yet-another.dev`.
