@@ -93,6 +93,9 @@ import 'package:solo/solo.dart';
 # The drivers of riverpod alone, without a controller.
 RIVERPOD_HEAD = HEAD.replace("import 'package:solo/solo.dart';\n", '')
 
+# The drivers of a controller alone, without riverpod.
+SOLO_HEAD = HEAD.replace("import 'package:riverpod/riverpod.dart';\n", '')
+
 # The device of the page: opening it takes 50 ms, closing it is at once.
 # `alive` holds the devices opened and not closed, `log` what happened to
 # each. The drivers act between those marks, never on one: two events on
@@ -296,6 +299,7 @@ FILES['bridge'] = (
 Future<void> scenario() async {
   final outcome = await leave(10);
   require(zone.isEmpty, 'nothing reaches the zone: $zone');
+  print('zone: nothing');
   require(outcome is Cancelled, 'the closing cancels the opening: $outcome');
   require(alive.isEmpty, 'the device opened late is closed: $alive');
   require(rebuilds == 0, 'the widget with SoloBuilder is not rebuilt: '
@@ -367,6 +371,38 @@ Future<void> scenario() async {
 
 # ------------------------------------------------------------------ price
 # The camera with onClose under its provider, as the page leaves it.
+# What the page says of `ctx.join` in the camera: it waits for the opening
+# even when the job is cancelled meanwhile. A `close()` 10 ms in returns
+# with the device opened and closed again; under `ctx.abandonable` it would
+# return at once and the device would open after it.
+JOIN = '''
+Future<void> scenario() async {
+  var closed = '';
+  Job<void>? opened;
+  await guarded(() async {
+    final controller = Camera();
+    opened = controller.open();
+    await delay(10);
+    await controller.close();
+    closed = log.join(', ');
+  });
+  require(
+    closed == 'open 1 start, open 1 done, close 1',
+    'close() waits for the opening: $closed',
+  );
+  require(opened?.outcome is Cancelled, 'the closing cancels the opening');
+  require(zone.isEmpty, 'nothing reaches the zone: $zone');
+}
+'''
+
+FILES['camera_join'] = (
+    # The block declares Ready.device, which this driver leaves alone.
+    '// ignore_for_file: unreachable_from_main\n\n'
+    + SOLO_HEAD + STATES + CAMERA + DEVICE + JOIN + RUNNER)
+FILES['closing_join'] = (
+    SOLO_HEAD + STATES + snips[f'{CAMERA_SECTION}/onclose/Camera']
+    + DEVICE + JOIN + RUNNER)
+
 CLOSING = HEAD + STATES + snips[f'{CAMERA_SECTION}/onclose/Camera'] + ANSWER
 
 # A read with no listener: the provider makes the controller and disposes
@@ -440,10 +476,14 @@ MUTATION_HEAD = HEAD.replace(
 # call, the number taken before the wait.
 SEND = '''
 int calls = 0;
+int inFlight = 0;
+int maxInFlight = 0;
 
 Future<String> send(String text) async {
   final call = ++calls;
+  if (++inFlight > maxInFlight) maxInFlight = inFlight;
   await Future<void>.delayed(const Duration(milliseconds: 30));
+  inFlight--;
   return 'sent $text #$call';
 }
 
@@ -453,6 +493,9 @@ void require(bool condition, String message) {
 '''
 
 MUTATION = snips[f'{FORM}/the-first-attempt/submit']
+
+FORM_STATES = snips[f'{FORM}/policy-droppable/MessageState']
+FORM_CONTROLLER = snips[f'{FORM}/policy-droppable/MessageForm']
 
 # What the page quotes from riverpod's own documentation: a mutation run
 # twice without the guard sends twice. Should riverpod start restricting
@@ -504,8 +547,7 @@ Future<void> scenario() async {
 ''' + RUNNER)
 
 FILES['form_droppable'] = (
-    HEAD.replace("import 'package:riverpod/riverpod.dart';\n", '') + snips[f'{FORM}/policy-droppable/MessageState']
-    + snips[f'{FORM}/policy-droppable/MessageForm'] + SEND + '''
+    SOLO_HEAD + FORM_STATES + FORM_CONTROLLER + SEND + '''
 Future<void> scenario() async {
   final form = MessageForm();
   final first = form.submit('hi');
@@ -525,6 +567,33 @@ Future<void> scenario() async {
     'both callers get the receipt of hi: $firstReceipt, $secondReceipt',
   );
   require(state is Sent && state.receipt == 'sent hi #1', 'state: $state');
+  await form.close();
+}
+''' + RUNNER)
+
+# What the page says of `ctx.join` in the form: a cancelled send holds the
+# queue until it is over, and a `submit` that comes meanwhile gets the
+# cancelled job back instead of starting a second send. Under
+# `ctx.abandonable` the job would end at once, and the next `submit` would
+# send while the first is still on its way.
+FILES['form_cancelled'] = (
+    # The block declares Sent.receipt, which this driver leaves alone.
+    '// ignore_for_file: unreachable_from_main\n\n'
+    + SOLO_HEAD + FORM_STATES + FORM_CONTROLLER + SEND + '''
+Future<void> scenario() async {
+  final form = MessageForm();
+  final first = form.submit('hi');
+  await Future<void>.delayed(const Duration(milliseconds: 10));
+  unawaited(first.cancel());
+  await Future<void>.delayed(const Duration(milliseconds: 1));
+  final second = form.submit('bye');
+  await first.done;
+  await second.done;
+  require(first.outcome is Cancelled, 'the first send is cancelled');
+  require(
+    maxInFlight == 1,
+    'a submit after the cancellation waits for the send: $maxInFlight',
+  );
   await form.close();
 }
 ''' + RUNNER)

@@ -24,9 +24,9 @@ throws `Exception('Cancelled')` after the disposal. An app that wants to tell
 that cancellation from a failure by its type throws a class of its own;
 `async_job` gives every piece of code that type already: `Cancelled`.
 
-Each section opens with the version riverpod's own documentation leads to and
-shows what that code does. The states and traces under the fragments are what
-the code prints when it runs.
+Each section opens with the version riverpod's own API leads to and shows what
+that code does. The states and traces under the fragments are what the code
+prints when it runs.
 
 ## A controller under a provider
 
@@ -137,6 +137,7 @@ screen left at 10 ms
 outcome: Cancelled(closed)
 states: Closed, Opening
 device: open 1 start, open 1 done, close 1
+zone: nothing
 ```
 
 The listener goes before the controller closes, and the `Closed` of the
@@ -327,9 +328,9 @@ calls: 1
 The guard works: `run` puts the mutation into `MutationPending` before it
 returns, and the second call finds it there. What sets it apart from the answer
 below is narrow. The second caller gets `null`, not the receipt of the message
-that went. And the guard lives in each caller, not in the mutation: its
-documentation says that "mutations do not restrict concurrent calls in any
-capacity", and a caller without the check sends the message a second time.
+that went. And the guard lives in each caller, not in the mutation. Its
+documentation says: "Currently, mutations do not restrict concurrent calls in
+any capacity." A caller without the check sends the message a second time.
 
 ### Policy.droppable
 
