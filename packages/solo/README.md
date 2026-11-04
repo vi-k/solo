@@ -305,8 +305,8 @@ resources, children, streams, accumulation and its rules. Diagnostics, errors
 and testing are for a controller about to ship, the common mistakes are a list
 to check against, and the reference names every member with the section that
 explains it. Flutter is for a controller behind a screen, the camera example
-puts the pages together in one controller, solo and bloc side by side is for a
-reader who comes from bloc, solo under riverpod for one who stays on it.
+joins them in one controller, solo and bloc side by side is for a reader who
+comes from bloc, solo under riverpod and solo under bloc for one who stays.
 
 | Page | What it covers |
 | --- | --- |
@@ -327,6 +327,7 @@ reader who comes from bloc, solo under riverpod for one who stays on it.
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
 | [solo and bloc, side by side](doc/vs-bloc.md) | Eleven scenarios in both packages |
 | [solo under riverpod](doc/riverpod.md) | A controller under a provider: the bridge, a camera closed when the screen goes, a form sent once |
+| [solo under bloc](doc/bloc.md) | A controller under a bloc: the bridges, six requirements where the controller leaves the bloc less to do |
 
 ## Recipes
 

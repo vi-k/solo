@@ -48,7 +48,8 @@ The examples introduce other solo APIs where they are used. The
 [README](https://github.com/vi-k/solo/blob/main/packages/solo/README.md) is the
 introduction, and the pages it lists under
 [Guides](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#guides)
-hold the detailed contracts.
+hold the detailed contracts. An app that keeps bloc can put the controllers of
+six of these sections under its blocs, as [solo under bloc](bloc.md) shows.
 
 Examples use separate application models: the player's `Ready` is not the
 report's `Ready`. Supporting state classes, event classes and fake APIs are not

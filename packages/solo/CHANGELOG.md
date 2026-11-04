@@ -8,6 +8,9 @@
 - A new page, `doc/riverpod.md`, shows a controller under a riverpod provider:
   the bridge between the two, a camera closed when the screen goes, a form sent
   once, and what the controller costs there.
+- A new page, `doc/bloc.md`, puts a controller under a bloc: the bridges for
+  its jobs and its states, six requirements where the controller leaves the
+  bloc less to do, and the scenarios where the answer stays with bloc.
 
 ## 1.0.0
 
