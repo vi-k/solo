@@ -31,6 +31,7 @@ import 'package:test/test.dart';
 
 import '../example/example.dart' as example;
 import '../example/quick_start.dart' as quick_start;
+import '../example/walk_away.dart' as walk_away;
 import 'support/delay.dart';
 import 'support/page_code.dart';
 
@@ -587,7 +588,7 @@ void main() {
           'closed the database on the way out',
     );
     for (final page in readmes) {
-      expect(printed.join('\n'), quotedOutputs(page, 1).single, reason: page);
+      expect(printed.join('\n'), quotedOutputs(page, 2).first, reason: page);
     }
   });
 
@@ -671,6 +672,79 @@ void main() {
     );
     expect(next, lessThanOrEqualTo(95));
     expect(guides, lessThanOrEqualTo(125));
+  });
+
+  group('walking away from a call', () {
+    test('returns before the call ends', () {
+      // The block runs in `example/walk_away.dart`, with a request that
+      // prints when it is sent and when its answer comes.
+      final printed = <String>[];
+      final at = <String, Duration>{};
+      fakeAsync((async) {
+        runZoned(
+          () => unawaited(walk_away.main()),
+          zoneSpecification: ZoneSpecification(
+            print: (self, parent, zone, line) {
+              printed.add(line);
+              at[line] = async.elapsed;
+            },
+          ),
+        );
+        async.flushTimers();
+      });
+
+      for (final page in readmes) {
+        expect(printed.join('\n'), quotedOutputs(page, 2).last, reason: page);
+      }
+      expect(at['Cancelled(manual)'], const Duration(milliseconds: 50));
+      expect(at['quote answered'], const Duration(milliseconds: 100));
+    });
+
+    test('takes done next to its constructor', () {
+      for (final page in readmes) {
+        expectDoneTakenFirst(
+          dartBlocks(
+            page,
+          ).singleWhere((block) => block.contains('ctx.abandonable(')),
+          page,
+        );
+      }
+    });
+
+    test('the read of the Quick start under abandonable ends on a closed '
+        'database', () {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          final db = await ctx.join(Database.open, dispose: (db) => db.close());
+          use(await ctx.abandonable(db.readAll));
+        });
+        async.elapse(const Duration(milliseconds: 50));
+        job.cancel().ignore();
+        async.flushTimers();
+
+        expect(Database.events, ['opened', 'closed', 'read']);
+        expect('${job.outcome}', 'Cancelled(manual)');
+      });
+    });
+
+    test('an error the abandoned call throws later reaches the zone, done '
+        'taken first', () {
+      Outcome<void>? ended;
+      final zone = zoneErrorsOf((async) {
+        final job = Job<void>(
+          (ctx) => ctx.abandonable(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+            throw StateError('quote lost');
+          }),
+        );
+        job.done.then((outcome) => ended = outcome).ignore();
+        async.elapse(const Duration(milliseconds: 50));
+        job.cancel().ignore();
+      });
+
+      expect(zone, ['Bad state: quote lost']);
+      expect('$ended', 'Cancelled(manual)');
+    });
   });
 
   test('cancelled next to its constructor the same job does none of it', () {
@@ -1686,7 +1760,7 @@ void main() {
       codeMissingFrom(
         'README.md',
         'test/readme_recipe_test.dart',
-        alsoIn: ['example/quick_start.dart'],
+        alsoIn: ['example/quick_start.dart', 'example/walk_away.dart'],
       ),
       isEmpty,
     );
@@ -1713,15 +1787,16 @@ void main() {
         code(match.group(1)!.split('\n')),
     ];
 
-    // The blocks of the README are copied by the program of
-    // `example/quick_start.dart`, and those of the why page here.
+    // The blocks of the README are copied by the programs of
+    // `example/quick_start.dart` and `example/walk_away.dart`, in this
+    // order, and those of the why page here.
     const readmeMarks = r'// README: begin\n(.*?)\n\s*// README: end';
     const whyMarks = r'// why: begin\n(.*?)\n\s*// why: end';
     const dart = r'```dart\n(.*?)\n```';
-    expect(
-      blocks(readmeMarks, 'example/quick_start.dart'),
-      blocks(dart, 'README.md'),
-    );
+    expect([
+      ...blocks(readmeMarks, 'example/quick_start.dart'),
+      ...blocks(readmeMarks, 'example/walk_away.dart'),
+    ], blocks(dart, 'README.md'));
     expect(
       blocks(whyMarks, 'test/readme_recipe_test.dart'),
       blocks(dart, whyEn),

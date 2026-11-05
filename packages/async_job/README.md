@@ -87,6 +87,41 @@ read throws after the cancellation is not the outcome: the job ends
 [Where errors go](doc/errors.md#where-errors-go) shows. The body starts on the
 next microtask, which is why the block waits before it cancels.
 
+## Walking away from a call
+
+```dart
+Future<void> main() async {
+  final job = Job<String>((ctx) => ctx.abandonable(fetchQuote));
+  final outcome = job.done;
+
+  // Somebody left the screen while the quote was on its way.
+  await Future<void>.delayed(const Duration(milliseconds: 50));
+
+  // Returns before fetchQuote answers.
+  await job.cancel();
+  print(await outcome);
+}
+```
+
+`example/walk_away.dart` runs this block with a `fetchQuote` that prints when
+the request is sent and when the quote comes back. It prints:
+
+```text
+request sent
+Cancelled(manual)
+quote answered
+```
+
+`ctx.abandonable` stops waiting for the call at the cancellation, and the call
+runs on with nobody to take its result: `cancel()` returned before the quote
+came back, where `ctx.join` in the Quick start waited for the read. That fits a
+call that holds nothing the job cleans up: the read of the Quick start, under
+`ctx.abandonable`, would end on a closed database. A request that can stop
+takes its stop through `ctx.onCancel` and `ctx.join`, as
+[A token through `onCancel`](doc/cancellation.md#a-token-through-oncancel)
+shows. An error the call throws after the cancellation is left uncaught, as in
+the Quick start.
+
 ## Guides
 
 Also on the [documentation site](https://docs.yet-another.dev/async_job/), with

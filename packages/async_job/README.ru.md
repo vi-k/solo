@@ -89,6 +89,42 @@ cancelled: manual
 Тело запускается на следующей микротаске, поэтому блок ждёт, прежде чем
 отменить.
 
+## Уйти от вызова
+
+```dart
+Future<void> main() async {
+  final job = Job<String>((ctx) => ctx.abandonable(fetchQuote));
+  final outcome = job.done;
+
+  // Кто-то ушёл с экрана, пока цитата была в пути.
+  await Future<void>.delayed(const Duration(milliseconds: 50));
+
+  // Возвращается раньше, чем ответит fetchQuote.
+  await job.cancel();
+  print(await outcome);
+}
+```
+
+`example/walk_away.dart` запускает этот блок с `fetchQuote`, который печатает,
+когда запрос отправлен и когда приходит цитата. Он печатает:
+
+```text
+request sent
+Cancelled(manual)
+quote answered
+```
+
+`ctx.abandonable` перестаёт ждать вызов при отмене, а вызов идёт дальше, и его
+результат никто не заберёт: `cancel()` вернулся раньше, чем пришла цитата,
+тогда как `ctx.join` в быстром старте дождался чтения. Это подходит вызову,
+который не держит ничего, что задача убирает: чтение из быстрого старта под
+`ctx.abandonable` кончилось бы на закрытой базе. Запрос, который умеет
+останавливаться, получает остановку через `ctx.onCancel` и `ctx.join`, как
+показывает раздел
+[«Токен через `onCancel`»](../../docs/ru/async_job/cancellation.md#токен-через-oncancel).
+Ошибка, которую вызов бросит после отмены, остаётся непойманной, как
+и в быстром старте.
+
 ## Страницы
 
 Они же на [сайте документации](https://docs.yet-another.dev/ru/async_job/),
