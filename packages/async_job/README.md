@@ -15,8 +15,8 @@ waits for nothing; the core set of `package:lints` flags it with
 `await_only_futures`.
 
 [Why a job](doc/why.md) shows what a job adds to a `Future`, a flag and
-`CancelableOperation`, on a fuller example. [Reference](doc/reference.md) lists
-every member of the context and what it does once the job is cancelled.
+`CancelableOperation`, and a fuller example. [Reference](doc/reference.md)
+lists every member of the context and what it does once the job is cancelled.
 
 ## Install
 
@@ -26,8 +26,8 @@ dart pub add async_job
 
 The analyzer plugin [async_job_lints](https://pub.dev/packages/async_job_lints)
 reports mistakes that compile, run and often pass a first test, such as a wait
-in cleanup that never happens or a resource lost to a cancellation. Name it in
-`analysis_options.yaml`, which turns on its warnings, and turn its lints on by
+in cleanup that never happens or a resource lost to a cancellation. Naming it
+in `analysis_options.yaml` turns on its warnings; its lints are turned on by
 name, as its
 [Install](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#install)
 section shows:
@@ -84,8 +84,8 @@ reached the body; `cancel()` returned once the job was over, cleanup included.
 cancellation lands in the `switch` instead of ending the program. An error the
 read throws after the cancellation is not the outcome: the job ends
 `Cancelled`, and the error is left uncaught, as
-[Where errors go](doc/errors.md#where-errors-go) shows. The body starts on the
-next microtask, which is why the block waits before it cancels.
+[Where errors go](doc/errors.md#where-errors-go) shows. A job cancelled right
+away never starts its body, so the block waits until the read is in flight.
 
 ## Walking away from a call
 
@@ -116,11 +116,12 @@ quote answered
 runs on with nobody to take its result: `cancel()` returned before the quote
 came back, where `ctx.join` in the Quick start waited for the read. That fits a
 call that holds nothing the job cleans up: the read of the Quick start, under
-`ctx.abandonable`, would end on a closed database. A request that can stop
-takes its stop through `ctx.onCancel` and `ctx.join`, as
+`ctx.abandonable`, would end on a closed database. A request that can stop is
+handed the cancellation through `ctx.onCancel` and awaited with `ctx.join`;
 [A token through `onCancel`](doc/cancellation.md#a-token-through-oncancel)
-shows. An error the call throws after the cancellation is left uncaught, as in
-the Quick start.
+shows how, and how `Job.isCancellationError` keeps the error of each stop out
+of the crash reports of the app. An error the call throws after the
+cancellation is left uncaught, as in the Quick start.
 
 ## Guides
 

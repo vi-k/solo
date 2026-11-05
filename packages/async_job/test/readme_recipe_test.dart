@@ -666,6 +666,9 @@ void main() {
     final lines = read('README.md').split('\n');
     final quickStart = lines.indexOf('## Quick start');
     final guides = lines.indexOf('## Guides');
+    // A renamed heading would measure from the top of the page and pass.
+    expect(quickStart, isNot(-1), reason: 'no "## Quick start"');
+    expect(guides, isNot(-1), reason: 'no "## Guides"');
     final next = lines.indexWhere(
       (line) => line.startsWith('## '),
       quickStart + 1,

@@ -2,14 +2,12 @@
 
 ### Documentation
 
-- The README is a short entry. The Quick start takes `done` next to the
-  constructor of its job and reads the outcome in a `switch`, and a new
-  section, "Walking away from a call", shows `ctx.abandonable`. "Why" and "A
-  fuller example" moved to a page of their own, [Why a job](doc/why.md), and
-  the table of the context and "Four words" to [Reference](doc/reference.md).
+- The README is a short entry with a section on `ctx.abandonable`: `Why` and
+  `A fuller example` moved to [Why a job](doc/why.md), and the table of the
+  context and `Four words` to [Reference](doc/reference.md).
 - The README names the analyzer plugin `async_job_lints` in `Install`, which
   holds the rules for code on `async_job`; code on `solo` names `solo_lints`,
-  as the section "solo" says.
+  as its section `solo` says.
 - "A deadline for one step" on the time page calls `ctx.check()` first in the
   clause that catches the child's deadline. Without it, a job whose own
   `timeout` ran out before `ctx.run` took its own `Cancelled(timeout)` for the
