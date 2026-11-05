@@ -182,9 +182,10 @@ once, so `onCancel` can stop the call, waits for the call to come back and
 throws only then. `abandonable` stops waiting at the cancellation and leaves
 the call in flight. Steps that must not hear a cancellation until they end go
 into `ctx.uncancellable`. See
-[The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/README.md#the-context-at-a-glance)
-and
-[Letting time pass](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/time.md#letting-time-pass).
+[The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/reference.md#the-context-at-a-glance)
+on the reference page of `async_job` and
+[Letting time pass](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/time.md#letting-time-pass)
+on its time page.
 
 The rule looks at a job body, a function literal or a top-level function whose
 first parameter is a `JobContext`, also when it is named `_`. Functions

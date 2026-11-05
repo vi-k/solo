@@ -5,9 +5,9 @@ it returns, of its queue and of its accumulators, with the section that
 explains it. One line, too, for every parameter of the methods that make jobs.
 What `solo` takes from the core is listed where it is explained. The rest of
 `ctx` is in
-[The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/README.md#the-context-at-a-glance)
-of the `async_job` README, and `value`, `done` or `cancel()` of a job are in
-[Jobs and results](jobs.md#jobs-and-results) on the jobs page.
+[The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/reference.md#the-context-at-a-glance)
+on the reference page of `async_job`, and `value`, `done` or `cancel()` of a
+job are in [Jobs and results](jobs.md#jobs-and-results) on the jobs page.
 
 ## Solo
 
@@ -103,10 +103,10 @@ parameters after it. The first type argument of each is the working type, in
 What a body of `solo` gets as `ctx`: the core's `JobContext` plus the state,
 narrowed to the working type `W` of the job. `join`, `abandonable`, `onDispose`
 and the rest of `ctx` are the core's, in
-[The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/README.md#the-context-at-a-glance)
-of the `async_job` README. Here the checkpoints of the core, `check()` and the
-waiting methods, also ask the rules of the job, as `ctx.state` does, and so
-does `ctx.each`.
+[The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/reference.md#the-context-at-a-glance)
+on the reference page of `async_job`. Here the checkpoints of the core,
+`check()` and the waiting methods, also ask the rules of the job, as
+`ctx.state` does, and so does `ctx.each`.
 
 | Member | What it does | Where |
 | --- | --- | --- |

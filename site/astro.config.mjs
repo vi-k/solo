@@ -50,6 +50,7 @@ const topics = [
             'Своё поверх ядра',
           ),
           page('async_job/engine', 'An engine of your own', 'Свой движок'),
+          page('async_job/reference', 'Reference', 'Справочник'),
           changelog('async_job'),
         ],
       },

@@ -186,9 +186,11 @@ final job = Job<void>((ctx) async {
 остановить вызов, ждёт, пока вызов вернётся, и только тогда бросает.
 `abandonable` перестаёт ждать при отмене и оставляет вызов в полёте. Шаги,
 которые не должны слышать отмену, пока не закончатся, кладите
-в `ctx.uncancellable`. Подробнее в разделах
-[«Контекст коротко»](https://github.com/vi-k/solo/blob/main/packages/async_job/README.ru.md#контекст-коротко)
-и [«Дать времени пройти»](https://github.com/vi-k/solo/blob/main/docs/ru/async_job/time.md#дать-времени-пройти).
+в `ctx.uncancellable`. Подробнее — в разделе
+[«Контекст коротко»](https://github.com/vi-k/solo/blob/main/docs/ru/async_job/reference.md#контекст-коротко)
+справочника `async_job` и в разделе
+[«Дать времени пройти»](https://github.com/vi-k/solo/blob/main/docs/ru/async_job/time.md#дать-времени-пройти)
+его страницы о времени.
 
 Правило смотрит в тело задачи — литерал функции или функцию верхнего уровня,
 первый параметр которой `JobContext`, в том числе с именем `_`. Функции,

@@ -241,6 +241,20 @@ final readmes = [
   if (File('README.ru.md').existsSync()) 'README.ru.md',
 ];
 
+/// The reference page of the core and its translation: the table of the
+/// context and the four words, which left the README for it.
+///
+/// The translation lives outside the package, under `docs/ru`, and the
+/// `floor` job runs this file on the archive, where the original is read
+/// alone. The directory is asked for, not the file: in the tree a missing
+/// translation then fails here, not only in `tool/check_translations.py`.
+const referenceEn = 'doc/reference.md';
+const referenceRu = '../../docs/ru/async_job/reference.md';
+final referencePages = [
+  referenceEn,
+  if (Directory('../../docs/ru').existsSync()) referenceRu,
+];
+
 String read(String file) => File(file).readAsStringSync();
 
 /// The output a block of [page] quotes in the comment that closes the line
@@ -1077,7 +1091,7 @@ void main() {
 
   group('the context at a glance', () {
     test('names every member of the context, and nothing else', () {
-      for (final page in readmes) {
+      for (final page in referencePages) {
         expect(
           contextTable(page).keys.toList()..sort(),
           contextMembers()..sort(),
@@ -1114,7 +1128,7 @@ void main() {
         'Работает как обычно': 'works',
       };
       expect(calls.keys.toList()..sort(), contextMembers()..sort());
-      for (final page in readmes) {
+      for (final page in referencePages) {
         for (final MapEntry(key: member, value: cells) in contextTable(
           page,
         ).entries) {
@@ -1142,10 +1156,10 @@ void main() {
       'Not cancelled': 'Не отменяется',
     };
     String cell(String member, {int column = 2}) {
-      final original = contextTable('README.md')[member]![column];
-      if (readmes.contains('README.ru.md')) {
+      final original = contextTable(referenceEn)[member]![column];
+      if (referencePages.contains(referenceRu)) {
         expect(
-          contextTable('README.ru.md')[member]![column],
+          contextTable(referenceRu)[member]![column],
           translated[original],
           reason: '$member in the translation',
         );
@@ -1320,13 +1334,13 @@ void main() {
           '`ctx.each` hands the events of the stream to its callback '
           'one at a time.';
       final said = {
-        'README.md': [check, each],
-        'README.ru.md': [
+        referenceEn: [check, each],
+        referenceRu: [
           '`ctx.check()` — контрольная точка для места, где нечего обернуть.',
           '`ctx.each` отдаёт события стрима колбэку по одному.',
         ],
       };
-      for (final page in readmes) {
+      for (final page in referencePages) {
         final text = read(page).replaceAll(RegExp(r'\s+'), ' ');
         for (final line in said[page]!) {
           expect(text, contains(line), reason: page);
@@ -1337,13 +1351,13 @@ void main() {
     test('the errors of unattended work go to onError, then to the answer', () {
       // Said under the table, in a line of its own on each page.
       final said = {
-        'README.md':
+        referenceEn:
             'The errors of the work of `ctx.unattended` go to '
             '`onError`, then are answered for.',
-        'README.ru.md':
+        referenceRu:
             'Ошибки работы `ctx.unattended` идут в `onError`, затем к ответу.',
       };
-      for (final page in readmes) {
+      for (final page in referencePages) {
         expect(
           read(page).replaceAll(RegExp(r'\s+'), ' '),
           contains(said[page]),
@@ -1424,7 +1438,7 @@ void main() {
     });
 
     test('the members that do not run on leave the cell empty', () {
-      for (final page in readmes) {
+      for (final page in referencePages) {
         expect(
           [
             for (final MapEntry(key: member, value: cells) in contextTable(
