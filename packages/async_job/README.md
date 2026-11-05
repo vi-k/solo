@@ -14,6 +14,10 @@ unawaited futures leave it alone. For the same reason `await job` compiles and
 waits for nothing; the core set of `package:lints` flags it with
 `await_only_futures`.
 
+[Why a job](doc/why.md) shows what a job adds to a `Future`, a flag and
+`CancelableOperation`, on a fuller example. [Reference](doc/reference.md) lists
+every member of the context and what it does once the job is cancelled.
+
 ## Install
 
 ```sh
@@ -23,18 +27,15 @@ dart pub add async_job
 The analyzer plugin [async_job_lints](https://pub.dev/packages/async_job_lints)
 reports mistakes that compile, run and often pass a first test, such as a wait
 in cleanup that never happens or a resource lost to a cancellation. Name it in
-`analysis_options.yaml`:
+`analysis_options.yaml`, which turns on its warnings, and turn its lints on by
+name, as its
+[Install](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#install)
+section shows:
 
 ```yaml
 plugins:
   async_job_lints: ^0.1.0
 ```
-
-That turns on its warnings; the lints are turned on by name, as its
-[Install](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#install)
-section shows. Code built on [solo](https://pub.dev/packages/solo) names
-[solo_lints](https://pub.dev/packages/solo_lints) instead: it includes these
-rules and adds those of the controller.
 
 ## Quick start
 
@@ -53,13 +54,18 @@ Future<void> main() async {
     final db = await ctx.join(Database.open, dispose: (db) => db.close());
     use(await ctx.join(db.readAll));
   });
+  final outcome = job.done;
 
   // Somebody left the screen while the read was in flight.
   await Future<void>.delayed(const Duration(milliseconds: 50));
 
   // Waits for the body, its children and its cleanup.
   await job.cancel();
-  print(job.outcome); // Cancelled(manual)
+  print(switch (await outcome) {
+    Done() => 'read',
+    Failed(:final error) => 'failed: $error',
+    Cancelled(:final reason) => 'cancelled: $reason',
+  });
 }
 ```
 
@@ -69,16 +75,17 @@ it opens and when it closes. It prints:
 ```text
 database opened
 database closed
-Cancelled(manual)
+cancelled: manual
 ```
 
 `ctx.join` waited for the read it had already started, and the rows never
-reached the body. `await job.cancel()` returns once the job is over, cleanup
-included, so `outcome` is ready on the next line; neither of them observes a
-failure in the sense of [Four words](doc/reference.md#four-words). The body
-starts on the next microtask: a job cancelled right after its constructor never
-runs it and ends `Cancelled(manual)` with `started: false`, which is why the
-block waits first.
+reached the body; `cancel()` returned once the job was over, cleanup included.
+`done` is taken next to the constructor, so a failure that comes before the
+cancellation lands in the `switch` instead of ending the program. An error the
+read throws after the cancellation is not the outcome: the job ends
+`Cancelled`, and the error is left uncaught, as
+[Where errors go](doc/errors.md#where-errors-go) shows. The body starts on the
+next microtask, which is why the block waits before it cancels.
 
 ## Guides
 
@@ -149,7 +156,10 @@ release of it; [Building on the core](doc/extending.md) says the same.
 [solo](https://pub.dev/packages/solo) adds state, a queue and declarative
 rules. It runs one root job at a time and gives that job exclusive access to
 state. Use it when you need a controller with these guarantees. It re-exports
-`async_job`, so you only need a dependency on `solo`.
+`async_job`, so you only need a dependency on `solo`. Code built on `solo`
+names [solo_lints](https://pub.dev/packages/solo_lints) in place of
+`async_job_lints`: it includes the rules of `async_job_lints` and adds those of
+the controller.
 
 Jobs work wherever Dart runs. For `solo` widget integration, use
 [flutter_solo](https://pub.dev/packages/flutter_solo).

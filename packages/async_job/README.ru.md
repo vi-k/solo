@@ -14,6 +14,11 @@
 `await job` компилируется и ничего не ждёт; базовый набор `package:lints`
 отмечает это правилом `await_only_futures`.
 
+[«Зачем задача»](../../docs/ru/async_job/why.md) показывает, что задача
+добавляет к `Future`, флагу и `CancelableOperation`, на развёрнутом примере.
+[«Справочник»](../../docs/ru/async_job/reference.md) перечисляет каждый член
+контекста и то, что он делает у отменённой задачи.
+
 ## Установка
 
 ```sh
@@ -23,19 +28,15 @@ dart pub add async_job
 Плагин анализатора [async_job_lints](https://pub.dev/packages/async_job_lints)
 сообщает об ошибках, которые компилируются, работают и часто проходят первый
 тест, — например, об ожидании в уборке, которое так и не случается, или
-о ресурсе, потерянном при отмене. Назовите его в `analysis_options.yaml`:
+о ресурсе, потерянном при отмене. Назовите его в `analysis_options.yaml` — так
+включаются его предупреждения — и включите его линты по имени, как показывает
+его раздел
+[«Установка»](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#установка):
 
 ```yaml
 plugins:
   async_job_lints: ^0.1.0
 ```
-
-Так включаются его предупреждения; линты включаются по имени, как показывает
-его раздел
-[«Установка»](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#установка).
-Код на [solo](https://pub.dev/packages/solo) называет вместо него
-[solo_lints](https://pub.dev/packages/solo_lints): тот включает эти правила
-и добавляет правила контроллера.
 
 ## Быстрый старт
 
@@ -54,13 +55,18 @@ Future<void> main() async {
     final db = await ctx.join(Database.open, dispose: (db) => db.close());
     use(await ctx.join(db.readAll));
   });
+  final outcome = job.done;
 
   // Кто-то ушёл с экрана, пока шло чтение.
   await Future<void>.delayed(const Duration(milliseconds: 50));
 
   // Ждёт тело, его детей и его уборку.
   await job.cancel();
-  print(job.outcome); // Cancelled(manual)
+  print(switch (await outcome) {
+    Done() => 'read',
+    Failed(:final error) => 'failed: $error',
+    Cancelled(:final reason) => 'cancelled: $reason',
+  });
 }
 ```
 
@@ -70,17 +76,18 @@ Future<void> main() async {
 ```text
 database opened
 database closed
-Cancelled(manual)
+cancelled: manual
 ```
 
 `ctx.join` дождался чтения, которое уже началось, и прочитанные данные до тела
-не дошли. `await job.cancel()` возвращается, когда задача кончилась вместе
-с уборкой, поэтому `outcome` на следующей строке уже готов; ни то ни другое
-провал не наблюдает в смысле раздела
-[«Четыре слова»](../../docs/ru/async_job/reference.md#четыре-слова). Тело
-запускается на следующей микротаске: задача, отменённая сразу после создания,
-его не выполняет и кончается `Cancelled(manual)` с `started: false`, поэтому
-блок сначала ждёт.
+не дошли; `cancel()` вернулся, когда задача кончилась вместе с уборкой. `done`
+взят рядом с конструктором, поэтому провал, случившийся до отмены, попадает
+в `switch`, а не роняет программу. Ошибка, которую чтение бросит уже после
+отмены, исходом не становится: задача кончается `Cancelled`, а ошибка остаётся
+непойманной, как показывает раздел
+[«Куда уходят ошибки»](../../docs/ru/async_job/errors.md#куда-уходят-ошибки).
+Тело запускается на следующей микротаске, поэтому блок ждёт, прежде чем
+отменить.
 
 ## Страницы
 
@@ -154,7 +161,9 @@ Cancelled(manual)
 и декларативные правила. Он выполняет одну корневую задачу за раз и даёт ей
 исключительный доступ к состоянию. Используйте его, если нужен контроллер
 с такими гарантиями. Он реэкспортирует `async_job`, поэтому достаточно
-зависимости от `solo`.
+зависимости от `solo`. Код на `solo` называет вместо `async_job_lints`
+[solo_lints](https://pub.dev/packages/solo_lints): тот включает правила
+`async_job_lints` и добавляет правила контроллера.
 
 Задачи работают везде, где работает Dart. Чтобы связать `solo` с виджетами,
 используйте [flutter_solo](https://pub.dev/packages/flutter_solo).

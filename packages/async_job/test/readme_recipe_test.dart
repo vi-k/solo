@@ -11,9 +11,9 @@
 // described the others.
 //
 // What a page quotes is read from the page: the output in the comments of
-// its blocks, the output of the examples and the outcome of a job cancelled
-// before its start, from the originals and their translations alike, the
-// number of runs of the example and the dependency of the package. A literal
+// its blocks and the output of the examples, from the originals and their
+// translations alike, the number of runs of the example and the dependency
+// of the package. A literal
 // kept here would follow the code, and the page would go on promising what
 // the code no longer does. The table of the context is read from the
 // reference page: every member of `JobContext` stands in it, and what it
@@ -288,6 +288,81 @@ List<String> quotedOutputs(String page, int count) {
   return outputs;
 }
 
+/// The blocks of [page] in Dart, in its order.
+List<String> dartBlocks(String page) => [
+  for (final match in RegExp(
+    r'```dart\n(.*?)\n```',
+    dotAll: true,
+  ).allMatches(read(page)))
+    match.group(1)!,
+];
+
+/// That [block] takes `job.done` on the line after the constructor of its
+/// job, before anything is awaited, and reads the outcome nowhere else.
+///
+/// Taken after `cancel()`, `done` would come too late for a failure that
+/// ended the job before the cancellation: nothing listened to the job then,
+/// and the failure went on to end the program.
+void expectDoneTakenFirst(String block, String page) {
+  final lines = [for (final line in block.split('\n')) line.trim()];
+  final start = lines.indexWhere((line) => line.startsWith('final job = Job<'));
+  expect(start, isNot(-1), reason: '$page: no job in the block');
+  final end = lines[start].endsWith(');') ? start : lines.indexOf('});', start);
+  expect(
+    lines[end + 1],
+    'final outcome = job.done;',
+    reason: '$page: done is taken next to the constructor',
+  );
+  expect(block, isNot(contains('job.outcome')), reason: page);
+  expect(block, isNot(contains('await job.done')), reason: page);
+}
+
+/// The prose of [page] up to the heading [stop], without its blocks of
+/// code and with its whitespace folded.
+String proseBefore(String page, String stop) {
+  final text = read(page);
+  return text
+      .substring(0, text.indexOf('\n$stop\n'))
+      .replaceAll(RegExp('```.*?```', dotAll: true), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+}
+
+/// The Quick start with the database of these tests, so that its open and
+/// its read can fail: the block as the README writes it, from the
+/// constructor on.
+Future<void> quickStartHere() async {
+  final job = Job<void>((ctx) async {
+    final db = await ctx.join(Database.open, dispose: (db) => db.close());
+    use(await ctx.join(db.readAll));
+  });
+  final outcome = job.done;
+
+  await Future<void>.delayed(const Duration(milliseconds: 50));
+
+  await job.cancel();
+  print(switch (await outcome) {
+    Done() => 'read',
+    Failed(:final error) => 'failed: $error',
+    Cancelled(:final reason) => 'cancelled: $reason',
+  });
+}
+
+/// What [run] prints and what reaches the zone while it runs, on fake time.
+({List<String> printed, List<String> zone}) runQuickStart(
+  Future<void> Function() run,
+) {
+  final printed = <String>[];
+  final zone = zoneErrorsOf(
+    (async) => runZoned(
+      () => unawaited(run()),
+      zoneSpecification: ZoneSpecification(
+        print: (self, parent, zone, line) => printed.add(line),
+      ),
+    ),
+  );
+  return (printed: printed, zone: zone);
+}
+
 /// The members of `JobContext`, in the order of its source, the deprecated
 /// ones left out: a name kept for one release is not one to teach.
 List<String> contextMembers() {
@@ -512,13 +587,90 @@ void main() {
           'closed the database on the way out',
     );
     for (final page in readmes) {
-      expect(
-        printed.last,
-        quotedAfter(page, 'print(job.outcome);'),
-        reason: page,
-      );
       expect(printed.join('\n'), quotedOutputs(page, 1).single, reason: page);
     }
+  });
+
+  test('the Quick start takes done next to its constructor', () {
+    for (final page in readmes) {
+      expectDoneTakenFirst(dartBlocks(page).first, page);
+    }
+  });
+
+  test('taken first, done hands a failure before the cancellation to the '
+      'switch', () {
+    Database.openError = StateError('disk gone');
+    final run = runQuickStart(quickStartHere);
+
+    expect(run.zone, isEmpty);
+    expect(run.printed, ['failed: Bad state: disk gone']);
+  });
+
+  test('a read that fails after the cancellation reaches the zone, done '
+      'taken first', () {
+    // The read ends at 120 ms, and the cancellation comes at 50: the job
+    // ends `Cancelled`, and the error of the read is not its outcome.
+    Database.readError = StateError('disk gone');
+    final run = runQuickStart(quickStartHere);
+
+    expect(run.zone, ['Bad state: disk gone']);
+    expect(run.printed, ['cancelled: manual']);
+    expect(Database.events, ['opened', 'closed']);
+  });
+
+  test('the entry names both pages before Install', () {
+    for (final page in readmes) {
+      final text = read(page);
+      final install = text.indexOf(
+        RegExp(r'^## (?:Install|Установка)$', multiLine: true),
+      );
+      final entry = text.substring(0, install);
+      expect(entry, contains('why.md)'), reason: page);
+      expect(entry, contains('reference.md)'), reason: page);
+    }
+  });
+
+  test('the entry speaks without the words of the model', () {
+    // The words belong to the reference page; the entry teaches a job, its
+    // cancellation and its outcome without them.
+    final english = RegExp(
+      r'observ|answer(?:s|ed|ing)? for|\bzones?\b|#four-words',
+      caseSensitive: false,
+    );
+    // `\b` knows Latin letters only.
+    final russian = RegExp(
+      'наблюда|отве(?:т|ча)[а-яё]* за|(?<![а-яё])зон(?:а|е|у|ы|ой)?(?![а-яё])'
+      '|#четыре-слова',
+      caseSensitive: false,
+    );
+    final words = {
+      'README.md': (english, '## Guides'),
+      'README.ru.md': (russian, '## Страницы'),
+    };
+    for (final page in readmes) {
+      final (pattern, stop) = words[page]!;
+      expect(
+        [
+          for (final match in pattern.allMatches(proseBefore(page, stop)))
+            match.group(0),
+        ],
+        isEmpty,
+        reason: page,
+      );
+    }
+  });
+
+  test('the entry stays within 95 lines through the Quick start and 125 '
+      'before Guides', () {
+    final lines = read('README.md').split('\n');
+    final quickStart = lines.indexOf('## Quick start');
+    final guides = lines.indexOf('## Guides');
+    final next = lines.indexWhere(
+      (line) => line.startsWith('## '),
+      quickStart + 1,
+    );
+    expect(next, lessThanOrEqualTo(95));
+    expect(guides, lessThanOrEqualTo(125));
   });
 
   test('cancelled next to its constructor the same job does none of it', () {
@@ -530,16 +682,11 @@ void main() {
       job.cancel().ignore();
       async.flushTimers();
 
-      // The outcome the README promises for it. This is what the first
-      // Quick start used to show, and why the wait in it is not decoration.
+      // This is what the first Quick start used to show, and why the wait
+      // in it is not decoration.
       final outcome = job.outcome! as Cancelled;
-      for (final page in readmes) {
-        final promised = RegExp(
-          r'`(Cancelled\(\w+\))`\s+(?:with|с)\s+`started: (\w+)`',
-        ).firstMatch(read(page))!;
-        expect('$outcome', promised.group(1), reason: page);
-        expect('${outcome.started}', promised.group(2), reason: page);
-      }
+      expect('$outcome', 'Cancelled(manual)');
+      expect(outcome.started, isFalse);
       expect(Database.events, isEmpty);
     });
   });
