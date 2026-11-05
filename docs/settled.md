@@ -910,9 +910,12 @@ L15 2026-10-17.) Сделано 2026-10-21 при подготовке `0.3.0`: 
 `2026-10-12-solo-project-review.md`; поднимали L4 2026-10-12, M6 2026-10-17, L6
 2026-10-22.)
 
-**77. README `async_job`: `doc/why.md` не заводится, раздел «Why» сокращён
-на месте.** (2026-10-19; `2026-10-17-async-job-project-review.md`; поднимали M9
-2026-10-12, M12 2026-10-17.)
+**77. README `async_job` — короткий вход; «Why» и «A fuller example» —
+на `doc/why.md`, таблица контекста и «Four words» — на `doc/reference.md`.**
+Вход ядра — его README, и у читателя, пришедшего за отменой, на нём задача,
+`ctx.join`, `ctx.abandonable`, `dispose`, `cancel()` и исход. (2026-10-19;
+`2026-10-17-async-job-project-review.md`; поднимали M9 2026-10-12, M12
+2026-10-17; пересмотрено 2026-11-05, `2026-11-04-core-readme-entry-design.md`.)
 
 **78. Фраза `jobs.md` «the error has been answered for by then» остаётся.** Она
 строже кода на микрозадачу, но совет наблюдать исход до конца задачи верен.

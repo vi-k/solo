@@ -1,3 +1,8 @@
+## Unreleased
+
+- The README sends the reader for the table of the context to the reference
+  page of `async_job`, where the table moved from its README.
+
 ## 0.1.1
 
 - The message of `bare_await` and its section of the README no longer set

@@ -1,6 +1,6 @@
 # Handoff: текущее состояние проекта
 
-Обновлено: 2026-11-04. В работе — документация, слово владельца 2026-11-04
+Обновлено: 2026-11-05. В работе — документация, слово владельца 2026-11-04
 «с патчем не торопись. надо доделать документацию»: из четырёх работ, которые
 владелец выбрал 2026-11-04, сделаны две страницы о bloc и шесть находок Minor
 страницы `solo` о riverpod, страницы о bloc поправлены по ревью простоты;
@@ -139,8 +139,10 @@ Opus прошло, все находки приняты и дизайн пере
 мерку длины (95 строк через Quick start, 125 до «Guides», около двух
 с половиной экранов: с новым разделом 90 до «Guides» не сходится) и обещание,
 что вход не роняет программу: ошибка вызова после отмены уходит необработанной
-и у `join`, вход её называет. Дальше — слово владельца о плане, затем
-исполнение. Остальное из обоих списков закрыто или решено.
+и у `join`, вход её называет. Владелец 2026-11-05 велел исполнять план самому;
+задачи 1–5 исполнены на ветке `worktree-core-entry`. Дальше — независимое ревью
+Opus всей ветки, исправления по нему, слияние в `main` и отчёт владельцу.
+Остальное из обоих списков закрыто или решено.
 
 Новый член класса, от которого наследуются, или интерфейса, который реализуют
 ради мока, выходит минором с названием в списке изменений — ответ владельца
@@ -360,11 +362,12 @@ CI с 2026-10-21 стоит на `ubuntu-26.04` во всех заданиях `
 `outcomes_rakes_test.dart`, `cancellation_rakes_test.dart`,
 `observing_rakes_test.dart`, `children_rakes_test.dart`,
 `streams_rakes_test.dart`, `extending_rakes_test.dart`
-и `readme_recipe_test.dart` для README. В `solo` — `state_rakes_test.dart`,
-`cancellation_rakes_test.dart`, `resources_rakes_test.dart`,
-`errors_rakes_test.dart` с `cancel_delay_recipe_test.dart`,
-`testing_rakes_test.dart` и `readme_rakes_test.dart` для README; `camera.md`
-держит `camera_rakes_test.dart` пакета примера, а `children.md` —
+и `readme_recipe_test.dart` для README и страниц «Why a job» и «Reference».
+В `solo` — `state_rakes_test.dart`, `cancellation_rakes_test.dart`,
+`resources_rakes_test.dart`, `errors_rakes_test.dart`
+с `cancel_delay_recipe_test.dart`, `testing_rakes_test.dart`
+и `readme_rakes_test.dart` для README; `camera.md` держит
+`camera_rakes_test.dart` пакета примера, а `children.md` —
 `children_rakes_test.dart` с кодом страницы в `test/support/children_*.dart`,
 и прежние `children_test.dart`, `each_test.dart`, `each_child_test.dart`
 и `zone_test.dart`; `streams.md` — `streams_rakes_test.dart` с кодом
@@ -402,6 +405,10 @@ bloc держит только стенд.
 
 ## Требования к README, которые нужно сохранить
 
+С 2026-11-05 README ядра — короткий вход, а «Why» и «A fuller example» живут
+на `packages/async_job/doc/why.md`: требования о `discard`, о примере миграции
+и о границах ядра и `solo` относятся к этой странице.
+
 - При описании API на русском называть `Job` прямо. Слово «задача» уместно для
   самой работы, но не должно подменять имя класса в объяснении его
   возможностей.
@@ -432,7 +439,7 @@ bloc держит только стенд.
   возможен `Done`.
 
 Число блоков кода в README больше не годится как ориентир: материал разъехался
-по страницам `doc/`. Форму держат `check_translations.py` (сорок одна пара)
+по страницам `doc/`. Форму держат `check_translations.py` (сорок семь пар)
 и `check_doc_shape.py`. Примеры `then`, его контракт и переводы обновлены
 вместе с реализацией.
 

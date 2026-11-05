@@ -1,5 +1,7 @@
 ## Unreleased
 
+- `doc/reference.md` sends the reader for the table of the context to the
+  reference page of `async_job`, where the table moved from its README.
 - `pubspec.yaml` names the documentation site, and pub.dev links to it.
 - The README and `doc/jobs.md` no longer say that an `enqueue` without type
   arguments works with the whole of `S` in its body: there `ctx.state` is
