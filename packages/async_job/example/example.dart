@@ -57,7 +57,7 @@ class Database {
   String toString() => 'database';
 }
 
-/// The job of "A fuller example" in README.md.
+/// The job of "A fuller example" on doc/why.md.
 Job<Database> openDatabase() => Job<Database>((ctx) async {
   // `join` stays with the call: a database half-opened is not left
   // behind, and `discard` closes the one nobody wants any more.

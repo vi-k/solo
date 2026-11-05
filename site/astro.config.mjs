@@ -26,6 +26,7 @@ const topics = [
         label: 'async_job',
         items: [
           page('async_job', 'Overview', 'Обзор'),
+          page('async_job/why', 'Why a job', 'Зачем задача'),
           page('async_job/outcomes', 'Outcomes', 'Исходы'),
           page('async_job/cancellation', 'Cancellation', 'Отмена'),
           page(

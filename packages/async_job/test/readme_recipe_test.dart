@@ -1,22 +1,22 @@
-// The blocks of the README, run as they are written there, what its prose
-// says about them and about its neighbours in Dart, and the example it
-// points to.
+// The blocks of the README and of its why page, run as they are written
+// there, what their prose says about them and about the neighbours of a job
+// in Dart, and the examples they point to.
 //
-// It is a showcase, so it is the one page a reader is most likely to copy
-// and the one a reader is most likely to check under a debugger. Its
-// first Quick start used to prove nothing: `cancel` stood next to the
+// The README is a showcase, so it is the one page a reader is most likely
+// to copy and the one a reader is most likely to check under a debugger.
+// Its first Quick start used to prove nothing: `cancel` stood next to the
 // constructor, the body never started, and the promised line --
 // `Cancelled(manual)` -- printed while the database was never opened and
 // never closed. The example printed that one path, while its comments
 // described the others.
 //
-// What the page quotes is read from the page: the output in the comments
-// of its blocks, the output of the example and the outcome of a job
-// cancelled before its start, from the README and its translation alike,
-// the number of runs of the example and the dependency of the package. A
-// literal kept here would follow the code, and the page would go on
-// promising what the code no longer does. The table of the context is read
-// from the page too: every member of `JobContext` stands in it, and what it
+// What a page quotes is read from the page: the output in the comments of
+// its blocks, the output of the examples and the outcome of a job cancelled
+// before its start, from the originals and their translations alike, the
+// number of runs of the example and the dependency of the package. A literal
+// kept here would follow the code, and the page would go on promising what
+// the code no longer does. The table of the context is read from the
+// reference page: every member of `JobContext` stands in it, and what it
 // says of a cancellation is run here.
 @Timeout(Duration(seconds: 5))
 library;
@@ -133,11 +133,11 @@ final class Answering extends Listening with JobAnswerer {
       heard.add('onUnanswered: $error');
 }
 
-// The blocks of the README stand between these marks, each as it is
+// The blocks of the why page stand between these marks, each as it is
 // written there, with nothing more, in the order of the page; the flag is
 // declared as the block declares it.
 
-// README: begin
+// why: begin
 // ignore: type_annotate_public_apis
 var cancelled = false;
 
@@ -152,25 +152,25 @@ Future<void> load() async {
     await db.close();
   }
 }
-// README: end
+// why: end
 
-/// The operation of the README that catches a late database, as it is
+/// The operation of the why page that catches a late database, as it is
 /// written there.
 CancelableOperation<Database> lateOpenCaught() {
-  // README: begin
+  // why: begin
   final open = Database.open();
   final operation = CancelableOperation.fromFuture(
     open,
     // cancel() stops the waiting; this closes the database once it opens.
     onCancel: () async => (await open).close(),
   );
-  // README: end
+  // why: end
   return operation;
 }
 
-/// The fuller example of the README, as it is written there.
+/// The fuller example of the why page, as it is written there.
 Future<void> fullerExample() async {
-  // README: begin
+  // why: begin
   final job = Job<Database>((ctx) async {
     final database = await ctx.join(
       Database.open,
@@ -194,7 +194,7 @@ Future<void> fullerExample() async {
   await job.cancel();
 
   final outcome = await job.done; // Cancelled(manual)
-  // README: end
+  // why: end
   print(outcome);
 }
 
@@ -255,6 +255,13 @@ final referencePages = [
   if (Directory('../../docs/ru').existsSync()) referenceRu,
 ];
 
+/// The why page of the core and its translation: "Why" and the fuller
+/// example, which left the README for it. The translation is found the way
+/// [referencePages] finds it.
+const whyEn = 'doc/why.md';
+const whyRu = '../../docs/ru/async_job/why.md';
+final whyPages = [whyEn, if (Directory('../../docs/ru').existsSync()) whyRu];
+
 String read(String file) => File(file).readAsStringSync();
 
 /// The output a block of [page] quotes in the comment that closes the line
@@ -268,8 +275,8 @@ String quotedAfter(String page, String code) {
   return line.substring(line.indexOf('// ') + 3);
 }
 
-/// The outputs [page] quotes: the Quick start's, then the example's.
-List<String> quotedOutputs(String page) {
+/// The outputs [page] quotes, in its order; it quotes exactly [count].
+List<String> quotedOutputs(String page, int count) {
   final outputs = [
     for (final match in RegExp(
       r'```text\n(.*?)\n```',
@@ -277,7 +284,7 @@ List<String> quotedOutputs(String page) {
     ).allMatches(read(page)))
       match.group(1)!,
   ];
-  expect(outputs, hasLength(2), reason: page);
+  expect(outputs, hasLength(count), reason: page);
   return outputs;
 }
 
@@ -510,7 +517,7 @@ void main() {
         quotedAfter(page, 'print(job.outcome);'),
         reason: page,
       );
-      expect(printed.join('\n'), quotedOutputs(page).first, reason: page);
+      expect(printed.join('\n'), quotedOutputs(page, 1).single, reason: page);
     }
   });
 
@@ -906,7 +913,7 @@ void main() {
 
     test('Job(body, timeout: limit) cancels a job still running once the '
         'limit has run out, and leaves no timer behind', () {
-      for (final page in readmes) {
+      for (final page in whyPages) {
         expect(read(page), contains('`Job(body, timeout: limit)`'));
         expect(read(page), contains('`Cancelled(timeout)`'));
       }
@@ -935,11 +942,11 @@ void main() {
   });
 
   group('the fuller example', () {
-    test('as the README writes it, closes the database', () {
+    test('as the why page writes it, closes the database', () {
       final printed = printedBy(fullerExample);
 
       expect(Database.events, ['opened', 'closed']);
-      for (final page in readmes) {
+      for (final page in whyPages) {
         expect(printed, [
           quotedAfter(page, 'final outcome = await job.done;'),
         ], reason: page);
@@ -951,7 +958,7 @@ void main() {
       fakeAsync((async) {
         final job = Job<Database>((ctx) async {
           // Not the fuller example's own lines, so that the check of the
-          // README finds those in `fullerExample` alone.
+          // why page finds those in `fullerExample` alone.
           final database = await ctx.join(
             Database.open,
             discard: (db) => db.close(),
@@ -1027,7 +1034,7 @@ void main() {
     test(
       'the fuller example names that filter and the page that takes it apart',
       () {
-        for (final page in readmes) {
+        for (final page in whyPages) {
           final item = RegExp(
             r'- \*\*`ctx\.join\(\(\) => database\.migrate\(stop\)\)`\*\*(.*?)\n- ',
             dotAll: true,
@@ -1074,18 +1081,18 @@ void main() {
     });
   });
 
-  test('the example prints what the README quotes', () {
+  test('the example prints what the why page quotes', () {
     final printed = printedBy(example.main);
-    for (final page in readmes) {
-      expect(printed.join('\n'), quotedOutputs(page).last, reason: page);
+    for (final page in whyPages) {
+      expect(printed.join('\n'), quotedOutputs(page, 1).single, reason: page);
     }
 
-    // The README counts the runs in a word, and each run opens with a
+    // The why page counts the runs in a word, and each run opens with a
     // heading of its own.
     const numbers = {'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6};
     final said = RegExp(
       r'runs the job\s+(\w+)\s+times',
-    ).firstMatch(read('README.md'))!.group(1);
+    ).firstMatch(read(whyEn))!.group(1);
     expect(printed.where((line) => line.endsWith(':')).length, numbers[said]);
   });
 
@@ -1527,7 +1534,7 @@ void main() {
     });
   });
 
-  test('every block of the README runs in this file', () {
+  test('every block of the README and of the why page runs in this file', () {
     expect(
       codeMissingFrom(
         'README.md',
@@ -1536,13 +1543,14 @@ void main() {
       ),
       isEmpty,
     );
+    expect(codeMissingFrom(whyEn, 'test/readme_recipe_test.dart'), isEmpty);
   });
 
   test('and each of them runs whole, with nothing more', () {
     // The check above finds each piece between blank lines on its own, so
     // a line dropped from the edge of a piece, or one added here between
     // two pieces, would pass it. Between the marks, each copy is its block
-    // of the README and nothing else; an import stays at the top.
+    // of the page and nothing else; an import stays at the top.
     List<String> code(Iterable<String> lines) => [
       for (final line in lines)
         if (line.trim().isNotEmpty &&
@@ -1558,40 +1566,44 @@ void main() {
         code(match.group(1)!.split('\n')),
     ];
 
-    // The Quick start is the first block, and its copy is the program of
-    // `example/quick_start.dart`.
-    const marks = r'// README: begin\n(.*?)\n\s*// README: end';
-    expect([
-      ...blocks(marks, 'example/quick_start.dart'),
-      ...blocks(marks, 'test/readme_recipe_test.dart'),
-    ], blocks(r'```dart\n(.*?)\n```', 'README.md'));
+    // The blocks of the README are copied by the program of
+    // `example/quick_start.dart`, and those of the why page here.
+    const readmeMarks = r'// README: begin\n(.*?)\n\s*// README: end';
+    const whyMarks = r'// why: begin\n(.*?)\n\s*// why: end';
+    const dart = r'```dart\n(.*?)\n```';
+    expect(
+      blocks(readmeMarks, 'example/quick_start.dart'),
+      blocks(dart, 'README.md'),
+    );
+    expect(
+      blocks(whyMarks, 'test/readme_recipe_test.dart'),
+      blocks(dart, whyEn),
+    );
   });
 
-  test(
-    'the example runs the job of the fuller example as the README writes it',
-    () {
-      // Comments aside: the example explains the body in its own comments,
-      // and the README in the list under the block.
-      List<String> code(Iterable<String> lines) => [
-        for (final line in lines)
-          if (line.trim().isNotEmpty && !line.trim().startsWith('//'))
-            line.trim(),
-      ];
+  test('the example runs the job of the fuller example as the why page writes '
+      'it', () {
+    // Comments aside: the example explains the body in its own comments,
+    // and the why page in the list under the block.
+    List<String> code(Iterable<String> lines) => [
+      for (final line in lines)
+        if (line.trim().isNotEmpty && !line.trim().startsWith('//'))
+          line.trim(),
+    ];
 
-      final block = RegExp(r'```dart\n(.*?)\n```', dotAll: true)
-          .allMatches(File('README.md').readAsStringSync())
-          .map((match) => match.group(1)!)
-          .singleWhere((block) => block.contains('Job<Database>'));
-      final lines = block.split('\n');
-      final start = lines.indexWhere((line) => line.contains('Job<Database>('));
-      final body = code(lines.sublist(start, lines.indexOf('});', start) + 1));
+    final block = RegExp(r'```dart\n(.*?)\n```', dotAll: true)
+        .allMatches(File(whyEn).readAsStringSync())
+        .map((match) => match.group(1)!)
+        .singleWhere((block) => block.contains('Job<Database>'));
+    final lines = block.split('\n');
+    final start = lines.indexWhere((line) => line.contains('Job<Database>('));
+    final body = code(lines.sublist(start, lines.indexOf('});', start) + 1));
 
-      final source = code(File('example/example.dart').readAsLinesSync());
-      final at = source.indexWhere(
-        (line) => line.endsWith(body.first.replaceFirst('final job = ', '')),
-      );
-      expect(at, isNot(-1), reason: 'the example builds no such job');
-      expect(source.sublist(at + 1, at + body.length), body.sublist(1));
-    },
-  );
+    final source = code(File('example/example.dart').readAsLinesSync());
+    final at = source.indexWhere(
+      (line) => line.endsWith(body.first.replaceFirst('final job = ', '')),
+    );
+    expect(at, isNot(-1), reason: 'the example builds no such job');
+    expect(source.sublist(at + 1, at + body.length), body.sublist(1));
+  });
 }
