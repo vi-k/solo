@@ -2,10 +2,11 @@
 
 > **Состояние на 2026-11-05:** черновики написаны по слову владельца «давай
 > анонс» и исправлены по независимому ревью Opus (раздел «Ревью»); публикует
-> владелец сам. Ничего не опубликовано.
+> владелец сам. Ничего не опубликовано. Переводы для чтения добавлены тем же
+> днём по слову «сделай мне переводы черновиков».
 > **Что это:** четыре текста для каналов после 1.0 — статья «What cancelling
 > a Future takes in Dart», посты в r/FlutterDev и r/dartlang, ответ
-> в bloc#3069 — и зонды, которыми проверен их код.
+> в bloc#3069 — их переводы и зонды, которыми проверен их код.
 > **Связанные записи:** `2026-10-30-prospects-review.md`,
 > `2026-10-31-site-core-entry-report.md`,
 > `2026-11-05-core-readme-entry-plan.md`.
@@ -393,6 +394,475 @@ Here `close()` waits for A. If A can be stopped, such as a dio request, it takes
 
 Not suggesting any of this belongs in bloc, only that the work after `close()` has an answer outside it.
 ````
+
+## Переводы
+
+Переводы четырёх текстов выше — для чтения, а не для публикации: публикуются
+английские блоки. Перевод говорит то же, что оригинал, и правится вместе с ним.
+Код и трассы те же, комментарии в коде переведены, ссылки ведут туда же, куда
+в оригинале, — на английские страницы.
+
+### Статья
+
+Заголовок: **Что нужно, чтобы отменить Future в Dart**
+
+Пользователь открывает экран, экран начинает загрузку, и пользователь уходит
+раньше, чем загрузка кончится. В Dart загрузка идёт дальше. `Future` — это
+результат вычисления, а не само вычисление, и `cancel()` у неё нет:
+[dart-lang/sdk#42855](https://github.com/dart-lang/sdk/issues/42855) просит его
+с 2020 года. В bloc то же желание —
+[felangel/bloc#3069](https://github.com/felangel/bloc/issues/3069), открытая
+с 2021 года: кубит, закрытый во время загрузки, бросает
+`Bad state: Cannot emit new states after calling close`, когда загрузка
+возвращается.
+
+Статья берёт одну небольшую загрузку, пробует отменить её средствами, которые
+в Dart уже есть, и перечисляет, что для этой отмены нужно. Потом она показывает
+[async_job](https://pub.dev/packages/async_job), пакет на чистом Dart, который
+это делает, и то, чего он не делает.
+
+#### Загрузка
+
+Загрузка открывает базу данных, читает три страницы и закрывает базу:
+
+```dart
+Future<List<String>> load() async {
+  final db = await Database.open();
+  try {
+    return [for (var page = 1; page <= 3; page++) await db.readPage(page)];
+  } finally {
+    await db.close();
+  }
+}
+```
+
+`Database` — заглушка: открывается за 20 мс, читает страницу за 30 мс
+и печатает, что делает. Во всех примерах пользователь уходит на 35-й
+миллисекунде, пока читается первая страница; `leave()` обозначает этот момент.
+Трассы — то, что код печатает.
+
+#### Флаг
+
+Первое, что под рукой, — флаг, который загрузка проверяет:
+
+```dart
+var cancelled = false;
+
+Future<List<String>?> loadOrStop() async {
+  final db = await Database.open();
+  try {
+    final rows = <String>[];
+    for (var page = 1; page <= 3; page++) {
+      if (cancelled) return null;
+      rows.add(await db.readPage(page));
+    }
+    return rows;
+  } finally {
+    await db.close();
+  }
+}
+
+final rows = loadOrStop();
+await leave();
+cancelled = true;
+print('result: ${await rows}');
+```
+
+```text
+database opened
+page 1 read
+database closed
+result: null
+```
+
+Это работает: загрузка дочитывает страницу, которая уже идёт, пропускает
+остальные и закрывает базу. Цена — в форме кода. Каждому `await` нужна своя
+проверка, и пропущенная проверка пускает загрузку дальше, а на это место ничто
+не укажет. Каждому ресурсу нужен `finally`. А остановку от результата
+вызывающий отличает по особому значению, здесь `null`, под которое тип
+результата должен освободить место. Это соглашение, и держат его вручную
+в каждой асинхронной функции.
+
+#### Future.timeout
+
+`timeout` звучит как остановка:
+
+```dart
+try {
+  await load().timeout(const Duration(milliseconds: 35));
+} on TimeoutException {
+  print('gave up');
+}
+```
+
+```text
+database opened
+gave up
+page 1 read
+page 2 read
+page 3 read
+database closed
+```
+
+Он останавливает ожидание, а не загрузку: вызывающий идёт дальше, а загрузка
+читает все страницы впустую.
+
+#### CancelableOperation
+
+В `package:async` есть `CancelableOperation`:
+
+```dart
+final operation = CancelableOperation.fromFuture(load());
+await leave();
+await operation.cancel();
+print('cancelled');
+```
+
+```text
+database opened
+cancelled
+page 1 read
+page 2 read
+page 3 read
+database closed
+```
+
+`cancel()` перестаёт отдавать значение, а загрузка — та же `Future`, что
+и прежде: она идёт дальше. `value` отменённой операции не завершается никогда,
+так что тот, кто его ещё ждёт, ждёт вечно, если только не попросит вместо него
+`valueOrCancellation()`. `fromFuture` принимает колбэк `onCancel`, но то, что
+он должен остановить, ему приходится доставать самому: снова флагом или
+сигналом остановки самого вызова.
+
+#### Что нужно для отмены
+
+Вместе отмена одной этой загрузки требует:
+
+- Контрольной точки на каждом `await` и способа найти ту, которой не хватает.
+- Решения о вызове, который уже идёт: дождаться его конца или уйти и дать ему
+  кончиться впустую.
+- Уборки, зарегистрированной там, где ресурс открывается: она выполняется, чем
+  бы загрузка ни кончилась, в том числе для базы, которая откроется уже после
+  отмены.
+- `cancel()`, которого можно дождаться и который возвращается, когда уборка
+  сделана.
+- Исхода, который отличает отмену от успеха и от сбоя, чтобы типу результата
+  не приходилось освобождать место под особое значение.
+- Способа передать остановку вызову, который умеет останавливаться, например
+  HTTP-запросу с собственным токеном отмены.
+
+А когда работа запускает свою работу, нужны дочерние задачи: родитель, который
+кончается после них, и отмена, которая до них доходит.
+
+#### Задача
+
+`async_job` собирает всё это в `Job`. Тело задачи получает контекст, `ctx`.
+Каждый вызов, которого тело ждёт через `ctx.join`, — контрольная точка,
+а `dispose` регистрирует уборку рядом с открытием:
+
+```dart
+final job = Job<List<String>>((ctx) async {
+  final db = await ctx.join(Database.open, dispose: (db) => db.close());
+  return [
+    for (var page = 1; page <= 3; page++)
+      await ctx.join(() => db.readPage(page)),
+  ];
+});
+final outcome = job.done;
+
+await leave();
+await job.cancel();
+print('cancel returned');
+print(await outcome);
+```
+
+```text
+database opened
+page 1 read
+database closed
+cancel returned
+Cancelled(manual)
+```
+
+Отмена приходит, пока читается первая страница. `ctx.join` дожидается этого
+чтения, а затем бросает `Cancelled` вместо того, чтобы отдать страницу телу,
+так что вторая и третья страницы не начинаются. `dispose` закрывает базу,
+и `cancel()` возвращается после этого. `job.done` даёт `Cancelled(manual)`,
+и вызывающий отличает его от `Done` и `Failed`. Приди отмена во время
+`Database.open`, `join` дождался бы открытия, а `dispose` закрыл бы базу,
+которая открылась уже впустую.
+
+`done` читается сразу после конструктора: иначе задача, которая упадёт раньше,
+чем кто-нибудь прочтёт её исход, дойдёт до зоны неперехваченной ошибкой.
+
+##### Уйти от вызова
+
+Вызов, после которого задаче нечего убирать, ждать незачем. `ctx.abandonable`
+перестаёт ждать при отмене, а вызов идёт дальше, и его результат никто
+не берёт. Здесь `fetchQuote` печатает, когда запрос уходит и когда через 100 мс
+приходит ответ:
+
+```dart
+final job = Job<String>((ctx) => ctx.abandonable(fetchQuote));
+final outcome = job.done;
+
+// Кто-то ушёл с экрана, пока цитата была в пути.
+await Future<void>.delayed(const Duration(milliseconds: 50));
+
+// Возвращается раньше, чем ответит fetchQuote.
+await job.cancel();
+print(await outcome);
+```
+
+```text
+request sent
+Cancelled(manual)
+quote answered
+```
+
+##### Передать остановку вызову
+
+Вызов, который можно остановить, принимает собственный сигнал остановки,
+а `ctx.onCancel` подаёт этот сигнал вместе с отменой. С dio:
+
+```dart
+final job = Job<String>((ctx) async {
+  final token = CancelToken();
+  ctx.onCancel(token.cancel);
+
+  final response = await ctx.join(
+    () => dio.getUri<String>(url, cancelToken: token),
+  );
+  return response.data!;
+});
+```
+
+Соединение закрывается, и сервер перестаёт готовить ответ, который никто
+не прочтёт. Прерванный запрос всё равно бросает, при каждой отмене, и по
+умолчанию ошибка уходит в зону неперехваченной. Одна строка в `main` говорит
+async_job, что эта ошибка — то, как клиент останавливается, и с этого момента
+она уходит наблюдателю задачи, а не в зону:
+
+```dart
+Job.isCancellationError = (error) =>
+    error is DioException && error.type == DioExceptionType.cancel;
+```
+
+http 1.5 и новее делает то же через `AbortableRequest` и его `abortTrigger`;
+тогда фильтр называет ещё и `RequestAbortedException` из http.
+
+##### Дочерние задачи
+
+Тело запускает дочернюю задачу через `ctx.run`. Родитель кончается после
+дочерних задач и их уборки, а отмена, которую он принял, переходит к ним.
+Подробно — на странице
+[«Children»](https://docs.yet-another.dev/async_job/children/).
+
+#### Чего он не делает
+
+- **Он кооперативный.** Тело останавливается на контрольной точке. `await`
+  в обход `ctx` или цикл, который ничего не ждёт, продолжают работу после
+  отмены. Плагин анализатора
+  [async_job_lints](https://pub.dev/packages/async_job_lints) сообщает
+  об `await` в теле, который идёт не через контекст; это линт `bare_await`,
+  включаемый по имени.
+- **`ctx.join` дожидается вызова, который уже идёт.** Долгому вызову нужен
+  свой сигнал остановки, как выше, или `ctx.abandonable`.
+- **Это не управление состоянием.** Задача встаёт под провайдер riverpod или
+  обработчик bloc, не меняя слоя состояния, а страница
+  [«With riverpod and bloc»](https://docs.yet-another.dev/async_job/riverpod-and-bloc/)
+  показывает, где каждый из них её отменяет.
+
+`async_job` 1.0.0 лежит на [pub.dev](https://pub.dev/packages/async_job). Он
+зависит только от `meta` и с 1.0 следует семантическому версионированию.
+[Документация](https://docs.yet-another.dev/async_job/) рассказывает
+об исходах, отмене, уборке, дочерних задачах, стримах и тестах под
+`fake_async`. Для состояния с очередью поверх задач есть
+[solo](https://pub.dev/packages/solo) из того же репозитория.
+
+### r/FlutterDev
+
+Заголовок: **async_job 1.0: отмена асинхронной работы, когда уходит экран, под
+riverpod или bloc**
+
+Когда экран уходит, riverpod освобождает его провайдер, а bloc закрывает свои
+обработчики, но загрузка, которую они начали, — это `Future`, и её ничто
+не останавливает. Она идёт до конца впустую, а кубит бросает
+`Bad state: Cannot emit new states after calling close`.
+
+[async_job](https://pub.dev/packages/async_job) — пакет на чистом Dart для
+отмены такой работы. Задача проверяет отмену на каждом вызове, которого ждёт
+через свой контекст, закрывает открытое, чем бы ни кончилась, и кончается
+`Done`, `Failed` или `Cancelled`. Она встаёт под тот слой состояния, который
+у вас уже есть. Под riverpod провайдер отменяет задачу, когда его освобождают:
+
+```dart
+Job<List<String>> readRows(String query) => Job((ctx) async {
+  final db = await ctx.join(
+    () => Database.open(query),
+    dispose: (db) => db.close(),
+  );
+  return [
+    for (var page = 1; page <= 3; page++)
+      await ctx.join(() => db.readPage(page)),
+  ];
+});
+
+final rows = FutureProvider.autoDispose.family<List<String>, String>((
+  ref,
+  query,
+) {
+  final job = readRows(query);
+  ref.onDispose(job.cancel);
+  return job.value;
+});
+```
+
+Когда пользователь уходит с экрана во время первой страницы, задача
+останавливается после этой страницы, и база закрывается; здесь с заглушкой
+`Database`, которая печатает, что делает:
+
+```text
+database opened for dart
+screen left
+dart: page 1 read
+database for dart closed
+```
+
+`ProviderObserver`, который отправляет сбои в отчёты о сбоях, тоже услышит этот
+`Cancelled` и должен его пропускать.
+
+`ref.onCancel` кажется подходящим местом, но им не является: riverpod 3 зовёт
+его, когда перекрытый экран ставит своих слушателей на паузу, и чтения
+начинаются заново, когда экран возвращается. Страница
+[«With riverpod and bloc»](https://docs.yet-another.dev/async_job/riverpod-and-bloc/)
+показывает этот случай, нотифаер, который начинает заново на каждый поиск,
+обработчик bloc под `restartable()` и HTTP-запрос, который прерывается вместе
+с задачей.
+
+Рядом с ним —
+[async_job_lints](https://pub.dev/packages/async_job_lints), плагин
+анализатора, который сообщает о коде, который компилируется и всё равно теряет
+ресурс или не замечает отмену; два линта среди его правил включаются по имени.
+
+Подробная история, где сначала пробуются флаг, `Future.timeout`
+и `CancelableOperation`: [ARTICLE LINK]
+
+Я автор. Буду рад отзывам, особенно от тех, кто воевал с этим проверками
+`isClosed` или `CancelableOperation`.
+
+### r/dartlang
+
+Заголовок: **Что нужно, чтобы отменить Future в Dart (async_job 1.0)**
+
+У `Future` в Dart нет `cancel()`. Я описал, что нужно для отмены одной
+небольшой загрузки, и сначала попробовал средства, которые в Dart уже есть:
+[ARTICLE LINK]
+
+Загрузка открывает базу данных, читает три страницы и закрывает базу, а кто-то
+отменяет её во время первой страницы:
+
+- **Флаг** работает, но требует проверки после каждого `await`, `finally` для
+  каждого ресурса и особого значения, под которое тип результата освобождает
+  место.
+- **`Future.timeout`** останавливает ожидание; загрузка читает все страницы
+  впустую.
+- **`CancelableOperation`** перестаёт отдавать значение; загрузка идёт дальше,
+  а `value` отменённой операции не завершается, если не читать его через
+  `valueOrCancellation()`.
+
+[async_job](https://pub.dev/packages/async_job) 1.0 собирает недостающее
+в `Job`: контрольная точка на каждом вызове, которого тело ждёт через свой
+контекст, уборка, зарегистрированная там, где ресурс открывается, `cancel()`,
+который возвращается, когда уборка сделана, и исход, который отличает
+`Cancelled` от `Done` и `Failed`:
+
+```dart
+final job = Job<List<String>>((ctx) async {
+  final db = await ctx.join(Database.open, dispose: (db) => db.close());
+  return [
+    for (var page = 1; page <= 3; page++)
+      await ctx.join(() => db.readPage(page)),
+  ];
+});
+```
+
+Отменённая во время первой страницы, задача дочитывает эту страницу,
+пропускает остальные, закрывает базу и кончается `Cancelled(manual)`. Дочерние
+задачи, дедлайны, стримы и тесты под `fake_async` описаны
+в [документации](https://docs.yet-another.dev/async_job/).
+
+Пакет на чистом Dart и зависит только от `meta`, поэтому работает в консольных
+утилитах и на серверах так же, как во Flutter. Отмена кооперативная: `await`
+в обход контекста её не слышит, а плагин анализатора
+[async_job_lints](https://pub.dev/packages/async_job_lints) сообщает о таком
+`await`.
+
+Я автор; вопросы и критика приветствуются.
+
+### Ответ в bloc#3069
+
+Взгляд со стороны, не из bloc, на две вещи, которые здесь всплывают:
+`CancelableOperation` перестаёт отдавать значение, но не останавливает работу,
+а `maybeEmit` всё равно запускает B, как показывает
+[этот комментарий](https://github.com/felangel/bloc/issues/3069#issuecomment-2764251377).
+
+Я веду [async_job](https://pub.dev/packages/async_job), пакет на чистом Dart
+для кооперативной отмены. Вот пример с A и B выше, с задачей на каждую
+загрузку, которую отменяет `close()`:
+
+```dart
+class MyCubit extends Cubit<MyState> {
+  MyCubit() : super(MyState.idle);
+
+  Job<void>? _load;
+
+  Future<void> load() async {
+    final job = _load = Job((ctx) async {
+      emit(MyState.loading);
+      await ctx.join(_expensiveOperationA);
+      emit(MyState.loadedA);
+      await ctx.join(_expensiveOperationB);
+      emit(MyState.loadedB);
+    });
+    if (await job.done case Failed(:final error, :final stackTrace)) {
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    await _load?.cancel();
+    return super.close();
+  }
+}
+```
+
+Если кубит закрывают, пока идёт A, `close()` отменяет задачу; `ctx.join`
+дожидается A и затем бросает `Cancelled` вместо возврата, так что
+не выполняются ни `emit(MyState.loadedA)`, ни B, а `super.close()` идёт после
+того, как задача кончилась: ни `StateError`, ни проверок `isClosed`. Чтение
+`done` никогда не бросает, поэтому `load()` сам перебрасывает сбой A или B.
+A и B печатают, когда начинаются и кончаются, слушатель печатает состояния,
+после `await cubit.close()` стоит `print('closed')`; на bloc 9.2.1 и async_job
+1.0.0 (стрим доставляет состояния асинхронно, поэтому `loading` печатается
+после `A started`):
+
+```text
+A started
+MyState.loading
+A finished
+closed
+```
+
+Здесь `close()` ждёт A. Если A можно остановить, как запрос dio, он берёт токен
+через `ctx.onCancel`; если он ничего не держит, `ctx.abandonable` оставляет его
+позади. Для обработчиков `Bloc` под `restartable()` небольшой мост через
+`emit.forEach` отменяет задачу и при перезапуске, и при `close()`:
+[«A handler that restarts»](https://docs.yet-another.dev/async_job/riverpod-and-bloc/#a-handler-that-restarts).
+
+Я не предлагаю вносить что-то из этого в bloc — только показываю, что у работы
+после `close()` есть ответ вне его.
 
 ## Ревью
 
