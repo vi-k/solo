@@ -1,4 +1,4 @@
-## Unreleased
+## 1.0.1
 
 ### Documentation
 
@@ -12,6 +12,12 @@
   clause that catches the child's deadline. Without it, a job whose own
   `timeout` ran out before `ctx.run` took its own `Cancelled(timeout)` for the
   child's and went on: the reason of a deadline does not say whose it is.
+- [With riverpod and bloc](doc/riverpod-and-bloc.md) says that a bloc handler
+  with a single call needs no job: a stream whose cancellation stops the call
+  goes into `emit.forEach`, and a job pays off when the handler takes several
+  steps over resources.
+- [Cleanup rules](doc/cleanup-rules.md) names the `bare_await` rule of
+  `async_job_lints` rather than of `solo_lints`.
 
 ## 1.0.0
 
