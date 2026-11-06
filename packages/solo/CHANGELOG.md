@@ -1,8 +1,5 @@
-## Unreleased
+## 1.0.1
 
-- `doc/riverpod.md` runs against riverpod 3.5, where a `ProviderObserver` no
-  longer hears the `UnmountedRefException` of a cleanup registered after the
-  disposal, and says so in its first attempt.
 - `doc/reference.md` sends the reader for the table of the context to the
   reference page of `async_job`, where the table moved from its README.
 - `pubspec.yaml` names the documentation site, and pub.dev links to it.
@@ -10,9 +7,9 @@
   arguments works with the whole of `S` in its body: there `ctx.state` is
   `Object?`. The README also says that the working type holds from the start of
   the job to its end.
-- A new page, `doc/riverpod.md`, shows a controller under a riverpod provider:
-  the bridge between the two, a camera closed when the screen goes, a form sent
-  once, and what the controller costs there.
+- A new page, `doc/riverpod.md`, shows a controller under a riverpod 3.5
+  provider: the bridge between the two, a camera closed when the screen goes, a
+  form sent once, and what the controller costs there.
 - A new page, `doc/bloc.md`, puts a controller under a bloc: the bridges for
   its jobs and its states and what they cost, three requirements where the
   controller takes a workaround off the bloc, and the scenarios where the
