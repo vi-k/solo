@@ -118,7 +118,7 @@ only way to observe a failure:
 | Reads `done` | yes, even without awaiting it, and `done` never throws |
 | Reads `value` | yes, even without awaiting it, and the waiting code gets the error itself and has to handle it, as with any `Future` |
 | Reads `done` or `value` after the microtask that follows the end | too late: the failure has been answered for |
-| Forwards the failure through `then` | yes, and the continuation takes responsibility for it |
+| Forwards the failure through `then` or a handle of `shared()` | yes, and the continuation or the handles take responsibility for it |
 | Reads `outcome` | no |
 | Awaits `job.cancel()` | no |
 | Registers a listener with `whenCancelled` or `whenFinished` | no |

@@ -54,7 +54,9 @@ context do on a cancelled job:
 A body can cancel itself, by throwing `Cancelled` or by letting out the
 cancellation of a child. It accepts the cancellation as it throws, and the job
 is cancelled the same way: the cancellation passes to its children, its
-`onCancel` callbacks run, and it ends `Cancelled`.
+`onCancel` callbacks run, and it ends `Cancelled`. Awaiting `ctx.job.cancel()`
+does not do it: the returned future waits for the job, the job is this body,
+and the wait never ends.
 
 Inside an action passed to the context, a plain `await` is right: the context
 adds no checkpoint between the steps of that action. A step that needs a check

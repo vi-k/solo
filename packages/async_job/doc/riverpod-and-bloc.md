@@ -32,11 +32,11 @@ Job<List<String>> readRows(String query) => Job((ctx) async {
 });
 ```
 
-`Database` is the one of the README's quick start, reading by pages; it prints
-when it opens, reads a page and closes. The provider is `autoDispose`: when the
-screen goes, so does its last listener, and riverpod disposes the provider. The
-reads should stop there and the database close. In the traces below the screen
-goes during the first page.
+`Database` is like the one of the README's quick start, but it opens for a
+query and reads by pages; it prints when it opens, reads a page and closes. The
+provider is `autoDispose`: when the screen goes, so does its last listener, and
+riverpod disposes the provider. The reads should stop there and the database
+close. In the traces below the screen goes during the first page.
 
 ### The first attempt
 
@@ -336,16 +336,16 @@ is there for a job that ends `Cancelled` on its own, by its deadline for one:
 `watch` is page code, not part of `async_job`: copy it.
 
 A handler with a single call needs no job for this. Any stream whose
-cancellation stops the call goes into `emit.forEach` the same way —
-`CancelableOperation.fromFuture(call, onCancel: token.cancel).asStream()` of
-`package:async`, with the client's own token as in
-[A request to abort](#a-request-to-abort) — and `restartable()` and `close()`
-stop the call through it. A job pays off when the handler takes several steps,
-as `readRows` opens a database and reads it page by page: every `ctx.join` is a
-point where the work stops, and the database closes by the `dispose` written
-where it opens. With bloc alone the handler checks `emit.isDone` before every
-page and closes the database in a `finally`, and without the check the reads
-run to the end.
+cancellation stops the call goes into `emit.forEach` the same way, and
+`restartable()` and `close()` stop the call through it. `package:async` makes
+such a stream from the call and the client's own token, as in
+[A request to abort](#a-request-to-abort):
+`CancelableOperation.fromFuture(call, onCancel: token.cancel).asStream()`. A
+job pays off when the handler takes several steps, as `readRows` opens a
+database and reads it page by page: every `ctx.join` is a point where the work
+stops, and the database closes by the `dispose` written where it opens. With
+bloc alone the handler checks `emit.isDone` before every page and closes the
+database in a `finally`, and without the check the reads run to the end.
 
 ## A request to abort
 

@@ -1,3 +1,22 @@
+## Unreleased
+
+### Documentation
+
+- The README says that a plain `await` in a body is no checkpoint and that
+  `await job.value` throws the error of the body or `Cancelled`. Its `Install`
+  shows the yaml that turns on the two lints of `async_job_lints`, which are
+  off until named, and the trace of its Quick start shows the read that
+  `ctx.join` waited for.
+- [Reference](doc/reference.md) says that `ctx.pause` throws at once when the
+  job is cancelled. It, [Errors](doc/errors.md) and [Outcomes](doc/outcomes.md)
+  count a handle of `shared()` among the ways to observe a failure.
+- [Children](doc/children.md) says that a `Job(...)` made in a body is no child
+  even when the body waits for it, and [Cancellation](doc/cancellation.md) that
+  a body does not cancel itself by awaiting `ctx.job.cancel()`.
+- [Why a job](doc/why.md) ends with the pages to read next, and
+  [With riverpod and bloc](doc/riverpod-and-bloc.md) no longer calls its
+  `Database` the one of the README.
+
 ## 1.0.1
 
 ### Documentation

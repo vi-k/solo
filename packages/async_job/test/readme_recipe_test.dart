@@ -661,7 +661,7 @@ void main() {
     }
   });
 
-  test('the entry stays within 95 lines through the Quick start and 125 '
+  test('the entry stays within 95 lines through the Quick start and 131 '
       'before Guides', () {
     final lines = read('README.md').split('\n');
     final quickStart = lines.indexOf('## Quick start');
@@ -674,7 +674,9 @@ void main() {
       quickStart + 1,
     );
     expect(next, lessThanOrEqualTo(95));
-    expect(guides, lessThanOrEqualTo(125));
+    // 125 until the yaml that turns on the lints of the plugin, the plain
+    // `await` of the Quick start and the read in its trace came in.
+    expect(guides, lessThanOrEqualTo(131));
   });
 
   group('walking away from a call', () {
@@ -1381,7 +1383,6 @@ void main() {
       'Waits, then throws': 'Ждёт, потом бросает',
       'Throws at once': 'Бросает сразу',
       'Holds it until the step ends': 'Держит её до конца шага',
-      'Ends and throws': 'Прерывается и бросает',
       'Passes it on, waits, throws': 'Передаёт её, ждёт, бросает',
       'Passes it on': 'Передаёт её',
       'Not cancelled': 'Не отменяется',
@@ -1451,8 +1452,8 @@ void main() {
       );
     });
 
-    test('pause ends and throws', () {
-      expect(cell('pause'), 'Ends and throws');
+    test('pause throws at once', () {
+      expect(cell('pause'), 'Throws at once');
       expect(
         cancelledWhile(
           (ctx, say) => ctx.pause(const Duration(milliseconds: 100)),
@@ -1751,7 +1752,16 @@ void main() {
             r'```yaml\n(.*?)\n```',
             dotAll: true,
           ).firstMatch(read(page))!.group(1),
-          matches(RegExp(r'^plugins:\n  async_job_lints: \^\d+\.\d+\.\d+$')),
+          matches(
+            RegExp(
+              r'^plugins:\n'
+              r'  async_job_lints:\n'
+              r'    version: \^\d+\.\d+\.\d+\n'
+              r'    diagnostics:\n'
+              r'      catch_without_check: true\n'
+              r'      bare_await: true$',
+            ),
+          ),
           reason: page,
         );
       }

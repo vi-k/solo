@@ -216,8 +216,9 @@ somebody:
 
 - reads `done` or `value`;
 - calls `ignoreFailure()`;
-- forwards the failure through `then`. A continuation cancelled before its
-  source failed forwards nothing, and the failure stays unobserved.
+- forwards the failure through `then` or a handle of `shared()`. A continuation
+  or a handle cancelled before its source failed forwards nothing, and the
+  failure stays unobserved.
 
 See [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
 outcomes page. The observer's hooks do not observe the outcome, even a hook

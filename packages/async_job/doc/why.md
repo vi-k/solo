@@ -159,3 +159,6 @@ ready flag written
 database closed
 Cancelled(manual)
 ```
+
+The pages go on from here: [Outcomes](outcomes.md) for what `done` hands back,
+and [Cancellation](cancellation.md) for the checkpoints this example uses.

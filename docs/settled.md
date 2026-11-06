@@ -87,7 +87,9 @@ that refuses cancellation» на `cancellation.md` написан по прос�
 **9. `await job.cancel()` из собственного тела не возвращается.** Тот же тупик
 дают `await job.done` и `await job.value` из своего тела; ядро не знает, откуда
 вызов, а `StateError` запретил бы и работающий вызов без `await`. Сказано
-в dartdoc. (2026-10-20; `2026-10-20-async-job-project-review.md`, L5.)
+в dartdoc и во вступлении `cancellation.md`, рядом с тем, как тело отменяет
+себя. (2026-10-20; `2026-10-20-async-job-project-review.md`, L5;
+`2026-11-06-async-job-1-0-1-docs-review.md`, A4.)
 
 **10. Срок задачи — кооперативная отмена, а не ошибка.** Параметр `timeout`
 у конструктора, отсчёт от старта тела, причина `TimeoutCancelReason`;

@@ -158,3 +158,7 @@ ready flag written
 database closed
 Cancelled(manual)
 ```
+
+Дальше — страницы: [«Исходы»](outcomes.md) о том, что отдаёт `done`,
+и [«Отмена»](cancellation.md) о контрольных точках, которые этот пример
+использует.

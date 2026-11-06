@@ -23,8 +23,8 @@ Future<void> main() async {
 }
 // README: end
 
-/// The database of "Quick start" in README.md: it prints when it opens and
-/// when it closes.
+/// The database of "Quick start" in README.md: it prints when it opens, when
+/// a read ends and when it closes.
 class Database {
   /// Opens a database, in a fiftieth of a second.
   static Future<Database> open() async {
@@ -34,10 +34,11 @@ class Database {
   }
 
   /// Reads the rows, in a tenth of a second.
-  Future<List<String>> readAll() => Future<List<String>>.delayed(
-    const Duration(milliseconds: 100),
-    () => const ['row'],
-  );
+  Future<List<String>> readAll() async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    print('rows read');
+    return const ['row'];
+  }
 
   /// Closes the database.
   Future<void> close() async => print('database closed');

@@ -68,7 +68,10 @@ A child is made with `Job.deferred`, which leaves its start to whoever runs it.
 `ctx.run` takes a `ChildJob`: a `Job.deferred`, or a job of an engine that
 declares it. `Job(body)`, `then` and `Job.each` make jobs that start by
 themselves. Such a job could start before the parent takes it in and run
-outside the parent's cancellation, so the compiler turns it away.
+outside the parent's cancellation, so the compiler turns it away. A `Job(...)`
+made in the body is no child even when the body waits for it through
+`ctx.join(() => job.value)`: the parent's cancellation does not reach it, and
+the `join` waits for it to end.
 
 Code that holds a context and does not know the engine behind it makes the
 child with `ctx.child`, which takes what `Job.deferred` takes: the body, `key`,

@@ -1,6 +1,7 @@
 > **Состояние на 2026-11-06:** ревью проведено, у каждой находки стоит
-> вердикт. Принятые ждут слова владельца: правка документации в дереве,
-> на pub.dev она придёт со следующим выпуском ядра. Отказы — решение 147
+> вердикт с итогом. Принятые исправлены по слову владельца «исправляй»
+> коммитом «docs: close the findings of the async_job 1.0.1 docs review»;
+> на pub.dev правка придёт со следующим выпуском ядра. Отказы — решение 147
 > и дополненное решение 142 в `docs/settled.md`.
 > **Что это:** ревью документации `async_job` 1.0.1, как она вышла, одним
 > ревьюером на Fable: оценки документации и агента-пользователя, вход README,
@@ -48,6 +49,16 @@ README (D8); фразы о голом `await` в README и `why.md` нет (A1).
 Остальные страницы разошлись не больше чем на балл. Короткий вход оценку README
 не поднял: ревьюер снял её за абзац Install и за умолчание о голом `await`,
 а не за длину, за которую её снимали 2026-10-31.
+
+Исправление. Владелец 2026-11-06: «исправляй». Принятые находки сделаны одним
+коммитом «docs: close the findings of the async_job 1.0.1 docs review»,
+с переводами и записью в разделе «Unreleased» списка изменений. Итог каждой —
+в конце её вердикта. Сторож длины входа в `readme_recipe_test.dart` держал
+«Guides» не дальше 125-й строки, и на `HEAD` раздел стоял ровно на ней. yaml
+плагина, фраза о голом `await` и строка `rows read` добавили шесть строк,
+и порог поднят до 131; 95 строк до конца Quick start держатся. Под нагрузкой
+машины, средняя 87–114, два теста на время `let_go_together_test.dart` падали
+в общем прогоне и проходили одни; набор с `-j 2` — +1902, все прошли.
 
 Ниже — отчёт ревьюера без правок прозы. Конец раздела ПРОГОН называл зонды
 путём в копии ревьюера; путь заменён словами. Вердикты — отдельным абзацем
@@ -163,7 +174,11 @@ it had already started, and the rows never reached the body». Трасса:
 Вердикт: принять. `readAll` молчит — сверено чтением примера. С `rows read`
 трасса `join` кончает чтение до `database closed`, а у `abandonable` этой
 строки до закрытия не было бы: трасса начинает доказывать прозу. Правка
-примера, README, перевода и сторожа трассы README.
+примера, README, перевода и сторожа трассы README. Итог: сделано коммитом
+«docs: close the findings of the async_job 1.0.1 docs review». `readAll`
+печатает `rows read`, трасса README и перевода — `database opened`,
+`rows read`, `database closed`, `cancelled: manual`; сторож «the Quick start
+earns every line of it» сверяет её с запуском примера без правки.
 
 **D2. Medium. README, «Install».** «Naming it in `analysis_options.yaml` turns
 on its warnings; its lints are turned on by name, as its Install section
@@ -186,7 +201,13 @@ name» и yaml с блоком `diagnostics:` из README плагина; вер
 README плагина — `^0.1.1` с блоком, где `bare_await` и `catch_without_check`
 включены по имени. `^0.1.0` пускает 0.1.1, и запись выпуска 1.0.1 оставила его
 нарочно, но читатель видит две версии и yaml, который двух правил не включает.
-Правка — как предложено, вместе с A1.
+Правка — как предложено, вместе с A1. Итог: сделано коммитом «docs: close the
+findings of the async_job 1.0.1 docs review». Разошлось с предложенным: абзац
+Install не описывает правила, а говорит, что два линта включаются по имени,
+и ссылки на раздел Install плагина больше не даёт — что делает `bare_await`,
+сказано в Quick start (A1), а строки входа на счету. yaml — блок
+с `version: ^0.1.1` и `diagnostics:`, как у плагина; сторож формы блока
+в `readme_recipe_test.dart` переписан под него.
 
 **D3. Low. `reference.md`, «The context at a glance».** Клетка `ctx.pause` /
 «Cancelled while it runs»: «Ends and throws». Рядом `abandonable` — «Throws at
@@ -198,7 +219,11 @@ after 32 ms; outcome: Cancelled(manual)». Предлагаю: «Throws at once,
 cancels its timer».
 
 Вердикт: принять. Клетка сверена, `time.md` говорит «at once»; это точность
-справочника, а не плотность.
+справочника, а не плотность. Итог: сделано коммитом «docs: close the findings
+of the async_job 1.0.1 docs review». Клетка — «Throws at once», в переводе
+«Бросает сразу»; без «and cancels its timer» из предложения: о таймере говорит
+`time.md`. Сторож клетки «pause throws at once» и словарь перевода
+в `readme_recipe_test.dart` поправлены.
 
 **D4. Low. `reference.md`, «What the cells leave out».** Список разорван пустой
 строкой после пункта о `ctx.each` (строки 47–49): рендерится как два списка,
@@ -221,7 +246,12 @@ failure through `then` or a handle of `shared`…» в трёх местах.
 
 Вердикт: принять. Сверено: dartdoc `Job` в `lib/src/job.dart` называет «a
 handle of [shared]», строка «Observe a failure» `reference.md` — нет; решение
-146 тоже считает ручку `shared` наблюдением. Правка в трёх местах.
+146 тоже считает ручку `shared` наблюдением. Правка в трёх местах. Итог:
+сделано коммитом «docs: close the findings of the async_job 1.0.1 docs review»,
+в трёх местах и в переводах. Зонд подтвердил до правки: ручка `shared()` без
+`then` несёт провал источника, и зона молчит; ручка, отменённая раньше провала,
+не несёт ничего, и провал уходит в зону, — поэтому оговорка о продолжении
+на `errors.md` распространена и на ручку.
 
 **D6. Low. README, третий абзац и «Guides»; `why.md`, вступление.** Одна фраза
 трижды (см. «Вход»). Предлагаю: третий абзац README говорит по-другому — зачем
@@ -242,7 +272,10 @@ pages go on from here: Outcomes for what `done` hands back, Cancellation for
 the checkpoints the example used.»
 
 Вердикт: принять. `why.md` — вторая ступень входа, и с GitHub с неё некуда
-идти; фраза в конце не карта разделов, решение 107 её не касается.
+идти; фраза в конце не карта разделов, решение 107 её не касается. Итог:
+сделано коммитом «docs: close the findings of the async_job 1.0.1 docs review»:
+«The pages go on from here» со ссылками на «Outcomes» и «Cancellation»,
+в переводе так же.
 
 **D8. Low. `riverpod-and-bloc.md`, «A provider that is gone».** «`Database` is
 the one of the README's quick start, reading by pages» — у `Database` README
@@ -252,7 +285,9 @@ the one of the README's quick start, reading by pages» — у `Database` README
 README's, opened for a query and read by pages».
 
 Вердикт: принять. Сверено: фраза стоит в строке 35 страницы, а у класса README
-нет ни `open(query)`, ни `readPage`.
+нет ни `open(query)`, ни `readPage`. Итог: сделано коммитом «docs: close the
+findings of the async_job 1.0.1 docs review»: «like the one of the README's
+quick start, but it opens for a query».
 
 **D9. Low. `riverpod-and-bloc.md`, «A stream that cancels the job», новый абзац
 1.0.1 (строки 338–348).** Первое предложение — пять строк с вставкой через
@@ -264,7 +299,11 @@ README's, opened for a query and read by pages».
 предложения.
 
 Вердикт: принять. Абзац новый, вышел в 1.0.1, и решение 142 о плотности старых
-страниц его не прикрывает: правится свой свежий текст.
+страниц его не прикрывает: правится свой свежий текст. Итог: сделано коммитом
+«docs: close the findings of the async_job 1.0.1 docs review». Разошлось
+с предложенным: выражение осталось кодом в строке, в конце своего предложения,
+а не отдельным блоком — блок Dart на странице уходит в стенд и должен
+собираться. Предложение разбито на два.
 
 **D10. Low. README, «Walking away from a call».** Раздел открывается кодом
 с неопределённым `fetchQuote`, а Quick start — фразой задачи. Одна фраза
@@ -320,7 +359,14 @@ checkpoint: the job learns of the cancellation at its next `ctx.` call, and
 
 Вердикт: принять — главная находка ревью. Сверено поиском: в README и `why.md`
 фразы о голом `await` нет. Решение 143 держит привычные ошибки агента в прозе
-README, и эта — первая из них. Фраза в Quick start, вместе с D2.
+README, и эта — первая из них. Фраза в Quick start, вместе с D2. Итог: сделано
+коммитом «docs: close the findings of the async_job 1.0.1 docs review».
+Разошлось с предложенным: фраза стоит не после трассы, а во вступлении Quick
+start, рядом с тем, что такое контрольная точка, и короче — «A plain `await` is
+no checkpoint: a cancellation waits for the next call through `ctx` or the end
+of the body, and so do `cancel()` and a `timeout`; the lint `bare_await`
+reports such an `await`». Зонды G и H ревьюера повторены моим прогоном, выводы
+те же.
 
 **A2. Low. README, второй абзац.** «or `await job.value` to get the value
 returned by the body» — ни слова, что `value` бросает `Cancelled` и ошибку
@@ -330,7 +376,10 @@ returned by the body» — ни слова, что `value` бросает `Cance
 Предлагаю: «…or `await job.value` for the value alone: it throws the body's
 error, and `Cancelled` when the job was cancelled».
 
-Вердикт: принять. Сверено: второй абзац README о броске `value` молчит.
+Вердикт: принять. Сверено: второй абзац README о броске `value` молчит. Итог:
+сделано коммитом «docs: close the findings of the async_job 1.0.1 docs review»,
+короче предложенного: «`await job.value` for the value, which throws the error
+of the body or `Cancelled` instead». Зонд V повторён, вывод тот же.
 
 **A3. Low. `children.md`, вступление и «Running a child».** Страница говорит,
 что `Job(body)` «starts by itself» и что компилятор не пустит его в `ctx.run`,
@@ -347,7 +396,10 @@ parent's cancellation does not reach it, and a `ctx.join` on its `value` waits
 for it to end. Make a child instead, or cancel it in `ctx.onCancel`.»
 
 Вердикт: принять. Фраза `chains.md` не противоречит: форма там законна, а фраза
-говорит, куда отмена родителя не доходит.
+говорит, куда отмена родителя не доходит. Итог: сделано коммитом «docs: close
+the findings of the async_job 1.0.1 docs review»: фраза в «Running a child» без
+совета «Make a child instead» — как сделать ребёнка, страница говорит строкой
+выше. Зонд I повторён, вывод тот же.
 
 **A4. Low. `cancellation.md`, вступление.** `await ctx.job.cancel()`
 из собственного тела не возвращается — сказано только в dartdoc `cancel` (и для
@@ -361,7 +413,10 @@ body can cancel itself, by throwing `Cancelled`»: «…not by awaiting
 Вердикт: принять, повтор решения 9 с новым доводом. Решение закрыло поведение
 и оставило слово dartdoc; довод — фраза «A body can cancel itself»
 на `cancellation.md` стоит там, где агент ищет, как отменить себя, и молчит
-о тупике. Поведение не меняется; с правкой решение 9 назовёт и страницу.
+о тупике. Поведение не меняется; с правкой решение 9 назовёт и страницу. Итог:
+сделано коммитом «docs: close the findings of the async_job 1.0.1 docs review»:
+фраза во вступлении `cancellation.md` после того, как тело отменяет себя;
+решение 9 называет теперь и страницу.
 
 Проверил и нашёл документированным хорошо, находок нет: `catch (e)` вокруг
 `ctx.join` с запасным значением (зонд J: «catch took: Cancelled(manual); using

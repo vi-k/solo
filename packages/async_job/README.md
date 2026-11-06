@@ -7,12 +7,12 @@ manner of structured concurrency. The package works in pure Dart and depends
 only on `meta`.
 
 A `Job<T>` runs a function called its body and records how it ended. Use
-`await job.done` to get its outcome or `await job.value` to get the value
-returned by the body. `Job` itself does not implement `Future`: a job started
-without `await` is ordinary use rather than a forgotten wait, and the lints for
-unawaited futures leave it alone. For the same reason `await job` compiles and
-waits for nothing; the core set of `package:lints` flags it with
-`await_only_futures`.
+`await job.done` to get its outcome, or `await job.value` for the value, which
+throws the error of the body or `Cancelled` instead. `Job` itself does not
+implement `Future`: a job started without `await` is ordinary use rather than a
+forgotten wait, and the lints for unawaited futures leave it alone. For the
+same reason `await job` compiles and waits for nothing; the core set of
+`package:lints` flags it with `await_only_futures`.
 
 [Why a job](doc/why.md) shows what a job adds to a `Future`, a flag and
 `CancelableOperation`, and a fuller example. [Reference](doc/reference.md)
@@ -27,14 +27,16 @@ dart pub add async_job
 The analyzer plugin [async_job_lints](https://pub.dev/packages/async_job_lints)
 reports mistakes that compile, run and often pass a first test, such as a wait
 in cleanup that never happens or a resource lost to a cancellation. Naming it
-in `analysis_options.yaml` turns on its warnings; its lints are turned on by
-name, as its
-[Install](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#install)
-section shows:
+in `analysis_options.yaml` turns on its warnings, and its two lints are turned
+on by name:
 
 ```yaml
 plugins:
-  async_job_lints: ^0.1.0
+  async_job_lints:
+    version: ^0.1.1
+    diagnostics:
+      catch_without_check: true
+      bare_await: true
 ```
 
 ## Quick start
@@ -42,7 +44,10 @@ plugins:
 A job opens a database and reads from it, and somebody cancels it while the
 read is in flight. The body receives a context, `ctx`, and each call it awaits
 through `ctx.join` is a checkpoint: once the job is cancelled, the next one
-throws `Cancelled`. `dispose` closes the database whichever way the job ends:
+throws `Cancelled`. A plain `await` is no checkpoint: a cancellation waits for
+the next call through `ctx` or the end of the body, and so do `cancel()` and a
+`timeout`; the lint `bare_await` reports such an `await`. `dispose` closes the
+database whichever way the job ends:
 
 ```dart
 import 'package:async_job/async_job.dart';
@@ -69,11 +74,12 @@ Future<void> main() async {
 }
 ```
 
-`example/quick_start.dart` runs this block with a `Database` that prints when
-it opens and when it closes. It prints:
+`example/quick_start.dart` runs this block with a `Database` that prints as it
+opens, reads and closes. It prints:
 
 ```text
 database opened
+rows read
 database closed
 cancelled: manual
 ```

@@ -15,7 +15,7 @@ what a cancellation that comes while it runs does to it:
 | `ctx.join(action)` | Waits for all of the action | Throws `Cancelled` | Waits, then throws |
 | `ctx.abandonable(action)` | Waits while the job lives | Throws `Cancelled` | Throws at once |
 | `ctx.uncancellable(action)` | Holds the cancellation back | Throws `Cancelled` | Holds it until the step ends |
-| `ctx.pause(duration)` | Lets time pass | Throws `Cancelled` | Ends and throws |
+| `ctx.pause(duration)` | Lets time pass | Throws `Cancelled` | Throws at once |
 | `ctx.child(body)` | Makes a child to run | Works as usual |  |
 | `ctx.run(child)` | Runs a child and waits | Throws `Cancelled` | Passes it on, waits, throws |
 | `ctx.start(child)` | Starts a child, no waiting | Throws `Cancelled` | Passes it on |
@@ -68,7 +68,7 @@ it does in everyday English:
 
 | Word | What it means | Page |
 | --- | --- | --- |
-| Observe a failure | Read `done` or `value`, forward the failure through `then`, or call `ignoreFailure()`, by the microtask after the job ends; reading `outcome` or giving the job an observer does not count. | [Outcomes](outcomes.md#a-failure-nobody-waits-for) |
+| Observe a failure | Read `done` or `value`, forward the failure through `then` or a handle of `shared()`, or call `ignoreFailure()`, by the microtask after the job ends; reading `outcome` or giving the job an observer does not count. | [Outcomes](outcomes.md#a-failure-nobody-waits-for) |
 | Answer for an error | What happens to a failure nobody observes and to an error no outcome carries: `onUnanswered` of an observer that mixes in `JobAnswerer` takes it, or the zone if the job has no such observer. | [Errors](errors.md#answering-for-errors) |
 | The zone | The zone the job was created in; an error that reaches it is an uncaught error there. | [Errors](errors.md) |
 | Accept a cancellation | The job becomes cancelled: the cancellation passes to its children, its `onCancel` callbacks run, and it ends `Cancelled` whatever the body does next. | [Cancellation](cancellation.md) |
