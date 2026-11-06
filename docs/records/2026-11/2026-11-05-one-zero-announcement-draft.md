@@ -1,9 +1,11 @@
 # Анонс 1.0: статья, два поста и ответ в bloc#3069, черновики
 
-> **Состояние на 2026-11-05:** черновики написаны по слову владельца «давай
+> **Состояние на 2026-11-06:** черновики написаны по слову владельца «давай
 > анонс» и исправлены по независимому ревью Opus (раздел «Ревью»); публикует
 > владелец сам. Ничего не опубликовано. Переводы для чтения добавлены тем же
-> днём по слову «сделай мне переводы черновиков».
+> днём по слову «сделай мне переводы черновиков». 2026-11-06 по слову владельца
+> «да» в статье переписан абзац о раннем `done`, а в пост r/dartlang добавлена
+> фраза о структурной конкурентности, обе правки — с переводом.
 > **Что это:** четыре текста для каналов после 1.0 — статья «What cancelling
 > a Future takes in Dart», посты в r/FlutterDev и r/dartlang, ответ
 > в bloc#3069 — их переводы и зонды, которыми проверен их код.
@@ -195,7 +197,7 @@ Cancelled(manual)
 
 The cancellation lands while the first page is being read. `ctx.join` waits for that read, then throws `Cancelled` instead of handing the page to the body, so the second and third pages never start. `dispose` closes the database, and `cancel()` returns after it has. `job.done` gives `Cancelled(manual)`, which the caller tells from `Done` and `Failed`. Had the cancellation come during `Database.open`, `join` would have waited for the open, and `dispose` would have closed the database that arrived for nobody.
 
-`done` is read right after the constructor: a job that fails before anybody reads its outcome would otherwise reach the zone as an uncaught error.
+`done` is read right after the constructor, before `leave()`: a job that fails while nobody holds its outcome hands the error to the zone the moment it ends, and an `await job.done` that comes later is too late to take it back.
 
 ### Walking away from a call
 
@@ -335,6 +337,8 @@ final job = Job<List<String>>((ctx) async {
 ```
 
 Cancelled during the first page, it finishes that read, skips the rest, closes the database and ends `Cancelled(manual)`. Children, deadlines, streams and `fake_async` tests are covered in the [documentation](https://docs.yet-another.dev/async_job/).
+
+If you know structured concurrency from Kotlin or Swift: a parent ends after its children, a cancellation reaches them, and `ctx.runAll` cancels the other branches when one fails.
 
 It is pure Dart and depends only on `meta`, so it runs in CLI tools and servers as well as in Flutter. The cancellation is cooperative: an `await` that goes around the context does not hear it, and the analyzer plugin [async_job_lints](https://pub.dev/packages/async_job_lints) reports such an `await`.
 
@@ -541,9 +545,9 @@ database closed
 - Контрольной точки на каждом `await` и способа найти ту, которой не хватает.
 - Решения о вызове, который уже идёт: дождаться его конца или уйти и дать ему
   кончиться впустую.
-- Уборки, зарегистрированной там, где ресурс открывается: она выполняется, чем
-  бы загрузка ни кончилась, в том числе для базы, которая откроется уже после
-  отмены.
+- Уборки, зарегистрированной там, где ресурс открывается: она выполняется,
+  чем бы загрузка ни кончилась, в том числе для базы, которая откроется уже
+  после отмены.
 - `cancel()`, которого можно дождаться и который возвращается, когда уборка
   сделана.
 - Исхода, который отличает отмену от успеха и от сбоя, чтобы типу результата
@@ -592,8 +596,10 @@ Cancelled(manual)
 `Database.open`, `join` дождался бы открытия, а `dispose` закрыл бы базу,
 которая открылась уже впустую.
 
-`done` читается сразу после конструктора: иначе задача, которая упадёт раньше,
-чем кто-нибудь прочтёт её исход, дойдёт до зоны неперехваченной ошибкой.
+`done` читается сразу после конструктора, до `leave()`: задача, которая падает,
+пока её исход никто не держит, отдаёт ошибку в зону в тот самый момент, когда
+кончается, и `await job.done`, который придёт позже, забрать её назад уже
+не успеет.
 
 ##### Уйти от вызова
 
@@ -638,10 +644,10 @@ final job = Job<String>((ctx) async {
 ```
 
 Соединение закрывается, и сервер перестаёт готовить ответ, который никто
-не прочтёт. Прерванный запрос всё равно бросает, при каждой отмене, и по
-умолчанию ошибка уходит в зону неперехваченной. Одна строка в `main` говорит
-async_job, что эта ошибка — то, как клиент останавливается, и с этого момента
-она уходит наблюдателю задачи, а не в зону:
+не прочтёт. Прерванный запрос всё равно бросает, при каждой отмене,
+и по умолчанию ошибка уходит в зону неперехваченной. Одна строка в `main`
+говорит async_job, что эта ошибка — то, как клиент останавливается, и с этого
+момента она уходит наблюдателю задачи, а не в зону:
 
 ```dart
 Job.isCancellationError = (error) =>
@@ -666,8 +672,8 @@ http 1.5 и новее делает то же через `AbortableRequest` и �
   [async_job_lints](https://pub.dev/packages/async_job_lints) сообщает
   об `await` в теле, который идёт не через контекст; это линт `bare_await`,
   включаемый по имени.
-- **`ctx.join` дожидается вызова, который уже идёт.** Долгому вызову нужен
-  свой сигнал остановки, как выше, или `ctx.abandonable`.
+- **`ctx.join` дожидается вызова, который уже идёт.** Долгому вызову нужен свой
+  сигнал остановки, как выше, или `ctx.abandonable`.
 - **Это не управление состоянием.** Задача встаёт под провайдер riverpod или
   обработчик bloc, не меняя слоя состояния, а страница
   [«With riverpod and bloc»](https://docs.yet-another.dev/async_job/riverpod-and-bloc/)
@@ -740,10 +746,10 @@ database for dart closed
 обработчик bloc под `restartable()` и HTTP-запрос, который прерывается вместе
 с задачей.
 
-Рядом с ним —
-[async_job_lints](https://pub.dev/packages/async_job_lints), плагин
-анализатора, который сообщает о коде, который компилируется и всё равно теряет
-ресурс или не замечает отмену; два линта среди его правил включаются по имени.
+Рядом с ним — [async_job_lints](https://pub.dev/packages/async_job_lints),
+плагин анализатора, который сообщает о коде, который компилируется и всё равно
+теряет ресурс или не замечает отмену; два линта среди его правил включаются
+по имени.
 
 Подробная история, где сначала пробуются флаг, `Future.timeout`
 и `CancelableOperation`: [ARTICLE LINK]
@@ -787,10 +793,14 @@ final job = Job<List<String>>((ctx) async {
 });
 ```
 
-Отменённая во время первой страницы, задача дочитывает эту страницу,
-пропускает остальные, закрывает базу и кончается `Cancelled(manual)`. Дочерние
-задачи, дедлайны, стримы и тесты под `fake_async` описаны
+Отменённая во время первой страницы, задача дочитывает эту страницу, пропускает
+остальные, закрывает базу и кончается `Cancelled(manual)`. Дочерние задачи,
+дедлайны, стримы и тесты под `fake_async` описаны
 в [документации](https://docs.yet-another.dev/async_job/).
+
+Если вы знаете структурную конкурентность по Kotlin или Swift: родитель
+кончается после своих детей, отмена до них доходит, а `ctx.runAll` отменяет
+остальные ветки, когда одна падает.
 
 Пакет на чистом Dart и зависит только от `meta`, поэтому работает в консольных
 утилитах и на серверах так же, как во Flutter. Отмена кооперативная: `await`
@@ -842,11 +852,11 @@ class MyCubit extends Cubit<MyState> {
 дожидается A и затем бросает `Cancelled` вместо возврата, так что
 не выполняются ни `emit(MyState.loadedA)`, ни B, а `super.close()` идёт после
 того, как задача кончилась: ни `StateError`, ни проверок `isClosed`. Чтение
-`done` никогда не бросает, поэтому `load()` сам перебрасывает сбой A или B.
-A и B печатают, когда начинаются и кончаются, слушатель печатает состояния,
-после `await cubit.close()` стоит `print('closed')`; на bloc 9.2.1 и async_job
-1.0.0 (стрим доставляет состояния асинхронно, поэтому `loading` печатается
-после `A started`):
+`done` никогда не бросает, поэтому `load()` сам перебрасывает сбой A или B. A
+и B печатают, когда начинаются и кончаются, слушатель печатает состояния, после
+`await cubit.close()` стоит `print('closed')`; на bloc 9.2.1 и async_job 1.0.0
+(стрим доставляет состояния асинхронно, поэтому `loading` печатается после
+`A started`):
 
 ```text
 A started
