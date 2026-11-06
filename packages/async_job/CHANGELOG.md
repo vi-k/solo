@@ -12,7 +12,7 @@
   count a handle of `shared()` among the ways to observe a failure.
 - [Children](doc/children.md) says that a `Job(...)` made in a body is no child
   even when the body waits for it, and [Cancellation](doc/cancellation.md) that
-  a body does not cancel itself by awaiting `ctx.job.cancel()`.
+  awaiting `ctx.job.cancel()` in a body never ends.
 - [Why a job](doc/why.md) ends with the pages to read next, and
   [With riverpod and bloc](doc/riverpod-and-bloc.md) no longer calls its
   `Database` the one of the README.

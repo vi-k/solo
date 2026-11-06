@@ -7,11 +7,11 @@ manner of structured concurrency. The package works in pure Dart and depends
 only on `meta`.
 
 A `Job<T>` runs a function called its body and records how it ended. Use
-`await job.done` to get its outcome, or `await job.value` for the value, which
-throws the error of the body or `Cancelled` instead. `Job` itself does not
-implement `Future`: a job started without `await` is ordinary use rather than a
-forgotten wait, and the lints for unawaited futures leave it alone. For the
-same reason `await job` compiles and waits for nothing; the core set of
+`await job.done` to get its outcome, or `await job.value` for the value; in its
+place `value` throws the error of the body or `Cancelled`. `Job` itself does
+not implement `Future`: a job started without `await` is ordinary use rather
+than a forgotten wait, and the lints for unawaited futures leave it alone. For
+the same reason `await job` compiles and waits for nothing; the core set of
 `package:lints` flags it with `await_only_futures`.
 
 [Why a job](doc/why.md) shows what a job adds to a `Future`, a flag and
@@ -44,10 +44,10 @@ plugins:
 A job opens a database and reads from it, and somebody cancels it while the
 read is in flight. The body receives a context, `ctx`, and each call it awaits
 through `ctx.join` is a checkpoint: once the job is cancelled, the next one
-throws `Cancelled`. A plain `await` is no checkpoint: a cancellation waits for
-the next call through `ctx` or the end of the body, and so do `cancel()` and a
-`timeout`; the lint `bare_await` reports such an `await`. `dispose` closes the
-database whichever way the job ends:
+throws `Cancelled`. A plain `await` is no checkpoint: the body runs on to the
+next checkpoint or its end, and `cancel()` and a `timeout` wait that long; the
+lint `bare_await` reports such an `await`. `dispose` closes the database
+whichever way the job ends:
 
 ```dart
 import 'package:async_job/async_job.dart';

@@ -1,8 +1,9 @@
 > **Состояние на 2026-11-06:** ревью проведено, у каждой находки стоит
 > вердикт с итогом. Принятые исправлены по слову владельца «исправляй»
-> коммитом «docs: close the findings of the async_job 1.0.1 docs review»;
-> на pub.dev правка придёт со следующим выпуском ядра. Отказы — решение 147
-> и дополненное решение 142 в `docs/settled.md`.
+> коммитом «docs: close the findings of the async_job 1.0.1 docs review»,
+> находки ревью этой правки — коммитом «docs: tighten the fixes of the
+> async_job 1.0.1 docs review»; на pub.dev правка придёт со следующим выпуском
+> ядра. Отказы — решение 147 и дополненное решение 142 в `docs/settled.md`.
 > **Что это:** ревью документации `async_job` 1.0.1, как она вышла, одним
 > ревьюером на Fable: оценки документации и агента-пользователя, вход README,
 > находки D и A, читаемость каждой страницы.
@@ -59,6 +60,26 @@ README (D8); фразы о голом `await` в README и `why.md` нет (A1).
 и порог поднят до 131; 95 строк до конца Quick start держатся. Под нагрузкой
 машины, средняя 87–114, два теста на время `let_go_together_test.dart` падали
 в общем прогоне и проходили одни; набор с `-j 2` — +1902, все прошли.
+
+Ревью правки. Независимый ревьюер на Opus прочёл коммит и дал шесть находок,
+все приняты и исправлены вторым коммитом «docs: tighten the fixes of the
+async_job 1.0.1 docs review». R1: фраза Quick start говорила, что отмена ждёт
+следующего вызова через `ctx`, а задача принимает отмену сразу, `onCancel`
+срабатывает внутри `cancel()`, ждёт только тело, и не всякий вызов `ctx`
+контрольная точка; теперь «the body runs on to the next checkpoint or its end».
+R2: на `errors.md` ручка, отменённая раньше провала, оставляла провал
+ненаблюдаемым, хотя его несёт другая ручка того же источника; теперь
+ненаблюдаемым он остаётся, когда нести его больше некому. R3: итог D5 ниже
+говорил, что ручка гасит зону сама, а гасит её только ручка, которую ждут. R4:
+на `cancellation.md` «does not do it» читалось как «не отменяет», а задача
+отменяется и только не кончается. R5: «which throws» цеплялось к значению,
+а перевод говорил «получить ошибку»; теперь `value` бросает. R6: комментарий
+сторожа трассы не называл строку чтения. Зонды R1, R2 и R4 повторены моим
+прогоном, выводы те же: `onCancel` на 40 мс, тело после голого `await` на 210
+мс, `ctx.log` не бросил; вторая ручка получила `Failed`, зона молчала;
+`isCancelled true`, `isFinished false`. Ревьюер предлагал в R1 «reports it»
+ради строки; оставлено «reports such an `await`», и «Guides» остался на 131-й
+строке, порог тот же.
 
 Ниже — отчёт ревьюера без правок прозы. Конец раздела ПРОГОН называл зонды
 путём в копии ревьюера; путь заменён словами. Вердикты — отдельным абзацем
@@ -249,9 +270,10 @@ handle of [shared]», строка «Observe a failure» `reference.md` — не
 146 тоже считает ручку `shared` наблюдением. Правка в трёх местах. Итог:
 сделано коммитом «docs: close the findings of the async_job 1.0.1 docs review»,
 в трёх местах и в переводах. Зонд подтвердил до правки: ручка `shared()` без
-`then` несёт провал источника, и зона молчит; ручка, отменённая раньше провала,
-не несёт ничего, и провал уходит в зону, — поэтому оговорка о продолжении
-на `errors.md` распространена и на ручку.
+`then`, которую ждут, несёт провал источника, и зона молчит, а неждаемая
+отвечает за него сама; ручка, отменённая раньше провала, не несёт ничего,
+и провал уходит в зону, — поэтому оговорка о продолжении на `errors.md`
+распространена и на ручку.
 
 **D6. Low. README, третий абзац и «Guides»; `why.md`, вступление.** Одна фраза
 трижды (см. «Вход»). Предлагаю: третий абзац README говорит по-другому — зачем
@@ -363,10 +385,10 @@ README, и эта — первая из них. Фраза в Quick start, вм�
 коммитом «docs: close the findings of the async_job 1.0.1 docs review».
 Разошлось с предложенным: фраза стоит не после трассы, а во вступлении Quick
 start, рядом с тем, что такое контрольная точка, и короче — «A plain `await` is
-no checkpoint: a cancellation waits for the next call through `ctx` or the end
-of the body, and so do `cancel()` and a `timeout`; the lint `bare_await`
-reports such an `await`». Зонды G и H ревьюера повторены моим прогоном, выводы
-те же.
+no checkpoint: the body runs on to the next checkpoint or its end, and
+`cancel()` and a `timeout` wait that long; the lint `bare_await` reports such
+an `await`», в редакции после R1 ревью правки. Зонды G и H ревьюера повторены
+моим прогоном, выводы те же.
 
 **A2. Low. README, второй абзац.** «or `await job.value` to get the value
 returned by the body» — ни слова, что `value` бросает `Cancelled` и ошибку
@@ -378,8 +400,9 @@ error, and `Cancelled` when the job was cancelled».
 
 Вердикт: принять. Сверено: второй абзац README о броске `value` молчит. Итог:
 сделано коммитом «docs: close the findings of the async_job 1.0.1 docs review»,
-короче предложенного: «`await job.value` for the value, which throws the error
-of the body or `Cancelled` instead». Зонд V повторён, вывод тот же.
+короче предложенного: «`await job.value` for the value; in its place `value`
+throws the error of the body or `Cancelled`», в редакции после R5 ревью правки.
+Зонд V повторён, вывод тот же.
 
 **A3. Low. `children.md`, вступление и «Running a child».** Страница говорит,
 что `Job(body)` «starts by itself» и что компилятор не пустит его в `ctx.run`,
@@ -416,7 +439,9 @@ body can cancel itself, by throwing `Cancelled`»: «…not by awaiting
 о тупике. Поведение не меняется; с правкой решение 9 назовёт и страницу. Итог:
 сделано коммитом «docs: close the findings of the async_job 1.0.1 docs review»:
 фраза во вступлении `cancellation.md` после того, как тело отменяет себя;
-решение 9 называет теперь и страницу.
+решение 9 называет теперь и страницу. После R4 ревью правки фраза говорит, что
+ожидание задачу отменяет, но не кончается: «Awaiting `ctx.job.cancel()` cancels
+the job but never ends».
 
 Проверил и нашёл документированным хорошо, находок нет: `catch (e)` вокруг
 `ctx.join` с запасным значением (зонд J: «catch took: Cancelled(manual); using

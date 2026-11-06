@@ -556,7 +556,8 @@ void main() {
 
   test('the Quick start earns every line of it', () {
     // The block runs in `example/quick_start.dart`, which the README names,
-    // with a database that prints when it opens and when it closes.
+    // with a database that prints when it opens, when a read ends and when
+    // it closes.
     final printed = <String>[];
     Duration? closedAt;
     fakeAsync((async) {
