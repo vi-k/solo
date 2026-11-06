@@ -43,7 +43,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/adapters-check'
 DOC = os.path.join(REPO, 'packages', 'async_job', 'doc', 'riverpod-and-bloc.md')
 
-# The majors the page names. The bench resolves the newest of each, on the
+# The versions the page names. The bench resolves the newest of each, on the
 # SDK of the job; the floor of async_job is not what it proves.
 PUBSPEC = """name: adapters_check
 publish_to: none
@@ -60,7 +60,7 @@ dependencies:
   dio: ^5.9.0
   fake_async: ^1.3.1
   http: ^1.5.0
-  riverpod: ^3.0.0
+  riverpod: ^3.5.0
 
 dev_dependencies:
   lints: ^5.1.1
@@ -235,43 +235,37 @@ Future<void> scenario() async {
 }
 ''' + RUNNER)
 
-# The answer, then the observer twice: as the page has it, and without its
-# filter, which the prose says hears the Cancelled(manual) of the disposal.
-# Then a family query switch, and a pause the job reads on through.
-OBSERVER = snips[f'{PROVIDER}/cancelling-on-disposal/CrashReports']
-UNFILTERED = replaced(
-    replaced(OBSERVER, '    if (error is Cancelled) return;\n', ''),
-    'CrashReports', 'Unfiltered')
-
+# The answer under an observer that hears every failure, which the prose
+# says hears nothing of the disposal. Then a family query switch, and a pause
+# the job reads on through.
 FILES['provider_answer'] = (
     RIVERPOD_HEAD + DATABASE + READ_ROWS
     + snips[f'{PROVIDER}/cancelling-on-disposal/'
             'final-rows-futureprovider-auto']
-    + OBSERVER + UNFILTERED
     + '''
 final reported = <Object>[];
 
-void report(Object error, StackTrace stackTrace) => reported.add(error);
-
-Future<void> leave(ProviderObserver observer) async {
-  final container = ProviderContainer(observers: [observer]);
-  final screen = container.listen(rows('dart'), (_, _) {});
-  await delay(20);
-  print('screen left');
-  screen.close();
-  await delay(200);
-  container.dispose();
+final class Reports extends ProviderObserver {
+  @override
+  void providerDidFail(
+    ProviderObserverContext context,
+    Object error,
+    StackTrace stackTrace,
+  ) => reported.add(error);
 }
 
 Future<void> scenario() async {
-  await leave(CrashReports());
+  final left = ProviderContainer(observers: [Reports()]);
+  final watched = left.listen(rows('dart'), (_, _) {});
+  await delay(20);
+  print('screen left');
+  watched.close();
+  await delay(200);
+  left.dispose();
   require(pagesRead == 1, 'pages read: $pagesRead, not 1');
-  require(reported.isEmpty, 'the filter passes the cancellation over');
-
-  await leave(Unfiltered());
   require(
-    reported.length == 1 && '${reported.single}' == 'Cancelled(manual)',
-    'without the filter the observer hears Cancelled(manual): $reported',
+    reported.isEmpty,
+    'the observer hears nothing of the disposed provider: $reported',
   );
 
   // A screen that turns to another query leaves its provider to disposal.

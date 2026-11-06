@@ -39,7 +39,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/riverpod-check'
 DOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'riverpod.md')
 
-# The major the page names, resolved at its newest on the SDK of the job.
+# The version the page names, resolved at its newest on the SDK of the job.
 # solo comes from the tree, and so does the async_job under it: solo in the
 # tree can depend on an async_job that is not released yet.
 PUBSPEC = """name: riverpod_check
@@ -50,7 +50,7 @@ environment:
 
 dependencies:
   fake_async: ^1.3.1
-  riverpod: ^3.0.0
+  riverpod: ^3.5.0
   solo:
     path: {solo}
 
@@ -317,13 +317,10 @@ FILES['camera_naive'] = (
 Future<void> scenario() async {
   await leave(10);
   final names = failed.map((error) => '${error.runtimeType}');
-  print('observer: ${names.join(', ')}');
+  print('observer: ${names.isEmpty ? 'nothing' : names.join(', ')}');
   require(alive.length == 1, 'the device stays open: $alive');
   require(zone.isEmpty, 'nothing reaches the zone: $zone');
-  require(
-    names.length == 1 && names.single == 'UnmountedRefException',
-    'the late onDispose reaches the observer: $names',
-  );
+  require(names.isEmpty, 'the late onDispose reaches no observer: $names');
 }
 ''' + RUNNER)
 

@@ -3,7 +3,7 @@
 A job fits under a riverpod provider or a bloc handler without changing the
 state layer. The provider or the handler knows when the work is no longer
 wanted; it cancels the job, and the job stops at its next checkpoint and runs
-its cleanup. The code below runs against riverpod 3, bloc 9 with
+its cleanup. The code below runs against riverpod 3.5, bloc 9 with
 `bloc_concurrency`, http 1.5 and dio 5, in pure Dart: `flutter_riverpod` and
 `flutter_bloc` hand out the same `Ref` and `Emitter`.
 
@@ -125,23 +125,11 @@ The disposal cancels the job, `join` waits for the page already being read, and
 the database closes. A screen that asks for another query watches another
 provider of the family, and the one it stops watching is disposed the same way.
 
-The cancellation does not reach the zone, but a `ProviderObserver` still hears
-it: `providerDidFail` receives the `Cancelled(manual)` of the disposed
-provider. An observer that sends failures to crash reports passes it over:
-
-```dart
-final class CrashReports extends ProviderObserver {
-  @override
-  void providerDidFail(
-    ProviderObserverContext context,
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    if (error is Cancelled) return;
-    report(error, stackTrace);
-  }
-}
-```
+The cancellation reaches neither the zone nor a `ProviderObserver`: the job
+ends after its provider is disposed, and since riverpod 3.5.0 `providerDidFail`
+does not hear a provider that fails after its disposal. Before 3.5.0 it
+received this `Cancelled(manual)`, and an observer that sent failures to crash
+reports had to pass it over.
 
 A `Cancelled` the job ends with on its own, by its own deadline for one, is a
 failure to riverpod as well, and the provider retries it like any other.

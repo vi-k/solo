@@ -3,7 +3,7 @@
 Задача встаёт под провайдер riverpod или обработчик bloc, и слой состояния
 менять не нужно. Провайдер или обработчик знает, когда работа перестала быть
 нужна; он отменяет задачу, а задача останавливается в следующей контрольной
-точке и выполняет уборку. Код ниже идёт на riverpod 3, bloc 9
+точке и выполняет уборку. Код ниже идёт на riverpod 3.5, bloc 9
 с `bloc_concurrency`, http 1.5 и dio 5, на чистом Dart: `flutter_riverpod`
 и `flutter_bloc` дают те же `Ref` и `Emitter`.
 
@@ -126,23 +126,11 @@ database for dart closed
 и база закрывается. Экран, который просит другой запрос, слушает другой
 провайдер семейства, а тот, который он перестал слушать, освобождается так же.
 
-До зоны отмена не доходит, но `ProviderObserver` её всё равно слышит:
-`providerDidFail` получает `Cancelled(manual)` освобождённого провайдера.
-Наблюдатель, который шлёт сбои в отчёты, её пропускает:
-
-```dart
-final class CrashReports extends ProviderObserver {
-  @override
-  void providerDidFail(
-    ProviderObserverContext context,
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    if (error is Cancelled) return;
-    report(error, stackTrace);
-  }
-}
-```
+Отмена не доходит ни до зоны, ни до `ProviderObserver`: задача кончается после
+того, как её провайдер освобождён, а с riverpod 3.5.0 `providerDidFail`
+не слышит провайдер, который упал после освобождения. До 3.5.0 он получал этот
+`Cancelled(manual)`, и наблюдателю, который шлёт сбои в отчёты, приходилось его
+пропускать.
 
 `Cancelled`, которым задача кончилась сама, например по своему сроку, для
 riverpod тоже сбой, и провайдер повторяет его, как любой другой.

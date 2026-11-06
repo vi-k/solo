@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `doc/riverpod.md` runs against riverpod 3.5, where a `ProviderObserver` no
+  longer hears the `UnmountedRefException` of a cleanup registered after the
+  disposal, and says so in its first attempt.
 - `doc/reference.md` sends the reader for the table of the context to the
   reference page of `async_job`, where the table moved from its README.
 - `pubspec.yaml` names the documentation site, and pub.dev links to it.

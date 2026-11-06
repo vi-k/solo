@@ -13,6 +13,9 @@
 - [Children](doc/children.md) says that a `Job(...)` made in a body is no child
   even when the body waits for it, and [Cancellation](doc/cancellation.md) that
   awaiting `ctx.job.cancel()` in a body never ends.
+- [With riverpod and bloc](doc/riverpod-and-bloc.md) runs against riverpod 3.5,
+  where a `ProviderObserver` no longer hears the `Cancelled` of a disposed
+  provider, and drops the observer that passed it over.
 - [Why a job](doc/why.md) ends with the pages to read next, and
   [With riverpod and bloc](doc/riverpod-and-bloc.md) no longer calls its
   `Database` the one of the README.

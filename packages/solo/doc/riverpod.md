@@ -5,7 +5,7 @@ An app built on riverpod keeps riverpod: the graph of providers, the cache, the
 provider when the work there has an order to keep and a resource to close. A
 `solo` controller lives in a provider: the provider makes it, the screen reads
 its state through it, and the provider's disposal closes it. The code runs
-against riverpod 3 in pure Dart: `flutter_riverpod` hands out the same `Ref`.
+against riverpod 3.5 in pure Dart: `flutter_riverpod` hands out the same `Ref`.
 
 Where riverpod leaves the work to the app, this page and its neighbours take it
 apart:
@@ -180,15 +180,16 @@ container prints what fails:
 ```text
 screen left at 10 ms
 device: open 1 start, open 1 done
-observer: UnmountedRefException
+observer: nothing
 ```
 
 The device stays open. riverpod disposes the provider when the screen leaves,
 and the `onDispose` that would close the device is not registered yet: the line
 that registers it waits behind the `await`. When the opening ends, the provider
-is gone, and that line throws `UnmountedRefException`. A `ProviderObserver`
-sees it in `providerDidFail`, as a `Ref` used after its disposal; nothing names
-the open device.
+is gone, and that line throws `UnmountedRefException`. Since riverpod 3.5.0 a
+`ProviderObserver` does not hear a provider that fails after its disposal, and
+nothing reports the open device; before 3.5.0 `providerDidFail` received the
+exception, as a `Ref` used after its disposal.
 
 ### A flag before the await
 
