@@ -75,3 +75,9 @@ its gate on the floor: 7 roots». `async_job` как зависимость пр
 коммита — подготовка и эта запись; они уходят в origin вместе с релизным
 коммитом ядра. Тегов `async_job-v1.0.2` и `solo-v1.0.1` нет ни локально,
 ни в origin; на pub.dev `async_job` 1.0.1 и `solo` 1.0.0.
+
+Связка ядра прошла подряд: релизный коммит `df656249` «Release async_job
+1.0.2», аннотированный тег `async_job-v1.0.2` на нём,
+`git push --follow-tags` — `origin/main` с `9b627000` на `df656249` вместе
+с тегом, — и `dart pub publish` из чистого дерева `packages/async_job`:
+«Successfully uploaded … version 1.0.2». Следом идёт связка `solo` 1.0.1.
