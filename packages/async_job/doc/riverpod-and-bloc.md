@@ -127,12 +127,12 @@ provider of the family, and the one it stops watching is disposed the same way.
 
 The cancellation reaches neither the zone nor a `ProviderObserver`: the job
 ends after its provider is disposed, and since riverpod 3.5.0 `providerDidFail`
-does not hear a provider that fails after its disposal. Before 3.5.0 it
-received this `Cancelled(manual)`, and an observer that sent failures to crash
-reports had to pass it over.
+does not hear a provider that fails after its disposal. On riverpod before
+3.5.0 it does receive this `Cancelled(manual)`, and an observer that sends
+failures to crash reports has to pass it over.
 
 A `Cancelled` the job ends with on its own, by its own deadline for one, is a
-failure to riverpod as well, and the provider retries it like any other.
+failure to riverpod, and the provider retries it like any other.
 
 ## A notifier that starts again
 

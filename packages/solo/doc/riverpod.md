@@ -188,8 +188,8 @@ and the `onDispose` that would close the device is not registered yet: the line
 that registers it waits behind the `await`. When the opening ends, the provider
 is gone, and that line throws `UnmountedRefException`. Since riverpod 3.5.0 a
 `ProviderObserver` does not hear a provider that fails after its disposal, and
-nothing reports the open device; before 3.5.0 `providerDidFail` received the
-exception, as a `Ref` used after its disposal.
+nothing reports the open device; before 3.5.0 `providerDidFail` receives the
+exception, as a `Ref` used after its disposal, and names no device either.
 
 ### A flag before the await
 
