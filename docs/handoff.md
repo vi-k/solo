@@ -32,6 +32,14 @@ one step» страницы `time.md` ядра: `ctx.check()` первым в в
 «публикуй»: только документация, `lib/` не менялся, —
 `2026-11-06-docs-patches-release-report.md`.
 
+Спор «bloc или solo» с Sol (Codex) проведён 2026-11-07 по слову владельца: три
+раунда, Sol за bloc, — `2026-11-07-bloc-vs-solo-debate-report.md`. В работу
+из него ничего не взято. Предложения ждут владельца: `SoloProvider`
+и `SoloListener` в `flutter_solo`, пакет `solo_test`, страница приложения
+устройства, правка ответа bloc в «Closing and cancelling in-flight work»
+`vs-bloc.md` — там нет проверки `isClosed` до вызова, которую записывает
+`bloc.md`.
+
 Ревью документации `async_job` 1.0.1 с оценками проведено 2026-11-06 по слову
 владельца «давай на патч»: одна область, ревьюер на Fable, дерево тега —
 `2026-11-06-async-job-1-0-1-docs-review.md`. Документация 8/10,
