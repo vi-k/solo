@@ -96,6 +96,14 @@ final class SoloListener<S extends Object> extends StatefulWidget {
 и `SoloSelector`: это виджет, а не расширение чужого типа, и отдельный импорт
 `listenable.dart` ему не нужен.
 
+`SoloListener` — свой `StatefulWidget`, а не обёртка над `SoloBuilder`: его
+`build` возвращает `child` и ничего не перестраивает. Общий у них только способ
+подписки — `addListener` в `initState`, `removeListener` в `dispose`, перенос
+в `didUpdateWidget`. Его виджет берёт по образцу `_SoloBuilderState`, где он
+уже защищён от бросающего `addListener` и от вызова после `dispose` (пункт 1).
+Поэтому дальше они и сравниваются: свойства этой подписки — синхронный вызов,
+предел записи из `build` — у обоих одни и те же.
+
 ## Поведение
 
 1. **Подписка.** `initState` вешает слушателя на `solo` через `addListener`,
