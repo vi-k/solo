@@ -194,6 +194,11 @@ one `Solo.pending` shows. It says what is held when it is read, and the core's
 page tells
 [why a step keeps its result whatever it says](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#holding-the-cancellation-back).
 
+The job still ends `Cancelled`, with the reason the section held, though the
+payment has gone through: the receipt in the state says so, not the outcome.
+[Jobs and results](jobs.md#jobs-and-results) on the jobs page tells what an
+outcome does not say.
+
 ### A whole job
 
 ```dart

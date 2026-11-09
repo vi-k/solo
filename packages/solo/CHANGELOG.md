@@ -4,6 +4,14 @@
   dropping the outcome of `done`, so a failed open or close is thrown.
   `doc/mistakes.md` asks to read the outcome of `job.done`, not just
   `job.done`.
+- `doc/jobs.md` says what an outcome does not say about the work of a job: a
+  `Cancelled` job may have paid, and a job that has to know refuses
+  cancellation. `doc/cancellation.md` says the same of a section that held the
+  cancellation back.
+- `doc/state.md` says what an emit outside the working type leaves behind: the
+  handlers do not run, the state stays what the emit wrote, and the next call
+  is refused. `ctx.uncancellable` and `ctx.pause` join the list of the calls
+  that end such a job.
 
 ## 1.0.1
 

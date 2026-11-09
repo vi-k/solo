@@ -110,6 +110,41 @@ final class _Windows extends Solo<CameraState> with OpenSolo<CameraState> {
   );
 }
 
+/// A state outside the strings a till works in.
+final class _Gone {
+  const _Gone();
+}
+
+/// A till whose payments each wait for a gate of their own.
+final class _Till extends Solo<Object> with OpenSolo<Object> {
+  _Till() : super('ready');
+
+  /// The payments made, numbered from one.
+  final paid = <int>[];
+
+  /// One gate for each call, opened by the test.
+  final gates = <Completer<void>>[];
+
+  Future<void> _gate() {
+    final gate = Completer<void>();
+    gates.add(gate);
+    return gate.future;
+  }
+
+  /// A payment that goes through once its gate opens.
+  Future<String> charge() async {
+    await _gate();
+    paid.add(paid.length + 1);
+    return 'receipt ${paid.length}';
+  }
+
+  /// A payment that is declined once its gate opens.
+  Future<String> decline() async {
+    await _gate();
+    throw StateError('declined');
+  }
+}
+
 String _page() => File('doc/jobs.md').readAsStringSync();
 
 String _engine() => File('lib/src/solo.dart').readAsStringSync();
@@ -545,6 +580,195 @@ void main() {
 
       expect('$late', 'Failed(Bad state: disk full)', reason: 'done answers');
       expect(zone, ['Bad state: disk full'], reason: 'and the zone has it');
+    });
+  });
+
+  group('What Cancelled does not say', () {
+    test('join: an action that goes through leaves Cancelled', () {
+      fakeAsync((async) {
+        final till = _Till();
+        final job = till.enqueue<Object, void>(
+          (ctx) async => ctx.join(till.charge),
+        );
+        async.flushMicrotasks();
+        job.cancel().ignore();
+        async.flushMicrotasks();
+        expect(job.outcome, isNull, reason: 'join waits for the action');
+
+        till.gates.single.complete();
+        async.flushMicrotasks();
+        expect('${job.outcome}', 'Cancelled(manual)');
+        expect((job.outcome! as Cancelled).started, isTrue);
+        expect(till.paid, [1], reason: 'the payment went through');
+        till.close().ignore();
+      });
+    });
+
+    test('join: an action that fails after the cancellation leaves '
+        'Cancelled', () {
+      fakeAsync((async) {
+        final till = _Till();
+        final job = till.enqueue<Object, void>(
+          isExpectedError: (error) => error is StateError,
+          (ctx) async => ctx.join(till.decline),
+        );
+        async.flushMicrotasks();
+        job.cancel().ignore();
+        till.gates.single.complete();
+        async.flushMicrotasks();
+        expect('${job.outcome}', 'Cancelled(manual)');
+        expect((job.outcome! as Cancelled).started, isTrue);
+        expect(till.paid, isEmpty, reason: 'the payment failed');
+        till.close().ignore();
+      });
+    });
+
+    test('abandonable: the action goes through after the outcome', () {
+      fakeAsync((async) {
+        final till = _Till();
+        final job = till.enqueue<Object, void>(
+          (ctx) async => ctx.abandonable(till.charge),
+        );
+        async.flushMicrotasks();
+        job.cancel().ignore();
+        async.flushMicrotasks();
+        expect('${job.outcome}', 'Cancelled(manual)');
+        expect(till.paid, isEmpty);
+
+        till.gates.single.complete();
+        async.flushMicrotasks();
+        expect(till.paid, [1], reason: 'after the outcome');
+        till.close().ignore();
+      });
+    });
+
+    test('restart: the job that replaces it pays again', () {
+      fakeAsync((async) {
+        final till = _Till();
+        SoloJob<void> pay() => till.enqueue<Object, void>(
+          key: 'pay',
+          policy: Policy.restart,
+          (ctx) async => ctx.join(till.charge),
+        );
+        final first = pay();
+        async.flushMicrotasks();
+        final second = pay();
+        async.flushMicrotasks();
+        till.gates.first.complete();
+        async.flushMicrotasks();
+        till.gates.last.complete();
+        async.flushMicrotasks();
+        expect('${first.outcome}', 'Cancelled(replaced)');
+        expect(second.outcome, isA<Done<void>>());
+        expect(till.paid, [1, 2], reason: 'two payments');
+        till.close().ignore();
+      });
+    });
+
+    test('a section does not hold the rules back', () {
+      fakeAsync((async) {
+        final till = _Till();
+        final job = till.enqueue<Object, void>(
+          keepWhile: (state) => state is String,
+          (ctx) async {
+            await ctx.uncancellable(() async {
+              final receipt = await till.charge();
+              ctx.emit(receipt);
+            });
+          },
+        );
+        async.flushMicrotasks();
+        till.externalSetState(const _Gone());
+        till.gates.single.complete();
+        async.flushMicrotasks();
+        final outcome = job.outcome! as Cancelled;
+        expect(outcome.reason, isA<RulesCancelReason>());
+        expect(till.paid, [1], reason: 'the payment went through');
+        expect(till.currentState, const _Gone(), reason: 'with no receipt');
+        till.close().ignore();
+      });
+    });
+
+    test('cancellable: false over the whole state type ends Done', () {
+      fakeAsync((async) {
+        final till = _Till();
+        final child = till.job<Object, void>(
+          cancellable: false,
+          (ctx) async => ctx.emit(await ctx.join(till.charge)),
+        );
+        final parent = till.enqueue<Object, void>(
+          (ctx) async => ctx.run(child),
+        );
+        async.flushMicrotasks();
+        parent.cancel().ignore();
+        child.cancel().ignore();
+        till.cancelAll(force: true).ignore();
+        till.externalSetState(const _Gone());
+        final closing = till.close();
+        async.flushMicrotasks();
+        till.gates.single.complete();
+        async.flushMicrotasks();
+        expect('${child.outcome}', 'Done(null)');
+        expect(till.currentState, 'receipt 1');
+        closing.ignore();
+      });
+    });
+
+    test('cancellable: false: a body that gives up still ends Cancelled', () {
+      fakeAsync((async) {
+        final till = _Till();
+        final job = till.enqueue<Object, void>(cancellable: false, (ctx) async {
+          await ctx.join(till.charge);
+          ctx.stateAs<String>();
+        });
+        async.flushMicrotasks();
+        till.externalSetState(const _Gone());
+        till.gates.single.complete();
+        async.flushMicrotasks();
+        final outcome = job.outcome! as Cancelled;
+        expect(outcome.reason, isA<RulesCancelReason>());
+        expect(outcome.started, isTrue);
+        expect(till.paid, [1]);
+        till.close().ignore();
+      });
+    });
+
+    test('cancellable: false under restart: the newer call pays again', () {
+      fakeAsync((async) {
+        final till = _Till();
+        SoloJob<void> pay() => till.enqueue<Object, void>(
+          key: 'pay',
+          policy: Policy.restart,
+          cancellable: false,
+          (ctx) async => ctx.join(till.charge),
+        );
+        final first = pay();
+        async.flushMicrotasks();
+        final second = pay();
+        async.flushMicrotasks();
+        till.gates.first.complete();
+        async.flushMicrotasks();
+        till.gates.last.complete();
+        async.flushMicrotasks();
+        expect(first.outcome, isA<Done<void>>());
+        expect(second.outcome, isA<Done<void>>());
+        expect(till.paid, [1, 2], reason: 'two payments');
+        till.close().ignore();
+      });
+    });
+
+    test('says what Cancelled does not say', () {
+      final prose = _page().replaceAll(RegExp(r'\s+'), ' ');
+      expect(
+        prose,
+        contains('Nor does `Cancelled` say that nothing happened.'),
+      );
+      expect(prose, contains('the outcome does not tell which'));
+      expect(
+        prose,
+        contains('no request and no rule of its working type cancels it'),
+      );
+      expect(prose, contains('a section does not hold the rules back'));
     });
   });
 

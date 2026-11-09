@@ -3158,6 +3158,13 @@ void main() {
       );
     });
 
+    test('says the outcome of the section is no word on the payment', () {
+      expect(
+        _prose(),
+        contains('the receipt in the state says so, not the outcome'),
+      );
+    });
+
     test('names the numbers the tests use', () {
       expect(_prose(), contains('Drag through three positions'));
       expect(_prose(), contains('the second of four chunks'));

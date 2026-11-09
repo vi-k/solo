@@ -709,6 +709,35 @@ final class _Offline implements Exception {
 
 /// Not on the page: the load of "The handlers" with an `isExpectedError`
 /// that names [_Offline].
+/// The profile load of "Reading and updating state", narrowed to `Initial`:
+/// it writes `Loading` and then waits.
+final class _Narrow extends Solo<stubs.ProfileState> {
+  final stubs.ProfileApi api;
+
+  /// The handlers that ran.
+  final handled = <String>[];
+
+  _Narrow(this.api) : super(const stubs.Initial());
+
+  Job<String> load() => enqueue<stubs.Initial, String>(
+    key: 'load',
+    ifFailed: (state, error, stackTrace) {
+      handled.add('ifFailed');
+      return stubs.Failure(error);
+    },
+    ifCancelled: (state, cancelled) {
+      handled.add('ifCancelled');
+      return const stubs.Initial();
+    },
+    (ctx) async {
+      ctx.emit(const stubs.Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(stubs.Loaded(name));
+      return name;
+    },
+  );
+}
+
 final class _Naming extends Solo<stubs.ProfileState> {
   final stubs.ProfileApi api;
 
@@ -1063,6 +1092,58 @@ void main() {
         device.dispose();
         async.flushTimers();
       });
+    });
+
+    test('a load narrowed to Initial is left at Loading and refused next', () {
+      final lines = <String>[];
+      Solo.debug = lines.add;
+      addTearDown(() => Solo.debug = null);
+      fakeAsync((async) {
+        final api = stubs.ProfileApi();
+        final narrow = _Narrow(api);
+        final first = narrow.load();
+        async.flushMicrotasks();
+        expect(
+          _ended(first),
+          'Cancelled(rules: is not Initial), started: true',
+        );
+        expect(stubs.describe(narrow.currentState), 'Loading');
+        expect(narrow.handled, isEmpty, reason: 'no handler runs');
+        expect(api.calls, 0, reason: 'the request is never made');
+
+        final next = narrow.load();
+        async.flushMicrotasks();
+        expect(
+          _ended(next),
+          'Cancelled(rules: is not Initial), started: false',
+        );
+        narrow.close().ignore();
+      });
+      const tail =
+          'which is not Initial: the rules cancel Job(load) at its next '
+          'checkpoint';
+      expect(lines.where((line) => line.endsWith(tail)), hasLength(1));
+      expect(_page().replaceAll(RegExp(r'\s+'), ' '), contains('`$tail`'));
+    });
+
+    test('after an emit outside W pause ends the job before its timer', () {
+      fakeAsync((async) {
+        final any = _Any();
+        final job = any.afterLeavingW(
+          (ctx) => ctx.pause(const Duration(seconds: 1)),
+        );
+        async.flushMicrotasks();
+        expect(_ended(job), 'Cancelled(rules: is not String), started: true');
+        expect(async.pendingTimers, isEmpty);
+        any.close().ignore();
+      });
+    });
+
+    test('says what an emit outside W leaves and what the answer is', () {
+      final prose = _page().replaceAll(RegExp(r'\s+'), ' ');
+      expect(prose, contains('the state stays what the emit wrote'));
+      expect(prose, contains('takes all of them as its working type'));
+      expect(prose, contains('and `ctx.pause` before its timer'));
     });
 
     test('after an emit outside W a read or a wait ends the job', () {
