@@ -155,6 +155,54 @@ void main() {
 
       expect(lines, quoted[1]);
     });
+
+    test('Cancelled with started: true after a joined action that went '
+        'through', () {
+      fakeAsync((async) {
+        final gate = Completer<void>();
+        var paid = false;
+        final job = Job<void>(
+          (ctx) => ctx.join(() async {
+            await gate.future;
+            paid = true;
+          }),
+        );
+        async.flushMicrotasks();
+        job.cancel().ignore();
+        async.flushMicrotasks();
+        expect(job.outcome, isNull, reason: 'join waits for the action');
+
+        gate.complete();
+        async.flushMicrotasks();
+        final outcome = job.outcome! as Cancelled;
+        expect(outcome.reason, isA<ManualCancelReason>());
+        expect(outcome.started, isTrue);
+        expect(paid, isTrue, reason: 'the action went through');
+      });
+    });
+
+    test('Cancelled with started: false: the body never ran', () {
+      fakeAsync((async) {
+        var ran = false;
+        final job = Job.deferred<void>((ctx) async => ran = true);
+        job.cancel().ignore();
+        async.flushMicrotasks();
+        final outcome = job.outcome! as Cancelled;
+        expect(outcome.started, isFalse);
+        expect(ran, isFalse);
+      });
+    });
+
+    test("says the outcome is the job's, not that of its work", () {
+      final prose = _prose();
+      expect(
+        prose,
+        contains(
+          "An outcome is the job's, not that of the work it waited for.",
+        ),
+      );
+      expect(prose, contains('the job ends `Cancelled` all the same'));
+    });
   });
 
   group('A failure nobody waits for', () {
@@ -1323,3 +1371,7 @@ void main() {
     );
   });
 }
+
+/// The outcomes page as one line of prose.
+String _prose() =>
+    File('doc/outcomes.md').readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');

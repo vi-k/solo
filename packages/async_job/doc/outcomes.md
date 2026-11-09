@@ -60,6 +60,16 @@ own line. `value` fits code for which a cancellation is a failure like any
 other, such as a test that expects the value. If you do not need the result at
 all, call `report.ignoreFailure()` to acknowledge that choice.
 
+An outcome is the job's, not that of the work it waited for. `Cancelled` holds
+a `started` flag, and with `started: false` the body never ran. With
+`started: true` the outcome says nothing about what the actions of the body did
+outside the job: an action `ctx.join` waited out has ended, whether it went
+through or failed, and the job ends `Cancelled` all the same. A step that has
+to be kept whatever the outcome keeps its result inside the section that holds
+the cancellation back, as
+[Holding the cancellation back](cancellation.md#holding-the-cancellation-back)
+on the cancellation page shows.
+
 ## A failure nobody waits for
 
 `backup` uploads in the background, and nothing awaits it. A status line reads

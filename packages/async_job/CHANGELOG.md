@@ -8,6 +8,9 @@
   instead of going to the zone first. The table of [Outcomes](doc/outcomes.md)
   adds awaiting `done` and dropping the outcome, where nobody answers for the
   failure.
+- [Outcomes](doc/outcomes.md) says that an outcome is the job's, not that of
+  the work it waited for: an action `ctx.join` waited out has ended, whether it
+  went through or failed, and the job ends `Cancelled` all the same.
 
 ## 1.0.2
 
