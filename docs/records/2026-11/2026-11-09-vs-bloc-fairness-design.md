@@ -1,5 +1,5 @@
-> **Состояние на 2026-11-09:** дизайн написан, ждёт независимого ревью
-> и одобрения владельца; правок в дереве ещё нет.
+> **Состояние на 2026-11-09:** дизайн пересмотрен по ревью Opus и ждёт
+> одобрения владельца; правок в дереве ещё нет.
 > **Что это:** честная волна по `packages/solo/doc/vs-bloc.md` после спора
 > «bloc или solo» и раздел о том, почему у `flutter_solo` нет `SoloProvider`.
 > **Связанные записи:** `2026-11-07-bloc-vs-solo-debate-report.md`,
@@ -74,6 +74,11 @@ solo: короткое перечисление членов, без оценк�
 Вводный абзац над таблицей («The scenarios in order, with what the first
 attempt tries and what the solo version uses») называет и третью колонку.
 
+Форму карты держит решение 86 `docs/settled.md`: средний столбец называет то,
+что пробует первая попытка, а не её исход. Это остаётся; решение 86 тем же
+коммитом говорит о трёх столбцах после сценария — первая попытка, ответ bloc,
+ответ solo.
+
 ### 2. «Closing and cancelling in-flight work»: проверка до вызова
 
 **Что не так.** Ответ bloc проверяет `isClosed` только после
@@ -82,25 +87,33 @@ attempt tries and what the solo version uses») называет и третью
 противопоставляет этому: «A message still queued behind the running one never
 reaches the API … where `sequential()` would send it». А сильнейший ответ
 bloc — проверка и до вызова: стенд `tool/bloc_snippets.py`, задание
-`solo_table_closing`, уже гоняет его и требует, чтобы `bye` не ушло, `close()`
-ждал только вызова в полёте и ни один ответ не был опубликован или отмечен
-прочитанным. Таблица «Where bloc keeps its answer» в `bloc.md` ссылается именно
-на этот вариант.
+`solo_table_closing`, уже гоняет его и требует, чтобы второе сообщение не ушло,
+`close()` ждал только вызова в полёте и ни один ответ не был опубликован или
+отмечен прочитанным. Таблица «Where bloc keeps its answer» в `bloc.md`
+ссылается именно на этот вариант.
+
+Ответ держится только с bloc 9.2.1: там `Bloc.isClosed` стал истинным с начала
+`close()` (`_eventController.isClosed || super.isClosed`, CHANGELOG 9.2.1,
+#4809); на 9.2.0 копия с обеими проверками падает необработанным
+`Bad state: Cannot add new events after calling close` — зонд ревьюера.
 
 **Правка `vs-bloc.md`.**
 
 - Код под заголовком Bloc получает `if (isClosed) return;` перед
   `final reply = await _api.send(e.text);`, после него проверка остаётся.
+  Вводная фраза над кодом («This sequential handler checks closure after its
+  await:») называет обе проверки.
 - Абзац под кодом: обе проверки вместе не дают ни ответа в состоянии,
   ни `MarkReplyRead`, ни отправки сообщений, стоящих в очереди; `close()` ждёт
   только вызов, который уже ушёл, и обработчики очереди проходят вхолостую.
+  Там же — что проверка до вызова работает с bloc 9.2.1, где `isClosed` истинен
+  с начала `close()`.
 - Абзац solo о сообщении в очереди перестаёт противопоставлять: очередь solo
-  тоже не отправляет, разница в другом. Что остаётся за solo и проверено
-  стендом раздела: `close()` не ждёт ответа на вызов в полёте, потому что
-  `ctx.abandonable` отпускает его; вызов после `close()` возвращает задачу
-  `Cancelled(closed)`, а `add` после `close()` бросает `StateError`; проверок
-  `isClosed` в коде нет вовсе. Абзац о `SoloCloseMode.drain` остаётся: он про
-  случай, когда очередь уйти должна.
+  тоже не отправляет, разница в другом. Что остаётся за solo: `close()` не ждёт
+  ответа на вызов в полёте, потому что `ctx.abandonable` отпускает его; вызов
+  после `close()` возвращает задачу `Cancelled(closed)`, а `add` после
+  `close()` бросает `StateError`; проверок `isClosed` в коде нет вовсе. Абзац
+  о `SoloCloseMode.drain` остаётся: он про случай, когда очередь уйти должна.
 - «What solo gives» раздела сверяется с новым текстом и правится, если в нём
   есть противопоставление очереди.
 
@@ -111,18 +124,24 @@ there»: проверка до вызова теперь в нём.
 
 **Правка стендов.**
 
+- `tool/doc_snippets.py`, `BLOC_PUBSPEC`: `bloc: ^9.0.0` поднимается
+  до `^9.2.1`, как у `tool/bloc_snippets.py`.
 - `tool/doc_snippets.py`, `bloc/item3`: сценарий «queued behind, guarded»
-  требует сейчас `answered.length == 2` и пишет «sequential close must run the
-  queued event as well». Он меняется на требование, что `bye` не отправлено
-  и `close()` ждёт только `hi`. Трасса, если страница её цитирует, сверяется
-  `check_traces.py`.
+  (сообщения `hi` и `and again`) требует сейчас `answered.length == 2` и пишет
+  «sequential close must run the queued event as well». Он меняется
+  на требование, что `and again` не отправлено и `close()` ждёт только `hi`.
+- `tool/doc_snippets.py`, `solo/item3`: время закрытия сейчас не меряется.
+  Драйвер печатает его, и сторож требует, чтобы `close()` вернулся раньше
+  ответа на вызов в полёте. Если проза назовёт миллисекунды, спан идёт
+  в `QUOTED` — и в английском тексте, и в переводе.
 - `tool/bloc_snippets.py`, `solo_table_closing`: сейчас дописывает проверку
   к коду `vs-bloc.md` заменой строки `SEND`. После правки проверка уже в коде,
   и задание берёт блок как есть; `assert` о строке `SEND` меняется на `assert`
   о том, что проверок `isClosed` в блоке две. Комментарий над заданием правится
-  тем же коммитом.
+  тем же коммитом. Помощник `requireGuarded` там же не вызывается ниоткуда,
+  и его dartdoc говорит «the queued message is still sent»: удаляется.
 
-### 3. «Typed methods with queued execution»: два требования
+### 3. «Typed methods with queued execution»: сильнейший ответ bloc
 
 **Что не так.** Требование раздела — типизированные методы и «rapid drag
 updates should not leave the map at an older position». Ответ bloc
@@ -132,43 +151,74 @@ updates should not leave the map at an older position». Ответ bloc
 хотя требования такого нет. Sol: раздел смешивает удобство методов
 с требованиями очереди.
 
-**Правка.** Требование называет обе половины явно: методы самого контроллера
-с их аргументами, и перемещение, которое уже устарело, не должно занимать
-карту — карта не должна проезжать 1, 2 и 3 по очереди, когда нужна только 3;
-зум устаревшее перемещение не отменяет.
+**Правка требования.** Требование называет обе половины явно: методы самого
+контроллера с их аргументами, и перемещение, которое уже устарело, не занимает
+карту — карта не проезжает 1, 2 и 3 по очереди, когда нужна только 3; зум
+устаревшее перемещение не отменяет.
 
-Под заголовком «Bloc with function events», после нынешнего разбора
-`sequential()`, — абзац о второй половине. Одна регистрация — один трансформер
-на все команды. `restartable()` на ней перезапускает и перемещение зумом. Зонд
-Claude 2026-11-09 на bloc 9.2.1 и bloc_concurrency 0.3.0, код раздела
-с `restartable()` вместо `sequential()` и тот же сценарий:
+**Правка ответа bloc.** Под заголовком «Bloc with function events» — ответ,
+который выполняет обе половины, а не только первую: та же регистрация
+с `sequential()`, а метод `moveTo` в момент вызова отменяет токен предыдущего
+перемещения и заводит свой; тело проверяет токен до вызова карты и после. Метод
+выполняется при вызове, поэтому ни `onEvent`, ни сравнения позиций не нужно.
+Зонд Claude 2026-11-09 на bloc 9.2.1 и bloc_concurrency 0.3.0, фейк карты
+стенда, тот же сценарий:
 
-```text
-sequential:
-  moveTo 1 start, moveTo 1 end, moveTo 2 start, moveTo 2 end,
-  moveTo 3 start, moveTo 3 end, zoom 4 start, zoom 4 end
-  state MapState(3, z4)
-restartable:
-  moveTo 1 start, moveTo 2 start, moveTo 3 start, zoom 4 start,
-  zoom 4 end, moveTo 3 end, moveTo 2 end, moveTo 1 end
-  state MapState(0, z4)
+```dart
+CancelToken? _moving;
+
+void moveTo(Point<double> point) {
+  _moving?.cancel();
+  final token = _moving = CancelToken();
+  add((emit) async {
+    if (token.cancelled) return;
+    await _map.moveTo(point, cancelToken: token);
+    if (token.cancelled) return;
+    emit(state.copyWith(center: point));
+  });
+}
 ```
 
-Под `restartable()` все три перемещения идут на карту одновременно, потому что
-отмена эмиттера не останавливает нативный вызов, а зум отменяет эмиттер
-третьего: ни одно перемещение не записано в состояние. Регистрация на каждую
-команду вернула бы две очереди — ссылка на «Ordering updates to shared state».
-Как остановить сам нативный вызов, bloc не говорит: токен отмены придётся
-провести через событие руками.
+```text
+token per move: [moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]  state MapState(3, z4)
+```
 
-На странице эта трасса — в формате стенда, а не зонда: стенд раздела
-`tool/doc_snippets.py`, `bloc/item6`, получает драйвер с `restartable()`
-и сторож на `MapState(0, z4)`, а `check_traces.py` сверяет цитату. Код варианта
-в отдельный блок не выносится: он отличается одним словом, и драйвер собирает
-его заменой строки в блоке `CommandMapBloc` с `assert`, что замена одна.
+Трасса та же, что у solo в этом разделе. Нынешний разбор `sequential()` — что
+событие-функция стоит своей идентичности в наблюдателе, что обычный класс
+события был бы так же типизирован, — остаётся.
 
-«What solo gives» раздела остаётся по сути, но опирается теперь на названное
-требование.
+**Почему не `restartable()`.** Короткий абзац там же: одна регистрация — один
+трансформер на все команды, и `restartable()` перезапустил бы перемещение
+и зумом. На фейке стенда вариант с `restartable()` даёт трассу первой попытки
+на Cubit, `[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3 end,
+moveTo 2 end, moveTo 1 end]`, и состояние `MapState(0, z4)`: отмена эмиттера
+не останавливает вызовы карты, карта физически останавливается на 1,
+а состояние не записало ни одного перемещения. Фейк карты не меняется: строки
+зума в нём сломали бы цитаты Cubit и solo (`QUOTED`, `doc_snippets.py`).
+Вариант собирается из блока `CommandMapBloc` заменой `sequential()`
+на `restartable()` с `assert`, что замена одна, и переименованием класса —
+в одном файле драйвера два класса с одним именем не собрать.
+
+**Правка «What solo gives» и прозы solo.** Раз ответ bloc даёт ту же трассу,
+solo хвалится тем, чего bloc здесь не даёт, и только проверенным стендом:
+каждый вызов возвращает `Job` со своим исходом, и вытесненные перемещения
+кончаются `Cancelled(replaced)`; замена — политика `Policy.restart` у метода,
+а не поле и две проверки токена; токен связан с задачей через `ctx.onCancel`,
+поэтому его отменяет и `close()`; наблюдатель видит ключ задачи,
+а не безымянное замыкание. Что делает `close()` под ответом bloc — ждёт ли он
+перемещение, — исполнитель проверяет стендом до того, как писать сравнение.
+
+**`bloc.md`.** Строка «Typed methods with queued execution» таблицы «Where bloc
+keeps its answer» («function events and methods that return `void`…»)
+переписывается под новый ответ. Если строка заявляет, что ответ одного bloc
+выполняет требование, у неё появляется задание стенда `tool/bloc_snippets.py`
+по образцу `solo_table_closing`. Вводная `bloc.md` о трёх требованиях, где bloc
+нужен обходной приём, сверяется с новой строкой.
+
+**Стенды.** `tool/doc_snippets.py`, `bloc/item6`: сторож на `MapState(3, z4)`
+и на трассу с `moveTo 1 stopped` для ответа bloc, отдельный драйвер
+с `restartable()` и сторожем на `MapState(0, z4)`. Новые спаны трасс в прозе —
+в `QUOTED`, в английском тексте и в переводе.
 
 ### 4. «Awaiting a particular request»: ловушка без опоры на имя
 
@@ -181,67 +231,85 @@ policy for sharing one payment». Ловушка выглядит построе
 повторные запросы того же заказа приходят как раз во время платежа. Код
 и разбор остаются. Абзац о заказе B переформулируется так, чтобы читалось, что
 ловушек две и обе не зависят от имени: трансформер правит всей регистрацией,
-а не заказом, поэтому заказ B отброшен тоже; завершитель отброшенного события
-никто не завершает, поэтому его вызывающий ждёт вечно. Вторая ловушка и есть
-причина, по которой ответ bloc ниже держит карту платежей, а не другой
-трансформер.
+а не заказом, — ни один из четырёх трансформеров bloc_concurrency 0.3.0 ключа
+не различает, — поэтому заказ B отброшен тоже; завершитель отброшенного события
+никто не завершает, поэтому его вызывающий ждёт вечно. Карта платежей ответа
+bloc отвечает на обе: различает заказ и отдаёт повторному запросу завершитель
+идущего платежа. Фраза «make one API call, and one caller in three is answered»
+стоит в `SAID` стенда и переживает переписывание.
 
 ### 5. «Ordering updates to shared state»: цена одной очереди
 
 **Что не так.** Раздел solo говорит, что очередь одна на контроллер и это
 гарантирует порядок. Свежий оппонент: та же очередь заставляет ждать команду,
-которая общего состояния не трогает. Страница говорит об этом только
-в «Correspondences»: «There is no concurrent root-job policy; use children or
-separate controllers».
+которая общего состояния не трогает, — смену фильтра за загрузкой файла.
 
 **Правка.** В абзаце solo после «no arrangement of the methods can give two of
-them a queue each» — фраза о цене: команда, которой порядок не нужен, ждёт
-за загрузкой так же, и выход для неё — ребёнок или отдельный контроллер, ссылка
-на «A tap that does not wait for a reload» в `jobs.md`.
+them a queue each» — фраза о цене: команда, которая заметок не трогает, ждёт
+за загрузкой так же, и выход для неё — отдельный контроллер со своей очередью.
+Ребёнок здесь не выход: он идёт внутри тела задачи, которая уже занимает
+очередь (`jobs.md`, «A tap that does not wait for a reload», где ответ — второй
+контроллер). Строку «Correspondences» о «children or separate controllers»
+правка не трогает: там речь о независимой работе внутри одной задачи, и для неё
+ребёнок — ответ.
 
 ### 6. Почему у `flutter_solo` нет `SoloProvider`
 
 **Что сейчас.** `packages/flutter_solo/README.md`, «The controller's life»:
 «There is no `SoloProvider`: a controller is an object, and it lives wherever
-the rest of your objects live.» Дальше — `State`, общие места и scopo
-с `ScopeModel` и `AsyncDataScope`. Причины, по которой провайдера нет,
-на странице нет. В `vs-bloc.md`, «Correspondences», строка `BlocProvider` —
-«Deliberately not part of the package: dependencies are passed by other means
-and packages, such as scopo».
+the rest of your objects live.» Дальше — `State`
+с `unawaited(controller.close())`, общие места, `ScopeModel` с синхронным
+`dispose` («nothing waits for the close») и `AsyncDataScope`, который закрытие
+ждёт. «Why» того же README и строка `BlocProvider` в «Correspondences»
+`vs-bloc.md` объясняют отсутствие провайдера передачей зависимостей. Причины
+в терминах закрытия на странице нет.
 
 **Правка README `flutter_solo`.** После первого абзаца раздела — абзац
 о причине. Набросок, формулировку правит исполнитель:
 
-> The reason is the close. A controller's `close()` is asynchronous: it waits
-> for the running job, and with `SoloCloseMode.drain` for the queue. A
-> provider closes its object from a synchronous `dispose`, which cannot wait
-> for that future: `BlocProvider` calls `bloc.close()` there and lets it run.
-> A new screen can then create the next controller of a resource while the old
-> one still holds it, and a failed close reaches only the zone. Waiting for a
-> release needs a lifecycle of its own: a scope that awaits what it owns,
-> orders the next owner of a resource after the previous one, and shows
-> something while it waits. scopo is that lifecycle, as a package of its own,
-> so it serves any object, a bloc included. A `SoloProvider` would be a weaker
-> copy of it.
+> A provider would add nothing to what follows. A `State`, a `ScopeModel` and
+> `package:provider` all close the controller from a synchronous `dispose`, and
+> the controller is a plain object any of them can hold; `BlocProvider` does
+> the same with `bloc.close()`. None of them can wait for the close to end,
+> because `close()` is asynchronous: it waits for the running job, and with
+> `SoloCloseMode.drain` for the queue. Waiting for it takes an asynchronous
+> lifecycle, `AsyncDataScope` of scopo below, and scopo serves any object, a
+> bloc included.
 
-Каждое утверждение наброска сверяется по исходникам до записи: `Dispose<T>`
+Каждое утверждение сверяется по исходникам до записи: `Dispose<T>`
 и `_CreateInheritedProviderState.dispose` в `provider-6.1.5+1`,
-`BlocProvider.buildWithChild` во `flutter_bloc-9.1.1`, `disposeScope`,
-`scopeKey` и ветвь закрытия `close()` в `scopo-1.0.0`. Что не подтвердится,
-из абзаца уходит. Оговорка свежего оппонента о сроке — со сроком по умолчанию
-следующий владелец ресурса может стартовать раньше — в абзаце не нужна:
-нынешний текст раздела ниже уже говорит о сроке `disposeScopeTimeout`
-и о `ScopeTimeout.none`.
+`BlocProvider.buildWithChild` во `flutter_bloc-9.1.1`, `ScopeModel`
+и `AsyncDataScope` в `scopo-1.0.0`, `Solo.close` в `solo.dart`. Чего в абзаце
+нет и не будет: что ошибка закрытия уходит в зону — `Solo.close()` ошибкой
+не завершается, `_finishClose` гонит хуки через `_callHook` и завершает
+`Future` всегда; что scopo упорядочивает следующего владельца ресурса — это
+`scopeKey` со своим сроком и под общим координатором, а README его нигде
+не показывает; оценки вроде «слабая копия». «Why» README и строка
+`BlocProvider` в «Correspondences» сводятся с новым абзацем: зависимости — одна
+причина, закрытие — другая, и обе звучат одинаково на обеих страницах.
 
 **Правка `vs-bloc.md`.** Строка `BlocProvider` в «Correspondences» ссылается
-на этот раздел README `flutter_solo` (адрес на GitHub, как у ссылок README
-на `vs-bloc.md`).
+на этот раздел:
+`https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#the-controllers-life`.
+Перевод —
+на `https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md#жизнь-контроллера`,
+как `docs/ru/solo/vs-bloc.md` уже ссылается на `README.ru.md`. `check_links.py`
+сверяет якоря.
 
-**`docs/settled.md`.** Решение 148 в разделе `flutter_solo`: `SoloProvider`
-не делаем; жизнь контроллера во Flutter — scopo, отдельный пакет того же
-автора, и провайдер с синхронным `dispose` дал бы контракт слабее. Даты
-2026-11-07 и 2026-11-09, записи — эта
-и `2026-11-07-bloc-vs-solo-debate-report.md`.
+## `docs/settled.md`
+
+- Решение 64 («Передачей зависимостей пакет не занимается: для этого есть scopo
+  и другие пакеты») дополняется причиной из правки 6: провайдер закрывал бы
+  из синхронного `dispose`, как `State` и `ScopeModel`, и ничего к ним
+  не добавил; ждёт закрытия только асинхронный жизненный цикл scopo. Даты
+  2026-11-07 и 2026-11-09, записи — эта
+  и `2026-11-07-bloc-vs-solo-debate-report.md`.
+- Решение 86 говорит о трёх столбцах карты — правка 1.
+- Решение 148: самописный `Lock` в «Finishing an in-flight write before
+  restarting» `vs-bloc.md` остаётся, а не заменяется пакетом: он показывает,
+  как барьер устроен изнутри (владелец 2026-11-07). Готовые замены
+  (`synchronized`, `mutex`) пакеты-реклама не делают: выбор между ними — дело
+  читателя.
 
 ## Переводы
 
@@ -251,26 +319,34 @@ and packages, such as scopo».
 линтер скилла `humanizer--ru`, только `ERROR`. Сверка —
 `python3 tool/check_translations.py`.
 
-## Бэклог
+## Бэклог и handoff
 
-Тем же коммитом, что работа:
+Тем же коммитом, что работа; формулировки ниже — часть того, что одобряет
+владелец:
 
 - «Ответ bloc в «Closing…»» и «Остальные замечания Sol к подаче…» удаляются;
 - «Подача `vs-bloc.md` по проверке свежим оппонентом» переписывается
-  на остаток — ловушка рабочего типа и исход задачи против исхода внешнего
-  действия на страницах `state.md` и `jobs.md`;
-- из записи о `SoloProvider` и `SoloListener` уходит `SoloProvider`, остаётся
-  `SoloListener` со словом владельца 2026-11-09.
+  на остаток: «Ловушка рабочего типа и исход задачи против исхода внешнего
+  действия на страницах `state.md` и `jobs.md`», с прежними фактами записи;
+- из записи о `SoloProvider` и `SoloListener` уходит `SoloProvider` со ссылкой
+  на решение 64, остаётся `SoloListener` со словом владельца 2026-11-09 «нужно
+  отдельно подумать: может, стоит добавить» и доводом свежего оппонента:
+  реакция экрана на чужие изменения состояния — другая функция, чем
+  освобождение.
+
+`docs/handoff.md` — о волне, после каждого шага.
 
 ## Проверки
 
-- `snippets`: все пять стендов, `tool/check_traces.py` — правки 2 и 3 меняют
-  драйверы и цитаты.
+- `snippets`: все пять стендов, `tool/check_traces.py`; цитаты в прозе держит
+  `QUOTED` и `SAID` в `tool/doc_snippets.py`.
 - `docs`: `reflow.py --check`, `check_line_width.py`, `check_links.py`,
   `check_translations.py`, `check_dartdoc.py`, сторожа и сборка сайта
   `tool/build_site.py`.
-- Мутация: сторож правки 2 краснеет, если из блока убрать проверку до вызова;
-  сторож правки 3 краснеет, если в драйвере заменить `restartable()` обратно
+- Мутации: сторож правки 2 краснеет, если из блока убрать проверку до вызова;
+  сторож закрытия solo краснеет, если `ctx.abandonable` заменить на `ctx.join`;
+  сторож ответа bloc правки 3 краснеет, если из `moveTo` убрать отмену прежнего
+  токена; сторож варианта с `restartable()` краснеет, если заменить его обратно
   на `sequential()`.
 
 ## Решения исполнителя
@@ -279,3 +355,118 @@ and packages, such as scopo».
   `docs/conventions.md` и скилла `doc-reader`.
 - Если стенд покажет, что утверждение дизайна неверно, — правка идёт по стенду,
   а расхождение записывается в отчёт волны.
+
+## Ревью дизайна
+
+Дизайн 2026-11-09 прочитал независимый ревьюер на Opus по копии дерева,
+с правом гонять зонды вне репозитория. Он запускал генераторы обоих стендов
+в свой каталог и драйверы `bloc/item6`, `bloc/item3`, `solo/item3`,
+`solo_table_closing` с копиями-вариантами, в том числе на bloc 9.2.0. Ниже его
+находки в сжатом виде, у каждой — вердикт. Пересказ выше уже учитывает
+принятые.
+
+1. **Критично.** Правка 3 называет вторую половину требования, а ответ под
+   заголовком Bloc её не выполняет; `restartable()` — не сильнейший ответ,
+   сильнейший — токен на вызов в методе, трасса как у solo.
+
+   Вердикт: принято. Claude повторил зонд своей программой на bloc 9.2.1:
+   `[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]`,
+   `MapState(3, z4)`. Правка 3 переписана: ответ bloc с токеном,
+   `restartable()` — абзацем «почему не он», «What solo gives» — о том, чего
+   bloc здесь не даёт.
+
+2. **Важно.** Трасса `restartable()` в дизайне снята с другого фейка: фейк
+   стенда зум не печатает, а строки зума в нём сломали бы цитаты Cubit и solo.
+
+   Вердикт: принято. Фейк не меняется; трасса — та, что даёт фейк стенда,
+   и совпадает с трассой первой попытки на Cubit.
+
+3. **Важно.** Исполнителю не хватает устройства стенда: второй класс с тем же
+   именем, сторож на `MapState(3, z4)`, цитаты прозы держит `QUOTED`,
+   а не `check_traces.py`.
+
+   Вердикт: принято, в правку 3 и в «Проверки».
+
+4. **Важно.** «Регистрация на каждую команду вернула бы две очереди» не про
+   этот код: у событий-функций один тип, второй `on<MapCommand>` — `assert`.
+
+   Вердикт: принято, довод убран.
+
+5. **Важно.** Правка 3 обходит предложение Sol показать методы-обёртки над
+   классами событий.
+
+   Вердикт: не делать отдельным вариантом. Нынешний абзац раздела уже говорит,
+   что обычный класс события так же типизирован и что цена замыкания —
+   безымянное событие в наблюдателе; ответ с токеном работает с классами
+   событий так же. Абзац остаётся.
+
+6. **Важно.** Правка 5 противоречит `jobs.md`: ребёнок там не выход, ответ —
+   второй контроллер; формулировка «команда, которой порядок не нужен» неточна.
+
+   Вердикт: принято частично. Правка 5 называет только отдельный контроллер
+   и команду, которая общего состояния не трогает. Строку «Correspondences»
+   о «children or separate controllers» не трогаем: она о независимой работе
+   внутри одной задачи, где ребёнок — ответ.
+
+7. **Важно.** Набросок правки 6 спорит с тем же разделом README: `State`
+   и `ScopeModel` тоже закрывают из синхронного `dispose`.
+
+   Вердикт: принято, набросок переписан по предложению ревьюера: провайдер
+   ничего не добавил бы к `State`, `ScopeModel` и `package:provider`, а ждёт
+   закрытия только асинхронный жизненный цикл.
+
+8. **Важно.** «A failed close reaches only the zone» к контроллеру solo
+   неприменимо: `Solo.close()` ошибкой не завершается.
+
+   Вердикт: принято. Claude сверил `_finishClose` в `solo.dart`: хуки идут
+   через `_callHook`, `completer.complete()` в конце. Фраза убрана.
+
+9. **Важно.** Упорядочение следующего владельца — это `scopeKey` со своим
+   сроком и под общим координатором, а README его не показывает.
+
+   Вердикт: принято, придаточное убрано.
+
+10. **Мелко.** «A weaker copy» — оценка, а не факт.
+
+    Вердикт: принято, убрано.
+
+11. **Важно.** «`close()` solo не ждёт ответа на вызов в полёте» стенд
+    не держит: `solo/item3` время закрытия не меряет.
+
+    Вердикт: принято, сторож времени закрытия в `solo/item3`.
+
+12. **Важно.** Ответ с проверкой до вызова держится только с bloc 9.2.1,
+    а `doc_snippets.py` стоит на `bloc: ^9.0.0`.
+
+    Вердикт: принято. Claude сверил строку `BLOC_PUBSPEC`. Пол поднимается
+    до `^9.2.1`, проза называет версию.
+
+13. **Мелко.** Имена сообщений в стендах разные, вводная фраза над кодом Bloc
+    меняется, помощник `requireGuarded` мёртв.
+
+    Вердикт: принято, в правку 2.
+
+14. **Важно.** Правка 1 пересматривает решение 86 `docs/settled.md`.
+
+    Вердикт: принято. Claude сверил решение 86; оно правится тем же коммитом.
+
+15. **Мелко.** Решения оставить `Lock` в `settled.md` нет; решение 148
+    пересекается с 64.
+
+    Вердикт: принято. Решение 64 дополняется, `Lock` — решение 148.
+
+16. **Мелко.** Ссылки правки 6 не заданы, у перевода свой якорь.
+
+    Вердикт: принято, адреса в правке 6.
+
+17. **Мелко.** «Вторая ловушка и есть причина» верно наполовину; фраза
+    из `SAID` должна пережить правку.
+
+    Вердикт: принято, правка 4 говорит, что карта отвечает на обе ловушки.
+    Довод о dartdoc `restartable()` не берём: раздел о `droppable()`.
+
+18. **Мелко.** Переписать записи бэклога можно только с согласия владельца;
+    `docs/handoff.md` в дизайне не назван.
+
+    Вердикт: принято. Формулировки бэклога стоят в дизайне и одобряются
+    вместе с ним; handoff назван.
