@@ -1,0 +1,4 @@
+# Use local solo until 1.1.0 with addChangeListener is published.
+dependency_overrides:
+  solo:
+    path: ../solo

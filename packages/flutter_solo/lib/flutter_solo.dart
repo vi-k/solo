@@ -12,5 +12,6 @@ library;
 export 'package:solo/solo.dart';
 export 'src/solo_builder.dart';
 export 'src/solo_listenable.dart';
+export 'src/solo_listener.dart';
 export 'src/solo_selection.dart' show SoloSelection;
 export 'src/solo_selector.dart';
