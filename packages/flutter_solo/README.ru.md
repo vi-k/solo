@@ -88,7 +88,7 @@ import 'package:flutter_solo/listenable.dart';
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.3
+  solo_lints: ^0.2.0
 ```
 
 Так включаются его предупреждения; линты включаются по имени, как показывает

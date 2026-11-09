@@ -35,7 +35,7 @@ flutter pub add flutter_solo
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.3
+  solo_lints: ^0.2.0
 ```
 
 Так включаются его предупреждения; линты включаются по имени, как показывает

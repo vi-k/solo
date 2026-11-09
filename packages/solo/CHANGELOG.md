@@ -1,5 +1,7 @@
 ## Unreleased
 
+- The README asks for `solo_lints: ^0.2.0`, which brings the warnings
+  `discarded_outcome` and `outcome_after_await` on the outcome of a job.
 - The example program awaits `value` of `init()` and `dispose()` instead of
   dropping the outcome of `done`, so a failed open or close is thrown.
   `doc/mistakes.md` asks to read the outcome of `job.done`, not just

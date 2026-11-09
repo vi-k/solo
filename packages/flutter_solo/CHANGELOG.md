@@ -1,5 +1,7 @@
 ## Unreleased
 
+- The README asks for `solo_lints: ^0.2.0`, which brings the warnings
+  `discarded_outcome` and `outcome_after_await` on the outcome of a job.
 - `pubspec.yaml` names the documentation site, and pub.dev links to it.
 
 ## 1.0.0
