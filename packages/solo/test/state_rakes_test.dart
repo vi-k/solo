@@ -11,6 +11,7 @@ import 'package:test/test.dart';
 import 'support/page_code.dart';
 import 'support/state_camera_stubs.dart' as camera;
 import 'support/state_first_attempts.dart' as first;
+import 'support/state_opening_stubs.dart' as opening;
 import 'support/state_page.dart' as page;
 import 'support/state_page_profile.dart' as profile;
 import 'support/state_profile_stubs.dart' as stubs;
@@ -707,37 +708,38 @@ final class _Offline implements Exception {
   String toString() => 'offline';
 }
 
-/// Not on the page: the load of "The handlers" with an `isExpectedError`
-/// that names [_Offline].
-/// The profile load of "Reading and updating state", narrowed to `Initial`:
-/// it writes `Loading` and then waits.
-final class _Narrow extends Solo<stubs.ProfileState> {
-  final stubs.ProfileApi api;
+/// The first attempt of "Opening the camera" on the camera page: an `init`
+/// narrowed to `Initial` that writes `Preparing` before it opens the
+/// hardware.
+final class _Opening extends Solo<opening.CameraState> {
+  _Opening() : super(const opening.Initial());
 
   /// The handlers that ran.
   final handled = <String>[];
 
-  _Narrow(this.api) : super(const stubs.Initial());
+  /// How many times the hardware was opened.
+  int opened = 0;
 
-  Job<String> load() => enqueue<stubs.Initial, String>(
-    key: 'load',
+  Job<void> init() => enqueue<opening.Initial, void>(
+    key: opening.CameraKey.init,
     ifFailed: (state, error, stackTrace) {
       handled.add('ifFailed');
-      return stubs.Failure(error);
+      return const opening.Initial();
     },
     ifCancelled: (state, cancelled) {
       handled.add('ifCancelled');
-      return const stubs.Initial();
+      return const opening.Initial();
     },
     (ctx) async {
-      ctx.emit(const stubs.Loading());
-      final name = await ctx.abandonable(api.fetchName);
-      ctx.emit(stubs.Loaded(name));
-      return name;
+      ctx.emit(const opening.Preparing());
+      await ctx.join(() async => opened++);
+      ctx.emit(const opening.Ready());
     },
   );
 }
 
+/// Not on the page: the load of "The handlers" with an `isExpectedError`
+/// that names [_Offline].
 final class _Naming extends Solo<stubs.ProfileState> {
   final stubs.ProfileApi api;
 
@@ -1094,49 +1096,63 @@ void main() {
       });
     });
 
-    test('a load narrowed to Initial is left at Loading and refused next', () {
+    test('an init narrowed to Initial is left at Preparing and refused '
+        'next', () {
       final lines = <String>[];
       Solo.debug = lines.add;
       addTearDown(() => Solo.debug = null);
       fakeAsync((async) {
-        final api = stubs.ProfileApi();
-        final narrow = _Narrow(api);
-        final first = narrow.load();
+        final cam = _Opening();
+        final first = cam.init();
         async.flushMicrotasks();
         expect(
           _ended(first),
           'Cancelled(rules: is not Initial), started: true',
         );
-        expect(stubs.describe(narrow.currentState), 'Loading');
-        expect(narrow.handled, isEmpty, reason: 'no handler runs');
-        expect(api.calls, 0, reason: 'the request is never made');
+        expect(cam.currentState, const opening.Preparing());
+        expect(cam.handled, isEmpty, reason: 'no handler runs');
+        expect(cam.opened, 0, reason: 'the hardware is never opened');
 
-        final next = narrow.load();
+        final next = cam.init();
         async.flushMicrotasks();
         expect(
           _ended(next),
           'Cancelled(rules: is not Initial), started: false',
         );
-        narrow.close().ignore();
+        cam.close().ignore();
       });
       const tail =
-          'which is not Initial: the rules cancel Job(load) at its next '
-          'checkpoint';
+          'which is not Initial: the rules cancel Job(CameraKey.init) at its '
+          'next checkpoint';
       expect(lines.where((line) => line.endsWith(tail)), hasLength(1));
       expect(_page().replaceAll(RegExp(r'\s+'), ' '), contains('`$tail`'));
     });
 
     test('after an emit outside W pause ends the job before its timer', () {
+      var made = 0;
       fakeAsync((async) {
-        final any = _Any();
-        final job = any.afterLeavingW(
-          (ctx) => ctx.pause(const Duration(seconds: 1)),
+        runZoned(
+          () {
+            final any = _Any();
+            final job = any.afterLeavingW(
+              (ctx) => ctx.pause(const Duration(seconds: 1)),
+            );
+            async.flushMicrotasks();
+            expect(
+              _ended(job),
+              'Cancelled(rules: is not String), started: true',
+            );
+            any.close().ignore();
+          },
+          zoneSpecification: ZoneSpecification(
+            createTimer: (self, parent, zone, duration, callback) {
+              made++;
+              return parent.createTimer(zone, duration, callback);
+            },
+          ),
         );
-        async.flushMicrotasks();
-        expect(_ended(job), 'Cancelled(rules: is not String), started: true');
-        expect(async.pendingTimers, isEmpty);
-        any.close().ignore();
       });
+      expect(made, 0, reason: 'the timer of pause is never made');
     });
 
     test('says what an emit outside W leaves and what the answer is', () {

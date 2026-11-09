@@ -173,18 +173,19 @@ So put such a transition last in the body, with no read, no wait and no
 `ctx.each` through the context after it. `canStart` is checked once, at the
 start, and is not used again, after this emit either.
 
-A job that does not end there is cancelled by its own rules, so its `ifFailed`
-and `ifCancelled` do not run, as
+A job that reaches a checkpoint after such an emit is cancelled by its own
+rules, so its `ifFailed` and `ifCancelled` do not run, as
 [Handler eligibility and errors](#handler-eligibility-and-errors) has it, and
-the state stays what the emit wrote. A load whose working type is `Initial` and
-that writes `Loading` before it waits leaves the controller at `Loading` for
-good, and the next call of it is refused at its start: the state is no longer
-`Initial`. A job that goes on in the states it writes takes all of them as its
-working type, and `canStart` says where it may start, as `switchOn` above does;
+the state stays what the emit wrote. A camera's `init` whose working type is
+`Initial` and that writes `Preparing` before it opens the hardware leaves the
+controller at `Preparing` for good, and the next `init()` is refused at its
+start: the state is no longer `Initial`. A job that goes on in the states it
+writes takes all of them as its working type, and `canStart` says where it may
+start, as `switchOn` above does;
 [Opening the camera](camera.md#opening-the-camera) on the camera page follows
-the mistake through, with its trace. With [`Solo.debug`](diagnostics.md#logs)
-set, such an emit is named as it writes, in a line that ends
-`which is not Initial: the rules cancel Job(load) at its next checkpoint`.
+that `init` through, with its trace. With [`Solo.debug`](diagnostics.md#logs)
+set, such an emit is named as it writes, in a line that ends `which is not
+Initial: the rules cancel Job(CameraKey.init) at its next checkpoint`.
 
 Other running bodies are checked after a state update: a job's children run
 beside it, and each body answers to its own rules. A job's own emit is excluded

@@ -135,24 +135,26 @@ about an action the body was waiting for: the action `ctx.join` waited for has
 ended, whether it went through or failed, and the outcome does not tell which;
 the action `ctx.abandonable` let go of may go through after the outcome; and
 `Policy.restart` cancels a job in the middle of its action, and the job that
-replaces it makes the call again. A caller that repeats a payment because it
-ended `Cancelled` may pay twice.
+replaces it makes the call again. A payment is the plain case: a caller that
+repeats one because its job ended `Cancelled` may pay twice.
 
 A job whose outcome has to tell what its action did refuses cancellation:
 `cancellable: false`, the whole state type as its working type and no
-`keepWhile`, as [A whole job](cancellation.md#a-whole-job) on the cancellation
-page puts it. Once such a job has started, no request and no rule of its
-working type cancels it: it ends `Done` or `Failed`, unless its own body gives
-up — a `stateAs` that finds another state, or a `Cancelled` it throws or lets
-out of a child. Such a job turns down `Policy.restart` as well: the newer call
-waits for it, then runs and makes the call again. Otherwise the record of the
-work is what the job writes inside an `uncancellable` section, such as a
-receipt in the state, as
+[`keepWhile`](state.md#the-rules), as
+[A whole job](cancellation.md#a-whole-job) on the cancellation page puts it.
+Once such a job has started, no request and no rule of its working type cancels
+it: it ends `Done` or `Failed`, unless its own body gives up — a
+[`stateAs`](state.md#reading-and-updating-state) that finds another state, or a
+`Cancelled` it throws or lets out of a child. Such a job turns down
+`Policy.restart` as well: the newer call waits for it, then runs and makes the
+call again. A job that does not refuse cancellation keeps the record of its
+work in what it writes inside an `uncancellable` section, such as a receipt in
+the state, as
 [One section for the step](cancellation.md#one-section-for-the-step) shows. The
 record holds only in a job its rules cannot cancel: a section does not hold the
-rules back, and a payment the rules cut short leaves no receipt. Across
-restarts of the app, only an idempotent API of the service tells a second
-request from the first.
+rules back, and a section the rules cut short after the payment leaves no
+receipt. Across restarts of the app, only an idempotent API of the service
+tells a second request from the first.
 
 Every failure reaches the `onError` hook of the controller and of
 `Solo.observer`. A failed job whose outcome nobody has accessed through `done`,

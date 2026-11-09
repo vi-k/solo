@@ -714,6 +714,29 @@ void main() {
       });
     });
 
+    test('cancellable: false over the whole state type ends Done as a root '
+        'job', () {
+      fakeAsync((async) {
+        final till = _Till();
+        final job = till.enqueue<Object, void>(
+          cancellable: false,
+          (ctx) async => ctx.emit(await ctx.join(till.charge)),
+        );
+        async.flushMicrotasks();
+        job.cancel().ignore();
+        till.cancelAll().ignore();
+        till.cancelAll(force: true).ignore();
+        till.externalSetState(const _Gone());
+        final closing = till.close();
+        async.flushMicrotasks();
+        till.gates.single.complete();
+        async.flushMicrotasks();
+        expect('${job.outcome}', 'Done(null)');
+        expect(till.currentState, 'receipt 1');
+        closing.ignore();
+      });
+    });
+
     test('cancellable: false: a body that gives up still ends Cancelled', () {
       fakeAsync((async) {
         final till = _Till();
