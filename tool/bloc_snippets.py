@@ -1097,9 +1097,9 @@ Future<void> waitOut() async {
 ''' + FLASHING + RUNNER)
 
 # ------------------------------------------------------------------ table
-# The closing row: the Bloc answer of vs-bloc.md with a check of isClosed
-# before the call as well. "bye" waits under sequential() and finds the bloc
-# closed; close() waits for "hi" alone. It holds from bloc 9.2.1 on.
+# The closing row: the Bloc answer of vs-bloc.md, which checks isClosed
+# before the call and after it. "bye" waits under sequential() and finds the
+# bloc closed; close() waits for "hi" alone. It holds from bloc 9.2.1 on.
 CLOSING = 'closing-and-cancelling-in-flig'
 
 # The events and the state of the closing section of vs-bloc.md, which keeps
@@ -1159,27 +1159,16 @@ Future<void> scenario() async {
 }
 
 late int tookMs;
-
-/// What the guard of bloc alone keeps: the queued message is still sent,
-/// and no reply reaches the state or the server.
-void requireGuarded(Api api, List<ChatState> afterClose) {
-  require('${api.sent}' == '[hi, bye]',
-      '$name: the queued message must still be sent');
-  require(afterClose.isEmpty,
-      '$name: no state may follow close(): $afterClose');
-  require(api.reads == 0, '$name: no read may be reported');
-}
 '''
 
 # The bloc of a driver from its api.
 CHAT_BLOC = 'ChatBloc chatBloc(Api api) => ChatBloc(api);\n'
 
-SEND = '      final reply = await _api.send(e.text);\n'
 CHAT_BLOC_ALONE = vs_bloc[f'{CLOSING}/bloc/ChatBloc']
-assert CHAT_BLOC_ALONE.count(SEND) == 1, 'the send of vs-bloc.md moved'
+assert CHAT_BLOC_ALONE.count('if (isClosed) return;') == 2, (
+    'the Bloc answer of vs-bloc.md checks isClosed before the call and after')
 FILES['solo_table_closing'] = (
-    BLOC_HEAD + HELPERS + CHAT_API + CHAT_EVENTS
-    + CHAT_BLOC_ALONE.replace(SEND, '      if (isClosed) return;\n' + SEND)
+    BLOC_HEAD + HELPERS + CHAT_API + CHAT_EVENTS + CHAT_BLOC_ALONE
     + CHAT_BLOC + '''
 const name = 'isClosed before and after the call';
 

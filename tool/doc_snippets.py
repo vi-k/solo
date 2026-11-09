@@ -56,7 +56,7 @@ environment:
   sdk: ^3.10.0
 
 dependencies:
-  bloc: ^9.0.0
+  bloc: ^9.2.1
   bloc_concurrency: ^0.3.0
   fake_async: ^1.3.1
 """
@@ -185,12 +185,16 @@ QUOTED = {
         '[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3 end, '
         'moveTo 2 end, moveTo 1 end]',
         'MapState(1, z4)',
+        '[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]',
         'MapState(3, z4)',
         '(Emitter<MapState>) => Future<void>',
+        'MapState(0, z4)',
     ],
     'solo/item6': [
         '[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]',
         'MapState(3, z4)',
+        'Cancelled(replaced)',
+        'MapKey.moveTo',
     ],
     'bloc/item7': [
         '[_leaving = true, connect, rename kitchen, disconnect]',
@@ -260,6 +264,9 @@ SAID = [
     'the guarded version releases both, once each',
     'The failure is reported twice',
     'for each of the four commands',
+    'the second finds its token cancelled before it starts',
+    'so `close()` stops a move in flight as well, where the `close()` of the '
+    'bloc above waits for it to end',
     'would not cancel `StartRefresh` by itself',
     'leaves the ones already alive as they were',
     'checking only before entry would let its obsolete write start later',
@@ -1703,11 +1710,40 @@ Future<void> main() async {
 ''')
 
 # --------------------------------------------------------------- item 6 bloc
+# What the prose of the Bloc answer says `restartable()` does in place of
+# the token: the same bloc with plain moves and the other transformer.
+TOKEN_MOVE = '''  void moveTo(Point<double> point) {
+    _moving?.cancel();
+    final token = _moving = CancelToken();
+    add((emit) async {
+      if (token.cancelled) return;
+      await _map.moveTo(point, cancelToken: token);
+      if (token.cancelled) return;
+      emit(state.copyWith(center: point));
+    });
+  }
+'''
+PLAIN_MOVE = '''  void moveTo(Point<double> point) => add((emit) async {
+    await _map.moveTo(point);
+    emit(state.copyWith(center: point));
+  });
+'''
+RESTART_MAP_BLOC = snips['6/CommandMapBloc']
+for old, new in [(TOKEN_MOVE, PLAIN_MOVE),
+                 ('  CancelToken? _moving;\n', ''),
+                 ('typedef MapCommand = Future<void> Function(Emitter<MapState>);\n\n',
+                  ''),
+                 ('sequential()', 'restartable()')]:
+    assert RESTART_MAP_BLOC.count(old) == 1, f'the Bloc answer moved: {old}'
+    RESTART_MAP_BLOC = RESTART_MAP_BLOC.replace(old, new)
+RESTART_MAP_BLOC = RESTART_MAP_BLOC.replace('CommandMapBloc', 'RestartMapBloc')
+
 FILES['bloc/item6'] = (BLOC_MAP_IMPORTS.replace(
     "import 'package:bloc/bloc.dart';",
     "import 'package:bloc/bloc.dart';\n"
     "import 'package:bloc_concurrency/bloc_concurrency.dart';",
-) + TRACE + MAP_API + '\n' + snips['6/MapCubit'] + '\n' + snips['6/CommandMapBloc'] + '''
+) + TRACE + MAP_API + '\n' + snips['6/MapCubit'] + '\n' + snips['6/CommandMapBloc']
+    + '\n' + RESTART_MAP_BLOC + '''
 final seenEvents = <String>[];
 
 class _SeenEvents extends BlocObserver {
@@ -1755,23 +1791,95 @@ Future<void> main() async {
   if ('${bloc.state}' != 'MapState(3, z4)' || seenEvents.length != 4) {
     throw StateError('four commands, in order, and four nameless events');
   }
+  // "The second finds its token cancelled before it starts."
+  if ('$trace' !=
+      '[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]') {
+    throw StateError('the token must stop the first move and skip the second');
+  }
   Bloc.observer = const _NoObserver();
   await bloc.close();
+
+  trace.clear();
+  // "Where the `close()` of the bloc above waits for it to end."
+  final closing = CommandMapBloc(MapApi())..moveTo(const Point<double>(1, 0));
+  await tick(10);
+  await closing.close();
+  print('close during a move: $trace');
+  if ('$trace' != '[moveTo 1 start, moveTo 1 end]') {
+    throw StateError('close of the bloc must wait for the move in flight');
+  }
+
+  trace.clear();
+  // `restartable()` in place of the token.
+  final restarting = RestartMapBloc(MapApi());
+  restarting.moveTo(const Point<double>(1, 0));
+  await tick(10);
+  restarting
+    ..moveTo(const Point<double>(2, 0))
+    ..moveTo(const Point<double>(3, 0))
+    ..setZoom(4);
+  await tick(400);
+  print('restartable: $trace  state ${restarting.state}');
+  if ('$trace' !=
+          '[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3 end, '
+              'moveTo 2 end, moveTo 1 end]' ||
+      '${restarting.state}' != 'MapState(0, z4)') {
+    throw StateError('a restart must leave the calls running and the zoom '
+        'must restart the move');
+  }
+  await restarting.close();
 }
 ''')
 
 # --------------------------------------------------------------- item 6 solo
 FILES['solo/item6'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['6/MapController'] + '''
+/// The keys of the jobs an observer is shown.
+final class _Keys extends SoloObserver {
+  final keys = <String>[];
+
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) {
+    super.onStart(solo, job);
+    keys.add('${job.key}');
+  }
+}
+
 Future<void> main() async {
+  final observer = _Keys();
+  Solo.observer = observer;
   final map = MapController(MapApi());
-  onMapDrag(map, const Point<double>(1, 0));
+  final first = map.moveTo(const Point<double>(1, 0));
   await tick(10);
-  onMapDrag(map, const Point<double>(2, 0));
+  final second = map.moveTo(const Point<double>(2, 0));
   onMapDrag(map, const Point<double>(3, 0));
   map.setZoom(4);
   await tick(300);
   print('drag: $trace  state ${map.currentState}');
+  print('replaced: ${first.outcome}, ${second.outcome}');
+  print('an observer sees: ${observer.keys}');
+  // "The first two moves end `Cancelled(replaced)`, each replaced by the
+  // next."
+  for (final job in [first, second]) {
+    final outcome = job.outcome;
+    if (outcome is! Cancelled || '$outcome' != 'Cancelled(replaced)') {
+      throw StateError('a replaced move must end Cancelled(replaced)');
+    }
+  }
+  if (!observer.keys.contains('MapKey.moveTo')) {
+    throw StateError('an observer must see the key of a move');
+  }
   await map.close();
+  Solo.observer = null;
+
+  trace.clear();
+  // "So `close()` stops a move in flight as well."
+  final closing = MapController(MapApi())..moveTo(const Point<double>(1, 0));
+  await tick(10);
+  await closing.close();
+  print('close during a move: $trace');
+  if ('$trace' != '[moveTo 1 start, moveTo 1 stopped]') {
+    throw StateError('close must stop the move in flight');
+  }
 }
 ''')
 
@@ -1856,17 +1964,28 @@ Future<void> main() async {
   });
 
   // A message queued behind the one in flight. `sequential()` runs it out
-  // inside `close()`: it is sent, and `close()` returns after its answer.
+  // inside `close()`, and the check before the call keeps it from the API:
+  // `close()` returns after the answer to "hi" alone.
   final queuedApi = Api();
   final queued = ChatBloc(queuedApi)
     ..add(const SendMessage('hi'))
     ..add(const SendMessage('and again'));
   await tick(10);
+  final queuedClosing = nowMs();
   await queued.close();
-  print('queued behind, guarded: answered ${queuedApi.answered} by the '
-      'end of close, state ${queued.state}, reads reported ${queuedApi.reads}');
-  if (queuedApi.answered.length != 2) {
-    throw StateError('sequential close must run the queued event as well');
+  final queuedTook = nowMs() - queuedClosing;
+  await tick(100);
+  print('queued behind, guarded: close took ${queuedTook}ms, sent '
+      '${queuedApi.sent}, state ${queued.state}, '
+      'reads reported ${queuedApi.reads}');
+  // "Closing waits for the call already in flight and its handler, and for
+  // nothing else."
+  if ('${queuedApi.sent}' != '[hi]') {
+    throw StateError('the check before the call must keep the queued '
+        'message from the API');
+  }
+  if (queuedTook < 30) {
+    throw StateError('sequential close must wait for the call in flight');
   }
   if (queued.state.reply != null || queuedApi.reads != 0) {
     throw StateError('the guard must turn the queued reply away too');
@@ -1944,8 +2063,16 @@ Future<void> main() async {
   final running = chat.send('hi');
   final queued = chat.send('and again');
   await tick(10);
+  final closing = nowMs();
   await onScreenClosed(chat);
-  print('running ${running.outcome}  queued ${queued.outcome}');
+  final took = nowMs() - closing;
+  print('close took ${took}ms, running ${running.outcome}  '
+      'queued ${queued.outcome}');
+  // "`close()` returns without waiting for its reply": the reply to "hi"
+  // is still 40 ms away when close() is called.
+  if (took >= 30) {
+    throw StateError('close must not wait for the reply in flight');
+  }
   print('state after close: ${chat.currentState}, '
       'reads reported ${api.reads}');
   print('send after close: ${chat.send('later').outcome}');

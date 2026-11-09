@@ -16,22 +16,22 @@ point of the section. A reader who already knows the trap can skip to the bloc
 heading and `### Solo`, or to the line that closes the section, **What solo
 gives**.
 
-The scenarios in order, with what the first attempt tries and what the solo
-version uses:
+The scenarios in order, with what the first attempt tries, what the answer of
+bloc uses and what the solo version uses:
 
-| Scenario | What the first attempt tries | What solo uses |
-| --- | --- | --- |
-| [Ordering updates to shared state](#ordering-updates-to-shared-state) | An event type per command, and `sequential()` on each of the two handlers | The one queue of the controller |
-| [An observer fails during a state update](#an-observer-fails-during-a-state-update) | An observer, and a journal kept in `onChange`, both calling `super` first | `Solo.observer`, whose failure does not reach the job |
-| [Closing and cancelling in-flight work](#closing-and-cancelling-in-flight-work) | A `sequential()` handler that publishes the reply, then adds `MarkReplyRead` | `close()`, which cancels the running job at `ctx.abandonable` |
-| [Leaving a loading state when the work is cancelled](#leaving-a-loading-state-when-the-work-is-cancelled) | The reset to `Initial` in `finally` | `ifCancelled`, and `lastJobWhere` to find the job to cancel |
-| [Restarting one operation within a shared queue](#restarting-one-operation-within-a-shared-queue) | A registration per command, and `restartable()` on `seek` | `Policy.restart` on `seek`, with `ctx.onCancel` and `ctx.join` |
-| [Typed methods with queued execution](#typed-methods-with-queued-execution) | `Cubit` methods that return futures | Methods that return a `Job`, with `Policy.restart` |
-| [Removing selected pending work](#removing-selected-pending-work) | A leaving flag that the handler checks | `queue.removeWhere`, and `cancellable: false` on what has to run |
-| [Awaiting a particular request](#awaiting-a-particular-request) | A completer on the event, and `droppable()` on the payment | A key per order with `Policy.droppable`, and the job the caller awaits |
-| [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change) | One registration for the build and the revocation | `externalSetState`, and `enqueue<SignedIn, void>` on the build |
-| [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting) | `restartable()` on the upload loop | `Policy.restart`, with `ctx.join` around each write |
-| [Releasing a resource returned after cancellation](#releasing-a-resource-returned-after-cancellation) | A check of `emit.isDone` before the result is used | `dispose` on `ctx.abandonable` |
+| Scenario | What the first attempt tries | What bloc uses | What solo uses |
+| --- | --- | --- | --- |
+| [Ordering updates to shared state](#ordering-updates-to-shared-state) | An event type per command, and `sequential()` on each of the two handlers | One registration for the common supertype, with `sequential()` | The one queue of the controller |
+| [An observer fails during a state update](#an-observer-fails-during-a-state-update) | An observer, and a journal kept in `onChange`, both calling `super` first | A guard inside the observer | `Solo.observer`, whose failure does not reach the job |
+| [Closing and cancelling in-flight work](#closing-and-cancelling-in-flight-work) | A `sequential()` handler that publishes the reply, then adds `MarkReplyRead` | `isClosed` checked before the call and after it | `close()`, which cancels the running job at `ctx.abandonable` |
+| [Leaving a loading state when the work is cancelled](#leaving-a-loading-state-when-the-work-is-cancelled) | The reset to `Initial` in `finally` | The reset published from the `CancelRefresh` handler | `ifCancelled`, and `lastJobWhere` to find the job to cancel |
+| [Restarting one operation within a shared queue](#restarting-one-operation-within-a-shared-queue) | A registration per command, and `restartable()` on `seek` | The wanted `seek` and the token of the one in flight in fields, and `onEvent` to stop it | `Policy.restart` on `seek`, with `ctx.onCancel` and `ctx.join` |
+| [Typed methods with queued execution](#typed-methods-with-queued-execution) | `Cubit` methods that return futures | Function events, and a cancel token per move | Methods that return a `Job`, with `Policy.restart` |
+| [Removing selected pending work](#removing-selected-pending-work) | A leaving flag that the handler checks | The screen generation recorded on each event | `queue.removeWhere`, and `cancellable: false` on what has to run |
+| [Awaiting a particular request](#awaiting-a-particular-request) | A completer on the event, and `droppable()` on the payment | A map of the payments in flight; for `Cubit`, a map and a future chain | A key per order with `Policy.droppable`, and the job the caller awaits |
+| [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change) | One registration for the build and the revocation | A registration of its own for the revocation, and a check of the state on both sides of the await of the build | `externalSetState`, and `enqueue<SignedIn, void>` on the build |
+| [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting) | `restartable()` on the upload loop | A lock shared by the device calls | `Policy.restart`, with `ctx.join` around each write |
+| [Releasing a resource returned after cancellation](#releasing-a-resource-returned-after-cancellation) | A check of `emit.isDone` before the result is used | A `try`/`finally` that owns the acquired buffer | `dispose` on `ctx.abandonable` |
 
 `Bloc` processes events in handlers, and each `on<E>` call is one registration:
 a handler for the events of type `E` and the transformer that determines how
@@ -76,7 +76,7 @@ The main API correspondences, for a reader who knows bloc:
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` or `SoloBuilder`, and `SoloSelector`; the last two are in `flutter_solo` |
 | `BlocListener` for an operation's result | Await that operation's `job.done`; for news that outlives the screen, [a notice the screen accepts](state.md#a-notice-the-screen-accepts) |
-| `BlocProvider` | Deliberately not part of the package: dependencies are passed by other means and packages, such as [scopo](https://pub.dev/packages/scopo) |
+| `BlocProvider` | Deliberately not part of the package: dependencies are passed by other means and packages, such as [scopo](https://pub.dev/packages/scopo), and a provider would close a controller from a synchronous `dispose`, no better than a `State` does |
 | `close()` | `close()` |
 | `blocTest` | `test` and an awaited job outcome |
 
@@ -302,9 +302,14 @@ on the jobs page, in
 [Working the queue directly](jobs.md#working-the-queue-directly). Adding
 another queued method preserves the ordering, because the queue is one per
 controller rather than one per command; no arrangement of the methods can give
-two of them a queue each. This guarantee covers root jobs; child jobs can run
-inside a parent, in parallel too, and independent external changes have a
-separate path described in
+two of them a queue each. The same queue also holds back a command that does
+not touch the notes, a change of filter say: it waits behind a refresh like any
+other. Such a command goes to a separate controller with a queue of its own, as
+in
+[A tap that does not wait for a reload](jobs.md#a-tap-that-does-not-wait-for-a-reload)
+on the jobs page. This guarantee covers root jobs; child jobs can run inside a
+parent, in parallel too, and independent external changes have a separate path
+described in
 [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change).
 
 Use context waiting methods inside job bodies to check cancellation and state
@@ -525,7 +530,7 @@ body, and none drops an event the transformer had let through.
 
 ### Bloc
 
-This sequential handler checks closure after its await:
+This sequential handler checks closure before its call and after it:
 
 ```dart
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
@@ -533,6 +538,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   ChatBloc(this._api) : super(const ChatState()) {
     on<SendMessage>((e, emit) async {
+      if (isClosed) return;
       final reply = await _api.send(e.text);
       if (isClosed) return;
       emit(state.withReply(reply));
@@ -543,12 +549,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 }
 ```
 
-The guard prevents both the reply update and the `MarkReplyRead` event. Closing
-still waits for the API call and handler to return, and for every message
-queued behind them. Each is still sent to the API while `close()` runs, and the
-guard turns away only its reply. The separate `MarkReplyRead` registration is
-safe for this example because it does not write shared state; otherwise the
-ordering concern of
+The check after the call prevents both the reply update and the `MarkReplyRead`
+event. The check before it is for the messages queued behind: `close()` still
+runs the `sequential()` queue out, but their handlers now return before calling
+the API. So closing waits for the call already in flight and its handler, and
+for nothing else. Both checks need bloc 9.2.1 or later: from that version
+`isClosed` is true as soon as `close()` begins, and before it only once
+`close()` had finished. The separate `MarkReplyRead` registration is safe for
+this example because it does not write shared state; otherwise the ordering
+concern of
 [Ordering updates to shared state](#ordering-updates-to-shared-state) would
 apply.
 
@@ -601,10 +610,13 @@ With a plain await instead, closing would wait for the API response. The
 published. Calls made after closure return jobs already completed with
 `Cancelled(closed)`, so the call site needs no `isClosed` guard.
 
-A message still queued behind the running one never reaches the API: it ends
-`Cancelled(closed)` without starting, where `sequential()` would send it. When
-queued work has to go out, `close(mode: SoloCloseMode.drain)` runs the queue
-first, as `sequential()` does;
+A message still queued behind the running one ends `Cancelled(closed)` without
+starting, so it never reaches the API, as with the check before the call in the
+bloc above. The difference is the call already in flight: `ctx.abandonable`
+lets go of it, and `close()` returns without waiting for its reply, where the
+bloc waits for it. When queued work has to go out,
+`close(mode: SoloCloseMode.drain)` runs the queue first, as `sequential()` does
+without the check before the call;
 [Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
 on the cancellation page takes it apart. The `markReplyRead()` each reply calls
 still comes back `Cancelled(closed)` there, because a closing controller takes
@@ -617,9 +629,10 @@ That call throws `Bad state: Job(send) has already finished, cannot emit`, in
 debug and release alike, and the state stays as it was. Where bloc has an
 assertion that disappears in release, this is an ordinary error that does not.
 
-**What solo gives:** `close()` cancels the running job at `ctx.abandonable`,
-before the reply update and `markReplyRead()`, and a queued message or a call
-after `close()` ends `Cancelled(closed)` with no `isClosed` guard.
+**What solo gives:** `close()` cancels the running job at `ctx.abandonable` and
+returns without waiting for the reply; the reply update and `markReplyRead()`
+are not reached, and a queued message or a call after `close()` ends
+`Cancelled(closed)`, with no `isClosed` check in the code.
 
 ## Leaving a loading state when the work is cancelled
 
@@ -946,10 +959,11 @@ starts, and every `seek` has an outcome to read.
 
 A map exposes `moveTo` and `setZoom`. Callers should invoke them as methods of
 the controller itself, as in `controller.moveTo(point)`, with their own
-arguments and without a class per command. Rapid drag updates should not leave
-the map at an older position. In the scenario below a drag sends position 1,
-then, while the map is still moving there, positions 2 and 3, and the user
-zooms to 4.
+arguments and without a class per command. A move made stale by a newer one
+should not hold the map: rapid drag updates should leave it at the latest
+position without driving it through every older one first, and a zoom should
+not cancel a move. In the scenario below a drag sends position 1, then, while
+the map is still moving there, positions 2 and 3, and the user zooms to 4.
 
 ### The first attempt
 
@@ -988,22 +1002,31 @@ invalidates that chain; `Cubit` does not manage it automatically.
 ### Bloc with function events
 
 An event can itself be a function. One sequential registration runs those
-functions, while public methods provide the typed call interface:
+functions, while public methods provide the typed call interface. A method runs
+when it is called, so `moveTo` cancels the token of the move before it right
+there and hands a token of its own to the function it adds:
 
 ```dart
 typedef MapCommand = Future<void> Function(Emitter<MapState>);
 
 class CommandMapBloc extends Bloc<MapCommand, MapState> {
   final MapApi _map;
+  CancelToken? _moving;
 
   CommandMapBloc(this._map) : super(const MapState()) {
     on<MapCommand>((command, emit) => command(emit), transformer: sequential());
   }
 
-  void moveTo(Point<double> point) => add((emit) async {
-    await _map.moveTo(point);
-    emit(state.copyWith(center: point));
-  });
+  void moveTo(Point<double> point) {
+    _moving?.cancel();
+    final token = _moving = CancelToken();
+    add((emit) async {
+      if (token.cancelled) return;
+      await _map.moveTo(point, cancelToken: token);
+      if (token.cancelled) return;
+      emit(state.copyWith(center: point));
+    });
+  }
 
   void setZoom(double value) => add((emit) async {
     await _map.setZoom(value);
@@ -1012,16 +1035,28 @@ class CommandMapBloc extends Bloc<MapCommand, MapState> {
 }
 ```
 
-The calls now run in order and end at `MapState(3, z4)`. An ordinary event
-class would be just as typed — `add(MoveTo(point))` checks its argument like
-any other constructor. But then the command vocabulary lives beside the
-controller instead of on it, and every command needs its class. The closure
-removes both, and what it costs is the event's identity: an observer of this
-bloc receives `(Emitter<MapState>) => Future<void>` for each of the four
-commands, with no name and no arguments to record. All commands still use one
-transformer, and the shown methods return `void`. Returning a result requires
-an additional mechanism, as in
+The trace is `[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]`
+and the state ends at `MapState(3, z4)`: the first move stops when the third is
+called, the second finds its token cancelled before it starts, and the zoom
+waits its turn in the queue. The check after the call keeps a move stopped
+halfway from publishing its point.
+
+An ordinary event class would be just as typed — `add(MoveTo(point))` checks
+its argument like any other constructor. But then the command vocabulary lives
+beside the controller instead of on it, and every command needs its class. The
+closure removes both, and what it costs is the event's identity: an observer of
+this bloc receives `(Emitter<MapState>) => Future<void>` for each of the four
+commands, with no name and no arguments to record. The shown methods return
+`void`, and returning a result requires an additional mechanism, as in
 [Awaiting a particular request](#awaiting-a-particular-request).
+
+`restartable()` in place of the token does not answer. One registration has one
+transformer for every command, so a zoom restarts a move as well, and a restart
+cancels the emitter of the handler, not the call to the map. On the same drag
+the trace is the one of the first attempt, `[moveTo 1 start, moveTo 2 start,
+moveTo 3 start, moveTo 3 end, moveTo 2 end, moveTo 1 end]`, and the state ends
+at `MapState(0, z4)`: the map has come to rest at position 1, and the state
+records none of the three moves.
 
 ### Solo
 
@@ -1065,15 +1100,22 @@ The trace is
 `[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]`: the first
 request was already under way and stops before the latest one begins, and the
 middle one does not start. Both the map and `MapState(3, z4)` reflect the
-latest request. Callers may await `job.value` or `job.done` to wait for the
-operation, or omit waiting. The returned job itself is not a `Future`; what
-becomes of the failure of a job nobody waits for is in
+latest request. It is the trace of the bloc above, and what differs is around
+it. Each call returns a job with an outcome of its own: the first two moves end
+`Cancelled(replaced)`, each replaced by the next. Replacement is the
+`Policy.restart` of the method rather than a field and two checks of a token.
+The token is tied to the job by `ctx.onCancel`, so `close()` stops a move in
+flight as well, where the `close()` of the bloc above waits for it to end. And
+an observer sees the key of each job, `MapKey.moveTo`, where the observer of
+the bloc sees a function with no name. Callers may await `job.value` or
+`job.done` to wait for the operation, or omit waiting. The returned job itself
+is not a `Future`; what becomes of the failure of a job nobody waits for is in
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page.
 
-**What solo gives:** typed methods return a `Job`, and under `Policy.restart`
-the first move stops before the latest begins, the middle one never starts and
-the map ends at `MapState(3, z4)`.
+**What solo gives:** typed methods return a `Job` with an outcome of its own,
+`Policy.restart` replaces a move with no token kept in a field, `close()` stops
+the move in flight, and an observer sees the key of each job.
 
 ## Removing selected pending work
 
@@ -1304,9 +1346,10 @@ whether or not another order followed it.
 `Bloc.add` returns `void`, and the
 [awaiting-events discussion](https://github.com/felangel/bloc/issues/1556)
 covers this use case: the result has to travel on the event itself, as a
-completer the caller awaits. `droppable()` reads like the policy for sharing
-one payment: while a charge is running, another request for it should not start
-a second one.
+completer the caller awaits. `droppable()` drops the events that arrive while
+its handler is busy, and the repeated requests for an order arrive exactly
+then, while its payment is running, so it is the transformer to reach for:
+another request during a charge should not start a second one.
 
 ```dart
 // The first attempt: dropped events leave their callers waiting.
@@ -1344,9 +1387,13 @@ waiting after everything else has finished, and would wait for as long as the
 process lives — `droppable()` dropped their events, and a dropped event's
 completer is completed by nobody.
 
-The second of those two shows what the policy actually does: order B is a
-different payment, and it was dropped as well. `droppable()` drops what arrives
-while a handler is running, not what duplicates it.
+Order B, the second of those two, shows the other half: it is a different
+payment, and it was dropped as well. A transformer rules every event of its
+registration, whatever order the event carries, and none of the four of
+bloc_concurrency 0.3.0 tells one key from another, so `droppable()` drops what
+arrives while a handler is running, not what duplicates it. An answer has to
+meet both traps: tell the orders apart, and give a repeated request the
+completer of the payment in flight rather than one that nobody completes.
 
 ### Bloc
 

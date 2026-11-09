@@ -49,9 +49,11 @@ The long argument, eleven scenarios solved in bloc first and then here, is in
 What is not here: no `SoloProvider` and no code generation, no dependency
 injection, no persistence, and no parallel root jobs. Dependencies are left out
 deliberately: they are passed by other means and packages, such as
-[scopo](https://pub.dev/packages/scopo). One job at a time is deliberate too,
-hence the `solo` in the name: it is the subject of the package, not a limit of
-its engine.
+[scopo](https://pub.dev/packages/scopo). Nor would a provider close a
+controller any better than a `State` does, as
+[The controller's life](#the-controllers-life) shows. One job at a time is
+deliberate too, hence the `solo` in the name: it is the subject of the package,
+not a limit of its engine.
 
 ## Install
 
@@ -500,6 +502,15 @@ always steps aside for a member.
 
 Nothing closes a controller for you. There is no `SoloProvider`: a controller
 is an object, and it lives wherever the rest of your objects live.
+
+A provider would add nothing to what follows. A `State`, a `ScopeModel` of
+scopo and a `Provider` of `package:provider` all close the controller from a
+synchronous `dispose`, and the controller is a plain object any of them can
+hold; `BlocProvider` does the same with `bloc.close()`. None of them can wait
+for the close to end, because `close()` is asynchronous: it waits for the
+running job to stop, and with `SoloCloseMode.drain` for the queue as well.
+Waiting for it takes an asynchronous lifecycle, such as `AsyncDataScope` of
+scopo below, and scopo serves any object, a bloc included.
 
 ```dart
 import 'dart:async';
