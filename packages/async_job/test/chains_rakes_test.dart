@@ -496,12 +496,12 @@ void main() {
       return printed;
     }
 
-    /// The output blocks that follow a block ending with the print of
-    /// `shown`, in the order of the page.
+    /// The output blocks that follow a block printing the awaited outcome
+    /// of `shown`, in the order of the page.
     List<List<String>> shownQuotes() => [
       for (final match in RegExp(
-        r"print\('shown: \$\{shown.outcome\}'\);\n```\n\n```text\n"
-        r'(.*?)\n```',
+        r"print\('shown: \$\{await shownOutcome\}'\);\n.*?```\n\n"
+        r'```text\n(.*?)\n```',
         dotAll: true,
       ).allMatches(File('doc/chains.md').readAsStringSync()))
         match.group(1)!.split('\n'),
@@ -534,9 +534,9 @@ void main() {
         'the other', () {
       final printed = printedBy(page.twoHandles);
       expect(printed, [
+        'shown: Done(null)',
         'parsed: Cancelled(manual)',
         'loaded: Done(21)',
-        'shown: Done(null)',
       ]);
       expect(shownQuotes().first, printed);
       expect(trace(), ['shown 21']);
@@ -592,9 +592,9 @@ void main() {
       () {
         final printed = printedBy(page.twoWaiting);
         expect(printed, [
+          'shown: Done(null)',
           'parsed: Cancelled(manual)',
           'loaded: Done(21)',
-          'shown: Done(null)',
         ]);
         expect(shownQuotes(), hasLength(2));
         expect(shownQuotes().last, printed);

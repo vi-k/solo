@@ -57,6 +57,14 @@ void elapse() {
   });
 }
 
+Future<void> upload() async {
+  final sent = Job<int>((ctx) => ctx.join(commit));
+  await sent.done; // discarded_outcome
+  final saved = Job<int>((ctx) => ctx.join(commit));
+  await commit();
+  print(await saved.value); // outcome_after_await
+}
+
 // The rules of async_job and of solo on the jobs of a controller.
 
 sealed class State {}

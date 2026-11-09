@@ -4,8 +4,10 @@
 [async_job](https://pub.dev/packages/async_job). It reports the mistakes that
 compile, run and often pass a first test: a wait in cleanup that never happens,
 a resource lost to a cancellation, a catch that resets a working device, a test
-that never moves its fake clock, a wait that a cancellation does not end. Each
-rule links to the page of async_job that shows the mistake and the right way.
+that never moves its fake clock, a wait that a cancellation does not end, an
+outcome awaited and dropped, a result read after its failure has gone to the
+zone. Each rule links to the page of async_job that shows the mistake and the
+right way.
 
 Code built on [solo](https://pub.dev/packages/solo) or
 [flutter_solo](https://pub.dev/packages/flutter_solo) needs
@@ -76,6 +78,8 @@ checks.
 | `catch_without_check` | lint | a broad catch in a body that acts before asking the job |
 | `sync_fake_async` | warning | an `async` callback of `fakeAsync` |
 | `bare_await` | lint | an `await` in a job body that does not go through the context |
+| `discarded_outcome` | warning | an outcome of `done` that is awaited and dropped |
+| `outcome_after_await` | warning | the first read of a job's result that comes after a wait |
 
 ### ctx_in_cleanup
 
@@ -227,6 +231,105 @@ It is a lint rather than a warning because tests wait in bodies on purpose, to
 cancel a job midway. A project that gates CI on it turns it on as
 `bare_await: warning` and puts `// ignore_for_file: async_job_lints/bare_await`
 into the test files that hold a body on a plain wait.
+
+### discarded_outcome
+
+```dart
+final upload = Job<void>((ctx) => ctx.join(() => api.upload(file)));
+await upload.done; // discarded_outcome
+showUploaded();
+```
+
+Reading `done` tells the core that the failure is handled, and the outcome it
+brings is dropped here: a failed upload goes on to `showUploaded()`, and
+nothing answers for the failure, not an observer's `onUnanswered` and not the
+zone. Only an observer's `onError` hears it. Read the outcome with a `switch`,
+await `value` to have the failure thrown, or call `ignoreFailure()` on the job
+if its failure is not wanted. `value` throws a cancellation too, as
+`Cancelled`, so it fits code for which a cancellation is a failure; other code
+switches over the outcome. See
+[A switch over `done`](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#a-switch-over-done).
+
+The rule reports a statement that awaits or just reads a `Future` of an
+`Outcome` of async_job, `await job.done;` or `job.done;`, and such a future
+returned from a function whose return type is `void`, `Future<void>` or
+`FutureOr<void>`, as in `onRefresh: () => controller.load().done`. It goes by
+the type, so a function of your own that returns `done` is reported where its
+result is dropped. It is quiet when the job is a local variable or a parameter
+whose `outcome`, `value` or `done` is read later in the same function, when
+`ignoreFailure()` was called on it before, as a statement or in a cascade of
+its declaration, and on a wait of a job body for a job of the controller's own
+queue, which `bare_await` reports. A test that waits for a job only to look at
+it afterwards reads `job.outcome` after `await job.done;` and keeps the rule
+quiet that way.
+
+The failure is answered for without anybody reading the outcome when the job is
+continued with `then` or a handle of `shared()`, when it runs under `ctx.run`
+or in `ctx.runAll`, or when the method that made it has called
+`ignoreFailure()`. The rule does not see that and reports the line. A job of
+solo with `isExpectedError` keeps an expected error away from `onUnanswered`,
+but an unexpected one still goes there, and `await job.done;` silences exactly
+that one. Switch over the outcome and rethrow what was not expected, or wait
+for the end without observing the job through `whenFinished`, as
+[Hearing the end without the failure](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#hearing-the-end-without-the-failure)
+shows.
+
+The rule does not report `final _ = await job.done;`, outcomes dropped in a
+list given to `Future.wait` or `[...].wait`, a callback of `done.then` that
+does not look at the outcome, or `ctx.run(child).ignore()`.
+
+### outcome_after_await
+
+```dart
+final upload = Job<void>((ctx) => ctx.join(() => api.upload(file)));
+await saveDraft();
+final outcome = await upload.done; // outcome_after_await
+```
+
+A failure nobody has observed is answered for one microtask after the job ends:
+by the observer's `onUnanswered` if it mixes in `JobAnswerer`, otherwise by the
+zone the job was made in. If the upload fails during `saveDraft()`, the zone
+gets the error, and `outcome` brings the same failure a second time. Read
+`done` right after the job is made, `final outcome = upload.done;`, and await
+that outcome where the result is needed. For `value`, take the future at once
+and mark it, `final value = upload.value..ignore();`: an early `value` alone is
+a future that fails with nobody listening, and `ignore()` silences only that
+report, while `await value` still throws. See
+[Telling the core it is handled](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#telling-the-core-it-is-handled).
+
+The rule takes a local variable that is final or never assigned again, made by
+a call, without a cascade and without `await`, whose type is a `Job` of
+async_job, a `SoloJob` of solo included. It reports the first observation of
+the job, `done`, `value`, `ignoreFailure()`, `then` or `shared()`, when a wait
+stands between the declaration and it in the same function: `await`,
+`await for`, or `yield` in an `async*` function. The actions of `join`,
+`abandonable`, `wait` and `uncancellable` count as the same function, since
+they run when the call is made. A job of `Job.deferred` does not run until it
+is started, so for it only a wait after `start()` counts. `await job.cancel()`
+of the job itself is not such a wait: its future ends before the failure is
+answered for. The members that do not observe the job, such as `outcome`,
+`isRunning`, `cancel()`, `whenFinished` and `start()`, do not stop the search.
+Any other use first, as an argument, `ctx.run(job)` included, an assignment, a
+return, an element of a collection or a variable captured by a closure, hands
+the job to code the rule does not follow, and the rule is quiet.
+
+The early read has a cost the rule does not hide. It marks the job observed, so
+if the function leaves before it awaits the outcome, by an exception, a
+`return` or, in a job body, a cancellation at a checkpoint, nobody hears the
+failure. In a body a cancellation is an ordinary way out, so there run the job
+as a child with `ctx.run`, whose failure the parent answers for, or wait in a
+`try` and read the outcome in its `finally`.
+
+A read after the wait costs nothing when the failure is taken care of
+elsewhere: by an observer with `JobAnswerer` whose `onUnanswered` handles it,
+by an `unansweredHandler` of a solo controller that takes it, by a method that
+returns a job it has already observed, or in a test that waits for a job ending
+in `Done` or `Cancelled`. Such a line is silenced with
+`// ignore: async_job_lints/outcome_after_await`. The rule does not see an
+observation in a loop whose wait stands later in the text but ran earlier, in
+the previous pass, a job held in a field, a job made in one function and read
+in another, or an observation in a closure other than the action of a waiting
+call.
 
 ## Versions
 

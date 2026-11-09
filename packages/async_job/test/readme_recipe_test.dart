@@ -189,14 +189,14 @@ Future<void> fullerExample() async {
 
     return database;
   });
+  final outcome = job.done;
 
   // Somebody changed their mind while the database was opening.
   await Future<void>.delayed(const Duration(milliseconds: 10));
   await job.cancel();
 
-  final outcome = await job.done; // Cancelled(manual)
+  print(await outcome); // Cancelled(manual)
   // why: end
-  print(outcome);
 }
 
 /// What [run] prints, on fake time, once every timer has fired.
@@ -1175,7 +1175,7 @@ void main() {
       expect(Database.events, ['opened', 'closed']);
       for (final page in whyPages) {
         expect(printed, [
-          quotedAfter(page, 'final outcome = await job.done;'),
+          quotedAfter(page, 'print(await outcome);'),
         ], reason: page);
       }
     });

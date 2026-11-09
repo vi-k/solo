@@ -105,19 +105,19 @@ reach the screen that stayed.
 final loaded = Job<String>((ctx) => ctx.join(loadText));
 final parsed = loaded.shared().then<int>((ctx, text) => int.parse(text));
 final shown = loaded.shared().then<void>((ctx, text) => showText(text));
+final shownOutcome = shown.done;
 
 // The number left the screen while the text was loading.
 await parsed.cancel();
-await shown.done;
+print('shown: ${await shownOutcome}');
 print('parsed: ${parsed.outcome}');
 print('loaded: ${loaded.outcome}');
-print('shown: ${shown.outcome}');
 ```
 
 ```text
+shown: Done(null)
 parsed: Cancelled(manual)
 loaded: Done(21)
-shown: Done(null)
 ```
 
 `shared()` makes a handle that ends with the outcome of `loaded` and cannot
@@ -147,19 +147,19 @@ final parsed = Job<int>(
 final shown = Job<void>(
   (ctx) async => showText(await ctx.abandonable(() => loaded.value)),
 );
+final shownOutcome = shown.done;
 
 // The number left the screen while the text was loading.
 await parsed.cancel();
-await shown.done;
+print('shown: ${await shownOutcome}');
 print('parsed: ${parsed.outcome}');
 print('loaded: ${loaded.outcome}');
-print('shown: ${shown.outcome}');
 ```
 
 ```text
+shown: Done(null)
 parsed: Cancelled(manual)
 loaded: Done(21)
-shown: Done(null)
 ```
 
 `parsed` and `shown` are jobs of their own that wait for `loaded`, not its
@@ -315,6 +315,7 @@ The parent needs the rows; the report on them may finish after the parent has:
 ```dart
 final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
+final reported = tail.value..ignore(); // tail is yours to observe.
 
 final parent = Job<void>((ctx) async {
   // The source is a child: the parent starts it and waits for it.
@@ -322,7 +323,7 @@ final parent = Job<void>((ctx) async {
 });
 
 await parent.value; // Done, whatever tail is doing.
-await tail.value; // tail is yours to observe.
+await reported;
 ```
 
 The parent waits for its children, not for what hangs off them. Once
@@ -347,9 +348,10 @@ parent: Cancelled(body: Job(): Cancelled(chain)), child: Cancelled(chain)
 ```
 
 A failure in the continuation is nobody's business but its own. Observe it
-through `value`, `done` or `ignoreFailure`; an unobserved one is answered for
-by the continuation, in `onUnanswered` of its observer or in the zone `then`
-was called in, after the parent has already finished. Its outcome comes back to
+through `value`, `done` or `ignoreFailure` before the first wait, as the code
+above takes `tail.value`; an unobserved one is answered for by the
+continuation, in `onUnanswered` of its observer or in the zone `then` was
+called in, after the parent has already finished. Its outcome comes back to
 you, not to the parent.
 
 ## Steps in a row

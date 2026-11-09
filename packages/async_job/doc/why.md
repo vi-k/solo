@@ -93,12 +93,13 @@ final job = Job<Database>((ctx) async {
 
   return database;
 });
+final outcome = job.done;
 
 // Somebody changed their mind while the database was opening.
 await Future<void>.delayed(const Duration(milliseconds: 10));
 await job.cancel();
 
-final outcome = await job.done; // Cancelled(manual)
+print(await outcome); // Cancelled(manual)
 ```
 
 - **`ctx.join(Database.open)`** waits for the open even after a cancellation,
@@ -125,6 +126,12 @@ final outcome = await job.done; // Cancelled(manual)
 - **`ctx.run(database.readyFlag())`** starts, as a child, the job that writes
   the ready flag; `readyFlag()` makes it with `Job.deferred`, which leaves its
   start to `ctx.run`. See [Children](children.md).
+- **`final outcome = job.done;`** comes right after the job is made, before
+  anything waits. Reading `done` tells the core the failure is handled, so a
+  job that fails during the wait below brings its error back in `outcome`
+  alone; read after the wait, `done` would carry an error that had already gone
+  to the zone. See
+  [Telling the core it is handled](outcomes.md#telling-the-core-it-is-handled).
 
 The complete runnable example, with a fake `Database` and `CancelToken`, is in
 `example/example.dart`. It runs the job four times: once to the end, and

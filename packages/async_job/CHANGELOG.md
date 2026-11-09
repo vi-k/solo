@@ -1,3 +1,14 @@
+## Unreleased
+
+### Documentation
+
+- [Why a job](doc/why.md) reads the outcome of its fuller example right after
+  the job is made, before anything waits, and [Chains](doc/chains.md) does the
+  same in three answers: a failure during the wait comes back in the outcome
+  instead of going to the zone first. The table of [Outcomes](doc/outcomes.md)
+  adds awaiting `done` and dropping the outcome, where nobody answers for the
+  failure.
+
 ## 1.0.2
 
 ### Documentation

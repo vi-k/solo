@@ -287,14 +287,14 @@ Future<void> twoHandles() async {
   final loaded = Job<String>((ctx) => ctx.join(loadText));
   final parsed = loaded.shared().then<int>((ctx, text) => int.parse(text));
   final shown = loaded.shared().then<void>((ctx, text) => showText(text));
+  final shownOutcome = shown.done;
   await delay(10);
 
   // The number left the screen while the text was loading.
   await parsed.cancel();
-  await shown.done;
+  print('shown: ${await shownOutcome}');
   print('parsed: ${parsed.outcome}');
   print('loaded: ${loaded.outcome}');
-  print('shown: ${shown.outcome}');
 }
 
 /// Chains: two jobs that wait for one source, and one of them is cancelled
@@ -307,14 +307,14 @@ Future<void> twoWaiting() async {
   final shown = Job<void>(
     (ctx) async => showText(await ctx.abandonable(() => loaded.value)),
   );
+  final shownOutcome = shown.done;
   await delay(10);
 
   // The number left the screen while the text was loading.
   await parsed.cancel();
-  await shown.done;
+  print('shown: ${await shownOutcome}');
   print('parsed: ${parsed.outcome}');
   print('loaded: ${loaded.outcome}');
-  print('shown: ${shown.outcome}');
 }
 
 /// Chains, the first attempt: the continuation does not wait for a job.
@@ -395,6 +395,7 @@ final parent = Job<void>((ctx) async {
 Future<void> reportedRows() async {
   final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
   final tail = child.then<void>((ctx, rows) => report(rows));
+  final reported = tail.value..ignore(); // tail is yours to observe.
 
   final parent = Job<void>((ctx) async {
     // The source is a child: the parent starts it and waits for it.
@@ -403,7 +404,7 @@ Future<void> reportedRows() async {
   parent.done.then((outcome) => stage.trace.add('parent $outcome')).ignore();
 
   await parent.value; // Done, whatever tail is doing.
-  await tail.value; // tail is yours to observe.
+  await reported;
 }
 
 Job<void> twoChildrenInARow() {

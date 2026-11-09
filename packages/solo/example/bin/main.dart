@@ -6,7 +6,7 @@ import 'package:solo_example/solo_example.dart';
 Future<void> main() async {
   Solo.observer = _PrintObserver();
   final camera = CameraController(FakeCameraHardware());
-  await camera.init().done;
+  await camera.init().value;
   camera
     ..setZoom(2)
     ..setFocusPoint(const Point(0.5, 0.5));
@@ -15,7 +15,7 @@ Future<void> main() async {
   // 35 ms in, the shot is halfway through, and the disposal cancels it on
   // purpose. The program prints `shot: Cancelled(manual)` for it.
   await Future<void>.delayed(const Duration(milliseconds: 35));
-  await camera.dispose().done;
+  await camera.dispose().value;
   print('shot: ${shot.outcome}');
   await camera.close();
 }

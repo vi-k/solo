@@ -20,7 +20,7 @@ with a comment naming the rule.
 For each set of plugins, named alone or both in either order, the probe
 writes `analysis_options.yaml` with the plugins by path and their lints on,
 runs `dart analyze --format=machine` and compares the diagnostics of the
-eight rules with the marks. The output names no plugin: the owner of a
+ten rules with the marks. The output names no plugin: the owner of a
 rule of the core shows only through the `ignore` lines. A rule of the core
 belongs to the plugin named alone, and of two to the one named first.
 
@@ -70,6 +70,8 @@ CORE = (
     'sync_fake_async',
     'catch_without_check',
     'bare_await',
+    'discarded_outcome',
+    'outcome_after_await',
 )
 RULES = CORE + ('await_own_queue', 'key_per_request',
                 'ignore_failure_hides_bugs')
@@ -183,7 +185,7 @@ def run(command, cwd):
 
 
 def analyze(user):
-    """The (rule, line) pairs of the eight rules `dart analyze` reports.
+    """The (rule, line) pairs of the ten rules `dart analyze` reports.
 
     Also the other lines of its output: a plugin that does not load says why
     there, and a mismatch prints them.

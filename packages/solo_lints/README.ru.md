@@ -6,8 +6,8 @@
 об ошибках, которые компилируются, работают и часто проходят первый тест:
 ожидание в уборке, которое так и не случается; ресурс, потерянный при отмене;
 `catch`, который сбрасывает исправное устройство; задача, которая ждёт саму
-себя; один ключ на все запросы; ожидание, которое отмена не прерывает.
-За большинством правил стоит раздел
+себя; один ключ на все запросы; ожидание, которое отмена не прерывает; исход,
+которого дождались и выбросили. За большинством правил стоит раздел
 [«Частых ошибок»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md) —
 страницы solo, где каждая ошибка показана рядом с правильным способом.
 
@@ -82,8 +82,10 @@ plugins:
 | `key_per_request` | линт | один ключ у задачи `Policy.droppable`, чьё тело читает аргумент |
 | `ignore_failure_hides_bugs` | линт | `ignoreFailure()` у задачи, которая называет свои ожидаемые ошибки |
 | [`bare_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#bare_await) | линт | `await` в теле задачи, который идёт мимо контекста |
+| [`discarded_outcome`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#discarded_outcome) | предупреждение | исход `done`, которого дождались и выбросили |
+| [`outcome_after_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#outcome_after_await) | предупреждение | первое чтение результата задачи, стоящее после ожидания |
 
-Пять правил ядра описаны в README `async_job_lints`: их имена в таблице ведут
+Семь правил ядра описаны в README `async_job_lints`: их имена в таблице ведут
 к их разделам в нём. Там `// ignore:` ставит перед правилом `async_job_lints/`;
 когда назван этот плагин, — `solo_lints/`, как и для трёх правил ниже.
 

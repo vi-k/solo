@@ -1,3 +1,10 @@
+## Unreleased
+
+- The example program awaits `value` of `init()` and `dispose()` instead of
+  dropping the outcome of `done`, so a failed open or close is thrown.
+  `doc/mistakes.md` asks to read the outcome of `job.done`, not just
+  `job.done`.
+
 ## 1.0.1
 
 - `doc/reference.md` sends the reader for the table of the context to the

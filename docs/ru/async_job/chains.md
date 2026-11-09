@@ -106,19 +106,19 @@ Bad state: Job() already has a continuation: a job is continued once; call share
 final loaded = Job<String>((ctx) => ctx.join(loadText));
 final parsed = loaded.shared().then<int>((ctx, text) => int.parse(text));
 final shown = loaded.shared().then<void>((ctx, text) => showText(text));
+final shownOutcome = shown.done;
 
 // Число ушло с экрана, пока текст загружался.
 await parsed.cancel();
-await shown.done;
+print('shown: ${await shownOutcome}');
 print('parsed: ${parsed.outcome}');
 print('loaded: ${loaded.outcome}');
-print('shown: ${shown.outcome}');
 ```
 
 ```text
+shown: Done(null)
 parsed: Cancelled(manual)
 loaded: Done(21)
-shown: Done(null)
 ```
 
 `shared()` делает ручку, которая кончается исходом `loaded` и до неё
@@ -149,19 +149,19 @@ final parsed = Job<int>(
 final shown = Job<void>(
   (ctx) async => showText(await ctx.abandonable(() => loaded.value)),
 );
+final shownOutcome = shown.done;
 
 // Число ушло с экрана, пока текст загружался.
 await parsed.cancel();
-await shown.done;
+print('shown: ${await shownOutcome}');
 print('parsed: ${parsed.outcome}');
 print('loaded: ${loaded.outcome}');
-print('shown: ${shown.outcome}');
 ```
 
 ```text
+shown: Done(null)
 parsed: Cancelled(manual)
 loaded: Done(21)
-shown: Done(null)
 ```
 
 `parsed` и `shown` — отдельные задачи, которые ждут `loaded`, а не её
@@ -317,6 +317,7 @@ if (await opened.done case Done(:final value)) value.close();
 ```dart
 final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
+final reported = tail.value..ignore(); // tail наблюдать вам.
 
 final parent = Job<void>((ctx) async {
   // Источник остаётся ребёнком: родитель его запускает и дожидается.
@@ -324,7 +325,7 @@ final parent = Job<void>((ctx) async {
 });
 
 await parent.value; // Done, что бы ни делал tail.
-await tail.value; // tail наблюдать вам.
+await reported;
 ```
 
 Родитель ждёт своих детей, а не то, что на них навешано. Как только
@@ -349,10 +350,11 @@ parent: Cancelled(body: Job(): Cancelled(chain)), child: Cancelled(chain)
 ```
 
 Ошибка продолжения касается только его самого. Наблюдайте его через `value`,
-`done` или `ignoreFailure`; за ошибку, которую никто не наблюдал, отвечает
-продолжение, в `onUnanswered` своего наблюдателя или в зоне, где вызвали
-`then`, уже после того, как родитель закончился. Исход продолжения возвращается
-вам, а не родителю.
+`done` или `ignoreFailure` до первого ожидания, как код выше берёт
+`tail.value`; за ошибку, которую никто не наблюдал, отвечает продолжение,
+в `onUnanswered` своего наблюдателя или в зоне, где вызвали `then`, уже после
+того, как родитель закончился. Исход продолжения возвращается вам,
+а не родителю.
 
 ## Шаги подряд
 

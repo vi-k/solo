@@ -93,12 +93,13 @@ final job = Job<Database>((ctx) async {
 
   return database;
 });
+final outcome = job.done;
 
 // Кто-то передумал, пока база открывалась.
 await Future<void>.delayed(const Duration(milliseconds: 10));
 await job.cancel();
 
-final outcome = await job.done; // Cancelled(manual)
+print(await outcome); // Cancelled(manual)
 ```
 
 - **`ctx.join(Database.open)`** дожидается открытия и после отмены, а затем
@@ -124,6 +125,12 @@ final outcome = await job.done; // Cancelled(manual)
 - **`ctx.run(database.readyFlag())`** запускает ребёнком задачу, которая пишет
   флаг готовности; `readyFlag()` создаёт её через `Job.deferred`, и запуск
   остаётся за `ctx.run`. См. [«Дети»](children.md).
+- **`final outcome = job.done;`** стоит сразу после того, как задача создана,
+  раньше любого ожидания. Чтение `done` говорит ядру, что ошибка обработана,
+  поэтому задача, упавшая во время ожидания ниже, вернёт ошибку только
+  в `outcome`; прочитанный после ожидания, `done` принёс бы ошибку, которая уже
+  ушла в зону. См.
+  [«Сказать ядру, что она обработана»](outcomes.md#сказать-ядру-что-она-обработана).
 
 Полный запускаемый пример с имитацией `Database` и `CancelToken` находится
 в `example/example.dart`. Он запускает задачу четыре раза: один раз до конца

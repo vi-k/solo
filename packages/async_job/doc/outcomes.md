@@ -116,6 +116,7 @@ only way to observe a failure:
 | What the code does | Observes the failure? |
 | --- | --- |
 | Reads `done` | yes, even without awaiting it, and `done` never throws |
+| Awaits `done` and drops the outcome | yes, and nobody answers for the failure: only an observer's `onError` hears it |
 | Reads `value` | yes, even without awaiting it, and the waiting code gets the error itself and has to handle it, as with any `Future` |
 | Reads `done` or `value` after the microtask that follows the end | too late: the failure has been answered for |
 | Forwards the failure through `then` or a handle of `shared()` | yes, and the continuation or the handles take responsibility for it |

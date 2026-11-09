@@ -203,11 +203,11 @@ final class Failures extends SoloObserver {
 
 The `onError` hook of an observer or of the controller, an `ifFailed` handler
 and a look at `job.outcome` all see the failure, but none of them counts as
-reading it. Await `job.value` and catch the error, read `job.done`, or call
-`ignoreFailure()` when nobody needs the result and the reporting is left to the
-hooks, like the observer above. A job that knows which of its errors are
-expected names them in `isExpectedError`, and nobody is asked to answer for
-those.
+reading it. Await `job.value` and catch the error, read the outcome of
+`job.done`, or call `ignoreFailure()` when nobody needs the result and the
+reporting is left to the hooks, like the observer above. A job that knows which
+of its errors are expected names them in `isExpectedError`, and nobody is asked
+to answer for those.
 
 Do this:
 

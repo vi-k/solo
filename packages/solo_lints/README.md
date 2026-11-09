@@ -6,7 +6,8 @@
 that compile, run and often pass a first test: a wait in cleanup that never
 happens, a resource lost to a cancellation, a catch that resets a working
 device, a job that waits for itself, one key for every request, a wait that a
-cancellation does not end. Most rules stand for a section of
+cancellation does not end, an outcome awaited and dropped. Most rules stand for
+a section of
 [Common mistakes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md),
 the page of solo that shows each mistake and the right way side by side.
 
@@ -79,8 +80,10 @@ diagnostic of the analyzer itself twice. Dart 3.13 prints it once.
 | `key_per_request` | lint | one key for a `Policy.droppable` job whose body reads an argument |
 | `ignore_failure_hides_bugs` | lint | `ignoreFailure()` on a job that names its expected errors |
 | [`bare_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#bare_await) | lint | an `await` in a job body that does not go through the context |
+| [`discarded_outcome`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#discarded_outcome) | warning | an outcome of `done` that is awaited and dropped |
+| [`outcome_after_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#outcome_after_await) | warning | the first read of a job's result that comes after a wait |
 
-The five rules of the core are described in the README of async_job_lints:
+The seven rules of the core are described in the README of async_job_lints:
 their names in the table lead to their sections there. There `// ignore:` puts
 `async_job_lints/` in front of a rule; with this plugin named, it is
 `solo_lints/`, as for the three rules below.
