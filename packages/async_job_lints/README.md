@@ -313,11 +313,13 @@ stands between the declaration and it in the same function: `await`,
 `abandonable` and `uncancellable` count as the same function, since they run
 when the call is made. A job of `Job.deferred` does not run until it is
 started, so for it only a wait after `start()` counts. A `late` job is made at
-the first read of its variable, so for it only a wait after that read counts.
-`await job.cancel()` of the job itself is not such a wait: its future ends
-before the failure is answered for. The members that do not observe the job,
-such as `outcome`, `isRunning`, `cancel()`, `whenFinished` and `start()`, do
-not stop the search. Any other use first, as an argument, `ctx.run(job)`
+the first read of its variable, so for it only a wait after that read counts;
+when the read might not run, being inside a branch, after `&&`, `||` or `??`,
+in a null-aware call or in another `late` initializer, the rule does not report
+the job. `await job.cancel()` of the job itself is not such a wait: its future
+ends before the failure is answered for. The members that do not observe the
+job, such as `outcome`, `isRunning`, `cancel()`, `whenFinished` and `start()`,
+do not stop the search. Any other use first, as an argument, `ctx.run(job)`
 included, an assignment, a return, an element of a collection or a variable
 captured by a closure, hands the job to code the rule does not follow, and the
 rule is quiet.

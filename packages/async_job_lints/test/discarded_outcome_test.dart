@@ -258,6 +258,18 @@ void run() {
     ['reload = () => load().[[done]];'],
   );
 
+  Future<void> test_returned_into_an_if_null_assignment() => assertAt(
+    '''
+$_api
+void run() {
+  Future<void> Function()? reload;
+  reload ??= () => load().done;
+  refresh(reload);
+}
+''',
+    ['reload ??= () => load().[[done]];'],
+  );
+
   Future<void> test_returned_from_a_conditional_into_an_outcome() =>
       assertAt('''
 $_api

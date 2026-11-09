@@ -252,14 +252,17 @@ class _Visitor extends SimpleAstVisitor<void> {
         : null;
   }
 
-  /// The type of what [slot] is assigned to with `=`.
+  /// The type of what [slot] is assigned to with `=` or `??=`.
   static DartType? _assignedType(Expression slot) {
     final assignment = slot.parent;
-    return assignment is AssignmentExpression &&
-            assignment.rightHandSide == slot &&
-            assignment.operator.type == TokenType.EQ
-        ? assignment.writeType
-        : null;
+    if (assignment is! AssignmentExpression ||
+        assignment.rightHandSide != slot) {
+      return null;
+    }
+    return switch (assignment.operator.type) {
+      TokenType.EQ || TokenType.QUESTION_QUESTION_EQ => assignment.writeType,
+      _ => null,
+    };
   }
 
   /// Whether [type] is `void`, `Future<void>` or `FutureOr<void>`.

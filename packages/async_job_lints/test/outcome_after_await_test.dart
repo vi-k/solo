@@ -320,6 +320,109 @@ Future<void> run() async {
     ['job.[[done]])'],
   );
 
+  Future<void> test_late_read_in_a_branch_that_returns() => assertAt('''
+$_api
+Future<void> run(bool fast) async {
+  late final job = load();
+  if (fast) {
+    print(job.isRunning);
+    return;
+  }
+  await commit();
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_late_read_in_the_other_branch() => assertAt('''
+$_api
+Future<void> run(bool peek) async {
+  late final job = load();
+  if (peek) {
+    print(job.isRunning);
+  } else {
+    await commit();
+    print(await job.done);
+  }
+}
+''', []);
+
+  Future<void> test_late_read_in_another_late_initializer() => assertAt('''
+$_api
+Future<void> run() async {
+  late final job = load();
+  late final running = job.isRunning;
+  await commit();
+  print(running);
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_late_read_in_a_short_circuit() => assertAt('''
+$_api
+Future<void> run(bool check) async {
+  late final job = load();
+  if (check && job.isRunning) return;
+  await commit();
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_late_read_in_a_condition() => assertAt(
+    '''
+$_api
+Future<void> run() async {
+  late final job = load();
+  if (!job.isRunning) return;
+  await commit();
+  print(await job.done);
+}
+''',
+    ['job.[[done]])'],
+  );
+
+  Future<void> test_late_read_in_an_initializer() => assertAt(
+    '''
+$_api
+Future<void> run() async {
+  late final job = load();
+  final running = job.isRunning;
+  await commit();
+  print(running);
+  print(await job.done);
+}
+''',
+    ['job.[[done]])'],
+  );
+
+  Future<void> test_late_read_in_a_named_argument() => assertAt(
+    '''
+$_api
+void log({required bool running}) {}
+
+Future<void> run() async {
+  late final job = load();
+  log(running: job.isRunning);
+  await commit();
+  print(await job.done);
+}
+''',
+    ['job.[[done]])'],
+  );
+
+  Future<void> test_late_read_in_a_null_aware_call() => assertAt('''
+$_api
+class Log {
+  void put(bool running) {}
+}
+
+Future<void> run(Log? log) async {
+  late final job = load();
+  log?.put(job.isRunning);
+  await commit();
+  print(await job.done);
+}
+''', []);
+
   Future<void> test_late_made_after_the_wait() => assertAt('''
 $_api
 Future<void> run() async {

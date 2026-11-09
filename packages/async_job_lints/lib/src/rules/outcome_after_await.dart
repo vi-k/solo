@@ -2,6 +2,7 @@ import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/error/error.dart';
@@ -139,7 +140,9 @@ class _Visitor extends SimpleAstVisitor<void> {
     scope.accept(events);
     // The window opens where the job can start to fail: at its declaration,
     // at the first read of a late variable, which makes the job, or at
-    // `start()` for a job that does not run until it is started.
+    // `start()` for a job that does not run until it is started. A first
+    // read that might not run leaves the job's making unknown, and the rule
+    // keeps quiet.
     var opened = deferred || late ? null : declaration.end;
     var made = !late;
     for (final use in events.uses) {
@@ -147,7 +150,10 @@ class _Visitor extends SimpleAstVisitor<void> {
       if (use.escapes) return;
       if (!made) {
         made = true;
-        if (!deferred) opened = use.offset;
+        if (!deferred) {
+          if (!_runsSurely(use.reference, declaration)) return;
+          opened = use.offset;
+        }
       }
       final member = use.member;
       if (member == 'start') {
@@ -173,6 +179,79 @@ class _Visitor extends SimpleAstVisitor<void> {
       ];
       rule.reportAtNode(at, diagnosticCode: code, arguments: arguments);
       return;
+    }
+  }
+
+  /// Whether [read] runs whenever the statement holding it does, and that
+  /// statement stands in the block that holds [declaration]: nothing between
+  /// them is a branch, a short-circuit, a null-aware call or the initializer
+  /// of a late variable. Only the nodes listed here pass; any other keeps the
+  /// rule quiet.
+  static bool _runsSurely(AstNode read, Statement declaration) {
+    var node = read;
+    while (true) {
+      final parent = node.parent;
+      if (parent == null) return false;
+      if (parent is Block) return parent == declaration.parent;
+      final passes = switch (parent) {
+        PrefixedIdentifier() ||
+        ArgumentList() ||
+        ParenthesizedExpression() ||
+        AwaitExpression() ||
+        PrefixExpression() ||
+        InterpolationExpression() ||
+        StringInterpolation() ||
+        InstanceCreationExpression() ||
+        ExpressionStatement() ||
+        ReturnStatement() ||
+        VariableDeclarationList() ||
+        VariableDeclarationStatement() => true,
+        PropertyAccess(:final target) => target == node,
+        MethodInvocation(:final target) =>
+          target == node || !_shortCircuits(parent),
+        VariableDeclaration(parent: VariableDeclarationList(:final isLate)) =>
+          !isLate,
+        AssignmentExpression(:final rightHandSide, :final operator) =>
+          rightHandSide != node ||
+              operator.type != TokenType.QUESTION_QUESTION_EQ,
+        BinaryExpression(:final rightOperand, :final operator) =>
+          rightOperand != node || !_shortCircuiting.contains(operator.type),
+        ConditionalExpression(:final condition) => condition == node,
+        IfStatement(:final expression) => expression == node,
+        // A named argument, whose node analyzer 12 and 14 name differently.
+        _ => parent.parent is ArgumentList && argumentName(parent) != null,
+      };
+      if (!passes) return false;
+      node = parent;
+    }
+  }
+
+  /// The operators whose right operand might not run.
+  static const _shortCircuiting = {
+    TokenType.AMPERSAND_AMPERSAND,
+    TokenType.BAR_BAR,
+    TokenType.QUESTION_QUESTION,
+  };
+
+  /// Whether the arguments of [call] might not run: the call or a target
+  /// before it in the chain is null-aware, or the call is a cascade section.
+  static bool _shortCircuits(MethodInvocation call) {
+    if (call.isCascaded) return true;
+    Expression? link = call;
+    while (true) {
+      switch (link) {
+        case MethodInvocation(:final isNullAware, :final target):
+          if (isNullAware) return true;
+          link = target;
+        case PropertyAccess(:final isNullAware, :final target):
+          if (isNullAware) return true;
+          link = target;
+        case IndexExpression(:final isNullAware, :final target):
+          if (isNullAware) return true;
+          link = target;
+        default:
+          return false;
+      }
     }
   }
 
@@ -209,7 +288,17 @@ final class _Use {
   /// Whether the reference hands the job to code the rule does not follow.
   final bool escapes;
 
-  _Use(this.offset, this.end, {this.member, this.name, this.escapes = false});
+  /// The node that refers to the job.
+  final AstNode reference;
+
+  _Use(
+    this.reference,
+    this.offset,
+    this.end, {
+    this.member,
+    this.name,
+    this.escapes = false,
+  });
 }
 
 /// The references to a job and the waits in the function that made it, in
@@ -277,7 +366,7 @@ class _Events extends RecursiveAstVisitor<void> {
   void visitAssignmentExpression(AssignmentExpression node) {
     final target = node.leftHandSide;
     if (target is SimpleIdentifier && node.writeElement == job) {
-      uses.add(_Use(target.offset, target.end, escapes: true));
+      uses.add(_Use(target, target.offset, target.end, escapes: true));
     }
     super.visitAssignmentExpression(node);
   }
@@ -286,14 +375,14 @@ class _Events extends RecursiveAstVisitor<void> {
   void visitSimpleIdentifier(SimpleIdentifier node) {
     if (node.element != job) return;
     if (_inside > 0) {
-      uses.add(_Use(node.offset, node.end, escapes: true));
+      uses.add(_Use(node, node.offset, node.end, escapes: true));
       return;
     }
     final name = _memberOn(node);
     uses.add(
       name == null
-          ? _Use(node.offset, node.end, escapes: true)
-          : _Use(node.offset, name.end, member: name.name, name: name),
+          ? _Use(node, node.offset, node.end, escapes: true)
+          : _Use(node, node.offset, name.end, member: name.name, name: name),
     );
   }
 
