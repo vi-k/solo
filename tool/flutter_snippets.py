@@ -1951,6 +1951,258 @@ void main() {
 ''',
 ])
 
+# The two sections on `SoloListener`, built into a file of their own: the
+# model of Usage, the app's own pieces the sections name -- the controllers
+# `connection` and `query`, `api.suggest` and `SuggestionList` -- and the
+# blocks. Three blocks of the second section declare `_suggest`, so both
+# sections are addressed by the subsection a block stands in.
+_reacting = subsections(
+    open(FLUTTER_README).read(), doc_blocks.slug('Reacting to a change'),
+    _taken_readme)
+_replaces_slug = doc_blocks.slug('A reaction the next change replaces')
+_replaces = subsections(
+    open(FLUTTER_README).read(), _replaces_slug, _taken_readme)
+_ATTEMPT = doc_blocks.slug('The first attempt')
+_SCREEN_PARAMETERS = (
+    '\n  ConnectionController connection,\n  ProfileController controller,\n')
+
+
+def _suggesting(name, block):
+    """A `State` of the search screen whose `_suggest` is [block]."""
+    return (f'class {name} extends _SearchState {{\n  @override\n'
+            + block + '}\n')
+
+
+FILES['readme_reacting_test'] = '\n'.join([
+    *sorted(set(
+        _install_imports + _usage_imports + [
+            "import 'dart:async';",
+            "import 'package:flutter_test/flutter_test.dart';",
+        ])),
+    '',
+    _usage_body,
+    README_API,
+    '''
+enum Connection { online, offline }
+
+final class ConnectionController extends Solo<Connection> {
+  ConnectionController() : super(Connection.online);
+
+  void set(Connection state) => externalSetState(state);
+}
+''',
+    wrap('snackBarInBuild',
+         _reacting[_ATTEMPT + '/the-first-attempt-the-snack-ba'],
+         _SCREEN_PARAMETERS),
+    wrap('snackBarInReaction',
+         _reacting[doc_blocks.slug('A reaction outside the build')
+                   + '/sololistener-connection'],
+         _SCREEN_PARAMETERS),
+    '''
+final class QueryController extends Solo<String> {
+  QueryController() : super('');
+
+  void type(String text) => externalSetState(text);
+}
+
+/// The call the page takes as the app's own: it answers 100 ms after it
+/// starts, and says so in [log].
+class SearchApi {
+  final List<String> log;
+
+  SearchApi(this.log);
+
+  Future<List<String>> suggest(String text) async {
+    log.add('load $text');
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    log.add('loaded $text');
+    return ['$text.'];
+  }
+}
+
+class SuggestionList extends StatelessWidget {
+  final List<String> suggestions;
+
+  const SuggestionList({required this.suggestions, super.key});
+
+  @override
+  Widget build(BuildContext context) => Text(suggestions.join(' '));
+}
+
+class Search extends StatefulWidget {
+  final QueryController query;
+  final SearchApi api;
+  final State<Search> Function() state;
+
+  const Search({
+    required this.query,
+    required this.api,
+    required this.state,
+    super.key,
+  });
+
+  @override
+  // The test hands the version in: one widget for the three of the page.
+  // ignore: no_logic_in_create_state
+  State<Search> createState() => state();
+}
+
+abstract class _SearchState extends State<Search> {
+  var _suggestions = const <String>[];
+
+  QueryController get query => widget.query;
+
+  SearchApi get api => widget.api;
+
+  Future<void> _suggest(JobContext ctx, BuildContext context, String text);
+
+  @override
+  Widget build(BuildContext context) =>
+''' + '      ' + _replaces[_replaces_slug + '/sololistener-string']
+    .strip().removesuffix(',') + ';\n}\n',
+    _suggesting('_FirstAttempt', _replaces[_ATTEMPT + '/_suggest']),
+    _suggesting('_Joining', _replaces[
+        doc_blocks.slug('Waiting with `ctx.join`') + '/_suggest']),
+    _suggesting('_GivingUp', _replaces[
+        doc_blocks.slug('A wait that gives up') + '/_suggest']),
+    README_HELPERS + '''
+/// Types [typed] into the search screen with the `State` [state] makes,
+/// each text at its millisecond, and returns what the API did until
+/// [until], each line with the millisecond it came at, and what the screen
+/// showed.
+Future<List<String>> typing(
+  WidgetTester tester,
+  State<Search> Function() state,
+  Map<int, String> typed, {
+  required int until,
+}) async {
+  final query = QueryController();
+  final log = <String>[];
+  await tester.pumpWidget(
+    app(Search(query: query, api: SearchApi(log), state: state)),
+  );
+  final timed = <String>[];
+  var seen = 0;
+  var shown = '';
+  for (var at = 0; at <= until; at++) {
+    if (typed[at] case final text?) {
+      query.type(text);
+    }
+    await tester.pump();
+    for (; seen < log.length; seen++) {
+      timed.add('$at ${log[seen]}');
+    }
+    final now =
+        tester.widget<SuggestionList>(find.byType(SuggestionList))
+            .suggestions
+            .join(' ');
+    if (now != shown) {
+      timed.add('$at shows $now');
+      shown = now;
+    }
+    await tester.pump(const Duration(milliseconds: 1));
+  }
+  await tester.pumpWidget(const SizedBox());
+  await query.close();
+  return timed;
+}
+
+void main() {
+  testWidgets('a snack bar from a builder breaks the build', (tester) async {
+    final connection = ConnectionController()..set(Connection.offline);
+    final controller = ProfileController(ProfileApi());
+    closing(connection);
+    closing(controller);
+    await tester.pumpWidget(app(snackBarInBuild(connection, controller)));
+
+    final error = tester.takeException();
+    expect(error, isFlutterError);
+    expect(
+      (error as FlutterError).diagnostics.first.toString(),
+      'The showSnackBar() method cannot be called during build.',
+    );
+    debugPrint('the snack bar in a builder: ${error.diagnostics.first}');
+  });
+
+  testWidgets('a reaction shows one snack bar for a loss', (tester) async {
+    final connection = ConnectionController();
+    final controller = ProfileController(ProfileApi());
+    closing(connection);
+    closing(controller);
+    await tester.pumpWidget(app(snackBarInReaction(connection, controller)));
+    await tester.pumpAndSettle();
+    expect(find.text('No connection'), findsNothing);
+
+    connection
+      ..set(Connection.offline)
+      ..set(Connection.offline);
+    await tester.pumpAndSettle();
+    expect(find.text('No connection'), findsOneWidget);
+
+    tester
+        .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+        .hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+    expect(
+      find.text('No connection'),
+      findsNothing,
+      reason: 'offline written again is no loss, and listenWhen says so',
+    );
+    debugPrint('the snack bar in a reaction: one for a loss');
+  });
+
+  testWidgets('a plain await shows the old suggestions, and late',
+      (tester) async {
+    expect(
+      await typing(tester, _FirstAttempt.new, {0: 'a', 10: 'ab'},
+          until: 250),
+      [
+        '0 load a',
+        '100 loaded a',
+        '100 load ab',
+        '100 shows a.',
+        '200 loaded ab',
+        '200 shows ab.',
+      ],
+    );
+  });
+
+  testWidgets('ctx.join drops the old suggestions, and still late',
+      (tester) async {
+    expect(
+      await typing(tester, _Joining.new, {0: 'a', 10: 'ab'}, until: 250),
+      [
+        '0 load a',
+        '100 loaded a',
+        '100 load ab',
+        '200 loaded ab',
+        '200 shows ab.',
+      ],
+    );
+  });
+
+  testWidgets('a wait that gives up starts the next reaction at once',
+      (tester) async {
+    expect(
+      await typing(tester, _GivingUp.new, {0: 'a', 350: 'ab'}, until: 800),
+      [
+        '300 load a',
+        '400 loaded a',
+        '650 load ab',
+        '750 loaded ab',
+        '750 shows ab.',
+      ],
+    );
+    expect(
+      await typing(tester, _GivingUp.new, {0: 'a', 100: 'ab'}, until: 600),
+      ['400 load ab', '500 loaded ab', '500 shows ab.'],
+      reason: 'a letter within the pause loads nothing for the one before',
+    );
+  });
+}
+''',
+])
+
 # A block of either page that no driver took is a block nobody builds: it
 # could stop compiling, or stop being true, and every step after this one
 # would stay green.

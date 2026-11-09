@@ -208,6 +208,207 @@ class _ListeningState extends State<Listening> {
   Widget build(BuildContext context) => const SizedBox();
 }
 
+/// The state of the connection "Reacting to a change" follows, which the page
+/// takes as the application's own.
+enum Connection {
+  /// The network is there.
+  online,
+
+  /// The network is gone.
+  offline,
+}
+
+/// The controller of [Connection] the page names `connection`: the
+/// application writes it from wherever it learns of the network.
+final class ConnectionController extends Solo<Connection> {
+  /// A connection that starts [Connection.online].
+  ConnectionController() : super(Connection.online);
+
+  /// Writes [state] as the application would.
+  void set(Connection state) => externalSetState(state);
+}
+
+/// The first attempt of "Reacting to a change".
+Widget snackBarInBuild(
+  ConnectionController connection,
+  ProfileController controller,
+) => [
+  SoloBuilder<Connection>(
+    solo: connection,
+    builder: (context, state, child) {
+      if (state == Connection.offline) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No connection')));
+      }
+
+      return child!;
+    },
+    child: ProfileView(controller: controller),
+  ),
+].single;
+
+/// The answer of "Reacting to a change".
+Widget snackBarInReaction(
+  ConnectionController connection,
+  ProfileController controller,
+) => [
+  SoloListener<Connection>(
+    solo: connection,
+    listenWhen: (previous, current) =>
+        previous == Connection.online && current == Connection.offline,
+    listener: (ctx, context, state) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No connection')));
+    },
+    child: ProfileView(controller: controller),
+  ),
+].single;
+
+/// The text a search field writes, which "A reaction the next change
+/// replaces" names `query`.
+final class QueryController extends Solo<String> {
+  /// A query that starts empty.
+  QueryController() : super('');
+
+  /// Writes [text] as the search field would.
+  void type(String text) => externalSetState(text);
+}
+
+/// The call of the application the page names `api.suggest`: it answers
+/// [delay] after the call, and says what it did in [log].
+class SearchApi {
+  /// How long a call takes.
+  final Duration delay;
+
+  /// `load <text>` when a call starts, `loaded <text>` when it answers.
+  final List<String> log;
+
+  /// An API that answers [delay] after the call.
+  SearchApi(this.log, {this.delay = const Duration(milliseconds: 100)});
+
+  /// The suggestions for [text].
+  Future<List<String>> suggest(String text) async {
+    log.add('load $text');
+    await Future<void>.delayed(delay);
+    log.add('loaded $text');
+    return ['$text.'];
+  }
+}
+
+/// The list under the search field, which the page takes as the
+/// application's own.
+class SuggestionList extends StatelessWidget {
+  /// What the list shows.
+  final List<String> suggestions;
+
+  /// A list of [suggestions].
+  const SuggestionList({required this.suggestions, super.key});
+
+  @override
+  Widget build(BuildContext context) => Text(suggestions.join(' '));
+}
+
+/// The versions of `_suggest` in "A reaction the next change replaces".
+enum Suggesting {
+  /// A plain `await`.
+  firstAttempt,
+
+  /// `ctx.join`.
+  join,
+
+  /// `ctx.pause` and `ctx.abandonable`.
+  abandonable,
+}
+
+/// The screen of "A reaction the next change replaces".
+class Search extends StatefulWidget {
+  /// What the search field writes.
+  final QueryController query;
+
+  /// Where the suggestions come from.
+  final SearchApi api;
+
+  /// The version of `_suggest` the screen takes.
+  final Suggesting how;
+
+  /// A screen that suggests for [query] the way [how] says.
+  const Search({
+    required this.query,
+    required this.api,
+    required this.how,
+    super.key,
+  });
+
+  @override
+  State<Search> createState() =>
+      // The switch is the test's: one widget for the versions of the page.
+      // ignore: no_logic_in_create_state
+      switch (how) {
+        Suggesting.firstAttempt => _FirstAttemptSearchState(),
+        Suggesting.join => _JoinSearchState(),
+        Suggesting.abandonable => _AbandonableSearchState(),
+      };
+}
+
+abstract class _SearchState extends State<Search> {
+  var _suggestions = const <String>[];
+
+  QueryController get query => widget.query;
+
+  SearchApi get api => widget.api;
+
+  Future<void> _suggest(JobContext ctx, BuildContext context, String text);
+
+  @override
+  Widget build(BuildContext context) => [
+    SoloListener<String>(
+      solo: query,
+      mode: SoloListenerMode.restart,
+      listener: _suggest,
+      child: SuggestionList(suggestions: _suggestions),
+    ),
+  ].single;
+}
+
+class _FirstAttemptSearchState extends _SearchState {
+  @override
+  Future<void> _suggest(
+    JobContext ctx,
+    BuildContext context,
+    String text,
+  ) async {
+    final found = await api.suggest(text);
+    setState(() => _suggestions = found);
+  }
+}
+
+class _JoinSearchState extends _SearchState {
+  @override
+  Future<void> _suggest(
+    JobContext ctx,
+    BuildContext context,
+    String text,
+  ) async {
+    final found = await ctx.join(() => api.suggest(text));
+    setState(() => _suggestions = found);
+  }
+}
+
+class _AbandonableSearchState extends _SearchState {
+  @override
+  Future<void> _suggest(
+    JobContext ctx,
+    BuildContext context,
+    String text,
+  ) async {
+    await ctx.pause(const Duration(milliseconds: 300));
+    final found = await ctx.abandonable(() => api.suggest(text));
+    setState(() => _suggestions = found);
+  }
+}
+
 /// What the callback of [secondImport] was told.
 final heardBySecondImport = <bool>[];
 

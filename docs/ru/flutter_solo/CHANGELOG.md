@@ -1,5 +1,18 @@
 ## Не выпущено
 
+### Добавлено
+
+- `SoloListener` — виджет, который на каждое изменение контроллера, пропущенное
+  `listenWhen`, запускает реакцию, задачу ядра, с состоянием этого изменения,
+  и `SoloListenerMode` — что делает изменение, пока идёт прежняя реакция:
+  `concurrent`, `sequential`, `droppable`, `keepLatest` или `restart`. Уход
+  из дерева или новый контроллер отменяют реакции, а провал уходит
+  в `FlutterError`. README разбирает его в разделах «Reacting to a change» и «A
+  reaction the next change replaces».
+- Нужен `solo` 1.1.0 — ради `Solo.addChangeListener`.
+
+### Документация
+
 - README просит `solo_lints: ^0.2.0`, с которым приходят предупреждения
   `discarded_outcome` и `outcome_after_await` об исходе задачи.
 - `pubspec.yaml` называет сайт документации, и pub.dev ссылается на него.

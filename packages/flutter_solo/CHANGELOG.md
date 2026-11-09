@@ -1,5 +1,18 @@
 ## Unreleased
 
+### Added
+
+- `SoloListener`, a widget that runs a reaction, a job of the core, on every
+  change of a controller that `listenWhen` lets through, with the state of that
+  change, and `SoloListenerMode`, what a change does while an earlier reaction
+  runs: `concurrent`, `sequential`, `droppable`, `keepLatest` or `restart`.
+  Leaving the tree, or a new controller, cancels the reactions, and a failure
+  goes to `FlutterError`. The README takes it apart in "Reacting to a change"
+  and "A reaction the next change replaces".
+- `solo` 1.1.0 is required, for `Solo.addChangeListener`.
+
+### Documentation
+
 - The README asks for `solo_lints: ^0.2.0`, which brings the warnings
   `discarded_outcome` and `outcome_after_await` on the outcome of a job.
 - `pubspec.yaml` names the documentation site, and pub.dev links to it.

@@ -71,9 +71,10 @@ import 'package:flutter_solo/flutter_solo.dart';
 ```
 
 The package's own part arrives with the same import: the mixin
-`SoloListenable`, the widgets `SoloBuilder` and `SoloSelector`, and the class
-`SoloSelection`. A second import next door adds `select` and `listen` as
-methods, with the subscriptions `listen` hands back:
+`SoloListenable`, the widgets `SoloBuilder`, `SoloSelector` and `SoloListener`
+with its `SoloListenerMode`, and the class `SoloSelection`. A second import
+next door adds `select` and `listen` as methods, with the subscriptions
+`listen` hands back:
 
 ```dart
 import 'package:flutter_solo/listenable.dart';
@@ -207,6 +208,7 @@ others apart:
 | That value as a `ValueListenable` a `State` holds | `SoloSelection` |
 | One widget over two controllers | `Listenable.merge` in a `ListenableBuilder`, with `SoloListenable` |
 | A callback on every change, outside `build` | `listen` from the second import, with `SoloListenable` |
+| A reaction to every change, cancelled with the screen | `SoloListener` |
 
 ## The controller as a `ValueListenable`
 
@@ -468,6 +470,166 @@ another controller. A `State` whose source can be replaced cancels the group in
 `didUpdateWidget` and takes its subscriptions again, into a new group: the
 cancelled one would cancel them on the spot.
 
+## Reacting to a change
+
+A screen shows a snack bar when the connection is lost, whoever lost it.
+`connection` is a controller of the app's own: its state is `Connection.online`
+or `Connection.offline`, and the app writes it from wherever it learns of the
+network.
+
+### The first attempt
+
+```dart
+// The first attempt: the snack bar is shown from inside a build.
+SoloBuilder<Connection>(
+  solo: connection,
+  builder: (context, state, child) {
+    if (state == Connection.offline) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No connection')));
+    }
+
+    return child!;
+  },
+  child: ProfileView(controller: controller),
+),
+```
+
+`SoloBuilder` is where the screen meets the state, so the call goes in its
+builder. The builder runs inside a build, and a snack bar changes the state of
+the `ScaffoldMessenger` above it, which a build may not do: a debug build stops
+there with "The showSnackBar() method cannot be called during build." Nor does
+a builder run once per change. It runs whenever the framework builds the widget
+again, and every such build while the connection is offline makes the call
+again.
+
+### A reaction outside the build
+
+```dart
+SoloListener<Connection>(
+  solo: connection,
+  listenWhen: (previous, current) =>
+      previous == Connection.online && current == Connection.offline,
+  listener: (ctx, context, state) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('No connection')));
+  },
+  child: ProfileView(controller: controller),
+),
+```
+
+`SoloListener` runs `listener` for every change that `listenWhen` lets through,
+handed the state of that change, and builds `child` as it is. The reaction
+starts on a microtask after the change, outside any build, so it may show a
+snack bar or push a route whoever wrote the state, the build of another widget
+included. The state the widget subscribes at starts no reaction. Without
+`listenWhen` every change reacts, the same state written again included; this
+one says what a loss is, a step from online to offline.
+
+The reaction is a job of the core and takes a `JobContext` first. The widget
+cancels it when it leaves the tree, and the cancellation is cooperative, as the
+next section shows. A failure of `listenWhen` or of a reaction goes to
+`FlutterError`, whether the controller has `SoloListenable` or not.
+
+The widget is for changes this screen did not make. The outcome of a job the
+screen started is waited for on its `done`, as [Outcomes](#outcomes) shows, and
+news that has to outlive the screen goes on a board of its own, as
+[A notice the screen accepts](https://github.com/vi-k/solo/blob/main/packages/solo/doc/state.md#a-notice-the-screen-accepts)
+on the state page of `solo` shows.
+
+## A reaction the next change replaces
+
+A search field writes what the user types to `query`, a controller of a
+`String`, and the suggestions under it follow the latest text.
+`api.suggest(text)` stands for the app's own call, which returns a
+`Future<List<String>>`. The screen loads the suggestions in a reaction, and
+`SoloListenerMode.restart` cancels the reaction to the old text when a new text
+comes:
+
+```dart
+SoloListener<String>(
+  solo: query,
+  mode: SoloListenerMode.restart,
+  listener: _suggest,
+  child: SuggestionList(suggestions: _suggestions),
+),
+```
+
+The mode says what a change does while an earlier reaction runs. `concurrent`,
+the default, starts the next reaction beside it, `sequential` queues the
+change, `droppable` drops it, and `keepLatest` keeps only the latest change
+waiting. `restart` keeps the latest too and cancels the running reaction
+without waiting for it. The next reaction starts when the cancelled one ends,
+and when that is depends on how the reaction waits.
+
+### The first attempt
+
+```dart
+// The first attempt: the replaced load runs to its end, and the next waits.
+Future<void> _suggest(
+  JobContext ctx,
+  BuildContext context,
+  String text,
+) async {
+  final found = await api.suggest(text);
+  setState(() => _suggestions = found);
+}
+```
+
+The cancellation is cooperative, and a plain `await` is no checkpoint. The load
+for the old text runs to its end and its `setState` puts the old suggestions
+up; only then does the reaction to the new text start. Every letter waits out
+the load of the letter before it. Leaving the screen cancels the reaction the
+same way, and the `setState` after the `await` then comes to a `State` that is
+gone: the reaction fails, and the failure goes to `FlutterError`.
+
+### Waiting with `ctx.join`
+
+```dart
+Future<void> _suggest(
+  JobContext ctx,
+  BuildContext context,
+  String text,
+) async {
+  final found = await ctx.join(() => api.suggest(text));
+  setState(() => _suggestions = found);
+}
+```
+
+`ctx.join` is how a job waits for a call, and once the reaction is cancelled it
+throws `Cancelled`: the old suggestions no longer come up, and a screen that
+has left meets no `setState`. But it waits its call out first, which is what
+keeps a save whole, so the next reaction starts as late as before.
+
+### A wait that gives up
+
+```dart
+Future<void> _suggest(
+  JobContext ctx,
+  BuildContext context,
+  String text,
+) async {
+  await ctx.pause(const Duration(milliseconds: 300));
+  final found = await ctx.abandonable(() => api.suggest(text));
+  setState(() => _suggestions = found);
+}
+```
+
+`ctx.abandonable` stops waiting the moment the reaction is cancelled. The next
+reaction starts at once, and the load for the old text ends with nobody waiting
+for it. `ctx.pause` ends at once as well, so a letter typed within 300
+milliseconds of the one before cancels the reaction before it loads anything.
+
+`abandonable` leaves the old request running. A client that can stop its
+request takes a token instead: `ctx.onCancel` cancels the token with the
+reaction, and `ctx.join` waits only as long as the client takes to stop. The
+error such a client throws when stopped is named once in
+`Job.isCancellationError`, or every stop goes to `FlutterError` as a failure.
+[A token through `onCancel`](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-token-through-oncancel)
+on the cancellation page of `async_job` shows both.
+
 ## Methods from a second import
 
 `select` and `listen` arrive with an import of their own, next to the one the
@@ -668,10 +830,11 @@ Flutter's.
 | A listener of a controller without it | To the zone, as [Where each error goes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#where-each-error-goes) on the errors page of `solo` has it: `SoloBuilder` and `SoloSelector` take such a controller, but `FlutterError.onError` never hears of a failure of its listeners. |
 | A listener of a selection | Through `FlutterError`, whether the controller has `SoloListenable` or not: a selection reports its own listeners. |
 | The selector of a selection | The controller's route, one of the two rows above: the selector runs inside a listener of the controller. |
+| `listenWhen` or a reaction of `SoloListener` | Through `FlutterError`, whether the controller has `SoloListenable` or not: the widget reports them itself. |
 
 | Question | Answer |
 | --- | --- |
-| When do listeners run? | Synchronously, in subscription order, on every state change. With `SoloListenable`, `value` and `currentState` are the same object. There is no `stream` unless `SoloStream` is mixed in: the builders listen to the controller itself. |
+| When do listeners run? | Synchronously, in subscription order, on every state change. With `SoloListenable`, `value` and `currentState` are the same object. A reaction of `SoloListener` starts on a microtask after the change; its `listenWhen` runs with the listeners. There is no `stream` unless `SoloStream` is mixed in: the builders listen to the controller itself. |
 | Are equal states filtered? | No. `emit` of a state equal to the current one still notifies: the listeners are the engine's own, and the engine compares nothing. A frame may swallow several of them, a listener will not. A selection filters its own value, which is the one a widget usually cares about, as [Selecting one value](#selecting-one-value) shows. |
 | Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two; it takes controllers with `SoloListenable`, as [The controller as a `ValueListenable`](#the-controller-as-a-valuelistenable) shows. Work of one screen that must not wait for another goes to a controller of its own: [A tap that does not wait for a reload](https://github.com/vi-k/solo/blob/main/packages/solo/doc/jobs.md#a-tap-that-does-not-wait-for-a-reload). |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |

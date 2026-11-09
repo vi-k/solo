@@ -73,6 +73,9 @@ enum SoloListenerMode {
 ///   child: const FeedView(),
 /// )
 /// ```
+///
+/// See [Reacting to a change](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#reacting-to-a-change)
+/// in the package README.
 final class SoloListener<S extends Object> extends StatefulWidget {
   /// The controller whose changes start the reactions.
   ///

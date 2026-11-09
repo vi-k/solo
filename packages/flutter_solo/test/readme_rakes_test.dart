@@ -177,7 +177,7 @@ void main() {
       );
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
-        hasLength(17),
+        hasLength(23),
         reason:
             'a new block of the page needs a place in the support files '
             'and a test that runs it',
@@ -341,7 +341,7 @@ void main() {
 
   group('Install', () {
     test('one import brings the engine, the mixin and the widgets', () {
-      expect(arrivesWithOneImport, hasLength(10));
+      expect(arrivesWithOneImport, hasLength(12));
       expect(
         File('lib/flutter_solo.dart').readAsStringSync(),
         contains("export 'package:solo/solo.dart';"),
@@ -351,8 +351,9 @@ void main() {
         'with',
       );
       _says(
-        'the mixin `SoloListenable`, the widgets `SoloBuilder` and '
-        '`SoloSelector`, and the class `SoloSelection`',
+        'the mixin `SoloListenable`, the widgets `SoloBuilder`, '
+        '`SoloSelector` and `SoloListener` with its `SoloListenerMode`, and '
+        'the class `SoloSelection`',
       );
     });
 
@@ -1751,6 +1752,355 @@ void main() {
     });
   });
 
+  group('Reacting to a change', () {
+    testWidgets('the first attempt calls showSnackBar inside every build', (
+      tester,
+    ) async {
+      final connection = ConnectionController()..set(Connection.offline);
+      final controller = ProfileController(ProfileApi());
+      await tester.pumpWidget(_app(snackBarInBuild(connection, controller)));
+      final first = tester.takeException();
+      expect(first, isFlutterError);
+      expect(
+        (first as FlutterError).diagnostics.first.toString(),
+        'The showSnackBar() method cannot be called during build.',
+      );
+
+      // Nothing changed but the parent, which built the widget again.
+      await tester.pumpWidget(_app(snackBarInBuild(connection, controller)));
+      expect(tester.takeException(), isFlutterError);
+
+      await connection.close();
+      await controller.close();
+      _says(
+        'a debug build stops there with "The showSnackBar() method cannot be '
+        'called during build."',
+      );
+      _says(
+        'It runs whenever the framework builds the widget again, and every '
+        'such build while the connection is offline makes the call again.',
+      );
+    });
+
+    testWidgets('a reaction shows one snack bar for every loss', (
+      tester,
+    ) async {
+      final connection = ConnectionController();
+      final controller = ProfileController(ProfileApi());
+      Future<int> shown() async {
+        var count = 0;
+        await tester.pumpAndSettle();
+        while (find.text('No connection').evaluate().isNotEmpty) {
+          count++;
+          tester
+              .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+              .hideCurrentSnackBar();
+          await tester.pumpAndSettle();
+        }
+        return count;
+      }
+
+      await tester.pumpWidget(_app(snackBarInReaction(connection, controller)));
+      expect(await shown(), 0, reason: 'the state at the start reacts not');
+
+      connection.set(Connection.offline);
+      expect(await shown(), 1);
+
+      // A build of the parent and the same state written again.
+      await tester.pumpWidget(_app(snackBarInReaction(connection, controller)));
+      connection.set(Connection.offline);
+      expect(await shown(), 0);
+
+      connection
+        ..set(Connection.online)
+        ..set(Connection.offline)
+        ..set(Connection.online)
+        ..set(Connection.offline);
+      expect(await shown(), 2);
+      expect(tester.takeException(), isNull);
+
+      await connection.close();
+      await controller.close();
+      _says(
+        '`SoloListener` runs `listener` for every change that `listenWhen` '
+        'lets through, handed the state of that change, and builds `child` '
+        'as it is.',
+      );
+      _says('The state the widget subscribes at starts no reaction.');
+      _says('this one says what a loss is, a step from online to offline.');
+    });
+
+    testWidgets('a write from the build of another widget shows it too', (
+      tester,
+    ) async {
+      final connection = ConnectionController();
+      final controller = ProfileController(ProfileApi());
+      await tester.pumpWidget(
+        _app(
+          Column(
+            children: [
+              Expanded(child: snackBarInReaction(connection, controller)),
+              Builder(
+                builder: (context) {
+                  connection.set(Connection.offline);
+                  return const SizedBox();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('No connection'), findsOneWidget);
+
+      await connection.close();
+      await controller.close();
+      _says(
+        'The reaction starts on a microtask after the change, outside any '
+        'build, so it may show a snack bar or push a route whoever wrote the '
+        'state, the build of another widget included.',
+      );
+    });
+
+    test('the boundary of the widget is said where the page points', () {
+      _says('The widget is for changes this screen did not make.');
+      _says(
+        'The outcome of a job the screen started is waited for on its '
+        '`done`, as [Outcomes](#outcomes) shows',
+      );
+      expect(
+        File('../solo/doc/state.md').readAsStringSync(),
+        contains('\n## A notice the screen accepts\n'),
+      );
+    });
+  });
+
+  group('A reaction the next change replaces', () {
+    /// Types [typed] into a [Search] that suggests the way [how] says, each
+    /// text at its millisecond, and returns what the API and the screen did
+    /// until [until], each line with the millisecond it came at. [leave] is
+    /// the millisecond the screen leaves the tree at.
+    Future<List<String>> typing(
+      WidgetTester tester,
+      Suggesting how,
+      Map<int, String> typed, {
+      required int until,
+      int? leave,
+    }) async {
+      final query = QueryController();
+      final log = <String>[];
+      await tester.pumpWidget(
+        _app(Search(query: query, api: SearchApi(log), how: how)),
+      );
+      final timed = <String>[];
+      var seen = 0;
+      String? shown;
+      for (var at = 0; at <= until; at++) {
+        if (typed[at] case final text?) {
+          query.type(text);
+        }
+        if (at == leave) {
+          await tester.pumpWidget(const SizedBox());
+        }
+        await tester.pump();
+        for (; seen < log.length; seen++) {
+          timed.add('$at ${log[seen]}');
+        }
+        final list = find.byType(SuggestionList);
+        final now = list.evaluate().isEmpty
+            ? null
+            : tester.widget<SuggestionList>(list).suggestions.join(' ');
+        if (now != shown && now != null && now.isNotEmpty) {
+          timed.add('$at shows $now');
+        }
+        shown = now;
+        await tester.pump(const Duration(milliseconds: 1));
+      }
+      await tester.pumpWidget(const SizedBox());
+      await query.close();
+      return timed;
+    }
+
+    testWidgets('the first attempt shows the old suggestions and waits', (
+      tester,
+    ) async {
+      expect(
+        await typing(tester, Suggesting.firstAttempt, {
+          0: 'a',
+          10: 'ab',
+        }, until: 250),
+        [
+          '0 load a',
+          '100 loaded a',
+          '100 load ab',
+          '100 shows a.',
+          '200 loaded ab',
+          '200 shows ab.',
+        ],
+      );
+      _says(
+        'The load for the old text runs to its end and its `setState` puts '
+        'the old suggestions up; only then does the reaction to the new text '
+        'start.',
+      );
+    });
+
+    testWidgets('the first attempt fails on a screen that left', (
+      tester,
+    ) async {
+      expect(
+        await typing(
+          tester,
+          Suggesting.firstAttempt,
+          {0: 'a'},
+          until: 150,
+          leave: 10,
+        ),
+        ['0 load a', '100 loaded a'],
+      );
+      final error = tester.takeException();
+      expect(error, isFlutterError);
+      expect('$error', contains('setState() called after dispose()'));
+      _says(
+        'the `setState` after the `await` then comes to a `State` that is '
+        'gone: the reaction fails, and the failure goes to `FlutterError`.',
+      );
+    });
+
+    testWidgets('ctx.join drops the old suggestions and still waits', (
+      tester,
+    ) async {
+      expect(
+        await typing(tester, Suggesting.join, {0: 'a', 10: 'ab'}, until: 250),
+        [
+          '0 load a',
+          '100 loaded a',
+          '100 load ab',
+          '200 loaded ab',
+          '200 shows ab.',
+        ],
+      );
+      expect(
+        await typing(tester, Suggesting.join, {0: 'a'}, until: 150, leave: 10),
+        ['0 load a', '100 loaded a'],
+      );
+      expect(tester.takeException(), isNull);
+      _says(
+        'once the reaction is cancelled it throws `Cancelled`: the old '
+        'suggestions no longer come up, and a screen that has left meets no '
+        '`setState`.',
+      );
+      _says(
+        'But it waits its call out first, which is what keeps a save whole, '
+        'so the next reaction starts as late as before.',
+      );
+    });
+
+    testWidgets('ctx.abandonable lets the next reaction start at once', (
+      tester,
+    ) async {
+      // The load for `a` starts after the pause, at 300; `ab` comes during
+      // it. Under `ctx.join` the load for `ab` would start at 400 + 300.
+      expect(
+        await typing(tester, Suggesting.abandonable, {
+          0: 'a',
+          350: 'ab',
+        }, until: 800),
+        [
+          '300 load a',
+          '400 loaded a',
+          '650 load ab',
+          '750 loaded ab',
+          '750 shows ab.',
+        ],
+      );
+      _says(
+        '`ctx.abandonable` stops waiting the moment the reaction is '
+        'cancelled. The next reaction starts at once, and the load for the '
+        'old text ends with nobody waiting for it.',
+      );
+    });
+
+    testWidgets('ctx.pause lets a quick letter through without a load', (
+      tester,
+    ) async {
+      expect(
+        await typing(tester, Suggesting.abandonable, {
+          0: 'a',
+          100: 'ab',
+        }, until: 600),
+        ['400 load ab', '500 loaded ab', '500 shows ab.'],
+      );
+      expect(
+        await typing(
+          tester,
+          Suggesting.abandonable,
+          {0: 'a'},
+          until: 400,
+          leave: 100,
+        ),
+        isEmpty,
+      );
+      _says(
+        '`ctx.pause` ends at once as well, so a letter typed within 300 '
+        'milliseconds of the one before cancels the reaction before it loads '
+        'anything.',
+      );
+    });
+
+    for (final named in [true, false]) {
+      testWidgets('a token stops the request, and an unnamed stop is a failure'
+          '${named ? ', named here' : ''}', (tester) async {
+        final query = QueryController();
+        final log = <String>[];
+        final client = _StoppingClient(log);
+        final previous = Job.isCancellationError;
+        if (named) {
+          Job.isCancellationError = (error) => error is _RequestStopped;
+        }
+        addTearDown(() => Job.isCancellationError = previous);
+        await tester.pumpWidget(
+          _app(
+            SoloListener<String>(
+              solo: query,
+              mode: SoloListenerMode.restart,
+              listener: (ctx, context, text) async {
+                final token = _StopToken();
+                ctx.onCancel(token.stop);
+                await ctx.join(() => client.suggest(text, token));
+              },
+              child: const SizedBox(),
+            ),
+          ),
+        );
+        query.type('a');
+        await tester.pump(const Duration(milliseconds: 10));
+        query.type('ab');
+        await tester.pump();
+        expect(log, ['load a', 'stopped a', 'load ab']);
+        if (named) {
+          expect(tester.takeException(), isNull);
+        } else {
+          expect(tester.takeException(), isA<_RequestStopped>());
+        }
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(log.last, 'loaded ab');
+        await query.close();
+        _says(
+          'A client that can stop its request takes a token instead: '
+          '`ctx.onCancel` cancels the token with the reaction, and '
+          '`ctx.join` waits only as long as the client takes to stop.',
+        );
+        _says(
+          'The error such a client throws when stopped is named once in '
+          '`Job.isCancellationError`, or every stop goes to `FlutterError` '
+          'as a failure.',
+        );
+      });
+    }
+  });
+
   group('Methods from a second import', () {
     test('select and listen arrive as methods', () async {
       final controller = listenable.ProfileController(ProfileApi());
@@ -2323,6 +2673,81 @@ void main() {
       );
     });
 
+    testWidgets('a reaction of SoloListener starts on a microtask', (
+      tester,
+    ) async {
+      final bench = Bench();
+      final log = <String>[];
+      await tester.pumpWidget(
+        SoloListener<Profile>(
+          solo: bench,
+          listenWhen: (previous, current) {
+            log.add('listenWhen ${show(current)}');
+            return true;
+          },
+          listener: (ctx, context, state) => log.add('reaction ${show(state)}'),
+          child: const SizedBox(),
+        ),
+      );
+      bench.addListener(() => log.add('listener ${show(bench.value)}'));
+
+      bench.set(Loading());
+      log.add('after the write');
+      await tester.pump();
+
+      expect(log, [
+        'listener Loading',
+        'listenWhen Loading',
+        'after the write',
+        'reaction Loading',
+      ]);
+      await bench.close();
+      _says(
+        'object. A reaction of `SoloListener` starts on a microtask after the '
+        'change; its `listenWhen` runs with the listeners.',
+      );
+    });
+
+    for (final mixin in [true, false]) {
+      testWidgets('listenWhen and a reaction of SoloListener report through '
+          'FlutterError${mixin ? '' : ', without the mixin'}', (tester) async {
+        final Solo<Profile> controller;
+        final void Function(Profile state) write;
+        if (mixin) {
+          final bench = Bench();
+          controller = bench;
+          write = bench.set;
+        } else {
+          final plain = Plain();
+          controller = plain;
+          write = plain.set;
+        }
+        await tester.pumpWidget(
+          SoloListener<Profile>(
+            solo: controller,
+            listenWhen: (previous, current) =>
+                current is Loading ? throw StateError('listenWhen') : true,
+            listener: (ctx, context, state) => throw StateError('reaction'),
+            child: const SizedBox(),
+          ),
+        );
+
+        write(Loading());
+        await tester.pump();
+        expect('${tester.takeException()}', 'Bad state: listenWhen');
+        write(Loaded('Ada'));
+        await tester.pump();
+        expect('${tester.takeException()}', 'Bad state: reaction');
+
+        await controller.close();
+        _says(
+          '| `listenWhen` or a reaction of `SoloListener` | Through '
+          '`FlutterError`, whether the controller has `SoloListenable` or '
+          'not: the widget reports them itself. |',
+        );
+      });
+    }
+
     test('a failure of a listener takes the route of the mixin', () async {
       /// Where the failures went, outside the zone the writes were made in:
       /// of a listener of [controller], of a selector over it, and of a
@@ -2581,3 +3006,39 @@ int _length(Profile state) => state is Loaded ? state.name.length : 0;
 /// A `changed` of the test's own: fewer than three letters apart is no
 /// change.
 bool _far(int previous, int current) => (current - previous).abs() >= 3;
+
+/// What the client of [_StoppingClient] throws when its token stops it.
+final class _RequestStopped implements Exception {}
+
+/// The token of a client that can stop its request.
+final class _StopToken {
+  void Function()? _onStop;
+
+  void stop() => _onStop?.call();
+}
+
+/// A client with a cancellation of its own: it answers 100 ms after the
+/// call, or throws [_RequestStopped] the moment its token is stopped.
+final class _StoppingClient {
+  final List<String> log;
+
+  _StoppingClient(this.log);
+
+  Future<List<String>> suggest(String text, _StopToken token) {
+    log.add('load $text');
+    final answer = Completer<List<String>>();
+    final timer = Timer(const Duration(milliseconds: 100), () {
+      log.add('loaded $text');
+      answer.complete(['$text.']);
+    });
+    token._onStop = () {
+      if (answer.isCompleted) {
+        return;
+      }
+      timer.cancel();
+      log.add('stopped $text');
+      answer.completeError(_RequestStopped());
+    };
+    return answer.future;
+  }
+}
