@@ -22,6 +22,8 @@ void main() {
       registry.warnings.map((rule) => rule.name),
       unorderedEquals([
         'ctx_in_cleanup',
+        'discarded_outcome',
+        'outcome_after_await',
         'release_on_the_call',
         'sync_fake_async',
       ]),
@@ -45,7 +47,7 @@ void main() {
     );
   }
 
-  test('the five rules of the core are registered, each with its kind', () {
+  test('the seven rules of the core are registered, each with its kind', () {
     expectTheCore(registered());
   });
 
@@ -62,7 +64,7 @@ void main() {
   test('two registrations share each diagnostic code', () {
     final first = registered();
     final second = registered();
-    expect([...first.warnings, ...first.lints], hasLength(5));
+    expect([...first.warnings, ...first.lints], hasLength(7));
     for (final rule in [...first.warnings, ...first.lints]) {
       final codes = second.rule(rule.name).diagnosticCodes;
       expect(codes, hasLength(rule.diagnosticCodes.length));

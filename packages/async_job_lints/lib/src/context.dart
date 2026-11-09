@@ -66,6 +66,14 @@ bool isSolo(DartType? type) => _isA(type, 'Solo', _solo);
 /// Whether [type] is `SoloJob` of solo or one of its subtypes.
 bool isSoloJob(DartType? type) => _isA(type, 'SoloJob', _solo);
 
+/// Whether [type] is `Job` of async_job or one of its subtypes.
+bool isJob(DartType? type) => _isA(type, 'Job', _asyncJob);
+
+/// Whether [type] is a job that does not run until it is started: `ChildJob`
+/// of async_job or a subtype, other than a `SoloJob`, which the queue starts.
+bool isDeferredJob(DartType? type) =>
+    _isA(type, 'ChildJob', _asyncJob) && !isSoloJob(type);
+
 /// Whether [element] is the member [name] of the class or enum [type]
 /// declared in solo.
 bool isSoloMember(Element? element, String type, String name) {

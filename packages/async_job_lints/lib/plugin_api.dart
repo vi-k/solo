@@ -13,6 +13,8 @@ import 'src/fixes/release_on_the_call.dart';
 import 'src/rules/bare_await.dart';
 import 'src/rules/catch_without_check.dart';
 import 'src/rules/ctx_in_cleanup.dart';
+import 'src/rules/discarded_outcome.dart';
+import 'src/rules/outcome_after_await.dart';
 import 'src/rules/release_on_the_call.dart';
 import 'src/rules/sync_fake_async.dart';
 
@@ -45,6 +47,8 @@ void registerAsyncJobLints(
 }) {
   registry
     ..registerWarningRule(CtxInCleanup())
+    ..registerWarningRule(DiscardedOutcome())
+    ..registerWarningRule(OutcomeAfterAwait())
     ..registerWarningRule(ReleaseOnTheCall())
     ..registerFixForRule(ReleaseOnTheCall.code, PassReleaseToCall.new)
     ..registerWarningRule(SyncFakeAsync())

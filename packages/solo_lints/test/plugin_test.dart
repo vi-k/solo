@@ -22,13 +22,15 @@ void main() {
   // A user of solo_lints keeps every rule after the rules of the core moved
   // to async_job_lints: a forgotten call, a rule of the wrong kind or a lost
   // fix shows here, while the tests of the rules make the classes directly.
-  test('the plugin registers the eight rules, each with its kind', () {
+  test('the plugin registers the ten rules, each with its kind', () {
     final registry = _registered();
     expect(SoloLintsPlugin().name, 'solo_lints');
     expect(
       registry.warnings.map((rule) => rule.name),
       unorderedEquals([
         'ctx_in_cleanup',
+        'discarded_outcome',
+        'outcome_after_await',
         'release_on_the_call',
         'sync_fake_async',
         'await_own_queue',
