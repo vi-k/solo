@@ -1366,58 +1366,59 @@ void main() {
   });
 
   group('Observing state', () {
-    test(
-      'the block prints the read, each change at once, each event later',
-      () {
-        final lines = <String>[];
-        runZoned(
-          () => fakeAsync((async) {
-            final device = camera.Device();
-            final cam = page.Camera(device)
-              ..reflect(const camera.Ready(zoom: 2));
-            async.flushMicrotasks();
+    test('the block prints the read, each change and its pair at once, '
+        'each event later', () {
+      final lines = <String>[];
+      runZoned(
+        () => fakeAsync((async) {
+          final device = camera.Device();
+          final cam = page.Camera(device)..reflect(const camera.Ready(zoom: 2));
+          async.flushMicrotasks();
 
-            final subscription = page.observing(cam);
-            async.flushMicrotasks();
-            lines.add('subscribed, nothing replayed');
+          final subscription = page.observing(cam);
+          async.flushMicrotasks();
+          lines.add('subscribed, nothing replayed');
 
-            cam.reflect(const camera.Ready(zoom: 3));
-            lines.add('the next line of the writer');
-            async.flushMicrotasks();
+          cam.reflect(const camera.Ready(zoom: 3));
+          lines.add('the next line of the writer');
+          async.flushMicrotasks();
 
-            cam.reflect(const camera.Ready(zoom: 3));
-            lines.add('the next line of the writer');
-            cam.reflect(const camera.Ready(zoom: 4));
-            lines.add('the next line of the writer');
-            async.flushMicrotasks();
+          cam.reflect(const camera.Ready(zoom: 3));
+          lines.add('the next line of the writer');
+          cam.reflect(const camera.Ready(zoom: 4));
+          lines.add('the next line of the writer');
+          async.flushMicrotasks();
 
-            subscription.cancel().ignore();
-            cam.close().ignore();
-            device.dispose();
-            async.flushTimers();
-          }),
-          zoneSpecification: ZoneSpecification(
-            print: (self, parent, zone, line) => lines.add(line),
-          ),
-        );
+          subscription.cancel().ignore();
+          cam.close().ignore();
+          device.dispose();
+          async.flushTimers();
+        }),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => lines.add(line),
+        ),
+      );
 
-        expect(lines, [
-          'Ready(free: 8, paused: false, zoom: 2)',
-          'subscribed, nothing replayed',
-          'Ready(free: 8, paused: false, zoom: 3)',
-          'the next line of the writer',
-          'Ready(free: 8, paused: false, zoom: 3)',
-          // An equal state is a change and an event all the same, and both
-          // events come on a microtask, in order.
-          'Ready(free: 8, paused: false, zoom: 3)',
-          'the next line of the writer',
-          'Ready(free: 8, paused: false, zoom: 4)',
-          'the next line of the writer',
-          'Ready(free: 8, paused: false, zoom: 3)',
-          'Ready(free: 8, paused: false, zoom: 4)',
-        ]);
-      },
-    );
+      String ready(int zoom) => 'Ready(free: 8, paused: false, zoom: $zoom)';
+      expect(lines, [
+        ready(2),
+        'subscribed, nothing replayed',
+        ready(3),
+        '${ready(2)} -> ${ready(3)}',
+        'the next line of the writer',
+        ready(3),
+        // An equal state is a change, a pair and an event all the same,
+        // and both events come on a microtask, in order.
+        ready(3),
+        '${ready(3)} -> ${ready(3)}',
+        'the next line of the writer',
+        ready(4),
+        '${ready(3)} -> ${ready(4)}',
+        'the next line of the writer',
+        ready(3),
+        ready(4),
+      ]);
+    });
 
     test('a stream event may be older than currentState when it arrives', () {
       fakeAsync((async) {

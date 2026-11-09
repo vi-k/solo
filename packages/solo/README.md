@@ -353,6 +353,7 @@ section linked beside it.
 | A tap must not wait for a long reload of the same screen | a controller of its own for the taps, and marks the reload settles | [A tap that does not wait for a reload](doc/jobs.md#a-tap-that-does-not-wait-for-a-reload) |
 | The screen has to show news until the user closes it, and the camera must go on working | a controller of its own for the notices, and an acceptance that names the notice | [A notice the screen accepts](doc/state.md#a-notice-the-screen-accepts) |
 | A stream event arrives a microtask late, and that is too late | `addListener`, which calls back inside the change | [Observing state](doc/state.md#observing-state) |
+| Every change with what it replaced, and a listener that reads the state misses one | `addChangeListener`, which calls back with the previous and the current state | [Observing state](doc/state.md#observing-state) |
 
 ## Versions
 

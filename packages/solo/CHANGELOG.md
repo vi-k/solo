@@ -1,5 +1,17 @@
 ## Unreleased
 
+### Added
+
+- `Solo.addChangeListener` and `removeChangeListener`: a listener that gets
+  every change as a pair, the previous state and the current one,
+  synchronously, after the `addListener` listeners of the same change. A change
+  written during the pass comes as the next pair.
+
+### Documentation
+
+- `doc/state.md` shows `addChangeListener` under "Observing state", next to
+  `addListener`, and the README table sends a reader who needs every change
+  with what it replaced there.
 - The README asks for `solo_lints: ^0.2.0`, which brings the warnings
   `discarded_outcome` and `outcome_after_await` on the outcome of a job.
 - The example program awaits `value` of `init()` and `dispose()` instead of

@@ -71,7 +71,7 @@
 | `emit(next)` | `ctx.emit(next)` |
 | `if (emit.isDone) return;` | Контрольные точки отмены, например `ctx.abandonable` и `ctx.check` |
 | `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
-| `state`, `stream` | `currentState`, `addListener`; `stream` с подмешанным `SoloStream` |
+| `state`, `stream` | `currentState`, `addListener`, `addChangeListener`; `stream` с подмешанным `SoloStream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` или `SoloBuilder` и `SoloSelector`; два последних лежат в `flutter_solo` |
 | `BlocListener` для результата операции | Ожидание `job.done` этой операции; для новости, которая переживает экран, — [уведомление, которое принимает экран](state.md#уведомление-которое-принимает-экран) |

@@ -278,13 +278,16 @@ void main() {
       _says('| `close()` | `close()` |');
       final controller = notes.NotesController(notes.Api());
       var heard = 0;
-      // `currentState` and `addListener` are members of every controller.
-      controller.addListener(() => heard++);
+      // `currentState`, `addListener` and `addChangeListener` are members of
+      // every controller.
+      controller
+        ..addListener(() => heard++)
+        ..addChangeListener((previous, current) => heard++);
       expect(controller.currentState.notes, isEmpty);
       expect(heard, 0);
       _says(
-        '| `state`, `stream` | `currentState`, `addListener`; `stream` '
-        'with `SoloStream` mixed in |',
+        '| `state`, `stream` | `currentState`, `addListener`, '
+        '`addChangeListener`; `stream` with `SoloStream` mixed in |',
       );
     });
 

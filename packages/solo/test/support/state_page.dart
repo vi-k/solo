@@ -94,8 +94,8 @@ final class Camera extends Solo<CameraState> with SoloStream {
   void onClose() => unawaited(_link.cancel());
 }
 
-/// The block under "Observing state": a read, a listener and a subscription
-/// to the stream.
+/// The block under "Observing state": a read, a listener, a listener of the
+/// pair and a subscription to the stream.
 StreamSubscription<CameraState> observing(Camera camera) {
   // A read at any moment.
   print(camera.currentState);
@@ -103,6 +103,13 @@ StreamSubscription<CameraState> observing(Camera camera) {
   // Every change, synchronously, inside the change itself. The listener
   // reads the new state itself, so nothing it reads can be stale.
   camera.addListener(() => print(camera.currentState));
+
+  // Every change with the state it replaced, synchronously, after the
+  // listeners above. A change written meanwhile comes as the next pair,
+  // so `current` may be older than `currentState`.
+  camera.addChangeListener(
+    (previous, current) => print('$previous -> $current'),
+  );
 
   // Every update, in order, on a microtask. The initial state is not
   // replayed, and an equal state still produces an event. Needs

@@ -214,6 +214,13 @@ print(camera.currentState);
 // reads the new state itself, so nothing it reads can be stale.
 camera.addListener(() => print(camera.currentState));
 
+// Every change with the state it replaced, synchronously, after the
+// listeners above. A change written meanwhile comes as the next pair,
+// so `current` may be older than `currentState`.
+camera.addChangeListener(
+  (previous, current) => print('$previous -> $current'),
+);
+
 // Every update, in order, on a microtask. The initial state is not
 // replayed, and an equal state still produces an event. Needs
 // `with SoloStream` on the controller — see the table below.
@@ -232,9 +239,10 @@ checked `ctx.state`.
 | `Solo<S> with SoloStream` | All of `Solo` plus a broadcast `stream`. |
 | `Solo<S> with SoloListenable` | All of `Solo` plus Flutter's `ValueListenable<S>`. The mixin comes from [`flutter_solo`](https://pub.dev/packages/flutter_solo). |
 
-`addListener` is the engine's own member, on `Solo` itself. So what follows
-holds for every controller, with a delivery of its own or without any. The
-listeners run synchronously, in registration order, inside the change itself:
+`addListener` and `addChangeListener` are the engine's own members, on `Solo`
+itself. So what follows holds for every controller, with a delivery of its own
+or without any. The listeners of both run synchronously, in registration order,
+inside the change itself, the `addListener` ones first:
 
 - after the state is written;
 - before the rules of the running jobs are re-evaluated;
@@ -248,19 +256,29 @@ the listeners after it nor the re-evaluation that follows them. Its error goes
 to `onListenerError`, which hands it to the zone unless a subclass says
 otherwise.
 
+`addChangeListener` hands its listener each change as a pair: the state before
+it and the state after. It is for code that compares the two, a reaction to a
+change rather than to a value. A change written during the pass, by a listener
+of either kind, comes as the next pair, so `current` may be older than
+`currentState` by the time the listener runs: the pair is the change being
+told, `currentState` is where the controller stands now. The same state written
+twice is two changes, and so is a return to the old one. `removeChangeListener`
+matches with `==`, the way `removeListener` does.
+
 The engine drops the listeners for good when closing finishes, the moment
 `isFinished` turns true, and not when `close()` is called. From then on
-`addListener` does nothing: the listener is neither registered nor kept, and
-nothing is thrown. The state stops at the same moment, and from then on
-`externalSetState` throws a `StateError`.
+`addListener` and `addChangeListener` do nothing: the listener is neither
+registered nor kept, and nothing is thrown. The state stops at the same moment,
+and from then on `externalSetState` throws a `StateError`.
 
 `SoloListenable` adds Flutter's `ValueListenable` on top of `addListener`, and
 reports a listener's error to `FlutterError` instead of the zone. It is a mixin
 on `Solo`, the way `SoloStream` is: a widget rebuilds from `value`, and a
 controller that needs both deliveries mixes in both.
 
-A change made from inside a listener does not get the order of the list above.
-It goes to the end of the publication queue rather than ahead of it:
+A change made from inside a listener of either kind does not get the order of
+the list above. It goes to the end of the publication queue rather than ahead
+of it:
 
 ```text
 externalSetState(B)
