@@ -176,6 +176,98 @@ void run() {
     ['reload = () => load().[[done]];'],
   );
 
+  Future<void> test_returned_into_a_named_super_argument() => assertAt(
+    '''
+$_api
+class Pull extends Indicator {
+  Pull() : super(onRefresh: () => load().done);
+}
+''',
+    ['() => load().[[done]])'],
+  );
+
+  Future<void> test_returned_into_a_named_redirecting_argument() => assertAt(
+    '''
+$_api
+class Pull {
+  Pull({required Future<void> Function() onRefresh});
+
+  Pull.quick() : this(onRefresh: () => load().done);
+}
+''',
+    ['() => load().[[done]])'],
+  );
+
+  Future<void> test_returned_into_a_named_dot_shorthand_argument() => assertAt(
+    '''
+$_api
+void run() {
+  final Indicator indicator = .new(onRefresh: () => load().done);
+  print(indicator);
+}
+''',
+    ['() => load().[[done]])'],
+  );
+
+  Future<void> test_returned_from_a_branch_of_a_conditional() => assertAt(
+    '''
+$_api
+void refreshIf({Future<void> Function()? onRefresh}) {}
+
+void run(bool on) {
+  refreshIf(onRefresh: on ? () => load().done : null);
+  refresh(on ? () => load().done : () async {});
+}
+''',
+    [
+      'on ? () => load().[[done]] : null',
+      'refresh(on ? () => load().[[done]] :',
+    ],
+  );
+
+  Future<void> test_returned_from_an_if_null_operand() => assertAt(
+    '''
+$_api
+void run(Future<void> Function()? given) {
+  refresh(given ?? () => load().done);
+}
+''',
+    ['given ?? () => load().[[done]])'],
+  );
+
+  Future<void> test_returned_from_parentheses() => assertAt(
+    '''
+$_api
+void run() {
+  refreshNamed(onRefresh: (() => load().done));
+  refresh((() => load().done));
+}
+''',
+    ['onRefresh: (() => load().[[done]]))', 'refresh((() => load().[[done]]))'],
+  );
+
+  Future<void> test_returned_into_an_assigned_variable() => assertAt(
+    '''
+$_api
+void run() {
+  Future<void> Function() reload;
+  reload = () => load().done;
+  refresh(reload);
+}
+''',
+    ['reload = () => load().[[done]];'],
+  );
+
+  Future<void> test_returned_from_a_conditional_into_an_outcome() =>
+      assertAt('''
+$_api
+void keep({Future<Outcome<int>> Function()? action}) {}
+
+void run(bool on) {
+  keep(action: on ? () => load().done : null);
+}
+''', []);
+
   Future<void> test_awaited_and_returned_into_future_void() => assertAt(
     '''
 $_api

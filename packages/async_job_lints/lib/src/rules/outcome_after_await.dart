@@ -107,7 +107,6 @@ const _bystanders = {
   'isChild',
   'whenCancelled',
   'whenFinished',
-  'start',
 };
 
 class _Visitor extends SimpleAstVisitor<void> {
@@ -118,13 +117,13 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitVariableDeclarationStatement(VariableDeclarationStatement node) {
     final scope = node.thisOrAncestorOfType<FunctionBody>();
-    // A late job is made at its first read, so no wait comes before it.
-    if (scope == null || node.variables.isLate) return;
+    if (scope == null) return;
+    final late = node.variables.isLate;
     for (final variable in node.variables.variables) {
       final value = variable.initializer?.unParenthesized;
       final job = variable.declaredFragment?.element;
       if (value == null || job == null || !_isMade(value)) continue;
-      _check(job, variable.name.lexeme, node, scope, _isDeferred(value));
+      _check(job, variable.name.lexeme, node, scope, _isDeferred(value), late);
     }
   }
 
@@ -134,15 +133,22 @@ class _Visitor extends SimpleAstVisitor<void> {
     Statement declaration,
     FunctionBody scope,
     bool deferred,
+    bool late,
   ) {
     final events = _Events(job, scope.isAsynchronous && scope.isGenerator);
     scope.accept(events);
     // The window opens where the job can start to fail: at its declaration,
-    // or at `start()` for a job that does not run until it is started.
-    var opened = deferred ? null : declaration.end;
+    // at the first read of a late variable, which makes the job, or at
+    // `start()` for a job that does not run until it is started.
+    var opened = deferred || late ? null : declaration.end;
+    var made = !late;
     for (final use in events.uses) {
       if (use.offset < declaration.end) continue;
       if (use.escapes) return;
+      if (!made) {
+        made = true;
+        if (!deferred) opened = use.offset;
+      }
       final member = use.member;
       if (member == 'start') {
         opened = use.end;

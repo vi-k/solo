@@ -2,6 +2,7 @@ import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
@@ -174,16 +175,19 @@ class _Visitor extends SimpleAstVisitor<void> {
   };
 
   /// The return types the function of [body] has: its own, and the one the
-  /// parameter it is passed to, or the variable it initializes, expects.
+  /// parameter it is passed to, or the variable it initializes or is
+  /// assigned to, expects.
   static Iterable<DartType> _returnTypesOf(FunctionBody body) sync* {
     final function = body.parent;
     if (function is FunctionExpression) {
       final type = function.staticType;
       if (type is FunctionType) yield type.returnType;
+      final slot = _slotOf(function);
       for (final expected in [
-        function.correspondingParameter?.type,
-        _namedParameterType(function),
-        _variableType(function),
+        slot.correspondingParameter?.type,
+        _namedParameterType(slot),
+        _variableType(slot),
+        _assignedType(slot),
       ]) {
         if (expected is FunctionType) yield expected.returnType;
       }
@@ -193,18 +197,41 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
   }
 
-  /// The type of the named parameter [function] is passed to.
+  /// The expression whose place decides the type [function] is expected to
+  /// have: [function] itself, or the parentheses, the branch of `?:` or the
+  /// operand of `??` around it.
+  static Expression _slotOf(FunctionExpression function) {
+    Expression slot = function;
+    while (true) {
+      final parent = slot.parent;
+      if (parent is! Expression) return slot;
+      final passes = switch (parent) {
+        ParenthesizedExpression() => true,
+        ConditionalExpression(:final condition) => condition != slot,
+        BinaryExpression(:final operator) =>
+          operator.type == TokenType.QUESTION_QUESTION,
+        _ => false,
+      };
+      if (!passes) return slot;
+      slot = parent;
+    }
+  }
+
+  /// The type of the named parameter [slot] is passed to.
   ///
   /// A named argument has no `correspondingParameter` on its value, and its
   /// own node is `NamedExpression` in analyzer 12 and `NamedArgument` later,
-  /// so the parameter is found by name in the type of the invocation.
-  static DartType? _namedParameterType(FunctionExpression function) {
-    final argument = function.parent;
+  /// so the parameter is found by name in the type of the invocation: of the
+  /// constructor for `super(...)`, `this(...)` and `.new(...)`, whose
+  /// invocation has no type of its own.
+  static DartType? _namedParameterType(Expression slot) {
+    final argument = slot.parent;
     if (argument == null) return null;
     final name = argumentName(argument);
     final list = argument.parent;
     if (name == null || list is! ArgumentList) return null;
     final invoked = switch (list.parent) {
+      ConstructorReferenceNode(:final element) => element?.type,
       InvocationExpression(:final staticInvokeType) => staticInvokeType,
       InstanceCreationExpression(:final constructorName) =>
         constructorName.element?.type,
@@ -217,11 +244,21 @@ class _Visitor extends SimpleAstVisitor<void> {
     return null;
   }
 
-  /// The declared type of the variable [function] initializes.
-  static DartType? _variableType(FunctionExpression function) {
-    final variable = function.parent;
+  /// The declared type of the variable [slot] initializes.
+  static DartType? _variableType(Expression slot) {
+    final variable = slot.parent;
     return variable is VariableDeclaration
         ? variable.declaredFragment?.element.type
+        : null;
+  }
+
+  /// The type of what [slot] is assigned to with `=`.
+  static DartType? _assignedType(Expression slot) {
+    final assignment = slot.parent;
+    return assignment is AssignmentExpression &&
+            assignment.rightHandSide == slot &&
+            assignment.operator.type == TokenType.EQ
+        ? assignment.writeType
         : null;
   }
 

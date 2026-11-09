@@ -307,6 +307,42 @@ Future<void> run() async {
 }
 ''', []);
 
+  Future<void> test_late_read_before_the_wait() => assertAt(
+    '''
+$_api
+Future<void> run() async {
+  late final job = load();
+  print(job.isRunning);
+  await commit();
+  print(await job.done);
+}
+''',
+    ['job.[[done]])'],
+  );
+
+  Future<void> test_late_made_after_the_wait() => assertAt('''
+$_api
+Future<void> run() async {
+  late final job = load();
+  await commit();
+  print(job.isRunning);
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_cancel_does_not_observe() => assertAt(
+    '''
+$_api
+Future<void> run() async {
+  final job = load();
+  await job.cancel();
+  await commit();
+  print(await job.done);
+}
+''',
+    ['job.[[done]])'],
+  );
+
   Future<void> test_returned() => assertAt('''
 $_api
 Future<Job<int>> run() async {
