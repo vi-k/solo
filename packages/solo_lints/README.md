@@ -27,7 +27,7 @@ workspace:
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.5
+  solo_lints: ^0.2.0
 ```
 
 The analysis server fetches the plugin itself, so it is not a dependency in
@@ -46,7 +46,7 @@ The warnings are on as soon as the plugin is named. The four lints,
 ```yaml
 plugins:
   solo_lints:
-    version: ^0.1.5
+    version: ^0.2.0
     diagnostics:
       catch_without_check: true
       key_per_request: true

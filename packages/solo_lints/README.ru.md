@@ -28,7 +28,7 @@
 
 ```yaml
 plugins:
-  solo_lints: ^0.1.5
+  solo_lints: ^0.2.0
 ```
 
 Плагин сервер анализа скачивает сам, поэтому в `pubspec.yaml` он
@@ -47,7 +47,7 @@ plugins:
 ```yaml
 plugins:
   solo_lints:
-    version: ^0.1.5
+    version: ^0.2.0
     diagnostics:
       catch_without_check: true
       key_per_request: true

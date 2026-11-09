@@ -1,11 +1,11 @@
-## Unreleased
+## 0.2.0
 
 - The two new warnings of `async_job_lints`, `discarded_outcome` and
   `outcome_after_await`, come with it: an outcome of `done` that is awaited and
   dropped, and the first read of a job's result that comes after a wait. They
   are on as soon as the plugin is named, so `dart analyze` fails on code it
-  passed before, and the next release is a minor one. The README lists them
-  among the seven rules of the core.
+  passed before, and the release is a minor one. The README lists them among
+  the seven rules of the core.
 
 ## 0.1.5
 

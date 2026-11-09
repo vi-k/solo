@@ -3,7 +3,7 @@ description: >-
   Analyzer plugin for solo and flutter_solo: a job in its own queue, a shared
   key, a needless ignoreFailure(), and the rules of async_job_lints for the
   core.
-version: 0.1.5
+version: 0.2.0
 repository: https://github.com/vi-k/solo/tree/main/packages/solo_lints
 documentation: https://docs.yet-another.dev/solo_lints/
 issue_tracker: https://github.com/vi-k/solo/issues
@@ -20,7 +20,7 @@ dependencies:
   analysis_server_plugin: ^0.3.14
   analyzer: '>=12.1.0 <15.0.0'
   analyzer_plugin: '>=0.14.8 <0.15.0'
-  async_job_lints: ^0.1.0
+  async_job_lints: ^0.2.0
 
 dev_dependencies:
   analyzer_testing: '>=0.2.5 <0.5.0'
