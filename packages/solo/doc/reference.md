@@ -30,6 +30,8 @@ the subclass.
 | `currentState` | The state for a reader outside a job, read without a checkpoint | [Observing state](state.md#observing-state) |
 | `addListener(listener)` | Calls back synchronously inside every change of the state | [Observing state](state.md#observing-state) |
 | `removeListener(listener)` | Removes the earliest registration equal to the listener | [Observing state](state.md#observing-state) |
+| `addChangeListener(listener)` | Calls back synchronously with the previous and the current state on every change, after the `addListener` listeners | [Observing state](state.md#observing-state) |
+| `removeChangeListener(listener)` | Removes the earliest pair registration equal to the listener | [Observing state](state.md#observing-state) |
 | `isClosed` | Whether `close()` was called | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isDraining` | Whether a `close()` that drains is still running the queue | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isFinished` | Whether closing has finished and the state can no longer change | [externalSetState](state.md#externalsetstate) |

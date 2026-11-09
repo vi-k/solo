@@ -5,6 +5,7 @@ import 'package:async_job/engine.dart';
 import 'package:meta/meta.dart';
 
 import 'call_hook.dart';
+import 'change_listeners.dart';
 import 'close_mode.dart';
 import 'listeners.dart';
 import 'observer.dart';
@@ -26,7 +27,9 @@ const _notCreatedHere =
     'was not created by this Solo (make it with job(...) or ctx.child of this '
     'controller)';
 
-/// The engine: state, queue, hooks and its own listeners ([addListener]).
+/// The engine: state, queue, hooks and its own listeners: [addListener],
+/// and [addChangeListener] for a listener that takes the two states of a
+/// change.
 ///
 /// [publish] is the seam for a delivery of another kind; `SoloStream` adds a
 /// broadcast stream through it.
@@ -159,6 +162,7 @@ abstract class Solo<S extends Object> {
 
   static const Object _closedListeners = Object();
   Object? _listeners;
+  ChangeListeners<S>? _changeListeners;
 
   bool get _finished => identical(_listeners, _closedListeners);
 
@@ -206,13 +210,21 @@ abstract class Solo<S extends Object> {
   @protected
   bool get hasListeners {
     final listeners = _listeners;
-    return listeners is Listeners && !listeners.isEmpty;
+    final changeListeners = _changeListeners;
+    return (listeners is Listeners && !listeners.isEmpty) ||
+        (changeListeners != null && !changeListeners.isEmpty);
   }
 
   /// Registers [listener] to be called synchronously when the state changes.
   ///
   /// If the controller has finished closing, this is a no-op: the listener
   /// is neither registered nor retained, and no error is thrown.
+  ///
+  /// The listener is told that the state changed, not to what: reading
+  /// [currentState] in it gives the latest state, and a change written by
+  /// another listener of the same pass is already there. A listener that
+  /// needs every change with the state before it subscribes with
+  /// [addChangeListener].
   void addListener(void Function() listener) {
     if (_finished) {
       return;
@@ -246,6 +258,43 @@ abstract class Solo<S extends Object> {
     }
   }
 
+  /// Registers [listener] to be called with the previous and the current
+  /// state on every change.
+  ///
+  /// Every change arrives as its own pair, synchronously, in subscription
+  /// order, after the [addListener] listeners of the same change. A write
+  /// made by a listener during the pass arrives as the next pair, so
+  /// `current` can be older than [currentState] by the time a listener reads
+  /// it: the pair is the change being told, [currentState] is where the
+  /// controller stands now. The same state written twice is two changes, and
+  /// so is a return to the old one.
+  ///
+  /// [onChange] is the subclass's own hook and says which job made the
+  /// change; this is for anyone who holds the controller and compares the two
+  /// states, such as a screen that reacts to a change rather than to a value.
+  ///
+  /// A listener that throws goes to [onListenerError], and the others are
+  /// still called. If the controller has finished closing, this is a no-op:
+  /// the listener is neither registered nor retained, and no error is thrown.
+  ///
+  /// See [Observing state](https://github.com/vi-k/solo/blob/main/packages/solo/doc/state.md#observing-state)
+  /// on the state page.
+  void addChangeListener(void Function(S previous, S current) listener) {
+    if (_finished) {
+      return;
+    }
+    (_changeListeners ??= ChangeListeners<S>()).add(listener);
+  }
+
+  /// Removes the earliest active registration equal to [listener].
+  ///
+  /// Registrations are matched with `==`, not identity, for the reason
+  /// [removeListener] gives. If the listener was not registered or was
+  /// already removed, this is a no-op.
+  void removeChangeListener(void Function(S previous, S current) listener) {
+    _changeListeners?.remove(listener);
+  }
+
   /// Called when a listener throws during notification.
   ///
   /// By default forwards the error to [Zone.handleUncaughtError].
@@ -259,8 +308,9 @@ abstract class Solo<S extends Object> {
     Zone.current.handleUncaughtError(error, stackTrace);
   }
 
-  /// Notifies the engine's own listeners, then stands as the seam a
-  /// subclass or mixin adds a delivery of its own through.
+  /// Notifies the engine's own listeners — the [addListener] ones, then the
+  /// [addChangeListener] ones with [previous] and [current] — then stands as
+  /// the seam a subclass or mixin adds a delivery of its own through.
   ///
   /// Called after `onChange` and before running jobs are re-evaluated.
   @protected
@@ -270,6 +320,7 @@ abstract class Solo<S extends Object> {
     if (listeners is Listeners) {
       listeners.notify(_reportListenerError);
     }
+    _changeListeners?.notify(previous, current, _reportListenerError);
   }
 
   /// Hands a listener's failure to [onListenerError], isolated.
@@ -947,6 +998,8 @@ abstract class Solo<S extends Object> {
     if (listeners is Listeners) {
       listeners.clear();
     }
+    _changeListeners?.clear();
+    _changeListeners = null;
     completer.complete();
   }
 
