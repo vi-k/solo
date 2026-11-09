@@ -120,7 +120,7 @@ riverpod 3.5.0 вышел 2026-11-06 и перестал сообщать `Provi
 запись `2026-11-04-async-job-lints-0-1-1-release-report.md`): подсказка
 `bare_await` больше не ставит `ctx.join` в один ряд с прерываемыми ожиданиями;
 `solo_lints` получает её сам, по `^0.1.0`. `async_job_lints` 0.2.0 (2026-11-09,
-по слову владельца, тег `async_job_lints-v0.2.0`, запись
+по слову владельца, тег `async_job_lints-v0.2.0` на `000ed9a7`, запись
 `2026-11-09-async-job-lints-0-2-0-release-report.md`) — правила
 `discarded_outcome` и `outcome_after_await`; до пользователей `solo_lints` они
 дойдут с его выпуском 0.2.0. `async_job` 1.0.1 (2026-11-06, по слову владельца,

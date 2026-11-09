@@ -1,6 +1,5 @@
-> **Состояние на 2026-11-09:** связка выпуска `async_job_lints` 0.2.0 идёт
-> по слову владельца «публикуй»: релизный коммит этой записи, тег, push
-> и `dart pub publish`. Итог связки дописан следующим коммитом.
+> **Состояние на 2026-11-09:** `async_job_lints` 0.2.0 опубликован на pub.dev;
+> релизный коммит `000ed9a7` и аннотированный тег отправлены в origin.
 > **Что это:** подготовка и связка минорного выпуска `async_job_lints` 0.2.0
 > с правилами `discarded_outcome` и `outcome_after_await`.
 > **Связанные записи:** `2026-11-09-done-lints-design.md`,
@@ -60,3 +59,9 @@ handoff и прошлое сообщение владельцу называли
 на pub.dev `latest: 0.1.1`. Связка: релизный коммит «Release async_job_lints
 0.2.0» с этой записью и handoff, аннотированный тег `async_job_lints-v0.2.0`
 на нём, `git push --follow-tags`, `dart pub publish` из чистого дерева.
+
+Связка выполнена: релизный коммит `000ed9a7` «Release async_job_lints 0.2.0»,
+аннотированный тег `async_job_lints-v0.2.0` на нём, `git push --follow-tags`
+отправил `main` (`d805e4a7..000ed9a7`) и тег. `dart pub publish` из чистого
+дерева: «Successfully uploaded https://pub.dev/packages/async_job_lints version
+0.2.0». API pub.dev отдаёт версию 0.2.0 с датой 2026-11-09T13:09:27Z.
