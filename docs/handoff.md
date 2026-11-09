@@ -117,7 +117,11 @@ ffc6b5b6» того же отчёта, решение 151; `async_job_lints` +18
 в сессии, без агента на задачу, в ветке `solo-listener`, журнал задач —
 `.superpowers/sdd/2026-11-09-solo-listener-plan/progress.md` в копии ветки;
 в конце — ревью всей ветки на Opus. Пробный прототип живёт в ветке
-`worktree-solo-listener-spike`, в `main` не идёт. Кода в пакетах нет.
+`worktree-solo-listener-spike`, в `main` не идёт. На 2026-11-10 в ветке
+`solo-listener` сделаны задачи 1–4: `addChangeListener` в `solo`
+с документацией и переводами, виджет `SoloListener` с режимами, отменой
+и отчётом об ошибках (`flutter test` +306). Дальше задача 5 — раздел README
+`flutter_solo`; в `main` кода нет.
 
 Ревью документации `async_job` 1.0.1 с оценками проведено 2026-11-06 по слову
 владельца «давай на патч»: одна область, ревьюер на Fable, дерево тега —
