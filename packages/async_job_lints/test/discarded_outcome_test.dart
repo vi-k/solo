@@ -26,6 +26,12 @@ Job<int> load() => Job<int>((ctx) => ctx.join(commit));
 Future<Outcome<int>> loadOutcome() => load().done;
 
 void refresh(Future<void> Function() action) {}
+
+void refreshNamed({required Future<void> Function() onRefresh}) {}
+
+class Indicator {
+  Indicator({required Future<void> Function() onRefresh});
+}
 ''';
 
 @reflectiveTest
@@ -124,6 +130,74 @@ void run() {
 ''',
     ['() => load().[[done]])'],
   );
+
+  Future<void> test_returned_into_a_named_callback() => assertAt(
+    '''
+$_api
+void run() {
+  refreshNamed(onRefresh: () => load().done);
+}
+''',
+    ['() => load().[[done]])'],
+  );
+
+  Future<void> test_returned_from_a_block_into_a_named_callback() => assertAt(
+    '''
+$_api
+void run() {
+  refreshNamed(
+    onRefresh: () {
+      return load().done;
+    },
+  );
+}
+''',
+    ['return load().[[done]];'],
+  );
+
+  Future<void> test_returned_into_a_named_constructor_argument() => assertAt(
+    '''
+$_api
+void run() {
+  Indicator(onRefresh: () => load().done);
+}
+''',
+    ['() => load().[[done]])'],
+  );
+
+  Future<void> test_returned_into_a_typed_variable() => assertAt(
+    '''
+$_api
+void run() {
+  final Future<void> Function() reload = () => load().done;
+  refresh(reload);
+}
+''',
+    ['reload = () => load().[[done]];'],
+  );
+
+  Future<void> test_awaited_and_returned_into_future_void() => assertAt(
+    '''
+$_api
+Future<void> reload() async => await load().done;
+''',
+    ['await load().[[done]];'],
+  );
+
+  Future<void> test_awaited_and_returned_into_a_callback() => assertAt(
+    '''
+$_api
+void run() {
+  refresh(() async => await load().done);
+}
+''',
+    ['await load().[[done]])'],
+  );
+
+  Future<void> test_awaited_and_returned_as_an_outcome() => assertAt('''
+$_api
+Future<Outcome<int>> reload() async => await load().done;
+''', []);
 
   // Outside a body the queue does not wait for itself, and the outcome is
   // still dropped.

@@ -208,8 +208,15 @@ $_api
 Future<void> run() async {
   final job = load();
   job.whenFinished((outcome) {});
+  job.whenCancelled((cancelled) {});
   print(job.isRunning);
+  print(job.isFinished);
+  print(job.isCancelled);
   print(job.outcome);
+  print(job.key);
+  print(job.describe());
+  print(job.level);
+  print(job.isChild);
   await commit();
   print(await job.done);
 }
@@ -290,6 +297,47 @@ final class Desk extends Solo<int> {
 ''',
     ['step.[[value]])'],
   );
+
+  Future<void> test_late() => assertAt('''
+$_api
+Future<void> run() async {
+  late final job = load();
+  await commit();
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_returned() => assertAt('''
+$_api
+Future<Job<int>> run() async {
+  final job = load();
+  if (job.isRunning) return job;
+  await commit();
+  print(await job.done);
+  return job;
+}
+''', []);
+
+  Future<void> test_collection_element() => assertAt('''
+$_api
+Future<void> run() async {
+  final job = load();
+  final jobs = [job];
+  await commit();
+  print(await job.done);
+  print(jobs);
+}
+''', []);
+
+  Future<void> test_interpolated() => assertAt('''
+$_api
+Future<void> run() async {
+  final job = load();
+  print('\$job');
+  await commit();
+  print(await job.done);
+}
+''', []);
 
   Future<void> test_passed_on() => assertAt('''
 $_api

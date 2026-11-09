@@ -1258,7 +1258,10 @@ void main() {
       );
       _says('Both the map and `MapState(3, z4)` reflect the latest request.');
       _says('The returned job itself is not a `Future`');
-      _says('`Policy.restart` replaces a move with no token kept in a field');
+      _says(
+        'the first two moves end `Cancelled(replaced)`, each replaced by '
+        'the next.',
+      );
     });
 
     test('onMapDrag is a finished statement that waits for nothing', () {

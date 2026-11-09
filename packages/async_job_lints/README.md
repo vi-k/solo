@@ -252,16 +252,17 @@ switches over the outcome. See
 
 The rule reports a statement that awaits or just reads a `Future` of an
 `Outcome` of async_job, `await job.done;` or `job.done;`, and such a future
-returned from a function whose return type is `void`, `Future<void>` or
-`FutureOr<void>`, as in `onRefresh: () => controller.load().done`. It goes by
-the type, so a function of your own that returns `done` is reported where its
-result is dropped. It is quiet when the job is a local variable or a parameter
-whose `outcome`, `value` or `done` is read later in the same function, when
-`ignoreFailure()` was called on it before, as a statement or in a cascade of
-its declaration, and on a wait of a job body for a job of the controller's own
-queue, which `bare_await` reports. A test that waits for a job only to look at
-it afterwards reads `job.outcome` after `await job.done;` and keeps the rule
-quiet that way.
+returned, awaited or not, from a function whose return type, declared or
+expected by the parameter or the variable it is given to, is `void`,
+`Future<void>` or `FutureOr<void>`, as in
+`onRefresh: () => controller.load().done`. It goes by the type, so a function
+of your own that returns `done` is reported where its result is dropped. It is
+quiet when the job is a local variable or a parameter whose `outcome`, `value`
+or `done` is read later in the same function, when `ignoreFailure()` was called
+on it before, as a statement or in a cascade of its declaration, and on a wait
+of a job body for a job of the controller's own queue, which `bare_await`
+reports. A test that waits for a job only to look at it afterwards reads
+`job.outcome` after `await job.done;` and keeps the rule quiet that way.
 
 The failure is answered for without anybody reading the outcome when the job is
 continued with `then` or a handle of `shared()`, when it runs under `ctx.run`
@@ -274,9 +275,9 @@ for the end without observing the job through `whenFinished`, as
 [Hearing the end without the failure](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#hearing-the-end-without-the-failure)
 shows.
 
-The rule does not report `final _ = await job.done;`, outcomes dropped in a
-list given to `Future.wait` or `[...].wait`, a callback of `done.then` that
-does not look at the outcome, or `ctx.run(child).ignore()`.
+The rule does not report `final _ = await job.done;`, `unawaited(job.done)`,
+outcomes dropped in a list given to `Future.wait` or `[...].wait`, a callback
+of `done.then` that does not look at the outcome, or `ctx.run(child).ignore()`.
 
 ### outcome_after_await
 
@@ -294,16 +295,19 @@ gets the error, and `outcome` brings the same failure a second time. Read
 that outcome where the result is needed. For `value`, take the future at once
 and mark it, `final value = upload.value..ignore();`: an early `value` alone is
 a future that fails with nobody listening, and `ignore()` silences only that
-report, while `await value` still throws. See
+report, while `await value` still throws. `await job.done;` after a wait with
+the outcome dropped is reported by both rules, and the answer
+`discarded_outcome` gives, `value` or `ignoreFailure()` on that line, is still
+a read after the wait: read early and use the outcome. See
 [Telling the core it is handled](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/outcomes.md#telling-the-core-it-is-handled).
 
-The rule takes a local variable that is final or never assigned again, made by
-a call, without a cascade and without `await`, whose type is a `Job` of
-async_job, a `SoloJob` of solo included. It reports the first observation of
-the job, `done`, `value`, `ignoreFailure()`, `then` or `shared()`, when a wait
-stands between the declaration and it in the same function: `await`,
-`await for`, or `yield` in an `async*` function. The actions of `join`,
-`abandonable`, `wait` and `uncancellable` count as the same function, since
+The rule takes a local variable that is final or never assigned again, not
+`late`, made by a call, without a cascade and without `await`, whose type is a
+`Job` of async_job, a `SoloJob` of solo included. It reports the first
+observation of the job, `done`, `value`, `ignoreFailure()`, `then` or
+`shared()`, when a wait stands between the declaration and it in the same
+function: `await`, `await for`, or `yield` in an `async*` function. The actions
+of `join`, `abandonable` and `uncancellable` count as the same function, since
 they run when the call is made. A job of `Job.deferred` does not run until it
 is started, so for it only a wait after `start()` counts. `await job.cancel()`
 of the job itself is not such a wait: its future ends before the failure is

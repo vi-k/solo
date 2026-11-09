@@ -118,7 +118,8 @@ class _Visitor extends SimpleAstVisitor<void> {
   @override
   void visitVariableDeclarationStatement(VariableDeclarationStatement node) {
     final scope = node.thisOrAncestorOfType<FunctionBody>();
-    if (scope == null) return;
+    // A late job is made at its first read, so no wait comes before it.
+    if (scope == null || node.variables.isLate) return;
     for (final variable in node.variables.variables) {
       final value = variable.initializer?.unParenthesized;
       final job = variable.declaredFragment?.element;

@@ -81,9 +81,14 @@ class _Visitor extends SimpleAstVisitor<void> {
       _checkReturned(node.expression, node);
 
   /// Checks [value], returned from [body], when the function drops it: its
-  /// return type is `void`, `Future<void>` or `FutureOr<void>`.
+  /// return type is `void`, `Future<void>` or `FutureOr<void>`. An awaited
+  /// value counts too: `() async => await job.done` drops the outcome all the
+  /// same.
   void _checkReturned(Expression value, FunctionBody body) {
-    final returned = value.unParenthesized;
+    var returned = value.unParenthesized;
+    if (returned is AwaitExpression) {
+      returned = returned.expression.unParenthesized;
+    }
     if (!_isOutcomeFuture(returned.staticType)) return;
     if (!_returnTypesOf(body).any(_isVoid)) return;
     _check(returned);
@@ -169,18 +174,55 @@ class _Visitor extends SimpleAstVisitor<void> {
   };
 
   /// The return types the function of [body] has: its own, and the one the
-  /// parameter it is passed to expects.
+  /// parameter it is passed to, or the variable it initializes, expects.
   static Iterable<DartType> _returnTypesOf(FunctionBody body) sync* {
     final function = body.parent;
     if (function is FunctionExpression) {
       final type = function.staticType;
       if (type is FunctionType) yield type.returnType;
-      final expected = function.correspondingParameter?.type;
-      if (expected is FunctionType) yield expected.returnType;
+      for (final expected in [
+        function.correspondingParameter?.type,
+        _namedParameterType(function),
+        _variableType(function),
+      ]) {
+        if (expected is FunctionType) yield expected.returnType;
+      }
     } else if (function is MethodDeclaration) {
       final type = function.declaredFragment?.element.returnType;
       if (type != null) yield type;
     }
+  }
+
+  /// The type of the named parameter [function] is passed to.
+  ///
+  /// A named argument has no `correspondingParameter` on its value, and its
+  /// own node is `NamedExpression` in analyzer 12 and `NamedArgument` later,
+  /// so the parameter is found by name in the type of the invocation.
+  static DartType? _namedParameterType(FunctionExpression function) {
+    final argument = function.parent;
+    if (argument == null) return null;
+    final name = argumentName(argument);
+    final list = argument.parent;
+    if (name == null || list is! ArgumentList) return null;
+    final invoked = switch (list.parent) {
+      InvocationExpression(:final staticInvokeType) => staticInvokeType,
+      InstanceCreationExpression(:final constructorName) =>
+        constructorName.element?.type,
+      _ => null,
+    };
+    if (invoked is! FunctionType) return null;
+    for (final parameter in invoked.formalParameters) {
+      if (parameter.isNamed && parameter.name == name) return parameter.type;
+    }
+    return null;
+  }
+
+  /// The declared type of the variable [function] initializes.
+  static DartType? _variableType(FunctionExpression function) {
+    final variable = function.parent;
+    return variable is VariableDeclaration
+        ? variable.declaredFragment?.element.type
+        : null;
   }
 
   /// Whether [type] is `void`, `Future<void>` or `FutureOr<void>`.
