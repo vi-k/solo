@@ -724,13 +724,14 @@ void main() {
         'cancels the job.',
       );
       _says(
-        'A message still queued behind the running one never reaches '
-        'the API: it ends `Cancelled(closed)` without starting',
+        'A message still queued behind the running one ends '
+        '`Cancelled(closed)` without starting, so it never reaches the API',
       );
       _says(
         '**What solo gives:** `close()` cancels the running job at '
-        '`ctx.abandonable`, before the reply update and `markReplyRead()`, '
-        'and a queued message',
+        '`ctx.abandonable` and returns without waiting for the reply; the '
+        'reply update and `markReplyRead()` are not reached, and a queued '
+        'message',
       );
     });
 
@@ -747,8 +748,8 @@ void main() {
         '`Cancelled(closed)`, so the call site needs no `isClosed` guard.',
       );
       _says(
-        'or a call after `close()` ends `Cancelled(closed)` with no '
-        '`isClosed` guard.',
+        'a queued message or a call after `close()` ends '
+        '`Cancelled(closed)`, with no `isClosed` check in the code.',
       );
     });
 
@@ -1257,11 +1258,7 @@ void main() {
       );
       _says('Both the map and `MapState(3, z4)` reflect the latest request.');
       _says('The returned job itself is not a `Future`');
-      _says(
-        '**What solo gives:** typed methods return a `Job`, and under '
-        '`Policy.restart` the first move stops before the latest begins, the '
-        'middle one never starts and the map ends at `MapState(3, z4)`.',
-      );
+      _says('`Policy.restart` replaces a move with no token kept in a field');
     });
 
     test('onMapDrag is a finished statement that waits for nothing', () {
