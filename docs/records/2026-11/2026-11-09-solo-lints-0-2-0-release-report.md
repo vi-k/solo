@@ -1,5 +1,5 @@
-> **Состояние на 2026-11-09:** связка `solo_lints` 0.2.0 готова: подготовка
-> `a783f833`, релизный коммит с этой записью — следующий.
+> **Состояние на 2026-11-09:** `solo_lints` 0.2.0 опубликован на pub.dev;
+> релизный коммит `57bdb950` и аннотированный тег отправлены в origin.
 > **Что это:** подготовка и связка минорного выпуска `solo_lints` 0.2.0,
 > который приносит пользователям правила `async_job_lints` 0.2.0.
 > **Связанные записи:** `2026-11-09-async-job-lints-0-2-0-release-report.md`,
@@ -65,3 +65,9 @@ floor: 7 roots». `solo_lints` из архива разрешил `async_job_lin
 на pub.dev `latest: 0.1.5`. Связка: релизный коммит «Release solo_lints 0.2.0»
 с этой записью и handoff, аннотированный тег `solo_lints-v0.2.0` на нём,
 `git push --follow-tags`, `dart pub publish` из чистого дерева.
+
+Связка выполнена: релизный коммит `57bdb950` «Release solo_lints 0.2.0»,
+аннотированный тег `solo_lints-v0.2.0` на нём, `git push --follow-tags`
+отправил `main` (`000ed9a7..57bdb950`) и тег. `dart pub publish` из чистого
+дерева: «Successfully uploaded https://pub.dev/packages/solo_lints version
+0.2.0». API pub.dev отдаёт версию 0.2.0 с датой 2026-11-09T13:26:09Z.
