@@ -184,7 +184,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   /// Whether [read] runs whenever the statement holding it does, and that
   /// statement stands in the block that holds [declaration]: nothing between
-  /// them is a branch, a short-circuit, a null-aware call or the initializer
+  /// them is a branch, a short-circuit, a null-aware access or the initializer
   /// of a late variable. Only the nodes listed here pass; any other keeps the
   /// rule quiet.
   static bool _runsSurely(AstNode read, Statement declaration) {
@@ -211,9 +211,14 @@ class _Visitor extends SimpleAstVisitor<void> {
           target == node || !_shortCircuits(parent),
         VariableDeclaration(parent: VariableDeclarationList(:final isLate)) =>
           !isLate,
-        AssignmentExpression(:final rightHandSide, :final operator) =>
+        AssignmentExpression(
+          :final leftHandSide,
+          :final rightHandSide,
+          :final operator,
+        ) =>
           rightHandSide != node ||
-              operator.type != TokenType.QUESTION_QUESTION_EQ,
+              operator.type != TokenType.QUESTION_QUESTION_EQ &&
+                  !_shortCircuits(leftHandSide),
         BinaryExpression(:final rightOperand, :final operator) =>
           rightOperand != node || !_shortCircuiting.contains(operator.type),
         ConditionalExpression(:final condition) => condition == node,
@@ -233,13 +238,18 @@ class _Visitor extends SimpleAstVisitor<void> {
     TokenType.QUESTION_QUESTION,
   };
 
-  /// Whether the arguments of [call] might not run: the call or a target
-  /// before it in the chain is null-aware, or the call is a cascade section.
-  static bool _shortCircuits(MethodInvocation call) {
-    if (call.isCascaded) return true;
-    Expression? link = call;
+  /// Whether what [access] passes on might not run: the arguments of a call,
+  /// or the value assigned to a property or an index. It might not when
+  /// [access] or a link before it in the chain is null-aware, `!` passing a
+  /// null on, or when [access] is a cascade section.
+  static bool _shortCircuits(Expression access) {
+    if (access is MethodInvocation && access.isCascaded) return true;
+    Expression? link = access;
     while (true) {
       switch (link) {
+        case PostfixExpression(:final operator, :final operand)
+            when operator.type == TokenType.BANG:
+          link = operand;
         case MethodInvocation(:final isNullAware, :final target):
           if (isNullAware) return true;
           link = target;

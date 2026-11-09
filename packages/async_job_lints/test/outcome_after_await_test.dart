@@ -423,6 +423,115 @@ Future<void> run(Log? log) async {
 }
 ''', []);
 
+  Future<void> test_late_read_in_a_null_aware_property_assignment() =>
+      assertAt('''
+$_api
+class Log {
+  bool flag = false;
+  int count = 0;
+  Log? inner;
+  void put(bool running) {}
+}
+
+Future<void> run(Log? log, List<bool>? list) async {
+  late final job = load();
+  log?.flag = job.isRunning;
+  await commit();
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_late_read_in_a_null_aware_index_assignment() => assertAt('''
+$_api
+class Log {
+  bool flag = false;
+  int count = 0;
+  Log? inner;
+  void put(bool running) {}
+}
+
+Future<void> run(Log? log, List<bool>? list) async {
+  late final job = load();
+  list?[0] = job.isRunning;
+  await commit();
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_late_read_in_a_null_aware_compound_assignment() =>
+      assertAt('''
+$_api
+class Log {
+  bool flag = false;
+  int count = 0;
+  Log? inner;
+  void put(bool running) {}
+}
+
+Future<void> run(Log? log, List<bool>? list) async {
+  late final job = load();
+  log?.count += job.isRunning ? 1 : 0;
+  await commit();
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_late_read_after_a_null_assertion_in_a_chain() =>
+      assertAt('''
+$_api
+class Log {
+  bool flag = false;
+  int count = 0;
+  Log? inner;
+  void put(bool running) {}
+}
+
+Future<void> run(Log? log, List<bool>? list) async {
+  late final job = load();
+  log?.inner!.put(job.isRunning);
+  await commit();
+  print(await job.done);
+}
+''', []);
+
+  Future<void> test_late_read_in_a_property_assignment() => assertAt(
+    '''
+$_api
+class Log {
+  bool flag = false;
+  Log? inner;
+  void put(bool running) {}
+}
+
+Future<void> run(Log log) async {
+  late final job = load();
+  log.flag = job.isRunning;
+  await commit();
+  print(await job.done);
+}
+''',
+    ['job.[[done]])'],
+  );
+
+  Future<void> test_late_read_after_a_null_assertion() => assertAt(
+    '''
+$_api
+class Log {
+  bool flag = false;
+  Log? inner;
+  void put(bool running) {}
+}
+
+Future<void> run(Log log) async {
+  late final job = load();
+  log.inner!.put(job.isRunning);
+  await commit();
+  print(await job.done);
+}
+''',
+    ['job.[[done]])'],
+  );
+
   Future<void> test_late_made_after_the_wait() => assertAt('''
 $_api
 Future<void> run() async {

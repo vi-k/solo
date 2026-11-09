@@ -314,15 +314,15 @@ stands between the declaration and it in the same function: `await`,
 when the call is made. A job of `Job.deferred` does not run until it is
 started, so for it only a wait after `start()` counts. A `late` job is made at
 the first read of its variable, so for it only a wait after that read counts;
-when the read might not run, being inside a branch, after `&&`, `||` or `??`,
-in a null-aware call or in another `late` initializer, the rule does not report
-the job. `await job.cancel()` of the job itself is not such a wait: its future
-ends before the failure is answered for. The members that do not observe the
-job, such as `outcome`, `isRunning`, `cancel()`, `whenFinished` and `start()`,
-do not stop the search. Any other use first, as an argument, `ctx.run(job)`
-included, an assignment, a return, an element of a collection or a variable
-captured by a closure, hands the job to code the rule does not follow, and the
-rule is quiet.
+when the rule cannot tell that the read runs, as inside a branch, after `&&`,
+`||` or `??`, behind `?.` or `?[` or in another `late` initializer, it does not
+report the job. `await job.cancel()` of the job itself is not such a wait: its
+future ends before the failure is answered for. The members that do not observe
+the job, such as `outcome`, `isRunning`, `cancel()`, `whenFinished` and
+`start()`, do not stop the search. Any other use first, as an argument,
+`ctx.run(job)` included, an assignment, a return, an element of a collection or
+a variable captured by a closure, hands the job to code the rule does not
+follow, and the rule is quiet.
 
 The early read has a cost the rule does not hide. It marks the job observed, so
 if the function leaves before it awaits the outcome, by an exception, a
