@@ -74,6 +74,12 @@ but not the call the job walked away from: the fake still answers ten
 milliseconds after it was called, and the test ends cleanly once `pump` with a
 duration has moved the clock past that.
 
+A reaction of `SoloListener` that waits in a plain `await` keeps its timer
+after the widget has left: leaving the tree cancels the reaction, and the
+cancellation is cooperative. The test fails with the same message unless it
+moves the clock past the wait. A reaction that waits through `ctx.pause` ends
+with its widget and takes its timer along.
+
 ## Waiting for the job
 
 The handle waits for the job itself:

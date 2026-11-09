@@ -351,6 +351,64 @@ void main() {
         );
       },
     );
+
+    for (final (wait, moved, pending) in [
+      ('a plain await', false, true),
+      ('a plain await', true, false),
+      ('ctx.pause', false, false),
+    ]) {
+      test(
+        'a reaction of SoloListener waiting in $wait when the body ends, '
+        '${moved ? 'with' : 'without'} the clock moved past the wait',
+        () async {
+          final counter = _Counter();
+          final reported = await _asWidgetTest((binding) async {
+            final widget = SoloListener<int>(
+              solo: counter,
+              listener: (ctx, context, state) async {
+                if (wait == 'ctx.pause') {
+                  await ctx.pause(const Duration(milliseconds: 100));
+                } else {
+                  await Future<void>.delayed(const Duration(milliseconds: 100));
+                }
+              },
+              child: const SizedBox(),
+            );
+            binding.attachRootWidget(binding.wrapWithDefaultView(widget));
+            await binding.pump();
+            counter.set(1);
+            await binding.pump();
+            binding.attachRootWidget(
+              binding.wrapWithDefaultView(const SizedBox()),
+            );
+            await binding.pump();
+            if (moved) {
+              await binding.pump(const Duration(milliseconds: 100));
+            }
+          });
+
+          expect(
+            [for (final details in reported) '${details.exception}'],
+            [
+              if (pending)
+                contains(
+                  'A Timer is still pending even after the widget tree was '
+                  'disposed',
+                ),
+            ],
+          );
+          _says(
+            'A reaction of `SoloListener` that waits in a plain `await` '
+            'keeps its timer after the widget has left',
+          );
+          _says(
+            'A reaction that waits through `ctx.pause` ends with its widget '
+            'and takes its timer along.',
+          );
+          unawaited(counter.close());
+        },
+      );
+    }
   });
 
   group('Waiting for the job', () {
@@ -565,4 +623,11 @@ void main() {
       },
     );
   });
+}
+
+/// A controller the test writes to, for the reactions of `SoloListener`.
+final class _Counter extends Solo<int> {
+  _Counter() : super(0);
+
+  void set(int state) => externalSetState(state);
 }

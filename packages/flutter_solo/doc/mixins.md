@@ -5,9 +5,9 @@ as well. The framework's `ValueListenableBuilder`, `ListenableBuilder` and
 `AnimatedBuilder` take the controller as it is, and the package README shows
 the first of them in
 [The controller as a `ValueListenable`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#the-controller-as-a-valuelistenable).
-The builders of this package, `SoloBuilder` and `SoloSelector`, take any
-controller, with the mixin or without it. This page is about three things
-around the mixin:
+The widgets of this package, `SoloBuilder`, `SoloSelector` and `SoloListener`,
+take any controller, with the mixin or without it. This page is about three
+things around the mixin:
 
 - [A controller with both deliveries](#a-controller-with-both-deliveries):
   `SoloListenable` combines with `SoloStream` of `solo`, in either order. One
