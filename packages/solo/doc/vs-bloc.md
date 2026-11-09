@@ -75,6 +75,7 @@ The main API correspondences, for a reader who knows bloc:
 | `state`, `stream` | `currentState`, `addListener`, `addChangeListener`; `stream` with `SoloStream` mixed in |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` or `SoloBuilder`, and `SoloSelector`; the last two are in `flutter_solo` |
+| `BlocListener` for a change this screen did not make | `SoloListener` from `flutter_solo`; its reaction is a job, cancelled when the screen leaves |
 | `BlocListener` for an operation's result | Await that operation's `job.done`; for news that outlives the screen, [a notice the screen accepts](state.md#a-notice-the-screen-accepts) |
 | `BlocProvider` | Deliberately not part of the package: dependencies are passed by other means and packages, such as [scopo](https://pub.dev/packages/scopo), and a provider would close a controller from a synchronous `dispose`, no better than a `State` does |
 | `close()` | `close()` |

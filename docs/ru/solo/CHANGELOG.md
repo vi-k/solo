@@ -1,3 +1,13 @@
+## Не выпущено
+
+### Документация
+
+- Dartdoc `SoloCancelReason` и `ReplacedCancelReason`, строка
+  `doc/reference.md` и таблица `doc/cancellation.md` называют `SoloListener`
+  из `flutter_solo`: реакцию, которую заменило более новое изменение, он
+  отменяет с `ReplacedCancelReason`. `doc/vs-bloc.md` отправляет `BlocListener`
+  для изменения, которое сделал не этот экран, к `SoloListener`.
+
 ## 1.1.0
 
 ### Добавлено

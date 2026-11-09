@@ -349,7 +349,7 @@ a `Cancelled` with each one prints:
 | `RulesCancelReason` | the state left the working type, `canStart` or `keepWhile` said no, or `ctx.stateAs` found another type | `Cancelled(rules: is not Ready)`, `Cancelled(rules: canStart)`, `Cancelled(rules: keepWhile)` |
 | `ClosedCancelReason` | `close()`, or a job enqueued after it | `Cancelled(closed)` |
 | `DuplicateCancelReason` | `Policy.droppable` found a job with the same key and handed that one back | `Cancelled(duplicate)` |
-| `ReplacedCancelReason` | `Policy.keepLatest` or `Policy.restart` put a newer job with the same key in its place | `Cancelled(replaced)` |
+| `ReplacedCancelReason` | `Policy.keepLatest` or `Policy.restart` put a newer job with the same key in its place; `SoloListener` of `flutter_solo`, in `SoloListenerMode.restart`, cancels a running reaction this way when a newer change comes | `Cancelled(replaced)` |
 | `TimeoutCancelReason` | the deadline given with `timeout` ran out | `Cancelled(timeout)` |
 
 Inspect the type, as the first case above does; `name` is a display label, not

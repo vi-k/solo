@@ -1,3 +1,13 @@
+## Unreleased
+
+### Documentation
+
+- The dartdoc of `SoloCancelReason` and `ReplacedCancelReason`, the row of
+  `doc/reference.md` and the table of `doc/cancellation.md` name `SoloListener`
+  of `flutter_solo`, which cancels a reaction a newer change replaces with
+  `ReplacedCancelReason`. `doc/vs-bloc.md` sends `BlocListener` for a change
+  the screen did not make to `SoloListener`.
+
 ## 1.1.0
 
 ### Added

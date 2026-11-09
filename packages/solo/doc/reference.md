@@ -176,4 +176,4 @@ field: events combine only within one accumulator, even under the same key.
 | `SoloStream` | A mixin that adds a broadcast `stream` of the states | [Observing state](state.md#observing-state) |
 | `AccumulationPolicy` | Which waiting group an event joins: `join`, `adjacent` or `replace` | [Choosing where events join](accumulation-rules.md#choosing-where-events-join) |
 | `AccumulationTiming` | When a group may start: `debounce` or `throttle` | [Choosing when a group is ready](accumulation-rules.md#choosing-when-a-group-is-ready) |
-| `SoloCancelReason` | The base of the reasons `solo` adds to the core's: `RulesCancelReason`, `ClosedCancelReason`, `DuplicateCancelReason` and `ReplacedCancelReason` | [Cancellation details](cancellation.md#cancellation-details) |
+| `SoloCancelReason` | The base of the reasons `solo` adds to the core's: `RulesCancelReason`, `ClosedCancelReason`, `DuplicateCancelReason` and `ReplacedCancelReason`, which `SoloListener` of `flutter_solo` gives a replaced reaction as well | [Cancellation details](cancellation.md#cancellation-details) |

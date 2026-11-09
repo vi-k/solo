@@ -347,7 +347,7 @@ switch (job.outcome) {
 | `RulesCancelReason` | состояние вышло из рабочего типа, `canStart` или `keepWhile` ответили «нет» либо `ctx.stateAs` нашёл другой тип | `Cancelled(rules: is not Ready)`, `Cancelled(rules: canStart)`, `Cancelled(rules: keepWhile)` |
 | `ClosedCancelReason` | `close()` или `Job`, поставленная в очередь после него | `Cancelled(closed)` |
 | `DuplicateCancelReason` | `Policy.droppable` нашёл `Job` с тем же ключом и вернул её | `Cancelled(duplicate)` |
-| `ReplacedCancelReason` | `Policy.keepLatest` или `Policy.restart` поставили на её место более новую `Job` с тем же ключом | `Cancelled(replaced)` |
+| `ReplacedCancelReason` | `Policy.keepLatest` или `Policy.restart` поставили на её место более новую `Job` с тем же ключом; `SoloListener` из `flutter_solo` в режиме `SoloListenerMode.restart` так отменяет идущую реакцию, когда приходит более новое изменение | `Cancelled(replaced)` |
 | `TimeoutCancelReason` | истёк срок, заданный через `timeout` | `Cancelled(timeout)` |
 
 Проверяйте тип, как первая ветка `switch` выше; `name` служит подписью,

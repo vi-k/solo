@@ -2,7 +2,8 @@ import 'package:async_job/async_job.dart';
 
 import 'solo.dart';
 
-/// The base for reasons added by `solo` and engines built on it.
+/// The base for reasons added by `solo`, engines built on it, and the
+/// widgets of `flutter_solo`.
 abstract class SoloCancelReason extends CancelReason {
   /// Creates a reason for a subclass.
   const SoloCancelReason();
@@ -44,8 +45,12 @@ final class DuplicateCancelReason extends SoloCancelReason {
 /// job with the same key in this one's place: took it out of the queue, or,
 /// under `restart`, cancelled it while it ran.
 ///
+/// `SoloListener` of `flutter_solo` cancels a running reaction with it under
+/// `SoloListenerMode.restart`, when a newer change takes the reaction's place.
+///
 /// A reason of its own, apart from [ManualCancelReason]: nobody asked for
-/// this job to stop, a later call with its key stands in for it.
+/// this job to stop, a later call with its key, or a later change, stands in
+/// for it.
 final class ReplacedCancelReason extends SoloCancelReason {
   /// Creates a replacement reason.
   const ReplacedCancelReason();

@@ -277,13 +277,14 @@ for phrase in SAID:
     assert phrase in PROSE['the document'], (
         f'the document no longer says: {phrase}')
 
-# The table of correspondences names three things of `flutter_solo`, a
+# The table of correspondences names four things of `flutter_solo`, a
 # package this bench does not build against: they have to be there.
 FLUTTER_SOLO = os.path.join(REPO, 'packages', 'flutter_solo', 'lib', 'src')
 for declared, source in (
     ('mixin SoloListenable', 'solo_listenable.dart'),
     ('class SoloBuilder', 'solo_builder.dart'),
     ('class SoloSelector', 'solo_selector.dart'),
+    ('class SoloListener', 'solo_listener.dart'),
 ):
     assert declared in open(os.path.join(FLUTTER_SOLO, source)).read(), (
         f'flutter_solo no longer has {declared}, which the document names')

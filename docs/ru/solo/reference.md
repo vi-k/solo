@@ -177,4 +177,4 @@
 | `SoloStream` | Миксин, который добавляет broadcast-стрим `stream` состояний | [«Наблюдение за состоянием»](state.md#наблюдение-за-состоянием) |
 | `AccumulationPolicy` | В какую ждущую группу входит событие: `join`, `adjacent` или `replace` | [«Выбор места присоединения событий»](accumulation-rules.md#выбор-места-присоединения-событий) |
 | `AccumulationTiming` | Когда группа может стартовать: `debounce` или `throttle` | [«Выбор момента готовности группы»](accumulation-rules.md#выбор-момента-готовности-группы) |
-| `SoloCancelReason` | База причин, которые `solo` добавляет к причинам ядра: `RulesCancelReason`, `ClosedCancelReason`, `DuplicateCancelReason` и `ReplacedCancelReason` | [«Сведения об отмене»](cancellation.md#сведения-об-отмене) |
+| `SoloCancelReason` | База причин, которые `solo` добавляет к причинам ядра: `RulesCancelReason`, `ClosedCancelReason`, `DuplicateCancelReason` и `ReplacedCancelReason`, которую `SoloListener` из `flutter_solo` тоже даёт заменённой реакции | [«Сведения об отмене»](cancellation.md#сведения-об-отмене) |
