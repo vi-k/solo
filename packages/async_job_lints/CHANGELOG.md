@@ -1,11 +1,11 @@
-## Unreleased
+## 0.2.0
 
 - Two new warnings on the result of a job, on as soon as the plugin is named:
   `discarded_outcome` reports an outcome of `done` that is awaited and dropped,
   where the failure reaches nobody, and `outcome_after_await` reports the first
   read of a job's result that comes after a wait, where the failure has gone to
   the zone before the read. `dart analyze` fails on code it passed before, so
-  the next release is a minor one.
+  the release is a minor one.
 - The README sends the reader for the table of the context to the reference
   page of `async_job`, where the table moved from its README.
 

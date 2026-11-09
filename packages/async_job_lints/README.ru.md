@@ -28,7 +28,7 @@
 
 ```yaml
 plugins:
-  async_job_lints: ^0.1.1
+  async_job_lints: ^0.2.0
 ```
 
 Плагин сервер анализа скачивает сам, поэтому в `pubspec.yaml` он
@@ -46,7 +46,7 @@ plugins:
 ```yaml
 plugins:
   async_job_lints:
-    version: ^0.1.1
+    version: ^0.2.0
     diagnostics:
       catch_without_check: true
       bare_await: true
