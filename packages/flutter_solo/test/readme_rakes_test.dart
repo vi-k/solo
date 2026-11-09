@@ -2049,6 +2049,71 @@ void main() {
       );
     });
 
+    for (final inside in [false, true]) {
+      testWidgets('a failure of the abandoned load goes to FlutterError'
+          '${inside ? ', unless the action catches it' : ''}', (tester) async {
+        final query = QueryController();
+        final caught = <String>[];
+        Future<List<String>> suggest(String text) async {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          if (text == 'a') {
+            throw const SocketException('no connection');
+          }
+          return ['$text.'];
+        }
+
+        await tester.pumpWidget(
+          _app(
+            SoloListener<String>(
+              solo: query,
+              mode: SoloListenerMode.restart,
+              listener: (ctx, context, text) async {
+                try {
+                  await ctx.abandonable(
+                    inside
+                        ? () async {
+                            try {
+                              return await suggest(text);
+                            } on SocketException {
+                              return const <String>[];
+                            }
+                          }
+                        : () => suggest(text),
+                  );
+                } on Object catch (error) {
+                  caught.add(
+                    '$text ${error is Cancelled ? 'Cancelled' : error}',
+                  );
+                  rethrow;
+                }
+              },
+              child: const SizedBox(),
+            ),
+          ),
+        );
+        query.type('a');
+        await tester.pump(const Duration(milliseconds: 10));
+        query.type('ab');
+        await tester.pump();
+        expect(caught, ['a Cancelled']);
+        expect(tester.takeException(), isNull);
+
+        await tester.pump(const Duration(milliseconds: 100));
+        if (inside) {
+          expect(tester.takeException(), isNull);
+        } else {
+          expect(tester.takeException(), isA<SocketException>());
+        }
+        expect(caught, ['a Cancelled'], reason: 'the catch saw no failure');
+        await query.close();
+        _says(
+          'A failure of that request still goes to `FlutterError`: a `catch` '
+          'around the `await` sees only `Cancelled`, so a call that may fail '
+          'catches its error inside the action given to `abandonable`.',
+        );
+      });
+    }
+
     for (final named in [true, false]) {
       testWidgets('a token stops the request, and an unnamed stop is a failure'
           '${named ? ', named here' : ''}', (tester) async {

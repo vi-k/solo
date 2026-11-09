@@ -623,8 +623,49 @@ void main() {
       expect(log, ['s1']);
     });
 
-    testWidgets('the reactions of the new controller wait for the cancelled '
-        'ones', (tester) async {
+    for (final (mode, starts) in [
+      (SoloListenerMode.concurrent, 10),
+      (SoloListenerMode.sequential, 100),
+      (SoloListenerMode.keepLatest, 100),
+      (SoloListenerMode.restart, 100),
+    ]) {
+      testWidgets('in ${mode.name}, the reactions of the new controller '
+          '${starts == 10 ? 'start at once' : 'wait for the cancelled ones'}', (
+        tester,
+      ) async {
+        final first = _Counter();
+        final next = _Counter();
+        addTearDown(first.close);
+        addTearDown(next.close);
+        final log = <String>[];
+        Widget tree(Solo<int> solo) => _listener(
+          solo,
+          log,
+          mode: mode,
+          listener: (ctx, context, state) async {
+            log.add('s$state');
+            await Future<void>.delayed(_wait);
+          },
+        );
+        await tester.pumpWidget(tree(first));
+        first.set(1);
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.pumpWidget(tree(next));
+        next.set(7);
+        var at = 10;
+        await tester.pump();
+        while (!log.contains('s7')) {
+          await tester.pump(const Duration(milliseconds: 1));
+          at++;
+          expect(at, lessThan(500));
+        }
+        expect(at, starts);
+        await tester.pump(const Duration(milliseconds: 200));
+      });
+    }
+
+    testWidgets('a new controller drops the waiting states of the old one '
+        'before it cancels', (tester) async {
       final first = _Counter();
       final next = _Counter();
       addTearDown(first.close);
@@ -634,25 +675,23 @@ void main() {
         solo,
         log,
         mode: SoloListenerMode.sequential,
-        listener: (ctx, context, state) async {
-          log.add('s$state');
-          await Future<void>.delayed(_wait);
-        },
+        listener: (ctx, context, state) => log.add('r$state'),
       );
-      await tester.pumpWidget(tree(first));
-      first.set(1);
-      await tester.pump(const Duration(milliseconds: 10));
-      await tester.pumpWidget(tree(next));
-      next.set(7);
-      var at = 10;
-      await tester.pump();
-      while (!log.contains('s7')) {
-        await tester.pump(const Duration(milliseconds: 1));
-        at++;
-        expect(at, lessThan(500));
-      }
-      expect(at, 100);
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpWidget(Builder(builder: (context) => tree(first)));
+      // The reaction to 1 is made and has not started, 2 waits behind it,
+      // and the same build moves the widget to the next controller.
+      await tester.pumpWidget(
+        Builder(
+          builder: (context) {
+            first
+              ..set(1)
+              ..set(2);
+            return tree(next);
+          },
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(log, isEmpty);
     });
 
     testWidgets('droppable drops a change of the new controller while a '
@@ -690,15 +729,26 @@ void main() {
       Widget tree(Solo<int> solo) => _listener(
         solo,
         log,
-        listener: (ctx, context, state) => log.add('r$state'),
+        listener: (ctx, context, state) async {
+          log.add('s$state');
+          try {
+            await ctx.pause(_wait);
+          } on Cancelled catch (cancelled) {
+            log.add('c$state $cancelled');
+            rethrow;
+          }
+          log.add('e$state');
+        },
       );
       await tester.pumpWidget(tree(a));
+      a.set(1);
+      await tester.pump(const Duration(milliseconds: 10));
       await tester.pumpWidget(tree(b));
       await tester.pumpWidget(tree(a));
-      a.set(1);
-      b.set(2);
-      await tester.pump();
-      expect(log, ['r1']);
+      a.set(2);
+      b.set(3);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(log, ['s1', 'c1 Cancelled(manual)', 's2', 'e2']);
     });
 
     testWidgets('a finished controller gives neither error nor reaction', (
@@ -809,21 +859,25 @@ void main() {
       },
     );
 
-    testWidgets('a listener throwing synchronously goes to FlutterError', (
-      tester,
-    ) async {
+    testWidgets('a listener throwing synchronously goes to FlutterError, '
+        'and the next reaction runs', (tester) async {
       final counter = _Counter();
       addTearDown(counter.close);
+      final log = <String>[];
       await tester.pumpWidget(
         _listener(
           counter,
-          [],
-          listener: (ctx, context, state) => throw StateError('at once'),
+          log,
+          listener: (ctx, context, state) =>
+              state == 1 ? throw StateError('at once') : log.add('r$state'),
         ),
       );
       counter.set(1);
       await tester.pump();
       expect(tester.takeException(), isStateError);
+      counter.set(2);
+      await tester.pump();
+      expect(log, ['r2']);
     });
 
     group('a failure after the screen left goes to FlutterError', () {

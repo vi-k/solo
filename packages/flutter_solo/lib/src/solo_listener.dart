@@ -81,8 +81,12 @@ final class SoloListener<S extends Object> extends StatefulWidget {
   ///
   /// Replaced by another one, compared by identity, it takes the reactions
   /// to its changes along: the running ones are cancelled and the waiting
-  /// ones dropped. The reactions to the new one wait for the cancelled ones
-  /// to end, and the state of the new one at that moment starts no reaction.
+  /// ones dropped, and the state of the new one at that moment starts no
+  /// reaction. Under [SoloListenerMode.sequential],
+  /// [SoloListenerMode.keepLatest] and [SoloListenerMode.restart] the
+  /// reactions to the new one wait for the cancelled ones to end;
+  /// [SoloListenerMode.concurrent] starts them at once, and
+  /// [SoloListenerMode.droppable] drops the changes that come meanwhile.
   final Solo<S> solo;
 
   /// The reaction, called with the context of its job first, then the

@@ -622,11 +622,14 @@ reaction starts at once, and the load for the old text ends with nobody waiting
 for it. `ctx.pause` ends at once as well, so a letter typed within 300
 milliseconds of the one before cancels the reaction before it loads anything.
 
-`abandonable` leaves the old request running. A client that can stop its
-request takes a token instead: `ctx.onCancel` cancels the token with the
-reaction, and `ctx.join` waits only as long as the client takes to stop. The
-error such a client throws when stopped is named once in
-`Job.isCancellationError`, or every stop goes to `FlutterError` as a failure.
+`abandonable` leaves the old request running. A failure of that request still
+goes to `FlutterError`: a `catch` around the `await` sees only `Cancelled`, so
+a call that may fail catches its error inside the action given to
+`abandonable`. A client that can stop its request takes a token instead:
+`ctx.onCancel` cancels the token with the reaction, and `ctx.join` waits only
+as long as the client takes to stop. The error such a client throws when
+stopped is named once in `Job.isCancellationError`, or every stop goes to
+`FlutterError` as a failure.
 [A token through `onCancel`](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-token-through-oncancel)
 on the cancellation page of `async_job` shows both.
 
