@@ -1,8 +1,10 @@
 > **Состояние на 2026-11-10:** сделано в ветке `solo-listener` (голова
-> `85c0e59a`), в `main` не влито и ждёт выпусков: часть `solo` — коммиты
+> `fb4e6451`), в `main` не влито и ждёт выпусков: часть `solo` — коммиты
 > `c00f5cbc` и `9e44a3a0`, она выходит с `solo` 1.1.0; остальное — с
 > `flutter_solo`. Ревью ветки на Opus: пять находок, три правлены коммитом
-> `85c0e59a`, две мелкие отложены. Кода из этого отчёта в `main` нет.
+> `85c0e59a`, две мелкие отложены. Ревью этих правок на Codex Astra: одна
+> находка, дыра сторожа, закрыта коммитом `fb4e6451`. Кода из этого отчёта
+> в `main` нет.
 > **Что это:** отчёт об исполнении плана `SoloListener` и о ревью всей ветки.
 > **Связанные записи:** `2026-11-09-solo-listener-async-design.md`,
 > `2026-11-09-solo-listener-plan.md`, `2026-11-09-solo-listener-design.md`,
@@ -29,6 +31,7 @@
 | `2cc24e79` | 6 | `testing.md`, `mixins.md`, переводы |
 | `59cef380` | 7 | строка `BlocListener` в `vs-bloc`, причины отмены, `CHANGELOG` `solo` |
 | `85c0e59a` | ревью | находки 1, 2 и 4 |
+| `fb4e6451` | ревью Codex | тесты провала реакции во всех режимах |
 
 ## Что сделано
 
@@ -248,7 +251,10 @@ P2 log=[s1, c1 manual, s2, e2] ex=null
 в `85c0e59a`: тест «a new controller drops the waiting states of the old one
 before it cancels» — на мутанте краснеет (`Actual: ['r2']`), на исходнике
 зелёный; тест синхронного броска проверяет реакцию на 2, тест A → B → A —
-`c1 Cancelled(manual)`.
+`c1 Cancelled(manual)`. Ревью исправлений на Codex показало, что проверка
+реакции на 2 после провала стояла только в `concurrent`, где ничто не ждёт;
+`fb4e6451` гоняет оба теста провала во всех режимах — раздел «Ревью
+исправлений».
 
 ### 5. Мелкая. Оборванный перенос в комментарии `readme_install.dart`
 
@@ -303,6 +309,294 @@ before it cancels» — на мутанте краснеет (`Actual: ['r2']`),
   копией: порядок `_letGo` — выжил, порядок `restart` — убит. Зонды удалены,
   копия чиста.
 
+## Ревью исправлений
+
+После прохода правок коммит `85c0e59a` отдан на независимое ревью Codex
+по слову владельца «давай кодексом Astra»: `gpt-6-astra`, усилие `xhigh`,
+отдельная копия ветки на `85c0e59a`, 826 секунд. Задание: закрыты ли находки 1,
+2 и 4 и подтверждает ли зонд новую прозу README и dartdoc, не меньше пяти своих
+мутаций `solo_listener.dart` против новых тестов, новые дефекты в тестах,
+README EN/RU и dartdoc; находки 3 и 5 и решения `docs/settled.md` не поднимать
+без нового довода. Ниже — его отчёт дословно, кроме трёх сокращений: опущен
+раскрывающийся блок со стек-трассой сервера анализа, убраны пути к временной
+копии, каталог для резервной копии файла назван словами.
+
+### ПРОГОН
+
+Проверен `85c0e59a` относительно `59cef380`. Все команды ниже выполнены.
+Команды Flutter/Dart запускались из `packages/flutter_solo`, документные
+проверки — из корня. Временный каталог — `.review-tmp`.
+
+#### Исходные проверки
+
+| Команда | Результат и точная последняя строка |
+|---|---|
+| `flutter test` | Код 0: `00:02 +329: All tests passed!` |
+| `flutter analyze` | Не завершился; остановлен. Последняя строка: `Error from the analysis server: An error occurred while handling initialized notification` |
+| `flutter analyze`, повтор | Та же ошибка; остановлен после 90 секунд. Анализ **не пройден**, несмотря на код 0 после остановки процесса. Последняя строка приведена ниже. |
+| `dart format --output=none --set-exit-if-changed lib test example` | Код 0: `Formatted 38 files (0 changed) in 0.10 seconds.` |
+| `flutter test` после восстановления и удаления зондов | Код 0: `00:02 +329: All tests passed!` |
+
+Причина отказа анализатора, дословно:
+
+```text
+PathAccessException: Creation failed, path = '/Users/user/.dartServer/.plugin_manager/c3c466d92f6b841250490b0b970dfaf6' (OS Error: Operation not permitted, errno = 1)
+```
+
+Ограничение не обходил. Вспомогательная проверка процессов через `ps` также
+получила отказ:
+
+```text
+PermissionError: [Errno 1] Operation not permitted: 'ps'
+```
+
+
+#### Мутации
+
+Перед каждой подменой `solo_listener.dart` копировался в каталог вне дерева.
+После каждого прогона восстановлен через `cp`; следующий непосредственно
+за восстановлением `git diff --stat` был пуст.
+
+Для M1–M7 команда:
+
+```sh
+flutter test -r expanded test/solo_listener_test.dart --plain-name '<имя теста>'
+```
+
+| Мутация | Что изменено | Имя теста | Результат |
+|---|---|---|---|
+| M1 | `_letGo`: `_waiting.clear()` после отмены | `a new controller drops the waiting states of the old one before it cancels` | Код 1; вместо пустого журнала `['r2']` |
+| M2 | `_changed`, `keepLatest`: немедленный старт, если все идущие отменены | `in keepLatest, the reactions of the new controller wait for the cancelled ones` | Код 1; ожидалось `100`, получилось `10` |
+| M3 | `_changed`, `sequential`: отбросить изменение вместо `_waiting.add(current)` | `in sequential, the reactions of the new controller wait for the cancelled ones` | Код 1; ожидание достигло предела `500` |
+| M4 | `didUpdateWidget`: снять подписку и очистить ожидающих, пропустив отмену | `A to B and back to A reacts once per write` | Код 1; `['s1', 's2', 'e1', 'e2']` вместо журнала с `c1 Cancelled(manual)` |
+| M5 | `_start`: проглотить синхронный бросок `widget.listener` | `a listener throwing synchronously goes to FlutterError, and the next reaction runs` | Код 1; вместо `StateError` получен `null` |
+| M6 | `_changed`, `concurrent`: поставить изменение в очередь | `in concurrent, the reactions of the new controller start at once` | Код 1; ожидалось `10`, получилось `100` |
+| M7 | `_changed`, `droppable`: поставить изменение в очередь | `droppable drops a change of the new controller while a cancelled reaction of the old one runs` | Код 1; `['s1', 's7']` вместо `['s1']` |
+
+Точные последние строки этих семи прогонов:
+
+```text
+  packages/flutter_solo/test/solo_listener_test.dart: SoloListener a new controller drops the waiting states of the old one before it cancels
+  packages/flutter_solo/test/solo_listener_test.dart: SoloListener in keepLatest, the reactions of the new controller wait for the cancelled ones
+  packages/flutter_solo/test/solo_listener_test.dart: SoloListener in sequential, the reactions of the new controller wait for the cancelled ones
+  packages/flutter_solo/test/solo_listener_test.dart: SoloListener A to B and back to A reacts once per write
+  packages/flutter_solo/test/solo_listener_test.dart: SoloListener a listener throwing synchronously goes to FlutterError, and the next reaction runs
+  packages/flutter_solo/test/solo_listener_test.dart: SoloListener in concurrent, the reactions of the new controller start at once
+  packages/flutter_solo/test/solo_listener_test.dart: SoloListener droppable drops a change of the new controller while a cancelled reaction of the old one runs
+```
+
+**M8 — пропуск `_finished` после `Failed`:**
+
+```dart
+job.whenFinished((outcome) {
+  if (outcome is! Failed) _finished(job);
+});
+```
+
+Команда `flutter test -r expanded` — **код 0, мутант выжил во всём штатном
+наборе**. Последняя строка:
+
+```text
+00:02 +329: All tests passed!
+```
+
+Первый вариант этой мутации ошибочно использовал `Failed<void>`. Команда
+`flutter test -r expanded` завершилась кодом 1 из-за
+`Error: Expected 0 type arguments.` Это ошибка моего зонда, не обнаружение
+дефекта тестами. Последняя строка:
+
+```text
+  ... and 6 more
+```
+
+Для проверки последствий корректной M8 выполнено:
+
+```sh
+flutter test -r expanded test/zz_review_probe_test.dart --plain-name 'P3 sync throw'
+```
+
+Код 1, четыре падения; вывод:
+
+```text
+P3 concurrent error=Bad state: sync next=[2]
+P3 sequential error=Bad state: sync next=[]
+P3 droppable error=Bad state: sync next=[]
+P3 keepLatest error=Bad state: sync next=[]
+P3 restart error=Bad state: sync next=[]
+```
+
+Последняя строка:
+
+```text
+  packages/flutter_solo/test/zz_review_probe_test.dart: P3 sync throw sequential
+```
+
+**M9 — `_Reporter.onUnanswered` игнорирует ошибки отменённой задачи.**
+
+```sh
+flutter test -r expanded test/readme_rakes_test.dart --plain-name 'a failure of the abandoned load goes to FlutterError'
+```
+
+Код 1: вариант без внутреннего перехвата покраснел — ожидался
+`SocketException`, получен `null`; вариант с перехватом прошёл. Последняя
+строка:
+
+```text
+  packages/flutter_solo/test/readme_rakes_test.dart: A reaction the next change replaces a failure of the abandoned load goes to FlutterError
+```
+
+#### Независимые зонды
+
+Команда на исходнике, затем повторно после восстановления:
+
+```sh
+flutter test -r expanded test/zz_review_probe_test.dart
+```
+
+Оба раза код 0, последняя строка:
+
+```text
+00:00 +21: All tests passed!
+```
+
+**P1: смена контроллера во всех режимах**, отдельно с обычным `await`
+и `ctx.join`. Старую операцию удерживал `Completer`, освобождаемый явно.
+Проверены отмена, отсутствие реакции на начальное состояние нового контроллера,
+снятие старой подписки, ожидание/пропуск нового изменения и обработка
+следующего.
+
+```text
+P1 concurrent join=false before=[start1, cancel1, start7] after=[start1, cancel1, start7, end1] fresh=start8
+P1 concurrent join=true before=[start1, cancel1, start7] after=[start1, cancel1, start7, caught1] fresh=start8
+P1 sequential join=false before=[start1, cancel1] after=[start1, cancel1, end1, start7] fresh=start8
+P1 sequential join=true before=[start1, cancel1] after=[start1, cancel1, caught1, start7] fresh=start8
+P1 droppable join=false before=[start1, cancel1] after=[start1, cancel1, end1] fresh=start8
+P1 droppable join=true before=[start1, cancel1] after=[start1, cancel1, caught1] fresh=start8
+P1 keepLatest join=false before=[start1, cancel1] after=[start1, cancel1, end1, start7] fresh=start8
+P1 keepLatest join=true before=[start1, cancel1] after=[start1, cancel1, caught1, start7] fresh=start8
+P1 restart join=false before=[start1, cancel1] after=[start1, cancel1, end1, start7] fresh=start8
+P1 restart join=true before=[start1, cancel1] after=[start1, cancel1, caught1, start7] fresh=start8
+```
+
+**P2: поздний провал `abandonable`.** Ошибка запроса передавалась через
+`Completer.completeError` уже после отмены реакции. `inside` — перехват внутри
+действия; `leave` — уход виджета вместо замены реакции.
+
+```text
+P2 inside=false leave=false before=[start1, request-start, outside:Cancelled, start2] after=[start1, request-start, outside:Cancelled, start2, request-end] FlutterError=SocketException: offline
+P2 inside=false leave=true before=[start1, request-start, outside:Cancelled] after=[start1, request-start, outside:Cancelled, request-end] FlutterError=SocketException: offline
+P2 inside=true leave=false before=[start1, request-start, outside:Cancelled, start2] after=[start1, request-start, outside:Cancelled, start2, handled-inside, request-end] FlutterError=null
+P2 inside=true leave=true before=[start1, request-start, outside:Cancelled] after=[start1, request-start, outside:Cancelled, handled-inside, request-end] FlutterError=null
+```
+
+Проверено также, что при отмене запрос ещё не завершён, наружный `catch` больше
+ничего не получает, а повторного сообщения об ошибке нет.
+
+**P3: синхронный бросок и следующее изменение**, исходник:
+
+```text
+P3 concurrent error=Bad state: sync next=[2]
+P3 sequential error=Bad state: sync next=[2]
+P3 droppable error=Bad state: sync next=[2]
+P3 keepLatest error=Bad state: sync next=[2]
+P3 restart error=Bad state: sync next=[2]
+```
+
+**P4:** две записи старого контроллера и его замена в одной сборке; затем
+проверена успешная реакция на запись нового. **P5:** A → B → A с отменой первой
+реакции и проверкой единственной подписки.
+
+```text
+P4 old=[]
+P5 log=[start1, Cancelled(manual), start2]
+```
+
+Эти зонды не используют задержки для определения порядка событий.
+
+#### Документация
+
+| Команда | Код | Точная последняя строка |
+|---|---:|---|
+| `python3 tool/check_translations.py` | 0 | `no differences` |
+| `python3 tool/reflow.py --check` | 0 | `every paragraph is filled to 79 columns` |
+| `python3 tool/check_line_width.py` | 0 | `no Markdown line over 79 columns, no blank line doubled` |
+| `python3 tool/check_dartdoc.py` | 0 | `every public dartdoc is a hint` |
+
+Новый абзац README EN/RU вычитан: смысл совпадает. Новые публичные утверждения
+dartdoc подтверждены P1. Ослабления прежних утверждений тестов и ложного
+прохождения из-за тайминга в проверенных сценариях не обнаружено.
+
+### Находки
+
+#### 1. Важная. Сторож продолжения после синхронного провала пропускает блокировку следующих реакций
+
+**Место:** `packages/flutter_solo/test/solo_listener_test.dart:862`, тест
+`a listener throwing synchronously goes to FlutterError,
+and the next reaction runs`. Связанный участок — `_start` и `_finished`
+в `packages/flutter_solo/lib/src/solo_listener.dart:253`.
+
+**Механика.** Дополненный тест работает только в режиме по умолчанию,
+`concurrent`. Следующая реакция в нём стартует даже тогда, когда завершившаяся
+с ошибкой задача осталась в `_running`. Поэтому добавленный
+`expect(log, ['r2'])` не проверяет освобождение занятого места после провала.
+
+В остальных режимах это существенная регрессия: `sequential`, `keepLatest`
+и `restart` оставляют следующие изменения ждать, а `droppable` отбрасывает их.
+Обычный сценарий — обработчик состояния синхронно бросил исключение, после чего
+пользователь продолжает работать с экраном.
+
+**Доказательство.** M8 пропускает `_finished(job)` только для `Failed`. Все
+**329 штатных тестов остаются зелёными**. Независимый P3 на этой мутации
+получает `next=[]` в четырёх режимах, сохраняя ожидаемое сообщение об ошибке.
+На исходнике тот же P3 получает `next=[2]` во всех пяти режимах.
+
+**Предложение.** Параметризовать дополненный тест по всем
+`SoloListenerMode.values`. Сохранить обе проверки: ошибка пришла
+в `FlutterError`, следующее изменение вызвало ровно одну реакцию.
+
+**Вердикт:** подтверждён пробел в защите от регрессии. Дефекта исполнения
+на HEAD этот зонд не обнаружил; исправление требуется в тестах.
+
+Вердикт исполнителя: принято. Подтверждено своей мутацией: та же подмена
+`job.whenFinished` (не звать `_finished` у `Failed`) проходит весь набор,
+`+329: All tests passed!`. Сделано в `fb4e6451`, шире предложенного: по всем
+`SoloListenerMode.values` идут оба теста провала — синхронный бросок
+и асинхронный провал после `ctx.pause`, — потому что та же мутация глушит
+и второй. На мутанте 8 падений (`sequential`, `droppable`, `keepLatest`,
+`restart` по два теста), на исходнике `flutter test` +337, `flutter analyze`
+и `dart format` чистые; на Flutter 3.38.1 тот же набор +337.
+
+### Вердикт ревьюера
+
+- **Прежняя находка 1 закрыта.** README правильно описывает позднюю ошибку,
+  наружный и внутренний перехват. Подтверждено P2 и мутацией M9.
+- **Прежняя находка 2 закрыта.** Поведение всех пяти режимов соответствует
+  исправленному dartdoc. Подтверждено P1 и мутациями M2, M3, M6, M7.
+- **Прежняя находка 4 закрыта частично.** Порядок `_letGo` и отмена первого A
+  защищены — M1 и M4 обнаружены. Продолжение после синхронного провала защищено
+  недостаточно: M8 переживает полный набор.
+
+**Безусловную готовность к выпуску не подтверждаю:** перед выпуском нужен
+указанный сторож и успешный `flutter analyze` в окружении с доступом к каталогу
+плагинов. Новых дефектов поведения виджета или расхождений README EN/RU
+не найдено. Отложенные находки 3 и 5 не поднимались.
+
+По приоритету задания не выполнял конфликтующие требования `AGENTS.md`
+об обновлении `docs/handoff.md`, сохранении отчёта под git и коммитах. Код
+пакета не исправлялся; все мутации восстановлены, зонды и `.review-tmp`
+удалены.
+
+Последний `git diff --stat` пуст. Последний `git status --short` — **пустой
+вывод**.
+
+#### Приёмка
+
+`flutter analyze` у ревьюера не дошёл до конца по вине песочницы: сервер
+анализа пишет в `~/.dartServer`, который не был открыт на запись. Тот же
+`flutter analyze` в той же копии вне песочницы — `No issues found!`, и после
+`fb4e6451` тоже. Второе условие вердикта ревьюера — сторож продолжения после
+провала — закрыто тем же коммитом.
+
 ## Гейт
 
 Пять заданий CI локально, на голове ветки: `dart`, `flutter` (со стендом
@@ -316,6 +610,11 @@ before it cancels» — на мутанте краснеет (`Actual: ['r2']`),
 прошёл целиком: `async_job` +1905, `solo` +2260, пример `solo` +112,
 `async_job_lints` +203, `solo_lints` +96, оба плагина через сервер анализа,
 `flutter_solo` +329, его пример +6, стенд `flutter_solo` +56.
+
+`fb4e6451` меняет только `test/solo_listener_test.dart`, и полный гейт на нём
+не перезапускался: `flutter test` `flutter_solo` +337 на текущем SDK
+и на Flutter 3.38.1, `flutter analyze` — `No issues found!`, `dart format` без
+изменений.
 
 ## Отложенное
 
