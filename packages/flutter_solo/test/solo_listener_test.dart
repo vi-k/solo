@@ -831,9 +831,11 @@ void main() {
       expect(log, ['r2']);
     });
 
-    testWidgets(
-      'a failed reaction goes to FlutterError and the next one runs',
-      (tester) async {
+    // A failed reaction has to leave its place, or every mode but
+    // concurrent holds the next change behind it.
+    for (final mode in SoloListenerMode.values) {
+      testWidgets('in ${mode.name}, a failed reaction goes to FlutterError '
+          'and the next one runs', (tester) async {
         final counter = _Counter();
         addTearDown(counter.close);
         final log = <String>[];
@@ -841,6 +843,7 @@ void main() {
           _listener(
             counter,
             log,
+            mode: mode,
             listener: (ctx, context, state) async {
               await ctx.pause();
               if (state == 1) {
@@ -856,29 +859,30 @@ void main() {
         counter.set(2);
         await tester.pump(const Duration(milliseconds: 10));
         expect(log, ['r2']);
-      },
-    );
+      });
 
-    testWidgets('a listener throwing synchronously goes to FlutterError, '
-        'and the next reaction runs', (tester) async {
-      final counter = _Counter();
-      addTearDown(counter.close);
-      final log = <String>[];
-      await tester.pumpWidget(
-        _listener(
-          counter,
-          log,
-          listener: (ctx, context, state) =>
-              state == 1 ? throw StateError('at once') : log.add('r$state'),
-        ),
-      );
-      counter.set(1);
-      await tester.pump();
-      expect(tester.takeException(), isStateError);
-      counter.set(2);
-      await tester.pump();
-      expect(log, ['r2']);
-    });
+      testWidgets('in ${mode.name}, a listener throwing synchronously goes '
+          'to FlutterError, and the next reaction runs', (tester) async {
+        final counter = _Counter();
+        addTearDown(counter.close);
+        final log = <String>[];
+        await tester.pumpWidget(
+          _listener(
+            counter,
+            log,
+            mode: mode,
+            listener: (ctx, context, state) =>
+                state == 1 ? throw StateError('at once') : log.add('r$state'),
+          ),
+        );
+        counter.set(1);
+        await tester.pump();
+        expect(tester.takeException(), isStateError);
+        counter.set(2);
+        await tester.pump();
+        expect(log, ['r2']);
+      });
+    }
 
     group('a failure after the screen left goes to FlutterError', () {
       final failures = <String, void Function(BuildContext context)>{
