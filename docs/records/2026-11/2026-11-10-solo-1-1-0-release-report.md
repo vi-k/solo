@@ -1,7 +1,7 @@
-> **Состояние на 2026-11-10:** связка `solo` 1.1.0 идёт по слову владельца
-> «публикуй»: часть `solo` ветки `solo-listener` влита в `main`
-> (`4f5d4370`, `5dacbae3`), подготовка `ef26d17e`, релизный коммит с этой
-> записью — следующий.
+> **Состояние на 2026-11-10:** выпущено по слову владельца «публикуй»:
+> релизный коммит `4ffc087e`, аннотированный тег `solo-v1.1.0`, `solo` 1.1.0
+> на pub.dev. Остаток ветки `solo-listener` после выпуска перебазирован
+> на `main`, голова `83824298`; он ждёт выпуска `flutter_solo`.
 > **Что это:** подготовка минорного выпуска `solo` 1.1.0 —
 > `Solo.addChangeListener` и его документация.
 > **Связанные записи:** `2026-11-10-solo-listener-report.md`,
@@ -96,9 +96,35 @@ README версию не называет: установка — `dart pub add 
 записью, аннотированный тег `solo-v1.1.0` на нём, `git push --follow-tags`
 и `dart pub publish` из чистого дерева `packages/solo`.
 
+Связка прошла подряд: релизный коммит `4ffc087e` «Release solo 1.1.0»,
+аннотированный тег `solo-v1.1.0` на нём, `git push --follow-tags` —
+`origin/main` с `b541fe82` на `4ffc087e` вместе с тегом, —
+и `dart pub publish --force` из чистого дерева `packages/solo`: «Successfully
+uploaded https://pub.dev/packages/solo version 1.1.0». API pub.dev отдаёт
+версию 1.1.0 с датой публикации 2026-11-10.
+
 ## После выпуска
 
 Шаг 2 раздела «Как ветка входит в `main`» плана: перебазировать остаток ветки
 `solo-listener` на `main`. Запись задачи 7 в `CHANGELOG.md` `solo` и в переводе
 должна лечь в новый «Unreleased», а не под «1.1.0»: проверить глазами
 и `check_translations.py`.
+
+Сделано сразу после публикации. Перебазирование прошло без конфликтов,
+но запись задачи 7 легла в конец раздела «1.1.0» — и в `CHANGELOG.md`,
+и в переводе. Она перенесена в новый раздел «Unreleased» («Не выпущено»
+в переводе) с подразделом «Documentation» («Документация») и вклеена в сам
+коммит задачи 7, так что ни один коммит ветки не пишет её под «1.1.0».
+`check_translations.py` — «no differences», `reflow.py --check`,
+`check_line_width.py`, `check_links.py` и сторож сборки сайта чистые;
+`dart test` `solo` +2260, `flutter test` `flutter_solo` +337.
+
+| До | После | Коммит |
+| --- | --- | --- |
+| `9c539e92` | `77981709` | feat(flutter_solo): add SoloListener |
+| `2aaf6885` | `287ead02` | feat(flutter_solo): cancel SoloListener reactions… |
+| `9e9e1fb3` | `f85c7698` | docs(flutter_solo): add the SoloListener section… |
+| `cf157b0c` | `530f10a7` | docs(flutter_solo): say what a reaction that outlives… |
+| `b13b253a` | `5bf3ae03` | docs: name SoloListener next to BlocListener… |
+| `7b6edee9` | `bd8b61a7` | fix(flutter_solo): say where an abandoned load fails… |
+| `2bca4c26` | `83824298` | test(flutter_solo): hold every mode to the next reaction… |
