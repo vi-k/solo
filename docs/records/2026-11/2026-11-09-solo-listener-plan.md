@@ -5,8 +5,8 @@
 > в `main`» сделан 2026-11-10: часть `solo` вышла с `solo` 1.1.0
 > (`2026-11-10-solo-1-1-0-release-report.md`). Шаг 2 тоже: остаток
 > перебазирован на `main`, запись задачи 7 — в новом «Unreleased». Шаг 3
-> тоже: остаток влит в `main` при подготовке `flutter_solo` 1.1.0
-> (`2026-11-10-flutter-solo-1-1-0-release-report.md`), голова `312a5130`.
+> тоже: остаток влит в `main` (голова `312a5130`) и вышел с `flutter_solo`
+> 1.1.0 (`2026-11-10-flutter-solo-1-1-0-release-report.md`).
 > Отчёт — `2026-11-10-solo-listener-report.md`.
 > **Что это:** план работ по `Solo.addChangeListener` в `solo` и виджету
 > `SoloListener` во `flutter_solo`: задачи, тесты, документы, порядок коммитов

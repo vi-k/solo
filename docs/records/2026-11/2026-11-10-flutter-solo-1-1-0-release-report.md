@@ -1,7 +1,6 @@
-> **Состояние на 2026-11-10:** связка `flutter_solo` 1.1.0 идёт по слову
-> владельца «публикуй»: остаток ветки `solo-listener` влит в `main`
-> (`312a5130`), подготовка `0e218671`, релизный коммит с этой записью —
-> следующий.
+> **Состояние на 2026-11-10:** выпущено по слову владельца «публикуй»:
+> подготовка `0e218671`, релизный коммит `09ba1338`, аннотированный тег
+> `flutter_solo-v1.1.0`, `flutter_solo` 1.1.0 на pub.dev.
 > **Что это:** подготовка минорного выпуска `flutter_solo` 1.1.0 —
 > `SoloListener` и его документация.
 > **Связанные записи:** `2026-11-10-solo-1-1-0-release-report.md`,
@@ -99,6 +98,14 @@ README версию не называет: таблица версиониров
 коммит «Release flutter_solo 1.1.0» с этой записью, аннотированный тег
 `flutter_solo-v1.1.0` на нём, `git push --follow-tags` и `flutter pub publish`
 из чистого дерева `packages/flutter_solo`.
+
+Связка прошла подряд: релизный коммит `09ba1338` «Release flutter_solo 1.1.0»,
+аннотированный тег `flutter_solo-v1.1.0` на нём, `git push --follow-tags` —
+`origin/main` с `4ffc087e` на `09ba1338` вместе с тегом, —
+и `flutter pub publish --force` из чистого дерева `packages/flutter_solo`:
+«Successfully uploaded https://pub.dev/packages/flutter_solo version 1.1.0».
+API pub.dev отдаёт версию 1.1.0 с датой публикации 2026-11-10 и зависимостью
+`solo: ^1.1.0`.
 
 ## После выпуска
 

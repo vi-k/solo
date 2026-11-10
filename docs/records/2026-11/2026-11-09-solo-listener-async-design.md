@@ -5,9 +5,8 @@
 > `2026-11-09-solo-listener-plan.md`, по его ревью уточнены пункты 5
 > и 6 «Поведения» и «Документация». Исполнен в ветке `solo-listener`;
 > часть `solo` вышла с `solo` 1.1.0
-> (`2026-11-10-solo-1-1-0-release-report.md`), остальное влито в `main`
-> к выпуску `flutter_solo` 1.1.0
-> (`2026-11-10-flutter-solo-1-1-0-release-report.md`); отчёт —
+> (`2026-11-10-solo-1-1-0-release-report.md`), остальное — с `flutter_solo`
+> 1.1.0 (`2026-11-10-flutter-solo-1-1-0-release-report.md`); отчёт —
 > `2026-11-10-solo-listener-report.md`.
 > **Что это:** асинхронный `SoloListener` во `flutter_solo` — реакция экрана
 > на каждое изменение состояния задачей ядра с отменой и пятью режимами —
