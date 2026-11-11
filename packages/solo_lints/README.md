@@ -106,8 +106,15 @@ the same file, and `close()` and `cancelAll()`. It looks at the body of a
 `SoloContext` job queued on this controller, what the body returns included, at
 the actions that body waits for through `join`, `abandonable` and
 `uncancellable`, and at its cleanup, which the queue waits for as well. A mixin
-`on Solo` is the controller too. `bare_await`, which reports the other plain
-waits of a body, is quiet on these. See
+`on Solo` is the controller too, and for `close()` and `cancelAll()`, which
+wait for every lane, so is any `SoloController`. In a `SoloLanes` the deadlock
+is within one lane: the rule reports a body queued by `_likes.enqueue(...)`
+that waits for a job of `_likes`, queued there directly or by a method whose
+body queues it there, and names the lane. A job of another lane runs on that
+lane's pump, and where the lane is not seen, as with a lane from a getter, a
+job from a field or a parameter, a body of a child or a handler of an
+accumulator, the rule is quiet. `bare_await`, which reports the other plain
+waits of a body, is quiet on the waits this rule reports. See
 [Steps as children](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#steps-as-children).
 
 ### key_per_request

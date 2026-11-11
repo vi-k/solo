@@ -267,6 +267,22 @@ $_feed
 }
 ''', []);
 
+  // A getter is no lane field: which lane it gives is not seen.
+  Future<void> test_lane_from_a_getter() => assertAt('''
+$_feed
+  SoloLane<int> get current => _likes;
+
+  Job<void> likeTwice() => current.enqueue<int, void>((ctx) async {
+    await current.enqueue<int, void>((ctx) async {}).done;
+    await like().done;
+  });
+
+  Job<void> likeAgain() => _likes.enqueue<int, void>((ctx) async {
+    await current.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''', []);
+
   Future<void> test_close_of_lanes() => assertAt(
     '''
 $_feed
