@@ -283,4 +283,55 @@ $_profiles
 ''',
     ['key: [[scope]]'],
   );
+
+  Future<void> test_lane_enqueue() => assertAt(
+    '''
+$_feed
+  Job<Profile> load(String id) => _profiles.enqueue<Ready, Profile>(
+    key: _Op.load,
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
 }
+''',
+    ['key: [[_Op.load]]'],
+  );
+
+  Future<void> test_lane_enqueue_job() => assertAt(
+    '''
+$_feed
+  Job<Profile> load(String id) => _profiles.enqueueJob(
+    _profiles.job<Ready, Profile>(key: _Op.load, (ctx) => api.load(id)),
+    policy: Policy.droppable,
+  );
+}
+''',
+    ['key: [[_Op.load]]'],
+  );
+}
+
+/// [_profiles] with a lane in place of the queue of a `Solo`.
+const _feed = '''
+import 'package:solo/solo.dart';
+
+sealed class State {}
+
+final class Ready extends State {}
+
+class Profile {}
+
+enum _Op { load }
+
+abstract interface class Api {
+  Future<Profile> load(String id);
+}
+
+late final Api api;
+
+final class Feed extends SoloLanes<State> {
+  Feed() : super(Ready()) {
+    _profiles = lane('profiles');
+  }
+
+  late final SoloLane<State> _profiles;
+''';

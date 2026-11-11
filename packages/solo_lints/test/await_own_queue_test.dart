@@ -196,4 +196,150 @@ mixin Steps on Solo<int> {
 ''',
     ['await [[sync(item)]]'],
   );
+
+  Future<void> test_lane() => _assertLane(
+    '''
+$_feed
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
 }
+''',
+    '_likes.enqueue<int, void>((ctx) async {})',
+    'enqueue',
+  );
+
+  Future<void> test_another_lane() => assertAt('''
+$_feed
+  Job<void> reloadAndLike() => _reload.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+    await like().value;
+  });
+}
+''', []);
+
+  // The lane of a method is read in its body, the declared SoloJob too.
+  Future<void> test_method_of_the_lane() => _assertLane(
+    '''
+$_feed
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await this.like().value;
+    await reload().done;
+  });
+}
+''',
+    'this.like()',
+    'like',
+  );
+
+  Future<void> test_job_from_a_parameter() => assertAt('''
+$_feed
+  Job<void> after(SoloJob<void> job) => _likes.enqueue<int, void>((ctx) async {
+    await job.done;
+  });
+}
+''', []);
+
+  // A child runs in the lane of its parent and a handler in the lane of the
+  // accumulator, neither seen at the body.
+  Future<void> test_child_and_handler() => assertAt('''
+$_feed
+  late final _batch = _likes.collect<int, int, void>((ctx, events) async {
+    await like().done;
+  });
+
+  Job<void> nested() => _likes.enqueue<int, void>((ctx) async {
+    await ctx.run(ctx.child((child) async {
+      await like().done;
+    }));
+  });
+}
+''', []);
+
+  Future<void> test_body_queued_in_a_lane_of_another_controller() =>
+      assertAt('''
+$_feed
+  late final Feed other;
+
+  Job<void> relay() => other._likes.enqueue<int, void>((ctx) async {
+    await like().done;
+  });
+}
+''', []);
+
+  Future<void> test_close_of_lanes() => assertAt(
+    '''
+$_feed
+  Job<void> stop() => _likes.enqueue<int, void>((ctx) async {
+    await cancelAll();
+    await this.close();
+  });
+}
+''',
+    ['cancelAll()', 'this.close()'],
+  );
+
+  Future<void> test_close_of_a_solo_stream() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Desk extends Solo<int> with SoloStream<int> {
+  Desk() : super(0);
+
+  Job<void> logout() => enqueue<int, void>((ctx) async {
+    await close();
+  });
+}
+''',
+    ['await [[close()]]'],
+  );
+
+  Future<void> test_close_of_lanes_with_a_stream() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> with SoloStream<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _likes;
+
+  Job<void> logout() => _likes.enqueue<int, void>((ctx) async {
+    await close();
+  });
+}
+''',
+    ['await [[close()]]'],
+  );
+
+  /// Asserts one diagnostic at [span], the first one awaited in [code],
+  /// that names [member] and the lane `_likes`.
+  Future<void> _assertLane(String code, String span, String member) =>
+      assertDiagnostics(code, [
+        lint(
+          code.indexOf('await $span') + 'await '.length,
+          span.length,
+          messageContainsAll: ["'$member' waits", "the lane '_likes'"],
+        ),
+      ]);
+}
+
+/// A controller of two lanes, to be completed: `reload` queues in `_reload`
+/// and `like` in `_likes`.
+const _feed = '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _reload = lane('reload');
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _reload;
+  late final SoloLane<int> _likes;
+
+  Job<void> reload() => _reload.enqueue<int, void>((ctx) async {});
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+''';

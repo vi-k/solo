@@ -49,6 +49,18 @@ final class Profiles extends Solo<State> {
   );
 ''';
 
+/// A controller of one lane, to be completed.
+const _lanes =
+    '''
+$_header
+final class Feed extends SoloLanes<State> {
+  Feed() : super(Ready()) {
+    _profiles = lane('profiles');
+  }
+
+  late final SoloLane<State> _profiles;
+''';
+
 @reflectiveTest
 class IgnoreFailureHidesBugsTest extends RuleTest {
   @override
@@ -196,6 +208,73 @@ final class Profiles extends Solo<State> {
 }
 ''',
     '_saves.add(name).ignoreFailure()',
+    '_saves',
+  );
+
+  Future<void> test_lane_enqueue() => _assertOne(
+    '''
+$_lanes
+  void reload() {
+    _profiles.enqueue<Ready, Profile>(
+      (ctx) => api.load(),
+      isExpectedError: (e) => e is ApiException,
+    ).ignoreFailure();
+  }
+}
+''',
+    'ignoreFailure()',
+    'enqueue',
+  );
+
+  Future<void> test_lane_job_through_enqueue_job() => _assertOne(
+    '''
+$_lanes
+  void reload() {
+    _profiles.enqueueJob(
+      _profiles.job<Ready, Profile>(
+        (ctx) => api.load(),
+        isExpectedError: (e) => e is ApiException,
+      ),
+    ).ignoreFailure();
+  }
+}
+''',
+    'ignoreFailure()',
+    'job',
+  );
+
+  Future<void> test_lane_collect() => _assertOne(
+    '''
+$_lanes
+  late final _saves = _profiles.collect<Ready, String, void>(
+    (ctx, names) => api.save(names),
+    isExpectedError: (e) => e is ApiException,
+  );
+
+  void save(String name) {
+    _saves.add(name).ignoreFailure();
+  }
+}
+''',
+    '_saves.add(name).ignoreFailure()',
+    '_saves',
+  );
+
+  Future<void> test_lane_accumulate() => _assertOne(
+    '''
+$_lanes
+  late final _saves = _profiles.accumulate<Ready, List<String>, void>(
+    (ctx, names) => api.save(names),
+    merge: (all, more) => [...all, ...more],
+    isExpectedError: (e) => e is ApiException,
+  );
+
+  void save(String name) {
+    _saves.add([name]).ignoreFailure();
+  }
+}
+''',
+    '_saves.add([name]).ignoreFailure()',
     '_saves',
   );
 

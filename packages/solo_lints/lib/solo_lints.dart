@@ -23,8 +23,13 @@ class SoloLintsPlugin extends Plugin {
   @override
   void register(PluginRegistry registry) {
     // The rules of the core come from async_job_lints; await_own_queue says
-    // what bare_await would at a wait for the own queue.
-    registerAsyncJobLints(registry, ownQueueReportedElsewhere: true);
+    // what bare_await would at a wait for the own queue or the own lane, and
+    // what discarded_outcome would at the own lane.
+    registerAsyncJobLints(
+      registry,
+      ownQueueReportedElsewhere: true,
+      ownLaneReportedElsewhere: true,
+    );
     registry
       ..registerWarningRule(AwaitOwnQueue())
       ..registerLintRule(KeyPerRequest())

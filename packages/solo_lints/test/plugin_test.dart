@@ -70,6 +70,7 @@ void main() {
 
   defineReflectiveSuite(() {
     defineReflectiveTests(OwnQueueTest);
+    defineReflectiveTests(OwnLaneTest);
   });
 }
 
@@ -91,4 +92,67 @@ final class Desk extends Solo<int> {
   });
 }
 ''', []);
+
+  // await_own_queue reports the wait for the own lane; bare_await keeps the
+  // wait for the other one, which no rule here takes.
+  Future<void> test_lanes() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _reload = lane('reload');
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _reload;
+  late final SoloLane<int> _likes;
+
+  Job<void> reload() => _reload.enqueue<int, void>((ctx) async {});
+
+  Job<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await reload().done;
+    await like().done;
+    await close();
+  });
+}
+''',
+    ['[[await]] reload()'],
+  );
+}
+
+/// `discarded_outcome` as the plugin registers it, at a wait for the own
+/// lane.
+@reflectiveTest
+class OwnLaneTest extends RuleTest {
+  @override
+  AbstractAnalysisRule get underTest => _registered().rule('discarded_outcome');
+
+  Future<void> test_lanes() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _reload = lane('reload');
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _reload;
+  late final SoloLane<int> _likes;
+
+  Job<void> reload() => _reload.enqueue<int, void>((ctx) async {});
+
+  Job<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await reload().done;
+    await like().done;
+  });
+}
+''',
+    ['reload().[[done]]'],
+  );
 }
