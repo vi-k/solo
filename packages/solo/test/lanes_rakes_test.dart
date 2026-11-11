@@ -256,6 +256,31 @@ final class _Two extends SoloLanes<int> {
   void onStart(Job<Object?> job) => log.add('start ${job.key}');
 }
 
+/// The state of a feed that a reload takes through `Loading`.
+sealed class _Load {
+  const _Load();
+}
+
+final class _Loading extends _Load {
+  const _Loading();
+}
+
+final class _Loaded extends _Load {
+  const _Loaded();
+}
+
+/// A reload lane that writes `Loading`, and a likes lane whose jobs need
+/// `Loaded`.
+final class _Loads extends SoloLanes<_Load> {
+  late final SoloLane<_Load> reload;
+  late final SoloLane<_Load> likes;
+
+  _Loads() : super(const _Loaded()) {
+    reload = lane('reload');
+    likes = lane('likes');
+  }
+}
+
 void main() {
   tearDown(() {
     Solo.observer = null;
@@ -403,6 +428,29 @@ void main() {
       }, errors: errors);
 
       expect(errors, isEmpty);
+      final mark = feed.currentState.marks['p1']!;
+      expect((mark.liked, mark.confirmation), (true, 1));
+    });
+
+    test('a cancelled like puts back the mark it found', () {
+      _says(
+        'when the like fails or is cancelled, `ifFailed` or `ifCancelled` '
+        'puts it back',
+      );
+      late page.FeedController feed;
+      late Job<void> unlike;
+      page.Mark? during;
+      _trace((async, say) {
+        feed = page.FeedController(FeedApi(say))..setLiked('p1', liked: true);
+        async.elapse(_ms(100));
+        unlike = feed.setLiked('p1', liked: false);
+        async.elapse(_ms(10));
+        during = feed.currentState.marks['p1'];
+        feed.close().ignore();
+      });
+
+      expect(during?.liked, isFalse);
+      expect(unlike.outcome, isA<Cancelled>());
       final mark = feed.currentState.marks['p1']!;
       expect((mark.liked, mark.confirmation), (true, 1));
     });
@@ -725,7 +773,54 @@ void main() {
       }
     });
 
+    test('a write outside the W of a job of another lane cancels it, running '
+        'or at its start', () {
+      _says(
+        'A reload lane that writes `Loading` cancels every like with '
+        '`W = Loaded`: the like that runs is cancelled at the write, and a '
+        'like that comes to its start while the state is `Loading` never runs '
+        'its body.',
+      );
+      _says(
+        'The like that runs is cancelled at the write, and a like that comes '
+        'to its start while the state is `Loading` is cancelled before its '
+        'body runs.',
+      );
+      fakeAsync((async) {
+        final loads = _Loads();
+        final server = Completer<void>();
+        var bodies = 0;
+        SoloJob<void> like() => loads.likes.enqueue<_Loaded, void>((ctx) {
+          bodies++;
+          return ctx.join(() => server.future);
+        });
+        final running = like();
+        final next = like();
+        async.flushMicrotasks();
+        expect(bodies, 1);
+
+        loads.reload.enqueue<_Load, void>(
+          (ctx) async => ctx.emit(const _Loading()),
+        );
+        async.flushMicrotasks();
+        expect(running.isCancelled, isTrue);
+        server.complete();
+        async.flushMicrotasks();
+
+        Matcher cancelled({required bool started}) => isA<Cancelled>()
+            .having((c) => c.started, 'started', started)
+            .having((c) => c.reason, 'reason', isA<RulesCancelReason>());
+        expect(running.outcome, cancelled(started: true));
+        expect(next.outcome, cancelled(started: false));
+        expect(bodies, 1);
+      });
+    });
+
     test('a write of one lane cancels a cancellable: false job of another', () {
+      _says(
+        'And the rules go past `cancellable: false`, so a write of one lane '
+        'cancels a command to a device that runs in another.',
+      );
       _says(
         'The job is cancelled all the same: the rules go past '
         '`cancellable: false`, as `externalSetState` does in a `Solo`.',
@@ -771,6 +866,39 @@ void main() {
         });
         async.elapse(const Duration(seconds: 100));
         expect(own.outcome, isNull);
+        two.close().ignore();
+        async.flushTimers();
+      });
+    });
+
+    test('a circle of waits across lanes hangs both', () {
+      _says(
+        'A job of lane A awaits a job it queued in lane B, which awaits a job '
+        'it queued in lane A',
+      );
+      _says(
+        'Both wait for good: the job in B waits for one queued in A behind the '
+        'job that waits for it.',
+      );
+      fakeAsync((async) {
+        final two = _Two();
+        SoloJob<void>? inB;
+        SoloJob<void>? backInA;
+        final inA = two.a.enqueue<int, void>((ctx) async {
+          inB = two.b.enqueue<int, void>((ctx) async {
+            backInA = two.a.enqueue<int, void>((ctx) async {});
+            await backInA!.done;
+          });
+          await inB!.done;
+        });
+        async.elapse(const Duration(seconds: 100));
+
+        expect(inB, isNotNull);
+        expect(backInA, isNotNull);
+        expect(
+          [inA.outcome, inB!.outcome, backInA!.outcome],
+          [null, null, null],
+        );
         two.close().ignore();
         async.flushTimers();
       });

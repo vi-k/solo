@@ -30,7 +30,7 @@ final class Worker extends Solo<Permit> {
     (ctx) => ctx.join(step),
   );
 
-  // Called once, when the last job of the worker is over.
+  // Called once, when closing the worker finishes.
   @override
   void onClose() => gate.removeListener(_sync);
 }

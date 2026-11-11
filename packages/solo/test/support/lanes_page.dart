@@ -157,8 +157,7 @@ final class StudioController extends SoloLanes<Studio> {
         ctx.emit((camera: ctx.state.camera, notice: Notice(photo)));
       });
 
-  /// Not on the page: the camera reports what the device did, as
-  /// `externalSetState` reflects a fact on the state page.
+  // The device reports its camera: Off, or Ready again.
   void reflect(Camera camera) =>
       externalSetState((camera: camera, notice: currentState.notice));
 

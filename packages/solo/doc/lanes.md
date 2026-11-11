@@ -6,6 +6,13 @@ and the jobs of different lanes run side by side. To a job of one lane, a write
 of another lane is what `externalSetState` is to a job of a `Solo`: its rules
 are asked again, and a `W` or a `keepWhile` that no longer holds cancels it.
 
+Two consequences of that are easy to miss coming from a `Solo`. A reload lane
+that writes `Loading` cancels every like with `W = Loaded`: the like that runs
+is cancelled at the write, and a like that comes to its start while the state
+is `Loading` never runs its body. And the rules go past `cancellable: false`,
+so a write of one lane cancels a command to a device that runs in another.
+[The table of cases](#the-table-of-cases) holds both.
+
 Most sections open with a first attempt: the version the vocabulary of `Solo`
 leads to, and what that code does. The answer follows under a heading of its
 own. A section with nothing to get wrong opens with the answer. The states and
@@ -44,7 +51,7 @@ final class Worker extends Solo<Permit> {
     (ctx) => ctx.join(step),
   );
 
-  // Called once, when the last job of the worker is over.
+  // Called once, when closing the worker finishes.
   @override
   void onClose() => gate.removeListener(_sync);
 }
@@ -417,8 +424,8 @@ The camera and its notice from
 [A notice the screen accepts](state.md#a-notice-the-screen-accepts), in one
 controller. A camera lane takes shots, and a notices lane closes the notice of
 a stored photo, so the acceptance does not wait for a shot. A shot needs the
-camera `Ready` and is cancelled when it no longer is; the controller reflects
-what the device reports with `externalSetState`.
+camera `Ready` and is cancelled when it no longer is. What the device reports
+reaches the state through `reflect`, with `externalSetState`.
 
 ### The first attempt
 
@@ -484,6 +491,10 @@ final class StudioController extends SoloLanes<Studio> {
         ctx.emit((camera: ctx.state.camera, notice: Notice(photo)));
       });
 
+  // The device reports its camera: Off, or Ready again.
+  void reflect(Camera camera) =>
+      externalSetState((camera: camera, notice: currentState.notice));
+
   Job<void> accept(Notice notice) =>
       _notices.enqueue<Studio, void>((ctx) async {
         if (identical(ctx.state.notice, notice)) {
@@ -546,9 +557,9 @@ job, and the first `setLiked` throws all the same:
 Bad state: Cannot declare lane likes of FeedController after enqueueJob of one of its lanes was called: from the first call on, the lanes are what the pump walks; see https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes
 ```
 
-Without the seal, whether a call works would hang on the order of the taps, and
-the order the pump walks the lanes in on the order of the first reads rather
-than on the lines of the class.
+Without the seal a microtask after the constructor, whether a call works would
+hang on the order of the taps, and the order the pump walks the lanes in on the
+order of the first reads rather than on the lines of the class.
 
 ### In the constructor body
 
@@ -580,9 +591,11 @@ and a job of a `Solo` has none.
 | What happens | What comes of it |
 | --- | --- |
 | The synchronous part of a job of one lane queues a job in another | The other lane starts it in the same pass of the pump if it was declared later, and in the next pass if it was declared earlier. |
+| A job of one lane writes a state outside the `W` of a job of another, as a reload writes `Loading` under a like with `W = Loaded` | The like that runs is cancelled at the write, and a like that comes to its start while the state is `Loading` is cancelled before its body runs. |
 | A write of one lane, and a `cancellable: false` job of another whose `keepWhile` refuses the new state | The job is cancelled all the same: the rules go past `cancellable: false`, as `externalSetState` does in a `Solo`. |
 | A job awaits a job it queued in another lane | It waits while the other lane runs that job. |
 | A job awaits a job it queued in its own lane | It waits for good: a lane runs one job at a time. |
+| A job of lane A awaits a job it queued in lane B, which awaits a job it queued in lane A | Both wait for good: the job in B waits for one queued in A behind the job that waits for it. |
 | A job awaits `close()` or `cancelAll()` of its controller | It waits for itself: both wait for the jobs of every lane. |
 | `close()` | The queues of every lane are cleared, the running job of every lane is cancelled, and `close` completes when the last of them ends. |
 | `close(mode: SoloCloseMode.drain)` | Every lane runs its queue out, and `close` completes when all of them are empty. |
