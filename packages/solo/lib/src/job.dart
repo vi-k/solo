@@ -245,7 +245,8 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
       // After the controller has let go of this job, not before: the
       // state correction above calls these very handlers and reads the
       // parent through `_mayCorrectState`, and the line above takes this
-      // job out of `_running` and out of `_current`.
+      // job out of `_running` and out of the `current` of the core it runs
+      // in.
       _body = null;
       _ifFailed = null;
       _ifCancelled = null;

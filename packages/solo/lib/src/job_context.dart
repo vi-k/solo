@@ -191,10 +191,13 @@ final class _SoloContext<S extends Object, W extends S, R>
   }) {
     // Made for the core this job runs in, not the one that made it: a child
     // handed to a job of another core runs there.
-    final core = _job._execution ?? _job._destination;
+    // A running job always has one: it was queued into a core or adopted
+    // by a parent that runs in one.
+    final core = _job._execution!;
     final controller = core.controller;
     if (controller is Solo<S>) {
-      // Through the controller's own `job`, which a subclass may override.
+      // Through the controller's own `job`, which a subclass may override;
+      // it ends in `_makeJob`, as the other branch does.
       return controller.job<W, T>(
         body,
         key: key,
@@ -203,16 +206,13 @@ final class _SoloContext<S extends Object, W extends S, R>
         timeout: timeout,
       );
     }
-    return _SoloJob<S, W, T>(
+    return controller._makeJob<W, T>(
       core,
       body,
       key: key,
-      canStart: null,
-      keepWhile: _job._keepWhile,
-      cancellable: true,
-      timeout: timeout,
       describe: describe,
-      observer: controller._jobObserver,
+      keepWhile: _job._keepWhile,
+      timeout: timeout,
     );
   }
 

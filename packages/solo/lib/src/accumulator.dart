@@ -128,8 +128,16 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
 
   /// Queues a job of a group. A [Solo] is asked through its own
   /// [Solo.enqueueJob], which a subclass may override.
-  SoloJob<T> _enqueue(_SoloJob<S, W, T> job) =>
-      (_solo as Solo<S>).enqueueJob(job);
+  SoloJob<T> _enqueue(_SoloJob<S, W, T> job) {
+    final controller = _solo;
+    if (controller is Solo<S>) {
+      return controller.enqueueJob(job);
+    }
+    throw UnimplementedError(
+      'an accumulator of a ${controller.runtimeType} has no way to queue its '
+      'groups: only a Solo makes accumulators',
+    );
+  }
 
   _SoloJob<S, W, T>? _candidate() {
     final jobs = _core.queue._jobs;

@@ -28,6 +28,19 @@ const _notCreatedHere =
     'was not created by this Solo (make it with job(...) or ctx.child of this '
     'controller)';
 
+/// How the pump's step in one core ends, for the pass that walks them all.
+enum _StepEnd {
+  /// The pass goes on to the next core.
+  goOn,
+
+  /// The pass goes on, and this core is drained: a drain is on, nothing
+  /// runs in it and its queue is empty.
+  drained,
+
+  /// A [SoloController.close] that cancels came in: the pass stops here.
+  stop,
+}
+
 /// The base of a controller: state, closing, hooks and its own listeners:
 /// [addListener], and [addChangeListener] for a listener that takes the two
 /// states of a change.
@@ -85,22 +98,24 @@ abstract class SoloController<S extends Object> {
 
   /// The cores of this controller in the order of creation, the order a
   /// pass of the pump walks them in: one for a [Solo].
-  final _cores = <_SoloLaneCore<S>>[];
+  ///
+  /// Read already from the observer's `onCreate`, which this constructor
+  /// calls before the body of a subclass's: a core the subclass declares
+  /// here is there for a job queued and closed from that hook.
+  List<_SoloLaneCore<S>> get _cores;
 
   bool _pumpScheduled = false;
 
-  /// How many cores the pass under way has found drained: nothing running,
-  /// nothing to take, an empty queue, and a drain on.
-  int _drainedCores = 0;
-
-  /// The queue of root jobs, which [Solo] holds in its core.
+  /// The queue of root jobs in the single core of [Solo]; kept for
+  /// [pending], which reads it.
   _SoloQueue<S> get _queue;
 
-  /// The running root job, which [Solo] holds in its core.
+  /// The running root job in the single core of [Solo]; kept for
+  /// [pending], which reads it.
   _SoloJob<S, S, Object?>? get _current;
 
-  /// The job the pump holds in the core of [Solo] while it asks its start
-  /// rules.
+  /// The job the pump holds in the single core of [Solo] while it asks its
+  /// start rules; kept for [pending], which reads it.
   _SoloJob<S, S, Object?>? get _inTransition;
 
   /// Creates a controller in [initialState].
@@ -433,15 +448,19 @@ abstract class SoloController<S extends Object> {
           ),
         );
       }
-      for (final job in core.queue._drain()) {
-        job._drop(
-          Cancelled.by(
-            reason: const ClosedCancelReason(),
-            started: false,
-            stackTrace: stackTrace,
-          ),
-        );
-      }
+    }
+    // Every queue is emptied before the first of its jobs is dropped: a
+    // dropped job's finish handlers are the caller's code, and they find no
+    // queue still full, whichever core they look at.
+    final queued = [for (final core in _cores) ...core.queue._drain()];
+    for (final job in queued) {
+      job._drop(
+        Cancelled.by(
+          reason: const ClosedCancelReason(),
+          started: false,
+          stackTrace: stackTrace,
+        ),
+      );
     }
     final running = [for (final core in _cores) ?core.current];
     if (running.isEmpty) {
@@ -833,6 +852,39 @@ abstract class SoloController<S extends Object> {
     throw ArgumentError.value('$job', 'job', _notCreatedHere);
   }
 
+  /// Makes a job of this controller for [core]: the one place a job is
+  /// built with the controller's observer.
+  ///
+  /// [Solo.job] comes here, and so does a child made for a core of
+  /// another controller. The public default of `cancellable` lives in
+  /// [Solo.job]; this one only repeats it for the child.
+  _SoloJob<S, W, T> _makeJob<W extends S, T>(
+    _SoloLaneCore<S> core,
+    Future<T> Function(SoloContext<S, W> ctx) body, {
+    Object? key,
+    bool Function(W state)? canStart,
+    bool Function(W state)? keepWhile,
+    bool cancellable = true,
+    Duration? timeout,
+    String Function()? describe,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
+  }) => _SoloJob<S, W, T>(
+    core,
+    body,
+    key: key,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    observer: _jobObserver,
+    ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
+    ifCancelled: ifCancelled,
+  );
+
   void _onJobFinished(_SoloJob<S, S, Object?> job) {
     var wasCurrent = false;
     final core = job._execution;
@@ -869,33 +921,39 @@ abstract class SoloController<S extends Object> {
   /// One pass: a step in every core, in the order of creation, unless a
   /// step closes the controller with a cancel; then the drain's end.
   void _pump() {
-    _drainedCores = 0;
+    var drained = 0;
     for (final core in _cores) {
-      if (!_step(core)) {
+      final end = _step(core);
+      if (end == _StepEnd.stop) {
         break;
+      }
+      if (end == _StepEnd.drained) {
+        drained++;
       }
     }
     // A drain ends here, once a pass, and not in the step of a core: a
     // controller with no core has no step to end it, and two cores found
     // drained in one pass would end it twice. Only a pass that found every
-    // core drained ends it; a core whose step launched a job is not drained
-    // even when that job is already over, and the end of the job brings the
-    // pump back.
-    if (_draining && _drainedCores == _cores.length) {
+    // core drained ends it — none of none counts as all; a core whose step
+    // launched a job is not drained even when that job is already over, and
+    // the end of the job brings the pump back.
+    if (_draining && drained == _cores.length) {
       _finishClose(_closing!);
     }
   }
 
-  /// Whether a pass of the pump goes on to the next core: not after a
-  /// [close] that cancels. A drain and [cancelAll] leave it going.
-  bool get _passGoesOn => !isClosed || _draining;
+  /// How a step that took nothing more ends: the pass goes on to the next
+  /// core unless a [close] that cancels came in. A drain and [cancelAll]
+  /// leave it going.
+  _StepEnd get _stepEnd =>
+      !isClosed || _draining ? _StepEnd.goOn : _StepEnd.stop;
 
   /// What the pump does in [core]: takes the head of its queue, asks the
   /// start rules, steps over the jobs they turn down and launches the first
-  /// one they accept. Returns whether the pass goes on to the next core.
-  bool _step(_SoloLaneCore<S> core) {
+  /// one they accept.
+  _StepEnd _step(_SoloLaneCore<S> core) {
     if (core.current != null || (isClosed && !_draining)) {
-      return _passGoesOn;
+      return _stepEnd;
     }
     final queue = core.queue;
     while (true) {
@@ -905,14 +963,13 @@ abstract class SoloController<S extends Object> {
         // stays in it, and its timer brings the pump back. A drain that
         // ended here would cut off the very case it exists for.
         if (_draining && queue._jobs.isEmpty) {
-          // Drained: the pass ends the drain once it has seen every core.
-          _drainedCores++;
-
-          return _passGoesOn;
+          // Drained, and said nowhere: the pass ends the drain once it has
+          // seen every core.
+          return _StepEnd.drained;
         }
         _debug(() => 'queue has no ready jobs');
 
-        return _passGoesOn;
+        return _stepEnd;
       }
       // Off the queue, not started, and not yet `current`: while the rules
       // are asked — the caller's code — this job belongs to nobody, and only
@@ -968,7 +1025,7 @@ abstract class SoloController<S extends Object> {
           ..current = job
           ..inTransition = null;
         job._launch();
-        return _passGoesOn;
+        return _stepEnd;
       } finally {
         core.inTransition = null;
       }
@@ -1076,6 +1133,11 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   /// job whose start rules are being asked.
   late final _SoloLaneCore<S> _core = _SoloLaneCore<S>(this, name: null);
 
+  // Late, not filled in the constructor body: the observer's `onCreate`
+  // runs before that body and may already queue a job and close.
+  @override
+  late final List<_SoloLaneCore<S>> _cores = List.unmodifiable([_core]);
+
   @override
   _SoloQueue<S> get _queue => _core.queue;
 
@@ -1090,9 +1152,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
       'is handed back to every call of its key under Policy.droppable';
 
   /// Creates a controller in [initialState].
-  Solo(super.initialState) : super._() {
-    _cores.add(_core);
-  }
+  Solo(super.initialState) : super._();
 
   /// Creates a job without queueing it, for [enqueueJob] or for
   /// [JobContext.run].
@@ -1136,7 +1196,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) => _SoloJob<S, W, T>(
+  }) => _makeJob<W, T>(
     _core,
     body,
     key: key,
@@ -1145,7 +1205,6 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     cancellable: cancellable,
     timeout: timeout,
     describe: describe,
-    observer: _jobObserver,
     ifFailed: ifFailed,
     isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
