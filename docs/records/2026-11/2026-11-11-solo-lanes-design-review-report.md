@@ -7,7 +7,8 @@
 > **Что это:** два независимых ревью дизайна линий — Opus и Astra —
 > с вердиктом по каждой находке.
 > **Связанные записи:** `2026-11-10-solo-lanes-design.md`,
-> `2026-11-07-bloc-vs-solo-debate-report.md`.
+> `2026-11-07-bloc-vs-solo-debate-report.md`,
+> `2026-11-11-solo-lanes-design-review-report-2.md`.
 
 # Ревью дизайна линий: Opus и Astra
 
