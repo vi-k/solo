@@ -836,6 +836,10 @@ void main() {
         async.flushMicrotasks();
         two.a.enqueue<int, void>((ctx) async => ctx.emit(1));
         async.flushMicrotasks();
+        // At the write itself: the command still waits on its join, and no
+        // check of its own has come yet.
+        expect(command.isCancelled, isTrue);
+        expect(gate.isCompleted, isFalse);
         gate.complete();
         async.flushMicrotasks();
 
