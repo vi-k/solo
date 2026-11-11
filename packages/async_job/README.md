@@ -196,10 +196,11 @@ release of it; [Building on the core](doc/extending.md) says the same.
 ## solo
 
 [solo](https://pub.dev/packages/solo) adds state, a queue and declarative
-rules. It runs one root job at a time and gives that job exclusive access to
-state. Use it when you need a controller with these guarantees. It re-exports
-`async_job`, so you only need a dependency on `solo`. Code built on `solo`
-names [solo_lints](https://pub.dev/packages/solo_lints) in place of
+rules. Its `Solo` runs one root job at a time over a state, and its `SoloLanes`
+runs one at a time in each of several lanes over one state. Use it when you
+need a controller with these guarantees. It re-exports `async_job`, so you only
+need a dependency on `solo`. Code built on `solo` names
+[solo_lints](https://pub.dev/packages/solo_lints) in place of
 `async_job_lints`: it includes the rules of `async_job_lints` and adds those of
 the controller.
 

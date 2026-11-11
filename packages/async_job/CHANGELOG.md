@@ -1,3 +1,11 @@
+## Unreleased
+
+### Documentation
+
+- The README says that `Solo` of `solo` runs one root job at a time and
+  `SoloLanes` one at a time in each of its lanes, in place of exclusive access
+  to state.
+
 ## 1.0.3
 
 ### Documentation
