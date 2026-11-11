@@ -1,3 +1,55 @@
+## Unreleased
+
+### Breaking changes
+
+- **The hooks of `SoloObserver` take a `SoloController<Object>` instead of a
+  `Solo<Object>`.** An override that names `Solo<Object>` no longer compiles:
+  Dart does not let an override narrow the type of a parameter.
+- **`SoloUnansweredHandler` takes a `SoloController<Object>` instead of a
+  `Solo<Object>`.**
+- **`SoloPending` has a new subclass, `SoloPendingLanes`.** An exhaustive
+  `switch` over `SoloPending` needs a case for it, in an app with no
+  `SoloLanes` too.
+- **`SoloJob` has a new member, `lane`.** A fake that implements `SoloJob` by
+  hand implements it as well.
+- **`SoloStream` is a mixin on `SoloController`, no longer a subtype of
+  `Solo`.** A value of type `SoloStream` does not go where a `Solo` is
+  expected.
+- **Update `async_job_lints` and `solo_lints` with this release.** A
+  `solo_lints` that does not know `SoloController` stops reporting
+  `await_own_queue` on `close` of a controller with `SoloStream`; the patch
+  releases of both plugins that come out with this one know it. The rules about
+  lanes come in a minor release of `solo_lints`, which reaches an app once its
+  constraint is raised to it.
+
+### Added
+
+- `SoloController<S>`, the base of `Solo` and `SoloLanes`: the state, the
+  listeners, closing and the hooks.
+- `SoloLanes<S>`, a controller with several queues of root jobs, its lanes,
+  over one state, declared in its constructor with `lane(name)` and listed by
+  `lanes`. See [Lanes](doc/lanes.md).
+- `SoloLane<S>`, a lane, with the members of the queue of a `Solo`, and
+  `SoloLaneId`, the identity of a lane with its `name`.
+- `SoloJob.lane`, the lane a job runs in, `null` for a job of a `Solo`.
+- `SoloPendingLanes`, what `pending` of a `SoloLanes` returns: the snapshot of
+  each lane that holds it.
+
+### Documentation
+
+- A new page, `doc/lanes.md`, shows two queues over one state, a write that
+  keeps the work of another lane, a snapshot from the server merged into the
+  state, an epoch that makes old work stale, rules by type on a record state,
+  declaring lanes, and a table of cases.
+- The README, `doc/vs-bloc.md`, `doc/mistakes.md`, `doc/state.md`,
+  `doc/errors.md` and `doc/streams.md` say that the root jobs of a `Solo` run
+  one at a time, and so do those of each lane of a `SoloLanes`; the jobs page
+  sends the recipe of the likes to the same feed in one `SoloLanes`.
+- `doc/state.md` writes `Logged` as a mixin on `SoloController`, which serves a
+  `Solo` and a `SoloLanes` alike.
+- `doc/diagnostics.md` names `SoloPendingLanes`, `job.lane` in the lines of an
+  observer, and a `SoloLanes` that has no lane yet in `onCreate`.
+
 ## 1.1.1
 
 ### Documentation

@@ -85,6 +85,47 @@ final class _Journal extends Solo<int> with OpenSolo<int> {
   void onClose() => read.add('onClose: $pending');
 }
 
+/// A controller with two lanes whose jobs wait for good.
+final class _TwoLanes extends SoloLanes<int> {
+  late final SoloLane<int> _reload;
+  late final SoloLane<int> _likes;
+
+  _TwoLanes() : super(0) {
+    _reload = lane('reload');
+    _likes = lane('likes');
+  }
+
+  Job<void> reload() => _reload.enqueue<int, void>(
+    key: 'reload',
+    (ctx) => ctx.abandonable(() => Completer<void>().future),
+  );
+
+  Job<void> like() => _likes.enqueue<int, void>(
+    key: 'like',
+    (ctx) => ctx.abandonable(() => Completer<void>().future),
+  );
+}
+
+/// An observer that names the lane of each job it sees start, and queues a
+/// reload from `onCreate` of a [_TwoLanes].
+final class _LaneLines extends SoloObserver {
+  final List<String> lines;
+
+  _LaneLines(this.lines);
+
+  @override
+  void onCreate(SoloController<Object> solo) {
+    lines.add('onCreate: ${solo.runtimeType}');
+    if (solo is _TwoLanes) {
+      solo.reload();
+    }
+  }
+
+  @override
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
+      lines.add('${job.key}: started in ${(job as SoloJob).lane?.name}');
+}
+
 String _page() => diagnosticsPage.source;
 
 void _says(String phrase) => diagnosticsPage.says(phrase);
@@ -325,6 +366,44 @@ void main() {
       },
     );
 
+    test('job.lane names the lane, and onCreate finds no lane yet', () {
+      _says(
+        'In a `SoloLanes` the root jobs of different lanes run side by side, '
+        'so the lines of one root come between those of another. '
+        '`job.lane` says which lane a job runs in: a `SoloLaneId` with the '
+        '`name` of the lane, and `null` for a job of a `Solo`.',
+      );
+      _says(
+        '`onCreate` is called from the constructor of `SoloController`, '
+        'before the body of a `SoloLanes` constructor declares its lanes: '
+        'the controller it is handed has no lane yet, and a method of it '
+        'that queues a job finds the field of its lane unassigned.',
+      );
+      final lines = <String>[];
+      final ran = runFaked((async) {
+        Solo.observer = _LaneLines(lines);
+        final feed = _TwoLanes();
+        Solo.observer = null;
+        feed
+          ..reload()
+          ..like();
+        final solo = Bench()..enqueue<int, void>(key: 'plain', (ctx) async {});
+        Solo.observer = _LaneLines(lines);
+        async.flushMicrotasks();
+        Solo.observer = null;
+        unawaited(feed.close());
+        unawaited(solo.close());
+      });
+
+      expect(ran.errors, [contains("LateInitializationError: Field '_reload")]);
+      expect(lines, [
+        'onCreate: _TwoLanes',
+        'reload: started in reload',
+        'like: started in likes',
+        'plain: started in null',
+      ]);
+    });
+
     test('what the observer is told, and what stays with the controller', () {
       _says(
         '`SoloObserver` is told what the controllers are told, '
@@ -380,8 +459,8 @@ void main() {
         _says(
           'The `job` is the one whose `emit` made the change or whose '
           'state handler returned it. It is `null` for an '
-          '`externalSetState`, and it is a child of the running job when '
-          'the child made the change, not the root the child belongs to',
+          '`externalSetState`, and it is a child of a running job when the '
+          'child made the change, not the root the child belongs to',
         );
         late _Journal journal;
         runFaked((async) {
@@ -607,6 +686,39 @@ void main() {
       ]);
       expect(withoutClose, isNull, reason: 'nothing is closing yet');
       expect(ranAfter, isTrue, reason: 'the drain ran it in the end');
+    });
+
+    test('a SoloLanes names each lane that holds it', () {
+      _says(
+        'A `SoloLanes` waits for every lane, and its `pending` is a '
+        '`SoloPendingLanes`. Its `lanes` pair each lane that holds the close '
+        "with that lane's `SoloPendingJob` or `SoloPendingQueue`, in the "
+        'order the lanes were declared. A lane that holds nothing is left '
+        'out, and with no lane left `pending` is `null`.',
+      );
+      _says(
+        'A `SoloPendingLanes` prints the same way, with the name and the '
+        'snapshot of each lane inside: `SoloPending(likes: SoloPending(...))`.',
+      );
+      SoloPending? busy;
+      SoloPending? idle;
+      runFaked((async) {
+        final feed = _TwoLanes();
+        final like = feed.like();
+        async.flushMicrotasks();
+        busy = feed.pending;
+        unawaited(like.cancel());
+        async.flushMicrotasks();
+        idle = feed.pending;
+        unawaited(feed.close());
+      });
+
+      expect(busy, isA<SoloPendingLanes>());
+      final lanes = (busy! as SoloPendingLanes).lanes;
+      expect(lanes.map((entry) => entry.lane.name), ['likes']);
+      expect(lanes.single.pending, isA<SoloPendingJob>());
+      expect('$busy', startsWith('SoloPending(likes: SoloPending('));
+      expect(idle, isNull);
     });
 
     test('the same line with SoloStream: a subscription left paused', () {

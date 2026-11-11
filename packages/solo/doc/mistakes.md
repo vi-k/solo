@@ -140,11 +140,12 @@ errors page.
 
 ## Steps as children
 
-The controller runs one root job at a time, and a method of the controller
-queues one more. The examples use two pairs of the controller's methods from
-the children page. `_sync(item)` and `_recordPath(path)` make a job with
-`job(...)` and start nothing. `sync(item)` and `recordPath(path)` are the
-public methods that queue it: `sync(item)` returns `enqueueJob(_sync(item))`.
+A `Solo` runs one root job at a time, and so does each lane of a `SoloLanes`; a
+method of the controller queues one more. The examples use two pairs of the
+controller's methods from the children page. `_sync(item)` and
+`_recordPath(path)` make a job with `job(...)` and start nothing. `sync(item)`
+and `recordPath(path)` are the public methods that queue it: `sync(item)`
+returns `enqueueJob(_sync(item))`.
 
 Don't do this:
 
@@ -172,6 +173,9 @@ Job<void> syncAndRecord(int item) =>
     });
 ```
 
+In a `SoloLanes` the wait hangs within one lane: a job that awaits a job of
+another lane waits while that lane runs it, as
+[The table of cases](lanes.md#the-table-of-cases) on the lanes page shows.
 `Solo.debug` warns of such a wait when the job is queued. Awaiting `close()` or
 `cancelAll()` from a body hangs the same way: both wait for the running job.
 See [Steps in a row](children.md#steps-in-a-row) on the children page and

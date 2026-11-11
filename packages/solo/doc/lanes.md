@@ -557,9 +557,10 @@ job, and the first `setLiked` throws all the same:
 Bad state: Cannot declare lane likes of FeedController after enqueueJob of one of its lanes was called: from the first call on, the lanes are what the pump walks; see https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes
 ```
 
-Without the seal a microtask after the constructor, whether a call works would
-hang on the order of the taps, and the order the pump walks the lanes in on the
-order of the first reads rather than on the lines of the class.
+Without the seal that comes a microtask after the constructor, whether a call
+works would depend on the order of the taps, and the order the pump walks the
+lanes in would follow the order of the first reads rather than the lines of the
+class.
 
 ### In the constructor body
 

@@ -838,7 +838,9 @@ last tap rather than from `shownLiked`: a third tap during the wait would read
 the heart the second tap has not turned yet and repeat the second tap. The
 screen listens to both controllers. In Flutter, one widget over both takes
 `Listenable.merge` in a `ListenableBuilder`, with `SoloListenable` of
-`flutter_solo` mixed in to each.
+`flutter_solo` mixed in to each. One `SoloLanes` does without the second
+controller: [A snapshot from the server](lanes.md#a-snapshot-from-the-server)
+on the lanes page puts the reload and the likes in two lanes over one state.
 
 The countdown of [A delayed start](#a-delayed-start) suggests another way: the
 wait for the server in a `Job` outside the queue, and only the step that

@@ -512,10 +512,10 @@ nothing for the cancellation.
 
 ### Retrying from the caller
 
-A pause in the body still belongs to the job. Root jobs run one at a time, so
-the next job of the profile waits through every attempt and every pause between
-them. Where other jobs should run between the attempts, the caller retries
-instead of the body. The job is `load()` of
+A pause in the body still belongs to the job. Root jobs of a queue run one at a
+time, so the next job of the profile waits through every attempt and every
+pause between them. Where other jobs should run between the attempts, the
+caller retries instead of the body. The job is `load()` of
 [The profile controller](jobs.md#the-profile-controller), without its
 `isExpectedError`, on the profile of [Reporting an error](#reporting-an-error),
 and it tries once.

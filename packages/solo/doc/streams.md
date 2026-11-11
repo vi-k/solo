@@ -152,13 +152,15 @@ first: `take` emits, the listeners of the screen hear the write at once, and
 one of them may change the session right there. Subscribed already, the child
 hears that change; a subscription made after the read would miss it.
 
-The subscription keeps the following controller's queue occupied until it ends:
-no other job of that controller starts before the session closes its stream,
-and a draining `close` waits for the same. So this job suits a controller that
-does nothing but follow. A controller with other jobs to run holds a
-subscription of its own instead, made in its constructor and cancelled in
-`onClose`. For each update that subscription brings, the controller either
-queues a short job or, when the update is a fact the running work has to hear
-at once, writes it with `externalSetState`.
-[External state](state.md#external-state) on the state page shows such a
-subscription and says which of the two an update calls for.
+The subscription keeps the queue it runs in occupied until it ends: no other
+job of that queue starts before the session closes its stream, and a draining
+`close` waits for the same. So in a `Solo` this job suits a controller that
+does nothing but follow. A `SoloLanes` can give the following a lane of its
+own, and its other lanes run beside it, as
+[Two queues over one state](lanes.md#two-queues-over-one-state) on the lanes
+page shows. A `Solo` with other jobs to run holds a subscription of its own
+instead, made in its constructor and cancelled in `onClose`. For each update
+that subscription brings, the controller either queues a short job or, when the
+update is a fact the running work has to hear at once, writes it with
+`externalSetState`. [External state](state.md#external-state) on the state page
+shows such a subscription and says which of the two an update calls for.

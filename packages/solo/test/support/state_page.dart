@@ -118,11 +118,10 @@ StreamSubscription<CameraState> observing(Camera camera) {
   return subscription;
 }
 
-/// A controller that writes every change to a log.
-class Logged<S extends Object> extends Solo<S> {
-  final void Function(String line) write;
-
-  Logged(super.initialState, this.write);
+/// Writes every change to a log, in a `Solo` or a `SoloLanes`.
+mixin Logged<S extends Object> on SoloController<S> {
+  /// Writes one line to the log.
+  void write(String line);
 
   @protected
   @override

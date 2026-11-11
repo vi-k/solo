@@ -1204,8 +1204,8 @@ void main() {
           'other Done(null), [other ran]',
         ]);
         _says(
-          'no other job of that controller starts before the session '
-          'closes its stream',
+          'no other job of that queue starts before the session closes its '
+          'stream',
         );
       });
 

@@ -558,9 +558,9 @@ Bad state: Cannot declare lane reload of FeedController after its constructor: l
 Bad state: Cannot declare lane likes of FeedController after enqueueJob of one of its lanes was called: from the first call on, the lanes are what the pump walks; see https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes
 ```
 
-Без печати через микрозадачу после конструктора то, сработает ли вызов,
-зависело бы от порядка нажатий, а порядок, в котором насос обходит линии, —
-от порядка первых чтений, а не от строк класса.
+Без печати, которая наступает через микрозадачу после конструктора, то,
+сработает ли вызов, зависело бы от порядка нажатий, а порядок, в котором насос
+обходит линии, следовал бы порядку первых чтений, а не строкам класса.
 
 ### В теле конструктора
 

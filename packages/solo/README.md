@@ -1,9 +1,10 @@
 # solo
 
 `solo` manages state and asynchronous work in Dart. A controller holds the
-current state and processes jobs one at a time, hence the name. Each job can
-declare which states allow it to start and continue, and callers can await its
-result or request cancellation.
+current state and processes jobs one at a time, hence the name: a `Solo` keeps
+one queue of jobs, and a `SoloLanes` keeps several queues over one state, one
+job at a time in each. Each job can declare which states allow it to start and
+continue, and callers can await its result or request cancellation.
 
 Use it for screens, sessions and devices where operations share state and need
 an explicit order. The package has no Flutter dependency.
@@ -300,13 +301,13 @@ Also on the [documentation site](https://docs.yet-another.dev/solo/), with
 search.
 
 The first three pages are for every controller, in this order: jobs, state,
-cancellation. The next five come when a controller needs what they cover:
-resources, children, streams, accumulation and its rules. Diagnostics, errors
-and testing are for a controller about to ship, the common mistakes are a list
-to check against, and the reference names every member with the section that
+cancellation. The next six come when a controller needs them: resources,
+children, streams, accumulation, its rules and lanes. Diagnostics, errors and
+testing are for a controller about to ship, the common mistakes are a list to
+check against, and the reference names every member with the section that
 explains it. Flutter is for a controller behind a screen, the camera example
 joins them in one controller, solo and bloc side by side is for one who comes
-from bloc, solo under riverpod and solo under bloc for one who stays on either.
+from bloc, solo under riverpod and under bloc for one who stays on either.
 
 | Page | What it covers |
 | --- | --- |
@@ -318,11 +319,12 @@ from bloc, solo under riverpod and solo under bloc for one who stays on either.
 | [Streams](doc/streams.md) | `ctx.each` in a controller, following another controller |
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle in four recipes |
 | [Accumulation rules](doc/accumulation-rules.md) | When a group is ready, `AccumulationPolicy`, one job for a group and `shared()`, `merge`, `close()` |
+| [Lanes](doc/lanes.md) | `SoloLanes`: several queues over one state, a write that keeps another lane's work, a merge, an epoch, declaring lanes |
 | [Diagnostics](doc/diagnostics.md) | `SoloObserver`, `pending`, logs, a slow cancellation |
 | [Errors](doc/errors.md) | `onError`, `unansweredHandler`, catching and retrying, `ctx.unattended` |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |
 | [Common mistakes](doc/mistakes.md) | Seven mistakes that often pass a first test, and the right way for each |
-| [Reference](doc/reference.md) | Every member of `Solo`, its context, jobs, queue and accumulators, with the section that explains it |
+| [Reference](doc/reference.md) | Every member of `Solo`, of `SoloLanes` and its lanes, of their base `SoloController`, of the context, jobs, queue and accumulators, with the section that explains it |
 | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md) | The `flutter_solo` package: `SoloListenable`, owning a controller, rebuilding a screen |
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
 | [solo and bloc, side by side](doc/vs-bloc.md) | Eleven scenarios in both packages |
@@ -350,6 +352,7 @@ section linked beside it.
 | A widget rebuilds for state it does not use | `SoloSelector` from `flutter_solo` | [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) |
 | The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Pausing the queue](doc/jobs.md#pausing-the-queue) |
 | A job has to start later, and the queue must not wait for it | a `Job` of its own for the wait, cancelled from `cancelAll` and `onClose` | [A delayed start](doc/jobs.md#a-delayed-start) |
+| Two kinds of work over one state must not wait for each other | `SoloLanes`, with a lane for each | [Two queues over one state](doc/lanes.md#two-queues-over-one-state) |
 | A tap must not wait for a long reload of the same screen | a controller of its own for the taps, and marks the reload settles | [A tap that does not wait for a reload](doc/jobs.md#a-tap-that-does-not-wait-for-a-reload) |
 | The screen has to show news until the user closes it, and the camera must go on working | a controller of its own for the notices, and an acceptance that names the notice | [A notice the screen accepts](doc/state.md#a-notice-the-screen-accepts) |
 | A stream event arrives a microtask late, and that is too late | `addListener`, which calls back inside the change | [Observing state](doc/state.md#observing-state) |
@@ -371,18 +374,18 @@ working, but for the cases below. The public API is what
 error messages and of debug output is not part of it. `listeners.dart` is the
 listener list a controller notifies through, for a package that builds a
 delivery of its own on top of `solo`, as `flutter_solo` does; an application
-listens through `Solo.addListener` and does not need it. A member that goes
-away is first marked `@Deprecated` in a minor release, with the name to use
-instead, and is removed in the next major one.
+listens through `addListener` of its controller and does not need it. A member
+that goes away is first marked `@Deprecated` in a minor release, with the name
+to use instead, and is removed in the next major one.
 
-A minor release can add a member to a class you extend, such as `Solo` or
-`SoloObserver`, and a member of the same name in your own code then stops
-compiling. It can add a member to an interface you implement for a mock, such
-as `JobContext` or `SoloContext`, and a fake that implements it by hand, rather
-than through `noSuchMethod`, then stops compiling too. The changelog of such a
-release names the members it adds. A new top-level name can clash with the same
-name imported from another package, until one of the imports hides it with
-`hide`.
+A minor release can add a member to a class you extend, such as `Solo`,
+`SoloLanes` or `SoloObserver`, and a member of the same name in your own code
+then stops compiling. It can add a member to an interface you implement for a
+mock, such as `JobContext` or `SoloContext`, and a fake that implements it by
+hand, rather than through `noSuchMethod`, then stops compiling too. The
+changelog of such a release names the members it adds. A new top-level name can
+clash with the same name imported from another package, until one of the
+imports hides it with `hide`.
 
 A `switch` over a `Policy`, a `SoloPhase`, a `SoloCloseMode`, an
 `AccumulationPolicy` or a `SoloPending` can be exhaustive, and a new value of
@@ -403,7 +406,8 @@ that asks for the new `async_job` itself does not resolve.
 ## Coming from bloc
 
 Callers invoke controller methods and receive a job for each operation. Queue
-policy is selected per call, and all root jobs share one queue.
+policy is selected per call. All root jobs of a `Solo` share one queue, and a
+`SoloLanes` gives each lane a queue of its own.
 [solo and bloc, side by side](doc/vs-bloc.md) holds the API correspondences and
 compares eleven application scenarios with implementations in both packages.
 

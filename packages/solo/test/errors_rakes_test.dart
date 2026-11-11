@@ -3133,8 +3133,8 @@ void main() {
 
     test('the pauses hold the queue', () {
       _says(
-        'Root jobs run one at a time, so the next job of the profile waits '
-        'through every attempt and every pause between them',
+        'Root jobs of a queue run one at a time, so the next job of the '
+        'profile waits through every attempt and every pause between them',
       );
       final events = <String>[];
       final ran = runFaked((async) {

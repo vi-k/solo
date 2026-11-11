@@ -72,14 +72,18 @@ the stream; its full lifecycle is explained in
 
 When a state update sets `paused` to true, `keepWhile` cancels the recording,
 and the body does not need to repeat that condition. That update does not come
-from another job of the queue. Root jobs run one at a time, so a `pause()`
-written as a job would wait for the recording to end before it could set
-`paused`. While the recording runs, an update its rules are asked about comes
-from one of two places:
+from another job of the queue. Root jobs of a queue run one at a time, so a
+`pause()` written as a job would wait for the recording to end before it could
+set `paused`. While the recording runs in a `Solo`, an update its rules are
+asked about comes from one of two places:
 
 - [`externalSetState`](#externalsetstate), where the controller reflects what
   the device reports;
 - a child of the recording.
+
+A `SoloLanes` adds a third: a job of another lane, as
+[Two queues over one state](lanes.md#two-queues-over-one-state) on the lanes
+page shows.
 
 Use separate classes when states allow different operations, and shared base
 types when an operation can span several states.
@@ -311,14 +315,15 @@ in the second.
 ### A delivery of your own
 
 The listeners above are the engine's, and they cover the common case. `publish`
-is the seam for delivery of another kind, such as a stream or a line in a log:
+is the seam for delivery of another kind, such as a stream or a line in a log.
+A mixin `on SoloController<S>` serves a `Solo` and a `SoloLanes` alike, as
+`SoloStream` does; a base class that extends `Solo` would serve only the one:
 
 ```dart
-/// A controller that writes every change to a log.
-class Logged<S extends Object> extends Solo<S> {
-  final void Function(String line) write;
-
-  Logged(super.initialState, this.write);
+/// Writes every change to a log, in a `Solo` or a `SoloLanes`.
+mixin Logged<S extends Object> on SoloController<S> {
+  /// Writes one line to the log.
+  void write(String line);
 
   @protected
   @override

@@ -99,9 +99,17 @@ the `job` the change belongs to, and a `revision` that grows by one per change.
 The revision keeps two transitions in order even when a hook changed the state
 again from inside the first. The `job` is the one whose `emit` made the change
 or whose state handler returned it. It is `null` for an `externalSetState`, and
-it is a child of the running job when the child made the change, not the root
-the child belongs to. It answers who changed the state, which nothing outside
-the engine can work out.
+it is a child of a running job when the child made the change, not the root the
+child belongs to. It answers who changed the state, which nothing outside the
+engine can work out.
+
+In a `SoloLanes` the root jobs of different lanes run side by side, so the
+lines of one root come between those of another. `job.lane` says which lane a
+job runs in: a `SoloLaneId` with the `name` of the lane, and `null` for a job
+of a `Solo`. `onCreate` is called from the constructor of `SoloController`,
+before the body of a `SoloLanes` constructor declares its lanes: the controller
+it is handed has no lane yet, and a method of it that queues a job finds the
+field of its lane unassigned.
 
 The observer is called before the corresponding hook of the controller. Each
 call stands on its own: a controller hook that leaves out `super` does not
@@ -158,6 +166,11 @@ two:
   subscription to take its done event. One left paused holds `close()` with
   `isFinished` already true, and `pending` is a `SoloPendingStream`.
 
+A `SoloLanes` waits for every lane, and its `pending` is a `SoloPendingLanes`.
+Its `lanes` pair each lane that holds the close with that lane's
+`SoloPendingJob` or `SoloPendingQueue`, in the order the lanes were declared. A
+lane that holds nothing is left out, and with no lane left `pending` is `null`.
+
 The three print alike, so the line above needs no switch:
 
 ```text
@@ -165,6 +178,9 @@ closing is held by SoloPending([stuck] in its body, closing, cancelled by Cancel
 closing is held by SoloPending(draining, 1 queued: [group])
 closing is held by SoloPending(stream: a subscription has not taken its done event)
 ```
+
+A `SoloPendingLanes` prints the same way, with the name and the snapshot of
+each lane inside: `SoloPending(likes: SoloPending(...))`.
 
 `null` says that nothing the controller knows of holds the close. A timer reads
 `pending` between the steps of a close, and a synchronous hook reads it in the

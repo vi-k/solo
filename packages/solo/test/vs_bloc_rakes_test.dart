@@ -274,6 +274,10 @@ void main() {
       );
       _says('`Policy.sequential`, `Policy.droppable` and `Policy.restart`');
       _says('| `BlocObserver` | `SoloObserver` |');
+      _says(
+        '| `BlocBase<S>`, the base of both | `SoloController<S>`, the base of '
+        'both |',
+      );
       _says('| `EventTransformer` | `Policy` on a job submission |');
       _says('| `close()` | `close()` |');
       final controller = notes.NotesController(notes.Api());
@@ -458,13 +462,13 @@ void main() {
           'third started',
         ]);
         _says(
-          'The root jobs of a controller run one at a time, and that is '
-          'the only way they run. Ready jobs start in the order they were '
+          'The root jobs of a `Solo` run one at a time, and that is the '
+          'only way they run. Ready jobs start in the order they were '
           'added.',
         );
         _says(
-          'because the root jobs of a controller run one at a time and '
-          'there is no transformer to pass.',
+          'because the root jobs of a `Solo` run one at a time and there is '
+          'no transformer to pass.',
         );
       },
     );

@@ -1,5 +1,5 @@
-/// One job at a time: sequential jobs with exclusive state ownership,
-/// declarative rules and cooperative cancellation.
+/// One job at a time, in one queue or in each of several lanes: jobs over
+/// one state, declarative rules and cooperative cancellation.
 library;
 
 export 'package:async_job/async_job.dart';

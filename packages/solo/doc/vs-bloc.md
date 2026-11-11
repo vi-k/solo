@@ -66,7 +66,8 @@ The main API correspondences, for a reader who knows bloc:
 
 | bloc | solo |
 | --- | --- |
-| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`; a `ValueListenable` with `SoloListenable` from `flutter_solo` mixed in |
+| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`, with one queue, and `SoloLanes<S>`, with a queue per lane; a `ValueListenable` with `SoloListenable` from `flutter_solo` mixed in |
+| `BlocBase<S>`, the base of both | `SoloController<S>`, the base of both |
 | Event class, `on<E>`, `add(E())` | Method returning `Job<T>` |
 | `EventTransformer` | `Policy` on a job submission |
 | `emit(next)` | `ctx.emit(next)` |
@@ -90,8 +91,11 @@ key.
 [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting)
 show where the two part. `Policy.keepLatest` removes queued work with the same
 key while leaving the running job alone. There is no concurrent root-job
-policy; use children or separate controllers for independent concurrent work,
-as in
+policy: the root jobs of a `Solo` run one at a time, and so do those of each
+lane of a `SoloLanes`. Independent concurrent work goes to children, to lanes
+of their own, as in
+[Two queues over one state](lanes.md#two-queues-over-one-state), or to separate
+controllers, as in
 [A tap that does not wait for a reload](jobs.md#a-tap-that-does-not-wait-for-a-reload).
 
 ## Ordering updates to shared state
@@ -294,19 +298,22 @@ refresh emits [n0, n1]
 
 There is nothing to remember here about transformers or the order events are
 processed in: there is no transformer to pass and no scheduling to choose. The
-root jobs of a controller run one at a time, and that is the only way they run.
+root jobs of a `Solo` run one at a time, and that is the only way they run.
 Ready jobs start in the order they were added. Two things change that order,
 and each happens only where the code asks for it. `enqueueJob` with
 `first: true` puts a job ahead of what is waiting, and a job waiting for an
 accumulation window can be passed by a ready one standing behind it. Both are
 on the jobs page, in
 [Working the queue directly](jobs.md#working-the-queue-directly). Adding
-another queued method preserves the ordering, because the queue is one per
-controller rather than one per command; no arrangement of the methods can give
-two of them a queue each. The same queue also holds back a command that does
-not touch the notes, a change of filter say: it waits behind a refresh like any
-other. Such a command goes to a separate controller with a queue of its own, as
-in
+another queued method to a `Solo` preserves the ordering, because its queue is
+one per controller rather than one per command; no arrangement of its methods
+can give two of them a queue each. A `SoloLanes` gives a queue to each lane its
+constructor declares, so where the ordering splits is written in one place. The
+same queue also holds back a command that does not touch the notes, a change of
+filter say: it waits behind a refresh like any other. Such a command goes to a
+lane of its own, as in
+[Two queues over one state](lanes.md#two-queues-over-one-state) on the lanes
+page, or to a separate controller, as in
 [A tap that does not wait for a reload](jobs.md#a-tap-that-does-not-wait-for-a-reload)
 on the jobs page. This guarantee covers root jobs; child jobs can run inside a
 parent, in parallel too, and independent external changes have a separate path
@@ -326,8 +333,8 @@ await them, the queue does not start the next job until then, and `close()`
 waits for them too. The page [Children and chains](children.md) covers them.
 
 **What solo gives:** after upload and refresh the state is
-`NotesState([n0, n1], uploading: false)`, because the root jobs of a controller
-run one at a time and there is no transformer to pass.
+`NotesState([n0, n1], uploading: false)`, because the root jobs of a `Solo` run
+one at a time and there is no transformer to pass.
 
 ## An observer fails during a state update
 

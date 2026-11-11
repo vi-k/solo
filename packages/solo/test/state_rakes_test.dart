@@ -299,10 +299,15 @@ final class _Order extends Solo<String> {
   );
 }
 
-/// The page's `Logged` over numbers, with a way to write and a job to
-/// watch.
-final class _LoggedNumbers extends page.Logged<int> {
-  _LoggedNumbers(void Function(String line) write) : super(0, write);
+/// A `Solo` over numbers with the page's `Logged` mixed in, with a way to
+/// write and a job to watch.
+final class _LoggedNumbers extends Solo<int> with page.Logged<int> {
+  final void Function(String line) _write;
+
+  _LoggedNumbers(this._write) : super(0);
+
+  @override
+  void write(String line) => _write(line);
 
   void set(int value) => externalSetState(value);
 
@@ -310,6 +315,28 @@ final class _LoggedNumbers extends page.Logged<int> {
     keepWhile: (state) => state < 5,
     (ctx) => ctx.abandonable(() => Completer<void>().future),
   );
+}
+
+/// A `SoloLanes` over numbers with the page's `Logged` mixed in, and a write
+/// in either of its two lanes.
+final class _LoggedLanes extends SoloLanes<int> with page.Logged<int> {
+  final void Function(String line) _write;
+
+  late final SoloLane<int> _first;
+  late final SoloLane<int> _second;
+
+  _LoggedLanes(this._write) : super(0) {
+    _first = lane('first');
+    _second = lane('second');
+  }
+
+  @override
+  void write(String line) => _write(line);
+
+  Job<void> set(int value, {required bool inFirst}) =>
+      (inFirst ? _first : _second).enqueue<int, void>(
+        (ctx) async => ctx.emit(value),
+      );
 }
 
 /// A delivery that lets its failure out, against the advice of the page.
@@ -1714,6 +1741,25 @@ void main() {
           'listener reads 2',
           '1 -> 2',
         ]);
+        logged.close().ignore();
+        async.flushTimers();
+      });
+    });
+
+    test('Logged writes the changes of every lane of a SoloLanes', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        final logged = _LoggedLanes(lines.add)
+          ..set(1, inFirst: true)
+          ..set(2, inFirst: false);
+        async.flushMicrotasks();
+        expect(lines, ['0 -> 1', '1 -> 2']);
+        expect(
+          _page(),
+          contains(
+            '/// Writes every change to a log, in a `Solo` or a `SoloLanes`.',
+          ),
+        );
         logged.close().ignore();
         async.flushTimers();
       });
