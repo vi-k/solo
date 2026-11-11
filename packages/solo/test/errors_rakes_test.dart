@@ -3696,7 +3696,7 @@ void main() {
           async.flushMicrotasks();
 
           final frames = _frames(outcomeOf(job).stackTrace);
-          expect(frames.first, 'Solo._pump');
+          expect(frames.first, 'SoloController._step');
           expect(frames, isNot(contains('_Traced.setsTooBig')));
         });
       });

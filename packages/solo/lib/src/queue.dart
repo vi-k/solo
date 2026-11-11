@@ -51,17 +51,21 @@ abstract interface class SoloQueue {
 }
 
 final class _SoloQueue<S extends Object> implements SoloQueue {
-  final Solo<S> _solo;
+  final _SoloLaneCore<S> _core;
   final _jobs = <_SoloJob<S, S, Object?>>[];
 
-  _SoloQueue(this._solo);
+  _SoloQueue(this._core);
 
   /// The job the pump holds while its start rules are asked, unless a rule
   /// has already ended it.
   _SoloJob<S, S, Object?>? get _held {
-    final job = _solo._inTransition;
+    final job = _core.inTransition;
     return job != null && !job.isFinished ? job : null;
   }
+
+  /// What a removal walks: the held job first, then the queue, taken before
+  /// any of them is asked or removed.
+  List<_SoloJob<S, S, Object?>> get _snapshot => [?_held, ..._jobs];
 
   @override
   Iterable<SoloJob<Object?>> get jobs => UnmodifiableListView(_jobs);
@@ -110,7 +114,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     // being asked: `test` is the caller's code, and `where` is lazy, so one
     // that touches the queue used to walk into a
     // `ConcurrentModificationError` on the list it had just changed.
-    for (final job in [?_held, ..._jobs]) {
+    for (final job in _snapshot) {
       if (!test(job)) {
         continue;
       }
@@ -125,7 +129,27 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   int clear({
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
-  }) => removeWhere((_) => true, force: force, reason: reason);
+  }) => _clear(_snapshot, force: force, reason: reason);
+
+  /// Removes every job of [snapshot] that is still here; returns the number
+  /// removed.
+  ///
+  /// The snapshot may be older than this call: `cancelAll` takes one of
+  /// every core before it clears the first, and a job a finish handler puts
+  /// in a core cleared later is not in it.
+  int _clear(
+    List<_SoloJob<S, S, Object?>> snapshot, {
+    required bool force,
+    required CancelReason reason,
+  }) {
+    var count = 0;
+    for (final job in snapshot) {
+      if (remove(job, force: force, reason: reason)) {
+        count++;
+      }
+    }
+    return count;
+  }
 
   void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
     if (first) {

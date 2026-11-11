@@ -155,7 +155,7 @@ final class _SoloContext<S extends Object, W extends S, R>
 
   _SoloContext(this._job) : super(_job);
 
-  Solo<S> get _solo => _job._solo;
+  SoloController<S> get _solo => _job._solo;
 
   @override
   SoloJob<void> createEachJob(
@@ -188,13 +188,33 @@ final class _SoloContext<S extends Object, W extends S, R>
     Object? key,
     String Function()? describe,
     Duration? timeout,
-  }) => _solo.job<W, T>(
-    body,
-    key: key,
-    describe: describe,
-    keepWhile: _job._keepWhile,
-    timeout: timeout,
-  );
+  }) {
+    // Made for the core this job runs in, not the one that made it: a child
+    // handed to a job of another core runs there.
+    final core = _job._execution ?? _job._destination;
+    final controller = core.controller;
+    if (controller is Solo<S>) {
+      // Through the controller's own `job`, which a subclass may override.
+      return controller.job<W, T>(
+        body,
+        key: key,
+        describe: describe,
+        keepWhile: _job._keepWhile,
+        timeout: timeout,
+      );
+    }
+    return _SoloJob<S, W, T>(
+      core,
+      body,
+      key: key,
+      canStart: null,
+      keepWhile: _job._keepWhile,
+      cancellable: true,
+      timeout: timeout,
+      describe: describe,
+      observer: controller._jobObserver,
+    );
+  }
 
   // The core hands back the child that `createEachJob` above made, and that
   // one is a `SoloJob`.

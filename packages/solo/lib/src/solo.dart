@@ -18,6 +18,7 @@ part 'accumulator.dart';
 part 'accumulation_timing.dart';
 part 'job.dart';
 part 'job_context.dart';
+part 'lane.dart';
 part 'queue.dart';
 
 /// What a controller says of a job it did not make, the fix included: the
@@ -82,17 +83,25 @@ abstract class SoloController<S extends Object> {
 
   bool get _finished => identical(_listeners, _closedListeners);
 
-  /// The queue of root jobs, which [Solo] holds.
+  /// The cores of this controller in the order of creation, the order a
+  /// pass of the pump walks them in: one for a [Solo].
+  final _cores = <_SoloLaneCore<S>>[];
+
+  bool _pumpScheduled = false;
+
+  /// How many cores the pass under way has found drained: nothing running,
+  /// nothing to take, an empty queue, and a drain on.
+  int _drainedCores = 0;
+
+  /// The queue of root jobs, which [Solo] holds in its core.
   _SoloQueue<S> get _queue;
 
-  /// The running root job, which [Solo] holds.
+  /// The running root job, which [Solo] holds in its core.
   _SoloJob<S, S, Object?>? get _current;
 
-  /// The job the pump of [Solo] holds while it asks its start rules.
+  /// The job the pump holds in the core of [Solo] while it asks its start
+  /// rules.
   _SoloJob<S, S, Object?>? get _inTransition;
-
-  /// Brings the pump of [Solo] back on a microtask.
-  void _schedulePump();
 
   /// Creates a controller in [initialState].
   SoloController._(S initialState) : _state = initialState {
@@ -403,39 +412,48 @@ abstract class SoloController<S extends Object> {
     return completer.future;
   }
 
-  /// Drops the queue, cancels the current job and finishes [completer]
-  /// once it is over: what [SoloCloseMode.cancel] means.
+  /// Drops the queues, cancels the current jobs and finishes [completer]
+  /// once they are over: what [SoloCloseMode.cancel] means.
   void _stopWork(Completer<void> completer, StackTrace stackTrace) {
     _cancelTimers();
-    final transition = _inTransition;
-    if (transition != null && !transition.isFinished) {
-      // Held by the pump, which is about to launch it: closing takes this
-      // one the way it takes the queue, without asking, and ahead of it,
-      // as the queue's own removals do.
-      transition._drop(
-        Cancelled.by(
-          reason: const ClosedCancelReason(),
-          started: false,
-          stackTrace: stackTrace,
-        ),
-      );
+    // Every core lets go of its queued work before any running job hears of
+    // the close: a job cancelled first could write while the queue of
+    // another core still waits.
+    for (final core in _cores) {
+      final transition = core.inTransition;
+      if (transition != null && !transition.isFinished) {
+        // Held by the pump, which is about to launch it: closing takes this
+        // one the way it takes the queue, without asking, and ahead of it,
+        // as the queue's own removals do.
+        transition._drop(
+          Cancelled.by(
+            reason: const ClosedCancelReason(),
+            started: false,
+            stackTrace: stackTrace,
+          ),
+        );
+      }
+      for (final job in core.queue._drain()) {
+        job._drop(
+          Cancelled.by(
+            reason: const ClosedCancelReason(),
+            started: false,
+            stackTrace: stackTrace,
+          ),
+        );
+      }
     }
-    for (final job in _queue._drain()) {
-      job._drop(
-        Cancelled.by(
-          reason: const ClosedCancelReason(),
-          started: false,
-          stackTrace: stackTrace,
-        ),
-      );
-    }
-    final current = _current;
-    if (current == null) {
+    final running = [for (final core in _cores) ?core.current];
+    if (running.isEmpty) {
       // Nothing to wait for, but still finish on a microtask: `onClose`
       // never arrives from inside `close`, whether the engine was busy or
       // idle.
       scheduleMicrotask(() => _finishClose(completer));
-    } else {
+      return;
+    }
+    // Every running job hears of the close before the wait for any of them
+    // begins.
+    for (final current in running) {
       // Rejectable on purpose: `close` waits for a job that refuses.
       current._cancelWith(
         Cancelled.by(
@@ -443,9 +461,20 @@ abstract class SoloController<S extends Object> {
           stackTrace: stackTrace,
         ),
       );
+    }
+    // The last of them to finish finishes the close, straight from its own
+    // end and with no microtask of its own; `_finishClose` guards only its
+    // completer, and the first to end would close under the others.
+    var unfinished = running.length;
+    for (final current in running) {
       // `untilFinished`, not `done`: closing waits for the job, it does not
       // observe its outcome, so a failure here is still answered for.
-      current._untilFinished.then((_) => _finishClose(completer));
+      current._untilFinished.then((_) {
+        unfinished--;
+        if (unfinished == 0) {
+          _finishClose(completer);
+        }
+      });
     }
   }
 
@@ -493,14 +522,29 @@ abstract class SoloController<S extends Object> {
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
   }) {
-    // The queue's removals reach the job the pump holds between the queue
-    // and the start, and a call from inside its rules is exactly when that
+    // One snapshot of every queue before the first removal: a removal runs
+    // the finish handlers of the job it ends, and a job one of them puts in
+    // any core outlives this call, whatever the order of the cores. The
+    // queue's removals reach the job the pump holds between the queue and
+    // the start, and a call from inside its rules is exactly when that
     // happens.
-    _queue.clear(force: force, reason: reason);
-    final current = _current;
-    return current == null
-        ? Future<void>.value()
-        : current.cancel(reason: reason);
+    final queued = [
+      for (final core in _cores) (core.queue, core.queue._snapshot),
+    ];
+    for (final (queue, jobs) in queued) {
+      queue._clear(jobs, force: force, reason: reason);
+    }
+    // The running jobs are read once the queues are cleared, and before
+    // any of them is cancelled.
+    final running = [for (final core in _cores) ?core.current];
+    return switch (running) {
+      [] => Future<void>.value(),
+      // As it is: one running job is waited for through its own `cancel`.
+      [final current] => current.cancel(reason: reason),
+      _ => Future.wait<void>([
+        for (final current in running) current.cancel(reason: reason),
+      ]),
+    };
   }
 
   /// A job body is about to run.
@@ -782,6 +826,155 @@ abstract class SoloController<S extends Object> {
     _timers.clear();
   }
 
+  _SoloJob<S, S, T> _own<T>(Job<T> job) {
+    if (job is _SoloJob<S, S, T> && identical(job._solo, this)) {
+      return job;
+    }
+    throw ArgumentError.value('$job', 'job', _notCreatedHere);
+  }
+
+  void _onJobFinished(_SoloJob<S, S, Object?> job) {
+    var wasCurrent = false;
+    final core = job._execution;
+    if (core != null && identical(job, core.current)) {
+      core.current = null;
+      wasCurrent = true;
+    }
+    _running.remove(job);
+    // A drain ends in the pump, so whatever empties the queue has to bring
+    // the pump back. Finishing the current job is one way; taking the last
+    // queued job off the queue is the other, and it woke nothing. A group
+    // waiting for its window keeps `current` empty and takes its timer
+    // away with it when it goes, so a drain left with one of those and a
+    // `cancelAll` had nothing left to finish it.
+    if (wasCurrent || _draining) {
+      _schedulePump();
+    }
+  }
+
+  /// Schedules a pump so the caller finishes its synchronous part first:
+  /// it may add several jobs and rearrange the queue before the first
+  /// one starts.
+  void _schedulePump() {
+    if (_pumpScheduled) {
+      return;
+    }
+    _pumpScheduled = true;
+    scheduleMicrotask(() {
+      _pumpScheduled = false;
+      _pump();
+    });
+  }
+
+  /// One pass: a step in every core, in the order of creation, unless a
+  /// step closes the controller with a cancel; then the drain's end.
+  void _pump() {
+    _drainedCores = 0;
+    for (final core in _cores) {
+      if (!_step(core)) {
+        break;
+      }
+    }
+    // A drain ends here, once a pass, and not in the step of a core: a
+    // controller with no core has no step to end it, and two cores found
+    // drained in one pass would end it twice. Only a pass that found every
+    // core drained ends it; a core whose step launched a job is not drained
+    // even when that job is already over, and the end of the job brings the
+    // pump back.
+    if (_draining && _drainedCores == _cores.length) {
+      _finishClose(_closing!);
+    }
+  }
+
+  /// Whether a pass of the pump goes on to the next core: not after a
+  /// [close] that cancels. A drain and [cancelAll] leave it going.
+  bool get _passGoesOn => !isClosed || _draining;
+
+  /// What the pump does in [core]: takes the head of its queue, asks the
+  /// start rules, steps over the jobs they turn down and launches the first
+  /// one they accept. Returns whether the pass goes on to the next core.
+  bool _step(_SoloLaneCore<S> core) {
+    if (core.current != null || (isClosed && !_draining)) {
+      return _passGoesOn;
+    }
+    final queue = core.queue;
+    while (true) {
+      final job = queue._takeFirst();
+      if (job == null) {
+        // Not the same as an empty queue: a group waiting for its window
+        // stays in it, and its timer brings the pump back. A drain that
+        // ended here would cut off the very case it exists for.
+        if (_draining && queue._jobs.isEmpty) {
+          // Drained: the pass ends the drain once it has seen every core.
+          _drainedCores++;
+
+          return _passGoesOn;
+        }
+        _debug(() => 'queue has no ready jobs');
+
+        return _passGoesOn;
+      }
+      // Off the queue, not started, and not yet `current`: while the rules
+      // are asked — the caller's code — this job belongs to nobody, and only
+      // `inTransition` can hand it to a `cancelAll` or a `close` made from in
+      // there.
+      core.inTransition = job;
+      try {
+        final String? rejection;
+        try {
+          rejection = job._rejectStart(_state);
+        } on Object catch (error, stackTrace) {
+          // The rules are the caller's code, and this one threw. The job is
+          // already out of the queue: left as it is, it would never finish,
+          // and the pump would never come back for the ones behind it. The
+          // core tells the observer of a failure handed in, and of one handed
+          // to a job the rule has already ended — cancelled, or dropped by a
+          // `close` made from inside it.
+          _debug(() => 'rule of $job threw: $error');
+          job._drop(Failed(error, stackTrace));
+          continue;
+        }
+        if (job.isFinished) {
+          // The rules are the caller's code, and one of them ended this
+          // job while answering: `cancel()` on a job that has not started
+          // finishes it where it stands, and a `cancelAll` or a `close`
+          // from in there reaches it through `inTransition`. Launching it
+          // now would throw `has already finished` from the core and
+          // leave the pump holding a finished `current` — the queue would
+          // never move again. This comes before the rejection: a rule that
+          // ended the job and then turned it down has not dropped it, and a
+          // `drop` line would name an outcome the job does not have.
+          _debug(() => 'start $job: ended while the rules were asked');
+          continue;
+        }
+        if (rejection != null) {
+          final cancelled = Cancelled.by(
+            reason: const RulesCancelReason(),
+            started: false,
+            description: rejection,
+            stackTrace: StackTrace.current,
+          );
+          // Said here, where the queue lets the job go: the line after it,
+          // if any, is `queue has no ready jobs`, which reads as if the job
+          // had never been queued.
+          _debug(() => 'drop $job: $cancelled');
+          job._drop(cancelled);
+          continue;
+        }
+        // The window closes here, not at the end of the launch: from now
+        // on the job is the current one, and that is where a `cancelAll`
+        // or a `close` from inside its body finds it.
+        core
+          ..current = job
+          ..inTransition = null;
+        job._launch();
+        return _passGoesOn;
+      } finally {
+        core.inTransition = null;
+      }
+    }
+  }
+
   static void _debug(String Function() message) {
     final debug = Solo.debug;
     if (debug == null) {
@@ -879,30 +1072,27 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   /// on the children page for both traps.
   static void Function(String message)? debug;
 
-  @override
-  late final _SoloQueue<S> _queue = _SoloQueue<S>(this);
+  /// The one core of this controller: its queue, its current job and the
+  /// job whose start rules are being asked.
+  late final _SoloLaneCore<S> _core = _SoloLaneCore<S>(this, name: null);
 
   @override
-  _SoloJob<S, S, Object?>? _current;
+  _SoloQueue<S> get _queue => _core.queue;
 
-  /// The job the pump holds while it asks its start rules: taken off the
-  /// queue, not started, not yet [_current].
-  ///
-  /// The rules are the caller's code and may cancel everything or close
-  /// the controller, and in that window neither the queue nor [_current]
-  /// leads to this job. It is queued work until it is launched, and this
-  /// is what says so.
   @override
-  _SoloJob<S, S, Object?>? _inTransition;
+  _SoloJob<S, S, Object?>? get _current => _core.current;
 
-  bool _pumpScheduled = false;
+  @override
+  _SoloJob<S, S, Object?>? get _inTransition => _core.inTransition;
 
   /// Why a job a [Policy.droppable] call may hand back refuses `then`.
   static const _handedBack =
       'is handed back to every call of its key under Policy.droppable';
 
   /// Creates a controller in [initialState].
-  Solo(super.initialState) : super._();
+  Solo(super.initialState) : super._() {
+    _cores.add(_core);
+  }
 
   /// Creates a job without queueing it, for [enqueueJob] or for
   /// [JobContext.run].
@@ -947,7 +1137,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => _SoloJob<S, W, T>(
-    this,
+    _core,
     body,
     key: key,
     canStart: canStart,
@@ -1002,7 +1192,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => _SoloAccumulator<S, W, E, List<E>, T>(
-    this,
+    _core,
     handler,
     seed: (event) => <E>[event],
     merge: (events, event) => events..add(event),
@@ -1054,7 +1244,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
   }) => _SoloAccumulator<S, W, E, E, T>(
-    this,
+    _core,
     handler,
     seed: (event) => event,
     merge: merge,
@@ -1148,6 +1338,9 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     // caller's included: otherwise whether a caller throws would depend on
     // who came first.
     if (policy == Policy.droppable) impl._requireShared(_handedBack);
+    // After the refusals and before any outcome: a job this call ends at
+    // once comes to `onFinish` with the core it was queued in.
+    impl._execution = _core;
     if (isClosed && duplicate == null) {
       SoloController._debug(() => 'enqueue $impl: closed');
       impl._drop(
@@ -1374,126 +1567,6 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
   }) => super.cancelAll(force: force, reason: reason);
-
-  _SoloJob<S, S, T> _own<T>(Job<T> job) {
-    if (job is _SoloJob<S, S, T> && identical(job._solo, this)) {
-      return job;
-    }
-    throw ArgumentError.value('$job', 'job', _notCreatedHere);
-  }
-
-  void _onJobFinished(_SoloJob<S, S, Object?> job) {
-    final wasCurrent = identical(job, _current);
-    if (wasCurrent) {
-      _current = null;
-    }
-    _running.remove(job);
-    // A drain ends in the pump, so whatever empties the queue has to bring
-    // the pump back. Finishing the current job is one way; taking the last
-    // queued job off the queue is the other, and it woke nothing. A group
-    // waiting for its window keeps `_current` empty and takes its timer
-    // away with it when it goes, so a drain left with one of those and a
-    // `cancelAll` had nothing left to finish it.
-    if (wasCurrent || _draining) {
-      _schedulePump();
-    }
-  }
-
-  /// Schedules a pump so the caller finishes its synchronous part first:
-  /// it may add several jobs and rearrange the queue before the first
-  /// one starts.
-  @override
-  void _schedulePump() {
-    if (_pumpScheduled) {
-      return;
-    }
-    _pumpScheduled = true;
-    scheduleMicrotask(() {
-      _pumpScheduled = false;
-      _pump();
-    });
-  }
-
-  void _pump() {
-    if (_current != null || (isClosed && !_draining)) {
-      return;
-    }
-    while (true) {
-      final job = _queue._takeFirst();
-      if (job == null) {
-        // Not the same as an empty queue: a group waiting for its window
-        // stays in it, and its timer brings the pump back. A drain that
-        // ended here would cut off the very case it exists for.
-        if (_draining && _queue._jobs.isEmpty) {
-          _finishClose(_closing!);
-
-          return;
-        }
-        SoloController._debug(() => 'queue has no ready jobs');
-
-        return;
-      }
-      // Off the queue, not started, and not yet `_current`: while the rules are
-      // asked — the caller's code — this job belongs to nobody, and only
-      // `_inTransition` can hand it to a `cancelAll` or a `close` made from in
-      // there.
-      _inTransition = job;
-      try {
-        final String? rejection;
-        try {
-          rejection = job._rejectStart(_state);
-        } on Object catch (error, stackTrace) {
-          // The rules are the caller's code, and this one threw. The job is
-          // already out of the queue: left as it is, it would never finish,
-          // and the pump would never come back for the ones behind it. The
-          // core tells the observer of a failure handed in, and of one handed
-          // to a job the rule has already ended — cancelled, or dropped by a
-          // `close` made from inside it.
-          SoloController._debug(() => 'rule of $job threw: $error');
-          job._drop(Failed(error, stackTrace));
-          continue;
-        }
-        if (job.isFinished) {
-          // The rules are the caller's code, and one of them ended this
-          // job while answering: `cancel()` on a job that has not started
-          // finishes it where it stands, and a `cancelAll` or a `close`
-          // from in there reaches it through `_inTransition`. Launching it
-          // now would throw `has already finished` from the core and
-          // leave the pump holding a finished `_current` — the queue would
-          // never move again. This comes before the rejection: a rule that
-          // ended the job and then turned it down has not dropped it, and a
-          // `drop` line would name an outcome the job does not have.
-          SoloController._debug(
-            () => 'start $job: ended while the rules were asked',
-          );
-          continue;
-        }
-        if (rejection != null) {
-          final cancelled = Cancelled.by(
-            reason: const RulesCancelReason(),
-            started: false,
-            description: rejection,
-            stackTrace: StackTrace.current,
-          );
-          // Said here, where the queue lets the job go: the line after it,
-          // if any, is `queue has no ready jobs`, which reads as if the job
-          // had never been queued.
-          SoloController._debug(() => 'drop $job: $cancelled');
-          job._drop(cancelled);
-          continue;
-        }
-        _current = job;
-        // The window closes here, not at the end of the launch: from now
-        // on the job is the current one, and that is where a `cancelAll`
-        // or a `close` from inside its body finds it.
-        _inTransition = null;
-        job._launch();
-        return;
-      } finally {
-        _inTransition = null;
-      }
-    }
-  }
 }
 
 /// Feeds the hooks of one job into [SoloObserver] and into the controller's

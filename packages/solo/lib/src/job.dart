@@ -14,7 +14,16 @@ abstract interface class SoloJob<T> implements ChildJob<T> {
 
 final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     implements SoloJob<T> {
-  final Solo<S> _solo;
+  /// The core that made this job: the one queue the job goes into, and the
+  /// one [isQueued], [adoptedBy] and [cancelWith] look at.
+  final _SoloLaneCore<S> _destination;
+
+  /// The core whose pump runs this job, kept after its end: for a root job
+  /// the core that queued it, for a child the core its parent runs in.
+  /// `null` until the job is queued or adopted.
+  _SoloLaneCore<S>? _execution;
+
+  SoloController<S> get _solo => _destination.controller;
 
   /// Let go of when the job is over, the way the core lets go of its own
   /// body and of the parent chain. A body runs once, and the handlers of
@@ -61,7 +70,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   var _taken = false;
 
   _SoloJob(
-    this._solo,
+    this._destination,
     Future<T> Function(SoloContext<S, W> ctx) body, {
     required super.key,
     required bool Function(W state)? canStart,
@@ -82,7 +91,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
        _hasStateHandlers = ifFailed != null || ifCancelled != null;
 
   @override
-  bool get isQueued => _solo._queue._jobs.contains(this);
+  bool get isQueued => _destination.queue._jobs.contains(this);
 
   /// The result type this job was created with.
   ///
@@ -102,7 +111,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
         'runs as a child only in a body of the Solo that made it',
       );
     }
-    if (_solo._queue._jobs.contains(this)) {
+    if (_destination.queue._jobs.contains(this)) {
       throw StateError('$this is queued and cannot be run as a child');
     }
     // Taken already, and still `created`: a rule of the child's own runs it
@@ -117,6 +126,8 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // a moment later, while the child is still `created` and in no list — must
     // not be able to put it in the queue.
     _taken = true;
+    // The child runs where its parent runs, whichever core made it.
+    _execution = parent._job._execution;
     _parentJob = parent._job;
     // A predicate of its own is stronger; a child without one -- `ctx.child`,
     // `each`, a `job(...)` made without it -- takes the one of the job whose
@@ -126,19 +137,20 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
-    final queued = _solo._queue._jobs.contains(this);
+    final queue = _destination.queue;
+    final queued = queue._jobs.contains(this);
     // A job the pump holds between the queue and the start is queued work
     // too: it has not run a line, and a `cancellable: false` one turns
     // down a rejectable cancellation the same way. Left to the core it
     // would not: a job that has not started is `created`, and `created` is
     // finished without asking.
-    if (queued || identical(this, _solo._inTransition)) {
+    if (queued || identical(this, _destination.inTransition)) {
       if (!cancellable && rejectable) {
         SoloController._debug(() => 'remove $this: not cancellable');
         return;
       }
       if (queued) {
-        _solo._queue._jobs.remove(this);
+        queue._jobs.remove(this);
         // Diagnostics may add another event synchronously. Detach first so
         // the group being cancelled can no longer receive it.
         SoloController._debug(() => 'remove $this: $cancelled');

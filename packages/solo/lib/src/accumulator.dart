@@ -46,7 +46,9 @@ abstract interface class SoloAccumulator<E, T> {
 
 final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     implements SoloAccumulator<E, T>, _AccumulationOwner {
-  final Solo<S> _solo;
+  /// The core every group of this accumulator goes into: its queue and its
+  /// current job are the ones the accumulator reads.
+  final _SoloLaneCore<S> _core;
   final Future<T> Function(SoloContext<S, W>, V) _handler;
   final V Function(E) _seed;
   final V Function(V, E) _merge;
@@ -67,7 +69,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   Timer? _throttleTimer;
 
   _SoloAccumulator(
-    this._solo,
+    this._core,
     this._handler, {
     required V Function(E) seed,
     required V Function(V, E) merge,
@@ -122,8 +124,15 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     return timeout;
   }
 
+  SoloController<S> get _solo => _core.controller;
+
+  /// Queues a job of a group. A [Solo] is asked through its own
+  /// [Solo.enqueueJob], which a subclass may override.
+  SoloJob<T> _enqueue(_SoloJob<S, W, T> job) =>
+      (_solo as Solo<S>).enqueueJob(job);
+
   _SoloJob<S, W, T>? _candidate() {
-    final jobs = _solo._queue._jobs;
+    final jobs = _core.queue._jobs;
     final candidates = _policy == AccumulationPolicy.adjacent
         ? <_SoloJob<S, S, Object?>>[if (jobs.isNotEmpty) jobs.last]
         : jobs.reversed;
@@ -138,7 +147,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
 
   _SoloJob<S, W, T> _job(_AccumulationGroup<V>? group) =>
       _SoloJob<S, W, T>(
-          _solo,
+          _core,
           (ctx) {
             ctx.check();
             return _handler(ctx, group!._take());
@@ -164,7 +173,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     if (_merging) {
       throw StateError('Cannot add while this accumulator is merging');
     }
-    if (_solo.isClosed) return _solo.enqueueJob(_job(null));
+    if (_solo.isClosed) return _enqueue(_job(null));
     final previous = _candidate();
     if (previous == null) {
       // Whether this accumulator is idle has to be read before its new job
@@ -173,7 +182,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       // running must not start a second interval under it.
       final idle = _isIdle;
       final group = _AccumulationGroup(this, _seed(event), _snapshot);
-      final job = _solo.enqueueJob(_job(group));
+      final job = _enqueue(_job(group));
       if (job.isQueued && group._open) {
         group._accepted();
         if (idle) _armCooldown();
@@ -197,8 +206,8 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       // job, its handle and its buffer, and the job moves behind whatever
       // was queued after it. Nothing is cancelled here, so no cancellation
       // hook can re-enter in the middle of the move.
-      _solo._queue._jobs.remove(previous);
-      _solo._queue._insert(previous, first: false);
+      _core.queue._jobs.remove(previous);
+      _core.queue._insert(previous, first: false);
       SoloController._debug(() => 'move $previous to the tail');
     }
     // The debug line is foreign code, and it may cancel the group's job: a
@@ -210,14 +219,14 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   @override
   bool get _throttleReady => _throttleTimer?.isActive != true;
 
-  bool get _hasQueuedGroup => _solo._queue._jobs.any(
+  bool get _hasQueuedGroup => _core.queue._jobs.any(
     (job) => identical(job._accumulation?._owner, this),
   );
 
   /// Whether this accumulator has no group of its own queued or running.
   bool get _isIdle =>
       !_hasQueuedGroup &&
-      !identical(_solo._current?._accumulation?._owner, this);
+      !identical(_core.current?._accumulation?._owner, this);
 
   @override
   Timer _startTimer(Duration duration, void Function(Timer) callback) =>
@@ -262,7 +271,9 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     timer = _startTimer(timing.duration, (elapsed) {
       if (!identical(_throttleTimer, elapsed)) return;
       _throttleTimer = null;
-      if (_solo._current == null && _hasQueuedGroup) _schedulePump();
+      // The current job of its own core: another core that is busy holds
+      // nothing up here.
+      if (_core.current == null && _hasQueuedGroup) _schedulePump();
     });
     _throttleTimer = timer;
   }
