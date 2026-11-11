@@ -1,6 +1,6 @@
 /// State management for Flutter: sequential jobs over one state, one job at
-/// a time in each lane, cooperative cancellation, and rebuilds through
-/// `ValueListenable`.
+/// a time in one queue or in each of several lanes, cooperative
+/// cancellation, and rebuilds through `ValueListenable`.
 ///
 /// Re-exports `solo` — and, through it, `async_job` — whole, so this is the
 /// only import an app needs. `select` and `listen` are the exception: they

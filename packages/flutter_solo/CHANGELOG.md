@@ -1,8 +1,8 @@
 ## Unreleased
 
-This package re-exports `solo`, and its 2.0.0 is this release: `SoloLanes`, a
-controller with several queues over one state, and the base `SoloController`
-arrive with the same import. See
+This package re-exports `solo`, and this release comes with `solo` 2.0.0:
+`SoloLanes`, a controller with several queues over one state, and the base
+`SoloController` arrive with the same import. See
 [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
 for what they bring and what breaks there.
 

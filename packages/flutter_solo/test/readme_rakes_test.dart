@@ -246,7 +246,7 @@ void main() {
       _says(
         'One root job at a time in a queue: a `Solo` has one queue, and a '
         '`SoloLanes` has one for each of its lanes. Two jobs of one queue '
-        'never write the same state.',
+        'never write the state at the same time.',
       );
     });
 

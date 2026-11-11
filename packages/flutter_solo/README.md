@@ -1,8 +1,8 @@
 # flutter_solo
 
 State management for Flutter: sequential jobs over one state, one job at a time
-in each lane, cooperative cancellation, and rebuilds through `SoloBuilder` or
-`ValueListenable`.
+in one queue or in each of several lanes, cooperative cancellation, and
+rebuilds through `SoloBuilder` or `ValueListenable`.
 
 A controller owns a state and runs jobs over it one at a time: a `Solo` in one
 queue, a `SoloLanes` in each of the lanes it declares. `SoloBuilder` rebuilds a
@@ -35,8 +35,8 @@ print(job.outcome); // Cancelled(manual)
 What the engine holds to:
 
 - One root job at a time in a queue: a `Solo` has one queue, and a `SoloLanes`
-  has one for each of its lanes. Two jobs of one queue never write the same
-  state.
+  has one for each of its lanes. Two jobs of one queue never write the state at
+  the same time.
 - Rules instead of flags: a job declares the states it works with and the
   condition it lives under, and it is cancelled when they stop holding.
 - A cancellation the caller can ask for: the next checkpoint of the context
