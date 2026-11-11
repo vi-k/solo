@@ -651,6 +651,31 @@ void main() {
     });
   });
 
+  test(
+    'a job of another controller started as a child names the controller',
+    () {
+      fakeAsync((async) {
+        final controller = _Two();
+        final theirs = _Two().first.job<_AB, void>(key: 'theirs', _nothing);
+        Object? thrown;
+        controller.first.enqueue<_AB, void>(key: 'parent', (ctx) async {
+          try {
+            ctx.start(theirs);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        });
+        async.flushMicrotasks();
+
+        expect(
+          '$thrown',
+          'Invalid argument (job): was not created by this controller (make it '
+              'with job(...) or ctx.child of this controller): "Job(theirs)"',
+        );
+      });
+    },
+  );
+
   group('SoloJob.lane', () {
     test('a root job has the lane that queued it', () {
       fakeAsync((async) {

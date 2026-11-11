@@ -24,8 +24,6 @@
   releases of both plugins that come out with this one know it. The rules about
   lanes come in a minor release of `solo_lints`, which reaches an app once its
   constraint is raised to it.
-- The error for a job another controller made is reworded: it says the job "was
-  not created by this controller" where it said "this Solo".
 
 ### Added
 

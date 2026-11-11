@@ -25,6 +25,11 @@ part 'queue.dart';
 /// types let a job of the core or of another controller through. A job it
 /// did make, run by a parent of the core, is refused in `adoptedBy`.
 const _notCreatedHere =
+    'was not created by this Solo (make it with job(...) or ctx.child of this '
+    'controller)';
+
+/// The same for a [SoloLanes], which is not a Solo.
+const _notCreatedHereLanes =
     'was not created by this controller (make it with job(...) or ctx.child '
     'of this controller)';
 
@@ -859,7 +864,11 @@ abstract class SoloController<S extends Object> {
     if (job is _SoloJob<S, S, T> && identical(job._solo, this)) {
       return job;
     }
-    throw ArgumentError.value('$job', 'job', _notCreatedHere);
+    throw ArgumentError.value(
+      '$job',
+      'job',
+      this is Solo ? _notCreatedHere : _notCreatedHereLanes,
+    );
   }
 
   /// Makes a job of this controller for [core]: the one place a job is

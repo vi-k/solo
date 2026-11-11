@@ -256,7 +256,7 @@ A job of the core made by hand with `Job.deferred` is a `ChildJob` and
 compiles, and the controller refuses it with an `ArgumentError`:
 
 ```text
-Invalid argument (job): was not created by this controller (make it with job(...) or ctx.child of this controller): "Job()"
+Invalid argument (job): was not created by this Solo (make it with job(...) or ctx.child of this controller): "Job()"
 ```
 
 ## Steps in a row
