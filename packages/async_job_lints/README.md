@@ -263,11 +263,14 @@ the type, so a function of your own that returns `done` is reported where its
 result is dropped. It is quiet when the job is a local variable or a parameter
 whose `outcome`, `value` or `done` is read later in the same function, when
 `ignoreFailure()` was called on it before, as a statement or in a cascade of
-its declaration, and on an `await` in a job body queued on a solo controller
-for a job of its own queue, which `bare_await` reports, or, under solo_lints,
-of its own lane, which `await_own_queue` reports. A test that waits for a job
-only to look at it afterwards reads `job.outcome` after `await job.done;` and
-keeps the rule quiet that way.
+its declaration, and in a job body on a `done` of a job of the own queue of a
+`Solo`, or, under solo_lints, on an awaited `done` of the own lane from a body
+queued in that lane. Such a job waits for itself, a deadlock rather than a
+dropped failure: solo_lints reports it as `await_own_queue` when the body is
+queued on the controller, and without solo_lints `bare_await` reports its
+`await` right in the body. A test that waits for a job only to look at it
+afterwards reads `job.outcome` after `await job.done;` and keeps the rule quiet
+that way.
 
 The failure is answered for without anybody reading the outcome when the job is
 continued with `then` or a handle of `shared()`, when it runs under `ctx.run`

@@ -734,10 +734,17 @@ class BareAwaitOwnQueueReportedElsewhereTest extends RuleTest {
   // The close of a SoloStream mixed into a Solo is the controller's own.
   Future<void> test_close_of_a_solo_stream() => assertAt(_soloStream, []);
 
-  // A body queued on another controller is not this one's: await_own_queue
-  // does not report it, so bare_await does.
-  Future<void> test_body_of_another_controller() => assertAt(
-    '''
+  // The answer of 0.2.0: a wait for the own queue of a Solo is left to the
+  // plugin on top from any body, though await_own_queue reports it only from
+  // a body queued here. Reporting it here would add diagnostics in a patch.
+  Future<void> test_own_queue_from_bodies_not_queued_here() =>
+      assertAt(_ownQueueElsewhere, []);
+}
+
+/// Waits for the own queue of a `Solo` from bodies it does not queue: one
+/// given to another controller, one of a core job and one that takes a
+/// `JobContext`.
+const _ownQueueElsewhere = '''
 import 'package:solo/solo.dart';
 
 final class Desk extends Solo<int> {
@@ -745,14 +752,26 @@ final class Desk extends Solo<int> {
 
   late final Desk other;
 
-  Job<void> logout() => other.enqueue<int, void>((ctx) async {
+  Job<void> relay() => other.enqueue<int, void>((ctx) async {
+    await close();
+  });
+
+  Job<void> later() => Job<void>((ctx) async {
+    await close();
+  });
+
+  Job<void> plain() => enqueue<int, void>((JobContext ctx) async {
     await close();
   });
 }
-''',
-    ['[[await]] close()'],
-  );
-}
+''';
+
+/// Every wait of [_ownQueueElsewhere].
+const _ownQueueElsewhereAwaits = [
+  '[[await]] close()',
+  '[[await]] close()',
+  '[[await]] close()',
+];
 
 /// `bare_await` with only the lane left to another rule: the own queue of a
 /// `Solo` is still its own to report.
@@ -763,6 +782,9 @@ class BareAwaitOwnLaneAloneTest extends RuleTest {
       BareAwait(ownLaneReportedElsewhere: true);
 
   Future<void> test_own_queue() => assertAt(_ownQueue, ['[[await]] close()']);
+
+  Future<void> test_own_queue_from_bodies_not_queued_here() =>
+      assertAt(_ownQueueElsewhere, _ownQueueElsewhereAwaits);
 }
 
 /// Waits from a body of the lane `_likes`: for a job of the other lane, then
@@ -852,6 +874,20 @@ final class Feed extends SoloLanes<int> {
     ['[[await]] close()'],
   );
 
+  // The answer of 0.2.0, as with bare_await alone.
+  Future<void> test_own_queue_from_bodies_not_queued_here() =>
+      assertAt(_ownQueueElsewhere, []);
+
+  // A lane the controller does not declare by lane(...) is not seen as its
+  // own, even waited from a body queued in it: bare_await reports both waits.
+  Future<void> test_injected_lane() =>
+      assertAt(_injectedLane, ['[[await]] close()', '[[await]] _audit']);
+
+  // In a Solo the close is the own queue's and left as 0.2.0 left it; the
+  // job of the injected lane is reported, as 0.2.0 reported it.
+  Future<void> test_injected_lane_of_a_solo() =>
+      assertAt(_injectedLaneOfASolo, ['[[await]] foreign']);
+
   // A getter is no lane field: which lane it gives is not seen.
   Future<void> test_lane_from_a_getter() => assertAt(
     '''
@@ -893,3 +929,41 @@ final class Feed extends SoloLanes<int> {
     ['[[await]] job.done'],
   );
 }
+
+/// A `SoloLanes` with a lane it takes rather than declares, waited from a
+/// body queued in that lane.
+const _injectedLane = '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed(this._audit) : super(0) {
+    _likes = lane('likes');
+  }
+
+  final SoloLane<int> _audit;
+  late final SoloLane<int> _likes;
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> record() => _audit.enqueue<int, void>((ctx) async {
+    await close();
+    await _audit.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''';
+
+/// A `Solo` with an injected lane, waited from a body queued in it.
+const _injectedLaneOfASolo = '''
+import 'package:solo/solo.dart';
+
+final class Desk extends Solo<int> {
+  Desk(this.foreign) : super(0);
+
+  final SoloLane<int> foreign;
+
+  Job<void> record() => foreign.enqueue<int, void>((ctx) async {
+    await close();
+    await foreign.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''';

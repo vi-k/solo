@@ -18,11 +18,13 @@
   they report that wait as any other. `ownQueueCall` keeps its signature and
   its answers for a `Solo`, and finds `close` and `cancelAll` of a `SoloStream`
   mixed into a `Solo`.
-- `bare_await` and `discarded_outcome` leave a wait for the own queue or lane
-  to the plugin on top only from a body queued on that controller, where the
-  plugin reports it. A wait from a body given to another controller's `enqueue`
-  or to a `Job` of the core is reported again, and so is an outcome of `done`
-  dropped in a body without `await`, which waits for nothing.
+- `bare_await` and `discarded_outcome` leave a wait for the own lane to the
+  plugin on top only from a body queued in that lane, where the plugin reports
+  it, and `discarded_outcome` only an awaited one: a `done` dropped without
+  `await` waits for nothing. A lane field is the controller's own only when a
+  constructor body of its class assigns it from `lane(...)`: a lane the
+  controller takes may be another controller's. For the own queue of a `Solo`
+  both rules answer as in 0.2.0.
 
 ## 0.2.0
 

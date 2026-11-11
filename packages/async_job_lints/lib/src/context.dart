@@ -450,8 +450,10 @@ DartType? _controllerAround(AstNode node) {
 }
 
 /// The lane field of this controller that [expression] reads, `_likes` or
-/// `this._likes`: an instance field typed `SoloLane`. A getter is not one:
-/// which lane it gives is not seen.
+/// `this._likes`: an instance field typed `SoloLane` that a constructor body
+/// of its class assigns from `lane(...)`. A getter is not one, nor is a lane
+/// the controller takes rather than declares: which lane it gives is not
+/// seen, and a lane is public, so it may be another controller's.
 Element? _laneField(Expression? expression) {
   final node = expression?.unParenthesized;
   final read = switch (node) {
@@ -463,7 +465,46 @@ Element? _laneField(Expression? expression) {
   if (field is! FieldElement || field.isStatic || !field.isOriginDeclaration) {
     return null;
   }
-  return isSoloLane(field.type) ? field.baseElement : null;
+  if (!isSoloLane(field.type)) return null;
+  final declared = _LaneDeclarations(field.baseElement);
+  node!.root.accept(declared);
+  return declared.found ? field.baseElement : null;
+}
+
+/// Finds `field = lane(...)` or `this.field = lane(...)` for [field] right
+/// in a constructor body of the class that declares it: where `SoloLanes`
+/// lets a controller declare its lanes.
+class _LaneDeclarations extends RecursiveAstVisitor<void> {
+  final FieldElement field;
+
+  bool found = false;
+
+  _LaneDeclarations(this.field);
+
+  @override
+  void visitConstructorDeclaration(ConstructorDeclaration node) {
+    final constructor = node.declaredFragment?.element;
+    if (constructor?.enclosingElement != field.enclosingElement) return;
+    super.visitConstructorDeclaration(node);
+  }
+
+  @override
+  void visitAssignmentExpression(AssignmentExpression node) {
+    super.visitAssignmentExpression(node);
+    if (found || node.operator.type != TokenType.EQ) return;
+    final written = node.writeElement;
+    final target = written is SetterElement ? written.variable : written;
+    if (target?.baseElement != field) return;
+    final value = node.rightHandSide.unParenthesized;
+    if (value is! MethodInvocation) return;
+    final on = value.realTarget;
+    if (on != null && on is! ThisExpression) return;
+    if (!isSoloMember(value.methodName.element, 'SoloLanes', 'lane')) return;
+    final constructor = node.thisOrAncestorOfType<ConstructorDeclaration>();
+    found =
+        constructor != null &&
+        node.thisOrAncestorOfType<FunctionBody>() == constructor.body;
+  }
 }
 
 /// The lane field [call] queues a job in: `enqueue` or `enqueueJob` of a
@@ -506,7 +547,8 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
 /// `enqueue` of a lane: a body given to `job` may run as a child in another
 /// lane, and a handler of `collect` or `accumulate` runs where its group
 /// goes. A rule that reports a wait for the own queue or the own lane looks
-/// at this body, and a rule that leaves the wait to it asks the same.
+/// at this body, and a rule that leaves a wait for the own lane to it asks
+/// the same.
 ({Element ctx, Element? lane})? queuedBodyOf(AstNode node) {
   final around = _controllerAround(node);
   if (!isSolo(around) && !isSoloController(around)) return null;

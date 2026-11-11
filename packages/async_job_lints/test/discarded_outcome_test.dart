@@ -439,9 +439,10 @@ final class Desk extends Solo<int> {
 }
 ''', []);
 
-  // Not awaited, the outcome is dropped and nothing waits for itself.
-  Future<void> test_own_queue_not_awaited() => assertAt(
-    '''
+  // The answer of 0.2.0: a dropped outcome of the own queue of a Solo is
+  // not reported in a body, awaited or not. Reporting it would add
+  // diagnostics in a patch.
+  Future<void> test_own_queue_not_awaited() => assertAt('''
 import 'package:solo/solo.dart';
 
 Future<int> commit() async => 1;
@@ -457,14 +458,11 @@ final class Desk extends Solo<int> {
     save().done;
   });
 }
-''',
-    ['save().[[done]]'],
-  );
+''', []);
 
-  // A body queued on another controller is not this one's: nothing reports
-  // the wait as waiting for itself.
-  Future<void> test_own_queue_from_another_controller() => assertAt(
-    '''
+  // The answer of 0.2.0 for bodies the Solo does not queue: one given to
+  // another controller, one of a core job and one that takes a JobContext.
+  Future<void> test_own_queue_from_bodies_not_queued_here() => assertAt('''
 import 'package:solo/solo.dart';
 
 Future<int> commit() async => 1;
@@ -478,13 +476,19 @@ final class Desk extends Solo<int> {
     await ctx.join(commit);
   });
 
-  Job<void> logout() => other.enqueue<int, void>((ctx) async {
+  Job<void> relay() => other.enqueue<int, void>((ctx) async {
+    await save().done;
+  });
+
+  Job<void> later() => Job<void>((ctx) async {
+    await save().done;
+  });
+
+  Job<void> plain() => enqueue<int, void>((JobContext ctx) async {
     await save().done;
   });
 }
-''',
-    ['save().[[done]]'],
-  );
+''', []);
 
   Future<void> test_outcome_kept() => assertAt('''
 $_api
@@ -568,6 +572,25 @@ class DiscardedOutcomeOwnLaneReportedElsewhereTest extends RuleTest {
 
   // The wait for the other lane is no deadlock, and its outcome is dropped.
   Future<void> test_lanes() => assertAt(_lanes, ['reload().[[done]]']);
+
+  // A lane the controller does not declare by lane(...) is not seen as its
+  // own: the outcome is dropped.
+  Future<void> test_injected_lane() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed(this._audit) : super(0);
+
+  final SoloLane<int> _audit;
+
+  Job<void> record() => _audit.enqueue<int, void>((ctx) async {
+    await _audit.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    ['{}).[[done]]'],
+  );
 
   // Not awaited, the outcome is dropped and nothing waits for itself.
   Future<void> test_own_lane_not_awaited() => assertAt(

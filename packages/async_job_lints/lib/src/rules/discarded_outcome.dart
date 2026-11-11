@@ -70,19 +70,26 @@ class _Visitor extends SimpleAstVisitor<void> {
       dropped = dropped.expression.unParenthesized;
     }
     if (!_isOutcomeFuture(dropped.staticType)) return;
-    if (awaited && _waitsForItself(node, dropped)) return;
+    if (_waitsForItself(node, dropped, awaited: awaited)) return;
     _check(dropped);
   }
 
-  /// Whether [dropped], awaited by [node] in a job body queued on this
-  /// controller, waits for the own queue, named by bare_await and
-  /// await_own_queue, or for the own lane where a plugin on top names it:
+  /// Whether [dropped] in a job body waits for the own queue of a `Solo`,
+  /// named by bare_await and await_own_queue, or, awaited by [node] in a
+  /// body queued in a lane, for that lane where a plugin on top names it:
   /// the job waits for itself.
-  bool _waitsForItself(ExpressionStatement node, Expression dropped) {
+  bool _waitsForItself(
+    ExpressionStatement node,
+    Expression dropped, {
+    required bool awaited,
+  }) {
     if (bodyContextAround(node) == null) return false;
-    if (queuedBodyOf(dropped) == null) return false;
+    // The own queue of a Solo is left from any body, awaited or not, as
+    // 0.2.0 left it.
     if (ownQueueCall(dropped) != null) return true;
-    return rule.ownLaneReportedElsewhere &&
+    return awaited &&
+        rule.ownLaneReportedElsewhere &&
+        queuedBodyOf(dropped) != null &&
         queueLaneOf(dropped) == QueueLane.own;
   }
 

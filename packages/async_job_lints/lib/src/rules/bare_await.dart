@@ -95,21 +95,21 @@ class _Visitor extends SimpleAstVisitor<void> {
   void visitAwaitExpression(AwaitExpression node) {
     final ctx = _bodyContextOf(node);
     if (ctx == null || _Waits(ctx, node).through(node.expression)) return;
-    // A wait for the controller's own queue or own lane from a body queued
-    // here is a deadlock. A plugin on top that reports it at the same await
-    // asks this rule to stay quiet; a lane is asked for apart, since a
-    // plugin that knows no lanes does not report them.
+    // A wait for the controller's own queue or own lane is a deadlock. A
+    // plugin on top that reports it at the same await asks this rule to stay
+    // quiet; a lane is asked for apart, since a plugin that knows no lanes
+    // does not report them.
     if (_reportedElsewhere(node.expression.unParenthesized)) return;
     _report(node.awaitKeyword, BareAwait.code, ctx);
   }
 
   bool _reportedElsewhere(Expression waited) {
-    if (!rule.ownQueueReportedElsewhere && !rule.ownLaneReportedElsewhere) {
-      return false;
-    }
-    if (queuedBodyOf(waited) == null) return false;
+    // The own queue of a Solo is left to the plugin from any body, as 0.2.0
+    // left it; the own lane only from a body queued in it, where the plugin
+    // reports it.
     if (ownQueueCall(waited) != null) return rule.ownQueueReportedElsewhere;
     return rule.ownLaneReportedElsewhere &&
+        queuedBodyOf(waited) != null &&
         queueLaneOf(waited) == QueueLane.own;
   }
 
