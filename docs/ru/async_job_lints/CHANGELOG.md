@@ -1,3 +1,11 @@
+## Не выпущено
+
+- `plugin_api.dart` экспортирует ещё `isSoloLanes`, `controllerAround`,
+  `declaresLane`, `callsOn` и `readsState` — для правил плагина поверх
+  о линиях. `declaresLane` говорит, объявляет ли `lane(...)` линию там, где это
+  позволяет `SoloLanes`, — прямо в теле конструктора: в том же месте, откуда
+  `queueLaneOf` берёт поле линии.
+
 ## 0.2.1
 
 - Правила знают `solo` 2.0: `SoloController`, базу `Solo` и нового `SoloLanes`,

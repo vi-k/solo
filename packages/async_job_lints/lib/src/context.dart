@@ -74,6 +74,10 @@ bool isSoloController(DartType? type) => _isA(type, 'SoloController', _solo);
 /// subtypes.
 bool isSoloLane(DartType? type) => _isA(type, 'SoloLane', _solo);
 
+/// Whether [type] is `SoloLanes` of solo, the controller with lanes, or one
+/// of its subtypes; a mixin on `SoloLanes` is one too.
+bool isSoloLanes(DartType? type) => _isA(type, 'SoloLanes', _solo);
+
 /// Whether [type] is `SoloJob` of solo or one of its subtypes.
 bool isSoloJob(DartType? type) => _isA(type, 'SoloJob', _solo);
 
@@ -346,7 +350,7 @@ MethodInvocation? ownQueueCall(Expression waited) {
   // mixin on SoloController, such as SoloStream, counts in a Solo.
   final ofSolo =
       isSolo(owner) ||
-      (isSoloController(owner) && isSolo(_controllerAround(call)));
+      (isSoloController(owner) && isSolo(controllerAround(call)));
   return ofSolo ? call : null;
 }
 
@@ -436,8 +440,9 @@ MethodInvocation? queueCallOf(Expression waited) {
   return owner is InterfaceElement ? (method, owner.thisType) : null;
 }
 
-/// The type of the class or the mixin around [node].
-DartType? _controllerAround(AstNode node) {
+/// The type of the class or the mixin around [node]: the controller, when
+/// [node] is in one.
+DartType? controllerAround(AstNode node) {
   final around = node.thisOrAncestorMatching(
     (node) => node is ClassDeclaration || node is MixinDeclaration,
   );
@@ -503,16 +508,12 @@ class _LaneDeclarations extends RecursiveAstVisitor<void> {
     if (target is! FieldElement) return;
     final field = target.baseElement;
     final value = node.rightHandSide.unParenthesized;
-    final constructor = node.thisOrAncestorOfType<ConstructorDeclaration>();
-    final on = value is MethodInvocation ? value.realTarget : null;
+    final inConstructor = node.thisOrAncestorOfType<ConstructorDeclaration>();
     final declares =
         node.operator.type == TokenType.EQ &&
         value is MethodInvocation &&
-        (on == null || on is ThisExpression) &&
-        isSoloMember(value.methodName.element, 'SoloLanes', 'lane') &&
-        constructor != null &&
-        node.thisOrAncestorOfType<FunctionBody>() == constructor.body &&
-        constructor.declaredFragment?.element.enclosingElement ==
+        declaresLane(value) &&
+        inConstructor?.declaredFragment?.element.enclosingElement ==
             field.enclosingElement;
     (declares ? _declared : _written).add(field);
   }
@@ -540,6 +541,24 @@ class _LaneDeclarations extends RecursiveAstVisitor<void> {
       _written.add(field.baseElement);
     }
   }
+}
+
+/// Whether [call] declares a lane where `SoloLanes` lets a controller
+/// declare it: `lane(...)` of `SoloLanes` on `this`, right in a constructor
+/// body rather than in a function declared there.
+///
+/// A `lane(...)` anywhere else, a `late final` initializer or a method,
+/// throws once `SoloLanes` has sealed its lanes, a microtask after the
+/// constructor.
+bool declaresLane(MethodInvocation call) {
+  final on = call.realTarget;
+  if (on != null && on is! ThisExpression) return false;
+  if (!isSoloMember(call.methodName.element, 'SoloLanes', 'lane')) {
+    return false;
+  }
+  final constructor = call.thisOrAncestorOfType<ConstructorDeclaration>();
+  return constructor != null &&
+      call.thisOrAncestorOfType<FunctionBody>() == constructor.body;
 }
 
 /// The lane field [call] queues a job in: `enqueue` or `enqueueJob` of a
@@ -585,7 +604,7 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
 /// at this body, and a rule that leaves a wait for the own lane to it asks
 /// the same.
 ({Element ctx, Element? lane})? queuedBodyOf(AstNode node) {
-  final around = _controllerAround(node);
+  final around = controllerAround(node);
   if (!isSolo(around) && !isSoloController(around)) return null;
   final crossed = <Element>[];
   for (var at = node.parent; at != null; at = at.parent) {

@@ -1,3 +1,11 @@
+## Unreleased
+
+- `plugin_api.dart` also exports `isSoloLanes`, `controllerAround`,
+  `declaresLane`, `callsOn` and `readsState`, for the rules of a plugin on top
+  about the lanes. `declaresLane` tells whether a `lane(...)` declares a lane
+  where `SoloLanes` lets it, right in a constructor body: the same place
+  `queueLaneOf` takes a lane field from.
+
 ## 0.2.1
 
 - The rules know `solo` 2.0: `SoloController`, the base of `Solo` and of the

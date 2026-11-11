@@ -21,7 +21,10 @@ import 'src/rules/sync_fake_async.dart';
 export 'src/context.dart'
     show
         QueueLane,
+        callsOn,
         cleanupContext,
+        controllerAround,
+        declaresLane,
         firstPositional,
         functionOf,
         isDartCoreClass,
@@ -31,6 +34,7 @@ export 'src/context.dart'
         isSoloContext,
         isSoloController,
         isSoloLane,
+        isSoloLanes,
         isSoloMember,
         jobContextOf,
         namedValue,
@@ -38,6 +42,7 @@ export 'src/context.dart'
         queueCallOf,
         queueLaneOf,
         queuedBodyOf,
+        readsState,
         returnedValues,
         waitingContext;
 
