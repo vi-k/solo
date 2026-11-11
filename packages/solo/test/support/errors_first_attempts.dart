@@ -18,11 +18,11 @@ final class SlowJobs extends SoloObserver {
   final _startedAt = Expando<DateTime>('start');
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       _startedAt[job] = clock.now();
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
+  void onFinish(SoloController<Object> solo, Job<Object?> job) {
     final startedAt = _startedAt[job];
     if (startedAt == null) return;
     final ran = clock.now().difference(startedAt);
@@ -37,7 +37,7 @@ final class SlowJobs extends SoloObserver {
 final class Failures extends SoloObserver {
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {

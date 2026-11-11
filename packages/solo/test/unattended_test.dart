@@ -255,7 +255,7 @@ final class _Watcher extends SoloObserver {
   _Watcher(this.lines);
 
   @override
-  void onClose(Solo<Object> solo) => lines.add('observer.onClose');
+  void onClose(SoloController<Object> solo) => lines.add('observer.onClose');
 }
 
 void _inZone(List<String> errors, void Function() body) {

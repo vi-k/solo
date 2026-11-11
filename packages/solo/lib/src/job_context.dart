@@ -282,7 +282,7 @@ final class _SoloContext<S extends Object, W extends S, R>
     // `W` is a condition of the whole run, not only of the start, and a
     // body that emits its way out of it is cancelled by the rules at its
     // next checkpoint — far from this line, which is where the mistake is.
-    Solo._debug(
+    SoloController._debug(
       () => next is W
           ? '$_job emit: $next'
           : '$_job emit: $next, which is not $W: the rules cancel $_job at '

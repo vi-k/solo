@@ -36,7 +36,7 @@ final class SoloSelector<S extends Object, T> extends StatefulWidget {
   /// Compared by identity when the parent rebuilds: handed a new
   /// controller whose `==` says it is the old one, the widget moves to the
   /// new one all the same.
-  final Solo<S> solo;
+  final SoloController<S> solo;
 
   /// Picks the value this widget rebuilds for.
   ///
@@ -86,7 +86,7 @@ final class SoloSelector<S extends Object, T> extends StatefulWidget {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty<Solo<S>>('solo', solo));
+    properties.add(DiagnosticsProperty<SoloController<S>>('solo', solo));
   }
 }
 

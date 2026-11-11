@@ -1385,14 +1385,16 @@ final class _Callbacks extends SoloObserver {
        _onError = onError;
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) => _onStart?.call(job);
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
+      _onStart?.call(job);
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) => _onFinish?.call(job);
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
+      _onFinish?.call(job);
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {

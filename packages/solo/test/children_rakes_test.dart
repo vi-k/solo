@@ -65,16 +65,18 @@ final class _Retrying extends Solo<AppState> {
 /// An observer that writes what it hears to [_seen].
 final class _Watch extends SoloObserver {
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       _see('${_label(job)} started');
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
       _see('${_label(job)} finished ${job.outcome}');
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      _see('state ${transition.current} by ${transition.job}');
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => _see('state ${transition.current} by ${transition.job}');
 }
 
 /// The lines of [_seen] that say a job started.

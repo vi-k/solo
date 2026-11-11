@@ -1839,7 +1839,7 @@ final class _Keys extends SoloObserver {
   final keys = <String>[];
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) {
+  void onStart(SoloController<Object> solo, Job<Object?> job) {
     super.onStart(solo, job);
     keys.add('${job.key}');
   }

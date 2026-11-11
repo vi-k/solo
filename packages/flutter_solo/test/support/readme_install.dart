@@ -27,7 +27,7 @@ const arrivesWithOneImport = <Type>[
 
 /// The kinds the page gives the package's own part: a mixin on a
 /// controller, three widgets and a class that is a listenable itself.
-(Solo<Object>, List<Widget>, ValueListenable<Object>) ownPart(
+(SoloController<Object>, List<Widget>, ValueListenable<Object>) ownPart(
   SoloListenable<Object> controller,
   SoloBuilder<Object> builder,
   SoloSelector<Object, Object> selector,

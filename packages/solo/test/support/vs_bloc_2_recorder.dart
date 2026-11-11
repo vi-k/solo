@@ -74,8 +74,10 @@ final class TelemetryObserver extends SoloObserver {
   TelemetryObserver(this._telemetry);
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      _telemetry.send(transition.current);
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => _telemetry.send(transition.current);
 }
 
 // What the test adds.
@@ -97,12 +99,14 @@ final class WatchingObserver extends SoloObserver {
   final seen = <String>[];
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      seen.add('change to ${transition.current}');
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => seen.add('change to ${transition.current}');
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {

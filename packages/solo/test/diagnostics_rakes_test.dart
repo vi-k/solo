@@ -34,7 +34,7 @@ import 'support/test_solo.dart';
 /// An observer whose `onStart` throws a [Cancelled].
 final class _GivingUp extends SoloObserver {
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       throw const Cancelled('observer.onStart');
 }
 
@@ -1597,6 +1597,6 @@ final class _Logs extends SoloObserver {
   _Logs(this.into);
 
   @override
-  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+  void onLog(SoloController<Object> solo, Job<Object?> job, Object? message) =>
       into.add(message);
 }

@@ -9,7 +9,7 @@ final class JournalObserver extends SoloObserver {
   JournalObserver({this.answers = false});
 
   final lines = <String>[];
-  final created = <Solo<Object>>[];
+  final created = <SoloController<Object>>[];
 
   /// Returns the lines collected so far and clears the journal.
   List<String> take() {
@@ -28,14 +28,14 @@ final class JournalObserver extends SoloObserver {
   }
 
   @override
-  void onCreate(Solo<Object> solo) => created.add(solo);
+  void onCreate(SoloController<Object> solo) => created.add(solo);
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       lines.add('${_label(job)} started');
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
+  void onFinish(SoloController<Object> solo, Job<Object?> job) {
     final outcome = job.outcome;
     final verb = outcome is Cancelled && !outcome.started
         ? 'dropped'
@@ -45,7 +45,7 @@ final class JournalObserver extends SoloObserver {
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -57,21 +57,23 @@ final class JournalObserver extends SoloObserver {
   );
 
   @override
-  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+  void onLog(SoloController<Object> solo, Job<Object?> job, Object? message) =>
       lines.add('${_label(job)} log $message');
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      lines.add('state: ${transition.current}');
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => lines.add('state: ${transition.current}');
 
   @override
-  void onClose(Solo<Object> solo) => lines.add('closed');
+  void onClose(SoloController<Object> solo) => lines.add('closed');
 
   /// Answers for an error with nowhere else to go, so the journal is the
   /// only place it shows up: an `unanswered` line, after the `error` line
   /// `onError` wrote for it; see `Solo.unansweredHandler`.
   void answerForErrors(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace,

@@ -455,14 +455,16 @@ final class TelemetryObserver extends SoloObserver {
   TelemetryObserver(this._telemetry);
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      _telemetry.send(transition.current);
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => _telemetry.send(transition.current);
 }
 ```
 
-`SoloObserver` получает `Solo<Object>`, поскольку наблюдает контроллеры
-с разными типами состояний. Собственный хук контроллера использует его
-конкретный тип состояния.
+`SoloObserver` получает `SoloController<Object>`, поскольку наблюдает
+контроллеры с разными типами состояний. Собственный хук контроллера использует
+его конкретный тип состояния.
 
 С бросающим наблюдателем состояние всё равно доходит до `Recording`, индикатор
 включается, в журнале стоит `[Recording]`, а `Job` заканчивается

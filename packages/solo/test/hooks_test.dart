@@ -738,11 +738,11 @@ final class _ThrowingChange extends Solo<TestState>
 /// Throws from the observer hooks around a job body.
 final class _ThrowingObserver extends SoloObserver {
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       throw StateError('observer onStart');
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
       throw StateError('observer onFinish');
 }
 
@@ -807,7 +807,7 @@ final class _ThrowingAtStart extends Solo<TestState> with OpenSolo<TestState> {
 /// Throws from the observer hook the engine calls while closing.
 final class _ThrowingClose extends SoloObserver {
   @override
-  void onClose(Solo<Object> solo) => throw StateError('onClose');
+  void onClose(SoloController<Object> solo) => throw StateError('onClose');
 }
 
 final class _Hooked extends Solo<TestState> with OpenSolo<TestState> {

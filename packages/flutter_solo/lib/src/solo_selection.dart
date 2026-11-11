@@ -98,7 +98,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// type parameters of its class, and this class leaves `S` unbounded
   /// where [Solo] requires `S extends Object`.
   static SoloSelection<S, T> from<S extends Object, T>(
-    Solo<S> solo,
+    SoloController<S> solo,
     T Function(S state) selector, {
     bool Function(T previous, T current)? changed,
   }) => SoloSelection<S, T>(_SoloSource(solo), selector, changed: changed);
@@ -314,7 +314,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
 }
 
 final class _SoloSource<S extends Object> implements ValueListenable<S> {
-  final Solo<S> _solo;
+  final SoloController<S> _solo;
 
   _SoloSource(this._solo);
 

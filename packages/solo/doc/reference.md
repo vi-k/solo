@@ -1,27 +1,21 @@
 # Reference
 
-One line for every member of `Solo`, of the context its jobs get, of the jobs
-it returns, of its queue and of its accumulators, with the section that
-explains it. One line, too, for every parameter of the methods that make jobs.
-What `solo` takes from the core is listed where it is explained. The rest of
-`ctx` is in
+One line for every member of `Solo` and of its base `SoloController`, of the
+context its jobs get, of the jobs it returns, of its queue and of its
+accumulators, with the section that explains it. One line, too, for every
+parameter of the methods that make jobs. What `solo` takes from the core is
+listed where it is explained. The rest of `ctx` is in
 [The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/reference.md#the-context-at-a-glance)
 on the reference page of `async_job`, and `value`, `done` or `cancel()` of a
 job are in [Jobs and results](jobs.md#jobs-and-results) on the jobs page.
 
-## Solo
+## SoloController
 
-`Solo<S>` is the base class of a controller. Its members fall into four groups
-by who uses them: the whole process, a caller, the subclass, and an override in
-the subclass.
-
-### Set once for the process
-
-| Member | What it does | Where |
-| --- | --- | --- |
-| `Solo.observer` | One observer of every controller of the process, which watches and answers for nothing | [Watching every controller](diagnostics.md#watching-every-controller) |
-| `Solo.unansweredHandler` | A `SoloUnansweredHandler` that takes the errors nobody answered for, in place of the zone | [Answering for an error](errors.md#answering-for-an-error) |
-| `Solo.debug` | A callback that traces the queue, the state and the closing of every controller, while the life of each job goes to `Job.debug` | [Logs](diagnostics.md#logs) |
+`SoloController<S>` is the base class of every controller: the state, the
+listeners, closing and the hooks. A controller extends `Solo`, which adds the
+queue; the constructor of this class is private. Its members fall into three
+groups by who uses them: a caller, the subclass, and an override in the
+subclass.
 
 ### What a caller sees
 
@@ -41,20 +35,11 @@ the subclass.
 
 ### What the subclass uses
 
-A controller builds its own constructor and methods from these, and a caller
-sees those. Every member here is protected.
+Through these a subclass asks about its listeners and reflects a state an
+outside source changed. Every member here is protected.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `Solo(initialState)` | The constructor a subclass calls as `super(initialState)`, with the first state | [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start) |
-| `enqueue(body)` | Makes and queues the job a method of the controller usually returns | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
-| `job(body)` | Makes a job without queueing it, for `enqueueJob` or for `ctx.run` as a child | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
-| `enqueueJob(job)` | Queues a job made by `job` under a `Policy`, at the tail or, with `first: true`, at the head | [Queue and policies](jobs.md#queue-and-policies) |
-| `collect(handler)` | Makes an accumulator that hands one job the list of the events of its group | [One request per log line](accumulation.md#one-request-per-log-line) |
-| `accumulate(handler, merge: ...)` | Makes an accumulator that merges the events of a group into one value | [Settings saved on every flip of a switch](accumulation.md#settings-saved-on-every-flip-of-a-switch) |
-| `queue` | The jobs waiting to run, a `SoloQueue` | [Working the queue directly](jobs.md#working-the-queue-directly) |
-| `lastJobWhere(test)` | The last queued job that passes the test, else the running one if it passes and has not been cancelled, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
-| `current` | The running root job, or `null` when the controller is idle | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `hasListeners` | Whether any listener is registered | [Observing state](state.md#observing-state) |
 | `externalSetState(state)` | Reflects a state an outside source has already changed | [externalSetState](state.md#externalsetstate) |
 
@@ -77,6 +62,46 @@ repeats `@protected`.
 | `onClose()` | The engine is about to finish closing, which is the place to release what the controller holds beside its jobs | [externalSetState](state.md#externalsetstate) |
 | `onListenerError(error, stackTrace)` | A listener threw an error, which goes to the zone by default | [Observing state](state.md#observing-state) |
 | `publish(previous, current)` | Calls the listeners and is the seam for a delivery of another kind | [A delivery of your own](state.md#a-delivery-of-your-own) |
+
+## Solo
+
+`Solo<S>` is the class a controller extends: the controller with one queue. It
+declares the members of the queue, and `close` and `cancelAll` once more, with
+the contract they have on `SoloController`. The rest of its members come from
+`SoloController` and are listed there. The members `Solo` declares fall into
+three groups by who uses them: the whole process, a caller and the subclass.
+
+### Set once for the process
+
+| Member | What it does | Where |
+| --- | --- | --- |
+| `Solo.observer` | One observer of every controller of the process, which watches and answers for nothing | [Watching every controller](diagnostics.md#watching-every-controller) |
+| `Solo.unansweredHandler` | A `SoloUnansweredHandler` that takes the errors nobody answered for, in place of the zone | [Answering for an error](errors.md#answering-for-an-error) |
+| `Solo.debug` | A callback that traces the queue, the state and the closing of every controller, while the life of each job goes to `Job.debug` | [Logs](diagnostics.md#logs) |
+
+### What a caller sees
+
+| Member | What it does | Where |
+| --- | --- | --- |
+| `cancelAll()` | `cancelAll()` of `SoloController`, declared again on `Solo` | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `close()` | `close()` of `SoloController`, declared again on `Solo` | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+
+### What the subclass uses
+
+A controller builds its own constructor and methods from these, and a caller
+sees those. Every member here is protected.
+
+| Member | What it does | Where |
+| --- | --- | --- |
+| `Solo(initialState)` | The constructor a subclass calls as `super(initialState)`, with the first state | [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start) |
+| `enqueue(body)` | Makes and queues the job a method of the controller usually returns | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `job(body)` | Makes a job without queueing it, for `enqueueJob` or for `ctx.run` as a child | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `enqueueJob(job)` | Queues a job made by `job` under a `Policy`, at the tail or, with `first: true`, at the head | [Queue and policies](jobs.md#queue-and-policies) |
+| `collect(handler)` | Makes an accumulator that hands one job the list of the events of its group | [One request per log line](accumulation.md#one-request-per-log-line) |
+| `accumulate(handler, merge: ...)` | Makes an accumulator that merges the events of a group into one value | [Settings saved on every flip of a switch](accumulation.md#settings-saved-on-every-flip-of-a-switch) |
+| `queue` | The jobs waiting to run, a `SoloQueue` | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `lastJobWhere(test)` | The last queued job that passes the test, else the running one if it passes and has not been cancelled, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `current` | The running root job, or `null` when the controller is idle | [Working the queue directly](jobs.md#working-the-queue-directly) |
 
 ## Parameters of a job
 

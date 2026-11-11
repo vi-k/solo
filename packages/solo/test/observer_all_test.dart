@@ -19,19 +19,19 @@ final class Recording extends SoloObserver {
   Recording(this.name, this.seen);
 
   @override
-  void onCreate(Solo<Object> solo) => seen.add('$name onCreate');
+  void onCreate(SoloController<Object> solo) => seen.add('$name onCreate');
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       seen.add('$name onStart');
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
       seen.add('$name onFinish');
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -39,15 +39,17 @@ final class Recording extends SoloObserver {
   }) => seen.add('$name ifFailed: $error');
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      seen.add('$name onChange');
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => seen.add('$name onChange');
 
   @override
-  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+  void onLog(SoloController<Object> solo, Job<Object?> job, Object? message) =>
       seen.add('$name onLog: $message');
 
   @override
-  void onClose(Solo<Object> solo) => seen.add('$name onClose');
+  void onClose(SoloController<Object> solo) => seen.add('$name onClose');
 }
 
 /// Equal to every other [Alike], though each is an observer of its own.
@@ -65,11 +67,11 @@ final class Alike extends Recording {
 /// Throws from [onStart], and a [Cancelled] from [onLog].
 final class Throwing extends SoloObserver {
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       throw StateError('onStart');
 
   @override
-  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+  void onLog(SoloController<Object> solo, Job<Object?> job, Object? message) =>
       throw const Cancelled('from onLog');
 }
 

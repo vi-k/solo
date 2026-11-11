@@ -64,7 +64,7 @@ final class _FailingDelivery extends page.RetryingProfile {
 /// look at the outcome, instead of from `onError`.
 final class _FailuresOnFinish extends SoloObserver {
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
+  void onFinish(SoloController<Object> solo, Job<Object?> job) {
     final outcome = job.outcome;
     if (outcome is Failed) {
       reportCrash(outcome.error, outcome.stackTrace);
@@ -91,7 +91,7 @@ final class _Answers extends SoloObserver {
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -250,7 +250,7 @@ final class _ZonedObserver extends SoloObserver {
 
   @override
   void onError(
-    Solo<Object?> solo,
+    SoloController<Object?> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -3593,9 +3593,9 @@ void main() {
 
           expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
           expect(_frames(outcomeOf(job).stackTrace).take(5), [
-            'Solo._reevaluate',
-            'Solo._setState',
-            'Solo.externalSetState',
+            'SoloController._reevaluate',
+            'SoloController._setState',
+            'SoloController.externalSetState',
             'OpenSolo.externalSetState',
             '_Traced.setsTooBig',
           ]);
@@ -3621,8 +3621,8 @@ void main() {
 
           expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
           expect(_frames(outcomeOf(job).stackTrace).take(4), [
-            'Solo._reevaluate',
-            'Solo._setState',
+            'SoloController._reevaluate',
+            'SoloController._setState',
             '_SoloContext.emit',
             '_Traced.emitsTooBig',
           ]);

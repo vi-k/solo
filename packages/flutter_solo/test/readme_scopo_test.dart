@@ -77,7 +77,7 @@ class _Made extends SoloObserver {
   _Made(this.controllers);
 
   @override
-  void onCreate(Solo<Object> solo) =>
+  void onCreate(SoloController<Object> solo) =>
       controllers.add(solo as ProfileController);
 }
 

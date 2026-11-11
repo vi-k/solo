@@ -446,16 +446,18 @@ final class Journal extends SoloObserver {
   final lines = <String>[];
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       lines.add('${job.key} started');
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
       lines.add('${job.key} ${job.outcome}');
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      lines.add('state: ${transition.current.runtimeType}');
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => lines.add('state: ${transition.current.runtimeType}');
 }
 
 test(

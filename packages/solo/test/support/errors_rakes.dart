@@ -69,7 +69,7 @@ final class Watching extends SoloObserver {
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -92,17 +92,19 @@ final class Saying extends SoloObserver {
   }
 
   @override
-  void onCreate(Solo<Object> solo) => _say('onCreate');
+  void onCreate(SoloController<Object> solo) => _say('onCreate');
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) => _say('onStart');
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
+      _say('onStart');
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) => _say('onFinish');
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
+      _say('onFinish');
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -110,15 +112,17 @@ final class Saying extends SoloObserver {
   }) => _say('onError');
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      _say('onChange');
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => _say('onChange');
 
   @override
-  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+  void onLog(SoloController<Object> solo, Job<Object?> job, Object? message) =>
       _say('onLog');
 
   @override
-  void onClose(Solo<Object> solo) => _say('onClose');
+  void onClose(SoloController<Object> solo) => _say('onClose');
 }
 
 /// A controller that overrides every hook the page names, calls `super` in

@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 
 /// `doc/reference.md` and its translation against the code.
 ///
-/// The page lists every member of five classes in tables, one row a
+/// The page lists every member of six classes in tables, one row a
 /// member, under a heading of the class. The members are read from the
 /// classes themselves, so a member added to the code and not to the page
 /// turns this red, and so does a row left after its member went. A
@@ -26,6 +26,7 @@ final _inRepository = Directory('../../docs/ru').existsSync();
 
 /// The classes the page lists, each under `## ` and its name.
 final _classes = <String, Type>{
+  'SoloController': SoloController,
   'Solo': Solo,
   'SoloContext': SoloContext,
   'SoloJob': SoloJob,
@@ -243,69 +244,95 @@ void main() {
     });
   }
 
-  group('the tables of Solo', () {
-    final members = _members(Solo);
-    final solo = _under(page, '## Solo');
-    final sections = _sections(solo);
-    List<String> rowsOf(String heading) {
-      final section = sections['### $heading'];
-      if (section == null) {
-        throw StateError('$_page has no "### $heading"');
+  // Each class lists the members it declares itself, by who uses them: a
+  // member `Solo` inherits from the base stands under the base alone.
+  for (final (name, type) in [
+    ('SoloController', SoloController),
+    ('Solo', Solo),
+  ]) {
+    group('the tables of $name', () {
+      final members = _members(type);
+      final sections = _sections(_under(page, '## $name'));
+
+      // A table its members leave empty is not on the page, and its rows
+      // are none; the first test holds which tables are there.
+      List<String> rowsOf(String heading) {
+        final section = sections['### $heading'];
+        return section == null ? const [] : _rows(section);
       }
-      return _rows(section);
-    }
 
-    test('the members set once for the process are the static ones', () {
-      expect(
-        rowsOf('Set once for the process'),
-        unorderedEquals([
-          for (final MapEntry(:key, :value) in members.entries)
-            if (value.isStatic) key,
-        ]),
-      );
-    });
-
-    test('what a caller sees is plain: no hook, nothing protected', () {
-      for (final name in rowsOf('What a caller sees')) {
-        final member = members[name];
-        expect(member?.isProtected, isFalse, reason: name);
-        expect(member?.isStatic, isFalse, reason: name);
-        expect(member?.isConstructor, isFalse, reason: name);
-        expect(_isHook(name), isFalse, reason: name);
-      }
-    });
-
-    test('what the subclass uses is protected or the constructor', () {
-      for (final name in rowsOf('What the subclass uses')) {
-        final member = members[name];
+      test('has a table for each group its members fill, and no other', () {
+        String groupOf(String name, _Member member) => member.isStatic
+            ? 'Set once for the process'
+            : _isHook(name)
+            ? 'What the subclass overrides'
+            : member.isProtected || member.isConstructor
+            ? 'What the subclass uses'
+            : 'What a caller sees';
         expect(
-          member != null && (member.isProtected || member.isConstructor),
-          isTrue,
-          reason: name,
+          {
+            for (final heading in sections.keys)
+              if (heading.startsWith('### ')) heading.substring(4),
+          },
+          {
+            for (final MapEntry(:key, :value) in members.entries)
+              groupOf(key, value),
+          },
         );
-        expect(_isHook(name), isFalse, reason: name);
-      }
-    });
+      });
 
-    test('what the subclass overrides is the hooks', () {
-      expect(
-        rowsOf('What the subclass overrides'),
-        unorderedEquals(members.keys.where(_isHook)),
-      );
-    });
+      test('the members set once for the process are the static ones', () {
+        expect(
+          rowsOf('Set once for the process'),
+          unorderedEquals([
+            for (final MapEntry(:key, :value) in members.entries)
+              if (value.isStatic) key,
+          ]),
+        );
+      });
 
-    test('every protected member is in a table of the subclass', () {
-      final subclass = {
-        ...rowsOf('What the subclass uses'),
-        ...rowsOf('What the subclass overrides'),
-      };
-      for (final MapEntry(:key, :value) in members.entries) {
-        if (value.isProtected) {
-          expect(subclass, contains(key));
+      test('what a caller sees is plain: no hook, nothing protected', () {
+        for (final name in rowsOf('What a caller sees')) {
+          final member = members[name];
+          expect(member?.isProtected, isFalse, reason: name);
+          expect(member?.isStatic, isFalse, reason: name);
+          expect(member?.isConstructor, isFalse, reason: name);
+          expect(_isHook(name), isFalse, reason: name);
         }
-      }
+      });
+
+      test('what the subclass uses is protected or the constructor', () {
+        for (final name in rowsOf('What the subclass uses')) {
+          final member = members[name];
+          expect(
+            member != null && (member.isProtected || member.isConstructor),
+            isTrue,
+            reason: name,
+          );
+          expect(_isHook(name), isFalse, reason: name);
+        }
+      });
+
+      test('what the subclass overrides is the hooks', () {
+        expect(
+          rowsOf('What the subclass overrides'),
+          unorderedEquals(members.keys.where(_isHook)),
+        );
+      });
+
+      test('every protected member is in a table of the subclass', () {
+        final subclass = {
+          ...rowsOf('What the subclass uses'),
+          ...rowsOf('What the subclass overrides'),
+        };
+        for (final MapEntry(:key, :value) in members.entries) {
+          if (value.isProtected) {
+            expect(subclass, contains(key));
+          }
+        }
+      });
     });
-  });
+  }
 
   test(
     'the translation has the rows of the page, cell for cell',

@@ -275,18 +275,21 @@ final class _CountingObserver extends SoloObserver {
   int changes = 0;
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) {
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) {
     changes++;
   }
 }
 
 final class _CloseObserver extends SoloObserver {
-  final void Function(Solo<Object> solo) callback;
+  final void Function(SoloController<Object> solo) callback;
 
   _CloseObserver(this.callback);
 
   @override
-  void onClose(Solo<Object> solo) => callback(solo);
+  void onClose(SoloController<Object> solo) => callback(solo);
 }
 
 final class _ExposedStreamSolo extends Solo<TestState>

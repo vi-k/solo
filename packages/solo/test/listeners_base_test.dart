@@ -350,7 +350,7 @@ final class _OnCloseObserver extends SoloObserver {
   _OnCloseObserver(this.log);
 
   @override
-  void onClose(Solo<Object> solo) {
+  void onClose(SoloController<Object> solo) {
     log.add('onClose start');
     solo.addListener(() {
       log.add('subscribed-in-onClose:${solo.currentState}');

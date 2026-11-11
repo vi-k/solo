@@ -189,7 +189,7 @@ final class _Heard extends SoloObserver {
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -202,7 +202,7 @@ final class _Finished extends SoloObserver {
   final jobs = <Job<Object?>>[];
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) => jobs.add(job);
+  void onFinish(SoloController<Object> solo, Job<Object?> job) => jobs.add(job);
 }
 
 const _failed = nested.State.failed;

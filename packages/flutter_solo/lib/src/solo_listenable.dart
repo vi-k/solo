@@ -30,7 +30,7 @@ import 'package:solo/solo.dart';
 /// See [The controller as a `ValueListenable`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#the-controller-as-a-valuelistenable) in the package README,
 /// and [A controller with both deliveries](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/mixins.md#a-controller-with-both-deliveries)
 /// and [A base class without Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/mixins.md#a-base-class-without-flutter) on the mixins page.
-mixin SoloListenable<S extends Object> on Solo<S>
+mixin SoloListenable<S extends Object> on SoloController<S>
     implements ValueListenable<S> {
   /// The current state; the same object as [currentState].
   @override

@@ -51,15 +51,18 @@ final class ProfileController extends Solo<ProfileState> {
 /// "Watching every controller".
 final class LoggingObserver extends SoloObserver {
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) => print('$job started');
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
+      print('$job started');
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
       print('$job finished ${job.outcome}');
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      print('${transition.job ?? 'external'}: ${transition.current}');
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => print('${transition.job ?? 'external'}: ${transition.current}');
 }
 
 void main() {
@@ -82,13 +85,15 @@ final class Hangs extends SoloObserver {
   final _timers = Expando<Timer>('hang');
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) => _timers[job] = Timer(
-    const Duration(seconds: 5),
-    () => log('${job.key} is still running: ${solo.pending}'),
-  );
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
+      _timers[job] = Timer(
+        const Duration(seconds: 5),
+        () => log('${job.key} is still running: ${solo.pending}'),
+      );
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
+      _timers[job]?.cancel();
 }
 
 /// "Stamping the cancellation".
@@ -98,14 +103,14 @@ final class SlowCancellations extends SoloObserver {
   final _markedAt = Expando<DateTime>('cancellation');
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) {
+  void onStart(SoloController<Object> solo, Job<Object?> job) {
     // whenCancelled fires when the job accepts the cancellation, not when
     // cancel() was called: an open ctx.uncancellable section ends first.
     job.whenCancelled((_) => _markedAt[job] = clock.now());
   }
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
+  void onFinish(SoloController<Object> solo, Job<Object?> job) {
     final markedAt = _markedAt[job];
     if (markedAt == null) return;
     final delay = clock.now().difference(markedAt);
@@ -120,15 +125,17 @@ final class StuckCancellations extends SoloObserver {
   final _timers = Expando<Timer>('cancellation');
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) => job.whenCancelled(
-    (_) => _timers[job] = Timer(
-      const Duration(seconds: 5),
-      () => log('${job.key} has not stopped: ${solo.pending}'),
-    ),
-  );
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
+      job.whenCancelled(
+        (_) => _timers[job] = Timer(
+          const Duration(seconds: 5),
+          () => log('${job.key} has not stopped: ${solo.pending}'),
+        ),
+      );
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
+      _timers[job]?.cancel();
 }
 
 /// Not on the page: the function around the statement.

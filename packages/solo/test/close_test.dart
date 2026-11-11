@@ -349,7 +349,7 @@ final class _ClosingObserver extends SoloObserver {
   var _fired = false;
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
+  void onFinish(SoloController<Object> solo, Job<Object?> job) {
     if (job.key == key && !_fired) {
       _fired = true;
       _solo.close(mode: mode).ignore();

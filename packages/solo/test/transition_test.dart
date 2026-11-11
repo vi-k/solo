@@ -132,6 +132,8 @@ final class _TransitionObserver extends SoloObserver {
   _TransitionObserver(this.seen);
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      seen.add(transition as SoloTransition<TestState>);
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => seen.add(transition as SoloTransition<TestState>);
 }

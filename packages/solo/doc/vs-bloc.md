@@ -456,13 +456,16 @@ final class TelemetryObserver extends SoloObserver {
   TelemetryObserver(this._telemetry);
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      _telemetry.send(transition.current);
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => _telemetry.send(transition.current);
 }
 ```
 
-`SoloObserver` receives `Solo<Object>` because it observes controllers with
-different state types. The controller's own hook uses its specific state type.
+`SoloObserver` receives `SoloController<Object>` because it observes
+controllers with different state types. The controller's own hook uses its
+specific state type.
 
 With the throwing observer, the state still reaches `Recording`, the meter is
 armed, the journal holds `[Recording]` and the job finishes with `Done(null)`:

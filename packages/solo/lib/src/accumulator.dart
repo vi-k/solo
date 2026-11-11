@@ -199,7 +199,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       // hook can re-enter in the middle of the move.
       _solo._queue._jobs.remove(previous);
       _solo._queue._insert(previous, first: false);
-      Solo._debug(() => 'move $previous to the tail');
+      SoloController._debug(() => 'move $previous to the tail');
     }
     // The debug line is foreign code, and it may cancel the group's job: a
     // group released that way is not armed again, as for a new one above.

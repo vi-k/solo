@@ -87,7 +87,7 @@ final class SoloListener<S extends Object> extends StatefulWidget {
   /// reactions to the new one wait for the cancelled ones to end;
   /// [SoloListenerMode.concurrent] starts them at once, and
   /// [SoloListenerMode.droppable] drops the changes that come meanwhile.
-  final Solo<S> solo;
+  final SoloController<S> solo;
 
   /// The reaction, called with the context of its job first, then the
   /// context of the widget and the state of the change.
@@ -138,7 +138,7 @@ final class SoloListener<S extends Object> extends StatefulWidget {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties
-      ..add(DiagnosticsProperty<Solo<S>>('solo', solo))
+      ..add(DiagnosticsProperty<SoloController<S>>('solo', solo))
       ..add(EnumProperty<SoloListenerMode>('mode', mode));
   }
 }
@@ -198,7 +198,7 @@ final class _SoloListenerState<S extends Object>
   /// inside `cancel`, and a waiting state would start from there. The
   /// cancelled ones stay running until they end, and the reactions to the
   /// next controller wait for them, or are dropped in `droppable`.
-  void _letGo(Solo<S> solo) {
+  void _letGo(SoloController<S> solo) {
     _waiting.clear();
     solo.removeChangeListener(_changed);
     for (final job in _running.toList()) {

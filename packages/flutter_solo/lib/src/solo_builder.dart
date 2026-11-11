@@ -29,7 +29,7 @@ import 'solo_selector.dart';
 /// here: this widget rebuilds on every state transition of [solo].
 final class SoloBuilder<S extends Object> extends StatefulWidget {
   /// The controller whose state transitions trigger rebuilds.
-  final Solo<S> solo;
+  final SoloController<S> solo;
 
   /// Builds the subtree for the controller's current state.
   final ValueWidgetBuilder<S> builder;
@@ -52,7 +52,7 @@ final class SoloBuilder<S extends Object> extends StatefulWidget {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty<Solo<S>>('solo', solo));
+    properties.add(DiagnosticsProperty<SoloController<S>>('solo', solo));
   }
 }
 

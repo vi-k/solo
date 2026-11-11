@@ -37,7 +37,7 @@ final class _Watching extends SoloObserver {
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {

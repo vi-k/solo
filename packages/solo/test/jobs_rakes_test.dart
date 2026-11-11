@@ -43,7 +43,7 @@ final class _Finished extends SoloObserver {
   final outcomes = <String>[];
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
       outcomes.add('${job.key}: ${job.outcome}');
 }
 
@@ -53,12 +53,12 @@ final class _Watcher extends SoloObserver {
   final labels = <String>[];
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       labels.add('${job.key}: ${job.describe()}');
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {

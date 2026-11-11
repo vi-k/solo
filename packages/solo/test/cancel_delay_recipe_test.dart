@@ -24,12 +24,12 @@ final class _SlowCancellations extends SoloObserver {
   final _markedAt = Expando<DateTime>('cancellation');
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) {
+  void onStart(SoloController<Object> solo, Job<Object?> job) {
     job.whenCancelled((_) => _markedAt[job] = clock.now());
   }
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
+  void onFinish(SoloController<Object> solo, Job<Object?> job) {
     final markedAt = _markedAt[job];
     if (markedAt == null) return;
     final delay = clock.now().difference(markedAt);

@@ -395,10 +395,10 @@ final class Hears extends SoloObserver {
   final lines = <String>[];
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       lines.add('${job.key} started at ${now()} ms');
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
       lines.add('${job.key} finished ${job.outcome} at ${now()} ms');
 }

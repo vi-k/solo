@@ -89,12 +89,12 @@ final class _MixedTwiceLeaf extends _FlutterBase<int> with SoloListenable {
 }
 
 final class _ClosingObserver extends SoloObserver {
-  final void Function(Solo<Object> solo) onCloseCallback;
+  final void Function(SoloController<Object> solo) onCloseCallback;
 
   _ClosingObserver(this.onCloseCallback);
 
   @override
-  void onClose(Solo<Object> solo) => onCloseCallback(solo);
+  void onClose(SoloController<Object> solo) => onCloseCallback(solo);
 }
 
 void main() {

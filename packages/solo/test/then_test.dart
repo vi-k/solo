@@ -46,7 +46,7 @@ final class _Watching extends SoloObserver {
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -54,7 +54,7 @@ final class _Watching extends SoloObserver {
   }) => heard.add('error $job: $error');
 
   @override
-  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+  void onLog(SoloController<Object> solo, Job<Object?> job, Object? message) =>
       heard.add('log $job: $message');
 }
 

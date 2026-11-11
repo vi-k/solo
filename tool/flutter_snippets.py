@@ -1263,7 +1263,7 @@ VoidCallback? pressable(WidgetTester tester) =>
 /// awaited there with a job still running never comes back: a driver that
 /// went red halfway through a load would stand until its timeout and take
 /// the next one with it, instead of saying what failed.
-void closing(Solo<Object> controller) =>
+void closing(SoloController<Object> controller) =>
     addTearDown(() => unawaited(controller.close()));
 
 Future<ProfileController> loaded(WidgetTester tester) async {

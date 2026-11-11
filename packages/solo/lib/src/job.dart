@@ -134,14 +134,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // finished without asking.
     if (queued || identical(this, _solo._inTransition)) {
       if (!cancellable && rejectable) {
-        Solo._debug(() => 'remove $this: not cancellable');
+        SoloController._debug(() => 'remove $this: not cancellable');
         return;
       }
       if (queued) {
         _solo._queue._jobs.remove(this);
         // Diagnostics may add another event synchronously. Detach first so
         // the group being cancelled can no longer receive it.
-        Solo._debug(() => 'remove $this: $cancelled');
+        SoloController._debug(() => 'remove $this: $cancelled');
       }
     }
     super.cancelWith(cancelled, rejectable: rejectable);

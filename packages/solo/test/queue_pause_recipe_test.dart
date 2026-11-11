@@ -25,7 +25,8 @@ final class _Starts extends SoloObserver {
   final heard = <String>[];
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) => heard.add('$job');
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
+      heard.add('$job');
 }
 
 void main() {

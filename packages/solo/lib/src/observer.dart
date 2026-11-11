@@ -56,18 +56,18 @@ abstract class SoloObserver {
 
   /// A controller was created.
   ///
-  /// Called from the constructor of [Solo], and so before the body of the
-  /// constructor of a subclass: a field initialized in its declaration or
-  /// in the initializer list is set, and one assigned in the body is not
+  /// Called from the constructor of [SoloController], and so before the body
+  /// of the constructor of a subclass: a field initialized in its declaration
+  /// or in the initializer list is set, and one assigned in the body is not
   /// yet: a nullable one reads `null`, and a `late` one without an
   /// initializer throws when read.
-  void onCreate(Solo<Object> solo) {}
+  void onCreate(SoloController<Object> solo) {}
 
   /// A job body is about to run.
-  void onStart(Solo<Object> solo, Job<Object?> job) {}
+  void onStart(SoloController<Object> solo, Job<Object?> job) {}
 
   /// A job has an outcome, including jobs dropped before start.
-  void onFinish(Solo<Object> solo, Job<Object?> job) {}
+  void onFinish(SoloController<Object> solo, Job<Object?> job) {}
 
   /// Something a job did threw, whether its outcome carries the error or not.
   ///
@@ -93,12 +93,12 @@ abstract class SoloObserver {
   /// errors that also reach the zone.
   ///
   /// [answer] says what the job does about this error, as in the core: with
-  /// [JobErrorAnswer.answered], [Solo.onUnanswered] of [solo] is asked about
-  /// it unless [Job.ignoreFailure] is called before it is. Unlike the core,
-  /// `solo` passes [JobErrorAnswer.never] for an error `isExpectedError` names.
-  /// See [JobErrorAnswer].
+  /// [JobErrorAnswer.answered], [SoloController.onUnanswered] of [solo] is
+  /// asked about it unless [Job.ignoreFailure] is called before it is. Unlike
+  /// the core, `solo` passes [JobErrorAnswer.never] for an error
+  /// `isExpectedError` names. See [JobErrorAnswer].
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -109,24 +109,28 @@ abstract class SoloObserver {
   ///
   /// [SoloTransition.job] says whose change it was, and
   /// [SoloTransition.revision] puts two of them in order.
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) {}
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) {}
 
   /// A job called [JobContext.log].
-  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) {}
+  void onLog(SoloController<Object> solo, Job<Object?> job, Object? message) {}
 
   /// The engine is about to finish closing.
   ///
-  /// [Solo.isFinished] is still false, listeners are still registered, and a
-  /// synchronous `externalSetState` still reaches them. Work scheduled after
-  /// this hook runs after the engine has crossed that boundary.
-  void onClose(Solo<Object> solo) {}
+  /// [SoloController.isFinished] is still false, listeners are still
+  /// registered, and a synchronous `externalSetState` still reaches them. Work
+  /// scheduled after this hook runs after the engine has crossed that
+  /// boundary.
+  void onClose(SoloController<Object> solo) {}
 }
 
 /// Answers for an error that has nowhere else to go; see
 /// [Solo.unansweredHandler].
 typedef SoloUnansweredHandler =
     void Function(
-      Solo<Object> solo,
+      SoloController<Object> solo,
       Job<Object?> job,
       Object error,
       StackTrace stackTrace,
@@ -145,19 +149,19 @@ final class _AllSoloObservers extends SoloObserver {
   }
 
   @override
-  void onCreate(Solo<Object> solo) => _each((o) => o.onCreate(solo));
+  void onCreate(SoloController<Object> solo) => _each((o) => o.onCreate(solo));
 
   @override
-  void onStart(Solo<Object> solo, Job<Object?> job) =>
+  void onStart(SoloController<Object> solo, Job<Object?> job) =>
       _each((o) => o.onStart(solo, job));
 
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
       _each((o) => o.onFinish(solo, job));
 
   @override
   void onError(
-    Solo<Object> solo,
+    SoloController<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace, {
@@ -165,15 +169,17 @@ final class _AllSoloObservers extends SoloObserver {
   }) => _each((o) => o.onError(solo, job, error, stackTrace, answer: answer));
 
   @override
-  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
-      _each((o) => o.onChange(solo, transition));
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => _each((o) => o.onChange(solo, transition));
 
   @override
-  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+  void onLog(SoloController<Object> solo, Job<Object?> job, Object? message) =>
       _each((o) => o.onLog(solo, job, message));
 
   @override
-  void onClose(Solo<Object> solo) => _each((o) => o.onClose(solo));
+  void onClose(SoloController<Object> solo) => _each((o) => o.onClose(solo));
 
   @override
   String toString() => 'SoloObserver.all($_observers)';
