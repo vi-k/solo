@@ -63,6 +63,17 @@ bool isSoloContext(DartType? type) => _isA(type, 'SoloContext', _solo);
 /// Whether [type] is `Solo` of solo or one of its subclasses.
 bool isSolo(DartType? type) => _isA(type, 'Solo', _solo);
 
+/// Whether [type] is `SoloController` of solo, the base of `Solo` and
+/// `SoloLanes`, or one of its subtypes.
+///
+/// Solo before 2.0 has no `SoloController`, and its `Solo` is not one: a rule
+/// about any controller asks [isSolo] too.
+bool isSoloController(DartType? type) => _isA(type, 'SoloController', _solo);
+
+/// Whether [type] is `SoloLane` of solo, a lane of `SoloLanes`, or one of its
+/// subtypes.
+bool isSoloLane(DartType? type) => _isA(type, 'SoloLane', _solo);
+
 /// Whether [type] is `SoloJob` of solo or one of its subtypes.
 bool isSoloJob(DartType? type) => _isA(type, 'SoloJob', _solo);
 
@@ -76,10 +87,15 @@ bool isDeferredJob(DartType? type) =>
 
 /// Whether [element] is the member [name] of the class or enum [type]
 /// declared in solo.
+///
+/// For [type] `Solo` the member of the same name of `SoloLane` counts too:
+/// a lane queues its jobs by the members of the queue of a `Solo`.
 bool isSoloMember(Element? element, String type, String name) {
   if (element == null || element.name != name) return false;
   final owner = element.enclosingElement;
-  return owner is InterfaceElement && _named(owner, type, _solo);
+  if (owner is! InterfaceElement) return false;
+  return _named(owner, type, _solo) ||
+      (type == 'Solo' && _named(owner, 'SoloLane', _solo));
 }
 
 /// Whether [element] is the class [name] declared in async_job.
@@ -310,31 +326,193 @@ class _FunctionFinder extends RecursiveAstVisitor<void> {
 }
 
 /// The call of the enclosing controller's own queue that [waited] waits
-/// for: `method(...).value` and `method(...).done` for a method that returns
-/// a `SoloJob`, and `close()` and `cancelAll()`.
+/// for: `method(...).value` and `method(...).done` for a method of a `Solo`
+/// that returns a `SoloJob`, and `close()` and `cancelAll()` of a `Solo`.
+///
+/// A wait in a `SoloLanes` is not among these: [queueLaneOf] tells whether
+/// it is for the lane the job runs in.
 MethodInvocation? ownQueueCall(Expression waited) {
-  MethodInvocation? call;
-  var jobOf = false;
+  final (:call, :jobOf) = _queueCallOf(waited);
+  if (call == null) return null;
+  final own = _ownMethodOf(call);
+  if (own == null) return null;
+  final (method, owner) = own;
+  if (jobOf) {
+    return isSolo(owner) && _returnsSoloJob(call, method) ? call : null;
+  }
+  // Both close and cancelAll are members of SoloController, so a method of
+  // the controller by either name is its own or overrides it; the one of a
+  // mixin on SoloController, such as SoloStream, counts in a Solo.
+  final ofSolo =
+      isSolo(owner) ||
+      (isSoloController(owner) && isSolo(_controllerAround(call)));
+  return ofSolo ? call : null;
+}
+
+/// Whose queue a wait is for, as [queueLaneOf] tells it.
+enum QueueLane {
+  /// The queue or the lane the waiting job runs in: the wait never ends.
+  own,
+
+  /// Another lane of the same controller, which runs on its own.
+  other,
+
+  /// Not known: not a wait for a queue, or a lane that is not seen.
+  unknown,
+}
+
+/// Whose queue [waited] waits for, when a job body of the enclosing
+/// controller waits for it.
+///
+/// For a `Solo` the answer is [QueueLane.own] where [ownQueueCall] finds
+/// the call. `close()` and `cancelAll()` of any controller are
+/// [QueueLane.own]: they wait for every lane. In a `SoloLanes` the lane of
+/// the waited job is the lane field the call queues it in,
+/// `_likes.enqueue(...)`, or the one a method of the controller queues it
+/// in, read from the method's body in the same file; the lane of the
+/// waiting body is the lane field whose `enqueue` takes it. Both seen and
+/// the same is [QueueLane.own], both seen and different is
+/// [QueueLane.other]; anything else, a body of a child or of a handler of
+/// an accumulator included, is [QueueLane.unknown].
+QueueLane queueLaneOf(Expression waited) {
+  final (:call, :jobOf) = _queueCallOf(waited);
+  if (call == null) return QueueLane.unknown;
+  final target = call.realTarget;
+  if (target != null && target is! ThisExpression) {
+    // A job queued in a lane right here: `_likes.enqueue(...).done`.
+    final lane = jobOf ? _laneQueuedBy(call) : null;
+    return lane == null ? QueueLane.unknown : _laneAgainst(lane, waited);
+  }
+  final own = _ownMethodOf(call);
+  if (own == null) return QueueLane.unknown;
+  final (method, owner) = own;
+  if (!jobOf) {
+    return isSolo(owner) || isSoloController(owner)
+        ? QueueLane.own
+        : QueueLane.unknown;
+  }
+  if (isSolo(owner)) {
+    return _returnsSoloJob(call, method) ? QueueLane.own : QueueLane.unknown;
+  }
+  if (!isSoloController(owner)) return QueueLane.unknown;
+  // A declared SoloJob does not name the lane, so the body is read always.
+  final lane = _laneOfMethod(call, method);
+  return lane == null ? QueueLane.unknown : _laneAgainst(lane, waited);
+}
+
+/// [QueueLane.own] when the job body that waits for [waited] runs in
+/// [lane], [QueueLane.other] when it runs in another lane.
+QueueLane _laneAgainst(Element lane, AstNode waited) {
+  final body = _bodyLane(waited);
+  if (body == null) return QueueLane.unknown;
+  return body == lane ? QueueLane.own : QueueLane.other;
+}
+
+/// The call [waited] waits for and whether it brings a job: the target of
+/// `.value` or `.done`, or a call of `close` or `cancelAll`.
+({MethodInvocation? call, bool jobOf}) _queueCallOf(Expression waited) {
   if (waited is PropertyAccess &&
       const {'value', 'done'}.contains(waited.propertyName.name)) {
     final target = waited.realTarget.unParenthesized;
-    if (target is MethodInvocation) call = target;
-    jobOf = true;
-  } else if (waited is MethodInvocation &&
-      const {'close', 'cancelAll'}.contains(waited.methodName.name)) {
-    call = waited;
+    return (call: target is MethodInvocation ? target : null, jobOf: true);
   }
-  if (call == null) return null;
+  if (waited is MethodInvocation &&
+      const {'close', 'cancelAll'}.contains(waited.methodName.name)) {
+    return (call: waited, jobOf: false);
+  }
+  return (call: null, jobOf: false);
+}
+
+/// The method of a class or a mixin that [call] calls on `this`, and the
+/// type that declares it.
+(MethodElement, InterfaceType)? _ownMethodOf(MethodInvocation call) {
   final target = call.realTarget;
   if (target != null && target is! ThisExpression) return null;
   final method = call.methodName.element;
   if (method is! MethodElement) return null;
   final owner = method.enclosingElement;
-  if (owner is! InterfaceElement || !isSolo(owner.thisType)) return null;
-  // Both close and cancelAll are members of Solo, so a method of the
-  // controller by either name is Solo's or overrides it.
-  if (jobOf && !_returnsSoloJob(call, method)) return null;
-  return call;
+  return owner is InterfaceElement ? (method, owner.thisType) : null;
+}
+
+/// The type of the class or the mixin around [node].
+DartType? _controllerAround(AstNode node) {
+  final around = node.thisOrAncestorMatching(
+    (node) => node is ClassDeclaration || node is MixinDeclaration,
+  );
+  final element = switch (around) {
+    ClassDeclaration(:final declaredFragment) => declaredFragment?.element,
+    MixinDeclaration(:final declaredFragment) => declaredFragment?.element,
+    _ => null,
+  };
+  return element?.thisType;
+}
+
+/// The lane field of this controller that [expression] reads, `_likes` or
+/// `this._likes`: an instance field typed `SoloLane`.
+Element? _laneField(Expression? expression) {
+  final node = expression?.unParenthesized;
+  final read = switch (node) {
+    SimpleIdentifier() => node.element,
+    PropertyAccess(target: ThisExpression()) => node.propertyName.element,
+    _ => null,
+  };
+  final field = read is GetterElement ? read.variable : read;
+  if (field is! FieldElement || field.isStatic) return null;
+  return isSoloLane(field.type) ? field.baseElement : null;
+}
+
+/// The lane field [call] queues a job in: `enqueue` or `enqueueJob` of a
+/// `SoloLane` read from a field of this controller.
+Element? _laneQueuedBy(MethodInvocation call) {
+  final name = call.methodName.name;
+  if (name != 'enqueue' && name != 'enqueueJob') return null;
+  final owner = call.methodName.element?.enclosingElement;
+  if (owner is! InterfaceElement || !_named(owner, 'SoloLane', _solo)) {
+    return null;
+  }
+  return _laneField(call.realTarget);
+}
+
+/// The lane field every value [method] returns is queued in, when the
+/// method is declared in the file of [call].
+Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
+  final finder = _MethodFinder(method.baseElement);
+  call.root.accept(finder);
+  final body = finder.found?.body;
+  if (body == null) return null;
+  final lanes = {
+    for (final value in returnedValues(body))
+      switch (value.unParenthesized) {
+        final MethodInvocation queued => _laneQueuedBy(queued),
+        _ => null,
+      },
+  };
+  return lanes.length == 1 ? lanes.single : null;
+}
+
+/// The lane field of the job body that waits for [node], whose `enqueue`
+/// takes the body: [node] is in the body itself, in the actions of waiting
+/// calls on its context or in its cleanup.
+Element? _bodyLane(AstNode node) {
+  final crossed = <Element>[];
+  for (var at = node.parent; at != null; at = at.parent) {
+    if (at is! FunctionExpression) continue;
+    final ctx = jobContextOf(at);
+    if (ctx != null) {
+      if (!crossed.every((c) => c == ctx)) return null;
+      final list = at.parent;
+      final call = list?.parent;
+      if (list is! ArgumentList || call is! MethodInvocation) return null;
+      // A body given to `job` may run as a child of another lane, and a
+      // handler of `collect` or `accumulate` runs where its group goes.
+      if (call.methodName.name != 'enqueue') return null;
+      return _laneQueuedBy(call);
+    }
+    final through = waitingContext(at) ?? cleanupContext(at);
+    if (through == null) return null;
+    crossed.add(through);
+  }
+  return null;
 }
 
 /// Whether [call] of [method] brings a `SoloJob`: by its declared type, or

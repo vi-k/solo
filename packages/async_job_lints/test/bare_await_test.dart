@@ -12,6 +12,7 @@ void main() {
   defineReflectiveSuite(() {
     defineReflectiveTests(BareAwaitTest);
     defineReflectiveTests(BareAwaitOwnQueueReportedElsewhereTest);
+    defineReflectiveTests(BareAwaitOwnLaneReportedElsewhereTest);
   });
 }
 
@@ -700,6 +701,8 @@ final job = Job<void>((ctx) async {
 
   // Nothing else reports this deadlock unless a plugin on top says so.
   Future<void> test_own_queue() => assertAt(_ownQueue, ['[[await]] close()']);
+
+  Future<void> test_lanes() => assertAt(_lanes, _lanesAwaits);
 }
 
 /// A wait for a job of the controller's own queue.
@@ -722,4 +725,95 @@ class BareAwaitOwnQueueReportedElsewhereTest extends RuleTest {
       BareAwait(ownQueueReportedElsewhere: true);
 
   Future<void> test_own_queue() => assertAt(_ownQueue, []);
+
+  // A plugin of the old API leaves a wait for a lane to bare_await: its rule
+  // of the own queue does not see the lanes.
+  Future<void> test_lanes() => assertAt(_lanes, _lanesAwaits);
+
+  // The close of a SoloStream mixed into a Solo is the controller's own.
+  Future<void> test_close_of_a_solo_stream() => assertAt(_soloStream, []);
+}
+
+/// Waits from a body of the lane `_likes`: for a job of the other lane, then
+/// for jobs of its own lane through a method and directly, then for `close`.
+const _lanes = '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _reload = lane('reload');
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _reload;
+  late final SoloLane<int> _likes;
+
+  Job<void> reload() => _reload.enqueue<int, void>((ctx) async {});
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await reload().done;
+    await like().done;
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+    await close();
+  });
+}
+''';
+
+/// Every wait of [_lanes].
+const _lanesAwaits = [
+  '[[await]] reload()',
+  '[[await]] like()',
+  '[[await]] _likes',
+  '[[await]] close()',
+];
+
+/// A close of a `Solo` with `SoloStream` awaited from its body.
+const _soloStream = '''
+import 'package:solo/solo.dart';
+
+final class Desk extends Solo<int> with SoloStream<int> {
+  Desk() : super(0);
+
+  Job<void> logout() => enqueue<int, void>((ctx) async {
+    await close();
+  });
+}
+''';
+
+/// `bare_await` as solo_lints registers it: both the own queue and the own
+/// lane are reported by `await_own_queue`.
+@reflectiveTest
+class BareAwaitOwnLaneReportedElsewhereTest extends RuleTest {
+  @override
+  AbstractAnalysisRule get underTest => BareAwait(
+    ownQueueReportedElsewhere: true,
+    ownLaneReportedElsewhere: true,
+  );
+
+  Future<void> test_own_queue() => assertAt(_ownQueue, []);
+
+  // Only the wait for the other lane is left: it is no deadlock, and the
+  // cancellation of the job does not reach it.
+  Future<void> test_lanes() => assertAt(_lanes, ['[[await]] reload()']);
+
+  Future<void> test_lane_of_a_job_from_a_parameter() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _likes;
+
+  Job<void> after(SoloJob<void> job) => _likes.enqueue<int, void>((ctx) async {
+    await job.done;
+  });
+}
+''',
+    ['[[await]] job.done'],
+  );
 }

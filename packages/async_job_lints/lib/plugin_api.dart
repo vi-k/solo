@@ -20,6 +20,7 @@ import 'src/rules/sync_fake_async.dart';
 
 export 'src/context.dart'
     show
+        QueueLane,
         cleanupContext,
         firstPositional,
         functionOf,
@@ -28,10 +29,13 @@ export 'src/context.dart'
         isJobContext,
         isSolo,
         isSoloContext,
+        isSoloController,
+        isSoloLane,
         isSoloMember,
         jobContextOf,
         namedValue,
         ownQueueCall,
+        queueLaneOf,
         returnedValues,
         waitingContext;
 
@@ -41,13 +45,21 @@ export 'src/context.dart'
 /// With [ownQueueReportedElsewhere], `bare_await` stays quiet on a wait for a
 /// job of the controller's own queue, because a rule of the calling plugin
 /// reports that wait. Without it `bare_await` reports the wait as any other.
+///
+/// With [ownLaneReportedElsewhere], `bare_await` and `discarded_outcome`
+/// stay quiet on a wait in a job body of a `SoloLanes` for a job of the
+/// lane that body runs in, for the same reason. A plugin that does not
+/// report such a wait leaves it to them.
 void registerAsyncJobLints(
   PluginRegistry registry, {
   bool ownQueueReportedElsewhere = false,
+  bool ownLaneReportedElsewhere = false,
 }) {
   registry
     ..registerWarningRule(CtxInCleanup())
-    ..registerWarningRule(DiscardedOutcome())
+    ..registerWarningRule(
+      DiscardedOutcome(ownLaneReportedElsewhere: ownLaneReportedElsewhere),
+    )
     ..registerWarningRule(OutcomeAfterAwait())
     ..registerWarningRule(ReleaseOnTheCall())
     ..registerFixForRule(ReleaseOnTheCall.code, PassReleaseToCall.new)
@@ -55,6 +67,9 @@ void registerAsyncJobLints(
     ..registerLintRule(CatchWithoutCheck())
     ..registerFixForRule(CatchWithoutCheck.code, AddCheck.new)
     ..registerLintRule(
-      BareAwait(ownQueueReportedElsewhere: ownQueueReportedElsewhere),
+      BareAwait(
+        ownQueueReportedElsewhere: ownQueueReportedElsewhere,
+        ownLaneReportedElsewhere: ownLaneReportedElsewhere,
+      ),
     );
 }

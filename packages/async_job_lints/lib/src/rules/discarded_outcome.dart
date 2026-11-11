@@ -25,13 +25,21 @@ class DiscardedOutcome extends AnalysisRule {
   );
 
   /// Creates the rule.
-  DiscardedOutcome()
+  ///
+  /// With [ownLaneReportedElsewhere], a wait in a job body for a job of the
+  /// lane that body runs in is left to another rule.
+  DiscardedOutcome({this.ownLaneReportedElsewhere = false})
     : super(
         name: 'discarded_outcome',
         description:
             "An outcome of 'done' that nobody reads: the failure of the job "
             'reaches no answerer.',
       );
+
+  /// Whether a rule of another plugin reports a wait for a job of the lane
+  /// of a `SoloLanes` the waiting job runs in, so that this rule stays quiet
+  /// on it.
+  final bool ownLaneReportedElsewhere;
 
   @override
   LintCode get diagnosticCode => code;
@@ -50,7 +58,7 @@ class DiscardedOutcome extends AnalysisRule {
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
-  final AnalysisRule rule;
+  final DiscardedOutcome rule;
 
   _Visitor(this.rule);
 
@@ -62,9 +70,14 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
     if (!_isOutcomeFuture(dropped.staticType)) return;
     // A body waiting for its own queue is named by bare_await and
-    // await_own_queue: the job waits for itself.
-    if (bodyContextAround(node) != null && ownQueueCall(dropped) != null) {
-      return;
+    // await_own_queue: the job waits for itself. A wait for its own lane is
+    // named only where a plugin on top says so.
+    if (bodyContextAround(node) != null) {
+      if (ownQueueCall(dropped) != null) return;
+      if (rule.ownLaneReportedElsewhere &&
+          queueLaneOf(dropped) == QueueLane.own) {
+        return;
+      }
     }
     _check(dropped);
   }

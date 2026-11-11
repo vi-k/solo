@@ -10,6 +10,7 @@ import 'support/rule_base.dart';
 void main() {
   defineReflectiveSuite(() {
     defineReflectiveTests(DiscardedOutcomeTest);
+    defineReflectiveTests(DiscardedOutcomeOwnLaneReportedElsewhereTest);
   });
 }
 
@@ -474,4 +475,50 @@ Future<void> run() async {
   await fetch();
 }
 ''', []);
+
+  // A plugin of the old API leaves a wait for a lane to the core: its rule of
+  // the own queue does not see the lanes.
+  Future<void> test_lanes() => assertAt(_lanes, [
+    'reload().[[done]]',
+    'like().[[done]]',
+    '{}).[[done]]',
+  ]);
+}
+
+/// Waits from a body of the lane `_likes`: for a job of the other lane, then
+/// for jobs of its own lane through a method and directly.
+const _lanes = '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _reload = lane('reload');
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _reload;
+  late final SoloLane<int> _likes;
+
+  Job<void> reload() => _reload.enqueue<int, void>((ctx) async {});
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await reload().done;
+    await like().done;
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''';
+
+/// `discarded_outcome` as solo_lints registers it: `await_own_queue` reports
+/// a wait for the own lane.
+@reflectiveTest
+class DiscardedOutcomeOwnLaneReportedElsewhereTest extends RuleTest {
+  @override
+  AbstractAnalysisRule get underTest =>
+      DiscardedOutcome(ownLaneReportedElsewhere: true);
+
+  // The wait for the other lane is no deadlock, and its outcome is dropped.
+  Future<void> test_lanes() => assertAt(_lanes, ['reload().[[done]]']);
 }

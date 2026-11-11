@@ -1,3 +1,22 @@
+## Не выпущено
+
+- Правила знают `solo` 2.0: `SoloController`, базу `Solo` и нового `SoloLanes`,
+  и `SoloLane`, линию `SoloLanes`. `outcome_after_await` берёт `job` линии
+  так же, как `job` у `Solo`: как задачу, которая не идёт, пока её
+  не поставили.
+- `plugin_api.dart` экспортирует `isSoloController`, `isSoloLane`,
+  `queueLaneOf` и `QueueLane`. `queueLaneOf` говорит, ждут ли в теле задачи
+  линию, в которой задача идёт, другую линию или это неизвестно,
+  а `isSoloMember` с `Solo` берёт и одноимённый член `SoloLane`, так что
+  правила плагина поверх, которые называют `enqueue`, `enqueueJob`, `job`,
+  `collect` и `accumulate` у `Solo`, видят и члены линии.
+- `registerAsyncJobLints` принимает `ownLaneReportedElsewhere`: с ним
+  `bare_await` и `discarded_outcome` оставляют ожидание своей линии плагину
+  поверх. Без него, как у `solo_lints` 0.2.0, который линий не знает, они
+  сообщают об этом ожидании, как о любом другом. `ownQueueCall` сохраняет
+  сигнатуру и ответы для `Solo` и находит `close` и `cancelAll` у `SoloStream`,
+  подмешанного в `Solo`.
+
 ## 0.2.0
 
 - Два новых предупреждения о результате задачи, включённые, как только плагин

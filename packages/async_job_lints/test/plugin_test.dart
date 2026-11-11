@@ -3,16 +3,21 @@ import 'package:async_job_lints/plugin_api.dart';
 import 'package:async_job_lints/src/fixes/add_check.dart';
 import 'package:async_job_lints/src/fixes/release_on_the_call.dart';
 import 'package:async_job_lints/src/rules/bare_await.dart';
+import 'package:async_job_lints/src/rules/discarded_outcome.dart';
 import 'package:test/test.dart';
 
 import 'support/recording_registry.dart';
 
 void main() {
-  RecordingRegistry registered({bool ownQueueReportedElsewhere = false}) {
+  RecordingRegistry registered({
+    bool ownQueueReportedElsewhere = false,
+    bool ownLaneReportedElsewhere = false,
+  }) {
     final registry = RecordingRegistry();
     registerAsyncJobLints(
       registry,
       ownQueueReportedElsewhere: ownQueueReportedElsewhere,
+      ownLaneReportedElsewhere: ownLaneReportedElsewhere,
     );
     return registry;
   }
@@ -84,5 +89,19 @@ void main() {
       ).ownQueueReportedElsewhere,
       isTrue,
     );
+  });
+
+  test('the lane parameter reaches bare_await and discarded_outcome', () {
+    BareAwait bareAwait(RecordingRegistry registry) =>
+        registry.rule('bare_await') as BareAwait;
+    DiscardedOutcome discarded(RecordingRegistry registry) =>
+        registry.rule('discarded_outcome') as DiscardedOutcome;
+    final plain = registered(ownQueueReportedElsewhere: true);
+    expect(bareAwait(plain).ownLaneReportedElsewhere, isFalse);
+    expect(discarded(plain).ownLaneReportedElsewhere, isFalse);
+    final lanes = registered(ownLaneReportedElsewhere: true);
+    expect(bareAwait(lanes).ownLaneReportedElsewhere, isTrue);
+    expect(bareAwait(lanes).ownQueueReportedElsewhere, isFalse);
+    expect(discarded(lanes).ownLaneReportedElsewhere, isTrue);
   });
 }

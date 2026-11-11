@@ -1,3 +1,22 @@
+## Unreleased
+
+- The rules know `solo` 2.0: `SoloController`, the base of `Solo` and of the
+  new `SoloLanes`, and `SoloLane`, a lane of `SoloLanes`. `outcome_after_await`
+  takes `job` of a lane as it takes `job` of a `Solo`, as a job that does not
+  run until it is queued.
+- `plugin_api.dart` exports `isSoloController`, `isSoloLane`, `queueLaneOf` and
+  `QueueLane`. `queueLaneOf` tells whether a wait in a job body is for the lane
+  the job runs in, for another lane or not known, and `isSoloMember` with
+  `Solo` takes the member of the same name of `SoloLane` too, so the rules of a
+  plugin on top that name `enqueue`, `enqueueJob`, `job`, `collect` and
+  `accumulate` of a `Solo` see those of a lane.
+- `registerAsyncJobLints` takes `ownLaneReportedElsewhere`: with it,
+  `bare_await` and `discarded_outcome` leave a wait for the own lane to the
+  plugin on top. Without it, as from `solo_lints` 0.2.0, which knows no lanes,
+  they report that wait as any other. `ownQueueCall` keeps its signature and
+  its answers for a `Solo`, and finds `close` and `cancelAll` of a `SoloStream`
+  mixed into a `Solo`.
+
 ## 0.2.0
 
 - Two new warnings on the result of a job, on as soon as the plugin is named:
