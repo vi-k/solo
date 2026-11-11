@@ -167,7 +167,7 @@ final class _SoloLane<S extends Object> implements SoloLane<S> {
   }) {
     // Whatever comes of the call, a refusal included: from the first job on,
     // the set of lanes is what the pump walks.
-    _controller._sealed = true;
+    _controller._sealed ??= _Sealed.enqueue;
     if (job is! _SoloJob<S, S, T> || !identical(job._destination, _core)) {
       throw ArgumentError.value('$job', 'job', _notCreatedByLane);
     }
@@ -217,12 +217,9 @@ final class _SoloLane<S extends Object> implements SoloLane<S> {
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) => _SoloAccumulator<S, W, E, List<E>, T>(
+  }) => _controller._collectIn<W, E, T>(
     _core,
     handler,
-    seed: (event) => <E>[event],
-    merge: (events, event) => events..add(event),
-    snapshot: List<E>.unmodifiable,
     key: key,
     policy: policy,
     timing: timing,
@@ -251,12 +248,10 @@ final class _SoloLane<S extends Object> implements SoloLane<S> {
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) => _SoloAccumulator<S, W, E, E, T>(
+  }) => _controller._accumulateIn<W, E, T>(
     _core,
     handler,
-    seed: (event) => event,
     merge: merge,
-    snapshot: (value) => value,
     key: key,
     policy: policy,
     timing: timing,

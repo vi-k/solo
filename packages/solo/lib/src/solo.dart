@@ -28,6 +28,10 @@ const _notCreatedHere =
     'was not created by this Solo (make it with job(...) or ctx.child of this '
     'controller)';
 
+/// Where the errors of [SoloLanes.lane] send the reader.
+const _declaringLanes =
+    'https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes';
+
 /// What a lane says of a job another lane or another controller made, the
 /// fix included.
 const _notCreatedByLane =
@@ -891,6 +895,77 @@ abstract class SoloController<S extends Object> {
     ifCancelled: ifCancelled,
   );
 
+  /// Creates an accumulator of a list of events whose groups go into
+  /// [core]: [Solo.collect] and [SoloLane.collect].
+  SoloAccumulator<E, T> _collectIn<W extends S, E, T>(
+    _SoloLaneCore<S> core,
+    Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {
+    Object? key,
+    AccumulationPolicy policy = AccumulationPolicy.join,
+    AccumulationTiming? timing,
+    bool Function(W state)? canStart,
+    bool Function(W state)? keepWhile,
+    bool cancellable = true,
+    Duration? timeout,
+    String Function()? describe,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
+  }) => _SoloAccumulator<S, W, E, List<E>, T>(
+    core,
+    handler,
+    seed: (event) => <E>[event],
+    merge: (events, event) => events..add(event),
+    snapshot: List<E>.unmodifiable,
+    key: key,
+    policy: policy,
+    timing: timing,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
+    ifCancelled: ifCancelled,
+  );
+
+  /// Creates an accumulator of one merged value whose groups go into
+  /// [core]: [Solo.accumulate] and [SoloLane.accumulate].
+  SoloAccumulator<E, T> _accumulateIn<W extends S, E, T>(
+    _SoloLaneCore<S> core,
+    Future<T> Function(SoloContext<S, W> ctx, E value) handler, {
+    required E Function(E accumulated, E incoming) merge,
+    Object? key,
+    AccumulationPolicy policy = AccumulationPolicy.join,
+    AccumulationTiming? timing,
+    bool Function(W state)? canStart,
+    bool Function(W state)? keepWhile,
+    bool cancellable = true,
+    Duration? timeout,
+    String Function()? describe,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    bool Function(Object error)? isExpectedError,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
+  }) => _SoloAccumulator<S, W, E, E, T>(
+    core,
+    handler,
+    seed: (event) => event,
+    merge: merge,
+    snapshot: (value) => value,
+    key: key,
+    policy: policy,
+    timing: timing,
+    canStart: canStart,
+    keepWhile: keepWhile,
+    cancellable: cancellable,
+    timeout: timeout,
+    describe: describe,
+    ifFailed: ifFailed,
+    isExpectedError: isExpectedError,
+    ifCancelled: ifCancelled,
+  );
+
   /// Queues [impl] in [core]: [Solo.enqueueJob] and [SoloLane.enqueueJob]
   /// past their check of who made the job.
   SoloJob<T> _enqueueIn<T>(
@@ -1446,12 +1521,9 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) => _SoloAccumulator<S, W, E, List<E>, T>(
+  }) => _collectIn<W, E, T>(
     _core,
     handler,
-    seed: (event) => <E>[event],
-    merge: (events, event) => events..add(event),
-    snapshot: List<E>.unmodifiable,
     key: key,
     policy: policy,
     timing: timing,
@@ -1498,12 +1570,10 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
     bool Function(Object error)? isExpectedError,
     S Function(S state, Cancelled cancelled)? ifCancelled,
-  }) => _SoloAccumulator<S, W, E, E, T>(
+  }) => _accumulateIn<W, E, T>(
     _core,
     handler,
-    seed: (event) => event,
     merge: merge,
-    snapshot: (value) => value,
     key: key,
     policy: policy,
     timing: timing,
@@ -1673,10 +1743,11 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   @override
   final List<_SoloLaneCore<S>> _cores = [];
 
-  /// Whether the set of lanes is sealed: by the microtask the constructor
-  /// schedules, or by the first `enqueueJob` of any lane. A closed
-  /// controller is sealed as well.
-  var _sealed = false;
+  /// What sealed the set of lanes first, or `null` while it is open: the
+  /// microtask the constructor schedules, or the first call of `enqueueJob`
+  /// of any lane, whatever came of it. A closed controller takes no lane
+  /// either; `lane` asks [isClosed] for that.
+  _Sealed? _sealed;
 
   /// Creates a controller in [initialState], with no lane until the body of
   /// the subclass's constructor declares them.
@@ -1685,32 +1756,40 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
     // and not only once a job has come: a `late final` field read in the
     // first call of a method would declare its lane at the mercy of the
     // order of the calls.
-    scheduleMicrotask(() => _sealed = true);
+    scheduleMicrotask(() => _sealed ??= _Sealed.constructor);
   }
 
   /// Declares a lane named [name] and returns it.
   ///
   /// Called in the body of the constructor, and kept in a private field.
   /// Throws [StateError] for a [name] this controller has a lane of already,
-  /// and once the set of lanes is sealed: by the first job any lane queues,
-  /// by [close], or by a microtask the constructor schedules. So a lane in a
-  /// `late final` field is an error: the field read after the constructor
-  /// throws.
+  /// and once the set of lanes is sealed: once any lane's `enqueueJob` has
+  /// been called (a refused or duplicate call seals too), after [close], or
+  /// after a microtask the constructor schedules. So a lane in a `late final`
+  /// field is an error: the field read after the constructor throws.
   @protected
   SoloLane<S> lane(String name) {
-    if (_sealed || isClosed) {
+    final why = switch (_sealed) {
+      _Sealed.constructor =>
+        'after its constructor: lanes are declared in the constructor body, '
+            'and a late final field declares its lane on its first read',
+      _Sealed.enqueue =>
+        'after enqueueJob of one of its lanes was called: from the first '
+            'call on, the lanes are what the pump walks',
+      null when isClosed => 'after close: a closed controller takes no lane',
+      null => null,
+    };
+    if (why != null) {
       throw StateError(
-        'Cannot declare lane $name of $runtimeType: lanes are declared in '
-        'the constructor, before the first job and before close, and a late '
-        'final field declares its lane on its first read; see '
-        'https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes',
+        'Cannot declare lane $name of $runtimeType $why; see $_declaringLanes',
       );
     }
     for (final lane in _lanes) {
       if (lane.name == name) {
         throw StateError(
           '$runtimeType has a lane named $name already: every call of lane '
-          'declares a new lane, and two of one name would read as one',
+          'declares a new lane, and two of one name would read as one; see '
+          '$_declaringLanes',
         );
       }
     }
@@ -1729,6 +1808,15 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   // does not gather them yet.
   @override
   SoloPending? get _pending => null;
+}
+
+/// What sealed the set of lanes of a [SoloLanes] first.
+enum _Sealed {
+  /// The microtask the constructor schedules.
+  constructor,
+
+  /// The first call of `enqueueJob` of any lane.
+  enqueue,
 }
 
 /// Feeds the hooks of one job into [SoloObserver] and into the controller's

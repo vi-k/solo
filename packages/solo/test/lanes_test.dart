@@ -11,6 +11,8 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/foreign_job.dart';
+
 typedef _AB = ({int a, int b});
 
 /// Two lanes, `first` and `second`, in that order, and a log of the hooks.
@@ -138,6 +140,15 @@ void _ladder(List<String> log, int n, [int i = 0]) {
   });
 }
 
+/// A [StateError] of `lane` that says [cause] and sends to the lanes page.
+Matcher _refusedLane(String cause) => throwsA(
+  isA<StateError>().having(
+    (e) => e.message,
+    'message',
+    allOf(contains(cause), contains('lanes.md#declaring-lanes')),
+  ),
+);
+
 /// A job that waits until [gate] completes.
 Future<void> Function(SoloContext<_AB, _AB> ctx) _waits(Completer<void> gate) =>
     (ctx) => gate.future;
@@ -169,9 +180,7 @@ void main() {
             ..declare('x')
             ..declare('x');
         }),
-        throwsA(
-          isA<StateError>().having((e) => e.message, 'message', contains('x')),
-        ),
+        _refusedLane('has a lane named x already'),
       );
     });
 
@@ -184,19 +193,15 @@ void main() {
 
         expect(
           () => controller.declare('c'),
-          throwsA(
-            isA<StateError>().having(
-              (e) => e.message,
-              'message',
-              contains('lanes.md#declaring-lanes'),
-            ),
-          ),
+          _refusedLane('after its constructor'),
         );
         expect([for (final lane in controller.declared) lane.name], ['a', 'b']);
       });
     });
 
     group('lane after the first enqueueJob throws', () {
+      const cause = 'after enqueueJob of one of its lanes was called';
+
       test('when the job is queued', () {
         final controller = _Lanes((self) => self.declare('a'));
         final job = controller.declared.single.enqueue<int, void>(
@@ -204,9 +209,47 @@ void main() {
         );
 
         expect(job.isQueued, isTrue);
-        expect(() => controller.declare('b'), throwsStateError);
+        expect(() => controller.declare('b'), _refusedLane(cause));
       });
 
+      // A call that throws leaves nothing behind but the seal, so these
+      // two tell the call apart from what it did. A repeated enqueue of one
+      // job is not among them: a job is taken only by an enqueue, or by the
+      // adoption of a body that runs, which an enqueue came before.
+      test('when the call refuses a job of another lane', () {
+        final controller = _Lanes((self) {
+          self
+            ..declare('a')
+            ..declare('b');
+        });
+        final [a, b] = controller.declared;
+
+        expect(
+          () => b.enqueueJob(a.job<int, void>((ctx) async {})),
+          throwsArgumentError,
+        );
+        expect(() => controller.declare('c'), _refusedLane(cause));
+      });
+
+      test('when the call refuses Policy.droppable without a key', () {
+        final controller = _Lanes((self) => self.declare('a'));
+        final a = controller.declared.single;
+
+        expect(
+          () => a.enqueue<int, void>(policy: Policy.droppable, (ctx) async {}),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              'Policy.droppable requires a job key',
+            ),
+          ),
+        );
+        expect(() => controller.declare('b'), _refusedLane(cause));
+      });
+
+      // The next two hold the outcome, not the cause of the seal: close
+      // seals by itself, and the duplicate's first enqueue sealed already.
       test('when the job ends Cancelled(closed)', () {
         final controller = _Lanes((self) => self.declare('a'));
         unawaited(controller.close());
@@ -253,13 +296,22 @@ void main() {
       final controller = _Lanes((self) => self.declare('a'));
       unawaited(controller.close());
 
-      expect(() => controller.declare('b'), throwsStateError);
+      expect(() => controller.declare('b'), _refusedLane('after close'));
     });
 
     test('a late final lane read after the constructor throws', () async {
       final controller = _LateLane();
 
-      await expectLater(controller.later(), throwsStateError);
+      await expectLater(
+        controller.later(),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('after its constructor'),
+          ),
+        ),
+      );
       expect(controller.declared, isEmpty);
     });
 
@@ -289,7 +341,13 @@ void main() {
           final controller = _LateDeclaration();
           async.flushMicrotasks();
 
-          expect(controller.refusal, isA<StateError>());
+          expect(
+            () => Error.throwWithStackTrace(
+              controller.refusal!,
+              StackTrace.empty,
+            ),
+            _refusedLane('after enqueueJob of one of its lanes was called'),
+          );
           expect(controller.declared, [same(controller.a)]);
           expect(controller.job.lane, same(controller.a.id));
           expect(controller.job.outcome, isA<Done<void>>());
@@ -479,8 +537,14 @@ void main() {
           canStart: (state) => state.a == 1,
           _nothing,
         );
+        scheduleMicrotask(() => controller.log.add('tick'));
         async.flushMicrotasks();
 
+        expect(controller.log.take(3), [
+          'start Job(a)',
+          'start Job(b)',
+          'tick',
+        ]);
         expect(b.outcome, isA<Done<void>>());
       });
     });
@@ -559,6 +623,31 @@ void main() {
         expect(child.lane, same(controller.first.id));
         expect(controller.second.queue.isEmpty, isTrue);
       });
+    });
+  });
+
+  test('a job of a lane run as a child by a job of the core', () {
+    fakeAsync((async) {
+      final controller = _Two();
+      final child = controller.first.job<_AB, void>(key: 'child', _nothing);
+      Object? thrown;
+      ForeignJob<void>((ctx) async {
+        try {
+          ctx.run(child).ignore();
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).launch();
+      async.flushMicrotasks();
+
+      // The child runs in a body of any lane of its controller: the text
+      // names the controller, and a Solo's says Solo, as before.
+      expect(
+        (thrown! as ArgumentError).message,
+        'runs as a child only in a body of the controller that made it',
+      );
+      expect(child.outcome, isNull);
+      expect(child.lane, isNull);
     });
   });
 
@@ -789,6 +878,11 @@ void main() {
           policy: Policy.droppable,
           _nothing,
         );
+        controller.first.enqueue<_AB, void>(
+          key: 'c',
+          policy: Policy.droppable,
+          _nothing,
+        );
         async.flushMicrotasks();
         controller.second.enqueue<_AB, void>(
           key: 'b',
@@ -810,6 +904,8 @@ void main() {
             'after Job(a) ends',
         'first: enqueue Job(a): duplicate of Job(a), which is running: if '
             'awaited from inside Job(a), it waits for itself',
+        'first: enqueue Job(c): duplicate of Job(c), which is queued while '
+            'Job(a) is running: it starts after Job(a) ends',
         'second: enqueue Job(b) while Job(b) is running: it starts after '
             'Job(b) ends',
         'second: restart: cancel Job(b)',

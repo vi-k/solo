@@ -118,7 +118,7 @@ fields. Every member here is protected.
 | Member | What it does | Where |
 | --- | --- | --- |
 | `SoloLanes(initialState)` | The constructor a subclass calls as `super(initialState)`, with the first state; its body declares the lanes | [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start) |
-| `lane(name)` | Declares a lane and returns it; throws `StateError` for a name declared already, and once the first job is queued, the controller is closed or a microtask after the constructor has run | [SoloLane](#sololane) |
+| `lane(name)` | Declares a lane and returns it; throws `StateError` for a name declared already, and once any lane's `enqueueJob` has been called (a refused or duplicate call seals too), the controller is closed or a microtask after the constructor has run | [SoloLane](#sololane) |
 | `lanes` | The lanes in the order they were declared, which is the order the pump walks them in | [SoloLane](#sololane) |
 
 ## SoloLane

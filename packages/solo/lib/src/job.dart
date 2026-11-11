@@ -120,7 +120,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
       throw ArgumentError.value(
         '$this',
         'child',
-        'runs as a child only in a body of the Solo that made it',
+        // A lane's child runs in a body of any lane of its controller, so
+        // the text names the controller and not the lane.
+        _destination.id == null
+            ? 'runs as a child only in a body of the Solo that made it'
+            : 'runs as a child only in a body of the controller that made it',
       );
     }
     if (_destination.queue._jobs.contains(this)) {
