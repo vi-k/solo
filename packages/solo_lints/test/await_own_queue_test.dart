@@ -283,6 +283,88 @@ $_feed
 }
 ''', []);
 
+  // A lane assigned through this is declared all the same.
+  Future<void> test_lane_assigned_through_this() => _assertLane(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    this._likes = lane('likes');
+  }
+
+  late final SoloLane<int> _likes;
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    '_likes.enqueue<int, void>((ctx) async {})',
+    'enqueue',
+  );
+
+  // A lane the controller takes rather than declares by lane(...) may be
+  // another controller's: its body is not seen as queued here.
+  Future<void> test_injected_lane() => assertAt('''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed(this._audit) : super(0) {
+    _likes = lane('likes');
+  }
+
+  final SoloLane<int> _audit;
+  late final SoloLane<int> _likes;
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> record() => _audit.enqueue<int, void>((ctx) async {
+    await close();
+    await _audit.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''', []);
+
+  // Only a constructor body declares a lane: a late initializer and a
+  // method throw when they call lane(...), so the lane is not seen.
+  Future<void> test_lane_declared_outside_the_constructor_body() => assertAt('''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0);
+
+  late final SoloLane<int> _reload = lane('reload');
+  late final SoloLane<int> _likes;
+
+  void declare() {
+    _likes = lane('likes');
+  }
+
+  Job<void> reloadTwice() => _reload.enqueue<int, void>((ctx) async {
+    await _reload.enqueue<int, void>((ctx) async {}).done;
+  });
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''', []);
+
+  Future<void> test_injected_lane_of_a_solo() => assertAt('''
+import 'package:solo/solo.dart';
+
+final class Desk extends Solo<int> {
+  Desk(this.foreign) : super(0);
+
+  final SoloLane<int> foreign;
+
+  Job<void> record() => foreign.enqueue<int, void>((ctx) async {
+    await close();
+  });
+}
+''', []);
+
   Future<void> test_close_of_lanes() => assertAt(
     '''
 $_feed

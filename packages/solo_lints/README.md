@@ -112,9 +112,10 @@ is within one lane: the rule reports a body queued by `_likes.enqueue(...)`
 that waits for a job of `_likes`, queued there directly or by a method whose
 body queues it there, and names the lane. A job of another lane runs on that
 lane's pump, and where the lane is not seen, as with a lane from a getter, a
-job from a field or a parameter, a body of a child or a handler of an
-accumulator, the rule is quiet. `bare_await`, which reports the other plain
-waits of a body, is quiet on the waits this rule reports. See
+lane the controller takes rather than declares by `lane(...)` in its
+constructor body, a job from a field or a parameter, a body of a child or a
+handler of an accumulator, the rule is quiet. `bare_await`, which reports the
+other plain waits of a body, is quiet on the waits this rule reports. See
 [Steps as children](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#steps-as-children).
 
 ### key_per_request
