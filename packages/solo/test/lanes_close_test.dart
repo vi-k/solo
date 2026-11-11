@@ -7,7 +7,6 @@
 // close and `cancelAll` were written for every core from the start. Every
 // group below names the mutation of that code it was seen red under, in a
 // saved copy of the library.
-// ignore_for_file: cascade_invocations
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -278,11 +277,10 @@ void main() {
 
         final SoloController<int> controller;
         if (lanes) {
-          final two = controller = _Two(log);
-          two.b.enqueue<int, void>(key: 'job', cancellable: cancellable, body);
+          controller = _Two(log)
+            ..b.enqueue<int, void>(key: 'job', cancellable: cancellable, body);
         } else {
-          final one = controller = _One(log);
-          one.put('job', cancellable: cancellable, body);
+          controller = _One(log)..put('job', cancellable: cancellable, body);
         }
         async.flushMicrotasks();
         controller.close().then((_) => log.add('done'));
@@ -530,8 +528,9 @@ void main() {
     test('a drain of two empty lanes closes once', () {
       final two = drain(
         (log) => _Lanes(log, (self) {
-          self.declare('a');
-          self.declare('b');
+          self
+            ..declare('a')
+            ..declare('b');
         }),
       );
       expect(two, idle);
@@ -579,12 +578,11 @@ void main() {
           SoloLane<int> named(String name) =>
               name == 'a' ? controller.a : controller.b;
           SoloJob<void>? put;
-          final removed = named(
-            from,
-          ).enqueue<int, void>(key: 'removed', _nothing);
-          removed.whenFinished((_) {
-            put = named(to).enqueue<int, void>(key: 'put', _nothing);
-          });
+          final removed =
+              named(from).enqueue<int, void>(key: 'removed', _nothing)
+                ..whenFinished((_) {
+                  put = named(to).enqueue<int, void>(key: 'put', _nothing);
+                });
 
           unawaited(controller.cancelAll());
           async.flushMicrotasks();

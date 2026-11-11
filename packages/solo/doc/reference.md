@@ -30,8 +30,8 @@ subclass, and an override in the subclass.
 | `isDraining` | Whether a `close()` that drains is still running the queue | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isFinished` | Whether closing has finished and the state can no longer change | [externalSetState](state.md#externalsetstate) |
 | `pending` | What is holding the controller right now, a running job included, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
-| `cancelAll()` | Clears the queue and cancels the running job; the controller stays open. `force: true` removes queued jobs made with `cancellable: false` too, and `reason:` names the reason every job it ends carries | [Three ways to stop](cancellation.md#three-ways-to-stop) |
-| `close()` | Stops taking work and closes, cancelling what is queued and running or, with `mode: SoloCloseMode.drain`, running the queue first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `cancelAll()` | Clears every queue and cancels every running job, one per lane of a `SoloLanes`; the controller stays open. `force: true` removes queued jobs made with `cancellable: false` too, and `reason:` names the reason every job it ends carries | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `close()` | Stops taking work and closes, cancelling what is queued and running or, with `mode: SoloCloseMode.drain`, running the queues first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 
 ### What the subclass uses
 

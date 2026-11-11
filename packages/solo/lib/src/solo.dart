@@ -300,15 +300,15 @@ abstract class SoloController<S extends Object> {
   /// What is holding the controller right now, or `null` when nothing the
   /// controller knows of is.
   ///
-  /// Not `null` while a job runs: a running job is a [SoloPendingJob], which
-  /// names the job, says what it is doing and whether it has been asked to
-  /// stop. A drain with no job running is a [SoloPendingQueue]: the queue it
-  /// has still to run, where a group of `collect` or `accumulate` stays
-  /// until its timing lets it go. A [SoloLanes] gives a [SoloPendingLanes],
-  /// one of those two for each busy lane. With `SoloStream`, once the engine
-  /// has closed, a subscription left paused holds the stream, and that is a
-  /// [SoloPendingStream]. Read it for a `close` that has not come back, or
-  /// a `cancel` that is taking its time.
+  /// Not `null` while a job runs. In a [Solo] a running job is a
+  /// [SoloPendingJob], which names the job, says what it is doing and whether
+  /// it has been asked to stop; a drain with no job running is a
+  /// [SoloPendingQueue]: the queue it has still to run, where a group of
+  /// `collect` or `accumulate` stays until its timing lets it go. A
+  /// [SoloLanes] gives a [SoloPendingLanes], one of those two for each busy
+  /// lane. With `SoloStream`, once the engine has closed, a subscription left
+  /// paused holds the stream, and that is a [SoloPendingStream]. Read it for
+  /// a `close` that has not come back, or a `cancel` that is taking its time.
   ///
   /// ```dart
   /// unawaited(controller.close().timeout(
@@ -388,21 +388,22 @@ abstract class SoloController<S extends Object> {
   /// is final and cannot change.
   ///
   /// [SoloCloseMode.cancel], the default, drops every queued job with
-  /// `Cancelled(closed)` and cancels the current one — a `cancellable: false`
-  /// job is waited for instead. [SoloCloseMode.drain] leaves the queue alone
-  /// and closes once it has run: new root jobs are refused from the call
-  /// onwards, and the ones already accepted go by the usual rules, children,
-  /// cleanup and accumulation windows included. A [Policy.droppable] call whose
-  /// key a draining job holds gets that job back, as before the close: it is
-  /// not new work.
+  /// `Cancelled(closed)` and cancels the current job of every lane (the one
+  /// job of a [Solo]) — a `cancellable: false` job is waited for instead.
+  /// [SoloCloseMode.drain] leaves the queues alone and closes once every one
+  /// has run: new root jobs are refused from the call onwards, and the ones
+  /// already accepted go by the usual rules, children, cleanup and
+  /// accumulation windows included. A [Policy.droppable] call whose key a
+  /// draining job holds gets that job back, as before the close: it is not
+  /// new work.
   ///
   /// A plain `close()` over a running drain stops it where it is: the
-  /// queue is dropped and the current job cancelled, and the same future
+  /// queues are dropped and the current jobs cancelled, and the same future
   /// everybody is holding completes after that. There is no way back the
   /// other way — a drain cannot be started over a `close` that is already
   /// cancelling.
   ///
-  /// Awaiting the returned future from inside the current job's body never
+  /// Awaiting the returned future from inside the body of a current job never
   /// completes: it waits for that very body.
   /// {@endtemplate}
   @mustCallSuper
@@ -534,16 +535,16 @@ abstract class SoloController<S extends Object> {
   }
 
   /// {@template solo.SoloController.cancelAll}
-  /// Clears the queue and cancels the current job; `force` affects only the
-  /// queue.
+  /// Clears every queue and cancels the current job of every lane (the one
+  /// job of a [Solo]); `force` affects only the queues.
   ///
-  /// Completes when the current job has actually finished.
+  /// Completes when every current job has actually finished.
   ///
   /// Every job it ends carries [reason], a [ManualCancelReason] unless the
   /// caller names one: a policy of the domain that clears the controller
   /// can tell its own cancellations from a user's.
   ///
-  /// Awaiting the returned future from inside the current job's body never
+  /// Awaiting the returned future from inside the body of a current job never
   /// completes: it waits for that very body.
   /// {@endtemplate}
   Future<void> cancelAll({

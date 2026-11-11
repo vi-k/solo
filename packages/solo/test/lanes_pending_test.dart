@@ -2,13 +2,14 @@
 // the order of creation, each lane by the rules of a `Solo`; `null` with no
 // busy lane. A `Solo` keeps its three variants.
 //
-// The first five are red while `SoloLanes.pending` answers `null`, as it
-// did before it gathered its lanes. Seen red as well, in a saved copy of
-// the library: the lanes listed last first (the order test and the print),
-// the list handed out as it is built (the order test), an empty
-// `SoloPendingLanes` for no busy lane (the idle, order and stream tests),
-// and idle lanes listed (all five). `a Solo never says SoloPendingLanes`
-// holds the variants of a `Solo`, which the gathering must not reach.
+// The tests of busy lanes are red while `SoloLanes.pending` answers
+// `null`, as it did before it gathered its lanes. Seen red as well, in a
+// saved copy of the library: the lanes listed last first (the order test
+// and the print), the list handed out as it is built (the order test), an
+// empty `SoloPendingLanes` for no busy lane (the idle, no-lane, order and
+// stream tests), and idle lanes listed (every test of lanes). `a Solo never
+// says SoloPendingLanes` holds the variants of a `Solo`, which the gathering
+// must not reach.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -29,6 +30,11 @@ final class _Three extends SoloLanes<int> {
     b = lane('b');
     c = lane('c');
   }
+}
+
+/// No lane at all.
+final class _None extends SoloLanes<int> {
+  _None() : super(0);
 }
 
 final class _Streamed extends SoloLanes<int> with SoloStream<int> {
@@ -87,6 +93,20 @@ void main() {
       expect(controller.b.queue.length, 1);
       expect(controller.pending, isNull);
       async.flushTimers();
+    });
+  });
+
+  test('pending is null with no lane, before and after close', () {
+    fakeAsync((async) {
+      for (final mode in SoloCloseMode.values) {
+        final controller = _None();
+        expect(controller.pending, isNull, reason: '$mode');
+        unawaited(controller.close(mode: mode));
+        expect(controller.pending, isNull, reason: '$mode');
+        async.flushMicrotasks();
+        expect(controller.isFinished, isTrue, reason: '$mode');
+        expect(controller.pending, isNull, reason: '$mode');
+      }
     });
   });
 
