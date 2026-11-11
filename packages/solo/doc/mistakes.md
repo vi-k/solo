@@ -173,14 +173,17 @@ Job<void> syncAndRecord(int item) =>
     });
 ```
 
-In a `SoloLanes` the wait hangs within one lane: a job that awaits a job of
-another lane waits while that lane runs it, as
-[The table of cases](lanes.md#the-table-of-cases) on the lanes page shows.
 `Solo.debug` warns of such a wait when the job is queued. Awaiting `close()` or
 `cancelAll()` from a body hangs the same way: both wait for the running job.
 See [Steps in a row](children.md#steps-in-a-row) on the children page and
 [Closing from a job](cancellation.md#closing-from-a-job) on the cancellation
 page.
+
+In a `SoloLanes` the same wait hangs within one lane, and so does a cycle
+across lanes: a job of lane A that awaits a job it queued in lane B, which
+awaits a job it queued in lane A. A job that awaits a job of another lane with
+no way back waits only while that lane runs it, as
+[The table of cases](lanes.md#the-table-of-cases) on the lanes page shows.
 
 ## Answering for every failure
 

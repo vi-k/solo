@@ -38,9 +38,10 @@ a handler for the events of type `E` and the transformer that determines how
 those events are scheduled. `Cubit` exposes methods that update state directly;
 it does not provide an event queue.
 
-In `solo`, a controller method normally creates a `Job<T>` and adds it to the
-controller's queue. The jobs of the queue are root jobs, and they run one at a
-time. The caller can await `job.value` for a value or exception, or `job.done`
+In `solo`, a controller method normally creates a `Job<T>` and adds it to a
+queue of the controller. The jobs of a queue are root jobs, and they run one at
+a time: a `Solo` has one queue, and a `SoloLanes` has one for each of its
+lanes. The caller can await `job.value` for a value or exception, or `job.done`
 for a `Done`, `Failed` or `Cancelled` outcome. Queue policies apply to
 individual submissions.
 

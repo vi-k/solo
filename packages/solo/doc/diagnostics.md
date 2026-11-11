@@ -211,9 +211,11 @@ final class Hangs extends SoloObserver {
 ```
 
 A job that ends in time disarms its own timer and says nothing. One that does
-not is named at the front of its line. The snapshot beside the name is of the
-root job the controller is on. That is the same job, unless the one that hangs
-is a child:
+not is named at the front of its line. The snapshot beside the name is the
+controller's `pending`. In a `Solo` that is the root job the controller is on,
+the same job unless the one that hangs is a child. In a `SoloLanes` it is a
+`SoloPendingLanes`, with the snapshot of every lane that holds the controller,
+the lane of the job that hangs among them. Two hangs in a `Solo` read:
 
 ```text
 stuck is still running: SoloPending([stuck] in its body)

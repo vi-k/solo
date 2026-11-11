@@ -4,7 +4,10 @@
 
 - **The hooks of `SoloObserver` take a `SoloController<Object>` instead of a
   `Solo<Object>`.** An override that names `Solo<Object>` no longer compiles:
-  Dart does not let an override narrow the type of a parameter.
+  Dart does not let an override narrow the type of a parameter. Nor does one
+  that reads `current` or `queue`, members of `Solo` that `SoloController` has
+  not: `solo.pending` gives the job the controller is on and the jobs queued
+  behind it.
 - **`SoloUnansweredHandler` takes a `SoloController<Object>` instead of a
   `Solo<Object>`.**
 - **`SoloPending` has a new subclass, `SoloPendingLanes`.** An exhaustive
@@ -21,6 +24,8 @@
   releases of both plugins that come out with this one know it. The rules about
   lanes come in a minor release of `solo_lints`, which reaches an app once its
   constraint is raised to it.
+- The error for a job another controller made is reworded: it says the job "was
+  not created by this controller" where it said "this Solo".
 
 ### Added
 
@@ -48,7 +53,15 @@
 - `doc/state.md` writes `Logged` as a mixin on `SoloController`, which serves a
   `Solo` and a `SoloLanes` alike.
 - `doc/diagnostics.md` names `SoloPendingLanes`, `job.lane` in the lines of an
-  observer, and a `SoloLanes` that has no lane yet in `onCreate`.
+  observer, and a `SoloLanes` that has no lane yet in `onCreate`; the snapshot
+  of `Hangs` is the controller's `pending`, a `SoloPendingLanes` in a
+  `SoloLanes`.
+- The README lists [Lanes](doc/lanes.md) among its guides and a recipe for two
+  kinds of work over one state that must not wait for each other. `doc/jobs.md`
+  says that one root job of a queue runs at a time, and `doc/mistakes.md` names
+  the cycle across lanes that hangs.
+- The dartdoc of the listeners library says that an application listens through
+  `SoloController.addListener`.
 
 ## 1.1.1
 

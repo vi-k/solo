@@ -1022,8 +1022,9 @@ void main() {
       test('a child that hangs under its root', () {
         _says(
           'One that does not is named at the front of its line. The '
-          'snapshot beside the name is of the root job the controller is '
-          'on. That is the same job, unless the one that hangs is a child',
+          "snapshot beside the name is the controller's `pending`. In a "
+          '`Solo` that is the root job the controller is on, the same job '
+          'unless the one that hangs is a child',
         );
         runFaked((async) {
           Solo.observer = page.Hangs();
@@ -1061,6 +1062,31 @@ void main() {
         expect(stage.lines, [
           'stuck is still running: $snapshot',
         ], reason: 'onStart has not come for the queued one');
+      });
+
+      test('a job that hangs in a lane of a SoloLanes', () {
+        _says(
+          'In a `SoloLanes` it is a `SoloPendingLanes`, with the snapshot of '
+          'every lane that holds the controller, the lane of the job that '
+          'hangs among them.',
+        );
+        runFaked((async) {
+          Solo.observer = page.Hangs();
+          final feed = _TwoLanes()..reload();
+          async.elapse(const Duration(seconds: 1));
+          feed.like();
+          async.elapse(const Duration(seconds: 6));
+          unawaited(feed.close());
+          async.flushMicrotasks();
+        });
+
+        const lanes =
+            'SoloPending(reload: SoloPending([reload] in its body), '
+            'likes: SoloPending([like] in its body))';
+        expect(stage.lines, [
+          'reload is still running: $lanes',
+          'like is still running: $lanes',
+        ]);
       });
 
       test('Hangs only reports, and a deadline stops the job', () {
