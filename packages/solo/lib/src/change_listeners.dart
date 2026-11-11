@@ -3,7 +3,7 @@
 ///
 /// The same rules as `Listeners` of `listeners.dart`, for a listener that
 /// takes the previous and the current state. Not exported: a caller sees
-/// `Solo.addChangeListener`, not this list.
+/// `SoloController.addChangeListener`, not this list.
 final class ChangeListeners<S> {
   final _entries = <_ChangeListenerEntry<S>>[];
 
