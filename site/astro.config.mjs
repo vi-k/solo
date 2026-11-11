@@ -74,6 +74,7 @@ const topics = [
           page('solo', 'Overview', 'Обзор'),
           page('solo/jobs', 'Jobs and the queue', 'Задачи и очередь'),
           page('solo/state', 'State', 'Состояние'),
+          page('solo/lanes', 'Lanes', 'Линии'),
           page('solo/cancellation', 'Cancellation', 'Отмена'),
           page(
             'solo/resources',

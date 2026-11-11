@@ -1736,6 +1736,10 @@ abstract class Solo<S extends Object> extends SoloController<S> {
 ///
 /// The state, the listeners, closing and the hooks come from
 /// [SoloController].
+///
+/// See [Two queues over one state](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#two-queues-over-one-state)
+/// and [A write that keeps the other lane's work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-write-that-keeps-the-other-lanes-work)
+/// on the lanes page.
 abstract class SoloLanes<S extends Object> extends SoloController<S> {
   /// The lanes in the order of creation.
   final _lanes = <_SoloLane<S>>[];
@@ -1769,6 +1773,9 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   /// been called (a refused or duplicate call seals too), after [close], or
   /// after a microtask the constructor schedules. So a lane in a `late final`
   /// field is an error: the field read after the constructor throws.
+  ///
+  /// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
+  /// on the lanes page.
   @protected
   SoloLane<S> lane(String name) {
     final why = switch (_sealed) {
@@ -1803,6 +1810,9 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
 
   /// The lanes of this controller in the order they were declared, the
   /// order a pass of the pump walks them in; an unmodifiable list.
+  ///
+  /// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
+  /// on the lanes page.
   @protected
   List<SoloLane<S>> get lanes => List<SoloLane<S>>.unmodifiable(_lanes);
 

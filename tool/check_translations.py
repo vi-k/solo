@@ -93,6 +93,10 @@ PAIRS = [
         REPO / "docs" / "ru" / "solo" / "state.md",
     ),
     (
+        REPO / "packages" / "solo" / "doc" / "lanes.md",
+        REPO / "docs" / "ru" / "solo" / "lanes.md",
+    ),
+    (
         REPO / "packages" / "solo" / "doc" / "cancellation.md",
         REPO / "docs" / "ru" / "solo" / "cancellation.md",
     ),

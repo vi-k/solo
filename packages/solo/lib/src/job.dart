@@ -18,6 +18,9 @@ abstract interface class SoloJob<T> implements ChildJob<T> {
   /// on, a job the call ends at once included; a child runs in the lane of
   /// the job whose body runs it, whichever lane made it. The lane stays
   /// after the job ends.
+  ///
+  /// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
+  /// on the lanes page.
   SoloLaneId? get lane;
 }
 

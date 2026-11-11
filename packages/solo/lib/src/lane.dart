@@ -5,6 +5,9 @@ part of 'solo.dart';
 /// Two lanes differ by identity, not by name: the name is what the lane was
 /// declared with, for logs, and [toString] gives it. Only a lane makes one,
 /// so a fake cannot pass for a lane.
+///
+/// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
+/// on the lanes page.
 final class SoloLaneId {
   /// The name the lane was declared with.
   final String name;
@@ -22,6 +25,9 @@ final class SoloLaneId {
 /// in private fields. A job runs in the lane that queued it; one made by
 /// another lane or another controller is refused. A lane has no `close` or
 /// `cancelAll`: [queue] and [current] give both for one lane.
+///
+/// See [Two queues over one state](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#two-queues-over-one-state)
+/// on the lanes page.
 abstract interface class SoloLane<S extends Object> {
   /// The name the lane was declared with in [SoloLanes.lane].
   String get name;
