@@ -1086,6 +1086,33 @@ void main() {
       },
     );
 
+    test(
+      'a lane with a group waiting says so once, not for each neighbour',
+      () {
+        final trace = lines((async) {
+          final controller = _Two();
+          controller.first
+              .collect<_AB, int, void>(
+                key: 'g',
+                timing: AccumulationTiming.debounce(
+                  const Duration(milliseconds: 10),
+                ),
+                (ctx, events) async {},
+              )
+              .add(1);
+          async.flushMicrotasks();
+          for (var i = 0; i < 5; i++) {
+            controller.second.enqueue<_AB, void>(key: 'n$i', _nothing);
+            async.flushMicrotasks();
+          }
+        });
+
+        expect(trace.where((line) => line.startsWith('first: queue')), [
+          'first: queue has no ready jobs',
+        ]);
+      },
+    );
+
     test('a Solo in the same program says its lines as before', () {
       final trace = lines((async) {
         final controller = _Two();

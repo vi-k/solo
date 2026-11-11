@@ -1249,13 +1249,17 @@ abstract class SoloController<S extends Object> {
           // seen every core.
           return _StepEnd.drained;
         }
-        // An idle lane that found its queue empty says nothing: a pass
-        // walks every lane, and the line would come for each empty one.
-        // A step that took jobs and dropped them says it, as a [Solo]
-        // says it every time.
-        if (core.id == null || took || queue._jobs.isNotEmpty) {
+        // A lane says nothing when it found its queue empty, and says a
+        // waiting group once: a pass walks every lane, and the line would
+        // come for each lane and each pass driven by another. A step that
+        // took jobs and dropped them says it, as a [Solo] says it every
+        // time.
+        if (core.id == null) {
+          _debug(() => core.said('queue has no ready jobs'));
+        } else if (took || (queue._jobs.isNotEmpty && !core.saidWaiting)) {
           _debug(() => core.said('queue has no ready jobs'));
         }
+        core.saidWaiting = !took && queue._jobs.isNotEmpty;
 
         return _stepEnd;
       }

@@ -321,6 +321,10 @@ final class _SoloLaneCore<S extends Object> {
   /// is what says so.
   _SoloJob<S, S, Object?>? inTransition;
 
+  /// Whether the pump has said that a group of this lane is waiting for its
+  /// window, so the passes driven by other lanes do not say it again.
+  bool saidWaiting = false;
+
   _SoloLaneCore(this.controller, {required String? name})
     : id = name == null ? null : SoloLaneId._(name);
 
