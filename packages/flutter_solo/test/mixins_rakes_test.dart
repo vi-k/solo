@@ -7,9 +7,12 @@ import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/mixins_app.dart' as answer;
+import 'support/mixins_app_both.dart' as both;
+import 'support/mixins_app_both_first.dart' as both_first;
 import 'support/mixins_app_first.dart' as first;
 import 'support/mixins_app_shared.dart' as shared;
 import 'support/mixins_base.dart' as answer_base;
+import 'support/mixins_base_both.dart' as both_base;
 import 'support/mixins_base_first.dart' as first_base;
 import 'support/mixins_log.dart';
 import 'support/mixins_session.dart';
@@ -23,12 +26,14 @@ import 'support/readme_profile.dart' show Empty, Loading, Profile;
 /// section on a base class is five files, because a block of it shows two
 /// libraries and its versions declare the same names — `mixins_base_first`
 /// and `mixins_base` are the package without Flutter, `mixins_app_first`,
-/// `mixins_app` and `mixins_app_shared` the app. The tests below run that
-/// code. What the page says in prose about a version it does not show is
-/// run from the classes at the foot of this file, and a test that checks a
-/// sentence holds the page to it through [_says]. The lines the page
-/// quotes under a block are compared with what the run shows, through
-/// [_quotes].
+/// `mixins_app` and `mixins_app_shared` the app. Its last subsection, on a
+/// base that is a mixin, is three more: `mixins_base_both` the package,
+/// `mixins_app_both_first` and `mixins_app_both` the app in either order of
+/// the mixins. The tests below run that code. What the page says in prose
+/// about a version it does not show is run from the classes at the foot of
+/// this file, and a test that checks a sentence holds the page to it through
+/// [_says]. The lines the page quotes under a block are compared with what
+/// the run shows, through [_quotes].
 ///
 /// The bench `tool/flutter_snippets.py` builds the same code out of the
 /// markdown itself, in a package of its own, and it is the bench that holds
@@ -42,6 +47,9 @@ const _appFirst = 'test/support/mixins_app_first.dart';
 const _base = 'test/support/mixins_base.dart';
 const _app = 'test/support/mixins_app.dart';
 const _appShared = 'test/support/mixins_app_shared.dart';
+const _baseBoth = 'test/support/mixins_base_both.dart';
+const _appBothFirst = 'test/support/mixins_app_both_first.dart';
+const _appBoth = 'test/support/mixins_app_both.dart';
 
 String _page() => File(_doc).readAsStringSync();
 
@@ -134,7 +142,7 @@ Future<String> _threeLines(
 /// What a failure of a listener of [profile] reaches, as the two lines the
 /// page quotes under a block of "A base class without Flutter".
 Future<String> _reached(
-  Solo<Profile> profile,
+  SoloController<Profile> profile,
   void Function(Profile state) set,
 ) async {
   String said(List<Object> errors) =>
@@ -193,6 +201,7 @@ void main() {
         ('### The second attempt', [_session]),
         ('### A builder that takes the controller', [_session]),
         ('### A report under another name', [_base, _app, _appShared]),
+        ('### A base for both kinds', [_baseBoth, _appBothFirst, _appBoth]),
       ]) {
         expect(
           codeMissingFrom(
@@ -207,22 +216,22 @@ void main() {
       }
     });
 
-    test('its blocks are dart and text, seven and six', () {
+    test('its blocks are dart and text, nine and eight', () {
       expect(strayFences(_doc), isEmpty);
       expect(
         _blocks('dart'),
-        hasLength(7),
+        hasLength(9),
         reason:
             'a new block of the page needs a place in the support files '
             'and a test that runs it',
       );
-      expect(_quotes(), hasLength(6));
+      expect(_quotes(), hasLength(8));
     });
 
     test('the package without Flutter imports meta and solo, no Flutter', () {
       // `flutter_solo` takes the annotation from Flutter; `meta` is a dev
       // dependency of the package so that these two files need not.
-      for (final file in [_baseFirst, _base]) {
+      for (final file in [_baseFirst, _base, _baseBoth]) {
         expect(_imports(file), [
           'package:meta/meta.dart',
           'package:solo/solo.dart',
@@ -242,8 +251,8 @@ void main() {
       final annotated = RegExp(
         r'@protected\s+@override\s+void onListenerError\(',
       );
-      expect(overrides.allMatches(code), hasLength(4));
-      expect(annotated.allMatches(code), hasLength(4));
+      expect(overrides.allMatches(code), hasLength(5));
+      expect(annotated.allMatches(code), hasLength(5));
       _says('`@protected` is repeated on every override');
     });
   });
@@ -742,6 +751,34 @@ void main() {
         expect(quoted, contains(row.last), reason: row.first);
         expect(await leaves[row.first]!(), quoted[row.last], reason: row.first);
       }
+    });
+  });
+
+  group('A base for both kinds', () {
+    test('mixed in before SoloListenable, the base loses to it', () async {
+      final profile = both_first.DrivenProfile();
+      expect(await _reached(profile, profile.set), _quotes()[6]);
+      expect(_quotes()[6], _quotes()[4], reason: 'the first attempt again');
+      expect(profile, isA<both_base.AppController<Profile>>());
+      _says('the mixin written last in `with` runs first');
+      _says('here that is `SoloListenable`');
+    });
+
+    test('mixed in after it, the base reports for a Solo', () async {
+      final profile = both.DrivenProfile();
+      expect(await _reached(profile, profile.set), _quotes()[7]);
+      expect(_quotes()[7], _quotes()[5]);
+      expect(profile, isA<ValueListenable<Profile>>());
+      _says('Written the other way round, the base is the one on top');
+    });
+
+    test('and for a SoloLanes', () async {
+      final lanes = both.DrivenLanes();
+      expect(await _reached(lanes, lanes.set), _quotes()[7]);
+      expect(lanes, isA<SoloLanes<Profile>>());
+      expect(lanes, isA<ValueListenable<Profile>>());
+      expect(lanes, isA<both_base.AppController<Profile>>());
+      _says('Both leaves report to `AppLog`');
     });
   });
 }

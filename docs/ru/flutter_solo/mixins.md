@@ -16,7 +16,8 @@
   показывать состояние с первого же кадра.
 - [«Базовый класс без Flutter»](#базовый-класс-без-flutter): общая база
   контроллеров приложения, в пакете без Flutter, сохраняет свой отчёт об ошибке
-  слушателя, когда контроллеры подмешивают `SoloListenable`.
+  слушателя, когда контроллеры подмешивают `SoloListenable`. База-миксин делает
+  то же и для `Solo`, и для `SoloLanes`.
 
 Строки под блоком кода показывают, что даёт его запуск: текст на экране после
 каждого шага или место, куда ушло сообщение об ошибке слушателя.
@@ -326,3 +327,66 @@ final class ProfileController extends ListenableController<Profile> {
 | то же, со своим переопределением | **`ProfileController`** → `SoloListenable` → `AppController` → `Solo` | `AppLog` |
 | `extends ListenableController` | `ProfileController` → **`ListenableController`** → `SoloListenable` → `AppController` → `Solo` | `AppLog` |
 | `extends ListenableController with SoloListenable` | `ProfileController` → **`SoloListenable`** → `ListenableController` → `SoloListenable` → `AppController` → `Solo` | `FlutterError` |
+
+### База для обоих видов
+
+`AppController` выше наследуется от `Solo`, поэтому базой для `SoloLanes`,
+контроллера `solo` с несколькими очередями над одним состоянием, он быть
+не может. База для обоих — миксин на `SoloController`, общей базе двух видов,
+с тем же хуком:
+
+```dart
+// Свой пакет, без Flutter.
+import 'package:meta/meta.dart';
+import 'package:solo/solo.dart';
+
+mixin AppController<S extends Object> on SoloController<S> {
+  @protected
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) =>
+      AppLog.error(error, stackTrace);
+}
+
+// Приложение.
+final class ProfileController extends Solo<Profile>
+    with AppController, SoloListenable {
+  ProfileController() : super(Empty());
+}
+```
+
+```text
+AppLog: nothing
+FlutterError: Bad state: the listener blew up
+```
+
+Это снова первая попытка. Миксины встают в том порядке, в каком их перечисляет
+`with`, каждый над предыдущим, поэтому миксин, записанный в `with` последним,
+срабатывает первым: здесь это `SoloListenable`, и отчёт уходит через
+`FlutterError`. Если записать их наоборот, наверху окажется база, и менять
+больше ничего не нужно:
+
+```dart
+// Приложение.
+final class ProfileController extends Solo<Profile>
+    with SoloListenable, AppController {
+  ProfileController() : super(Empty());
+}
+
+final class ProfileLanes extends SoloLanes<Profile>
+    with SoloListenable, AppController {
+  ProfileLanes() : super(Empty());
+}
+```
+
+```text
+AppLog: Bad state: the listener blew up
+FlutterError: nothing
+```
+
+Оба контроллера пишут в `AppLog`: от контроллера вниз цепочка идёт через
+`ProfileController`, **`AppController`**, `SoloListenable` и `Solo`, и так же
+над `SoloLanes`. Анализатор ни о каком порядке ничего не говорит, поэтому
+порядок остаётся на совести контроллера, как и переопределение в ответе выше.
+`SoloLanes` объявляет свои линии в теле конструктора, как показывает
+[«Объявление линий»](../solo/lanes.md#объявление-линий); `ProfileLanes` здесь
+не объявляет ни одной: от линий отчёт не зависит.

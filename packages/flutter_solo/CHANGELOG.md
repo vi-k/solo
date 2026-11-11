@@ -24,6 +24,9 @@ for what they bring and what breaks there.
   among what arrives with the import.
 - `pubspec.yaml` and the dartdoc of the library say the same in place of
   exclusive ownership.
+- `doc/mixins.md` adds "A base for both kinds": the shared base as a mixin on
+  `SoloController`, for a `Solo` and a `SoloLanes` alike, and the order of
+  `with` that decides whether its report of a listener's failure runs.
 
 ## 1.1.0
 

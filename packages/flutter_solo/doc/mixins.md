@@ -17,7 +17,8 @@ things around the mixin:
   `stream` that must show the state from its first frame.
 - [A base class without Flutter](#a-base-class-without-flutter): a base the
   app's controllers share, in a package with no Flutter in it, keeps its report
-  of a listener's failure when the controllers mix `SoloListenable` in.
+  of a listener's failure when the controllers mix `SoloListenable` in. A base
+  that is a mixin does the same for a `Solo` and a `SoloLanes` alike.
 
 The lines under a block of code are what a run of it shows: the text on the
 screen after each step, or where a listener's failure was reported.
@@ -326,3 +327,66 @@ the `onListenerError` that runs in bold:
 | the same, with an override of its own | **`ProfileController`** → `SoloListenable` → `AppController` → `Solo` | `AppLog` |
 | `extends ListenableController` | `ProfileController` → **`ListenableController`** → `SoloListenable` → `AppController` → `Solo` | `AppLog` |
 | `extends ListenableController with SoloListenable` | `ProfileController` → **`SoloListenable`** → `ListenableController` → `SoloListenable` → `AppController` → `Solo` | `FlutterError` |
+
+### A base for both kinds
+
+`AppController` above extends `Solo`, so it is no base for a `SoloLanes`, the
+controller of `solo` with several queues over one state. A base for both is a
+mixin on `SoloController`, the base of the two, with the same hook:
+
+```dart
+// A package of your own, without Flutter.
+import 'package:meta/meta.dart';
+import 'package:solo/solo.dart';
+
+mixin AppController<S extends Object> on SoloController<S> {
+  @protected
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) =>
+      AppLog.error(error, stackTrace);
+}
+
+// The app.
+final class ProfileController extends Solo<Profile>
+    with AppController, SoloListenable {
+  ProfileController() : super(Empty());
+}
+```
+
+```text
+AppLog: nothing
+FlutterError: Bad state: the listener blew up
+```
+
+This is the first attempt again. Mixins sit in the order `with` lists them,
+each above the one before it, so the mixin written last in `with` runs first:
+here that is `SoloListenable`, and the report goes through `FlutterError`.
+Written the other way round, the base is the one on top, and the order is all
+there is to change:
+
+```dart
+// The app.
+final class ProfileController extends Solo<Profile>
+    with SoloListenable, AppController {
+  ProfileController() : super(Empty());
+}
+
+final class ProfileLanes extends SoloLanes<Profile>
+    with SoloListenable, AppController {
+  ProfileLanes() : super(Empty());
+}
+```
+
+```text
+AppLog: Bad state: the listener blew up
+FlutterError: nothing
+```
+
+Both leaves report to `AppLog`: from the leaf down the chain is
+`ProfileController` → **`AppController`** → `SoloListenable` → `Solo`, and the
+same over `SoloLanes`. The analyzer says nothing about either order, so the
+order is the leaf's to write, as the override is in the answer above. A
+`SoloLanes` declares its lanes in the body of its constructor, as
+[Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
+shows; `ProfileLanes` declares none here, since the report does not depend on
+them.

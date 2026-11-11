@@ -808,7 +808,7 @@ String said(Iterable<Object> errors) =>
 
 /// What a failure of a listener of [profile] reaches: (AppLog, FlutterError).
 Future<(List<Object>, List<Object>)> failListener(
-  Solo<Profile> profile,
+  SoloController<Profile> profile,
   void Function(Profile state) set,
 ) async {
   AppLog.errors.clear();
@@ -1121,6 +1121,77 @@ void main() {
     final reached = await failListener(profile, profile.set);
     expect(reached.$1, isEmpty);
     expect(reached.$2.single, isA<StateError>());
+  });
+}
+""",
+])
+
+# The last subsection of the section makes the base a mixin on
+# `SoloController`, so that a `SoloLanes` takes it too. Its first block is
+# the package and the app with the base mixed in before `SoloListenable`,
+# its second the app alone with the base mixed in after it, on a `Solo` and
+# on a `SoloLanes`. Both blocks declare `ProfileController`, so they are
+# built as two drivers, and both orders are run rather than assumed.
+_both = doc_blocks.slug('A base for both kinds')
+FILES['base_both'], _both_first_app = without_flutter(
+    base[_both + '/AppController'])
+
+FILES['base_both_first_test'] = '\n'.join([
+    *BASE_IMPORTS,
+    "import 'base_both.dart';",
+    '',
+    PROFILE_STATES,
+    _both_first_app,
+    BASE_DRIVER,
+    """
+void main() {
+  test('mixed in before SoloListenable, the base loses to it', () async {
+    final profile = DrivenProfile();
+    final reached = await failListener(profile, profile.set);
+    show(reached);
+    expect(reached.$1, isEmpty, reason: 'the mixin written last runs first');
+    expect(reached.$2.single, isA<StateError>());
+    expect(profile, isA<AppController<Profile>>());
+  });
+}
+""",
+])
+
+_both_app = base[_both + '/ProfileLanes']
+assert _both_app.startswith(APP), _both_app
+
+FILES['base_both_test'] = '\n'.join([
+    *BASE_IMPORTS,
+    "import 'base_both.dart';",
+    '',
+    PROFILE_STATES,
+    _both_app,
+    BASE_DRIVER,
+    """
+final class DrivenLanes extends ProfileLanes {
+  void set(Profile state) => externalSetState(state);
+}
+
+void main() {
+  test('mixed in after SoloListenable, the base reports for a Solo',
+      () async {
+    final profile = DrivenProfile();
+    final reached = await failListener(profile, profile.set);
+    show(reached);
+    expect(reached.$1.single, isA<StateError>());
+    expect(reached.$2, isEmpty);
+    expect(profile, isA<ValueListenable<Profile>>());
+  });
+
+  test('and for a SoloLanes', () async {
+    final lanes = DrivenLanes();
+    final reached = await failListener(lanes, lanes.set);
+    show(reached);
+    expect(reached.$1.single, isA<StateError>());
+    expect(reached.$2, isEmpty);
+    expect(lanes, isA<SoloLanes<Profile>>());
+    expect(lanes, isA<ValueListenable<Profile>>());
+    expect(lanes, isA<AppController<Profile>>());
   });
 }
 """,
