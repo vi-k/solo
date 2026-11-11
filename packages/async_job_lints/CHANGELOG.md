@@ -1,10 +1,12 @@
 ## Unreleased
 
-- `plugin_api.dart` also exports `isSoloLanes`, `controllerAround`,
-  `declaresLane`, `callsOn` and `readsState`, for the rules of a plugin on top
-  about the lanes. `declaresLane` tells whether a `lane(...)` declares a lane
-  where `SoloLanes` lets it, right in a constructor body: the same place
-  `queueLaneOf` takes a lane field from.
+- Next patch, 0.2.2, which `solo_lints` 0.3.0 requires: `plugin_api.dart`
+  exports `isSoloLanes`, `controllerAround`, `declaresLane`, `callsOn` and
+  `readsState`, for the rules of a plugin on top about the lanes.
+  `declaresLane` tells whether a `lane(...)` on `this` or `super` declares a
+  lane where `SoloLanes` lets it, right in a constructor body, and
+  `queueLaneOf` takes a lane field from the same place: a field assigned from
+  `super.lane(...)` is the controller's own now, as one from `lane(...)` is.
 
 ## 0.2.1
 

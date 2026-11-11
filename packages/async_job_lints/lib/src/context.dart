@@ -544,15 +544,17 @@ class _LaneDeclarations extends RecursiveAstVisitor<void> {
 }
 
 /// Whether [call] declares a lane where `SoloLanes` lets a controller
-/// declare it: `lane(...)` of `SoloLanes` on `this`, right in a constructor
-/// body rather than in a function declared there.
+/// declare it: `lane(...)` of `SoloLanes` on `this` or `super`, right in a
+/// constructor body rather than in a function declared there.
 ///
 /// A `lane(...)` anywhere else, a `late final` initializer or a method,
 /// throws once `SoloLanes` has sealed its lanes, a microtask after the
 /// constructor.
 bool declaresLane(MethodInvocation call) {
   final on = call.realTarget;
-  if (on != null && on is! ThisExpression) return false;
+  if (on != null && on is! ThisExpression && on is! SuperExpression) {
+    return false;
+  }
   if (!isSoloMember(call.methodName.element, 'SoloLanes', 'lane')) {
     return false;
   }

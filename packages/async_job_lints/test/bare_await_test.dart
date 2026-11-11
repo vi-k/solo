@@ -888,6 +888,24 @@ final class Feed extends SoloLanes<int> {
   Future<void> test_injected_lane_of_a_solo() =>
       assertAt(_injectedLaneOfASolo, ['[[await]] foreign']);
 
+  // A lane declared by super.lane(...) is the controller's own as one
+  // declared by lane(...): the wait for it is left to await_own_queue.
+  Future<void> test_lane_declared_on_super() => assertAt('''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = super.lane('likes');
+  }
+
+  late final SoloLane<int> _likes;
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''', []);
+
   // A field a second constructor takes from outside may hold another
   // controller's lane, though one constructor declares it: bare_await reports
   // the wait, as 0.2.0 does.

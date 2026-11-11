@@ -1,10 +1,12 @@
 ## Не выпущено
 
-- `plugin_api.dart` экспортирует ещё `isSoloLanes`, `controllerAround`,
-  `declaresLane`, `callsOn` и `readsState` — для правил плагина поверх
-  о линиях. `declaresLane` говорит, объявляет ли `lane(...)` линию там, где это
-  позволяет `SoloLanes`, — прямо в теле конструктора: в том же месте, откуда
-  `queueLaneOf` берёт поле линии.
+- Следующий патч, 0.2.2, которого требует `solo_lints` 0.3.0: `plugin_api.dart`
+  экспортирует `isSoloLanes`, `controllerAround`, `declaresLane`, `callsOn`
+  и `readsState` — для правил плагина поверх о линиях. `declaresLane` говорит,
+  объявляет ли `lane(...)` на `this` или `super` линию там, где это позволяет
+  `SoloLanes`, — прямо в теле конструктора, и `queueLaneOf` берёт поле линии
+  из того же места: поле, присвоенное из `super.lane(...)`, теперь своё для
+  контроллера, как и поле из `lane(...)`.
 
 ## 0.2.1
 
