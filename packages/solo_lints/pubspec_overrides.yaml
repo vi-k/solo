@@ -1,0 +1,4 @@
+# Until solo 2.0.0 and the lint patches are published.
+dependency_overrides:
+  solo:
+    path: ../solo
