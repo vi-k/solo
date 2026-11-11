@@ -22,6 +22,7 @@ class StaleEmit extends MultiAnalysisRule {
         'it over what another lane wrote meanwhile.',
     correctionMessage:
         "Read 'ctx.state' where the job writes, after the last 'await'.",
+    uniqueName: 'LintCode.stale_emit',
   );
 
   /// The diagnostic for a read of the state in the `emit` itself, before a
