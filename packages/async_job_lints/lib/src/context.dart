@@ -450,10 +450,11 @@ DartType? _controllerAround(AstNode node) {
 }
 
 /// The lane field of this controller that [expression] reads, `_likes` or
-/// `this._likes`: an instance field typed `SoloLane` that a constructor body
-/// of its class assigns from `lane(...)`. A getter is not one, nor is a lane
-/// the controller takes rather than declares: which lane it gives is not
-/// seen, and a lane is public, so it may be another controller's.
+/// `this._likes`: an instance field typed `SoloLane` whose every write in its
+/// class is a `lane(...)` declaration in a constructor body. A getter is not
+/// one, nor is a lane the controller takes rather than declares, or may take
+/// as well: which lane it gives is not seen, and a lane is public, so it may
+/// be another controller's.
 Element? _laneField(Expression? expression) {
   final node = expression?.unParenthesized;
   final read = switch (node) {
@@ -466,44 +467,78 @@ Element? _laneField(Expression? expression) {
     return null;
   }
   if (!isSoloLane(field.type)) return null;
-  final declared = _LaneDeclarations(field.baseElement);
-  node!.root.accept(declared);
-  return declared.found ? field.baseElement : null;
+
+  return _ownLaneFields(node!.root).contains(field.baseElement)
+      ? field.baseElement
+      : null;
 }
 
-/// Finds `field = lane(...)` or `this.field = lane(...)` for [field] right
-/// in a constructor body of the class that declares it: where `SoloLanes`
-/// lets a controller declare its lanes.
+/// The own lane fields of each unit, found in one walk of it.
+final _ownLaneFieldsOf = Expando<Set<Element>>('own lane fields');
+
+/// The fields of the unit [root] is in that are their controller's own
+/// lanes.
+Set<Element> _ownLaneFields(AstNode root) =>
+    _ownLaneFieldsOf[root] ??= (_LaneDeclarations()..walk(root)).own;
+
+/// Finds the writes of the fields of a unit: `field = lane(...)` or
+/// `this.field = lane(...)` right in a constructor body of the class that
+/// declares it, where `SoloLanes` lets a controller declare its lanes, and
+/// every other write, which makes the field one that may hold another
+/// controller's lane.
 class _LaneDeclarations extends RecursiveAstVisitor<void> {
-  final FieldElement field;
+  final _declared = <Element>{};
+  final _written = <Element>{};
 
-  bool found = false;
+  /// The fields written only by a declaration.
+  Set<Element> get own => _declared.difference(_written);
 
-  _LaneDeclarations(this.field);
-
-  @override
-  void visitConstructorDeclaration(ConstructorDeclaration node) {
-    final constructor = node.declaredFragment?.element;
-    if (constructor?.enclosingElement != field.enclosingElement) return;
-    super.visitConstructorDeclaration(node);
-  }
+  void walk(AstNode root) => root.accept(this);
 
   @override
   void visitAssignmentExpression(AssignmentExpression node) {
     super.visitAssignmentExpression(node);
-    if (found || node.operator.type != TokenType.EQ) return;
     final written = node.writeElement;
     final target = written is SetterElement ? written.variable : written;
-    if (target?.baseElement != field) return;
+    if (target is! FieldElement) return;
+    final field = target.baseElement;
     final value = node.rightHandSide.unParenthesized;
-    if (value is! MethodInvocation) return;
-    final on = value.realTarget;
-    if (on != null && on is! ThisExpression) return;
-    if (!isSoloMember(value.methodName.element, 'SoloLanes', 'lane')) return;
     final constructor = node.thisOrAncestorOfType<ConstructorDeclaration>();
-    found =
+    final on = value is MethodInvocation ? value.realTarget : null;
+    final declares =
+        node.operator.type == TokenType.EQ &&
+        value is MethodInvocation &&
+        (on == null || on is ThisExpression) &&
+        isSoloMember(value.methodName.element, 'SoloLanes', 'lane') &&
         constructor != null &&
-        node.thisOrAncestorOfType<FunctionBody>() == constructor.body;
+        node.thisOrAncestorOfType<FunctionBody>() == constructor.body &&
+        constructor.declaredFragment?.element.enclosingElement ==
+            field.enclosingElement;
+    (declares ? _declared : _written).add(field);
+  }
+
+  @override
+  void visitFieldFormalParameter(FieldFormalParameter node) {
+    super.visitFieldFormalParameter(node);
+    final element = node.declaredFragment?.element;
+    final field = element is FieldFormalParameterElement ? element.field : null;
+    if (field != null) _written.add(field.baseElement);
+  }
+
+  @override
+  void visitConstructorFieldInitializer(ConstructorFieldInitializer node) {
+    super.visitConstructorFieldInitializer(node);
+    final field = node.fieldName.element;
+    if (field is FieldElement) _written.add(field.baseElement);
+  }
+
+  @override
+  void visitVariableDeclaration(VariableDeclaration node) {
+    super.visitVariableDeclaration(node);
+    final field = node.declaredFragment?.element;
+    if (node.initializer != null && field is FieldElement) {
+      _written.add(field.baseElement);
+    }
   }
 }
 

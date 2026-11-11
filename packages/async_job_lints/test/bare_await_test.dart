@@ -888,6 +888,76 @@ final class Feed extends SoloLanes<int> {
   Future<void> test_injected_lane_of_a_solo() =>
       assertAt(_injectedLaneOfASolo, ['[[await]] foreign']);
 
+  // A field a second constructor takes from outside may hold another
+  // controller's lane, though one constructor declares it: bare_await reports
+  // the wait, as 0.2.0 does.
+  Future<void> test_lane_also_taken_by_a_constructor() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  Feed.shared(this._likes) : super(0);
+
+  late SoloLane<int> _likes;
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    ['[[await]] _likes'],
+  );
+
+  // The same for a field a constructor sets in its initializer list.
+  Future<void> test_lane_also_set_by_an_initializer() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  Feed.shared(SoloLane<int> lane) : _likes = lane, super(0);
+
+  late SoloLane<int> _likes;
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    ['[[await]] _likes'],
+  );
+
+  // The same for a field a setter writes.
+  Future<void> test_lane_also_set_by_a_setter() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  late SoloLane<int> _likes;
+
+  set likes(SoloLane<int> value) {
+    _likes = value;
+  }
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    ['[[await]] _likes'],
+  );
+
   // A getter is no lane field: which lane it gives is not seen.
   Future<void> test_lane_from_a_getter() => assertAt(
     '''

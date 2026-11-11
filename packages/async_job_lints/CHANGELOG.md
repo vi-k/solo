@@ -21,10 +21,11 @@
 - `bare_await` and `discarded_outcome` leave a wait for the own lane to the
   plugin on top only from a body queued in that lane, where the plugin reports
   it, and `discarded_outcome` only an awaited one: a `done` dropped without
-  `await` waits for nothing. A lane field is the controller's own only when a
-  constructor body of its class assigns it from `lane(...)`: a lane the
-  controller takes may be another controller's. For the own queue of a `Solo`
-  both rules answer as in 0.2.0.
+  `await` waits for nothing. A lane field is the controller's own only when
+  every write to it in its class is `lane(...)` in a constructor body: a lane
+  the controller takes, from a constructor parameter, an initializer list or a
+  setter, may be another controller's, though a constructor declares it too.
+  For the own queue of a `Solo` both rules answer as in 0.2.0.
 
 ## 0.2.0
 

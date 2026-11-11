@@ -226,9 +226,10 @@ In a solo controller, a job that waits for a job of the controller's own queue
 waits for itself: the job it waits for is queued behind it. In a `SoloLanes` of
 solo 2.0 that holds within one lane, since a job of another lane runs on that
 lane's pump. This rule reports such a wait like any other plain one. solo_lints
-reports a wait for the own queue, and one newer than 0.2.0 a wait for the own
-lane too, from a body queued on that controller as `await_own_queue`, with a
-message about the queue or the lane, and keeps `bare_await` quiet there.
+reports a wait for the own queue, and a solo_lints newer than 0.2.0 reports a
+wait for the own lane too, from a body queued on that controller as
+`await_own_queue`, with a message about the queue or the lane, and keeps
+`bare_await` quiet there.
 
 It is a lint rather than a warning because tests wait in bodies on purpose, to
 cancel a job midway. A project that gates CI on it turns it on as
