@@ -13,8 +13,8 @@ job are in [Jobs and results](jobs.md#jobs-and-results) on the jobs page.
 
 `SoloController<S>` is the base class of every controller: the state, the
 listeners, closing and the hooks. A controller extends `Solo`, which adds the
-queue; the constructor of this class is private. Its members fall into three
-groups by who uses them: a caller, the subclass, and an override in the
+queue; the constructor of `SoloController` is private. Its members fall into
+three groups by who uses them: a caller, the subclass, and an override in the
 subclass.
 
 ### What a caller sees

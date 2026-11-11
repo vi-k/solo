@@ -47,7 +47,7 @@ const _notCreatedHere =
 /// zone first.
 ///
 /// A controller extends [Solo], which adds the queue. The constructor of this
-/// class is private, so nothing outside the package extends it; a fake still
+/// class is private, so nothing outside its library extends it; a fake still
 /// implements it.
 ///
 /// See [Reference](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#solocontroller)
@@ -1399,10 +1399,10 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     }
   }
 
-  @override
   /// Schedules a pump so the caller finishes its synchronous part first:
   /// it may add several jobs and rearrange the queue before the first
   /// one starts.
+  @override
   void _schedulePump() {
     if (_pumpScheduled) {
       return;

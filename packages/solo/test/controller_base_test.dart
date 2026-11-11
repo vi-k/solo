@@ -55,12 +55,19 @@ void main() {
   });
 
   test('the base cannot be extended outside the library', () async {
-    final errors = await compileErrors('''
-import 'package:solo/solo.dart';
-
-class X extends SoloController<int> {}
-''');
-    expect(errors, isNotEmpty);
-    expect(errors, everyElement(contains('constructor')));
+    // Each way of calling a constructor of the base in a library of its
+    // own: the implicit one, the unnamed one and the private one. Each must
+    // be refused on its own, so a public constructor of the base turns the
+    // second red, whatever the analyzer says of the other two.
+    for (final subclass in [
+      'class X extends SoloController<int> {}',
+      'class X extends SoloController<int> {\n  X() : super(0);\n}',
+      'class X extends SoloController<int> {\n  X() : super._(0);\n}',
+    ]) {
+      final errors = await compileErrors(
+        "import 'package:solo/solo.dart';\n\n$subclass\n",
+      );
+      expect(errors, [contains('constructor')], reason: subclass);
+    }
   });
 }

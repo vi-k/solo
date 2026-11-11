@@ -99,9 +99,9 @@
   контроллеров `SoloController` — `abstract class` с закрытым генеративным
   конструктором `SoloController._`: наследуют её только классы библиотеки
   `solo.dart` и её частей, а `implements` для фейков остаётся. `sealed`
-  и `final` не годятся: `SoloStream` и `SoloListenable` из `flutter_solo`
-  объявлены `on SoloController<S>`, а миксин из другой библиотеки
-  на запечатанный или финальный тип не встанет.
+  и `final` не годятся: `SoloStream` из отдельной библиотеки `solo`
+  и `SoloListenable` из `flutter_solo` объявлены `on SoloController<S>`,
+  а миксин из другой библиотеки на запечатанный или финальный тип не встанет.
 - Именование: задача — `job`, хэндл — `Job<T>`, контекст — `ctx`, контроллер —
   `Solo<S>` или `SoloLanes<S>`. Фабрики задач внутри контроллера — приватные
   методы с суффиксом `Job`: `_closeCameraJob()`.
