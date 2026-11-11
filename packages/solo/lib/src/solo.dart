@@ -25,8 +25,8 @@ part 'queue.dart';
 /// types let a job of the core or of another controller through. A job it
 /// did make, run by a parent of the core, is refused in `adoptedBy`.
 const _notCreatedHere =
-    'was not created by this Solo (make it with job(...) or ctx.child of this '
-    'controller)';
+    'was not created by this controller (make it with job(...) or ctx.child '
+    'of this controller)';
 
 /// Where the errors of [SoloLanes.lane] send the reader.
 const _declaringLanes =

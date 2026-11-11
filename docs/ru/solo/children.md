@@ -251,7 +251,7 @@ The argument type 'Job<void>' can't be assigned to the parameter type 'ChildJob<
 компилируется, а контроллер отказывает ей ошибкой `ArgumentError`:
 
 ```text
-Invalid argument (job): was not created by this Solo (make it with job(...) or ctx.child of this controller): "Job()"
+Invalid argument (job): was not created by this controller (make it with job(...) or ctx.child of this controller): "Job()"
 ```
 
 ## Шаги подряд

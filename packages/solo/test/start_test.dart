@@ -101,7 +101,7 @@ void main() {
       async.flushTimers();
       expect(
         '$thrown',
-        'Invalid argument (job): was not created by this Solo (make it '
+        'Invalid argument (job): was not created by this controller (make it '
             'with job(...) or ctx.child of this controller): '
             '"Job(theirs)"',
       );
