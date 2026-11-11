@@ -1,5 +1,5 @@
-/// State management for Flutter: sequential jobs over one state,
-/// exclusive ownership, cooperative cancellation, and rebuilds through
+/// State management for Flutter: sequential jobs over one state, one job at
+/// a time in each lane, cooperative cancellation, and rebuilds through
 /// `ValueListenable`.
 ///
 /// Re-exports `solo` — and, through it, `async_job` — whole, so this is the
