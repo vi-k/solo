@@ -49,12 +49,12 @@ enum SoloListenerMode {
 /// Runs a reaction, a job of the core, on every change of [solo] that
 /// [listenWhen] lets through.
 ///
-/// The reaction gets the state of its change, not [Solo.currentState], and
-/// starts on a microtask after the change: outside of a build, so it may show
-/// a snack bar or push a route. The state the widget subscribes at starts no
-/// reaction, and [mode] says what a change does while a reaction runs. A
-/// failure goes to `FlutterError`, and the screen is drawn by [SoloBuilder]:
-/// this widget builds [child] as it is.
+/// The reaction gets the state of its change, not
+/// [SoloController.currentState], and starts on a microtask after the change:
+/// outside of a build, so it may show a snack bar or push a route. The state
+/// the widget subscribes at starts no reaction, and [mode] says what a change
+/// does while a reaction runs. A failure goes to `FlutterError`, and the
+/// screen is drawn by [SoloBuilder]: this widget builds [child] as it is.
 ///
 /// Leaving the tree, or a new [solo], cancels the reactions and drops the
 /// waiting changes. The cancellation is cooperative: a reaction waiting in
@@ -92,10 +92,11 @@ final class SoloListener<S extends Object> extends StatefulWidget {
   /// The reaction, called with the context of its job first, then the
   /// context of the widget and the state of the change.
   ///
-  /// The state is the one the change wrote, and [Solo.currentState] may have
-  /// moved on by the time the reaction starts. Read when the reaction starts,
-  /// so a reaction that waited runs the closure of the latest build. A
-  /// reaction that fails goes to `FlutterError`, and the next ones still run.
+  /// The state is the one the change wrote, and
+  /// [SoloController.currentState] may have moved on by the time the reaction
+  /// starts. Read when the reaction starts, so a reaction that waited runs the
+  /// closure of the latest build. A reaction that fails goes to
+  /// `FlutterError`, and the next ones still run.
   final FutureOr<void> Function(JobContext ctx, BuildContext context, S state)
   listener;
 

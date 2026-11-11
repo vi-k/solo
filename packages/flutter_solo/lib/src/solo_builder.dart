@@ -20,10 +20,10 @@ import 'solo_selector.dart';
 /// subscription in [State.dispose], and rebuilds from the controller's
 /// current state on every notification.
 ///
-/// Once the engine has finished closing — [Solo.isFinished], which is
-/// not the same moment as the future of [Solo.close] completing — the
-/// listeners are gone and nothing notifies this widget again; connecting an
-/// already closed controller displays its final state.
+/// Once the engine has finished closing — [SoloController.isFinished], which
+/// is not the same moment as the future of [SoloController.close]
+/// completing — the listeners are gone and nothing notifies this widget again;
+/// connecting an already closed controller displays its final state.
 ///
 /// Selective rebuilds for a sub-state belong in [SoloSelector], not
 /// here: this widget rebuilds on every state transition of [solo].

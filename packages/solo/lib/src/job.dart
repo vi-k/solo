@@ -220,7 +220,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     return keep ? null : 'keepWhile';
   }
 
-  /// A snapshot of what this job is doing, for [Solo.pending].
+  /// A snapshot of what this job is doing, for [SoloController.pending].
   SoloPendingJob _pending({
     required bool closing,
     required bool draining,

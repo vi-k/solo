@@ -150,18 +150,19 @@ abstract class SoloController<S extends Object> {
   bool get isClosed => _closing != null;
 
   /// Whether [close] was called with [SoloCloseMode.drain] and the queue
-  /// it is running has not emptied yet.
+  /// it is running, or any of its queues, has not emptied yet.
   ///
   /// New root jobs are refused the whole time — [isClosed] is true from
   /// the call — while the engine goes on with the ones it already had.
   bool get isDraining => _draining;
 
-  /// Whether the engine has finished closing: the queue is empty, the
-  /// observer's `onClose` and [onClose] have run, the listeners are gone,
-  /// and the state can no longer change.
+  /// Whether the engine has finished closing: the queue is empty, or every
+  /// queue of a [SoloLanes] is, the observer's `onClose` and [onClose] have
+  /// run, the listeners are gone, and the state can no longer change.
   ///
   /// [isClosed] says that `close` was asked for, [isDraining] that the
-  /// queue it left is still running; this says the engine is done. A
+  /// queue it left, or one of its queues, is still running; this says the
+  /// engine is done. A
   /// subclass that feeds external facts guards [externalSetState] with it,
   /// and a `drain` goes on being fed for as long as it runs. Check it after
   /// the last `await`: a suspension between the check and the write lets
