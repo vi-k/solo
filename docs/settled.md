@@ -908,12 +908,14 @@ Codex 1 и Opus 2.)
 склеиваются, на Dart 3.10 — у названного последним. Поэтому `bare_await`
 на ожидании собственной очереди там зависит от SDK и порядка.
 В `async_job_lints` `bare_await` сообщает и это ожидание; `solo_lints` передаёт
-`ownQueueReportedElsewhere: true`, и там его называет `await_own_queue`. Зонд
-`tool/plugin_probe.py` на Dart 3.13 и 3.10 дал по одному быстрому исправлению
-на диагностику, у двух названных плагинов тоже. (2026-11-03;
-`2026-11-03-lints-split-design.md`, `2026-11-03-lints-split-plan.md`; правил
-ядра стало семь с `discarded_outcome` и `outcome_after_await`,
-`2026-11-09-done-lints-design.md`.)
+`ownQueueReportedElsewhere: true`, и там его называет `await_own_queue`;
+ожидание своей линии `SoloLanes` `bare_await` и `discarded_outcome` так же
+уступают ему по флагу `ownLaneReportedElsewhere: true`, которого `solo_lints`
+0.2.0 не передаёт. Зонд `tool/plugin_probe.py` на Dart 3.13 и 3.10 дал
+по одному быстрому исправлению на диагностику, у двух названных плагинов тоже.
+(2026-11-03; `2026-11-03-lints-split-design.md`,
+`2026-11-03-lints-split-plan.md`; правил ядра стало семь с `discarded_outcome`
+и `outcome_after_await`, `2026-11-09-done-lints-design.md`.)
 
 **154. `await_own_queue` молчит на `await close()` и `await cancelAll()`
 в теле, линию которого правило не опознало.** Линия из геттера, из другого

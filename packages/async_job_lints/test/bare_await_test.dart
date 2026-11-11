@@ -13,6 +13,7 @@ void main() {
     defineReflectiveTests(BareAwaitTest);
     defineReflectiveTests(BareAwaitOwnQueueReportedElsewhereTest);
     defineReflectiveTests(BareAwaitOwnLaneReportedElsewhereTest);
+    defineReflectiveTests(BareAwaitOwnLaneAloneTest);
   });
 }
 
@@ -732,6 +733,36 @@ class BareAwaitOwnQueueReportedElsewhereTest extends RuleTest {
 
   // The close of a SoloStream mixed into a Solo is the controller's own.
   Future<void> test_close_of_a_solo_stream() => assertAt(_soloStream, []);
+
+  // A body queued on another controller is not this one's: await_own_queue
+  // does not report it, so bare_await does.
+  Future<void> test_body_of_another_controller() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Desk extends Solo<int> {
+  Desk() : super(0);
+
+  late final Desk other;
+
+  Job<void> logout() => other.enqueue<int, void>((ctx) async {
+    await close();
+  });
+}
+''',
+    ['[[await]] close()'],
+  );
+}
+
+/// `bare_await` with only the lane left to another rule: the own queue of a
+/// `Solo` is still its own to report.
+@reflectiveTest
+class BareAwaitOwnLaneAloneTest extends RuleTest {
+  @override
+  AbstractAnalysisRule get underTest =>
+      BareAwait(ownLaneReportedElsewhere: true);
+
+  Future<void> test_own_queue() => assertAt(_ownQueue, ['[[await]] close()']);
 }
 
 /// Waits from a body of the lane `_likes`: for a job of the other lane, then
@@ -797,6 +828,51 @@ class BareAwaitOwnLaneReportedElsewhereTest extends RuleTest {
   // Only the wait for the other lane is left: it is no deadlock, and the
   // cancellation of the job does not reach it.
   Future<void> test_lanes() => assertAt(_lanes, ['[[await]] reload()']);
+
+  // A body queued in a lane of another controller is not this one's:
+  // await_own_queue does not report it, so bare_await does.
+  Future<void> test_close_from_a_lane_of_another_controller() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _likes;
+
+  late final Feed other;
+
+  Job<void> relay() => other._likes.enqueue<int, void>((ctx) async {
+    await close();
+  });
+}
+''',
+    ['[[await]] close()'],
+  );
+
+  // A getter is no lane field: which lane it gives is not seen.
+  Future<void> test_lane_from_a_getter() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _likes;
+
+  SoloLane<int> get current => _likes;
+
+  Job<void> likeTwice() => current.enqueue<int, void>((ctx) async {
+    await current.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    ['[[await]] current'],
+  );
 
   Future<void> test_lane_of_a_job_from_a_parameter() => assertAt(
     '''

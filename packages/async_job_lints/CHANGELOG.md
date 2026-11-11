@@ -5,10 +5,12 @@
   takes `job` of a lane as it takes `job` of a `Solo`, as a job that does not
   run until it is queued.
 - `plugin_api.dart` exports `isSoloController`, `isSoloLane`, `queueLaneOf` and
-  `QueueLane`. `queueLaneOf` tells whether a wait in a job body is for the lane
-  the job runs in, for another lane or not known, and `isSoloMember` with
-  `Solo` takes the member of the same name of `SoloLane` too, so the rules of a
-  plugin on top that name `enqueue`, `enqueueJob`, `job`, `collect` and
+  `QueueLane`, and `queueCallOf` and `queuedBodyOf`, which a rule on top asks
+  to agree with `bare_await` on the call a wait is for and on the body queued
+  on the controller. `queueLaneOf` tells whether a wait in a job body is for
+  the lane the job runs in, for another lane or not known, and `isSoloMember`
+  with `Solo` takes the member of the same name of `SoloLane` too, so the rules
+  of a plugin on top that name `enqueue`, `enqueueJob`, `job`, `collect` and
   `accumulate` of a `Solo` see those of a lane.
 - `registerAsyncJobLints` takes `ownLaneReportedElsewhere`: with it,
   `bare_await` and `discarded_outcome` leave a wait for the own lane to the
@@ -16,6 +18,11 @@
   they report that wait as any other. `ownQueueCall` keeps its signature and
   its answers for a `Solo`, and finds `close` and `cancelAll` of a `SoloStream`
   mixed into a `Solo`.
+- `bare_await` and `discarded_outcome` leave a wait for the own queue or lane
+  to the plugin on top only from a body queued on that controller, where the
+  plugin reports it. A wait from a body given to another controller's `enqueue`
+  or to a `Job` of the core is reported again, and so is an outcome of `done`
+  dropped in a body without `await`, which waits for nothing.
 
 ## 0.2.0
 

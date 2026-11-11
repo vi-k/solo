@@ -332,8 +332,9 @@ class _FunctionFinder extends RecursiveAstVisitor<void> {
 /// A wait in a `SoloLanes` is not among these: [queueLaneOf] tells whether
 /// it is for the lane the job runs in.
 MethodInvocation? ownQueueCall(Expression waited) {
-  final (:call, :jobOf) = _queueCallOf(waited);
+  final call = queueCallOf(waited);
   if (call == null) return null;
+  final jobOf = waited is PropertyAccess;
   final own = _ownMethodOf(call);
   if (own == null) return null;
   final (method, owner) = own;
@@ -375,8 +376,9 @@ enum QueueLane {
 /// [QueueLane.other]; anything else, a body of a child or of a handler of
 /// an accumulator included, is [QueueLane.unknown].
 QueueLane queueLaneOf(Expression waited) {
-  final (:call, :jobOf) = _queueCallOf(waited);
+  final call = queueCallOf(waited);
   if (call == null) return QueueLane.unknown;
+  final jobOf = waited is PropertyAccess;
   final target = call.realTarget;
   if (target != null && target is! ThisExpression) {
     // A job queued in a lane right here: `_likes.enqueue(...).done`.
@@ -403,24 +405,24 @@ QueueLane queueLaneOf(Expression waited) {
 /// [QueueLane.own] when the job body that waits for [waited] runs in
 /// [lane], [QueueLane.other] when it runs in another lane.
 QueueLane _laneAgainst(Element lane, AstNode waited) {
-  final body = _bodyLane(waited);
+  final body = queuedBodyOf(waited)?.lane;
   if (body == null) return QueueLane.unknown;
   return body == lane ? QueueLane.own : QueueLane.other;
 }
 
-/// The call [waited] waits for and whether it brings a job: the target of
-/// `.value` or `.done`, or a call of `close` or `cancelAll`.
-({MethodInvocation? call, bool jobOf}) _queueCallOf(Expression waited) {
+/// The call [waited] waits for: the target of `.value` or `.done` when it
+/// is a call, or [waited] itself when it calls `close` or `cancelAll`.
+MethodInvocation? queueCallOf(Expression waited) {
   if (waited is PropertyAccess &&
       const {'value', 'done'}.contains(waited.propertyName.name)) {
     final target = waited.realTarget.unParenthesized;
-    return (call: target is MethodInvocation ? target : null, jobOf: true);
+    return target is MethodInvocation ? target : null;
   }
   if (waited is MethodInvocation &&
       const {'close', 'cancelAll'}.contains(waited.methodName.name)) {
-    return (call: waited, jobOf: false);
+    return waited;
   }
-  return (call: null, jobOf: false);
+  return null;
 }
 
 /// The method of a class or a mixin that [call] calls on `this`, and the
@@ -448,7 +450,8 @@ DartType? _controllerAround(AstNode node) {
 }
 
 /// The lane field of this controller that [expression] reads, `_likes` or
-/// `this._likes`: an instance field typed `SoloLane`.
+/// `this._likes`: an instance field typed `SoloLane`. A getter is not one:
+/// which lane it gives is not seen.
 Element? _laneField(Expression? expression) {
   final node = expression?.unParenthesized;
   final read = switch (node) {
@@ -457,7 +460,9 @@ Element? _laneField(Expression? expression) {
     _ => null,
   };
   final field = read is GetterElement ? read.variable : read;
-  if (field is! FieldElement || field.isStatic) return null;
+  if (field is! FieldElement || field.isStatic || !field.isOriginDeclaration) {
+    return null;
+  }
   return isSoloLane(field.type) ? field.baseElement : null;
 }
 
@@ -490,29 +495,60 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
   return lanes.length == 1 ? lanes.single : null;
 }
 
-/// The lane field of the job body that waits for [node], whose `enqueue`
-/// takes the body: [node] is in the body itself, in the actions of waiting
-/// calls on its context or in its cleanup.
-Element? _bodyLane(AstNode node) {
+/// The job body of this controller that waits for [node], when there is
+/// one: its context, and the lane field whose `enqueue` takes the body.
+///
+/// [node] is in the body itself, in the actions of waiting calls on its
+/// context or in its cleanup, which the queue waits for as well. The body
+/// takes a `SoloContext` and is given to a call on this controller, on a
+/// context or on a lane field, or to no call; the class or the mixin around
+/// is a controller. The lane is `null` for a body given to anything but
+/// `enqueue` of a lane: a body given to `job` may run as a child in another
+/// lane, and a handler of `collect` or `accumulate` runs where its group
+/// goes. A rule that reports a wait for the own queue or the own lane looks
+/// at this body, and a rule that leaves the wait to it asks the same.
+({Element ctx, Element? lane})? queuedBodyOf(AstNode node) {
+  final around = _controllerAround(node);
+  if (!isSolo(around) && !isSoloController(around)) return null;
   final crossed = <Element>[];
   for (var at = node.parent; at != null; at = at.parent) {
     if (at is! FunctionExpression) continue;
     final ctx = jobContextOf(at);
     if (ctx != null) {
+      if (!isSoloContext(ctx.type)) return null;
       if (!crossed.every((c) => c == ctx)) return null;
-      final list = at.parent;
-      final call = list?.parent;
-      if (list is! ArgumentList || call is! MethodInvocation) return null;
-      // A body given to `job` may run as a child of another lane, and a
-      // handler of `collect` or `accumulate` runs where its group goes.
-      if (call.methodName.name != 'enqueue') return null;
-      return _laneQueuedBy(call);
+      return _queuedHere(at, ctx);
     }
     final through = waitingContext(at) ?? cleanupContext(at);
     if (through == null) return null;
     crossed.add(through);
   }
   return null;
+}
+
+/// [body] with its context [ctx] when it is given to a call on this
+/// controller, on a context or on a lane field, or to no call, rather than
+/// to another controller's `enqueue`; with the lane when it is given to
+/// `enqueue` of a lane field.
+({Element ctx, Element? lane})? _queuedHere(
+  FunctionExpression body,
+  Element ctx,
+) {
+  // A body is a positional argument or, by its name, a named one.
+  final parent = body.parent;
+  final list = parent is ArgumentList ? parent : parent?.parent;
+  final call = list?.parent;
+  if (list is! ArgumentList || call is! MethodInvocation) {
+    return (ctx: ctx, lane: null);
+  }
+  final target = call.realTarget;
+  if (target == null ||
+      target is ThisExpression ||
+      isJobContext(target.staticType)) {
+    return (ctx: ctx, lane: null);
+  }
+  if (_laneField(target) == null) return null;
+  return (ctx: ctx, lane: _laneQueuedBy(call));
 }
 
 /// Whether [call] of [method] brings a `SoloJob`: by its declared type, or

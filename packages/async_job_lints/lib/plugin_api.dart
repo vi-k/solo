@@ -35,7 +35,9 @@ export 'src/context.dart'
         jobContextOf,
         namedValue,
         ownQueueCall,
+        queueCallOf,
         queueLaneOf,
+        queuedBodyOf,
         returnedValues,
         waitingContext;
 

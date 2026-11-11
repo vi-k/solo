@@ -439,6 +439,53 @@ final class Desk extends Solo<int> {
 }
 ''', []);
 
+  // Not awaited, the outcome is dropped and nothing waits for itself.
+  Future<void> test_own_queue_not_awaited() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+Future<int> commit() async => 1;
+
+final class Desk extends Solo<int> {
+  Desk() : super(0);
+
+  Job<void> save() => enqueue<int, void>((ctx) async {
+    await ctx.join(commit);
+  });
+
+  Job<void> logout() => enqueue<int, void>((ctx) async {
+    save().done;
+  });
+}
+''',
+    ['save().[[done]]'],
+  );
+
+  // A body queued on another controller is not this one's: nothing reports
+  // the wait as waiting for itself.
+  Future<void> test_own_queue_from_another_controller() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+Future<int> commit() async => 1;
+
+final class Desk extends Solo<int> {
+  Desk() : super(0);
+
+  late final Desk other;
+
+  Job<void> save() => enqueue<int, void>((ctx) async {
+    await ctx.join(commit);
+  });
+
+  Job<void> logout() => other.enqueue<int, void>((ctx) async {
+    await save().done;
+  });
+}
+''',
+    ['save().[[done]]'],
+  );
+
   Future<void> test_outcome_kept() => assertAt('''
 $_api
 Future<void> run() async {
@@ -521,4 +568,26 @@ class DiscardedOutcomeOwnLaneReportedElsewhereTest extends RuleTest {
 
   // The wait for the other lane is no deadlock, and its outcome is dropped.
   Future<void> test_lanes() => assertAt(_lanes, ['reload().[[done]]']);
+
+  // Not awaited, the outcome is dropped and nothing waits for itself.
+  Future<void> test_own_lane_not_awaited() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _likes;
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    like().done;
+  });
+}
+''',
+    ['like().[[done]]'],
+  );
 }
