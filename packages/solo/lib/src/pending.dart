@@ -1,6 +1,8 @@
 import 'package:async_job/async_job.dart';
 import 'package:meta/meta.dart';
 
+import 'solo.dart' show SoloLaneId;
+
 /// What a job the controller is waiting for is doing, as far as the
 /// engine knows.
 enum SoloPhase {
@@ -19,14 +21,15 @@ enum SoloPhase {
 }
 
 /// What is holding the controller right now: a snapshot for whoever is
-/// looking at a `close` that has not come back, taken by `Solo.pending`.
+/// looking at a `close` that has not come back, taken by `pending`.
 ///
-/// One of three, and a `switch` over them is exhaustive:
+/// One of four, and a `switch` over them is exhaustive:
 ///
 /// * [SoloPendingJob] — a job the controller is waiting for: its body,
 ///   its children or its cleanup;
 /// * [SoloPendingQueue] — a drain with no job running, and the queue it
 ///   has still to run;
+/// * [SoloPendingLanes] — those two for each busy lane of a `SoloLanes`;
 /// * [SoloPendingStream] — the engine has closed, and the stream of
 ///   `SoloStream` waits for a subscription to take its done event.
 ///
@@ -34,6 +37,7 @@ enum SoloPhase {
 /// final line = switch (controller.pending) {
 ///   SoloPendingJob(:final job, :final phase) => '${job.key} in $phase',
 ///   SoloPendingQueue(:final jobs) => '${jobs.length} queued',
+///   SoloPendingLanes(:final lanes) => '${lanes.length} lanes',
 ///   SoloPendingStream() => 'a subscriber',
 ///   null => 'nothing',
 /// };
@@ -48,7 +52,7 @@ enum SoloPhase {
 /// and the line must not take its place.
 @immutable
 sealed class SoloPending {
-  /// Lets the three variants be constant.
+  /// Lets the variants be constant.
   const SoloPending();
 }
 
@@ -107,15 +111,16 @@ final class SoloPendingJob extends SoloPending {
   /// [closing] is true as well.
   final bool draining;
 
-  /// The jobs queued behind this one, in queue order: none of them starts
-  /// before this one is over.
+  /// The jobs queued behind this one, in queue order, within its lane for a
+  /// `SoloLanes`: none of them starts before this one is over.
   ///
   /// Taken when the snapshot is: the queue moving on does not change it.
   ///
-  /// A body that calls a method of its own controller and awaits the job that
-  /// comes back waits for one of these: that job waits for the slot the body is
-  /// holding, and neither moves until `close` or `cancelAll` cancels both; a
-  /// drain waits for them for good. The snapshot names them side by side.
+  /// A body that calls a method of its own controller, or of its own lane,
+  /// and awaits the job that comes back waits for one of these: that job
+  /// waits for the slot the body is holding, and neither moves until `close`
+  /// or `cancelAll` cancels both; a drain waits for them for good. The
+  /// snapshot names them side by side.
   final List<Job<Object?>> queued;
 
   /// Creates a snapshot; the engine makes these, a domain reads them.
@@ -200,6 +205,34 @@ final class SoloPendingQueue extends SoloPending {
   String toString() =>
       'SoloPending(draining, ${jobs.length} queued: '
       '${jobs.map(_name).join(', ')})';
+}
+
+/// What is holding a `SoloLanes`: the snapshot of each lane that holds it.
+///
+/// A lane says what a `Solo` would: [SoloPendingJob] for its running job,
+/// [SoloPendingQueue] for what a drain has still to run in it. Only the
+/// lanes that hold the controller are listed, so one busy lane of three is
+/// still this, with one entry, and no busy lane is `null`, not an empty
+/// list.
+///
+/// It prints as the others do, `SoloPending(...)`, with the name and the
+/// snapshot of each lane inside: `SoloPending(a: SoloPending(...), ...)`.
+final class SoloPendingLanes extends SoloPending {
+  /// Each lane that holds the controller and its snapshot, in the order the
+  /// lanes were declared.
+  ///
+  /// The `pending` of an entry is a [SoloPendingJob] or a [SoloPendingQueue]
+  /// and nothing else. Taken when the snapshot is: the lanes moving on do
+  /// not change it.
+  final List<({SoloLaneId lane, SoloPending pending})> lanes;
+
+  /// Creates a snapshot; the engine makes these, a domain reads them.
+  const SoloPendingLanes(this.lanes);
+
+  @override
+  String toString() =>
+      'SoloPending(${lanes.map((entry) => '${entry.lane.name}: '
+          '${entry.pending}').join(', ')})';
 }
 
 /// The engine has closed, and the stream of `SoloStream` waits for a

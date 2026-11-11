@@ -300,13 +300,13 @@ abstract class SoloController<S extends Object> {
   /// What is holding the controller right now, or `null` when nothing the
   /// controller knows of is.
   ///
-  /// Not `null` while a job runs, whether or not anybody has asked it to
-  /// stop: a running job is a [SoloPendingJob], which names the job, says
-  /// what it is doing and whether it has been asked to stop. A drain with
-  /// no job running is a [SoloPendingQueue]: the queue it has still to run,
-  /// where a group of `collect` or `accumulate` stays until its timing
-  /// lets it go. With `SoloStream`, once the engine has closed, a
-  /// subscription left paused holds the stream, and that is a
+  /// Not `null` while a job runs: a running job is a [SoloPendingJob], which
+  /// names the job, says what it is doing and whether it has been asked to
+  /// stop. A drain with no job running is a [SoloPendingQueue]: the queue it
+  /// has still to run, where a group of `collect` or `accumulate` stays
+  /// until its timing lets it go. A [SoloLanes] gives a [SoloPendingLanes],
+  /// one of those two for each busy lane. With `SoloStream`, once the engine
+  /// has closed, a subscription left paused holds the stream, and that is a
   /// [SoloPendingStream]. Read it for a `close` that has not come back, or
   /// a `cancel` that is taking its time.
   ///
@@ -1395,8 +1395,9 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   /// A job queued while another one runs gets a tail on its line, `enqueue
   /// Job(inner) while Job(outer) is running: it starts after Job(outer) ends`.
   /// For a job queued from outside that is only when it starts. A running job
-  /// that awaits a job it queued on its own controller, from its body, a child
-  /// or its cleanup, waits for good, and this is the line that shows it.
+  /// that awaits a job it queued on its own controller, within one lane for a
+  /// [SoloLanes], from its body, a child or its cleanup, waits for good, and
+  /// this is the line that shows it.
   ///
   /// A droppable duplicate gets a tail too, since [enqueueJob] hands back the
   /// job it duplicates. A duplicate of a queued job gets the tail of the job
@@ -1804,10 +1805,22 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   @protected
   List<SoloLane<S>> get lanes => List<SoloLane<S>>.unmodifiable(_lanes);
 
-  // Each lane says what holds it through its own `pending`; the controller
-  // does not gather them yet.
+  // The busy lanes in the order of creation, each by the rules of a `Solo`.
+  // No busy lane is `null`, and one is a `SoloPendingLanes` as several are:
+  // the shape does not depend on how many lanes hold the controller.
   @override
-  SoloPending? get _pending => null;
+  SoloPending? get _pending {
+    final lanes = <({SoloLaneId lane, SoloPending pending})>[
+      for (final core in _cores)
+        if (_pendingOf(core) case final pending?)
+          (lane: core.id!, pending: pending),
+    ];
+    return lanes.isEmpty
+        ? null
+        : SoloPendingLanes(
+            List<({SoloLaneId lane, SoloPending pending})>.unmodifiable(lanes),
+          );
+  }
 }
 
 /// What sealed the set of lanes of a [SoloLanes] first.

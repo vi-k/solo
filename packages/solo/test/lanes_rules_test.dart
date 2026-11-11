@@ -83,9 +83,11 @@ Matcher _byRules() => isA<Cancelled>().having(
 void main() {
   // Held by: `_reevaluate` (`solo.dart`) skipping the running jobs of lanes
   // other than the writer's (`if (except != null && job.lane != except.lane)
-  // continue;`): the first three tests go red. The last of the group is held
-  // by `ifCancelled` losing its right at the cancellation (the revocation
-  // removed in `_reevaluate` and in `_checkCorrectionState`).
+  // continue;`): the first three tests go red. The third is held as well by
+  // `ifCancelled` losing its right at the cancellation (the revocation
+  // removed in `_reevaluate` and in `_checkCorrectionState`). The fourth, a
+  // write that keeps `W` cancels nobody, is a guard against cancelling too
+  // much.
   group('a write of one lane is judged by the rules of the other', () {
     test("a write of one lane cancels the other's job by W", () {
       fakeAsync((async) {

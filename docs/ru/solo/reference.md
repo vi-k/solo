@@ -241,7 +241,7 @@
 | `SoloUnansweredHandler` | Тип `Solo.unansweredHandler`: функция от контроллера, задачи, ошибки и её стека | [«Ответ за ошибку»](errors.md#ответ-за-ошибку) |
 | `SoloObserver` | Что принимает `Solo.observer`, один наблюдатель или несколько, объединённых `SoloObserver.all`: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` и `onClose` каждого контроллера, плюс `onCreate` | [«Наблюдение за всеми контроллерами»](diagnostics.md#наблюдение-за-всеми-контроллерами) |
 | `SoloTransition` | Одно изменение состояния: состояния до и после, задача, которая его сделала, и ревизия, которая растёт на единицу с каждым изменением | [«Наблюдение за всеми контроллерами»](diagnostics.md#наблюдение-за-всеми-контроллерами) |
-| `SoloPending` | Что возвращает `pending`: `SoloPendingJob` со своими `job` и `phase`, `SoloPendingQueue` со своими `jobs` или `SoloPendingStream` | [«Что удерживает контроллер»](diagnostics.md#что-удерживает-контроллер) |
+| `SoloPending` | Что возвращает `pending`: `SoloPendingJob` со своими `job` и `phase`, `SoloPendingQueue` со своими `jobs`, `SoloPendingLanes` со своими `lanes`, по одному из этих двух на каждую занятую линию `SoloLanes`, или `SoloPendingStream` | [«Что удерживает контроллер»](diagnostics.md#что-удерживает-контроллер) |
 | `SoloPhase` | Где стоит задача `SoloPendingJob`: `body`, `children` или `cleanup` | [«Что удерживает контроллер»](diagnostics.md#что-удерживает-контроллер) |
 | `SoloStream` | Миксин, который добавляет broadcast-стрим `stream` состояний | [«Наблюдение за состоянием»](state.md#наблюдение-за-состоянием) |
 | `AccumulationPolicy` | В какую ждущую группу входит событие: `join`, `adjacent` или `replace` | [«Выбор места присоединения событий»](accumulation-rules.md#выбор-места-присоединения-событий) |
