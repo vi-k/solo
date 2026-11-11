@@ -33,7 +33,7 @@ const _table = <(String, int), String?>{
   ('Moving the clock in fakeAsync', 1): 'sync_fake_async',
   ('A key for each request', 1): 'key_per_request',
   ('Listening to a stream in a job', 1): null,
-  ('A copy read before the wait, in a lane', 1): null,
+  ('A copy read before the wait, in a lane', 1): 'stale_emit',
 };
 
 void main() {

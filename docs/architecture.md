@@ -433,10 +433,11 @@ BLE-устройство, плеер, синхронизация), где сос
   по имени и библиотеке; `async_job` и `solo` нужны ему только в тестах.
   `lib/plugin_api.dart` — функция `registerAsyncJobLints` и распознаватели для
   плагинов поверх.
-- `packages/solo_lints` — плагин анализатора для кода на `solo`: три правила
-  контроллера по ошибкам `packages/solo/doc/mistakes.md` и правила ядра,
-  которые он регистрирует под своим именем через `registerAsyncJobLints`.
-  Зависит от `async_job_lints`, от ядра и `solo` — только в тестах.
+- `packages/solo_lints` — плагин анализатора для кода на `solo`: пять правил
+  контроллера, три по ошибкам `packages/solo/doc/mistakes.md` и два по линиям
+  `packages/solo/doc/lanes.md`, и правила ядра, которые он регистрирует под
+  своим именем через `registerAsyncJobLints`. Зависит от `async_job_lints`,
+  от ядра и `solo` — только в тестах.
 
 Каждый пакет самодостаточен для pub.dev: свои `pubspec.yaml`, `LICENSE`,
 `README.md`, `CHANGELOG.md`, `analysis_options.yaml`.

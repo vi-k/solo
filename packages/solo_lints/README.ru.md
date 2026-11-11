@@ -7,7 +7,8 @@
 ожидание в уборке, которое так и не случается; ресурс, потерянный при отмене;
 `catch`, который сбрасывает исправное устройство; задача, которая ждёт саму
 себя; один ключ на все запросы; ожидание, которое отмена не прерывает; исход,
-которого дождались и выбросили. За большинством правил стоит раздел
+которого дождались и выбросили; запись поверх того, что написала другая линия;
+линия, объявленная слишком поздно. За большинством правил стоит раздел
 [«Частых ошибок»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md) —
 страницы solo, где каждая ошибка показана рядом с правильным способом.
 
@@ -40,9 +41,9 @@ plugins:
 проверяют через `dart analyze`. Правку раздела `plugins` редактор видит после
 перезапуска своего сервера анализа.
 
-Предупреждения включаются, как только плагин назван. Четыре линта,
-`catch_without_check`, `key_per_request`, `ignore_failure_hides_bugs`
-и `bare_await`, включаются по имени:
+Предупреждения включаются, как только плагин назван. Пять линтов,
+`catch_without_check`, `key_per_request`, `ignore_failure_hides_bugs`,
+`stale_emit` и `bare_await`, включаются по имени:
 
 ```yaml
 plugins:
@@ -52,6 +53,7 @@ plugins:
       catch_without_check: true
       key_per_request: true
       ignore_failure_hides_bugs: true
+      stale_emit: true
       bare_await: true
 ```
 
@@ -81,13 +83,15 @@ plugins:
 | `await_own_queue` | предупреждение | задача ждёт задачу из очереди своего же контроллера |
 | `key_per_request` | линт | один ключ у задачи `Policy.droppable`, чьё тело читает аргумент |
 | `ignore_failure_hides_bugs` | линт | `ignoreFailure()` у задачи, которая называет свои ожидаемые ошибки |
+| `stale_emit` | линт | `emit` в задаче `SoloLanes` значения, прочитанного из состояния до `await` |
+| `lane_outside_constructor` | предупреждение | `lane(...)` у `SoloLanes` вызван вне тела конструктора |
 | [`bare_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#bare_await) | линт | `await` в теле задачи, который идёт мимо контекста |
 | [`discarded_outcome`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#discarded_outcome) | предупреждение | исход `done`, которого дождались и выбросили |
 | [`outcome_after_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.ru.md#outcome_after_await) | предупреждение | первое чтение результата задачи, стоящее после ожидания |
 
 Семь правил ядра описаны в README `async_job_lints`: их имена в таблице ведут
 к их разделам в нём. Там `// ignore:` ставит перед правилом `async_job_lints/`;
-когда назван этот плагин, — `solo_lints/`, как и для трёх правил ниже.
+когда назван этот плагин, — `solo_lints/`, как и для пяти правил ниже.
 
 ### await_own_queue
 
@@ -168,6 +172,57 @@ profiles.load().ignoreFailure(); // ignore_failure_hides_bugs
 не нужен, а отчёт оставлен хукам, может вызывать `ignoreFailure()` намеренно,
 см.
 [«Ответ за каждую ошибку»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/mistakes.md#ответ-за-каждую-ошибку).
+
+### stale_emit
+
+```dart
+Job<void> setLiked(String postId, {required bool liked}) =>
+    _likes.enqueue<Feed, void>((ctx) async {
+      final feed = ctx.state;
+      ctx.emit(feed.mark(postId, Mark(liked)));
+      await ctx.join(() => api.setLiked(postId, liked: liked));
+      ctx.emit(feed.mark(postId, Mark(liked, ++_confirmations))); // stale_emit
+    });
+```
+
+В `SoloLanes` другие линии пишут, пока задача ждёт, и второй `emit` пишет
+копию, прочитанную до ожидания, поверх того, что они написали: посты, которые
+за это время опубликовала перезагрузка, пропадают. Читайте состояние там, где
+задача пишет:
+`ctx.emit(ctx.state.mark(postId, Mark(liked, ++_confirmations)))`. Правило
+берёт `ctx.emit` в теле задачи, которая идёт в линии: в теле, отданном линии,
+какой бы линия ни была, или в теле, поставленном в `SoloLanes` вокруг него,
+включая тело дочерней задачи. Оно сообщает о записи, когда значение построено
+на `ctx.state` или `ctx.stateAs<T>()` — через вызовы членов, чтение свойств
+и индексов, каскады, приведения и `!`, прямо или через локальные переменные
+того же тела, — а между чтением и записью стоит `await` или `await for` тела
+или действия, внутри которого запись. У `Solo` другой линии нет, и там правило
+молчит. Это эвристика и линт, а не предупреждение: копия, записанная обратно
+намеренно, для него выглядит так же. Оно не видит ответ сервера, записанный
+целиком, `ctx.emit(await ctx.abandonable(api.fetchFeed))`, который теряет
+написанное другими линиями точно так же, ни значение, которое прочитал
+родитель, а пишет его дочерняя задача, ни чтение и запись в разных проходах
+цикла. Подробнее в разделе
+[«Запись, которая бережёт работу другой линии»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/lanes.md#запись-которая-бережёт-работу-другой-линии).
+
+### lane_outside_constructor
+
+```dart
+late final _reload = lane('reload'); // lane_outside_constructor
+
+FeedController(this.api) : super(const Feed());
+```
+
+`SoloLanes` запечатывает набор линий через микрозадачу после конструктора,
+а линия в поле `late final` объявляется при первом чтении поля, в первом вызове
+метода, где `lane` бросает `StateError`. Объявляйте линии в теле конструктора,
+`_reload = lane('reload');`, в поле `late final SoloLane<Feed> _reload;`.
+Правило берёт `lane(...)` у `SoloLanes` везде, кроме самого тела конструктора
+на `this`: в инициализаторе поля, в методе, в геттере, в функции, объявленной
+в теле конструктора. О методе, который вызывает конструктор, правило тоже
+сообщает, хотя вызов там работает: `await_own_queue` линию, объявленную там,
+тоже не видит. Подробнее в разделе
+[«Объявление линий»](https://github.com/vi-k/solo/blob/main/docs/ru/solo/lanes.md#объявление-линий).
 
 ## Версии
 

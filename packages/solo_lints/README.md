@@ -6,8 +6,8 @@
 that compile, run and often pass a first test: a wait in cleanup that never
 happens, a resource lost to a cancellation, a catch that resets a working
 device, a job that waits for itself, one key for every request, a wait that a
-cancellation does not end, an outcome awaited and dropped. Most rules stand for
-a section of
+cancellation does not end, an outcome awaited and dropped, a write over what
+another lane wrote, a lane declared too late. Most rules stand for a section of
 [Common mistakes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md),
 the page of solo that shows each mistake and the right way side by side.
 
@@ -39,9 +39,9 @@ none of them. `flutter analyze` reports them on Flutter 3.38, but from Flutter
 plugin. An editor sees a change to the `plugins` section after its analysis
 server restarts.
 
-The warnings are on as soon as the plugin is named. The four lints,
-`catch_without_check`, `key_per_request`, `ignore_failure_hides_bugs` and
-`bare_await`, are turned on by name:
+The warnings are on as soon as the plugin is named. The five lints,
+`catch_without_check`, `key_per_request`, `ignore_failure_hides_bugs`,
+`stale_emit` and `bare_await`, are turned on by name:
 
 ```yaml
 plugins:
@@ -51,6 +51,7 @@ plugins:
       catch_without_check: true
       key_per_request: true
       ignore_failure_hides_bugs: true
+      stale_emit: true
       bare_await: true
 ```
 
@@ -79,6 +80,8 @@ diagnostic of the analyzer itself twice. Dart 3.13 prints it once.
 | `await_own_queue` | warning | a job that waits for a job of its own controller's queue |
 | `key_per_request` | lint | one key for a `Policy.droppable` job whose body reads an argument |
 | `ignore_failure_hides_bugs` | lint | `ignoreFailure()` on a job that names its expected errors |
+| `stale_emit` | lint | an `emit` in a job of `SoloLanes` of a value read from the state before an `await` |
+| `lane_outside_constructor` | warning | `lane(...)` of `SoloLanes` called outside the constructor body |
 | [`bare_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#bare_await) | lint | an `await` in a job body that does not go through the context |
 | [`discarded_outcome`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#discarded_outcome) | warning | an outcome of `done` that is awaited and dropped |
 | [`outcome_after_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#outcome_after_await) | warning | the first read of a job's result that comes after a wait |
@@ -86,7 +89,7 @@ diagnostic of the analyzer itself twice. Dart 3.13 prints it once.
 The seven rules of the core are described in the README of async_job_lints:
 their names in the table lead to their sections there. There `// ignore:` puts
 `async_job_lints/` in front of a rule; with this plugin named, it is
-`solo_lints/`, as for the three rules below.
+`solo_lints/`, as for the five rules below.
 
 ### await_own_queue
 
@@ -168,6 +171,55 @@ The page of common mistakes has no section for this one. It is a lint rather
 than a warning because a job whose outcome nobody needs, with the reporting
 left to the hooks, may call `ignoreFailure()` on purpose: see
 [Answering for every failure](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#answering-for-every-failure).
+
+### stale_emit
+
+```dart
+Job<void> setLiked(String postId, {required bool liked}) =>
+    _likes.enqueue<Feed, void>((ctx) async {
+      final feed = ctx.state;
+      ctx.emit(feed.mark(postId, Mark(liked)));
+      await ctx.join(() => api.setLiked(postId, liked: liked));
+      ctx.emit(feed.mark(postId, Mark(liked, ++_confirmations))); // stale_emit
+    });
+```
+
+In a `SoloLanes` the other lanes write while a job waits, and the second `emit`
+writes the copy read before the wait over what they wrote: the posts a reload
+published in the meantime are gone. Read the state where the job writes:
+`ctx.emit(ctx.state.mark(postId, Mark(liked, ++_confirmations)))`. The rule
+takes `ctx.emit` in a job body that runs in a lane: a body given to a lane,
+whichever lane it is, or a body queued on a `SoloLanes` around it, a child's
+included. It reports the write when the value is built on `ctx.state` or
+`ctx.stateAs<T>()`, through member calls, property and index reads, cascades,
+casts and `!`, directly or through local variables of the same body, and an
+`await` or `await for` of the body, or of an action the write is in, comes
+between the read and the write. A `Solo` has no other lane, and the rule is
+quiet there. It is a heuristic, and a lint rather than a warning: a copy
+written back on purpose looks the same to it. It does not see the answer of a
+server written whole, `ctx.emit(await ctx.abandonable(api.fetchFeed))`, which
+loses what the other lanes wrote just as well, nor a value a parent read and
+its child writes, nor a read and a write in different turns of a loop. See
+[A write that keeps the other lane's work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-write-that-keeps-the-other-lanes-work).
+
+### lane_outside_constructor
+
+```dart
+late final _reload = lane('reload'); // lane_outside_constructor
+
+FeedController(this.api) : super(const Feed());
+```
+
+`SoloLanes` seals its set of lanes a microtask after the constructor, and a
+lane in a `late final` field is declared on the first read of the field, in the
+first call of a method, where `lane` throws a `StateError`. Declare the lanes
+in the constructor body, `_reload = lane('reload');`, into a field
+`late final SoloLane<Feed> _reload;`. The rule takes `lane(...)` of `SoloLanes`
+anywhere but right in a constructor body on `this`: a field initializer, a
+method, a getter, a function declared in the constructor body. A method the
+constructor calls is reported too, though the call there works:
+`await_own_queue` does not see a lane declared there either. See
+[Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes).
 
 ## Versions
 

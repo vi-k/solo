@@ -1,3 +1,17 @@
+## Unreleased
+
+- Two new rules for the lanes of `SoloLanes` in `solo` 2.0. `stale_emit`, a
+  lint, reports `ctx.emit` in a job of a `SoloLanes` that writes a value built
+  on the state as the job read it before an `await`: the other lanes write
+  while the job waits, and the copy goes over what they wrote. It is a
+  heuristic, and it does not see the answer of a server written whole, which
+  loses those writes as well. `lane_outside_constructor`, a warning, reports
+  `lane(...)` of `SoloLanes` called anywhere but right in a constructor body,
+  as in a `late final` initializer or a method, where it throws once the set of
+  lanes is sealed. The warning is on as soon as the plugin is named, so
+  `dart analyze` fails on code it passed before, and the release is a minor
+  one. The README describes both rules.
+
 ## 0.2.1
 
 - `await_own_queue` knows the lanes of `SoloLanes` in `solo` 2.0. It reports a
