@@ -85,16 +85,19 @@
   задачи), `ArgumentError` на неверный аргумент (политика без ключа). Проверки,
   которые должны работать в release, делаются через `throw`, а не `assert`.
 - Модификаторы классов. Типы, которые пользователь получает от движка (`Job`,
-  `SoloJob`, `JobContext`, `SoloContext`, `SoloQueue`, `SoloAccumulator`), —
-  `abstract interface class`, реализации приватные; реализовать их можно (моки,
-  фейки), наследовать нельзя. Иерархии исходов — `sealed class` с `final class`
-  наследниками. Причины отмены: открытые абстрактные `CancelReason`
-  и `SoloCancelReason`, встроенные наследники `final`; свои причины могут нести
-  любые данные. Проверка по типу, `name` — только для журнала, равенства
-  по имени нет. Базовые классы и миксины, которые пользователь наследует или
-  подмешивает (`Solo`, `SoloStream`, `SoloListenable`, `SoloObserver`,
-  `JobObserver`, а также основы ядра `JobBase` и `JobContextBase`), — без
-  `base` и `final`: иначе наследники обязаны ставить `base`/`final`,
+  `SoloJob`, `JobContext`, `SoloContext`, `SoloQueue`, `SoloAccumulator`,
+  `SoloLane`), — `abstract interface class`, реализации приватные; реализовать
+  их можно (моки, фейки), наследовать нельзя. Иерархии исходов — `sealed class`
+  с `final class` наследниками; так и `SoloPending` с вариантами, среди них
+  `SoloPendingLanes`. `SoloLaneId` — `final class` с приватным конструктором:
+  личность линии делает только линия, и фейк за линию себя не выдаст. Причины
+  отмены: открытые абстрактные `CancelReason` и `SoloCancelReason`, встроенные
+  наследники `final`; свои причины могут нести любые данные. Проверка по типу,
+  `name` — только для журнала, равенства по имени нет. Базовые классы
+  и миксины, которые пользователь наследует или подмешивает (`Solo`,
+  `SoloLanes`, `SoloStream`, `SoloListenable`, `SoloObserver`, `JobObserver`,
+  а также основы ядра `JobBase` и `JobContextBase`), — без `base` и `final`:
+  иначе наследники обязаны ставить `base`/`final`,
   а `Mock implements MyController` перестаёт компилироваться. Общая база
   контроллеров `SoloController` — `abstract class` с закрытым генеративным
   конструктором `SoloController._`: наследуют её только классы библиотеки

@@ -159,9 +159,10 @@ export default defineConfig({
             'and a controller built on them. A job of async_job stops at ' +
             'its next checkpoint when cancelled, runs its cleanup and ends ' +
             'after its children. A solo controller holds one immutable ' +
-            'state and runs jobs over it ' +
-            'one at a time; each job declares which states let it start ' +
-            'and continue, owns its children and its cleanup, and ends ' +
+            'state and runs jobs over it one at a time, in one queue or ' +
+            'in each of several lanes; each job declares which states let ' +
+            'it start and continue, owns its children and its cleanup, ' +
+            'and ends ' +
             'with Done, Failed or Cancelled.',
           details: [
             'Three packages, one dependency:',
@@ -170,8 +171,9 @@ export default defineConfig({
               'its cleanup and cooperative cancellation. Pure Dart; ' +
               'usable on its own, with no controller, or under riverpod ' +
               'or bloc.',
-            '- `solo` adds the controller: a queue with policies, state ' +
-              'rules, event accumulation. Re-exports `async_job`.',
+            '- `solo` adds the controller: a queue with policies or ' +
+              'several lanes over one state, state rules, event ' +
+              'accumulation. Re-exports `async_job`.',
             '- `flutter_solo` adds the Flutter face: `SoloBuilder`, ' +
               '`ValueListenable`, `select`, `listen`. Re-exports `solo`.',
             '',
