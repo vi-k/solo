@@ -187,19 +187,33 @@ Job<void> setLiked(String postId, {required bool liked}) =>
 In a `SoloLanes` the other lanes write while a job waits, and the second `emit`
 writes the copy read before the wait over what they wrote: the posts a reload
 published in the meantime are gone. Read the state where the job writes:
-`ctx.emit(ctx.state.mark(postId, Mark(liked, ++_confirmations)))`. The rule
-takes `ctx.emit` in a job body that runs in a lane: a body given to a lane,
-whichever lane it is, or a body queued on a `SoloLanes` around it, a child's
-included. It reports the write when the value is built on `ctx.state` or
-`ctx.stateAs<T>()`, through member calls, property and index reads, cascades,
-casts and `!`, directly or through local variables of the same body, and an
-`await` or `await for` of the body, or of an action the write is in, comes
-between the read and the write. A `Solo` has no other lane, and the rule is
-quiet there. It is a heuristic, and a lint rather than a warning: a copy
-written back on purpose looks the same to it. It does not see the answer of a
+`ctx.emit(ctx.state.mark(postId, Mark(liked, ++_confirmations)))`.
+
+The rule takes `ctx.emit` in a job body that runs in a lane: a body given to a
+lane, whichever lane it is, or a body queued on a `SoloLanes` around it, a
+child's included. It reports the write when the value is built on `ctx.state`
+or `ctx.stateAs<T>()`, through member calls, property and index reads,
+cascades, casts and `!`, in any branch of `?:`, `??` and a switch expression,
+directly or through local variables of the same body, and an `await` or
+`await for` of the body, or of an action the write is in, comes between the
+read and the write in the text of the job: a wait in one branch counts for a
+write in another. The message names the variable the read went to. A write in
+the action of `await ctx.join(...)` runs before the job suspends and is not
+reported. A read in the `emit` itself,
+`ctx.emit(ctx.state.withPosts(await ctx.abandonable(fetchPosts)))`, gets its
+own message: await into a local variable before the `emit`, and read
+`ctx.state` in the `emit` after it.
+
+A `Solo` has no other lane, and the rule is quiet there. It is a heuristic, and
+a lint rather than a warning: a copy written back on purpose looks the same to
+it, and so does a part read before the wait and applied to the fresh state
+after it: `final pending = ctx.state.pending;` before the wait and
+`ctx.emit(pending.applyTo(ctx.state))` after it are reported, so read
+`ctx.state.pending` after the wait as well. It does not see the answer of a
 server written whole, `ctx.emit(await ctx.abandonable(api.fetchFeed))`, which
-loses what the other lanes wrote just as well, nor a value a parent read and
-its child writes, nor a read and a write in different turns of a loop. See
+loses what the other lanes wrote just as well, nor a body passed as a method
+tear-off, `_likes.enqueue(_like)`, nor a value a parent read and its child
+writes, nor a read and a write in different turns of a loop. See
 [A write that keeps the other lane's work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-write-that-keeps-the-other-lanes-work).
 
 ### lane_outside_constructor
@@ -215,10 +229,14 @@ lane in a `late final` field is declared on the first read of the field, in the
 first call of a method, where `lane` throws a `StateError`. Declare the lanes
 in the constructor body, `_reload = lane('reload');`, into a field
 `late final SoloLane<Feed> _reload;`. The rule takes `lane(...)` of `SoloLanes`
-anywhere but right in a constructor body on `this`: a field initializer, a
-method, a getter, a function declared in the constructor body. A method the
-constructor calls is reported too, though the call there works:
-`await_own_queue` does not see a lane declared there either. See
+anywhere but right in a constructor body on `this` or `super`: a field
+initializer, a method, a getter, a function declared in the constructor body. A
+lambda is such a function, though `map` runs it at once:
+`_lanes = names.map((name) => lane(name)).toList();` is reported, and a
+collection for, `_lanes = [for (final name in names) lane(name)];`, declares
+the same lanes right in the body. A method the constructor calls is reported
+too, though the call there works: `await_own_queue` does not see a lane
+declared there either. See
 [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes).
 
 ## Versions

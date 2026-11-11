@@ -34,11 +34,33 @@ final class Feed extends SoloLanes<int> {
 final class Station extends Feed {
   Station() {
     _gate = lane('gate');
+    _exit = super.lane('exit');
   }
 
   late final SoloLane<int> _gate;
+  late final SoloLane<int> _exit;
 }
 ''', []);
+
+  // A closure in the constructor body may run later, so the rule takes it
+  // as outside, though map runs it at once; a collection for is the body
+  // itself.
+  Future<void> test_lanes_from_a_list_of_names() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed(List<String> names) : super(0) {
+    _mapped = names.map((name) => lane(name)).toList();
+    _listed = [for (final name in names) lane(name)];
+  }
+
+  late final List<SoloLane<int>> _mapped;
+  late final List<SoloLane<int>> _listed;
+}
+''',
+    ['lane(name)'],
+  );
 
   // "Declaring lanes" on the lanes page of solo: the first read of the field
   // comes after the constructor.

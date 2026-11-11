@@ -13,14 +13,27 @@ import 'package:async_job_lints/plugin_api.dart';
 ///
 /// A heuristic: a whole new state, such as the answer of a server, written
 /// over what another lane wrote is not seen.
-class StaleEmit extends AnalysisRule {
-  /// The diagnostic this rule reports.
+class StaleEmit extends MultiAnalysisRule {
+  /// The diagnostic for a copy of the state read before a wait and written
+  /// after it.
   static const LintCode code = LintCode(
     'stale_emit',
     "'{0}' was read from the state before an 'await', and this 'emit' writes "
         'it over what another lane wrote meanwhile.',
     correctionMessage:
         "Read 'ctx.state' where the job writes, after the last 'await'.",
+  );
+
+  /// The diagnostic for a read of the state in the `emit` itself, before a
+  /// wait in its argument.
+  static const LintCode insideCode = LintCode(
+    'stale_emit',
+    "'{0}' is read before the 'await' inside this 'emit', and the write goes "
+        'over what another lane wrote meanwhile.',
+    correctionMessage:
+        "Await into a local variable before the 'emit', and read 'ctx.state' "
+        'in the emit after it.',
+    uniqueName: 'LintCode.stale_emit_inside',
   );
 
   /// Creates the rule.
@@ -33,7 +46,7 @@ class StaleEmit extends AnalysisRule {
       );
 
   @override
-  LintCode get diagnosticCode => code;
+  List<DiagnosticCode> get diagnosticCodes => const [code, insideCode];
 
   @override
   void registerNodeProcessors(
@@ -45,7 +58,7 @@ class StaleEmit extends AnalysisRule {
 }
 
 class _Visitor extends SimpleAstVisitor<void> {
-  final AnalysisRule rule;
+  final MultiAnalysisRule rule;
 
   _Visitor(this.rule);
 
@@ -61,10 +74,20 @@ class _Visitor extends SimpleAstVisitor<void> {
       return;
     }
     final reads = _Reads(body);
-    final root = reads.rootOf(written);
-    final read = reads.readAt(root, {});
-    if (read == null || !_waitsBetween(body, read, node)) return;
-    rule.reportAtNode(node, arguments: [root.toSource()]);
+    final waits = _suspensionsOf(body);
+    for (final root in reads.rootsOf(written)) {
+      for (final read in reads.behind(root, {})) {
+        if (!_waitsBetween(waits, read.at.offset, node)) continue;
+        rule.reportAtNode(
+          node,
+          diagnosticCode: read.name == null
+              ? StaleEmit.insideCode
+              : StaleEmit.code,
+          arguments: [read.name ?? read.at.toSource()],
+        );
+        return;
+      }
+    }
   }
 }
 
@@ -112,47 +135,67 @@ bool _readsState(Expression node) {
           (node is MethodInvocation && callsOn(node, ctx, const {'stateAs'})));
 }
 
+/// A read of the state a written value is built on: the read itself, and
+/// the local variable it was written to, or `null` when the value reads the
+/// state right in the `emit`.
+typedef _Read = ({Expression at, String? name});
+
 /// Where a value of the job [body] read the state, followed within [body].
 class _Reads {
   final FunctionExpression body;
 
   _Reads(this.body);
 
-  /// The expression [value] is built on: the target of its member calls,
+  /// The expressions [value] is built on: the target of its member calls,
   /// property reads, index reads, cascades, casts and `!`, taken off down to
-  /// a read of the state.
+  /// a read of the state, in each branch of `?:`, `??` and a switch
+  /// expression.
   ///
   /// `feed.confirm(post)` is built on `feed`, `ctx.state.confirm(post)` on
-  /// `ctx.state`, and `Feed(posts: posts)` on itself.
-  Expression rootOf(Expression value) {
-    var node = value.unParenthesized;
-    while (!_readsState(node)) {
-      final next = switch (node) {
-        PrefixedIdentifier(:final prefix) => prefix,
-        PropertyAccess(:final realTarget) => realTarget,
-        MethodInvocation(:final realTarget?) => realTarget,
-        IndexExpression(:final realTarget) => realTarget,
-        CascadeExpression(:final target) => target,
-        AsExpression(:final expression) => expression,
-        PostfixExpression(:final operand, :final operator)
-            when operator.type == TokenType.BANG =>
-          operand,
-        _ => null,
-      };
-      if (next == null) break;
-      node = next.unParenthesized;
-    }
-    return node;
+  /// `ctx.state`, `a ? feed : ctx.state` on both, and `Feed(posts: posts)` on
+  /// itself.
+  List<Expression> rootsOf(Expression value) {
+    final node = value.unParenthesized;
+    if (_readsState(node)) return [node];
+    final branches = switch (node) {
+      ConditionalExpression(:final thenExpression, :final elseExpression) => [
+        thenExpression,
+        elseExpression,
+      ],
+      BinaryExpression(:final operator, :final leftOperand, :final rightOperand)
+          when operator.type == TokenType.QUESTION_QUESTION =>
+        [leftOperand, rightOperand],
+      SwitchExpression(:final cases) => [
+        for (final arm in cases) arm.expression,
+      ],
+      _ => null,
+    };
+    if (branches != null) return [for (final b in branches) ...rootsOf(b)];
+    final next = switch (node) {
+      PrefixedIdentifier(:final prefix) => prefix,
+      PropertyAccess(:final realTarget) => realTarget,
+      MethodInvocation(:final realTarget?) => realTarget,
+      IndexExpression(:final realTarget) => realTarget,
+      CascadeExpression(:final target) => target,
+      AsExpression(:final expression) => expression,
+      PostfixExpression(:final operand, :final operator)
+          when operator.type == TokenType.BANG =>
+        operand,
+      _ => null,
+    };
+    return next == null ? [node] : rootsOf(next);
   }
 
-  /// The offset of the read of the state [root] stands for: [root] itself
-  /// when it reads the state, or the read the last value written to a local
-  /// variable before [root] is built on; `null` for anything else.
-  int? readAt(Expression root, Set<Element> seen) {
-    if (_readsState(root)) return root.offset;
-    if (root is! SimpleIdentifier) return null;
+  /// The reads of the state [root] stands for: [root] itself when it reads
+  /// the state, or the reads the last value written to a local variable
+  /// before [root] is built on; none for anything else.
+  ///
+  /// [seen] holds the values already followed.
+  List<_Read> behind(Expression root, Set<Expression> seen) {
+    if (_readsState(root)) return [(at: root, name: null)];
+    if (root is! SimpleIdentifier) return const [];
     final variable = root.element;
-    if (variable is! LocalVariableElement || !seen.add(variable)) return null;
+    if (variable is! LocalVariableElement) return const [];
     final writes = _Writes(variable);
     body.body.accept(writes);
     Expression? last;
@@ -162,7 +205,14 @@ class _Reads {
         last = value;
       }
     }
-    return last == null ? null : readAt(rootOf(last), seen);
+    if (last == null || !seen.add(last)) return const [];
+    return [
+      for (final from in rootsOf(last))
+        if (_readsState(from))
+          (at: from, name: variable.name)
+        else
+          ...behind(from, seen),
+    ];
   }
 }
 
@@ -193,40 +243,53 @@ class _Writes extends RecursiveAstVisitor<void> {
   }
 }
 
-/// Whether [body] waits after the read at [read] and before [emit] writes:
-/// an `await` or an `await for` between the two, in a function that runs
-/// [emit] rather than one that runs on its own.
-bool _waitsBetween(FunctionExpression body, int read, AstNode emit) {
+/// Whether one of [waits] suspends after the read at [read] and before
+/// [emit] writes, in a function that runs [emit] rather than one that runs
+/// on its own.
+///
+/// The order is that of the text of the job: a wait in a branch counts for
+/// a write in another.
+bool _waitsBetween(List<_Suspension> waits, int read, AstNode emit) =>
+    waits.any(
+      (wait) =>
+          wait.point > read &&
+          wait.point < emit.end &&
+          wait.function.offset <= emit.offset &&
+          emit.end <= wait.function.end,
+    );
+
+/// Where a body suspends, and the function body it suspends.
+typedef _Suspension = ({int point, FunctionBody function});
+
+/// The suspensions of [body]: the end of each `await`, where the body
+/// resumes after the awaited value has run, and the start of the body of
+/// each `await for`, which every turn waits to reach.
+///
+/// The action of `await ctx.join(...)` runs before the body suspends, so a
+/// write in it comes before the wait.
+List<_Suspension> _suspensionsOf(FunctionExpression body) {
   final waits = _Waits();
   body.body.accept(waits);
-  return waits.found.any((wait) {
-    final (offset, function) = wait;
-    return offset > read &&
-        offset < emit.end &&
-        function.offset <= emit.offset &&
-        emit.end <= function.end;
-  });
+  return waits.found;
 }
 
-/// The offsets of the `await`s and `await for`s of a body, each with the
-/// function body it suspends.
 class _Waits extends RecursiveAstVisitor<void> {
-  final found = <(int, FunctionBody)>[];
+  final found = <_Suspension>[];
 
-  void _add(AstNode node) {
+  void _add(AstNode node, int point) {
     final function = node.thisOrAncestorOfType<FunctionBody>();
-    if (function != null) found.add((node.offset, function));
+    if (function != null) found.add((point: point, function: function));
   }
 
   @override
   void visitAwaitExpression(AwaitExpression node) {
     super.visitAwaitExpression(node);
-    _add(node);
+    _add(node, node.end);
   }
 
   @override
   void visitForStatement(ForStatement node) {
     super.visitForStatement(node);
-    if (node.awaitKeyword != null) _add(node);
+    if (node.awaitKeyword != null) _add(node, node.body.offset);
   }
 }

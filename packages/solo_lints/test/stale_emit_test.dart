@@ -140,7 +140,9 @@ $_feed
 }
 ''', []);
 
-  Future<void> test_value_built_on_the_copy() => assertAt(
+  // The message names the variable the read went to, not the one written
+  // after the wait.
+  Future<void> test_value_built_on_the_copy() => _assertMessage(
     '''
 $_feed
   Job<void> like(String post) => _likes.enqueue<Feed, void>((ctx) async {
@@ -151,7 +153,8 @@ $_feed
   });
 }
 ''',
-    ['ctx.emit((next.previous!.settled)..confirm(post))'],
+    'ctx.emit((next.previous!.settled)..confirm(post))',
+    "'feed' was read from the state before an 'await'",
   );
 
   Future<void> test_variable_read_again() => assertAt('''
@@ -166,7 +169,7 @@ $_feed
 ''', []);
 
   // The receiver is read before the argument is waited for.
-  Future<void> test_wait_inside_the_write() => assertAt(
+  Future<void> test_wait_inside_the_write() => _assertMessage(
     '''
 $_feed
   Job<void> reload() => _reload.enqueue<Feed, void>((ctx) async {
@@ -175,7 +178,59 @@ $_feed
   });
 }
 ''',
-    ['ctx.emit(ctx.state.withPosts(await ctx.abandonable(fetchPosts)))'],
+    'ctx.emit(ctx.state.withPosts(await ctx.abandonable(fetchPosts)))',
+    "'ctx.state' is read before the 'await' inside this 'emit'",
+  );
+
+  // The action of join runs at once, and the body suspends after it: a write
+  // in the action comes before the wait.
+  Future<void> test_write_in_the_action_of_a_wait() => assertAt('''
+$_feed
+  Job<void> like(String post) => _likes.enqueue<Feed, void>((ctx) async {
+    final feed = ctx.state;
+    await ctx.join(() async {
+      ctx.emit(feed.confirm(post));
+      await send(post);
+    });
+  });
+}
+''', []);
+
+  Future<void> test_conditional_wait() => assertAt(
+    '''
+$_feed
+  Job<void> like(String post, {required bool remote}) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        final feed = ctx.state;
+        if (remote) await ctx.join(() => send(post));
+        ctx.emit(feed.confirm(post));
+      });
+}
+''',
+    ['ctx.emit(feed.confirm(post))'],
+  );
+
+  // Each branch of ?:, ?? and a switch expression is a value the write may
+  // be built on.
+  Future<void> test_branches() => assertAt(
+    '''
+$_feed
+  Job<void> like(String post, {required bool liked, Feed? next}) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        final feed = ctx.state;
+        await ctx.join(() => send(post));
+        ctx.emit(liked ? feed.confirm(post) : feed);
+        ctx.emit(next ?? feed);
+        ctx.emit(switch (liked) { true => ctx.state, false => feed.settled });
+        ctx.emit(liked ? ctx.state.confirm(post) : (next ?? ctx.state));
+      });
+}
+''',
+    [
+      'ctx.emit(liked ? feed.confirm(post) : feed)',
+      'ctx.emit(next ?? feed)',
+      'ctx.emit(switch (liked) { true => ctx.state, false => feed.settled })',
+    ],
   );
 
   Future<void> test_state_as_and_await_for() => assertAt(
@@ -268,4 +323,10 @@ final class Desk extends Solo<Feed> {
       enqueue(body);
 }
 ''', []);
+
+  /// Asserts one diagnostic at [span] of [code] whose message has [message].
+  Future<void> _assertMessage(String code, String span, String message) =>
+      assertDiagnostics(code, [
+        lint(code.indexOf(span), span.length, messageContainsAll: [message]),
+      ]);
 }

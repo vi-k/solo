@@ -10,7 +10,8 @@
   as in a `late final` initializer or a method, where it throws once the set of
   lanes is sealed. The warning is on as soon as the plugin is named, so
   `dart analyze` fails on code it passed before, and the release is a minor
-  one. The README describes both rules.
+  one. The README describes both rules. They require `async_job_lints` 0.2.2,
+  which exports what they ask of it.
 
 ## 0.2.1
 
