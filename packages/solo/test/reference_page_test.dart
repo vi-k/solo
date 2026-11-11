@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 
 /// `doc/reference.md` and its translation against the code.
 ///
-/// The page lists every member of six classes in tables, one row a
+/// The page lists every member of eight classes in tables, one row a
 /// member, under a heading of the class. The members are read from the
 /// classes themselves, so a member added to the code and not to the page
 /// turns this red, and so does a row left after its member went. A
@@ -28,6 +28,8 @@ final _inRepository = Directory('../../docs/ru').existsSync();
 final _classes = <String, Type>{
   'SoloController': SoloController,
   'Solo': Solo,
+  'SoloLanes': SoloLanes,
+  'SoloLane': SoloLane,
   'SoloContext': SoloContext,
   'SoloJob': SoloJob,
   'SoloQueue': SoloQueue,
@@ -249,6 +251,7 @@ void main() {
   for (final (name, type) in [
     ('SoloController', SoloController),
     ('Solo', Solo),
+    ('SoloLanes', SoloLanes),
   ]) {
     group('the tables of $name', () {
       final members = _members(type);

@@ -10,6 +10,15 @@ part of 'solo.dart';
 abstract interface class SoloJob<T> implements ChildJob<T> {
   /// Whether the job waits in the controller's queue.
   bool get isQueued;
+
+  /// The lane this job runs in, or `null` for a job of a [Solo] and for a
+  /// job not queued or run yet.
+  ///
+  /// A root job runs in the lane that queued it, and says so from that call
+  /// on, a job the call ends at once included; a child runs in the lane of
+  /// the job whose body runs it, whichever lane made it. The lane stays
+  /// after the job ends.
+  SoloLaneId? get lane;
 }
 
 final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
@@ -93,6 +102,9 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   @override
   bool get isQueued => _destination.queue._jobs.contains(this);
 
+  @override
+  SoloLaneId? get lane => _execution?.id;
+
   /// The result type this job was created with.
   ///
   /// Read off the instance rather than matched against a type argument:
@@ -146,14 +158,18 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // finished without asking.
     if (queued || identical(this, _destination.inTransition)) {
       if (!cancellable && rejectable) {
-        SoloController._debug(() => 'remove $this: not cancellable');
+        SoloController._debug(
+          () => _destination.said('remove $this: not cancellable'),
+        );
         return;
       }
       if (queued) {
         queue._jobs.remove(this);
         // Diagnostics may add another event synchronously. Detach first so
         // the group being cancelled can no longer receive it.
-        SoloController._debug(() => 'remove $this: $cancelled');
+        SoloController._debug(
+          () => _destination.said('remove $this: $cancelled'),
+        );
       }
     }
     super.cancelWith(cancelled, rejectable: rejectable);

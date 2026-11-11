@@ -127,16 +127,16 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   SoloController<S> get _solo => _core.controller;
 
   /// Queues a job of a group. A [Solo] is asked through its own
-  /// [Solo.enqueueJob], which a subclass may override.
+  /// [Solo.enqueueJob], which a subclass may override, and a lane of a
+  /// [SoloLanes] through its [SoloLane.enqueueJob].
   SoloJob<T> _enqueue(_SoloJob<S, W, T> job) {
     final controller = _solo;
     if (controller is Solo<S>) {
       return controller.enqueueJob(job);
     }
-    throw UnimplementedError(
-      'an accumulator of a ${controller.runtimeType} has no way to queue its '
-      'groups: only a Solo makes accumulators',
-    );
+    // Only a Solo and a lane make accumulators, and a lane's core has its
+    // face.
+    return _core.lane!.enqueueJob(job);
   }
 
   _SoloJob<S, W, T>? _candidate() {
@@ -154,7 +154,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   }
 
   _SoloJob<S, W, T> _job(_AccumulationGroup<V>? group) =>
-      _SoloJob<S, W, T>(
+      _solo._makeJob<W, T>(
           _core,
           (ctx) {
             ctx.check();
@@ -166,7 +166,6 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
           cancellable: _cancellable,
           timeout: _timeout,
           describe: _describe,
-          observer: _solo._jobObserver,
           ifFailed: _ifFailed,
           isExpectedError: _isExpectedError,
           ifCancelled: _ifCancelled,
@@ -216,7 +215,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       // hook can re-enter in the middle of the move.
       _core.queue._jobs.remove(previous);
       _core.queue._insert(previous, first: false);
-      SoloController._debug(() => 'move $previous to the tail');
+      SoloController._debug(() => _core.said('move $previous to the tail'));
     }
     // The debug line is foreign code, and it may cancel the group's job: a
     // group released that way is not armed again, as for a new one above.

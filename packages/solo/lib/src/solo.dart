@@ -28,6 +28,16 @@ const _notCreatedHere =
     'was not created by this Solo (make it with job(...) or ctx.child of this '
     'controller)';
 
+/// What a lane says of a job another lane or another controller made, the
+/// fix included.
+const _notCreatedByLane =
+    'was not created by this lane (make it with job(...) of this lane, or '
+    'with ctx.child of a job running in it)';
+
+/// Why a job a [Policy.droppable] call may hand back refuses `then`.
+const _handedBack =
+    'is handed back to every call of its key under Policy.droppable';
+
 /// How the pump's step in one core ends, for the pass that walks them all.
 enum _StepEnd {
   /// The pass goes on to the next core.
@@ -60,9 +70,9 @@ enum _StepEnd {
 /// when none is set. If it throws, the error it was asked about goes to the
 /// zone first.
 ///
-/// A controller extends [Solo], which adds the queue. The constructor of this
-/// class is private, so nothing outside its library extends it; a fake still
-/// implements it.
+/// A controller extends [Solo], which adds the queue, or [SoloLanes], which
+/// adds lanes. The constructor of this class is private, so nothing outside
+/// its library extends it; a fake still implements it.
 ///
 /// See [Reference](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#solocontroller)
 /// for every member and the section that explains it.
@@ -106,17 +116,8 @@ abstract class SoloController<S extends Object> {
 
   bool _pumpScheduled = false;
 
-  /// The queue of root jobs in the single core of [Solo]; kept for
-  /// [pending], which reads it.
-  _SoloQueue<S> get _queue;
-
-  /// The running root job in the single core of [Solo]; kept for
-  /// [pending], which reads it.
-  _SoloJob<S, S, Object?>? get _current;
-
-  /// The job the pump holds in the single core of [Solo] while it asks its
-  /// start rules; kept for [pending], which reads it.
-  _SoloJob<S, S, Object?>? get _inTransition;
+  /// What [pending] says for this kind of controller.
+  SoloPending? get _pending;
 
   /// Creates a controller in [initialState].
   SoloController._(S initialState) : _state = initialState {
@@ -322,14 +323,18 @@ abstract class SoloController<S extends Object> {
   ///
   /// See [What is holding the controller](https://github.com/vi-k/solo/blob/main/packages/solo/doc/diagnostics.md#what-is-holding-the-controller)
   /// on the diagnostics page.
-  SoloPending? get pending {
-    final current = _current;
+  SoloPending? get pending => _pending;
+
+  /// What is holding [core] right now: its running job, or what a drain
+  /// has still to run in it.
+  SoloPending? _pendingOf(_SoloLaneCore<S> core) {
+    final current = core.current;
     if (current != null) {
       return current._pending(
         closing: isClosed,
         draining: _draining,
         // A copy, not a view, as below.
-        queued: List<Job<Object?>>.unmodifiable(_queue._jobs),
+        queued: List<Job<Object?>>.unmodifiable(core.queue._jobs),
       );
     }
     if (_draining) {
@@ -338,8 +343,8 @@ abstract class SoloController<S extends Object> {
       // until it is launched, and it goes first — unless a rule has
       // already ended it, which leaves it here until the pump lets go.
       final jobs = List<Job<Object?>>.unmodifiable([
-        if (_inTransition case final job? when !job.isFinished) job,
-        ..._queue._jobs,
+        if (core.inTransition case final job? when !job.isFinished) job,
+        ...core.queue._jobs,
       ]);
       if (jobs.isNotEmpty) {
         return SoloPendingQueue(jobs);
@@ -855,9 +860,10 @@ abstract class SoloController<S extends Object> {
   /// Makes a job of this controller for [core]: the one place a job is
   /// built with the controller's observer.
   ///
-  /// [Solo.job] comes here, and so does a child made for a core of
-  /// another controller. The public default of `cancellable` lives in
-  /// [Solo.job]; this one only repeats it for the child.
+  /// [Solo.job] comes here, and so do [SoloLane.job], a child made for a
+  /// core of a controller other than a [Solo], and every group of an
+  /// accumulator. The public defaults of `cancellable` live in [Solo.job]
+  /// and [SoloLane.job]; this one only repeats them for the child.
   _SoloJob<S, W, T> _makeJob<W extends S, T>(
     _SoloLaneCore<S> core,
     Future<T> Function(SoloContext<S, W> ctx) body, {
@@ -884,6 +890,196 @@ abstract class SoloController<S extends Object> {
     isExpectedError: isExpectedError,
     ifCancelled: ifCancelled,
   );
+
+  /// Queues [impl] in [core]: [Solo.enqueueJob] and [SoloLane.enqueueJob]
+  /// past their check of who made the job.
+  SoloJob<T> _enqueueIn<T>(
+    _SoloLaneCore<S> core,
+    _SoloJob<S, S, T> impl, {
+    required bool first,
+    required Policy policy,
+  }) {
+    if (policy != Policy.sequential && impl.key == null) {
+      throw ArgumentError('Policy.${policy.name} requires a job key');
+    }
+    final queue = core.queue;
+    if (impl._taken ||
+        impl._jobStatus != JobStatus.created ||
+        queue._jobs.contains(impl)) {
+      throw StateError('$impl has already been enqueued or run');
+    }
+    // Looked up before the job is marked as enqueued, and the answer reused
+    // below: a key shared with a job of another result type is the caller's
+    // mistake, and `enqueueJob` must not bury the job it then refuses to hand
+    // back. Nothing between here and the branch touches the queue. A closed
+    // controller takes no new work, but a `drain` still runs what it had: a
+    // duplicate found there is handed back as before the close, since its work
+    // is going to be done, and only new work gets the closed answer.
+    final duplicate = (!isClosed || _draining) && policy == Policy.droppable
+        ? _lastJobWhereIn(core, (other) => other.key == impl.key)
+        : null;
+    // The two jobs are compared with each other, not with `T`: the type
+    // argument of this call is whatever the call site wrote down, and a
+    // `SoloJob<void>` accepts any job at all — `void` is a top type, so
+    // `is SoloJob<void>` is true of a `Job<String>` and the caller would
+    // get somebody else's job back while its own work never ran.
+    if (duplicate != null && duplicate._resultType != impl._resultType) {
+      throw ArgumentError.value(
+        '$impl',
+        'job',
+        'key ${impl.key} is held by a job of result type '
+            '${duplicate._resultType}, not ${impl._resultType}',
+      );
+    }
+    // Set before anything can go wrong below: a job dropped by a closed
+    // controller has been enqueued too, and one handle is one enqueue.
+    impl._taken = true;
+    // Any job of this call may be handed to the next caller of the key, so
+    // every one of them refuses a plain `then` from the start, the first
+    // caller's included: otherwise whether a caller throws would depend on
+    // who came first.
+    if (policy == Policy.droppable) impl._requireShared(_handedBack);
+    // After the refusals and before any outcome: a job this call ends at
+    // once comes to `onFinish` with the core it was queued in.
+    impl._execution = core;
+    if (isClosed && duplicate == null) {
+      _debug(() => core.said('enqueue $impl: closed'));
+      impl._drop(
+        Cancelled.by(
+          reason: const ClosedCancelReason(),
+          started: false,
+          stackTrace: _closeStackTrace,
+        ),
+      );
+      return impl;
+    }
+    // Found by [Policy.droppable] only.
+    if (duplicate != null) {
+      // A job of another policy is marked here, when it first has a second
+      // caller, and before any code of the caller runs below; a `then` its
+      // own caller took before stays.
+      duplicate._requireShared(_handedBack);
+      _debug(() {
+        final name = '$duplicate';
+        final line = 'enqueue $impl: duplicate of $name';
+        final current = core.current;
+        // A droppable method called from inside the running job -- its
+        // body, a child of it, its cleanup -- hands back that very job,
+        // and a wait for it there is a wait for itself. A duplicate of a
+        // queued job hands back that one, which starts only after the
+        // running job ends, like any job queued from inside it. Who
+        // called is not known here, so the line says what holds for any
+        // caller.
+        if (current == null) {
+          return core.said(line);
+        }
+        if (identical(duplicate, current)) {
+          return core.said(
+            '$line, which is running: if awaited from inside $name, '
+            'it waits for itself',
+          );
+        }
+        final running = '$current';
+        return core.said(
+          '$line, which is queued while $running is running: '
+          'it starts after $running ends',
+        );
+      });
+      impl._drop(
+        Cancelled.by(
+          reason: const DuplicateCancelReason(),
+          started: false,
+          stackTrace: StackTrace.current,
+        ),
+      );
+      // The type was checked before the job was marked as enqueued.
+      return duplicate as SoloJob<T>;
+    }
+    // Queued before the others are cancelled, not after: cancelling one
+    // runs its `onFinish` and its cancellation listeners synchronously, and
+    // that code may queue a job of its own under the same key. Inserted
+    // first, this job is the one such a call finds and replaces; inserted
+    // afterwards, it would land behind that call and replace it instead,
+    // and the job queued last would not be the one to run last.
+    queue._insert(impl, first: first);
+    _debug(() {
+      final line = 'enqueue $impl${first ? ' first' : ''}';
+      final current = core.current;
+      // A method of the controller called from a running job -- its body,
+      // a child of it, its cleanup -- queues a root job, and a job that
+      // awaits it waits for good. Who called is not known here, so the line
+      // says what holds for any caller.
+      if (current == null) {
+        return core.said(line);
+      }
+      final name = '$current';
+      return core.said(
+        '$line while $name is running: it starts after $name ends',
+      );
+    });
+    if (policy == Policy.keepLatest || policy == Policy.restart) {
+      // What the cancelled jobs' code does to this one is the queue's usual
+      // business from here: a cancellation removes it, a `close` drops it
+      // with the rest.
+      queue.removeWhere(
+        (other) => other.key == impl.key && !identical(other, impl),
+        reason: const ReplacedCancelReason(),
+      );
+      // Unless that code took [job] out again: the running job is cancelled
+      // for a job that is going to run, not for one that already ended.
+      final current = core.current;
+      if (policy == Policy.restart &&
+          !impl.isFinished &&
+          current != null &&
+          current.key == impl.key) {
+        unawaited(current.cancel(reason: const ReplacedCancelReason()));
+        // The line above it says the new job waits for the running one,
+        // and from it alone a refused restart reads as `sequential`.
+        _debug(() => core.said('restart: ${current._restartAnswer}'));
+      }
+    }
+    _schedulePump();
+    return impl;
+  }
+
+  /// The last job of [core] matching [test]: [Solo.lastJobWhere] and
+  /// [SoloLane.lastJobWhere].
+  _SoloJob<S, S, Object?>? _lastJobWhereIn(
+    _SoloLaneCore<S> core,
+    bool Function(SoloJob<Object?> job) test,
+  ) {
+    // A snapshot for the same reason as in `removeWhere`: the predicate is
+    // the caller's code, and it may touch the queue while it answers. It
+    // may even cancel the job it is about to accept, so a job is asked
+    // after the answer, too, whether it is still going to do the work.
+    for (final job in core.queue._jobs.reversed.toList()) {
+      if (test(job) && _goingOn(job)) {
+        return job;
+      }
+    }
+    // The job whose start rules are being asked: off the queue, not
+    // started, and ahead of everything in the queue. Asked before the
+    // predicate as well as after, as the current job is: `cancelAll` from
+    // its rules ends it where it stands.
+    final transition = core.inTransition;
+    if (transition != null &&
+        _goingOn(transition) &&
+        test(transition) &&
+        _goingOn(transition)) {
+      return transition;
+    }
+    final current = core.current;
+    return current != null &&
+            _goingOn(current) &&
+            test(current) &&
+            _goingOn(current)
+        ? current
+        : null;
+  }
+
+  /// Whether [job] is still going to do its work: neither cancelled nor
+  /// finished.
+  static bool _goingOn(Job<Object?> job) => !job.isCancelled && !job.isFinished;
 
   void _onJobFinished(_SoloJob<S, S, Object?> job) {
     var wasCurrent = false;
@@ -956,6 +1152,7 @@ abstract class SoloController<S extends Object> {
       return _stepEnd;
     }
     final queue = core.queue;
+    var took = false;
     while (true) {
       final job = queue._takeFirst();
       if (job == null) {
@@ -967,10 +1164,17 @@ abstract class SoloController<S extends Object> {
           // seen every core.
           return _StepEnd.drained;
         }
-        _debug(() => 'queue has no ready jobs');
+        // An idle lane that found its queue empty says nothing: a pass
+        // walks every lane, and the line would come for each empty one.
+        // A step that took jobs and dropped them says it, as a [Solo]
+        // says it every time.
+        if (core.id == null || took || queue._jobs.isNotEmpty) {
+          _debug(() => core.said('queue has no ready jobs'));
+        }
 
         return _stepEnd;
       }
+      took = true;
       // Off the queue, not started, and not yet `current`: while the rules
       // are asked — the caller's code — this job belongs to nobody, and only
       // `inTransition` can hand it to a `cancelAll` or a `close` made from in
@@ -987,7 +1191,7 @@ abstract class SoloController<S extends Object> {
           // core tells the observer of a failure handed in, and of one handed
           // to a job the rule has already ended — cancelled, or dropped by a
           // `close` made from inside it.
-          _debug(() => 'rule of $job threw: $error');
+          _debug(() => core.said('rule of $job threw: $error'));
           job._drop(Failed(error, stackTrace));
           continue;
         }
@@ -1001,7 +1205,9 @@ abstract class SoloController<S extends Object> {
           // never move again. This comes before the rejection: a rule that
           // ended the job and then turned it down has not dropped it, and a
           // `drop` line would name an outcome the job does not have.
-          _debug(() => 'start $job: ended while the rules were asked');
+          _debug(
+            () => core.said('start $job: ended while the rules were asked'),
+          );
           continue;
         }
         if (rejection != null) {
@@ -1014,7 +1220,7 @@ abstract class SoloController<S extends Object> {
           // Said here, where the queue lets the job go: the line after it,
           // if any, is `queue has no ready jobs`, which reads as if the job
           // had never been queued.
-          _debug(() => 'drop $job: $cancelled');
+          _debug(() => core.said('drop $job: $cancelled'));
           job._drop(cancelled);
           continue;
         }
@@ -1139,17 +1345,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   late final List<_SoloLaneCore<S>> _cores = List.unmodifiable([_core]);
 
   @override
-  _SoloQueue<S> get _queue => _core.queue;
-
-  @override
-  _SoloJob<S, S, Object?>? get _current => _core.current;
-
-  @override
-  _SoloJob<S, S, Object?>? get _inTransition => _core.inTransition;
-
-  /// Why a job a [Policy.droppable] call may hand back refuses `then`.
-  static const _handedBack =
-      'is handed back to every call of its key under Policy.droppable';
+  SoloPending? get _pending => _pendingOf(_core);
 
   /// Creates a controller in [initialState].
   Solo(super.initialState) : super._();
@@ -1356,143 +1552,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     Job<T> job, {
     bool first = false,
     Policy policy = Policy.sequential,
-  }) {
-    final impl = _own(job);
-    if (policy != Policy.sequential && impl.key == null) {
-      throw ArgumentError('Policy.${policy.name} requires a job key');
-    }
-    if (impl._taken ||
-        impl._jobStatus != JobStatus.created ||
-        _queue._jobs.contains(impl)) {
-      throw StateError('$impl has already been enqueued or run');
-    }
-    // Looked up before the job is marked as enqueued, and the answer reused
-    // below: a key shared with a job of another result type is the caller's
-    // mistake, and `enqueueJob` must not bury the job it then refuses to hand
-    // back. Nothing between here and the branch touches the queue. A closed
-    // controller takes no new work, but a `drain` still runs what it had: a
-    // duplicate found there is handed back as before the close, since its work
-    // is going to be done, and only new work gets the closed answer.
-    final duplicate = (!isClosed || _draining) && policy == Policy.droppable
-        ? _lastJobWhere((other) => other.key == impl.key)
-        : null;
-    // The two jobs are compared with each other, not with `T`: the type
-    // argument of this call is whatever the call site wrote down, and a
-    // `SoloJob<void>` accepts any job at all — `void` is a top type, so
-    // `is SoloJob<void>` is true of a `Job<String>` and the caller would
-    // get somebody else's job back while its own work never ran.
-    if (duplicate != null && duplicate._resultType != impl._resultType) {
-      throw ArgumentError.value(
-        '$job',
-        'job',
-        'key ${impl.key} is held by a job of result type '
-            '${duplicate._resultType}, not ${impl._resultType}',
-      );
-    }
-    // Set before anything can go wrong below: a job dropped by a closed
-    // controller has been enqueued too, and one handle is one enqueue.
-    impl._taken = true;
-    // Any job of this call may be handed to the next caller of the key, so
-    // every one of them refuses a plain `then` from the start, the first
-    // caller's included: otherwise whether a caller throws would depend on
-    // who came first.
-    if (policy == Policy.droppable) impl._requireShared(_handedBack);
-    // After the refusals and before any outcome: a job this call ends at
-    // once comes to `onFinish` with the core it was queued in.
-    impl._execution = _core;
-    if (isClosed && duplicate == null) {
-      SoloController._debug(() => 'enqueue $impl: closed');
-      impl._drop(
-        Cancelled.by(
-          reason: const ClosedCancelReason(),
-          started: false,
-          stackTrace: _closeStackTrace,
-        ),
-      );
-      return impl;
-    }
-    // Found by [Policy.droppable] only.
-    if (duplicate != null) {
-      // A job of another policy is marked here, when it first has a second
-      // caller, and before any code of the caller runs below; a `then` its
-      // own caller took before stays.
-      duplicate._requireShared(_handedBack);
-      SoloController._debug(() {
-        final name = '$duplicate';
-        final line = 'enqueue $impl: duplicate of $name';
-        final current = _current;
-        // A droppable method called from inside the running job -- its
-        // body, a child of it, its cleanup -- hands back that very job,
-        // and a wait for it there is a wait for itself. A duplicate of a
-        // queued job hands back that one, which starts only after the
-        // running job ends, like any job queued from inside it. Who
-        // called is not known here, so the line says what holds for any
-        // caller.
-        if (current == null) {
-          return line;
-        }
-        if (identical(duplicate, current)) {
-          return '$line, which is running: if awaited from inside $name, '
-              'it waits for itself';
-        }
-        final running = '$current';
-        return '$line, which is queued while $running is running: '
-            'it starts after $running ends';
-      });
-      impl._drop(
-        Cancelled.by(
-          reason: const DuplicateCancelReason(),
-          started: false,
-          stackTrace: StackTrace.current,
-        ),
-      );
-      // The type was checked before the job was marked as enqueued.
-      return duplicate as SoloJob<T>;
-    }
-    // Queued before the others are cancelled, not after: cancelling one
-    // runs its `onFinish` and its cancellation listeners synchronously, and
-    // that code may queue a job of its own under the same key. Inserted
-    // first, this job is the one such a call finds and replaces; inserted
-    // afterwards, it would land behind that call and replace it instead,
-    // and the job queued last would not be the one to run last.
-    _queue._insert(impl, first: first);
-    SoloController._debug(() {
-      final line = 'enqueue $impl${first ? ' first' : ''}';
-      final current = _current;
-      // A method of the controller called from a running job -- its body,
-      // a child of it, its cleanup -- queues a root job, and a job that
-      // awaits it waits for good. Who called is not known here, so the line
-      // says what holds for any caller.
-      if (current == null) {
-        return line;
-      }
-      final name = '$current';
-      return '$line while $name is running: it starts after $name ends';
-    });
-    if (policy == Policy.keepLatest || policy == Policy.restart) {
-      // What the cancelled jobs' code does to this one is the queue's usual
-      // business from here: a cancellation removes it, a `close` drops it
-      // with the rest.
-      _queue.removeWhere(
-        (other) => other.key == impl.key && !identical(other, impl),
-        reason: const ReplacedCancelReason(),
-      );
-      // Unless that code took [job] out again: the running job is cancelled
-      // for a job that is going to run, not for one that already ended.
-      final current = _current;
-      if (policy == Policy.restart &&
-          !impl.isFinished &&
-          current != null &&
-          current.key == impl.key) {
-        unawaited(current.cancel(reason: const ReplacedCancelReason()));
-        // The line above it says the new job waits for the running one,
-        // and from it alone a refused restart reads as `sequential`.
-        SoloController._debug(() => 'restart: ${current._restartAnswer}');
-      }
-    }
-    _schedulePump();
-    return impl;
-  }
+  }) => _enqueueIn(_core, _own(job), first: first, policy: policy);
 
   /// `enqueueJob(job(...), policy: policy)` in one call: how a method of a
   /// controller builds its job and queues it.
@@ -1555,11 +1615,11 @@ abstract class Solo<S extends Object> extends SoloController<S> {
 
   /// The queue, for subclasses that manage it directly.
   @protected
-  SoloQueue get queue => _queue;
+  SoloQueue get queue => _core.queue;
 
   /// The running root job, or `null` when idle.
   @protected
-  SoloJob<Object?>? get current => _current;
+  SoloJob<Object?>? get current => _core.current;
 
   /// The last queued job matching [test], else the current job if it
   /// matches, else `null`.
@@ -1576,43 +1636,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   /// with the job the first one has just stopped.
   @protected
   SoloJob<Object?>? lastJobWhere(bool Function(SoloJob<Object?> job) test) =>
-      _lastJobWhere(test);
-
-  _SoloJob<S, S, Object?>? _lastJobWhere(
-    bool Function(SoloJob<Object?> job) test,
-  ) {
-    // A snapshot for the same reason as in `removeWhere`: the predicate is
-    // the caller's code, and it may touch the queue while it answers. It
-    // may even cancel the job it is about to accept, so a job is asked
-    // after the answer, too, whether it is still going to do the work.
-    for (final job in _queue._jobs.reversed.toList()) {
-      if (test(job) && _goingOn(job)) {
-        return job;
-      }
-    }
-    // The job whose start rules are being asked: off the queue, not
-    // started, and ahead of everything in the queue. Asked before the
-    // predicate as well as after, as the current job is: `cancelAll` from
-    // its rules ends it where it stands.
-    final transition = _inTransition;
-    if (transition != null &&
-        _goingOn(transition) &&
-        test(transition) &&
-        _goingOn(transition)) {
-      return transition;
-    }
-    final current = _current;
-    return current != null &&
-            _goingOn(current) &&
-            test(current) &&
-            _goingOn(current)
-        ? current
-        : null;
-  }
-
-  /// Whether [job] is still going to do its work: neither cancelled nor
-  /// finished.
-  static bool _goingOn(Job<Object?> job) => !job.isCancelled && !job.isFinished;
+      _lastJobWhereIn(_core, test);
 
   /// {@macro solo.SoloController.close}
   @override
@@ -1626,6 +1650,85 @@ abstract class Solo<S extends Object> extends SoloController<S> {
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
   }) => super.cancelAll(force: force, reason: reason);
+}
+
+/// The controller with lanes: its root jobs run one at a time in each lane,
+/// and the lanes run side by side over one state.
+///
+/// The lanes are declared in the constructor with [lane], and one pump walks
+/// them in that order. A write of one lane asks the rules of the jobs of the
+/// others again, as [externalSetState] does: a job whose `W` or `keepWhile`
+/// no longer holds is cancelled. The trap is a write of a whole state read
+/// before an `await`: it loses what the other lanes wrote in between, so a
+/// job reads `ctx.state` where it writes.
+///
+/// The state, the listeners, closing and the hooks come from
+/// [SoloController].
+abstract class SoloLanes<S extends Object> extends SoloController<S> {
+  /// The lanes in the order of creation.
+  final _lanes = <_SoloLane<S>>[];
+
+  // Filled by `lane`, from the constructor body; the observer's `onCreate`
+  // runs before that body and finds no lane yet.
+  @override
+  final List<_SoloLaneCore<S>> _cores = [];
+
+  /// Whether the set of lanes is sealed: by the microtask the constructor
+  /// schedules, or by the first `enqueueJob` of any lane. A closed
+  /// controller is sealed as well.
+  var _sealed = false;
+
+  /// Creates a controller in [initialState], with no lane until the body of
+  /// the subclass's constructor declares them.
+  SoloLanes(super.initialState) : super._() {
+    // A lane declared after this microtask throws whenever it is declared,
+    // and not only once a job has come: a `late final` field read in the
+    // first call of a method would declare its lane at the mercy of the
+    // order of the calls.
+    scheduleMicrotask(() => _sealed = true);
+  }
+
+  /// Declares a lane named [name] and returns it.
+  ///
+  /// Called in the body of the constructor, and kept in a private field.
+  /// Throws [StateError] for a [name] this controller has a lane of already,
+  /// and once the set of lanes is sealed: by the first job any lane queues,
+  /// by [close], or by a microtask the constructor schedules. So a lane in a
+  /// `late final` field is an error: the field read after the constructor
+  /// throws.
+  @protected
+  SoloLane<S> lane(String name) {
+    if (_sealed || isClosed) {
+      throw StateError(
+        'Cannot declare lane $name of $runtimeType: lanes are declared in '
+        'the constructor, before the first job and before close, and a late '
+        'final field declares its lane on its first read; see '
+        'https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes',
+      );
+    }
+    for (final lane in _lanes) {
+      if (lane.name == name) {
+        throw StateError(
+          '$runtimeType has a lane named $name already: every call of lane '
+          'declares a new lane, and two of one name would read as one',
+        );
+      }
+    }
+    final lane = _SoloLane<S>(this, name);
+    _lanes.add(lane);
+    _cores.add(lane._core);
+    return lane;
+  }
+
+  /// The lanes of this controller in the order they were declared, the
+  /// order a pass of the pump walks them in; an unmodifiable list.
+  @protected
+  List<SoloLane<S>> get lanes => List<SoloLane<S>>.unmodifiable(_lanes);
+
+  // Each lane says what holds it through its own `pending`; the controller
+  // does not gather them yet.
+  @override
+  SoloPending? get _pending => null;
 }
 
 /// Feeds the hooks of one job into [SoloObserver] and into the controller's

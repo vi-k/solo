@@ -1,10 +1,10 @@
 # Reference
 
-One line for every member of `Solo` and of its base `SoloController`, of the
-context its jobs get, of the jobs it returns, of its queue and of its
-accumulators, with the section that explains it. One line, too, for every
-parameter of the methods that make jobs. What `solo` takes from the core is
-listed where it is explained. The rest of `ctx` is in
+One line for every member of `Solo`, of `SoloLanes` and its lanes, and of their
+base `SoloController`, of the context their jobs get, of the jobs they return,
+of the queue and of the accumulators, with the section that explains it. One
+line, too, for every parameter of the methods that make jobs. What `solo` takes
+from the core is listed where it is explained. The rest of `ctx` is in
 [The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/reference.md#the-context-at-a-glance)
 on the reference page of `async_job`, and `value`, `done` or `cancel()` of a
 job are in [Jobs and results](jobs.md#jobs-and-results) on the jobs page.
@@ -13,9 +13,9 @@ job are in [Jobs and results](jobs.md#jobs-and-results) on the jobs page.
 
 `SoloController<S>` is the base class of every controller: the state, the
 listeners, closing and the hooks. A controller extends `Solo`, which adds the
-queue; the constructor of `SoloController` is private. Its members fall into
-three groups by who uses them: a caller, the subclass, and an override in the
-subclass.
+queue, or `SoloLanes`, which adds lanes; the constructor of `SoloController` is
+private. Its members fall into three groups by who uses them: a caller, the
+subclass, and an override in the subclass.
 
 ### What a caller sees
 
@@ -103,11 +103,52 @@ sees those. Every member here is protected.
 | `lastJobWhere(test)` | The last queued job that passes the test, else the running one if it passes and has not been cancelled, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `current` | The running root job, or `null` when the controller is idle | [Working the queue directly](jobs.md#working-the-queue-directly) |
 
+## SoloLanes
+
+`SoloLanes<S>` is the class a controller with lanes extends: its root jobs run
+one at a time in each lane, and the lanes run side by side over one state. It
+has no queue of its own. It declares its lanes, and the rest of its members
+come from `SoloController`.
+
+### What the subclass uses
+
+The lanes are declared in the body of the constructor and kept in private
+fields. Every member here is protected.
+
+| Member | What it does | Where |
+| --- | --- | --- |
+| `SoloLanes(initialState)` | The constructor a subclass calls as `super(initialState)`, with the first state; its body declares the lanes | [Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start) |
+| `lane(name)` | Declares a lane and returns it; throws `StateError` for a name declared already, and once the first job is queued, the controller is closed or a microtask after the constructor has run | [SoloLane](#sololane) |
+| `lanes` | The lanes in the order they were declared, which is the order the pump walks them in | [SoloLane](#sololane) |
+
+## SoloLane
+
+The type `lane` returns: one lane of a `SoloLanes`, with the members of the
+queue a `Solo` has. They are public: whoever holds the lane queues jobs in it,
+so a controller keeps its lanes in private fields. A job runs in the lane that
+queued it, and a `Policy` looks for its key in that lane only. A lane has no
+`close` or `cancelAll`: those are the controller's.
+
+| Member | What it does | Where |
+| --- | --- | --- |
+| `lane.name` | The name the lane was declared with, for logs | [SoloLanes](#sololanes) |
+| `lane.id` | The `SoloLaneId` a job of this lane returns from `job.lane` | [SoloJob](#solojob) |
+| `lane.enqueue(body)` | Makes and queues a job of this lane | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `lane.job(body)` | Makes a job of this lane without queueing it, for `lane.enqueueJob` or for `ctx.run` as a child | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `lane.enqueueJob(job)` | Queues a job this lane made under a `Policy`, at the tail or, with `first: true`, at the head; a job of another lane or another controller is refused with an `ArgumentError` | [Queue and policies](jobs.md#queue-and-policies) |
+| `lane.collect(handler)` | Makes an accumulator whose groups go into this lane, each handing one job the list of its events | [One request per log line](accumulation.md#one-request-per-log-line) |
+| `lane.accumulate(handler, merge: ...)` | Makes an accumulator whose groups go into this lane, each merging its events into one value | [Settings saved on every flip of a switch](accumulation.md#settings-saved-on-every-flip-of-a-switch) |
+| `lane.queue` | The jobs waiting in this lane, a `SoloQueue` | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `lane.lastJobWhere(test)` | The last queued job of this lane that passes the test, else its running one if it passes and has not been cancelled, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `lane.current` | The running root job of this lane, or `null` when the lane is idle | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `lane.pending` | What is holding this lane right now, by the rules `pending` has for a `Solo`, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
+
 ## Parameters of a job
 
-`enqueue`, `job`, `collect` and `accumulate` take the body first — for an
-accumulator, a handler that also gets the events of its group — and these named
-parameters after it. The first type argument of each is the working type, in
+`enqueue`, `job`, `collect` and `accumulate`, of a `Solo` and of a `SoloLane`
+alike, take the body first — for an accumulator, a handler that also gets the
+events of its group — and these named parameters after it. The first type
+argument of each is the working type, in
 [State and rules](state.md#state-and-rules) on the state page.
 
 | Parameter | Taken by | What it does | Where |
@@ -160,6 +201,7 @@ only for a caller that reads `isQueued`. A method that makes a child for
 | Member | What it does | Where |
 | --- | --- | --- |
 | `job.isQueued` | Whether the job is waiting in the controller's queue | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `job.lane` | The `SoloLaneId` of the lane the job runs in, or `null` for a job of a `Solo` and for one not queued or run yet | [SoloLane](#sololane) |
 
 ## SoloQueue
 
@@ -193,6 +235,7 @@ field: events combine only within one accumulator, even under the same key.
 | --- | --- | --- |
 | `Policy` | What `enqueueJob` and `enqueue` do with a job whose key is already queued or running: `sequential`, `droppable`, `keepLatest` or `restart` | [Queue and policies](jobs.md#queue-and-policies) |
 | `SoloCloseMode` | How `close()` stops: `cancel` or `drain` | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `SoloLaneId` | What `job.lane` returns: a lane told apart by identity, with the `name` it was declared with | [SoloLane](#sololane) |
 | `SoloUnansweredHandler` | The type of `Solo.unansweredHandler`: a function of the controller, the job, the error and its stack trace | [Answering for an error](errors.md#answering-for-an-error) |
 | `SoloObserver` | What `Solo.observer` takes, one or several joined by `SoloObserver.all`: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate` | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](diagnostics.md#watching-every-controller) |

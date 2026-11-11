@@ -60,7 +60,8 @@ abstract class SoloObserver {
   /// of the constructor of a subclass: a field initialized in its declaration
   /// or in the initializer list is set, and one assigned in the body is not
   /// yet: a nullable one reads `null`, and a `late` one without an
-  /// initializer throws when read.
+  /// initializer throws when read. A [SoloLanes] declares its lanes in that
+  /// body, so the observer sees it with no lane yet.
   void onCreate(SoloController<Object> solo) {}
 
   /// A job body is about to run.
