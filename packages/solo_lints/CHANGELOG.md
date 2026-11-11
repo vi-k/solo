@@ -6,10 +6,11 @@
   queued in `_likes`, and names the lane. A wait for another lane is no
   deadlock and stays with `bare_await`, as does a wait where the lane is not
   seen: a lane from a getter, a lane the controller takes rather than declares
-  by `lane(...)` in its constructor body, a job from a field or a parameter, a
-  body of a child or a handler of an accumulator. `close` and `cancelAll` are
-  reported for any controller, `SoloLanes` and a controller with `SoloStream`
-  included.
+  by `lane(...)` in its constructor body, a lane declared in another file (a
+  superclass there or another part of the library), a job from a field or a
+  parameter, a body of a child or a handler of an accumulator. `close` and
+  `cancelAll` are reported for any controller, `SoloLanes` and a controller
+  with `SoloStream` included.
 - `discarded_outcome` leaves a wait for the own lane to `await_own_queue`, as
   it leaves the wait for the own queue of a `Solo`.
 - `key_per_request` and `ignore_failure_hides_bugs` take `enqueue`,
