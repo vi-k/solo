@@ -1,5 +1,5 @@
-> **Состояние на 2026-11-11:** подготовлено, связка идёт по слову владельца
-> «опубликуй async_job 1.0.3».
+> **Состояние на 2026-11-11:** опубликован по слову владельца «опубликуй
+> async_job 1.0.3»: релизный коммит `567bf830`, тег `async_job-v1.0.3`.
 > **Что это:** выпуск патча `async_job` 1.0.3 — документация после 1.0.2.
 > **Связанные записи:** `2026-11-06-docs-patches-release-report.md`,
 > `2026-11-09-done-lints-report.md`, `2026-11-09-guarantee-bounds-report.md`,
@@ -54,3 +54,8 @@ its gate on the floor: 7 roots». Набор `async_job` из архива — +
 и не позади ни на один — записи о линиях; они и подготовка уходят в origin
 вместе с релизным коммитом. Тега `async_job-v1.0.3` нет ни локально,
 ни в origin; на pub.dev `async_job` 1.0.2.
+
+Связка прошла подряд: релизный коммит `567bf830` «Release async_job 1.0.3»,
+аннотированный тег `async_job-v1.0.3` на нём, `git push --follow-tags` —
+`origin/main` на `567bf830`, тег в origin; `dart pub publish` — «Successfully
+uploaded https://pub.dev/packages/async_job version 1.0.3».
