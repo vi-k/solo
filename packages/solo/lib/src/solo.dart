@@ -162,11 +162,10 @@ abstract class SoloController<S extends Object> {
   ///
   /// [isClosed] says that `close` was asked for, [isDraining] that the
   /// queue it left, or one of its queues, is still running; this says the
-  /// engine is done. A
-  /// subclass that feeds external facts guards [externalSetState] with it,
-  /// and a `drain` goes on being fed for as long as it runs. Check it after
-  /// the last `await`: a suspension between the check and the write lets
-  /// the line arrive in between.
+  /// engine is done. A subclass that feeds external facts guards
+  /// [externalSetState] with it, and a `drain` goes on being fed for as long
+  /// as it runs. Check it after the last `await`: a suspension between the
+  /// check and the write lets the line arrive in between.
   bool get isFinished => _finished;
 
   /// Whether at least one listener is registered on this controller.
@@ -1319,7 +1318,10 @@ abstract class SoloController<S extends Object> {
         // or a `close` from inside its body finds it.
         core
           ..current = job
-          ..inTransition = null;
+          ..inTransition = null
+          // A group that waits after this job is a new wait, and the line
+          // for it is due.
+          ..saidWaiting = false;
         job._launch();
         return _stepEnd;
       } finally {
@@ -1352,8 +1354,7 @@ abstract class SoloController<S extends Object> {
 /// [accumulate] where several events share one job. The five are protected: a
 /// caller sees the operations, not how they are queued.
 ///
-/// The state, the listeners, closing and the hooks come from
-/// [SoloController].
+/// The state, the listeners, closing and the hooks come from [SoloController].
 ///
 /// See [Reference](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#solo)
 /// for every member and the section that explains it.
@@ -1748,8 +1749,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
 /// before an `await`: it loses what the other lanes wrote in between, so a
 /// job reads `ctx.state` where it writes.
 ///
-/// The state, the listeners, closing and the hooks come from
-/// [SoloController].
+/// The state, the listeners, closing and the hooks come from [SoloController].
 ///
 /// See [Two queues over one state](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#two-queues-over-one-state)
 /// and [A write that keeps the other lane's work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-write-that-keeps-the-other-lanes-work)

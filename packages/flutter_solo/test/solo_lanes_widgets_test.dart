@@ -65,7 +65,9 @@ void main() {
     addTearDown(controller.close);
     final parity = SoloSelection.from(controller, (state) => state.isEven);
     final flips = <bool>[];
-    parity.addListener(() => flips.add(parity.value));
+    void onFlip() => flips.add(parity.value);
+    parity.addListener(onFlip);
+    addTearDown(() => parity.removeListener(onFlip));
     final built = <bool>[];
 
     await tester.pumpWidget(
@@ -112,6 +114,9 @@ void main() {
     );
 
     await tester.runAsync(() => controller.addInFirst(1));
+    await tester.pump();
+    expect(seen, [1]);
+
     await tester.runAsync(() => controller.addInSecond(10));
     await tester.pump();
     expect(seen, [1, 11]);

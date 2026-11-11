@@ -8,6 +8,15 @@
   that reads `current` or `queue`, members of `Solo` that `SoloController` has
   not: `solo.pending` gives the job the controller is on and the jobs queued
   behind it.
+
+  ```dart
+  if (solo.pending case SoloPendingJob(:final job, :final queued)) {
+    // `job` is the one the controller is on, `queued` the jobs behind it.
+  }
+  ```
+- **The frames `Solo._reevaluate`, `Solo._setState`, `Solo.externalSetState`
+  and `Solo._step` of a stack trace read `SoloController.…` now.** The members
+  moved to the base; the order and the depth of the frames are the same.
 - **`SoloUnansweredHandler` takes a `SoloController<Object>` instead of a
   `Solo<Object>`.**
 - **`SoloPending` has a new subclass, `SoloPendingLanes`.** An exhaustive

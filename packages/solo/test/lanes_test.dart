@@ -141,12 +141,13 @@ void _ladder(List<String> log, int n, [int i = 0]) {
 }
 
 /// A [StateError] of `lane` that says [cause] and sends to the lanes page.
-Matcher _refusedLane(String cause) => throwsA(
-  isA<StateError>().having(
-    (e) => e.message,
-    'message',
-    allOf(contains(cause), contains('lanes.md#declaring-lanes')),
-  ),
+Matcher _refusedLane(String cause) => throwsA(_refusalOf(cause));
+
+/// The matcher of the [StateError] itself, for a refusal that was stored.
+Matcher _refusalOf(String cause) => isA<StateError>().having(
+  (e) => e.message,
+  'message',
+  allOf(contains(cause), contains('lanes.md#declaring-lanes')),
 );
 
 /// A job that waits until [gate] completes.
@@ -342,11 +343,8 @@ void main() {
           async.flushMicrotasks();
 
           expect(
-            () => Error.throwWithStackTrace(
-              controller.refusal!,
-              StackTrace.empty,
-            ),
-            _refusedLane('after enqueueJob of one of its lanes was called'),
+            controller.refusal,
+            _refusalOf('after enqueueJob of one of its lanes was called'),
           );
           expect(controller.declared, [same(controller.a)]);
           expect(controller.job.lane, same(controller.a.id));
@@ -1112,6 +1110,39 @@ void main() {
         ]);
       },
     );
+
+    test('a group that waits after another group has run says so again', () {
+      final trace = lines((async) {
+        final controller = _Two();
+        final gate = Completer<void>();
+        const window = Duration(milliseconds: 10);
+        controller.first
+            .collect<_AB, int, void>(
+              key: 'g',
+              timing: AccumulationTiming.debounce(window),
+              (ctx, events) => gate.future,
+            )
+            .add(1);
+        async
+          ..flushMicrotasks()
+          ..elapse(window);
+        controller.first
+            .collect<_AB, int, void>(
+              key: 'h',
+              timing: AccumulationTiming.debounce(window),
+              (ctx, events) async {},
+            )
+            .add(1);
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+      });
+
+      expect(trace.where((line) => line == 'first: queue has no ready jobs'), [
+        'first: queue has no ready jobs',
+        'first: queue has no ready jobs',
+      ]);
+    });
 
     test('a Solo in the same program says its lines as before', () {
       final trace = lines((async) {

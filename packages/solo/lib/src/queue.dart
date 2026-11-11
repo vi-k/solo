@@ -11,7 +11,7 @@ part of 'solo.dart';
 /// A job whose start rules are being asked is off the queue and not
 /// started yet. [jobs] and [length] leave it out, as its `isQueued` does,
 /// and the removals reach it ahead of the rest, the way a [Policy] and
-/// [Solo.cancelAll] do: it is queued work until it is launched.
+/// [SoloController.cancelAll] do: it is queued work until it is launched.
 abstract interface class SoloQueue {
   /// An unmodifiable view of queued jobs in their current order.
   ///

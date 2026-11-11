@@ -18,7 +18,7 @@ final class RulesCancelReason extends SoloCancelReason {
   String get name => 'rules';
 }
 
-/// [Solo.close], or [Solo.enqueueJob] after close.
+/// [SoloController.close], or [Solo.enqueueJob] after close.
 final class ClosedCancelReason extends SoloCancelReason {
   /// Creates a controller closing reason.
   const ClosedCancelReason();

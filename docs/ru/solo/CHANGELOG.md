@@ -8,6 +8,15 @@
   Не компилируется и то, которое читает `current` или `queue`: эти члены есть
   у `Solo`, но не у `SoloController`. `solo.pending` даёт задачу, на которой
   стоит контроллер, и задачи, которые ждут за ней в очереди.
+
+  ```dart
+  if (solo.pending case SoloPendingJob(:final job, :final queued)) {
+    // `job` — задача, на которой стоит контроллер, `queued` — задачи за ней.
+  }
+  ```
+- **Кадры `Solo._reevaluate`, `Solo._setState`, `Solo.externalSetState`
+  и `Solo._step` в трассе стека теперь читаются как `SoloController.…`.** Члены
+  переехали в базу; порядок и глубина кадров те же.
 - **`SoloUnansweredHandler` принимает `SoloController<Object>` вместо
   `Solo<Object>`.**
 - **У `SoloPending` новый подкласс, `SoloPendingLanes`.** Исчерпывающему
