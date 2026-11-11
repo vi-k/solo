@@ -244,8 +244,9 @@ void main() {
       ]);
       await bench.close();
       _says(
-        'One root job of a controller at a time, so two of them never '
-        'write the same state.',
+        'One root job at a time in a queue: a `Solo` has one queue, and a '
+        '`SoloLanes` has one for each of its lanes. Two jobs of one queue '
+        'never write the same state.',
       );
     });
 
@@ -341,14 +342,14 @@ void main() {
 
   group('Install', () {
     test('one import brings the engine, the mixin and the widgets', () {
-      expect(arrivesWithOneImport, hasLength(12));
+      expect(arrivesWithOneImport, hasLength(14));
       expect(
         File('lib/flutter_solo.dart').readAsStringSync(),
         contains("export 'package:solo/solo.dart';"),
       );
       _says(
-        '`Solo`, `SoloContext`, `Job`, `Outcome` and `Policy` all arrive '
-        'with',
+        '`Solo`, `SoloLanes`, their base `SoloController`, `SoloContext`, '
+        '`Job`, `Outcome` and `Policy` all arrive with',
       );
       _says(
         'the mixin `SoloListenable`, the widgets `SoloBuilder`, '

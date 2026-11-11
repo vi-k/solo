@@ -1,14 +1,15 @@
 # flutter_solo
 
-State management for Flutter: sequential jobs over one state, exclusive
-ownership, cooperative cancellation, and rebuilds through `SoloBuilder` or
+State management for Flutter: sequential jobs over one state, one job at a time
+in each lane, cooperative cancellation, and rebuilds through `SoloBuilder` or
 `ValueListenable`.
 
-A controller owns a state and runs jobs over it one at a time. `SoloBuilder`
-rebuilds a widget on every change of that state. Mix `SoloListenable` into the
-controller, and it is a `ValueListenable` of its state as well, so it drops
-straight into `ValueListenableBuilder`, `ListenableBuilder`, `AnimatedBuilder`
-and `Listenable.merge`.
+A controller owns a state and runs jobs over it one at a time: a `Solo` in one
+queue, a `SoloLanes` in each of the lanes it declares. `SoloBuilder` rebuilds a
+widget on every change of that state. Mix `SoloListenable` into the controller,
+and it is a `ValueListenable` of its state as well, so it drops straight into
+`ValueListenableBuilder`, `ListenableBuilder`, `AnimatedBuilder` and
+`Listenable.merge`.
 
 The [documentation site](https://docs.yet-another.dev/flutter_solo/) carries
 this page and the guides of the packages below it.
@@ -33,7 +34,8 @@ print(job.outcome); // Cancelled(manual)
 
 What the engine holds to:
 
-- One root job of a controller at a time, so two of them never write the same
+- One root job at a time in a queue: a `Solo` has one queue, and a `SoloLanes`
+  has one for each of its lanes. Two jobs of one queue never write the same
   state.
 - Rules instead of flags: a job declares the states it works with and the
   condition it lives under, and it is cancelled when they stop holding.
@@ -47,13 +49,14 @@ The long argument, eleven scenarios solved in bloc first and then here, is in
 [solo and bloc, side by side](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md).
 
 What is not here: no `SoloProvider` and no code generation, no dependency
-injection, no persistence, and no parallel root jobs. Dependencies are left out
-deliberately: they are passed by other means and packages, such as
-[scopo](https://pub.dev/packages/scopo). Nor would a provider close a
-controller any better than a `State` does, as
+injection, no persistence, and no queue that runs its root jobs in parallel.
+Dependencies are left out deliberately: they are passed by other means and
+packages, such as [scopo](https://pub.dev/packages/scopo). Nor would a provider
+close a controller any better than a `State` does, as
 [The controller's life](#the-controllers-life) shows. One job at a time is
 deliberate too, hence the `solo` in the name: it is the subject of the package,
-not a limit of its engine.
+not a limit of its engine. Work that must not wait for another gets a lane of
+its own in a `SoloLanes`, and that lane runs its jobs one at a time as well.
 
 ## Install
 
@@ -63,8 +66,9 @@ flutter pub add flutter_solo
 
 One dependency is all it takes: `flutter_solo` re-exports the whole of
 [solo](https://pub.dev/packages/solo), which re-exports the whole of
-[async_job](https://pub.dev/packages/async_job). `Solo`, `SoloContext`, `Job`,
-`Outcome` and `Policy` all arrive with
+[async_job](https://pub.dev/packages/async_job). `Solo`, `SoloLanes`, their
+base `SoloController`, `SoloContext`, `Job`, `Outcome` and `Policy` all arrive
+with
 
 ```dart
 import 'package:flutter_solo/flutter_solo.dart';

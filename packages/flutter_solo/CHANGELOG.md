@@ -1,3 +1,30 @@
+## Unreleased
+
+This package re-exports `solo`, and its 2.0.0 is this release: `SoloLanes`, a
+controller with several queues over one state, and the base `SoloController`
+arrive with the same import. See
+[the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
+for what they bring and what breaks there.
+
+### Breaking changes
+
+- **The field `solo` of `SoloBuilder`, `SoloSelector` and `SoloListener`, and
+  the controller `SoloSelection.from` takes, are a `SoloController<S>` instead
+  of a `Solo<S>`.** A `Solo` goes there as before, and so does a `SoloLanes`;
+  what breaks is code that reads `builder.solo` into a variable of type
+  `Solo<S>`.
+- **`SoloListenable` is a mixin on `SoloController`, no longer a subtype of
+  `Solo`.** It mixes into a `SoloLanes` as well, and a value of type
+  `SoloListenable` does not go where a `Solo` is expected.
+
+### Documentation
+
+- The README says that the root jobs of a `Solo` run one at a time, and so do
+  those of each lane of a `SoloLanes`, and lists both with `SoloController`
+  among what arrives with the import.
+- `pubspec.yaml` and the dartdoc of the library say the same in place of
+  exclusive ownership.
+
 ## 1.1.0
 
 ### Added

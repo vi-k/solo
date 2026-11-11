@@ -12,6 +12,8 @@ import 'package:flutter_solo/flutter_solo.dart';
 /// the rest of `solo`.
 const arrivesWithOneImport = <Type>[
   Solo<Object>,
+  SoloLanes<Object>,
+  SoloController<Object>,
   SoloContext<Object, Object>,
   Job<Object>,
   Outcome<Object>,
