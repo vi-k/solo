@@ -229,8 +229,9 @@ where `ctx.run` starts it, like any `Job.deferred`.
 
 ## Queue and policies
 
-A job in a controller's queue is a root job, and only one root job runs at a
-time. When a method is called again while the job of an earlier call is still
+A job in a controller's queue is a root job, and only one root job of a queue
+runs at a time: a `Solo` has one queue, and each lane of a `SoloLanes` has its
+own. When a method is called again while the job of an earlier call is still
 queued or running, the policy decides which of the two survives:
 
 ```dart
