@@ -165,8 +165,8 @@ final class _SoloLane<S extends Object> implements SoloLane<S> {
     bool first = false,
     Policy policy = Policy.sequential,
   }) {
-    // Whatever comes of the call, a refusal included: from the first job on,
-    // the set of lanes is what the pump walks.
+    // Whatever comes of the call, a refusal included: from the first
+    // `enqueueJob` call on, the set of lanes is what the pump walks.
     _controller._sealed ??= _Sealed.enqueue;
     if (job is! _SoloJob<S, S, T> || !identical(job._destination, _core)) {
       throw ArgumentError.value('$job', 'job', _notCreatedByLane);
