@@ -637,9 +637,10 @@ no new root job.
 A `ctx` is valid while its job runs, and the unawaited future of the bloc
 heading above has a counterpart here. A body that starts a future and does not
 await it returns, and the future then calls `ctx.emit` on a job that is over.
-That call throws `Bad state: Job(send) has already finished, cannot emit`, in
-debug and release alike, and the state stays as it was. Where bloc has an
-assertion that disappears in release, this is an ordinary error that does not.
+That call throws `Bad state: Job(send) has already finished, cannot emit` with
+a hint at the way out, in debug and release alike, and the state stays as it
+was. Where bloc has an assertion that disappears in release, this is an
+ordinary error that does not.
 
 **What solo gives:** `close()` cancels the running job at `ctx.abandonable` and
 returns without waiting for the reply; the reply update and `markReplyRead()`

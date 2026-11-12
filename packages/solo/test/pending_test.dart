@@ -34,6 +34,23 @@ void main() {
     });
   });
 
+  test('a job without a key is named as one, not as null', () {
+    runSolo((solo, journal, async) {
+      solo
+        ..enqueue<TestState, void>((ctx) => pause(ctx, 100))
+        ..enqueue<TestState, void>(
+          describe: () => 'sync',
+          (ctx) => pause(ctx, 100),
+        );
+      async.flushMicrotasks();
+      expect(
+        '${solo.pending}',
+        'SoloPending([no key] in its body, 1 queued: [no key: sync])',
+      );
+      async.flushTimers();
+    });
+  });
+
   test('a job that turns cancellation down is nothing pending', () {
     runSolo((solo, journal, async) {
       solo.enqueue<TestState, void>(

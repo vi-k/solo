@@ -860,14 +860,16 @@ void main() {
         controller = chat.LateChatController(chat.Api())..send('hi');
         async.elapse(_ms(200));
       });
-      expect(errors, [
-        'Bad state: Job(send) has already finished, cannot emit',
-      ]);
+      const thrown =
+          'Bad state: Job(send) has already finished, cannot emit; code that '
+          'outlived the body called it: await that code in the body, or take '
+          'a stream with ctx.each';
+      expect(errors, [thrown]);
       expect('${controller.currentState}', 'ChatState(null)');
       _says(
         'That call throws `Bad state: Job(send) has already finished, '
-        'cannot emit`, in debug and release alike, and the state stays as '
-        'it was.',
+        'cannot emit` with a hint at the way out, in debug and release alike, '
+        'and the state stays as it was.',
       );
     });
 

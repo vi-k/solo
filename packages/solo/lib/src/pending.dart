@@ -271,7 +271,9 @@ final class SoloPendingStream extends SoloPending {
 }
 
 String _name(Job<Object?> job) {
-  final key = _part('key', () => '${job.key}');
+  // `[null]` read as a broken line exactly where the snapshot is read: a
+  // close that hangs on a job made without a key.
+  final key = _part('key', () => job.key == null ? 'no key' : '${job.key}');
   final description = _part('describe', job.describe);
   return description.isEmpty ? '[$key]' : '[$key: $description]';
 }

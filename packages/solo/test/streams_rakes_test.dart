@@ -210,7 +210,9 @@ void main() {
         expect(errors, [_quotes().first, _quotes().first]);
         expect(
           _quotes().first,
-          'Bad state: Job(track) has already finished, cannot emit',
+          'Bad state: Job(track) has already finished, cannot emit; code that '
+          'outlived the body called it: await that code in the body, or take '
+          'a stream with ctx.each',
         );
         _says(
           'Each position it delivers throws out of `emit` into the zone, '

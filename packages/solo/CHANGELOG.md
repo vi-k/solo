@@ -56,6 +56,10 @@
   where they took seconds. `queue.jobs` is still a live view in the order of
   the queue and prints the same, but it is no longer a `List`, only the
   `Iterable` its type says.
+- Two texts read better where something went wrong. `pending` prints a job made
+  without a key as `[no key]`, not `[null]`. `emit` called on a finished job by
+  code that outlived its body says so and names the way out: await that code in
+  the body, or take a stream with `ctx.each`.
 
 ### Documentation
 

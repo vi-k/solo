@@ -30,7 +30,7 @@ a job that has finished. Each position it delivers throws out of `emit` into
 the zone, and the state never changes:
 
 ```text
-Bad state: Job(track) has already finished, cannot emit
+Bad state: Job(track) has already finished, cannot emit; code that outlived the body called it: await that code in the body, or take a stream with ctx.each
 ```
 
 Nothing ends that subscription either: there is no job left to cancel, and

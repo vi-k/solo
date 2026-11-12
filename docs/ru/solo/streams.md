@@ -29,7 +29,7 @@ Job<void> track() => enqueue<Ready, void>(key: 'track', (ctx) async {
 `emit` бросает ошибку, и та уходит в зону, а состояние не меняется:
 
 ```text
-Bad state: Job(track) has already finished, cannot emit
+Bad state: Job(track) has already finished, cannot emit; code that outlived the body called it: await that code in the body, or take a stream with ctx.each
 ```
 
 Снять эту подписку тоже нечем: задачи, которую можно отменить, уже нет,

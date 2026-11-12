@@ -2898,7 +2898,7 @@ void main() {
         expect(job.isFinished, isFalse);
         expect(
           '${session.pending}',
-          'SoloPending([null] in its body, closing, '
+          'SoloPending([no key] in its body, closing, '
               'cancelled by Cancelled(closed))',
           reason: 'close waits for this job, and this job waits for close',
         );

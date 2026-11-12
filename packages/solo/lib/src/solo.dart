@@ -1764,6 +1764,10 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   /// The lanes in the order of creation.
   final _lanes = <_SoloLane<S>>[];
 
+  /// What [lanes] hands out: one view for every call, as the set is sealed
+  /// right after the constructor.
+  late final _lanesView = UnmodifiableListView<SoloLane<S>>(_lanes);
+
   // Filled by `lane`, from the constructor body; the observer's `onCreate`
   // runs before that body and finds no lane yet.
   @override
@@ -1834,7 +1838,7 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   /// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
   /// on the lanes page.
   @protected
-  List<SoloLane<S>> get lanes => List<SoloLane<S>>.unmodifiable(_lanes);
+  List<SoloLane<S>> get lanes => _lanesView;
 
   // The busy lanes in the order of creation, each by the rules of a `Solo`.
   // No busy lane is `null`, and one is a `SoloPendingLanes` as several are:

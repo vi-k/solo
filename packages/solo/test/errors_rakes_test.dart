@@ -4277,7 +4277,9 @@ void main() {
           expect(whileActive, 'emitted 1');
           expect(
             afterCompletion,
-            'Job(active) has already finished, cannot emit',
+            'Job(active) has already finished, cannot emit; code that outlived '
+            'the body called it: await that code in the body, or take a '
+            'stream with ctx.each',
           );
           expect(afterCancellation, 'Cancelled(manual)');
           expect(bench.currentState, 1);

@@ -297,6 +297,16 @@ final class _SoloContext<S extends Object, W extends S, R>
 
   @override
   void emit(S next) {
+    // The core's words say what happened and not where it came from: a
+    // finished job is written to by a stream subscription or a future the
+    // body started and did not wait for, and the text names the way out.
+    if (_job.isFinished) {
+      throw StateError(
+        '$_job has already finished, cannot emit; code that outlived the '
+        'body called it: await that code in the body, or take a stream with '
+        'ctx.each',
+      );
+    }
     throwIfFinished('emit');
     throwIfCancelled();
     // `W` is a condition of the whole run, not only of the start, and a

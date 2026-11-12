@@ -172,6 +172,7 @@ void main() {
       expect(controller.first.id.name, 'first');
       expect('${controller.first.id}', 'first');
       expect(() => lanes.add(controller.first), throwsUnsupportedError);
+      expect(controller.declared, same(lanes), reason: 'one list, not a copy');
     });
 
     test('a second lane of one name throws', () {
