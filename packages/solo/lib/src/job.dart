@@ -75,6 +75,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// in none.
   _QueueEntry<S>? _queueEntry;
 
+  /// This job's place among the queued jobs of its key; `null` while it is
+  /// in no queue or has no key.
+  _IndexEntry<S>? _keyEntry;
+
+  /// This job's place among the queued groups of its accumulator; `null`
+  /// while it is in no queue or carries no group.
+  _IndexEntry<S>? _ownerEntry;
+
   /// The revision of the state this job saw last, by a read or by a write
   /// of its own; `null` before the first.
   int? _seenRevision;

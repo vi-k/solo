@@ -60,8 +60,9 @@
 - Queuing a job, removing one and starting the next no longer walk the queue,
   and tens of thousands of queued jobs take milliseconds where they took
   seconds. A policy that looks for a job of the same key, `droppable`,
-  `keepLatest` or `restart`, still walks it, as does an accumulator that looks
-  for its group.
+  `keepLatest` or `restart`, asks only the jobs of that key, and an accumulator
+  only its own groups. A key is looked up by its `hashCode` now, as the key of
+  a `Map` is: two keys equal by `==` need the same hash code.
 - Two texts read better where something went wrong. `pending` prints a job made
   without a key as `[no key]`, not `[null]`. `emit` called on a finished job by
   code that outlived its body says so and names the way out: await that code in

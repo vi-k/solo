@@ -62,6 +62,79 @@ final class _QueueEntry<S extends Object>
   _QueueEntry(this.job);
 }
 
+/// The place of one job among the queued jobs that share something with it:
+/// its key, or the accumulator its group belongs to.
+final class _IndexEntry<S extends Object>
+    extends LinkedListEntry<_IndexEntry<S>> {
+  final _SoloJob<S, S, Object?> job;
+
+  /// What the job shares with the others of its list, the key the list is
+  /// found by.
+  final Object by;
+
+  _IndexEntry(this.job, this.by);
+}
+
+/// The queued jobs by what they share, each list in the order of the queue.
+///
+/// A policy looks for the jobs of a key, and an accumulator for its groups,
+/// on every call: a walk of the queue made each of those calls cost the
+/// length of the queue, and a long queue paid for it once per call.
+final class _QueueIndex<S extends Object> {
+  final Map<Object, LinkedList<_IndexEntry<S>>> _lists;
+
+  /// An index whose keys are compared with `==`, as the keys of jobs are.
+  _QueueIndex.byEquality() : _lists = {};
+
+  /// An index whose keys are compared by identity, as accumulators are.
+  _QueueIndex.byIdentity() : _lists = Map.identity();
+
+  _IndexEntry<S> _insert(
+    _SoloJob<S, S, Object?> job,
+    Object by, {
+    required bool first,
+  }) {
+    final entry = _IndexEntry<S>(job, by);
+    final list = _lists.putIfAbsent(by, LinkedList.new);
+    if (first) {
+      list.addFirst(entry);
+    } else {
+      list.add(entry);
+    }
+    return entry;
+  }
+
+  void _unlink(_IndexEntry<S> entry) {
+    final list = entry.list!;
+    entry.unlink();
+    // An empty list goes with its key: the index keeps no key the queue
+    // no longer holds.
+    if (list.isEmpty) _lists.remove(entry.by);
+  }
+
+  /// Whether a queued job shares [by].
+  bool _holds(Object by) => _lists.containsKey(by);
+
+  /// The queued jobs that share [by], in the order of the queue, taken now:
+  /// the caller asks them questions whose answers may change the queue.
+  List<_SoloJob<S, S, Object?>> _of(Object by) => [
+    ...?_lists[by]?.map((entry) => entry.job),
+  ];
+
+  /// The queued jobs that share [by], from the last to the first, a live
+  /// view: for a reader that changes nothing while it walks.
+  Iterable<_SoloJob<S, S, Object?>> _reversed(Object by) sync* {
+    final list = _lists[by];
+    var entry = list == null || list.isEmpty ? null : list.last;
+    while (entry != null) {
+      yield entry.job;
+      entry = entry.previous;
+    }
+  }
+
+  void _clear() => _lists.clear();
+}
+
 /// What [SoloQueue.jobs] hands out: a live view of the queue that prints as
 /// the list it used to be.
 final class _QueueView<S extends Object>
@@ -88,7 +161,24 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   final _SoloLaneCore<S> _core;
   final _entries = LinkedList<_QueueEntry<S>>();
 
+  /// The queued jobs that have a key, by the key.
+  final _byKey = _QueueIndex<S>.byEquality();
+
+  /// The queued jobs of accumulation groups, by the accumulator.
+  final _byOwner = _QueueIndex<S>.byIdentity();
+
   _SoloQueue(this._core);
+
+  /// The queued jobs whose key is [key], in the order of the queue.
+  List<_SoloJob<S, S, Object?>> _keyed(Object key) => _byKey._of(key);
+
+  /// The queued jobs of the groups of [owner], from the last to the first,
+  /// a live view.
+  Iterable<_SoloJob<S, S, Object?>> _ownedReversed(Object owner) =>
+      _byOwner._reversed(owner);
+
+  /// Whether a group of [owner] is queued.
+  bool _holdsGroupOf(Object owner) => _byOwner._holds(owner);
 
   /// The queued jobs in their order, a live view.
   Iterable<_SoloJob<S, S, Object?>> get _jobs =>
@@ -210,12 +300,22 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     } else {
       _entries.add(entry);
     }
+    if (job.key case final key?) {
+      job._keyEntry = _byKey._insert(job, key, first: first);
+    }
+    if (job._accumulation?._owner case final owner?) {
+      job._ownerEntry = _byOwner._insert(job, owner, first: first);
+    }
   }
 
   /// Takes [job], which is in this queue, out of it.
   void _unlink(_SoloJob<S, S, Object?> job) {
     job._queueEntry!.unlink();
     job._queueEntry = null;
+    if (job._keyEntry case final entry?) _byKey._unlink(entry);
+    job._keyEntry = null;
+    if (job._ownerEntry case final entry?) _byOwner._unlink(entry);
+    job._ownerEntry = null;
   }
 
   /// Moves [job], which is in this queue, behind every other job.
@@ -240,9 +340,14 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   List<_SoloJob<S, S, Object?>> _drain() {
     final drained = _jobs.toList();
     for (final job in drained) {
-      job._queueEntry = null;
+      job
+        .._queueEntry = null
+        .._keyEntry = null
+        .._ownerEntry = null;
     }
     _entries.clear();
+    _byKey._clear();
+    _byOwner._clear();
     return drained;
   }
 }

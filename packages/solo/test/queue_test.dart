@@ -397,4 +397,135 @@ void main() {
       await solo.close();
     },
   );
+
+  test('a policy with a key asks the jobs of its key, not the queue', () async {
+    // `droppable`, `keepLatest` and `restart` walked the whole queue on every
+    // call: 20 000 calls with as many keys took 17 to 27 seconds each. They
+    // ask the jobs of their own key now, and the three together take well
+    // under a second alone.
+    const n = 20000;
+    final watch = Stopwatch()..start();
+    for (final policy in [
+      Policy.droppable,
+      Policy.keepLatest,
+      Policy.restart,
+    ]) {
+      final solo = TestSolo();
+      final gate = Completer<void>();
+      solo.enqueue<TestState, void>((ctx) => ctx.join(() => gate.future));
+      await Future<void>.delayed(Duration.zero);
+      for (var i = 0; i < n; i++) {
+        solo.enqueue<TestState, void>(key: i, policy: policy, (ctx) async {});
+      }
+      expect(solo.queue.length, n);
+      // One key replaced over and over: the jobs it replaced are gone from
+      // what the next call asks.
+      for (var i = 0; i < n; i++) {
+        solo.enqueue<TestState, void>(
+          key: 'same',
+          policy: Policy.keepLatest,
+          (ctx) async {},
+        );
+      }
+      expect(solo.queue.length, n + 1);
+      gate.complete();
+      await solo.close();
+    }
+    expect(watch.elapsed, lessThan(const Duration(seconds: 6)));
+  });
+
+  test('droppable hands back the last job of its key in the queue', () {
+    runSolo((solo, journal, async) {
+      solo.enqueueJob(slow(solo, 'busy'));
+      async.flushMicrotasks();
+      final tail = solo.enqueueJob(slow(solo, 'k'));
+      final head = solo.enqueueJob(slow(solo, 'k'), first: true);
+      expect(solo.queue.jobs, [head, tail]);
+      expect(
+        solo.enqueueJob(slow(solo, 'k'), policy: Policy.droppable),
+        same(tail),
+      );
+      async.flushTimers();
+      journal.take();
+    });
+  });
+
+  test('keepLatest cancels the jobs of its key in their queue order', () {
+    runSolo((solo, journal, async) {
+      solo.enqueueJob(slow(solo, 'busy'));
+      async.flushMicrotasks();
+      for (final name in ['first', 'second']) {
+        solo.enqueue<TestState, void>(
+          key: 'k',
+          describe: () => name,
+          (ctx) async {},
+        );
+      }
+      journal.take();
+      solo.enqueueJob(slow(solo, 'k'), policy: Policy.keepLatest);
+      expect(journal.take(), [
+        '[k: first] dropped Cancelled(replaced)',
+        '[k: second] dropped Cancelled(replaced)',
+      ]);
+      async.flushTimers();
+      journal.take();
+    });
+  });
+
+  test('an accumulator asks its own groups, not the queue', () async {
+    // Each accumulator looked for its group, and asked whether it was idle,
+    // by a walk of the queue: 10 000 accumulators with an event each took 2
+    // to 6 seconds per policy. Each asks its own groups now.
+    const n = 10000;
+    final watch = Stopwatch()..start();
+    for (final policy in AccumulationPolicy.values) {
+      final solo = TestSolo();
+      final gate = Completer<void>();
+      solo.enqueue<TestState, void>((ctx) => ctx.join(() => gate.future));
+      await Future<void>.delayed(Duration.zero);
+      for (var i = 0; i < n; i++) {
+        solo
+            .accumulate<TestState, int, void>(
+              (ctx, value) async {},
+              merge: (a, b) => a + b,
+              policy: policy,
+            )
+            .add(1);
+      }
+      expect(solo.queue.length, n);
+      gate.complete();
+      await solo.close();
+    }
+    expect(watch.elapsed, lessThan(const Duration(seconds: 6)));
+  });
+
+  test('a key built twice is one key for the policies', () {
+    runSolo((solo, journal, async) {
+      String user(int id) => 'user-$id';
+      final first = solo.enqueue<TestState, void>(
+        key: (user(1), 2),
+        policy: Policy.droppable,
+        (ctx) async => delay(100),
+      );
+      final second = solo.enqueue<TestState, void>(
+        key: (user(1), 2),
+        policy: Policy.droppable,
+        (ctx) async => delay(100),
+      );
+      expect(second, same(first));
+      final queued = solo.enqueue<TestState, void>(
+        key: (user(3), 4),
+        (ctx) async => delay(100),
+      );
+      final latest = solo.enqueue<TestState, void>(
+        key: (user(3), 4),
+        policy: Policy.keepLatest,
+        (ctx) async => delay(100),
+      );
+      async.flushMicrotasks();
+      expect(queued.outcome, isA<Cancelled>());
+      expect(latest.isQueued, isTrue);
+      async.flushTimers();
+    });
+  });
 }

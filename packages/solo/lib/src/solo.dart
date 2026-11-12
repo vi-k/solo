@@ -1008,7 +1008,11 @@ abstract class SoloController<S extends Object> {
     // duplicate found there is handed back as before the close, since its work
     // is going to be done, and only new work gets the closed answer.
     final duplicate = (!isClosed || _draining) && policy == Policy.droppable
-        ? _lastJobWhereIn(core, (other) => other.key == impl.key)
+        ? _lastJobWhereIn(
+            core,
+            (other) => other.key == impl.key,
+            queued: queue._keyed(impl.key!).reversed,
+          )
         : null;
     // The two jobs are compared with each other, not with `T`: the type
     // argument of this call is whatever the call site wrote down, and a
@@ -1113,8 +1117,17 @@ abstract class SoloController<S extends Object> {
       // What the cancelled jobs' code does to this one is the queue's usual
       // business from here: a cancellation removes it, a `close` drops it
       // with the rest.
-      queue.removeWhere(
-        (other) => other.key == impl.key && !identical(other, impl),
+      // Only the jobs of the key are asked, not the whole queue: a queue
+      // walk per call made a long queue of keys pay for its length on every
+      // call. The held job first, as `removeWhere` takes it.
+      final held = queue._held;
+      queue._clear(
+        [
+          if (held != null && held.key == impl.key) held,
+          for (final other in queue._keyed(impl.key!))
+            if (!identical(other, impl)) other,
+        ],
+        force: false,
         reason: const ReplacedCancelReason(),
       );
       // Unless that code took [job] out again: the running job is cancelled
@@ -1136,15 +1149,19 @@ abstract class SoloController<S extends Object> {
 
   /// The last job of [core] matching [test]: [Solo.lastJobWhere] and
   /// [SoloLane.lastJobWhere].
+  ///
+  /// [queued], when given, is the part of the queue worth asking, from the
+  /// last job to the first, taken before any of them is asked.
   _SoloJob<S, S, Object?>? _lastJobWhereIn(
     _SoloLaneCore<S> core,
-    bool Function(SoloJob<Object?> job) test,
-  ) {
+    bool Function(SoloJob<Object?> job) test, {
+    Iterable<_SoloJob<S, S, Object?>>? queued,
+  }) {
     // A snapshot for the same reason as in `removeWhere`: the predicate is
     // the caller's code, and it may touch the queue while it answers. It
     // may even cancel the job it is about to accept, so a job is asked
     // after the answer, too, whether it is still going to do the work.
-    for (final job in core.queue._reversed.toList()) {
+    for (final job in queued ?? core.queue._reversed.toList()) {
       if (test(job) && _goingOn(job)) {
         return job;
       }

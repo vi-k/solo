@@ -143,7 +143,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     final queue = _core.queue;
     final candidates = _policy == AccumulationPolicy.adjacent
         ? <_SoloJob<S, S, Object?>>[if (queue.isNotEmpty) queue._jobs.last]
-        : queue._reversed;
+        : queue._ownedReversed(this);
     for (final job in candidates) {
       final group = job._accumulation;
       if (group != null && group._open && identical(group._owner, this)) {
@@ -225,9 +225,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   @override
   bool get _throttleReady => _throttleTimer?.isActive != true;
 
-  bool get _hasQueuedGroup => _core.queue._jobs.any(
-    (job) => identical(job._accumulation?._owner, this),
-  );
+  bool get _hasQueuedGroup => _core.queue._holdsGroupOf(this);
 
   /// Whether this accumulator has no group of its own queued or running.
   bool get _isIdle =>
