@@ -197,9 +197,12 @@ cascades, casts and `!`, in any branch of `?:`, `??` and a switch expression,
 directly or through local variables of the same body, and an `await` or
 `await for` of the body, or of an action the write is in, comes between the
 read and the write in the text of the job: a wait in one branch counts for a
-write in another. The message names the variable the read went to. A write in
-the action of `await ctx.join(...)` runs before the job suspends and is not
-reported. A read in the `emit` itself,
+write in another, except a branch whose block ends with `return` or `throw`,
+which the job leaves before a write after it. An assignment in a function
+declared in the body, a function expression or a local function, does not
+refresh the copy: the function may never run. The message names the variable
+the read went to. A write in the action of `await ctx.join(...)` runs before
+the job suspends and is not reported. A read in the `emit` itself,
 `ctx.emit(ctx.state.withPosts(await ctx.abandonable(fetchPosts)))`, gets its
 own message: await into a local variable before the `emit`, and read
 `ctx.state` in the `emit` after it.

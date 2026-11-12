@@ -233,6 +233,158 @@ $_feed
     ],
   );
 
+  // A write that rebuilds the copy from itself after the wait is no fresh
+  // read.
+  Future<void> test_self_assignment_conditional() => assertAt(
+    '''
+$_feed
+  Job<void> like(String post, bool liked) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        var feed = ctx.state;
+        await ctx.join(() => send(post));
+        feed = liked ? feed.confirm(post) : feed;
+        ctx.emit(feed);
+      });
+}
+''',
+    ['ctx.emit(feed)'],
+  );
+
+  Future<void> test_self_assignment_coalesce() => assertAt(
+    '''
+$_feed
+  Job<void> like(String post, Feed? next) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        var feed = ctx.state;
+        await ctx.join(() => send(post));
+        feed = next ?? feed;
+        ctx.emit(feed);
+      });
+}
+''',
+    ['ctx.emit(feed)'],
+  );
+
+  Future<void> test_self_assignment_switch() => assertAt(
+    '''
+$_feed
+  Job<void> like(String post, bool liked) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        var feed = ctx.state;
+        await ctx.join(() => send(post));
+        feed = switch (liked) {
+          true => feed.confirm(post),
+          false => feed,
+        };
+        ctx.emit(feed);
+      });
+}
+''',
+    ['ctx.emit(feed)'],
+  );
+
+  // A function declared in the body that nothing calls does not refresh the
+  // copy.
+  Future<void> test_function_declared_in_the_body_refreshes_nothing() =>
+      assertAt(
+        '''
+$_feed
+  Job<void> like(String post) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        var feed = ctx.state;
+        await ctx.join(() => send(post));
+        void refresh() {
+          feed = ctx.state;
+        }
+        ctx.emit(feed.confirm(post));
+      });
+}
+''',
+        ['ctx.emit(feed.confirm(post))'],
+      );
+
+  Future<void> test_function_expression_refreshes_nothing() => assertAt(
+    '''
+$_feed
+  Job<void> like(String post) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        var feed = ctx.state;
+        await ctx.join(() => send(post));
+        final refresh = () {
+          feed = ctx.state;
+        };
+        ctx.emit(feed.confirm(post));
+        refresh;
+      });
+}
+''',
+    ['ctx.emit(feed.confirm(post))'],
+  );
+
+  // A branch that ends the job waits for no write after it.
+  Future<void> test_branch_that_returns() => assertAt('''
+$_feed
+  Job<void> like(String post, bool empty) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        final feed = ctx.state;
+        if (empty) {
+          await ctx.join(() => send(post));
+          return;
+        }
+        ctx.emit(feed.confirm(post));
+      });
+}
+''', []);
+
+  Future<void> test_branch_that_throws() => assertAt('''
+$_feed
+  Job<void> like(String post, bool empty) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        final feed = ctx.state;
+        if (empty) {
+          await ctx.join(() => send(post));
+          throw post;
+        }
+        ctx.emit(feed.confirm(post));
+      });
+}
+''', []);
+
+  // The same branch without the end: its wait is before the write.
+  Future<void> test_branch_that_falls_through() => assertAt(
+    '''
+$_feed
+  Job<void> like(String post, bool empty) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        final feed = ctx.state;
+        if (empty) {
+          await ctx.join(() => send(post));
+        }
+        ctx.emit(feed.confirm(post));
+      });
+}
+''',
+    ['ctx.emit(feed.confirm(post))'],
+  );
+
+  // A write inside that branch, after its wait, is still stale.
+  Future<void> test_write_in_the_branch_that_returns() => assertAt(
+    '''
+$_feed
+  Job<void> like(String post, bool empty) =>
+      _likes.enqueue<Feed, void>((ctx) async {
+        final feed = ctx.state;
+        if (empty) {
+          await ctx.join(() => send(post));
+          ctx.emit(feed.confirm(post));
+          return;
+        }
+      });
+}
+''',
+    ['ctx.emit(feed.confirm(post))'],
+  );
+
   Future<void> test_state_as_and_await_for() => assertAt(
     '''
 $_feed

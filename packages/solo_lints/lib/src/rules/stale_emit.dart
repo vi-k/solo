@@ -201,7 +201,12 @@ class _Reads {
     body.body.accept(writes);
     Expression? last;
     for (final value in writes.values) {
-      if (value.offset < root.offset &&
+      // The right-hand side that holds [root] is the write being resolved,
+      // not an earlier one: `feed = flag ? feed.confirm(post) : feed`
+      // reads the copy it replaces.
+      final holdsRoot = value.offset <= root.offset && root.end <= value.end;
+      if (!holdsRoot &&
+          value.offset < root.offset &&
           (last == null || value.offset > last.offset)) {
         last = value;
       }
@@ -218,13 +223,23 @@ class _Reads {
 }
 
 /// The values written to [variable]: its initializer and the right-hand
-/// sides of `variable = ...`.
+/// sides of `variable = ...`, in the body itself.
+///
+/// A function declared in the body, a function expression or a local
+/// function, is not entered: it may never run, and when it runs the order of
+/// its writes is not that of the text.
 class _Writes extends RecursiveAstVisitor<void> {
   final LocalVariableElement variable;
 
   final values = <Expression>[];
 
   _Writes(this.variable);
+
+  @override
+  void visitFunctionExpression(FunctionExpression node) {}
+
+  @override
+  void visitFunctionDeclaration(FunctionDeclaration node) {}
 
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
@@ -249,18 +264,24 @@ class _Writes extends RecursiveAstVisitor<void> {
 /// on its own.
 ///
 /// The order is that of the text of the job: a wait in a branch counts for
-/// a write in another.
+/// a write in another, unless the branch ends the job: a block that ends
+/// with `return` or `throw` and does not hold the write is left before it.
 bool _waitsBetween(List<_Suspension> waits, int read, AstNode emit) =>
     waits.any(
       (wait) =>
           wait.point > read &&
           wait.point < emit.end &&
           wait.function.offset <= emit.offset &&
-          emit.end <= wait.function.end,
+          emit.end <= wait.function.end &&
+          wait.leaving.every(
+            (block) => block.offset <= emit.offset && emit.end <= block.end,
+          ),
     );
 
-/// Where a body suspends, and the function body it suspends.
-typedef _Suspension = ({int point, FunctionBody function});
+/// Where a body suspends, the function body it suspends, and the blocks
+/// around the wait, within that function, whose last statement is `return`
+/// or `throw`.
+typedef _Suspension = ({int point, FunctionBody function, List<Block> leaving});
 
 /// The suspensions of [body]: the end of each `await`, where the body
 /// resumes after the awaited value has run, and the start of the body of
@@ -274,12 +295,25 @@ List<_Suspension> _suspensionsOf(FunctionExpression body) {
   return waits.found;
 }
 
+/// Whether the last statement of [block] is a `return` or a `throw`.
+bool _endsTheJob(Block block) {
+  if (block.statements.isEmpty) return false;
+  final last = block.statements.last;
+  return last is ReturnStatement ||
+      (last is ExpressionStatement && last.expression is ThrowExpression);
+}
+
 class _Waits extends RecursiveAstVisitor<void> {
   final found = <_Suspension>[];
 
   void _add(AstNode node, int point) {
     final function = node.thisOrAncestorOfType<FunctionBody>();
-    if (function != null) found.add((point: point, function: function));
+    if (function == null) return;
+    final leaving = <Block>[];
+    for (var at = node.parent; at != null && at != function; at = at.parent) {
+      if (at is Block && _endsTheJob(at)) leaving.add(at);
+    }
+    found.add((point: point, function: function, leaving: leaving));
   }
 
   @override
