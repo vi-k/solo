@@ -35,6 +35,26 @@ void main() {
     });
   });
 
+  test('queue.jobs is a live view that counts what the queue holds', () {
+    runSolo((solo, journal, async) {
+      final jobs = solo.queue.jobs;
+      expect(jobs, isEmpty);
+      solo.enqueueJob(slow(solo, 'a'));
+      solo.enqueueJob(slow(solo, 'b'));
+      solo.enqueueJob(slow(solo, 'c'));
+      // `a` runs, `b` and `c` wait.
+      async.flushMicrotasks();
+      expect(jobs, hasLength(2));
+      expect(jobs.isEmpty, isFalse);
+      expect(jobs.length, solo.queue.length);
+      expect(jobs.toString(), '[Job(b), Job(c)]');
+      expect(solo.queue.clear(), 2);
+      expect(jobs.length, 0);
+      expect(jobs.isEmpty, isTrue);
+      async.flushTimers();
+    });
+  });
+
   test('first: true puts the job ahead of the queue', () {
     runSolo((solo, journal, async) {
       solo.enqueueJob(slow(solo, 'a'));
