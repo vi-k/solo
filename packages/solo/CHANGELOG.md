@@ -14,9 +14,6 @@
     // `job` is the one the controller is on, `queued` the jobs behind it.
   }
   ```
-- **The frames `Solo._reevaluate`, `Solo._setState`, `Solo.externalSetState`
-  and `Solo._step` of a stack trace read `SoloController.…` now.** The members
-  moved to the base; the order and the depth of the frames are the same.
 - **`SoloUnansweredHandler` takes a `SoloController<Object>` instead of a
   `Solo<Object>`.**
 - **`SoloPending` has a new subclass, `SoloPendingLanes`.** An exhaustive
@@ -45,7 +42,15 @@
   `SoloLaneId`, the identity of a lane with its `name`.
 - `SoloJob.lane`, the lane a job runs in, `null` for a job of a `Solo`.
 - `SoloPendingLanes`, what `pending` of a `SoloLanes` returns: the snapshot of
-  each lane that holds it.
+  each lane that holds it, a `SoloPendingLane` with the `lane` and its
+  `pending`.
+
+### Changed
+
+- The frames `Solo._reevaluate`, `Solo._setState`, `Solo.externalSetState` and
+  `Solo._step` of a stack trace read `SoloController.…` now: the members moved
+  to the base, and the order and the depth of the frames are the same. The
+  frames of a stack trace are not part of the public API.
 
 ### Documentation
 
@@ -69,6 +74,8 @@
   the cycle across lanes that hangs.
 - The dartdoc of the listeners library says that an application listens through
   `SoloController.addListener`.
+- The README counts the frames of a stack trace, with the text of error
+  messages and of debug output, among what is not part of the public API.
 
 ## 1.1.1
 

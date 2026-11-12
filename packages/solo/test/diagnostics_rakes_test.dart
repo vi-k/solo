@@ -691,7 +691,8 @@ void main() {
     test('a SoloLanes names each lane that holds it', () {
       _says(
         'A `SoloLanes` waits for every lane, and its `pending` is a '
-        '`SoloPendingLanes`. Its `lanes` pair each lane that holds the close '
+        '`SoloPendingLanes`. Its `lanes`, each a `SoloPendingLane`, pair each '
+        'lane that holds the close '
         "with that lane's `SoloPendingJob` or `SoloPendingQueue`, in the "
         'order the lanes were declared. A lane that holds nothing is left '
         'out, and with no lane left `pending` is `null`.',

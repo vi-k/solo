@@ -31,7 +31,7 @@ subclass, and an override in the subclass.
 | `isFinished` | Whether closing has finished and the state can no longer change | [externalSetState](state.md#externalsetstate) |
 | `pending` | What is holding the controller right now, a running job included, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `cancelAll()` | Clears every queue and cancels every running job, one per lane of a `SoloLanes`; the controller stays open. `force: true` removes queued jobs made with `cancellable: false` too, and `reason:` names the reason every job it ends carries | [Three ways to stop](cancellation.md#three-ways-to-stop) |
-| `close()` | Stops taking work and closes, cancelling what is queued and running or, with `mode: SoloCloseMode.drain`, running the queues first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `close()` | Stops taking work and closes, dropping what is queued and asking what runs to cancel or, with `mode: SoloCloseMode.drain`, running the queues first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 
 ### What the subclass uses
 
@@ -119,7 +119,7 @@ fields. Every member here is protected.
 | --- | --- | --- |
 | `SoloLanes(initialState)` | The constructor a subclass calls as `super(initialState)`, with the first state; its body declares the lanes | [Declaring lanes](lanes.md#declaring-lanes) |
 | `lane(name)` | Declares a lane and returns it; throws `StateError` for a name declared already, and once any lane's `enqueueJob` has been called (a refused or duplicate call seals too), the controller is closed or a microtask after the constructor has run | [Declaring lanes](lanes.md#declaring-lanes) |
-| `lanes` | The lanes in the order they were declared, which is the order the pump walks them in | [Declaring lanes](lanes.md#declaring-lanes) |
+| `lanes` | The lanes in the order they were declared | [Declaring lanes](lanes.md#declaring-lanes) |
 
 ## SoloLane
 
@@ -239,7 +239,7 @@ field: events combine only within one accumulator, even under the same key.
 | `SoloUnansweredHandler` | The type of `Solo.unansweredHandler`: a function of the controller, the job, the error and its stack trace | [Answering for an error](errors.md#answering-for-an-error) |
 | `SoloObserver` | What `Solo.observer` takes, one or several joined by `SoloObserver.all`: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate` | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](diagnostics.md#watching-every-controller) |
-| `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `job` and `phase`, a `SoloPendingQueue` with its `jobs`, a `SoloPendingLanes` with its `lanes`, one of those two for each busy lane of a `SoloLanes`, or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
+| `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `job` and `phase`, a `SoloPendingQueue` with its `jobs`, a `SoloPendingLanes` whose `lanes` hold a `SoloPendingLane` with one of those two for each busy lane of a `SoloLanes`, or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `SoloPhase` | Where the job of a `SoloPendingJob` stands: `body`, `children` or `cleanup` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `SoloStream` | A mixin that adds a broadcast `stream` of the states | [Observing state](state.md#observing-state) |
 | `AccumulationPolicy` | Which waiting group an event joins: `join`, `adjacent` or `replace` | [Choosing where events join](accumulation-rules.md#choosing-where-events-join) |

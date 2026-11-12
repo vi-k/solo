@@ -114,7 +114,12 @@ The lanes are declared in the constructor with `lane`, as
 members of the queue of a `Solo`: `enqueue`, `job`, `enqueueJob`, `collect`,
 `accumulate`, `queue`, `current`, `lastJobWhere` and `pending`. They are
 public: whoever holds a lane queues jobs in it, so the controller keeps its
-lanes in private fields.
+lanes in private fields. A `Solo` makes the children of `ctx.child` through its
+own `job` and queues the groups of an accumulator through its own `enqueueJob`,
+so a subclass that overrides the two sees those jobs too. A lane is no subclass
+and takes no override: every job of a `SoloLanes` reaches `onStart` and
+`onFinish` of the controller and a `SoloObserver`, as
+[Watching every controller](diagnostics.md#watching-every-controller) shows.
 
 The refresh writes the state in the gate lane, and the rules of the step in the
 work lane are asked about it at once. The same steps and refreshes print the
@@ -349,9 +354,11 @@ second reload sent at 2100 ms:
 `setLiked` is the like of the last section with a correction. `before` is the
 mark the post had when the like started, and when the like fails or is
 cancelled, `ifFailed` or `ifCancelled` puts it back: the post shows what it
-showed before the tap. Nobody reads the outcome of a tap, so `isExpectedError`
-names the `ApiException` of a failed request, and it does not go on to the
-zone.
+showed before the tap. Each handler changes the `feed` it is given and returns
+that: the reload may have written since the like started, and a state kept from
+then, returned whole, would take its posts away. Nobody reads the outcome of a
+tap, so `isExpectedError` names the `ApiException` of a failed request, and it
+does not go on to the zone.
 
 A like does not wait for a reload. A like of a second post still waits for the
 first: there is one likes lane. The settling is part of the reload's write
@@ -576,12 +583,11 @@ FeedController(this.api) : super(const Feed()) {
 
 The fields are assigned in the body of the constructor, so the lanes are
 declared before any job, and their order is the order of these lines: the order
-`lanes` gives them in and a pass of the pump walks them in. `lane` and `lanes`
-are protected. `lane` throws a `StateError` for a name the controller has a
-lane of already: every call declares a new lane, and two of one name would read
-as one. It throws as well once the set is sealed: a microtask after the
-constructor, at the first `enqueueJob` of any lane whatever came of it, and
-after `close`.
+`lanes` gives them in. `lane` and `lanes` are protected. `lane` throws a
+`StateError` for a name the controller has a lane of already: every call
+declares a new lane, and two of one name would read as one. It throws as well
+once the set is sealed: a microtask after the constructor, at the first
+`enqueueJob` of any lane whatever came of it, and after `close`.
 
 Two lanes differ by identity, not by name: the name is for logs and `toString`.
 A job tells the lane it runs in with `job.lane`, a `SoloLaneId` with that name,
@@ -591,14 +597,14 @@ and a job of a `Solo` has none.
 
 | What happens | What comes of it |
 | --- | --- |
-| The synchronous part of a job of one lane queues a job in another | The other lane starts it in the same pass of the pump if it was declared later, and in the next pass if it was declared earlier. |
+| The synchronous part of a job of one lane queues a job in another | If the other lane is free, it starts the job before control goes back to the event loop; how that start falls among the microtasks of the same turn is not promised. |
 | A job of one lane writes a state outside the `W` of a job of another, as a reload writes `Loading` under a like with `W = Loaded` | The like that runs is cancelled at the write, and a like that comes to its start while the state is `Loading` is cancelled before its body runs. |
 | A write of one lane, and a `cancellable: false` job of another whose `keepWhile` refuses the new state | The job is cancelled all the same: the rules go past `cancellable: false`, as `externalSetState` does in a `Solo`. |
 | A job awaits a job it queued in another lane | It waits while the other lane runs that job. |
 | A job awaits a job it queued in its own lane | It waits for good: a lane runs one job at a time. |
 | A job of lane A awaits a job it queued in lane B, which awaits a job it queued in lane A | Both wait for good: the job in B waits for one queued in A behind the job that waits for it. |
 | A job awaits `close()` or `cancelAll()` of its controller | It waits for itself: both wait for the jobs of every lane. |
-| `close()` | The queues of every lane are cleared, the running job of every lane is cancelled, and `close` completes when the last of them ends. |
+| `close()` | The queues of every lane are cleared, and the running job of every lane is asked to cancel; a `cancellable: false` job turns that down and runs on. `close` completes when the last of them ends, as [Three ways to stop](cancellation.md#three-ways-to-stop) tells. |
 | `close(mode: SoloCloseMode.drain)` | Every lane runs its queue out, and `close` completes when all of them are empty. |
 | During a drain, a job of one lane queues a continuation in another | The continuation ends `Cancelled(closed)`: a closed controller takes no new root job, whichever lane asks. |
 | An unlike fails after a reload has brought the server's word on the like | The correction puts back the confirmed mark the unlike found. It says what the server says, and the next reload takes it away. |

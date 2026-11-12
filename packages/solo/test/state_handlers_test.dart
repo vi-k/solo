@@ -16,6 +16,7 @@ final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
   final unanswered = <Object>[];
   void Function(S state)? changed;
   void Function(Job<Object?> job)? started;
+  void Function(Object error)? erred;
 
   _Controller(super.initialState);
 
@@ -45,6 +46,7 @@ final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
       Error.throwWithStackTrace(error, stackTrace);
     }
     errors.add(error);
+    erred?.call(error);
   }
 
   // A recorder of a test: it reads the errors and answers for them here,
@@ -553,6 +555,42 @@ void main() {
     });
   });
 
+  test('a rule that fails again after a nested write is reported again', () {
+    _run((solo, clock) {
+      // The observer of the first failure writes the state, and the rule
+      // fails anew on what it wrote. Reported for the first write, the job
+      // has not yet been reported for the second.
+      var nested = false;
+      solo.erred = (error) {
+        if (error case StateError(message: 'initial')) {
+          solo.external('nested');
+          nested = true;
+        }
+      };
+      final job = solo.enqueue<String, void>(
+        keepWhile: (state) => switch (state) {
+          'changed' => throw StateError('initial'),
+          'nested' when nested => throw StateError('after nested write'),
+          _ => true,
+        },
+        ifCancelled: (state, _) => state,
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
+      );
+      clock.flushMicrotasks();
+      solo.external('changed');
+
+      String messages(List<Object> errors) =>
+          errors.map((error) => (error as StateError).message).join('|');
+      expect(messages(solo.errors), 'initial|after nested write');
+      expect(messages(solo.unanswered), 'initial|after nested write');
+      expect(solo.currentState, 'nested');
+      job.cancel();
+      clock.flushMicrotasks();
+      expect(job.outcome, isA<Cancelled>());
+      expect(solo.currentState, 'nested', reason: 'correction is revoked');
+    });
+  });
+
   test('a finished parent body waits for child cleanup before correction', () {
     _run((solo, clock) {
       final stream = StreamController<void>(sync: true);
@@ -768,6 +806,44 @@ void main() {
       finishChild.complete();
       clock.flushMicrotasks();
       expect(parent.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('a returned body is not asked its rules once correction is revoked', () {
+    _run((solo, clock) {
+      // Past the body, the rules guard only the state correction. Once a
+      // rule has refused, that right is gone for good, and asking again
+      // would only repeat an answer nobody reads -- or report a rule that
+      // throws a second time.
+      final finishChild = Completer<void>();
+      var checks = 0;
+      final parent = solo.enqueue<String, void>(
+        keepWhile: (state) {
+          checks++;
+          return state != 'disconnected';
+        },
+        ifCancelled: (_, _) => fail('a revoked correction ran'),
+        (ctx) async {
+          unawaited(
+            ctx.run(
+              solo.job<String, void>(
+                (ctx) => ctx.abandonable(() => finishChild.future),
+              ),
+            ),
+          );
+        },
+      );
+      clock.flushMicrotasks();
+      solo.external('disconnected');
+      final checksAfterRefusal = checks;
+      solo
+        ..external('reconnected')
+        ..external('changed again');
+      expect(checks, checksAfterRefusal);
+      finishChild.complete();
+      clock.flushMicrotasks();
+      expect(parent.outcome, isA<Done<void>>());
+      expect(solo.errors, isEmpty);
     });
   });
 

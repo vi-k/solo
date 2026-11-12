@@ -1442,8 +1442,8 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   /// Creates a controller in [initialState].
   Solo(super.initialState) : super._();
 
-  /// Creates a job without queueing it, for [enqueueJob] or for
-  /// [JobContext.run].
+  /// Creates a job without queueing it, for [enqueueJob], [JobContext.run]
+  /// and `ctx.child`, so an override sees each child; a [SoloLanes] has none.
   ///
   /// Queued, the job starts in the zone this method is called in, where an
   /// unread failure of it goes as well, and not in the zone of [enqueueJob].
@@ -1605,7 +1605,7 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   );
 
   /// Queues [job] and returns it, or the existing job found by
-  /// [Policy.droppable].
+  /// [Policy.droppable]; the groups of `collect` and `accumulate` come here.
   ///
   /// A job [Policy.droppable] may hand back to another caller refuses a
   /// plain `then`: every caller continues it through `shared()`.
@@ -1822,8 +1822,8 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
     return lane;
   }
 
-  /// The lanes of this controller in the order they were declared, the
-  /// order a pass of the pump walks them in; an unmodifiable list.
+  /// The lanes of this controller in the order they were declared; an
+  /// unmodifiable list.
   ///
   /// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
   /// on the lanes page.
@@ -1835,16 +1835,14 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   // the shape does not depend on how many lanes hold the controller.
   @override
   SoloPending? get _pending {
-    final lanes = <({SoloLaneId lane, SoloPending pending})>[
+    final lanes = <SoloPendingLane>[
       for (final core in _cores)
         if (_pendingOf(core) case final pending?)
-          (lane: core.id!, pending: pending),
+          SoloPendingLane(core.id!, pending),
     ];
     return lanes.isEmpty
         ? null
-        : SoloPendingLanes(
-            List<({SoloLaneId lane, SoloPending pending})>.unmodifiable(lanes),
-          );
+        : SoloPendingLanes(List<SoloPendingLane>.unmodifiable(lanes));
   }
 }
 

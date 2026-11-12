@@ -371,12 +371,12 @@ From 1.0.0 on, `solo` follows semantic versioning: the constraint `^1.0.0`
 takes every minor and patch release, and they keep code written against 1.0.0
 working, but for the cases below. The public API is what
 `package:solo/solo.dart` and `package:solo/listeners.dart` export; the text of
-error messages and of debug output is not part of it. `listeners.dart` is the
-listener list a controller notifies through, for a package that builds a
-delivery of its own on top of `solo`, as `flutter_solo` does; an application
-listens through `addListener` of its controller and does not need it. A member
-that goes away is first marked `@Deprecated` in a minor release, with the name
-to use instead, and is removed in the next major one.
+error messages and of debug output and the frames of a stack trace are not part
+of it. `listeners.dart` is the listener list a controller notifies through, for
+a package that builds a delivery of its own on top of `solo`, as `flutter_solo`
+does; an application listens through `addListener` of its controller and does
+not need it. A member that goes away is first marked `@Deprecated` in a minor
+release, with the name to use instead, and is removed in the next major one.
 
 A minor release can add a member to a class you extend, such as `Solo`,
 `SoloLanes` or `SoloObserver`, and a member of the same name in your own code

@@ -56,6 +56,21 @@ final class Counter extends Solo<int> with OpenSolo<int> {
   );
 }
 
+/// A payload nothing reaches but the start rule of one job.
+(SoloJob<int>, WeakReference<Payload>) captureInCanStart(
+  Counter solo, {
+  required bool allow,
+}) {
+  final payload = Payload();
+  return (
+    solo.enqueue<int, int>(
+      canStart: (state) => payload.bytes.isNotEmpty && allow,
+      (ctx) async => 1,
+    ),
+    WeakReference(payload),
+  );
+}
+
 /// Only the child comes back. The value of the parent is then reachable
 /// from it alone, through the link a job of a controller keeps to the job
 /// that ran it.
@@ -125,6 +140,38 @@ void main() {
       await collected(capture),
       isTrue,
       reason: 'a handler of a job with an outcome has had its turn',
+    );
+
+    await solo.close();
+  });
+
+  test('a finished job lets go of its start rule', () async {
+    final solo = Counter();
+    final (job, capture) = captureInCanStart(solo, allow: true);
+    await job.done;
+
+    expect(job.outcome, isA<Done<int>>());
+    expect(
+      await collected(capture),
+      isTrue,
+      reason:
+          'canStart is asked once, before the start; held on, it keeps '
+          'everything it captured for as long as anyone keeps the handle',
+    );
+
+    await solo.close();
+  });
+
+  test('a job its start rule refused lets go of the rule', () async {
+    final solo = Counter();
+    final (job, capture) = captureInCanStart(solo, allow: false);
+    await job.done;
+
+    expect(job.outcome, isA<Cancelled>());
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'a job refused before the start will not be asked again',
     );
 
     await solo.close();
@@ -255,7 +302,7 @@ void main() {
   });
 
   test(
-    'the rules outlive the job, because a leaked context reads them',
+    'the keep rule outlives the job, because a leaked context reads it',
     () async {
       final solo = Counter();
       final kept = <String>[];

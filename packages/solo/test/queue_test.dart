@@ -125,6 +125,40 @@ void main() {
     });
   });
 
+  test('lastJobWhere from a start rule does not answer with the job its '
+      'predicate cancelled', () {
+    runSolo((solo, journal, async) {
+      // The job whose rules are being asked is checked before the
+      // predicate as well as after it: the predicate is the caller's code,
+      // and it may cancel the very job it is about to accept.
+      Object? found = 'not asked';
+      var started = false;
+      late final SoloJob<void> first;
+      first = solo.job<TestState, void>(
+        key: 'k',
+        canStart: (state) {
+          found = solo.lastJobWhere((job) {
+            if (identical(job, first)) {
+              job.cancel().ignore();
+            }
+            return job.key == 'k';
+          });
+          return true;
+        },
+        (ctx) async => started = true,
+      );
+      solo.enqueueJob(first);
+      final next = solo.enqueueJob(slow(solo, 'next'));
+      async.flushTimers();
+
+      expect(found, isNull);
+      expect(started, isFalse);
+      expect(first.outcome, isA<Cancelled>());
+      expect(next.outcome, isA<Done<void>>(), reason: 'the queue goes on');
+      journal.take();
+    });
+  });
+
   test('remove skips a cancellable: false job unless forced', () {
     runSolo((solo, journal, async) {
       solo.enqueueJob(slow(solo, 'a'));

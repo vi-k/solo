@@ -60,11 +60,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// a branch or for a [Failed] nobody observed comes later.
   bool Function(Object error)? _isExpectedError;
 
-  /// The rules outlive the job on purpose: a context that leaked out of a
-  /// body reads the state through them long after the outcome, and the
-  /// cancellation it builds from a rejection is the whole diagnosis it
-  /// has to offer.
-  final bool Function(W state)? _canStart;
+  /// Asked once, before the start; [finished] lets go of it, and of all it
+  /// captured, along with the body.
+  bool Function(W state)? _canStart;
+
+  /// The keep rule outlives the job on purpose: a context that leaked out
+  /// of a body reads the state through it long after the outcome, and the
+  /// cancellation it builds from a rejection is the whole diagnosis it has
+  /// to offer.
   final bool Function(W state)? _keepWhile;
   _AccumulationGroup<Object?>? _accumulation;
   _SoloJob<S, S, Object?>? _parentJob;
@@ -271,6 +274,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
       // job out of `_running` and out of the `current` of the core it runs
       // in.
       _body = null;
+      _canStart = null;
       _ifFailed = null;
       _ifCancelled = null;
       _parentJob = null;

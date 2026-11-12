@@ -221,18 +221,38 @@ final class SoloPendingLanes extends SoloPending {
   /// Each lane that holds the controller and its snapshot, in the order the
   /// lanes were declared.
   ///
-  /// The `pending` of an entry is a [SoloPendingJob] or a [SoloPendingQueue]
-  /// and nothing else. Taken when the snapshot is: the lanes moving on do
-  /// not change it.
-  final List<({SoloLaneId lane, SoloPending pending})> lanes;
+  /// Taken when the snapshot is: the lanes moving on do not change it.
+  final List<SoloPendingLane> lanes;
 
   /// Creates a snapshot; the engine makes these, a domain reads them.
   const SoloPendingLanes(this.lanes);
 
   @override
-  String toString() =>
-      'SoloPending(${lanes.map((entry) => '${entry.lane.name}: '
-          '${entry.pending}').join(', ')})';
+  String toString() => 'SoloPending(${lanes.join(', ')})';
+}
+
+/// One lane of a [SoloPendingLanes]: the lane and what holds it.
+///
+/// A class and not a record, so that a later release can tell more about
+/// a lane without breaking the code that reads this.
+@immutable
+final class SoloPendingLane {
+  /// The lane that holds the controller.
+  final SoloLaneId lane;
+
+  /// What holds the lane: a [SoloPendingJob] for its running job, or a
+  /// [SoloPendingQueue] for what a drain has still to run in it, and
+  /// nothing else.
+  ///
+  /// The type is the wider [SoloPending], so a `switch` over it that names
+  /// only those two needs a `_` branch for the rest, which never comes.
+  final SoloPending pending;
+
+  /// Creates an entry; the engine makes these, a domain reads them.
+  const SoloPendingLane(this.lane, this.pending);
+
+  @override
+  String toString() => '${lane.name}: $pending';
 }
 
 /// The engine has closed, and the stream of `SoloStream` waits for a

@@ -591,9 +591,11 @@ L1; `2026-11-10-solo-lanes-design.md`.)
 старта. `assert` в `emit` нет: он бросал бы и там, где задача кончает себя
 своим состоянием намеренно. Вместо него строка `Solo.debug` у `emit`; поведение
 разобрано на `camera.md`, и с 2026-11-02 о нём говорит README `solo`. Правила
-линта на такой `emit` нет: владелец 2026-11-02 выбрал фразу README без него.
-(2026-10-20; `2026-10-20-solo-project-review.md`, M8; оспаривала Fable F1
-`2026-10-30-pub-dev-landscape-review.md`.)
+линта на такой `emit` нет: владелец 2026-11-02 выбрал фразу README без него
+и 2026-11-12 оставил выбор, когда ревьюер, прочитавший README, всё равно
+написал эту форму первой. (2026-10-20; `2026-10-20-solo-project-review.md`, M8;
+оспаривали Fable F1 `2026-10-30-pub-dev-landscape-review.md` и Fable C2
+`2026-11-12-solo-project-review.md`.)
 
 **58. `SoloObserver.onCreate` зовётся до тела конструктора подкласса.** Порядок
 конструкторов Dart не изменить; dartdoc `onCreate` говорит, что тогда видно
@@ -675,6 +677,14 @@ L1; `2026-11-10-solo-lanes-design.md`.)
 `reference_page_test.dart`. Для кого `package:solo/listeners.dart`, говорит
 раздел «Versions» README. (2026-10-31; `2026-10-31-solo-project-review.md`, B3,
 D12.)
+
+**155. `job` и `enqueueJob` у `Solo` переопределяемы, а у `SoloLanes` такой
+точки нет.** Через них подкласс `Solo` видит детей `ctx.child` и группы
+накопителя; `@nonVirtual` отнял бы это у подклассов `Solo`, а линия
+не подкласс, и переопределять в ней нечего. Различие сказано в dartdoc обоих
+членов и на странице линий; каждая задача обоих контроллеров доходит
+до `onStart`, `onFinish` и `SoloObserver`. (2026-11-12;
+`2026-11-12-solo-project-review.md`, B4 Fable.)
 
 ## `flutter_solo`
 

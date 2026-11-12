@@ -14,9 +14,6 @@
     // `job` — задача, на которой стоит контроллер, `queued` — задачи за ней.
   }
   ```
-- **Кадры `Solo._reevaluate`, `Solo._setState`, `Solo.externalSetState`
-  и `Solo._step` в трассе стека теперь читаются как `SoloController.…`.** Члены
-  переехали в базу; порядок и глубина кадров те же.
 - **`SoloUnansweredHandler` принимает `SoloController<Object>` вместо
   `Solo<Object>`.**
 - **У `SoloPending` новый подкласс, `SoloPendingLanes`.** Исчерпывающему
@@ -44,7 +41,15 @@
   линии с её `name`.
 - `SoloJob.lane`, линия, в которой идёт задача, `null` у задачи `Solo`.
 - `SoloPendingLanes`, то, что возвращает `pending` у `SoloLanes`: снимок каждой
-  линии, которая его держит.
+  линии, которая его держит, — `SoloPendingLane` с линией `lane` и её
+  `pending`.
+
+### Изменено
+
+- Кадры `Solo._reevaluate`, `Solo._setState`, `Solo.externalSetState`
+  и `Solo._step` в трассе стека теперь читаются как `SoloController.…`: члены
+  переехали в базу, а порядок и глубина кадров те же. Кадры трассы стека
+  в публичный API не входят.
 
 ### Документация
 
@@ -67,6 +72,8 @@
   а `doc/mistakes.md` называет цикл через линии, который зависает.
 - Dartdoc библиотеки слушателей говорит, что приложение подписывается через
   `SoloController.addListener`.
+- README относит кадры трассы стека, вместе с текстом сообщений об ошибках
+  и отладочного вывода, к тому, что в публичный API не входит.
 
 ## 1.1.1
 

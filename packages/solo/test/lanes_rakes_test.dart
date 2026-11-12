@@ -716,9 +716,7 @@ void main() {
         '`lane` throws a `StateError` for a name the controller has a lane of '
         'already',
       );
-      _says(
-        'the order `lanes` gives them in and a pass of the pump walks them in',
-      );
+      _says('the order of these lines: the order `lanes` gives them in.');
       final two = _Two();
       expect([for (final lane in two.declared) lane.name], ['a', 'b']);
       expect(() => two.declare('a'), throwsStateError);
@@ -744,16 +742,16 @@ void main() {
   });
 
   group('The table of cases', () {
-    test('a job queued from the synchronous part of another lane starts in '
-        'this pass if its lane comes later, in the next if earlier', () {
+    test('a job queued from the synchronous part of another lane starts '
+        'before control goes back to the event loop', () {
       _says(
-        'The other lane starts it in the same pass of the pump if it was '
-        'declared later, and in the next pass if it was declared earlier.',
+        'If the other lane is free, it starts the job before control goes '
+        'back to the event loop; how that start falls among the microtasks '
+        'of the same turn is not promised.',
       );
-      for (final (from, into, expected) in [
-        ('a', 'b', ['start a', 'start b', 'tick']),
-        ('b', 'a', ['start b', 'tick', 'start a']),
-      ]) {
+      // Both orders of declaration, and only the promise: the pass of the
+      // pump the start falls in is left to the engine.
+      for (final (from, into) in [('a', 'b'), ('b', 'a')]) {
         fakeAsync((async) {
           final two = _Two();
           SoloLane<int> named(String name) => name == 'a' ? two.a : two.b;
@@ -762,10 +760,10 @@ void main() {
             named(into).enqueue<int, void>(key: into, (ctx) => gate.future);
             return gate.future;
           });
-          scheduleMicrotask(() => two.log.add('tick'));
-          async.flushMicrotasks();
+          Timer.run(() => two.log.add('event loop'));
+          async.elapse(Duration.zero);
 
-          expect(two.log, expected);
+          expect(two.log, ['start $from', 'start $into', 'event loop']);
           gate.complete();
           two.close().ignore();
           async.flushMicrotasks();
@@ -924,10 +922,12 @@ void main() {
       }
     });
 
-    test('close clears and cancels every lane and ends with the last', () {
+    test('close clears every lane, asks the running jobs to cancel and ends '
+        'with the last', () {
       _says(
-        'The queues of every lane are cleared, the running job of every lane '
-        'is cancelled, and `close` completes when the last of them ends.',
+        'The queues of every lane are cleared, and the running job of every '
+        'lane is asked to cancel; a `cancellable: false` job turns that down '
+        'and runs on. `close` completes when the last of them ends',
       );
       fakeAsync((async) {
         final two = _Two();
@@ -937,6 +937,7 @@ void main() {
           (ctx) => ctx.join(() => aGate.future),
         );
         final b = two.b.enqueue<int, void>(
+          cancellable: false,
           (ctx) => ctx.join(() => bGate.future),
         );
         final queued = two.b.enqueue<int, void>((ctx) async {});
@@ -945,13 +946,15 @@ void main() {
         two.close().then((_) => closed = true);
         async.flushMicrotasks();
 
-        expect(a.isCancelled && b.isCancelled, isTrue);
+        expect(a.isCancelled, isTrue);
+        expect(b.isCancelled, isFalse, reason: 'it turned the close down');
         expect(queued.outcome, isA<Cancelled>());
         aGate.complete();
         async.flushMicrotasks();
         expect(closed, isFalse);
         bGate.complete();
         async.flushMicrotasks();
+        expect(b.outcome, isA<Done<void>>());
         expect(closed, isTrue);
       });
     });

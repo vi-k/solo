@@ -277,8 +277,9 @@ and from then on `externalSetState` throws a `StateError`.
 
 `SoloListenable` adds Flutter's `ValueListenable` on top of `addListener`, and
 reports a listener's error to `FlutterError` instead of the zone. It is a mixin
-on `Solo`, the way `SoloStream` is: a widget rebuilds from `value`, and a
-controller that needs both deliveries mixes in both.
+on `SoloController`, the way `SoloStream` is, so it fits a `Solo` and a
+`SoloLanes` alike: a widget rebuilds from `value`, and a controller that needs
+both deliveries mixes in both.
 
 A change made from inside a listener of either kind does not get the order of
 the list above. It goes to the end of the publication queue rather than ahead
