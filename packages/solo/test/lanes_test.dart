@@ -918,6 +918,70 @@ void main() {
       return lines;
     }
 
+    /// Lines about writing over another lane, from a job of `first` that
+    /// reads, waits while `second` writes, and writes what [write] makes of
+    /// the state it read.
+    List<String> overWrites(
+      _AB Function(_AB saved, SoloContext<_AB, _AB> ctx) write,
+    ) {
+      final trace = lines((async) {
+        final controller = _Two();
+        final gate = Completer<void>();
+        controller.first.enqueue<_AB, void>(key: 'reload', (ctx) async {
+          final saved = ctx.state;
+          await ctx.join(() => gate.future);
+          ctx.emit(write(saved, ctx));
+        });
+        async.flushMicrotasks();
+        controller.second.enqueue<_AB, void>(
+          key: 'like',
+          (ctx) async => ctx.emit((a: ctx.state.a, b: 1)),
+        );
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+      });
+      return [
+        for (final line in trace)
+          if (line.contains('emit over')) line,
+      ];
+    }
+
+    test('a write of a state read before another lane wrote says so', () {
+      expect(overWrites((saved, ctx) => (a: saved.a + 1, b: saved.b)), [
+        'Job(reload) emit over a write of lane second made after Job(reload) '
+            'last read the state: read ctx.state after the wait, or this '
+            'write undoes the work of second',
+      ]);
+    });
+
+    test('a write of a state read after the other lane wrote says nothing', () {
+      expect(
+        overWrites((saved, ctx) => (a: ctx.state.a + 1, b: ctx.state.b)),
+        isEmpty,
+      );
+    });
+
+    test('a job that never read the state is not told about it', () {
+      final trace = lines((async) {
+        final controller = _Two();
+        final gate = Completer<void>();
+        controller.first.enqueue<_AB, void>(key: 'server', (ctx) async {
+          await ctx.join(() => gate.future);
+          ctx.emit((a: 5, b: 5));
+        });
+        async.flushMicrotasks();
+        controller.second.enqueue<_AB, void>(
+          key: 'like',
+          (ctx) async => ctx.emit((a: 0, b: 1)),
+        );
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+      });
+      expect(trace.where((line) => line.contains('emit over')), isEmpty);
+    });
+
     test('enqueue and restart name the lane, and a tail names a job of the '
         'same lane', () {
       final trace = lines((async) {

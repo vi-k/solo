@@ -383,6 +383,33 @@ void main() {
       );
       expect(trace, _quotes()[2]);
     });
+
+    List<String> overWrites(_Feed Function(FeedApi api) make) {
+      final lines = <String>[];
+      Solo.debug = lines.add;
+      try {
+        _trace((async, say) => tapLate(async, _listened(make, say)));
+      } finally {
+        Solo.debug = null;
+      }
+      return [
+        for (final line in lines)
+          if (line.contains('emit over')) line,
+      ];
+    }
+
+    test('Solo.debug names the write over the reload, and only that one', () {
+      _says(
+        'with [`Solo.debug`](diagnostics.md#logs) set, the second `emit` '
+        'of the first attempt comes with a line',
+      );
+      _says(
+        'A job that has not read the state gets none, and neither does '
+        'the read at the write.',
+      );
+      expect(overWrites(_copying), _quotes()[3]);
+      expect(overWrites(_reading), isEmpty);
+    });
   });
 
   group('A snapshot from the server', () {
@@ -394,7 +421,7 @@ void main() {
         async.elapse(_ms(100));
         feed.setLiked('p1', liked: true);
       });
-      expect(trace, _quotes()[3]);
+      expect(trace, _quotes()[4]);
     });
 
     test('the merge keeps it until a reload sent after it', () {
@@ -407,7 +434,7 @@ void main() {
         async.elapse(_ms(2000));
         feed.reload();
       });
-      expect(trace, _quotes()[4]);
+      expect(trace, _quotes()[5]);
     });
 
     test('a failed like puts back the mark it found, and nothing reaches '
@@ -507,7 +534,7 @@ void main() {
         cancelledAtTheChange = p1.isCancelled && p1.outcome == null;
       });
 
-      expect(trace, _quotes()[5]);
+      expect(trace, _quotes()[6]);
       expect(cancelledAtTheChange, isTrue);
       expect(
         p2.outcome,
@@ -618,7 +645,7 @@ void main() {
         );
       }, errors: errors);
 
-      expect(trace, _quotes()[6]);
+      expect(trace, _quotes()[7]);
       expect(errors, [isA<TypeError>()]);
     });
 
@@ -654,7 +681,7 @@ void main() {
         );
       }, errors: errors);
 
-      expect(trace, _quotes()[7]);
+      expect(trace, _quotes()[8]);
       expect(errors, isEmpty);
     });
 
@@ -686,7 +713,7 @@ void main() {
         expect(
           feed.reload,
           throwsA(
-            isA<StateError>().having((e) => '$e', 'text', _quotes()[8].single),
+            isA<StateError>().having((e) => '$e', 'text', _quotes()[9].single),
           ),
         );
       });
@@ -703,7 +730,7 @@ void main() {
         expect(
           () => feed.setLiked('p1', liked: true),
           throwsA(
-            isA<StateError>().having((e) => '$e', 'text', _quotes()[9].single),
+            isA<StateError>().having((e) => '$e', 'text', _quotes()[10].single),
           ),
         );
         feed.close().ignore();
@@ -1057,7 +1084,7 @@ void main() {
     });
 
     test('quotes ten traces', () {
-      expect(_quotes(), hasLength(10));
+      expect(_quotes(), hasLength(11));
     });
 
     test('has no fence the checks do not read', () {

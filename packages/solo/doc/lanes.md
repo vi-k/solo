@@ -206,9 +206,19 @@ stretch, and no other lane writes between the two:
 ```
 
 `ctx.state` is a checkpoint, as in a `Solo`: it checks cancellation and the
-rules before it returns. The engine compares a plain `emit` with nothing: a
-whole new state written on purpose and a lost update look the same to it, and
-only the domain tells them apart.
+rules before it returns. The engine does not refuse a plain `emit`: a whole new
+state written on purpose and a lost update look the same to it, and only the
+domain tells them apart. It does see when the state was read, and with
+[`Solo.debug`](diagnostics.md#logs) set, the second `emit` of the first attempt
+comes with a line:
+
+```text
+Job() emit over a write of lane reload made after Job() last read the state: read ctx.state after the wait, or this write undoes the work of reload
+```
+
+A job that read the state before the wait and writes a snapshot on purpose
+after it gets the line too, so it is a line in the log and not an error. A job
+that has not read the state gets none, and neither does the read at the write.
 
 ## A snapshot from the server
 

@@ -246,7 +246,11 @@ final class _SoloContext<S extends Object, W extends S, R>
     // cancellation by the rules — nobody cancelled it, the reading did.
     throwIfDisposing(action);
     throwIfCancelled();
-    return _checkedState();
+    final state = _checkedState();
+    // A read, not a checkpoint: `check` and every wait ask the rules too,
+    // and the body has seen nothing there.
+    _job._seenRevision = _solo._stateRevision;
+    return state;
   }
 
   /// The state, once the rules of the job still hold for it.
@@ -318,6 +322,17 @@ final class _SoloContext<S extends Object, W extends S, R>
           : '$_job emit: $next, which is not $W: the rules cancel $_job at '
                 'its next checkpoint',
     );
+    // A state read before a wait and written back after it undoes what
+    // another lane wrote meanwhile, and nothing else says so: the write is
+    // legal, and a snapshot from the server is written over on purpose.
+    if (_solo._wroteSinceSeen(_job) case final lane?) {
+      SoloController._debug(
+        () =>
+            '$_job emit over a write of lane $lane made after $_job last '
+            'read the state: read ctx.state after the wait, or this write '
+            'undoes the work of $lane',
+      );
+    }
     _solo._setState(next, emitter: _job);
     // The write is a checkpoint on both sides: hooks, observers and
     // listeners run inside `_setState` and may cancel this job — through a

@@ -44,6 +44,9 @@
 - `SoloPendingLanes`, what `pending` of a `SoloLanes` returns: the snapshot of
   each lane that holds it, a `SoloPendingLane` with the `lane` and its
   `pending`.
+- A `Solo.debug` line for an `emit` of a job in a lane over a write that
+  another lane made after the job last read the state. See
+  [A read at the write](doc/lanes.md#a-read-at-the-write).
 
 ### Changed
 

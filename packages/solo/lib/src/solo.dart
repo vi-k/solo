@@ -708,6 +708,10 @@ abstract class SoloController<S extends Object> {
     final previous = _state;
     _state = next;
     final revision = ++_stateRevision;
+    if (emitter != null) {
+      emitter._seenRevision = revision;
+      emitter._execution?.lastWrite = revision;
+    }
     _debug(() => 'state: $next');
     _unpublished.add((previous, next));
     // Record lost correction rights before observers can synchronously
@@ -1328,6 +1332,22 @@ abstract class SoloController<S extends Object> {
         core.inTransition = null;
       }
     }
+  }
+
+  /// The name of the lane, not [job]'s own, that wrote the state last after
+  /// [job] last saw it; `null` when none did, when [job] has not read the
+  /// state, outside lanes, and with [Solo.debug] off, which is the only one
+  /// to ask.
+  String? _wroteSinceSeen(_SoloJob<S, S, Object?> job) {
+    final seen = job._seenRevision;
+    final own = job._execution;
+    if (Solo.debug == null || seen == null || own?.id == null) return null;
+    _SoloLaneCore<S>? latest;
+    for (final core in _cores) {
+      if (identical(core, own) || core.lastWrite <= seen) continue;
+      if (latest == null || core.lastWrite > latest.lastWrite) latest = core;
+    }
+    return latest?.name;
   }
 
   static void _debug(String Function() message) {

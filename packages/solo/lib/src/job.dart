@@ -74,6 +74,10 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// This job's place in the queue of [_destination]; `null` while it is
   /// in none.
   _QueueEntry<S>? _queueEntry;
+
+  /// The revision of the state this job saw last, by a read or by a write
+  /// of its own; `null` before the first.
+  int? _seenRevision;
   _SoloJob<S, S, Object?>? _parentJob;
   final bool _hasStateHandlers;
   bool _stateCorrectionRevoked = false;

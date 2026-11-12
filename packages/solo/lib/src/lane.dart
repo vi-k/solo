@@ -325,6 +325,11 @@ final class _SoloLaneCore<S extends Object> {
   /// window, so the passes driven by other lanes do not say it again.
   bool saidWaiting = false;
 
+  /// The revision of the last write of the state made by a job running in
+  /// this core, `0` before the first; what tells a debug line that a job
+  /// writes over the work of another lane.
+  int lastWrite = 0;
+
   _SoloLaneCore(this.controller, {required String? name})
     : id = name == null ? null : SoloLaneId._(name);
 
