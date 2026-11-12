@@ -61,6 +61,8 @@ final class _One extends Solo<int> {
 
   _One(this.log) : super(0);
 
+  int get queued => queue.length;
+
   SoloJob<void> put(
     Object key,
     Future<void> Function(SoloContext<int, int> ctx) body, {
@@ -369,6 +371,77 @@ void main() {
       expect(a.outcome, _cancelled<ClosedCancelReason>(started: false));
       expect(b.outcome, _cancelled<ClosedCancelReason>(started: false));
     });
+
+    test('a cancelling close from a rule of the second lane', () {
+      final lines = <String>[];
+      Solo.debug = lines.add;
+      late SoloJob<void> held;
+      late SoloJob<void> rest;
+      fakeAsync((async) {
+        final controller = _Two([]);
+        held = controller.b.enqueue<int, void>(
+          key: 'held',
+          canStart: (state) {
+            unawaited(controller.close());
+            return true;
+          },
+          _nothing,
+        );
+        rest = controller.b.enqueue<int, void>(key: 'rest', _nothing);
+        async.flushMicrotasks();
+      });
+      Solo.debug = null;
+
+      expect(
+        lines,
+        contains('b: start Job(held): ended while the rules were asked'),
+      );
+      expect(held.outcome, _cancelled<ClosedCancelReason>(started: false));
+      expect(rest.outcome, _cancelled<ClosedCancelReason>(started: false));
+    });
+
+    // The queues are dropped before the running jobs hear of the close, so a
+    // finish handler of the cancelled job finds every queue empty.
+    for (final lanes in [false, true]) {
+      test('a running job cancelled by close sees empty queues in '
+          '${lanes ? 'SoloLanes' : 'Solo'}', () {
+        fakeAsync((async) {
+          final seen = <int>[];
+          final gate = Completer<void>();
+          late SoloController<int> controller;
+          late SoloJob<void> running;
+          if (lanes) {
+            final two = _Two([]);
+            controller = two;
+            running = two.a.enqueue<int, void>(key: 'run', _waits(gate));
+            two.b.enqueue<int, void>(key: 'b1', _waits(gate));
+            for (final lane in [two.a, two.b]) {
+              lane.enqueue<int, void>(key: 'more', _nothing);
+            }
+            async.flushMicrotasks();
+            running.whenCancelled((_) {
+              seen.addAll([two.a.queue.length, two.b.queue.length]);
+            });
+          } else {
+            final one = _One([]);
+            controller = one;
+            running = one.put('run', _waits(gate));
+            for (final key in ['q1', 'q2']) {
+              one.put(key, _nothing);
+            }
+            async.flushMicrotasks();
+            running.whenCancelled((_) => seen.add(one.queued));
+          }
+          async.flushMicrotasks();
+          unawaited(controller.close());
+          gate.complete();
+          async.flushMicrotasks();
+
+          expect(seen, everyElement(0));
+          expect(seen, hasLength(lanes ? 2 : 1));
+        });
+      });
+    }
 
     test('close(drain) from a rule lets the pass go on', () {
       fakeAsync((async) {

@@ -768,6 +768,45 @@ void main() {
         expect(made!.lane, same(controller.second.id));
       });
     });
+
+    test('a job made by a moved child has the lane the child runs in', () {
+      fakeAsync((async) {
+        final controller = _Two();
+        final gate = Completer<void>();
+        final grandchildren = <SoloJob<void>>[];
+        SoloJob<void>? made;
+        controller.first.enqueue<_AB, void>(key: 'maker', (ctx) {
+          made = ctx.child<void>(key: 'child', (ctx) async {
+            grandchildren.addAll([
+              ctx.child<void>(key: 'one', (ctx) async {}),
+              ctx.child<void>(key: 'two', (ctx) async {}),
+            ]);
+          });
+          return gate.future;
+        });
+        controller.second.enqueue<_AB, void>(
+          key: 'runner',
+          (ctx) => ctx.run(made!),
+        );
+        async.flushMicrotasks();
+
+        expect(grandchildren, hasLength(2));
+        expect(
+          () => controller.first.enqueueJob(grandchildren[0]),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              contains('was not created by this lane'),
+            ),
+          ),
+        );
+        final queued = controller.second.enqueueJob(grandchildren[1]);
+        async.flushMicrotasks();
+        expect(queued.isFinished, isTrue);
+        expect(queued.lane, same(controller.second.id));
+      });
+    });
   });
 
   test('a SoloLanes with no lanes closes like an idle Solo', () {
