@@ -150,11 +150,12 @@ class _Reads {
   /// The expressions [value] is built on: the target of its member calls,
   /// property reads, index reads, cascades, casts and `!`, taken off down to
   /// a read of the state, in each branch of `?:`, `??` and a switch
-  /// expression.
+  /// expression, and in each field of a record literal.
   ///
   /// `feed.confirm(post)` is built on `feed`, `ctx.state.confirm(post)` on
-  /// `ctx.state`, `a ? feed : ctx.state` on both, and `Feed(posts: posts)` on
-  /// itself.
+  /// `ctx.state`, `a ? feed : ctx.state` on both, `(a: 1, b: saved.b)` on
+  /// `1` and `saved`, and `Feed(posts: posts)` and `saved.a + 1` on
+  /// themselves.
   List<Expression> rootsOf(Expression value) {
     final node = value.unParenthesized;
     if (_readsState(node)) return [node];
@@ -168,6 +169,9 @@ class _Reads {
         [leftOperand, rightOperand],
       SwitchExpression(:final cases) => [
         for (final arm in cases) arm.expression,
+      ],
+      RecordLiteral(:final fields) => [
+        for (final field in fields) _valueOf(field),
       ],
       _ => null,
     };
@@ -220,6 +224,19 @@ class _Reads {
           ...behind(from, seen),
     ];
   }
+}
+
+/// The value of [field] of a record literal.
+///
+/// A positional field is the expression itself. A named field is a node of
+/// its own, whose type the versions of the analyzer this package takes name
+/// differently: a `NamedExpression` that opens with a [Label], or a node of
+/// a name and a colon. Its value is its last child expression either way.
+Expression _valueOf(AstNode field) {
+  final children = field.childEntities;
+  final named = children.isNotEmpty && children.first is Label;
+  if (field is Expression && !named) return field;
+  return children.whereType<Expression>().last;
 }
 
 /// The values written to [variable]: its initializer and the right-hand

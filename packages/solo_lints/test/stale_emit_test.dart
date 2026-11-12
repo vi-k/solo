@@ -52,6 +52,22 @@ final class Likes extends SoloLanes<Feed> {
   late final SoloLane<Feed> _likes;
 ''';
 
+/// A controller of two lanes over a record state, to be completed.
+const _counts = '''
+import 'package:solo/solo.dart';
+
+typedef Counts = ({int taps, int loads});
+
+Future<void> send(String what) async {}
+
+final class Counter extends SoloLanes<Counts> {
+  Counter() : super((taps: 0, loads: 0)) {
+    _taps = lane('taps');
+  }
+
+  late final SoloLane<Counts> _taps;
+''';
+
 @reflectiveTest
 class StaleEmitTest extends RuleTest {
   @override
@@ -473,6 +489,69 @@ final class Desk extends Solo<Feed> {
 
   Job<void> hand(Future<void> Function(SoloContext<Feed, Feed> ctx) body) =>
       enqueue(body);
+}
+''', []);
+
+  // A record state rebuilt field by field: a field passed on from the copy
+  // read before the wait writes back what that copy held.
+  Future<void> test_record_field_from_the_copy() => _assertMessage(
+    '''
+$_counts
+  Job<void> tap() => _taps.enqueue<Counts, void>((ctx) async {
+    final saved = ctx.state;
+    await ctx.join(() => send('tap'));
+    ctx.emit((taps: saved.taps + 1, loads: saved.loads));
+  });
+}
+''',
+    'ctx.emit((taps: saved.taps + 1, loads: saved.loads))',
+    "'saved' was read from the state before an 'await'",
+  );
+
+  Future<void> test_record_fields() => assertAt(
+    r'''
+import 'package:solo/solo.dart';
+
+Future<void> send(String what) async {}
+
+final class Pair extends SoloLanes<(int, ({int taps, int loads}))> {
+  Pair() : super((0, (taps: 0, loads: 0))) {
+    _left = lane('left');
+  }
+
+  late final SoloLane<(int, ({int taps, int loads}))> _left;
+
+  Job<void> positional() =>
+      _left.enqueue<(int, ({int taps, int loads})), void>((ctx) async {
+        final saved = ctx.state;
+        await ctx.join(() => send('tap'));
+        ctx.emit((1, saved.$2));
+      });
+
+  Job<void> nested() =>
+      _left.enqueue<(int, ({int taps, int loads})), void>((ctx) async {
+        final saved = ctx.state;
+        await ctx.join(() => send('tap'));
+        ctx.emit((2, (taps: 1, loads: saved.$2.loads)));
+      });
+}
+''',
+    [
+      r'ctx.emit((1, saved.$2))',
+      r'ctx.emit((2, (taps: 1, loads: saved.$2.loads)))',
+    ],
+  );
+
+  // A field read at the write, or computed from the copy rather than passed
+  // on, is not reported: the rule follows what a field holds, not what it is
+  // computed from.
+  Future<void> test_record_fields_read_at_the_write() => assertAt('''
+$_counts
+  Job<void> tap() => _taps.enqueue<Counts, void>((ctx) async {
+    final saved = ctx.state;
+    await ctx.join(() => send('tap'));
+    ctx.emit((taps: saved.taps + 1, loads: ctx.state.loads));
+  });
 }
 ''', []);
 
