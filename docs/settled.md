@@ -694,6 +694,16 @@ D12.)
 и `SoloLanes`. Решение владельца 2026-11-12: «оставляем Solo как имя пакета».
 (2026-11-12; `2026-11-12-solo-project-review.md`, B1 Fable.)
 
+**157. Рецепта фасада свежести поверх `Solo` нет.** Фасад
+`load(id, refresh:, freshFor:)` с `invalidate(id)` учил бы держать кеш
+со сроком жизни в контроллере, а README в «Where another package fits better»
+отправляет кеш сервера к кешу запросов и riverpod. Связку показывает раздел
+`riverpod.md` «A price riverpod reads and a controller saves»: кеш у riverpod,
+порядок сохранений и их исходы у контроллера. Решение исполнителя по слову
+владельца «давай сделаем всё, что можно»; владелец может его пересмотреть.
+(2026-11-12; `2026-11-12-solo-project-review.md`, P2 Astra;
+`2026-11-12-solo-review-candidates-report.md`.)
+
 ## `flutter_solo`
 
 **60. `SoloSelector.changed:` сравнивает с последним принятым значением,
