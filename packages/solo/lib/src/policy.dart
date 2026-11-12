@@ -3,7 +3,7 @@
 /// Every policy except [sequential] requires a non-null key and throws
 /// [ArgumentError] otherwise. Keys are compared with `==` and looked up by
 /// `hashCode`, as the keys of a `Map` are: two equal keys need the same hash
-/// code.
+/// code, and a key keeps it while its job is queued.
 ///
 /// A job whose start rules are being asked counts as queued for every policy:
 /// it is off the queue and not started yet, and a rule of it may call

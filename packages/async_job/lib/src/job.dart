@@ -223,7 +223,7 @@ abstract interface class Job<T> {
   ///
   /// The core does not read it: it is there for [toString], for the observer,
   /// and for whatever an engine does with it — `solo`, for example, compares
-  /// keys with `==` in its queue policies.
+  /// keys with `==` and looks them up by `hashCode` in its queue policies.
   Object? get key;
 
   /// The description given at creation, or an empty string.

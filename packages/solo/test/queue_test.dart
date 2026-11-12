@@ -396,6 +396,9 @@ void main() {
       expect(watch.elapsed, lessThan(const Duration(seconds: 6)));
       await solo.close();
     },
+    // Above the bound: the file's timeout would end a slow run before the
+    // bound is read.
+    timeout: const Timeout(Duration(seconds: 30)),
   );
 
   test('a policy with a key asks the jobs of its key, not the queue', () async {
@@ -432,7 +435,7 @@ void main() {
       await solo.close();
     }
     expect(watch.elapsed, lessThan(const Duration(seconds: 6)));
-  });
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('droppable hands back the last job of its key in the queue', () {
     runSolo((solo, journal, async) {
@@ -497,7 +500,36 @@ void main() {
       await solo.close();
     }
     expect(watch.elapsed, lessThan(const Duration(seconds: 6)));
-  });
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('a key that is not equal to itself leaves nothing behind', () async {
+    // `double.nan` is a key no job ever shares: it is not `==` to itself.
+    // Indexed, every job of it left a key in the index that no removal
+    // found, all of them of one hash code: the second 20 000 took 13
+    // seconds. Such a key is not indexed, as no walk ever matched it.
+    const n = 20000;
+    final solo = TestSolo();
+    final watch = Stopwatch()..start();
+    for (var round = 0; round < 2; round++) {
+      final gate = Completer<void>();
+      solo.enqueue<TestState, void>((ctx) => ctx.join(() => gate.future));
+      await Future<void>.delayed(Duration.zero);
+      final jobs = [
+        for (var i = 0; i < n; i++)
+          solo.enqueue<TestState, void>(key: double.nan, (ctx) async {}),
+      ];
+      final dropped = solo.enqueue<TestState, void>(
+        key: double.nan,
+        policy: Policy.droppable,
+        (ctx) async {},
+      );
+      expect(dropped, isNot(same(jobs.last)));
+      gate.complete();
+      await dropped.done;
+    }
+    expect(watch.elapsed, lessThan(const Duration(seconds: 6)));
+    await solo.close();
+  }, timeout: const Timeout(Duration(seconds: 60)));
 
   test('a key built twice is one key for the policies', () {
     runSolo((solo, journal, async) {

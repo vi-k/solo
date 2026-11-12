@@ -308,8 +308,9 @@ Job<Profile> load(String id) => enqueue<Ready, Profile>(
 );
 ```
 
-A key is any object compared with `==`, so a record will do. See
-[A key for each request](jobs.md#a-key-for-each-request) on the jobs page.
+A key is any object compared with `==` and with a `hashCode` that agrees, so a
+record will do. See [A key for each request](jobs.md#a-key-for-each-request) on
+the jobs page.
 
 ## Listening to a stream in a job
 

@@ -293,18 +293,22 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   }
 
   void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
+    // The key first: its `==` and `hashCode` are the caller's code, and one
+    // that throws leaves the job in no list rather than in the queue alone.
+    // A key not equal to itself, such as `double.nan`, is not indexed: no
+    // job shares it, and the index would keep a key no removal finds.
+    if (job.key case final key? when key == key) {
+      job._keyEntry = _byKey._insert(job, key, first: first);
+    }
+    if (job._accumulation?._owner case final owner?) {
+      job._ownerEntry = _byOwner._insert(job, owner, first: first);
+    }
     final entry = _QueueEntry<S>(job);
     job._queueEntry = entry;
     if (first) {
       _entries.addFirst(entry);
     } else {
       _entries.add(entry);
-    }
-    if (job.key case final key?) {
-      job._keyEntry = _byKey._insert(job, key, first: first);
-    }
-    if (job._accumulation?._owner case final owner?) {
-      job._ownerEntry = _byOwner._insert(job, owner, first: first);
     }
   }
 

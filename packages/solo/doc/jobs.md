@@ -344,9 +344,10 @@ Job<Profile> load(String id) => enqueue<Ready, Profile>(
 ```
 
 A key is any object that can be the key of a `Map`, compared with `==` and with
-a `hashCode` that agrees: the record `(_Op.load, id)` gives the policy the
-identity of one request rather than of the operation. `droppable` drops a
-second load of the same profile and lets a load of another one through.
+a `hashCode` that agrees and does not change while its job is queued: the
+record `(_Op.load, id)` gives the policy the identity of one request rather
+than of the operation. `droppable` drops a second load of the same profile and
+lets a load of another one through.
 
 The job the second call brought never starts: it ends on the spot with
 `Cancelled(duplicate)`, whose reason is a `DuplicateCancelReason`. `enqueue`
