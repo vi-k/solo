@@ -608,8 +608,9 @@ reload, the likes, the commands to a device. It does not fit a lane for each
 item of a list that grows and shrinks, and the seal is not the only reason. The
 pump walks every lane for the next job, and every write asks the rules of every
 running job of every lane: a thousand jobs that run side by side and then write
-once each ask a `keepWhile` 500500 times. Items that come and go take a
-controller each, or a layer above the controllers that caches by id, as in
+once each ask a `keepWhile` about half a million times. Items that come and go
+take a controller each, or a layer above the controllers that caches by id, as
+in
 [Where another package fits better](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#where-another-package-fits-better).
 
 ## The table of cases

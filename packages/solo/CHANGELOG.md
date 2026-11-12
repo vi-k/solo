@@ -30,6 +30,9 @@
   releases of both plugins that come out with this one know it. The rules about
   lanes come in a minor release of `solo_lints`, which reaches an app once its
   constraint is raised to it.
+- **`queue.jobs` is no longer a `List`.** It is still a live view in the order
+  of the queue and prints the same, but it is only the `Iterable` its type
+  says: `queue.jobs as List` throws.
 
 ### Added
 
@@ -54,11 +57,11 @@
   `Solo._step` of a stack trace read `SoloController.…` now: the members moved
   to the base, and the order and the depth of the frames are the same. The
   frames of a stack trace are not part of the public API.
-- A long queue costs each job the same: queuing, removing and starting a job no
-  longer walk the queue, and tens of thousands of queued jobs take milliseconds
-  where they took seconds. `queue.jobs` is still a live view in the order of
-  the queue and prints the same, but it is no longer a `List`, only the
-  `Iterable` its type says.
+- Queuing a job, removing one and starting the next no longer walk the queue,
+  and tens of thousands of queued jobs take milliseconds where they took
+  seconds. A policy that looks for a job of the same key, `droppable`,
+  `keepLatest` or `restart`, still walks it, as does an accumulator that looks
+  for its group.
 - Two texts read better where something went wrong. `pending` prints a job made
   without a key as `[no key]`, not `[null]`. `emit` called on a finished job by
   code that outlived its body says so and names the way out: await that code in
