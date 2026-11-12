@@ -912,6 +912,59 @@ final class Feed extends SoloLanes<int> {
     ['[[await]] _likes'],
   );
 
+  // A method that queues in one lane on one path and in another on a second
+  // has no lane that is seen: the wait is reported as any other.
+  Future<void> test_method_queueing_in_two_lanes() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _reload = lane('reload');
+    _likes = lane('likes');
+  }
+
+  late final SoloLane<int> _reload;
+  late final SoloLane<int> _likes;
+
+  Job<void> pick(bool first) {
+    if (first) {
+      return _likes.enqueue<int, void>((ctx) async {});
+    }
+    return _reload.enqueue<int, void>((ctx) async {});
+  }
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await pick(true).done;
+  });
+}
+''',
+    ['[[await]] pick(true)'],
+  );
+
+  // A field with an initializer is written by it, so a declaration in a
+  // constructor does not make it the controller's own lane.
+  Future<void> test_lane_field_with_an_initializer() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = lane('likes');
+  }
+
+  static late final SoloLane<int> shared;
+
+  SoloLane<int> _likes = shared;
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    ['[[await]] _likes'],
+  );
+
   // The same for a field a constructor sets in its initializer list.
   Future<void> test_lane_also_set_by_an_initializer() => assertAt(
     '''
