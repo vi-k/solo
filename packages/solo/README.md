@@ -43,6 +43,11 @@ That turns on its warnings; the lints are turned on by name, as its
 [Install](https://github.com/vi-k/solo/blob/main/packages/solo_lints/README.md#install)
 section shows.
 
+A coding agent that writes a controller does better with
+[the common mistakes](doc/mistakes.md) in its context: one short page with the
+shapes that habits from other state packages lead to, and the right way for
+each.
+
 ## Quick start
 
 A screen loads the name of a profile, and the user pulls to refresh and cancels
@@ -323,7 +328,7 @@ from bloc, solo under riverpod and under bloc for one who stays on either.
 | [Diagnostics](doc/diagnostics.md) | `SoloObserver`, `pending`, logs, a slow cancellation |
 | [Errors](doc/errors.md) | `onError`, `unansweredHandler`, catching and retrying, `ctx.unattended` |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |
-| [Common mistakes](doc/mistakes.md) | Seven mistakes that often pass a first test, and the right way for each |
+| [Common mistakes](doc/mistakes.md) | Nine mistakes that often pass a first test, and the right way for each |
 | [Reference](doc/reference.md) | Every member of `Solo`, of `SoloLanes` and its lanes, of their base `SoloController`, of the context, jobs, queue and accumulators, with the section that explains it |
 | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md) | The `flutter_solo` package: `SoloListenable`, owning a controller, rebuilding a screen |
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
@@ -357,6 +362,23 @@ section linked beside it.
 | The screen has to show news until the user closes it, and the camera must go on working | a controller of its own for the notices, and an acceptance that names the notice | [A notice the screen accepts](doc/state.md#a-notice-the-screen-accepts) |
 | A stream event arrives a microtask late, and that is too late | `addListener`, which calls back inside the change | [Observing state](doc/state.md#observing-state) |
 | Every change with what it replaced, and a listener that reads the state misses one | `addChangeListener`, which calls back with the previous and the current state | [Observing state](doc/state.md#observing-state) |
+
+## Where another package fits better
+
+`solo` is for state that operations wait on, overlap over and must leave in
+order: a screen, a session, a device. Three cases where it is the wrong layer:
+
+- Many entities by id, each with its own cache and a state derived from others:
+  a catalogue, a list of chats. A provider family in
+  [riverpod](https://pub.dev/packages/riverpod) caches by id, drops what no
+  screen watches and recomputes what is derived; a controller for each entity
+  does none of it. A command over such an entity, a save or a payment, still
+  fits a controller under the provider, as
+  [solo under riverpod](doc/riverpod.md) shows.
+- A server cache with invalidation and refetching: a query cache does that, and
+  `solo` keeps no cache of its own.
+- One plain value with no asynchronous work, such as a switch or a counter: a
+  `ValueNotifier` holds it, and a queue adds nothing.
 
 ## Versions
 

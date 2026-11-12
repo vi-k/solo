@@ -118,6 +118,22 @@ const _sources = <String, _Source>{
     answerHolder: 'test/support/jobs_page.dart',
     links: ['jobs.md#a-key-for-each-request'],
   ),
+  '## Listening to a stream in a job': (
+    pairs: 1,
+    attempt: '### The first attempt',
+    attemptHolder: 'test/support/streams_first_attempts.dart',
+    answer: '### A child that owns the subscription',
+    answerHolder: 'test/support/streams_page.dart',
+    links: ['streams.md#processing-a-stream'],
+  ),
+  '## A copy read before the wait, in a lane': (
+    pairs: 1,
+    attempt: '### The first attempt',
+    attemptHolder: 'test/support/lanes_first_attempts.dart',
+    answer: '### A read at the write',
+    answerHolder: 'test/support/lanes_page.dart',
+    links: ['lanes.md#a-write-that-keeps-the-other-lanes-work'],
+  ),
 };
 
 /// The parts of [text] that open with a heading, by the heading line.

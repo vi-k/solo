@@ -1,8 +1,8 @@
 # Common mistakes
 
-Seven mistakes that compile, run and often pass a first test. Each section
-shows the mistake, says what goes wrong, shows the right way in a few lines and
-links to the section that shows the mistake in full. The analyzer plugin
+Nine mistakes that compile, run and often pass a first test. Each section shows
+the mistake, says what goes wrong, shows the right way in a few lines and links
+to the section that shows the mistake in full. The analyzer plugin
 [solo_lints](https://pub.dev/packages/solo_lints) reports most of them in the
 code.
 
@@ -310,3 +310,72 @@ Job<Profile> load(String id) => enqueue<Ready, Profile>(
 
 A key is any object compared with `==`, so a record will do. See
 [A key for each request](jobs.md#a-key-for-each-request) on the jobs page.
+
+## Listening to a stream in a job
+
+A body that subscribes and returns has finished, and its context with it.
+
+Don't do this:
+
+```dart
+// Wrong: the job ends before the first position.
+Job<void> track() => enqueue<Ready, void>(key: 'track', (ctx) async {
+  hw.positions.listen((p) => ctx.emit(ctx.state.copyWith(position: p)));
+});
+```
+
+The queue moves on before the first position arrives, each position throws out
+of `emit` into the zone, and nothing ends the subscription, `close()` included.
+Give the stream to the job.
+
+Do this:
+
+```dart
+Job<void> track() => enqueue<Ready, void>(
+  key: 'track',
+  (ctx) => ctx.each(hw.positions, (childCtx, p) {
+    childCtx.emit(childCtx.state.copyWith(position: p));
+  }).value,
+);
+```
+
+`ctx.each` makes a child job that owns the subscription, so the subscription
+ends with the job. See [Processing a stream](streams.md#processing-a-stream) on
+the streams page.
+
+## A copy read before the wait, in a lane
+
+In a `SoloLanes`, while a job waits, every other lane writes.
+
+Don't do this:
+
+```dart
+// Wrong: the like writes over a copy read before the wait.
+Job<void> setLiked(String postId, {required bool liked}) =>
+    _likes.enqueue<Feed, void>((ctx) async {
+      final feed = ctx.state;
+      ctx.emit(feed.mark(postId, Mark(liked)));
+      await ctx.join(() => api.setLiked(postId, liked: liked));
+      ctx.emit(feed.mark(postId, Mark(liked, ++_confirmations)));
+    });
+```
+
+A reload that publishes the posts while the like waits for the server loses
+them at the second `emit`: the copy was read before they came. Read the state
+at the write.
+
+Do this:
+
+```dart
+Job<void> setLiked(String postId, {required bool liked}) =>
+    _likes.enqueue<Feed, void>((ctx) async {
+      ctx.emit(ctx.state.mark(postId, Mark(liked)));
+      await ctx.join(() => api.setLiked(postId, liked: liked));
+      ctx.emit(ctx.state.mark(postId, Mark(liked, ++_confirmations)));
+    });
+```
+
+`ctx.state` and the `emit` after it run in one synchronous stretch, and no
+other lane writes between the two. See
+[A write that keeps the other lane's work](lanes.md#a-write-that-keeps-the-other-lanes-work)
+on the lanes page.

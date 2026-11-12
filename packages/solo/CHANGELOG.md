@@ -88,6 +88,12 @@
   `SoloController.addListener`.
 - The README counts the frames of a stack trace, with the text of error
   messages and of debug output, among what is not part of the public API.
+- `doc/mistakes.md` shows two more mistakes: a stream listened to in a job
+  instead of `ctx.each`, and a copy of the state read before the wait in a
+  lane. The README offers the page to a coding agent, and a section of it,
+  [Where another package fits better](README.md#where-another-package-fits-better),
+  names the cases where `solo` is the wrong layer. `doc/lanes.md` says that
+  lanes are for kinds of work rather than for each item of a list.
 
 ## 1.1.1
 
