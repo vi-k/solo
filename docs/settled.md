@@ -686,6 +686,14 @@ D12.)
 до `onStart`, `onFinish` и `SoloObserver`. (2026-11-12;
 `2026-11-12-solo-project-review.md`, B4 Fable.)
 
+**156. `Solo.observer`, `Solo.unansweredHandler` и `Solo.debug` остаются
+статиками `Solo` и служат любому `SoloController`.** `Solo.` здесь — имя
+пакета, а не вида контроллера: приложение только на `SoloLanes` настраивает их
+так же. Перенос на `SoloController` менял бы около пятидесяти файлов ради
+имени; dartdoc класса `Solo` и двух полей говорит, что они служат
+и `SoloLanes`. Решение владельца 2026-11-12: «оставляем Solo как имя пакета».
+(2026-11-12; `2026-11-12-solo-project-review.md`, B1 Fable.)
+
 ## `flutter_solo`
 
 **60. `SoloSelector.changed:` сравнивает с последним принятым значением,

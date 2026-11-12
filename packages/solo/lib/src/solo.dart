@@ -1356,10 +1356,15 @@ abstract class SoloController<S extends Object> {
 ///
 /// The state, the listeners, closing and the hooks come from [SoloController].
 ///
+/// The static members, [observer], [unansweredHandler] and [debug], serve
+/// every [SoloController], a [SoloLanes] too: `Solo.` there names the
+/// package, not the kind of controller.
+///
 /// See [Reference](https://github.com/vi-k/solo/blob/main/packages/solo/doc/reference.md#solo)
 /// for every member and the section that explains it.
 abstract class Solo<S extends Object> extends SoloController<S> {
-  /// A global observer for all controllers; `null` by default.
+  /// A global observer for all controllers, a [SoloLanes] too; `null` by
+  /// default.
   ///
   /// Watching only. Setting one changes nothing about where an error then
   /// goes; [unansweredHandler] is what takes that over.
@@ -1397,7 +1402,8 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   /// operation throws because a cancellation stopped it.
   static SoloUnansweredHandler? unansweredHandler;
 
-  /// Engine tracing for debugging the engine itself; `null` by default.
+  /// Engine tracing for debugging the engine itself, of every controller;
+  /// `null` by default.
   ///
   /// The queue, the state and the closing report here. The life of each job,
   /// its start, its errors, a cancellation that reaches it and its outcome, is
