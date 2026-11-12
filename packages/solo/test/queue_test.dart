@@ -352,9 +352,10 @@ void main() {
     'a long queue costs each job the same, not the length of the queue',
     () async {
       // A list asked each job whether it was queued by a walk, and shifted
-      // its tail to take the head: 40 000 jobs took seconds to queue, to
-      // clear and to run. Each of them costs a constant now, and the bound is
-      // far above that and far below the walk.
+      // its tail to take the head: 40 000 jobs took 15 seconds to queue, to
+      // clear and to run. Each of them costs a constant now: under a second
+      // alone, two in a loaded run of the whole suite. The bound sits between
+      // the two costs, with room on either side.
       const n = 40000;
       final solo = TestSolo();
       final gate = Completer<void>();
@@ -372,7 +373,7 @@ void main() {
       gate.complete();
       await jobs.last.done;
       expect(jobs.last.outcome, isA<Done<void>>());
-      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 6)));
       await solo.close();
     },
   );
