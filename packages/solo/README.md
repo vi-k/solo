@@ -333,7 +333,7 @@ from bloc, solo under riverpod and under bloc for one who stays on either.
 | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md) | The `flutter_solo` package: `SoloListenable`, owning a controller, rebuilding a screen |
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
 | [solo and bloc, side by side](doc/vs-bloc.md) | Eleven scenarios in both packages |
-| [solo under riverpod](doc/riverpod.md) | A controller under a provider: the bridge, a camera closed when the screen goes, a form sent once |
+| [solo under riverpod](doc/riverpod.md) | A controller under a provider: the bridge, a camera closed when the screen goes, a form sent once, a price riverpod reads and a controller saves |
 | [solo under bloc](doc/bloc.md) | A controller under a bloc: the bridges and what they cost, three requirements where the controller takes a workaround off the bloc |
 
 ## Recipes
@@ -374,7 +374,8 @@ order: a screen, a session, a device. Three cases where it is the wrong layer:
   screen watches and recomputes what is derived; a controller for each entity
   does none of it. A command over such an entity, a save or a payment, still
   fits a controller under the provider, as
-  [solo under riverpod](doc/riverpod.md) shows.
+  [A price riverpod reads and a controller saves](doc/riverpod.md#a-price-riverpod-reads-and-a-controller-saves)
+  shows.
 - A server cache with invalidation and refetching: a query cache does that, and
   `solo` keeps no cache of its own.
 - One plain value with no asynchronous work, such as a switch or a counter: a

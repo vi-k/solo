@@ -18,6 +18,7 @@ apart:
 | The state of a controller on the screen | `ref.notifyListeners` and `select` | [A controller under a provider](#a-controller-under-a-provider) |
 | A resource taken before its cleanup is registered | `discard` where it is taken, `onClose` for what the controller keeps | [A camera closed when the screen goes](#a-camera-closed-when-the-screen-goes) |
 | A form sent twice | `Policy.droppable` | [A form sent once](#a-form-sent-once) |
+| A price invalidated while the save it should show is on its way | `invalidate` once the `done` of the save completes | [A price riverpod reads and a controller saves](#a-price-riverpod-reads-and-a-controller-saves) |
 
 The debounce of riverpod's [guide](https://riverpod.dev/docs/how_to/cancel)
 throws `Exception('Cancelled')` after the disposal. An app that wants to tell
@@ -393,6 +394,106 @@ while the first is still on its way.
 The price of `droppable` is the other side of the same rule: a second call with
 other arguments gets the first job as well. The `'bye'` typed while `'hi'` was
 on its way is never sent, and its caller gets the receipt of `'hi'`.
+
+## A price riverpod reads and a controller saves
+
+A screen shows the price of a product and lets the user change it. Reading the
+price is riverpod's: a provider family keeps it per product, reads it once for
+every screen that watches it, and reads it again when invalidated. Saving it
+has an order to keep: two saves of one price must reach the server in the order
+they were made. `fetchPrice` and `storePrice` stand for the API: the server
+answers a read in 20 ms and stores a price in 50 ms.
+
+```dart
+final price = FutureProvider.family<int, String>(
+  (ref, id) => fetchPrice(id),
+);
+```
+
+```dart
+final class PriceDesk extends Solo<Set<String>> {
+  PriceDesk() : super(const <String>{});
+
+  Job<void> save(String id, int value) =>
+      enqueue<Set<String>, void>((ctx) async {
+        ctx.emit({...ctx.state, id});
+        await ctx.join(() => storePrice(id, value));
+        ctx.emit({...ctx.state}..remove(id));
+      });
+}
+```
+
+```dart
+final priceDesk = Provider<PriceDesk>((ref) {
+  final desk = PriceDesk()..addListener(ref.notifyListeners);
+  ref.onDispose(() {
+    desk.removeListener(ref.notifyListeners);
+    unawaited(desk.close());
+  });
+  return desk;
+});
+```
+
+The state of the desk is the products whose price is being saved, for a screen
+that shows a spinner beside them. The provider of the desk is the bridge of the
+first section.
+
+### The first attempt
+
+```dart
+// The first attempt: the price is read again as soon as the save is queued.
+void setPrice(ProviderContainer container, String id, int value) {
+  container.read(priceDesk).save(id, value);
+  container.invalidate(price(id));
+}
+```
+
+In Flutter the same lines take the `WidgetRef` of the screen. The server holds
+100 for `p1`, the screen watches `price('p1')`, and once it shows the price the
+user sets 120:
+
+```text
+price p1: 100
+save p1 120 sent
+price p1: 100
+save p1 120 stored
+screen: 100, server: 120
+```
+
+`invalidate` makes riverpod read the price again at once, while the save is on
+its way, and the server still answers 100. The save lands after that read, and
+nothing reads the price again: the screen keeps 100 until something else
+invalidates it.
+
+### Invalidating after the outcome
+
+```dart
+Future<void> setPrice(
+  ProviderContainer container,
+  String id,
+  int value,
+) async {
+  await container.read(priceDesk).save(id, value).done;
+  container.invalidate(price(id));
+}
+```
+
+The same screen and the same 120:
+
+```text
+price p1: 100
+save p1 120 sent
+save p1 120 stored
+price p1: 120
+screen: 120, server: 120
+```
+
+`done` completes when the save has ended, however it ended, and only then is
+the price read again. The read comes after a failed or cancelled save as well:
+such a save may still have reached the server, and the read shows what the
+server holds. Each side keeps what it owns: riverpod the cache and who reads
+it, the controller the order of the saves and their outcomes, and the
+invalidation between them waits for the save to end.
 
 ## What you take on
 

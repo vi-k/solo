@@ -595,6 +595,77 @@ Future<void> scenario() async {
 }
 ''' + RUNNER)
 
+# ------------------------------------------------------------------ price
+PRICE = 'a-price-riverpod-reads-and-a-c'
+
+# The API of the page: a read answers in 20 ms with the price the server
+# holds, a save stores it after 50 ms.
+SERVER = '''
+final server = {'p1': 100};
+
+Future<int> fetchPrice(String id) async {
+  await Future<void>.delayed(const Duration(milliseconds: 20));
+  return server[id]!;
+}
+
+Future<void> storePrice(String id, int value) async {
+  print('save $id $value sent');
+  await Future<void>.delayed(const Duration(milliseconds: 50));
+  server[id] = value;
+  print('save $id $value stored');
+}
+
+void require(bool condition, String message) {
+  if (!condition) throw StateError(message);
+}
+'''
+
+PRICE_CODE = (
+    snips[f'{PRICE}/final-price-futureprovider-fam']
+    + snips[f'{PRICE}/PriceDesk']
+    + snips[f'{PRICE}/final-pricedesk-provider-price'])
+
+
+def price_scenario(call, screen, label):
+    # The screen watches the price, and once it shows one the user sets
+    # 120. Whatever the screen shows when all is quiet is what it keeps.
+    return '''
+Future<void> scenario() async {
+  final container = ProviderContainer();
+  final watching = container.listen(price('p1'), (_, next) {
+    // A read again keeps the old value while it runs: only a finished read
+    // is printed.
+    if (next case AsyncData(:final value) when !next.isLoading) {
+      print('price p1: $value');
+    }
+  });
+  await container.read(price('p1').future);
+  %s
+  await Future<void>.delayed(const Duration(milliseconds: 200));
+  final shown = container.read(price('p1')).value;
+  print('screen: $shown, server: ${server['p1']}');
+  require(server['p1'] == 120, 'the save reached the server');
+  require(shown == %d, '%s: $shown');
+  watching.close();
+  container.dispose();
+}
+''' % (call, screen, label)
+
+
+FILES['saved_price_first'] = (
+    HEAD + PRICE_CODE
+    + snips[f'{PRICE}/the-first-attempt/setPrice'] + SERVER
+    + price_scenario("setPrice(container, 'p1', 120);", 100,
+                     'the read before the save keeps the old price')
+    + RUNNER)
+
+FILES['saved_price_after'] = (
+    HEAD + PRICE_CODE
+    + snips[f'{PRICE}/invalidating-after-the-outcome/setPrice'] + SERVER
+    + price_scenario("await setPrice(container, 'p1', 120);", 120,
+                     'the read after the save shows the new price')
+    + RUNNER)
+
 unbuilt = snips.unbuilt()
 assert not unbuilt, f'blocks of the page no driver builds: {unbuilt}'
 

@@ -94,6 +94,9 @@
   [Where another package fits better](README.md#where-another-package-fits-better),
   names the cases where `solo` is the wrong layer. `doc/lanes.md` says that
   lanes are for kinds of work rather than for each item of a list.
+- `doc/riverpod.md` shows a price riverpod reads and a controller saves: the
+  price is invalidated once the `done` of the save completes, not when the save
+  is queued.
 
 ## 1.1.1
 
