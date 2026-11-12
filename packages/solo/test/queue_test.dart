@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -345,4 +347,33 @@ void main() {
       ]);
     });
   });
+
+  test(
+    'a long queue costs each job the same, not the length of the queue',
+    () async {
+      // A list asked each job whether it was queued by a walk, and shifted
+      // its tail to take the head: 40 000 jobs took seconds to queue, to
+      // clear and to run. Each of them costs a constant now, and the bound is
+      // far above that and far below the walk.
+      const n = 40000;
+      final solo = TestSolo();
+      final gate = Completer<void>();
+      solo.enqueue<TestState, void>((ctx) => ctx.join(() => gate.future));
+      await Future<void>.delayed(Duration.zero);
+      final watch = Stopwatch()..start();
+      for (var i = 0; i < n; i++) {
+        solo.enqueue<TestState, void>((ctx) async {});
+      }
+      expect(solo.queue.clear(), n);
+      final jobs = [
+        for (var i = 0; i < n; i++)
+          solo.enqueue<TestState, void>((ctx) async {}),
+      ];
+      gate.complete();
+      await jobs.last.done;
+      expect(jobs.last.outcome, isA<Done<void>>());
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+      await solo.close();
+    },
+  );
 }

@@ -70,6 +70,10 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// to offer.
   final bool Function(W state)? _keepWhile;
   _AccumulationGroup<Object?>? _accumulation;
+
+  /// This job's place in the queue of [_destination]; `null` while it is
+  /// in none.
+  _QueueEntry<S>? _queueEntry;
   _SoloJob<S, S, Object?>? _parentJob;
   final bool _hasStateHandlers;
   bool _stateCorrectionRevoked = false;
@@ -106,7 +110,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
        _hasStateHandlers = ifFailed != null || ifCancelled != null;
 
   @override
-  bool get isQueued => _destination.queue._jobs.contains(this);
+  bool get isQueued => _destination.queue._has(this);
 
   @override
   SoloLaneId? get lane => _execution?.id;
@@ -133,7 +137,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
             : 'runs as a child only in a body of the controller that made it',
       );
     }
-    if (_destination.queue._jobs.contains(this)) {
+    if (_destination.queue._has(this)) {
       throw StateError('$this is queued and cannot be run as a child');
     }
     // Taken already, and still `created`: a rule of the child's own runs it
@@ -160,7 +164,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
     final queue = _destination.queue;
-    final queued = queue._jobs.contains(this);
+    final queued = queue._has(this);
     // A job the pump holds between the queue and the start is queued work
     // too: it has not run a line, and a `cancellable: false` one turns
     // down a rejectable cancellation the same way. Left to the core it
@@ -174,7 +178,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
         return;
       }
       if (queued) {
-        queue._jobs.remove(this);
+        queue._unlink(this);
         // Diagnostics may add another event synchronously. Detach first so
         // the group being cancelled can no longer receive it.
         SoloController._debug(

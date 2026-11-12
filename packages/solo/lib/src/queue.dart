@@ -50,11 +50,62 @@ abstract interface class SoloQueue {
   });
 }
 
+/// The place of one job in a queue.
+///
+/// The job holds its own, so asking whether it is queued and taking it out
+/// cost the same however long the queue is: a list asked each of them by a
+/// walk, and a long queue paid for that walk once per job.
+final class _QueueEntry<S extends Object>
+    extends LinkedListEntry<_QueueEntry<S>> {
+  final _SoloJob<S, S, Object?> job;
+
+  _QueueEntry(this.job);
+}
+
+/// What [SoloQueue.jobs] hands out: a live view of the queue that prints as
+/// the list it used to be.
+final class _QueueView<S extends Object>
+    extends IterableBase<SoloJob<Object?>> {
+  final LinkedList<_QueueEntry<S>> _entries;
+
+  _QueueView(this._entries);
+
+  @override
+  Iterator<SoloJob<Object?>> get iterator =>
+      _entries.map((entry) => entry.job).iterator;
+
+  @override
+  int get length => _entries.length;
+
+  @override
+  bool get isEmpty => _entries.isEmpty;
+
+  @override
+  String toString() => Iterable.iterableToFullString(this, '[', ']');
+}
+
 final class _SoloQueue<S extends Object> implements SoloQueue {
   final _SoloLaneCore<S> _core;
-  final _jobs = <_SoloJob<S, S, Object?>>[];
+  final _entries = LinkedList<_QueueEntry<S>>();
 
   _SoloQueue(this._core);
+
+  /// The queued jobs in their order, a live view.
+  Iterable<_SoloJob<S, S, Object?>> get _jobs =>
+      _entries.map((entry) => entry.job);
+
+  /// The queued jobs from the last to the first, a live view.
+  Iterable<_SoloJob<S, S, Object?>> get _reversed sync* {
+    var entry = _entries.isEmpty ? null : _entries.last;
+    while (entry != null) {
+      yield entry.job;
+      entry = entry.previous;
+    }
+  }
+
+  /// Whether [job] is in this queue.
+  bool _has(_SoloJob<S, S, Object?> job) =>
+      identical(job._queueEntry?.list, _entries);
 
   /// The job the pump holds while its start rules are asked, unless a rule
   /// has already ended it.
@@ -68,16 +119,16 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   List<_SoloJob<S, S, Object?>> get _snapshot => [?_held, ..._jobs];
 
   @override
-  Iterable<SoloJob<Object?>> get jobs => UnmodifiableListView(_jobs);
+  Iterable<SoloJob<Object?>> get jobs => _QueueView(_entries);
 
   @override
-  int get length => _jobs.length;
+  int get length => _entries.length;
 
   @override
-  bool get isEmpty => _jobs.isEmpty;
+  bool get isEmpty => _entries.isEmpty;
 
   @override
-  bool get isNotEmpty => _jobs.isNotEmpty;
+  bool get isNotEmpty => _entries.isNotEmpty;
 
   @override
   bool remove(
@@ -86,7 +137,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     CancelReason reason = const ManualCancelReason(),
   }) {
     if (job is! _SoloJob<S, S, Object?> ||
-        !(_jobs.contains(job) || identical(job, _held))) {
+        !(_has(job) || identical(job, _held))) {
       return false;
     }
     job._cancelWith(
@@ -100,7 +151,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     // The job answers a rejectable cancellation itself, and a job that
     // refused is still here: membership is the answer, not a second check.
     // The held one is in no list, and a cancellation it takes ends it.
-    return !_jobs.contains(job) && !identical(job, _held);
+    return !_has(job) && !identical(job, _held);
   }
 
   @override
@@ -152,18 +203,34 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   }
 
   void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
+    final entry = _QueueEntry<S>(job);
+    job._queueEntry = entry;
     if (first) {
-      _jobs.insert(0, job);
+      _entries.addFirst(entry);
     } else {
-      _jobs.add(job);
+      _entries.add(entry);
     }
   }
 
+  /// Takes [job], which is in this queue, out of it.
+  void _unlink(_SoloJob<S, S, Object?> job) {
+    job._queueEntry!.unlink();
+    job._queueEntry = null;
+  }
+
+  /// Moves [job], which is in this queue, behind every other job.
+  void _moveToTail(_SoloJob<S, S, Object?> job) {
+    _unlink(job);
+    _insert(job, first: false);
+  }
+
   _SoloJob<S, S, Object?>? _takeFirst() {
-    for (var i = 0; i < _jobs.length; i++) {
-      final job = _jobs[i];
+    for (final entry in _entries) {
+      final job = entry.job;
       if (!(job._accumulation?._ready ?? true)) continue;
-      _jobs.removeAt(i);
+      // The walk ends here, so taking the entry out of the list it walks
+      // is safe.
+      _unlink(job);
       job._accumulation?._seal();
       return job;
     }
@@ -172,7 +239,10 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
 
   List<_SoloJob<S, S, Object?>> _drain() {
     final drained = _jobs.toList();
-    _jobs.clear();
+    for (final job in drained) {
+      job._queueEntry = null;
+    }
+    _entries.clear();
     return drained;
   }
 }

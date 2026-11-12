@@ -990,7 +990,7 @@ abstract class SoloController<S extends Object> {
     final queue = core.queue;
     if (impl._taken ||
         impl._jobStatus != JobStatus.created ||
-        queue._jobs.contains(impl)) {
+        queue._has(impl)) {
       throw StateError('$impl has already been enqueued or run');
     }
     // Looked up before the job is marked as enqueued, and the answer reused
@@ -1137,7 +1137,7 @@ abstract class SoloController<S extends Object> {
     // the caller's code, and it may touch the queue while it answers. It
     // may even cancel the job it is about to accept, so a job is asked
     // after the answer, too, whether it is still going to do the work.
-    for (final job in core.queue._jobs.reversed.toList()) {
+    for (final job in core.queue._reversed.toList()) {
       if (test(job) && _goingOn(job)) {
         return job;
       }
@@ -1244,7 +1244,7 @@ abstract class SoloController<S extends Object> {
         // Not the same as an empty queue: a group waiting for its window
         // stays in it, and its timer brings the pump back. A drain that
         // ended here would cut off the very case it exists for.
-        if (_draining && queue._jobs.isEmpty) {
+        if (_draining && queue.isEmpty) {
           // Drained, and said nowhere: the pass ends the drain once it has
           // seen every core.
           return _StepEnd.drained;
@@ -1256,10 +1256,10 @@ abstract class SoloController<S extends Object> {
         // time.
         if (core.id == null) {
           _debug(() => core.said('queue has no ready jobs'));
-        } else if (took || (queue._jobs.isNotEmpty && !core.saidWaiting)) {
+        } else if (took || (queue.isNotEmpty && !core.saidWaiting)) {
           _debug(() => core.said('queue has no ready jobs'));
         }
-        core.saidWaiting = !took && queue._jobs.isNotEmpty;
+        core.saidWaiting = !took && queue.isNotEmpty;
 
         return _stepEnd;
       }

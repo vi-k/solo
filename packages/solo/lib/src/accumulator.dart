@@ -140,10 +140,10 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   }
 
   _SoloJob<S, W, T>? _candidate() {
-    final jobs = _core.queue._jobs;
+    final queue = _core.queue;
     final candidates = _policy == AccumulationPolicy.adjacent
-        ? <_SoloJob<S, S, Object?>>[if (jobs.isNotEmpty) jobs.last]
-        : jobs.reversed;
+        ? <_SoloJob<S, S, Object?>>[if (queue.isNotEmpty) queue._jobs.last]
+        : queue._reversed;
     for (final job in candidates) {
       final group = job._accumulation;
       if (group != null && group._open && identical(group._owner, this)) {
@@ -213,8 +213,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       // job, its handle and its buffer, and the job moves behind whatever
       // was queued after it. Nothing is cancelled here, so no cancellation
       // hook can re-enter in the middle of the move.
-      _core.queue._jobs.remove(previous);
-      _core.queue._insert(previous, first: false);
+      _core.queue._moveToTail(previous);
       SoloController._debug(() => _core.said('move $previous to the tail'));
     }
     // The debug line is foreign code, and it may cancel the group's job: a

@@ -51,6 +51,11 @@
   `Solo._step` of a stack trace read `SoloController.…` now: the members moved
   to the base, and the order and the depth of the frames are the same. The
   frames of a stack trace are not part of the public API.
+- A long queue costs each job the same: queuing, removing and starting a job no
+  longer walk the queue, and tens of thousands of queued jobs take milliseconds
+  where they took seconds. `queue.jobs` is still a live view in the order of
+  the queue and prints the same, but it is no longer a `List`, only the
+  `Iterable` its type says.
 
 ### Documentation
 
