@@ -220,6 +220,15 @@ A job that read the state before the wait and writes a snapshot on purpose
 after it gets the line too, so it is a line in the log and not an error. A job
 that has not read the state gets none, and neither does the read at the write.
 
+The `stale_emit` lint of [solo_lints](https://pub.dev/packages/solo_lints)
+reports the first attempt: its second `emit` writes a value built on `feed`,
+which the job read before the `await`. The lint is a heuristic, and it does not
+see the reload of [A snapshot from the server](#a-snapshot-from-the-server),
+whose answer, written whole, loses the mark of the like all the same. Lints of
+`solo_lints` are turned on by name, as its
+[Install](https://github.com/vi-k/solo/blob/main/packages/solo_lints/README.md#install)
+section shows.
+
 ## A snapshot from the server
 
 A reload brings the server's word on the likes. A like the server confirmed
