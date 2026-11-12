@@ -1,4 +1,7 @@
 import 'dart:io';
+// Deprecated from Dart 3.14, and the floor is Dart 3.10: the test
+// reads the declarations of a class through it.
+// ignore: deprecated_member_use
 import 'dart:mirrors';
 
 import 'package:meta/meta.dart';

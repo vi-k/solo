@@ -2,6 +2,9 @@
 library;
 
 import 'dart:async';
+// Deprecated from Dart 3.14; the test reads one private list through it,
+// and the floor is Dart 3.10.
+// ignore: deprecated_member_use
 import 'dart:mirrors';
 
 import 'package:async_job/engine.dart';

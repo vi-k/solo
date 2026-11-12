@@ -6,6 +6,9 @@
 // code: the API behind the controller with the `ApiException` it throws,
 // and the fake `doc/testing.md` tests the controller with.
 
+// Deprecated from Flutter 3.47 for package:material_ui, whose releases
+// since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 

@@ -748,8 +748,14 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
   deferred.start();
 }
 ''');
+    // The words around the name are the analyzer's, and they change with
+    // it: "The method ... 'ChildJob'" in Dart 3.13, "The member ...
+    // 'ChildJob<void>'" in 3.15.
     expect(errors, [
-      "The method 'start' isn't defined for the type 'ChildJob'.",
+      allOf(
+        contains("'start' isn't defined for the type 'ChildJob"),
+        isNot(contains('DeferredJob')),
+      ),
     ]);
   }, timeout: const Timeout(Duration(minutes: 1)));
 

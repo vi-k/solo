@@ -32,6 +32,8 @@ const _table = <(String, int), String?>{
   ('Answering for every failure', 1): null,
   ('Moving the clock in fakeAsync', 1): 'sync_fake_async',
   ('A key for each request', 1): 'key_per_request',
+  ('Listening to a stream in a job', 1): null,
+  ('A copy read before the wait, in a lane', 1): null,
 };
 
 void main() {
@@ -240,8 +242,9 @@ final class _Section {
 /// [code], a block of [section], in the declarations it needs to resolve.
 ///
 /// The blocks stand in different places: most are statements of a job body,
-/// two sections show members of a controller, and the wrong way of
-/// "Answering for every failure" is a top-level class.
+/// four sections show members of a controller, one of them of a controller
+/// with lanes, and the wrong way of "Answering for every failure" is a
+/// top-level class.
 String _wrap(String section, int pair, _Side side, String code) =>
     switch ((section, pair, side)) {
       ('Each wait in its place', _, _) => _upload(code),
@@ -252,6 +255,8 @@ String _wrap(String section, int pair, _Side side, String code) =>
       ('Answering for every failure', _, _Side.right) => _refresh(code),
       ('Moving the clock in fakeAsync', _, _) => _fakeClock(code),
       ('A key for each request', _, _) => _profiles(code),
+      ('Listening to a stream in a job', _, _) => _tracker(code),
+      ('A copy read before the wait, in a lane', _, _) => _feed(code),
       _ => fail('$section, pair $pair has no harness'),
     };
 
@@ -458,6 +463,65 @@ late final Api api;
 
 final class Profiles extends Solo<State> {
   Profiles() : super(Ready());
+
+$code
+}
+''';
+
+String _tracker(String code) =>
+    '''
+import 'package:solo/solo.dart';
+
+sealed class State {}
+
+final class Ready extends State {
+  Ready copyWith({required int position}) => this;
+}
+
+abstract interface class Hardware {
+  Stream<int> get positions;
+}
+
+late final Hardware hw;
+
+final class Tracker extends Solo<State> {
+  Tracker() : super(Ready());
+
+$code
+}
+''';
+
+String _feed(String code) =>
+    '''
+import 'package:solo/solo.dart';
+
+final class Mark {
+  final bool liked;
+  final int confirmations;
+
+  const Mark(this.liked, [this.confirmations = 0]);
+}
+
+final class Feed {
+  const Feed();
+
+  Feed mark(String postId, Mark mark) => this;
+}
+
+abstract interface class Api {
+  Future<void> setLiked(String postId, {required bool liked});
+}
+
+late final Api api;
+
+final class Feeds extends SoloLanes<Feed> {
+  int _confirmations = 0;
+
+  late final SoloLane<Feed> _likes;
+
+  Feeds() : super(const Feed()) {
+    _likes = lane('likes');
+  }
 
 $code
 }

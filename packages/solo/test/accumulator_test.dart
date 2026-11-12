@@ -1,4 +1,7 @@
 import 'dart:async';
+// Deprecated from Dart 3.14, and the floor is Dart 3.10: the test
+// reads a private field through it.
+// ignore: deprecated_member_use
 import 'dart:mirrors';
 
 import 'package:fake_async/fake_async.dart';

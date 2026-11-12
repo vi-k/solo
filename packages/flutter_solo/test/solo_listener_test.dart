@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// Deprecated from Flutter 3.47 for package:material_ui, whose releases
+// since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_test/flutter_test.dart';

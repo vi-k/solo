@@ -591,9 +591,10 @@ import 'package:solo/solo.dart';
 
 void attempt(SoloJob<void> job) => job.start();
 ''');
-      expect(errors, [
-        "The method 'start' isn't defined for the type 'SoloJob'.",
-      ]);
+      // The words around the name are the analyzer's, and they change with
+      // it: "The method ... 'SoloJob'" in Dart 3.13, "The member ...
+      // 'SoloJob<void>'" in 3.15.
+      expect(errors, [contains("'start' isn't defined for the type 'SoloJob")]);
     },
     timeout: const Timeout(Duration(minutes: 1)),
   );

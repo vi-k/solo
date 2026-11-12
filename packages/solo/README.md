@@ -368,18 +368,16 @@ section linked beside it.
 `solo` is for state that operations wait on, overlap over and must leave in
 order: a screen, a session, a device. Three cases where it is the wrong layer:
 
-- Many entities by id, each with its own cache and a state derived from others:
-  a catalogue, a list of chats. A provider family in
-  [riverpod](https://pub.dev/packages/riverpod) caches by id, drops what no
-  screen watches and recomputes what is derived; a controller for each entity
-  does none of it. A command over such an entity, a save or a payment, still
-  fits a controller under the provider, as
-  [A price riverpod reads and a controller saves](doc/riverpod.md#a-price-riverpod-reads-and-a-controller-saves)
-  shows.
-- A server cache with invalidation and refetching: a query cache does that, and
-  `solo` keeps no cache of its own.
-- One plain value with no asynchronous work, such as a switch or a counter: a
-  `ValueNotifier` holds it, and a queue adds nothing.
+| Case | What fits | Why |
+| --- | --- | --- |
+| Many entities by id, each with its own cache and a state derived from others: a catalogue, a list of chats | a provider family in [riverpod](https://pub.dev/packages/riverpod) | it caches by id, drops what no screen watches and recomputes what is derived; a controller for each entity does none of it |
+| A server cache with invalidation and refetching | a query cache | `solo` keeps no cache of its own |
+| One plain value with no asynchronous work, such as a switch or a counter | a `ValueNotifier` | a queue adds nothing |
+
+A command over one entity of such a family, a save or a payment, still fits a
+controller under the provider, as
+[A price riverpod reads and a controller saves](doc/riverpod.md#a-price-riverpod-reads-and-a-controller-saves)
+shows.
 
 ## Versions
 
