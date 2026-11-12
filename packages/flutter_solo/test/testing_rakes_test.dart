@@ -67,8 +67,13 @@ Future<List<FlutterErrorDetails>> _asWidgetTest(
       description: 'a first attempt of the page',
     );
   } finally {
-    reportTestException = reporter;
-    binding.postTest();
+    // The binding checks that the reporter is still the one it ran the body
+    // with: in runTest up to Flutter 3.47, in postTest on Flutter 3.50.
+    try {
+      binding.postTest();
+    } finally {
+      reportTestException = reporter;
+    }
   }
   return reported;
 }
