@@ -982,6 +982,100 @@ void main() {
       expect(trace.where((line) => line.contains('emit over')), isEmpty);
     });
 
+    test('a job that wrote before the wait but never read is not told it '
+        'read', () {
+      final trace = lines((async) {
+        final controller = _Two();
+        final gate = Completer<void>();
+        controller.first.enqueue<_AB, void>(key: 'server', (ctx) async {
+          ctx.emit((a: -1, b: 0));
+          await ctx.join(() => gate.future);
+          ctx.emit((a: 5, b: 5));
+        });
+        async.flushMicrotasks();
+        controller.second.enqueue<_AB, void>(
+          key: 'like',
+          (ctx) async => ctx.emit((a: 0, b: 1)),
+        );
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+      });
+      expect(trace.where((line) => line.contains('emit over')), isEmpty);
+    });
+
+    test('a second write after the line is not told again', () {
+      final trace = lines((async) {
+        final controller = _Two();
+        final gate = Completer<void>();
+        controller.first.enqueue<_AB, void>(key: 'reload', (ctx) async {
+          final saved = ctx.state;
+          await ctx.join(() => gate.future);
+          ctx
+            ..emit(saved)
+            ..emit((a: 9, b: 9));
+        });
+        async.flushMicrotasks();
+        controller.second.enqueue<_AB, void>(
+          key: 'like',
+          (ctx) async => ctx.emit((a: 0, b: 1)),
+        );
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+      });
+      expect(trace.where((line) => line.contains('emit over')), hasLength(1));
+    });
+
+    test('the line names the lane that wrote last', () {
+      final trace = lines((async) {
+        final controller = _Two();
+        final third = controller.declare('third');
+        final gate = Completer<void>();
+        controller.first.enqueue<_AB, void>(key: 'reload', (ctx) async {
+          final saved = ctx.state;
+          await ctx.join(() => gate.future);
+          ctx.emit(saved);
+        });
+        async.flushMicrotasks();
+        controller.second.enqueue<_AB, void>(
+          key: 'like',
+          (ctx) async => ctx.emit((a: 0, b: 1)),
+        );
+        async.flushMicrotasks();
+        third.enqueue<_AB, void>(
+          key: 'mark',
+          (ctx) async => ctx.emit((a: 0, b: 2)),
+        );
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+      });
+      expect(trace.where((line) => line.contains('emit over')), [
+        'Job(reload) emit over a write of lane third made after Job(reload) '
+            'last read the state: read ctx.state after the wait, or this '
+            'write undoes the work of third',
+      ]);
+    });
+
+    test('a write of a child of the own lane is not another lane', () {
+      final trace = lines((async) {
+        final controller = _Two();
+        controller.first.enqueue<_AB, void>(key: 'reload', (ctx) async {
+          final saved = ctx.state;
+          await ctx.run(
+            ctx.child<void>(
+              key: 'child',
+              (ctx) async => ctx.emit((a: 7, b: 0)),
+            ),
+          );
+          ctx.emit(saved);
+        });
+        async.flushMicrotasks();
+      });
+      expect(trace.where((line) => line.contains('emit over')), isEmpty);
+    });
+
     test('enqueue and restart name the lane, and a tail names a job of the '
         'same lane', () {
       final trace = lines((async) {

@@ -709,7 +709,10 @@ abstract class SoloController<S extends Object> {
     _state = next;
     final revision = ++_stateRevision;
     if (emitter != null) {
-      emitter._seenRevision = revision;
+      // A job that has read sees what it writes; one that has not read
+      // stays a job that has not read, so a write it makes blind is not
+      // taken for a read.
+      if (emitter._seenRevision != null) emitter._seenRevision = revision;
       emitter._execution?.lastWrite = revision;
     }
     _debug(() => 'state: $next');
