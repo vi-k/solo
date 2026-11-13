@@ -1,5 +1,8 @@
 import 'package:camera_platform_interface/camera_platform_interface.dart';
-import 'package:flutter/widgets.dart';
+// Deprecated from Flutter 3.47 for package:material_ui, whose releases
+// since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart';
 import 'package:flutter_solo_camera_example/camera_app.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -44,6 +47,33 @@ void main() {
     await goBack(tester);
 
     expect(find.byKey(const Key('last-shot')), findsOneWidget);
+    expect(platform.openCameras, 0);
+  });
+
+  testWidgets('the flash and the switch buttons reach the camera', (
+    tester,
+  ) async {
+    await openCamera(tester);
+    await until(tester, find.byIcon(Icons.flash_auto));
+    await tester.tap(find.byKey(const Key('flash')));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.flash_on), findsOneWidget);
+    expect(platform.log, contains('flash #1 always'));
+    await tester.tap(find.byKey(const Key('switch')));
+    await tester.pump(platform.disposeTime);
+    await tester.pump(platform.openTime);
+
+    expect(
+      platform.log,
+      containsAllInOrder([
+        'dispose #1 start',
+        'dispose #1 end',
+        'create front #2',
+        'initialize #2 end',
+      ]),
+    );
+    await goBack(tester);
     expect(platform.openCameras, 0);
   });
 

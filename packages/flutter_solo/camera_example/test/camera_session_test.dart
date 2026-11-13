@@ -105,13 +105,15 @@ void main() {
       final session = CameraSession(onCaptured: captured.add);
       session.open();
       await tester.pump(platform.openTime);
-      session
-        ..takePicture()
-        ..takePicture();
+      final first = session.takePicture().value;
+      final second = session.takePicture().value;
       await tester.pump(platform.captureTime);
 
       expect(platform.log.where((l) => l == 'capture #1 start'), hasLength(1));
       expect(captured, hasLength(1));
+      // The second tap gets the shot of the first, not a cancellation.
+      expect((await first)?.path, '/fake/picture-1.jpg');
+      expect((await second)?.path, '/fake/picture-1.jpg');
       await finish(tester, session);
     });
 

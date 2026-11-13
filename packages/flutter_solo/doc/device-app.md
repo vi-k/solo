@@ -21,11 +21,12 @@ cd solo/packages/flutter_solo/camera_example
 flutter run
 ```
 
-The code on this page is the app's code. A trace is what the app does to the
-camera under `flutter test`, where a fake camera platform stands in for the
-phone. A call on the camera is a line, or two for a call that takes time, where
-it starts and where it ends; a change of the state is a line too. Opening the
-camera:
+The answers on this page are the app's code; a first attempt is marked by a
+line of its own, `// The first attempt:` and what goes wrong. A trace is what
+the app does to the camera under `flutter test`, where a fake camera platform
+stands in for the phone. A call on the camera is a line, or two for a call that
+takes time, where it starts and where it ends; a change of the state is a line
+too. Opening the camera:
 
 ```text
 state Opening
@@ -49,6 +50,19 @@ second shot out with `isTakingPicture`:
 
 ```dart
 // The first attempt: a switch during a shot loses the shot.
+Future<void> cycleFlash() async {
+  final next = switch (camera.value.flashMode) {
+    FlashMode.off => FlashMode.auto,
+    FlashMode.auto => FlashMode.always,
+    _ => FlashMode.off,
+  };
+  try {
+    await camera.setFlashMode(next);
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+
 Future<void> shoot() async {
   // A capture is already pending, do nothing.
   if (camera.value.isTakingPicture) return;
@@ -94,6 +108,12 @@ androidx.camera.core.ImageCaptureException: Camera is closed.` The next camera
 opens and works. An iPhone 13 mini releases the camera only once the shot is
 over, and the picture comes through: the same code keeps the picture on one
 phone and loses it on the other.
+
+The flash button picks the next mode from `value.flashMode`, which the plugin's
+controller sets only once `setFlashMode` has answered. Taps faster than that
+answer read the same mode and ask for it twice, and one tap is lost: on an
+iPhone 13 mini, three such taps from `auto` leave the flash at `off` rather
+than back at `auto`.
 
 ### One queue for the buttons
 
@@ -151,11 +171,5 @@ initialize #2 end
 ```
 
 The second tap of the shutter leaves no line. A tap made while the camera opens
-waits in the same queue, behind the opening.
-
-A tap of the flash reads the mode from the state, where the job before it put
-it once the platform had answered. The first attempt's flash button reads
-`value.flashMode`, which the plugin's controller also sets only after the
-answer, but nothing makes the next tap wait for it. On an iPhone 13 mini, taps
-one frame apart, quicker than a finger taps, read the same mode, and one of
-three taps was lost every time; taps 150 ms apart reached the flash in order.
+waits in the same queue, behind the opening. A tap of the flash waits there for
+the tap before it and reads the mode from the state, where that tap put it.
