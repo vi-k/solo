@@ -304,7 +304,7 @@ the screen hands a picture up through `onCaptured`, to the home screen, which
 outlives the camera screen:
 
 ```dart
-// The first attempt: leaving loses the shot, and coming back opens two cameras.
+// The first attempt: leaving loses the shot; coming back opens two cameras.
 @override
 void dispose() {
   camera.dispose();
@@ -327,7 +327,8 @@ end of the transition of `pop`, and `camera.dispose()` releases the camera
 whatever the controller is doing. Nothing waits for that release: a camera
 screen pushed again creates its controller on its first frame, while the screen
 before it still holds the camera. A tap of the shutter, then of back, and the
-camera screen opened again at once, with a picture longer than the transition:
+camera screen opened again at once, with a picture longer than the transition
+and the fake platform on the Galaxy's rules:
 
 ```text
 capture #1 start
@@ -390,9 +391,12 @@ class CameraApp extends StatelessWidget {
 ```
 
 The wait for the key and the wait for `disposeData` are bounded, 3 s each by
-default, and scopo goes on as if an expired wait had ended. A picture on a
-Galaxy A55 can take more than 3 s, and the release waits for it, so the screen
-sets both to `releaseTimeout`:
+default. When either expires, scopo goes on as if the wait had ended, and the
+new screen opens the camera while the old one still holds it: the break of the
+first attempt, only later. A picture on a Galaxy A55 takes up to 3.4 s, a
+recording on an iPhone 13 mini up to 2.5 s to start, and the release waits for
+either, so the screen sets both bounds to `releaseTimeout`, ten seconds, with
+room to spare:
 
 ```dart
 static const releaseTimeout = Duration(seconds: 10);
