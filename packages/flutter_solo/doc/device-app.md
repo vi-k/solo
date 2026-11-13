@@ -1077,6 +1077,7 @@ explains. Every test ends with `finish`:
 Future<void> finish(WidgetTester tester, CameraDriver controller) async {
   final released = controller.release();
   await tester.pump(platform.disposeTime);
+  await letCloseEnd(tester);
   await released;
 }
 ```
@@ -1384,19 +1385,26 @@ case Release(:final done):
 the screen before it. `BlocCameraScreen` owns the bloc through the same
 `AsyncDataScope` as `CameraScreen`, with its `scopeKey` and its timeouts, and
 hands it down with `BlocProvider.value`. The scope waits for the release and
-not for `close()`: the camera is free once the release ends, and under the fake
-clock of `testWidgets` the `close()` of this bloc does not return:
+then for `close()`, as for the session:
 
 ```dart
 disposeData: (bloc) async {
   try {
     await bloc.release();
   } finally {
-    // Not awaited: the camera is free by now, and under the fake clock
-    // of a widget test `close` does not return.
-    unawaited(bloc.close());
+    await bloc.close();
   }
 },
+```
+
+Under `testWidgets` that `close()` ends only after a turn of the real event
+loop. The bloc waits for the cancel of the subscriptions of its handlers, and a
+subscription with nothing to wait for answers with a future the SDK made in the
+root zone. The fake clock runs the callbacks of the test's zone, not of that
+one, so the cases turn the loop wherever they wait for a release:
+
+```dart
+Future<void> letCloseEnd(WidgetTester tester) => tester.runAsync(() async {});
 ```
 
 What each situation takes, on bloc and on solo:
@@ -1405,9 +1413,9 @@ What each situation takes, on bloc and on solo:
 | --- | --- | --- | --- |
 | Rapid taps | `on<CameraCommand>` with `sequential()`; `_shooting`, set in `add` | the queue of `Solo`; `Policy.droppable` on the key of `takePicture` | nothing more |
 | A switch during a recording | the same handler | the same queue | nothing more |
-| Leaving the screen | `Release` with a `Completer`; `AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` with a `scopeKey` | bloc: `close()` not awaited |
+| Leaving the screen | `Release` with a `Completer`; `AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` with a `scopeKey` | bloc: `letCloseEnd`, for `close()` |
 | Going to the background | `Suspend` and `Resume` in the queue | `suspend()` and `resume()` in the queue | for a failed stop, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
-| Losing the camera | `on<CameraLost>` of its own; `if (state != ready) return;` 8 times; `LetGo` in the queue; `_camera`; `close()` that cancels `_errors` | `externalSetState`; commands on `Ready` with `ctx.join`; `_letGo` with `first: true`; `onClose` that cancels `_errors` | for a failed switch during a recording, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| Losing the camera | `on<CameraLost>` of its own; a check of the state after every `await`; `LetGo` in the queue; `_camera`; `close()` that cancels `_errors` | `externalSetState`; `ctx.join` at every `await` of a command on `Ready`; `_letGo` with `first: true`; `onClose` that cancels `_errors` | for a failed switch during a recording, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | A denied permission | `_initialize`, which awaits `dispose` itself | `_initialize`, with `_letGo` | nothing more |
 
 The bloc's tests are the cases of the previous section and one of their own: an

@@ -371,9 +371,7 @@ class BlocCameraScreen extends StatelessWidget {
       try {
         await bloc.release();
       } finally {
-        // Not awaited: the camera is free by now, and under the fake clock
-        // of a widget test `close` does not return.
-        unawaited(bloc.close());
+        await bloc.close();
       }
     },
     progressBuilder: (context, progress) => const SizedBox.expand(),

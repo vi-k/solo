@@ -1069,6 +1069,7 @@ Duration stopTime = const Duration(milliseconds: 100);
 Future<void> finish(WidgetTester tester, CameraDriver controller) async {
   final released = controller.release();
   await tester.pump(platform.disposeTime);
+  await letCloseEnd(tester);
   await released;
 }
 ```
@@ -1375,20 +1376,27 @@ case Release(:final done):
 `BlocProvider` закрывает созданный им блок без ожидания и ничего не знает
 об экране перед ним. `BlocCameraScreen` владеет блоком через тот же
 `AsyncDataScope`, что и `CameraScreen`, с его `scopeKey` и таймаутами, и отдаёт
-блок вниз через `BlocProvider.value`. Скоуп ждёт освобождения, а не `close()`:
-камера свободна, как только освобождение кончилось, а на фальшивых часах
-`testWidgets` `close()` этого блока не возвращается:
+блок вниз через `BlocProvider.value`. Скоуп ждёт освобождения, а затем
+`close()`, как и у сессии:
 
 ```dart
 disposeData: (bloc) async {
   try {
     await bloc.release();
   } finally {
-    // Без ожидания: камера к этому времени свободна, а на фальшивых часах
-    // виджет-теста `close` не возвращается.
-    unawaited(bloc.close());
+    await bloc.close();
   }
 },
+```
+
+Под `testWidgets` этот `close()` кончается только после оборота настоящего
+цикла событий. Блок ждёт отмены подписок своих обработчиков, а подписка,
+которой нечего ждать, отвечает future, созданным SDK в корневой зоне. Фальшивые
+часы выполняют колбэки зоны теста, а не этой, поэтому случаи проворачивают цикл
+везде, где ждут освобождения:
+
+```dart
+Future<void> letCloseEnd(WidgetTester tester) => tester.runAsync(() async {});
 ```
 
 Что берёт каждая ситуация на bloc и на solo:
@@ -1397,9 +1405,9 @@ disposeData: (bloc) async {
 | --- | --- | --- | --- |
 | Быстрые нажатия | `on<CameraCommand>` с `sequential()`; `_shooting`, который ставится в `add` | очередь `Solo`; `Policy.droppable` на ключе `takePicture` | ничего сверх |
 | Смена камеры во время записи | тот же обработчик | та же очередь | ничего сверх |
-| Уход с экрана | `Release` с `Completer`; `AsyncDataScope` со `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` со `scopeKey` | bloc: `close()` без ожидания |
+| Уход с экрана | `Release` с `Completer`; `AsyncDataScope` со `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` со `scopeKey` | bloc: `letCloseEnd`, для `close()` |
 | Уход в фон | `Suspend` и `Resume` в очереди | `suspend()` и `resume()` в очереди | для упавшего стопа, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
-| Потеря камеры | свой `on<CameraLost>`; `if (state != ready) return;` 8 раз; `LetGo` в очереди; `_camera`; `close()`, который отменяет `_errors` | `externalSetState`; команды над `Ready` с `ctx.join`; `_letGo` с `first: true`; `onClose`, который отменяет `_errors` | для упавшей смены камеры во время записи, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| Потеря камеры | свой `on<CameraLost>`; проверка состояния после каждого `await`; `LetGo` в очереди; `_camera`; `close()`, который отменяет `_errors` | `externalSetState`; `ctx.join` при каждом `await` команды над `Ready`; `_letGo` с `first: true`; `onClose`, который отменяет `_errors` | для упавшей смены камеры во время записи, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | Отказ в разрешении | `_initialize`, который сам ждёт `dispose` | `_initialize`, с `_letGo` | ничего сверх |
 
 Тесты блока — случаи предыдущего раздела и один свой: ошибка камеры после

@@ -25,6 +25,7 @@ import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/bloc_camera.dart';
+import 'support/camera_cases.dart';
 import 'support/device_app_attempts.dart';
 import 'support/fake_camera_platform.dart';
 import 'support/journal.dart';
@@ -955,11 +956,8 @@ void main() {
   });
 
   group('the same screen on bloc', () {
-    /// The rows of the table, the number in them counted in the bloc.
+    /// The rows of the table.
     List<String> rows() {
-      final checks = RegExp(
-        r'if \(state != ready\) return;',
-      ).allMatches(File(_bloc).readAsStringSync()).length;
       return [
         '| Rapid taps | `on<CameraCommand>` with `sequential()`; `_shooting`, '
             'set in `add` | the queue of `Solo`; `Policy.droppable` on the '
@@ -969,28 +967,36 @@ void main() {
         '| Leaving the screen | `Release` with a `Completer`; '
             '`AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | '
             '`release()`; `AsyncDataScope` with a `scopeKey` | bloc: '
-            '`close()` not awaited |',
+            '`letCloseEnd`, for `close()` |',
         '| Going to the background | `Suspend` and `Resume` in the queue | '
             '`suspend()` and `resume()` in the queue | for a failed stop, '
             'bloc: the bloc made in `runZonedGuarded`; solo: '
             '`Solo.unansweredHandler` |',
         '| Losing the camera | `on<CameraLost>` of its own; '
-            '`if (state != ready) return;` $checks times; `LetGo` in the '
+            'a check of the state after every `await`; `LetGo` in the '
             'queue; `_camera`; `close()` that cancels `_errors` | '
-            '`externalSetState`; commands on `Ready` with `ctx.join`; `_letGo` '
-            'with `first: true`; `onClose` that cancels `_errors` | for a '
-            'failed switch during a recording, bloc: the bloc made in '
-            '`runZonedGuarded`; solo: `Solo.unansweredHandler` |',
+            '`externalSetState`; `ctx.join` at every `await` of a command on '
+            '`Ready`; `_letGo` with `first: true`; `onClose` that cancels '
+            '`_errors` | for a failed switch during a recording, bloc: the '
+            'bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |',
         '| A denied permission | `_initialize`, which awaits `dispose` '
             'itself | `_initialize`, with `_letGo` | nothing more |',
       ];
     }
 
     test('the blocks are the bloc', () {
-      expect(codeMissingFrom(_doc, _bloc, under: _onBloc), isEmpty);
+      expect(
+        codeMissingFrom(
+          _doc,
+          _bloc,
+          alsoIn: ['test/support/camera_cases.dart'],
+          under: _onBloc,
+        ),
+        isEmpty,
+      );
     });
 
-    test('the table holds every situation, with the count of the bloc', () {
+    test('the table holds every situation', () {
       for (final row in rows()) {
         _says(_part(_onBloc), row);
       }
@@ -1003,6 +1009,7 @@ void main() {
         'lib/camera_session.dart',
         'lib/camera_screen.dart',
         'test/camera_session_test.dart',
+        'test/support/camera_cases.dart',
       ].map((file) => File(file).readAsStringSync()).join('\n');
       for (final row in rows()) {
         for (final name in RegExp('`([^`]+)`').allMatches(row)) {
@@ -1011,21 +1018,43 @@ void main() {
       }
     });
 
-    testWidgets('close does not return under the fake clock', (tester) async {
+    testWidgets('close ends after a turn of the real event loop', (
+      tester,
+    ) async {
       final bloc = CameraBloc(onCaptured: (XFile file) {});
       var closed = false;
       unawaited(bloc.close().then((_) => closed = true));
       for (var frame = 0; frame < 10; frame++) {
         await tester.pump(const Duration(seconds: 1));
       }
-
+      // The clock alone does not end it.
       expect(closed, isFalse);
+      await letCloseEnd(tester);
+      await tester.pump();
+
+      expect(closed, isTrue);
       _says(
         _part(_onBloc),
-        'under the fake clock of `testWidgets` the `close()` of this bloc '
-        'does not return:',
+        'Under `testWidgets` that `close()` ends only after a turn of the '
+        'real event loop.',
       );
     });
+
+    test(
+      'a cancel with nothing to wait for answers with one shared future',
+      () {
+        // The future the SDK made in the root zone, the same for every such
+        // subscription.
+        final first = StreamController<int>.broadcast().stream.listen(null);
+        final second = StreamController<int>.broadcast().stream.listen(null);
+        expect(identical(first.cancel(), second.cancel()), isTrue);
+        _says(
+          _part(_onBloc),
+          'a subscription with nothing to wait for answers with a future the '
+          'SDK made in the root zone.',
+        );
+      },
+    );
   });
 
   group('the page', () {

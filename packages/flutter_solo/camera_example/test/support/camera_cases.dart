@@ -52,6 +52,14 @@ typedef MakeDriver =
       void Function(Object error)? onUnanswered,
     });
 
+/// Turns the real event loop once, for the `close()` of a bloc to end.
+///
+/// The bloc waits for the cancel of the subscriptions of its handlers, and
+/// a subscription with nothing to wait for answers with a future the SDK
+/// made in the root zone. The fake clock of `testWidgets` does not run the
+/// callbacks of that zone; the real event loop does.
+Future<void> letCloseEnd(WidgetTester tester) => tester.runAsync(() async {});
+
 /// Registers the cases that drive the controller [make] gives.
 void controllerCases(MakeDriver make) {
   late FakeCameraPlatform platform;
@@ -68,6 +76,7 @@ void controllerCases(MakeDriver make) {
   Future<void> finish(WidgetTester tester, CameraDriver controller) async {
     final released = controller.release();
     await tester.pump(platform.disposeTime);
+    await letCloseEnd(tester);
     await released;
   }
 
@@ -761,6 +770,7 @@ void controllerCases(MakeDriver make) {
       platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
       await tester.pump(platform.captureTime);
       await tester.pump(platform.disposeTime);
+      await letCloseEnd(tester);
       await released;
 
       expect(atRelease, contains('dispose #1 end'));
@@ -892,10 +902,12 @@ void appCases(Widget app) {
   });
 
   /// Pumps until [finder] finds a widget: a scope of scopo builds its ready
-  /// branch some frames after its initialization ends.
+  /// branch some frames after its initialization ends, and a scope that
+  /// waits on its `scopeKey` waits for the screen before it to close.
   Future<void> until(WidgetTester tester, Finder finder) async {
     for (var frame = 0; frame < 50 && finder.evaluate().isEmpty; frame++) {
       await tester.pump(const Duration(milliseconds: 50));
+      await letCloseEnd(tester);
     }
     expect(finder, findsOneWidget);
   }

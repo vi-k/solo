@@ -59,8 +59,7 @@ final class BlocDriver implements CameraDriver {
   @override
   Future<void> release() async {
     await bloc.release();
-    // As the camera screen does: see BlocCameraScreen.
-    unawaited(bloc.close());
+    await bloc.close();
   }
 }
 
