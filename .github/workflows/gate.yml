@@ -27,7 +27,8 @@ name: gate
 # the code of `packages/solo/doc/vs-bloc.md` and of
 # `packages/solo/doc/accumulation.md` with
 # `packages/solo/doc/accumulation-rules.md` and runs it. `floor` replays the
-# suites from the archives on the lowest SDK the pubspecs admit.
+# suites from the archives on the lowest SDK the pubspecs admit, and the
+# camera app on the lowest `camera` its constraint admits.
 #
 # What `floor` proves is what the other four cannot. They resolve the tree:
 # every file in it, the dev dependencies along with the rest, the newest
@@ -325,6 +326,23 @@ jobs:
       # stable, and its name is all there is to go by.
       - name: The archives pass their gate on the floor
         run: python3 tool/archive_floor.py run "$RUNNER_TEMP/archive"
+
+      # Not the archive layout above, which has no app in it: this one runs
+      # in the checked-out tree, with the `pubspec_overrides.yaml` of the
+      # app that point at the sibling packages. What it proves is the
+      # plugin: `camera` taken down to the lowest version its constraint
+      # allows, and the app's tests green against that. The lock is read
+      # afterwards, because a `downgrade` that stopped short would leave
+      # the check green on the wrong version. `pubspec.lock` is ignored by
+      # git, so the step below does not see it.
+      - name: The camera app on the floor
+        working-directory: packages/flutter_solo/camera_example
+        run: |
+          flutter pub get
+          flutter pub downgrade
+          flutter test
+          grep -A7 '^  camera:' pubspec.lock
+          grep -A7 '^  camera:' pubspec.lock | grep -q 'version: "0.12.0+2"'
 
       - name: Nothing drifted
         run: |
