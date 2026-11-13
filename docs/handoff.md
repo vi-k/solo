@@ -221,19 +221,14 @@ before the wait, in a lane» с `null`, потому что в `main` прави
 нет; если линт части C ловит неверный блок раздела, тест скажет об этом,
 и строка получает `stale_emit`.
 
-CI после пуша `1dc26d91` упал на смене SDK в `stable` и на двух моих пропусках;
-починка — `2026-11-12-ci-sdk-drift-report.md`. Импорты `material.dart` в тестах
+CI зелёный на `f30a6324`, Flutter 3.50 и Dart 3.14 из `stable`; починка смены
+SDK — `2026-11-12-ci-sdk-drift-report.md`. Импорты `material.dart` в тестах
 и примере `flutter_solo` и `dart:mirrors` в четырёх тестах держат
 `ignore: deprecated_member_use` с причиной: выпуски `material_ui` с 0.0.2
-требуют Flutter 3.44, а пол — 3.38.1. У `material.dart` они снимаются
-с подъёмом пола, у `dart:mirrors` — когда тесты обойдутся без зеркал. Прогон
-на `d99edb2e` уронил десять тестов `flutter_solo` на Flutter 3.50: стенды
-`_asWidgetTest` возвращали `reportTestException` до `postTest`; порядок
-переставлен. Прогон на `159e4339` упал на анализе стенда экранов
-`tool/flutter_snippets.py`: документы импортируют `material.dart`, и генератор
-ставит в конце этой строки `ignore` двух правил, `deprecated_member_use`
-и `unnecessary_ignore`; снимается вместе с остальными. Разбор — в том же
-отчёте. Открыто:
+требуют Flutter 3.44, а пол — 3.38.1. Стенд экранов `tool/flutter_snippets.py`
+ставит такой же `ignore` в конец импорта `material.dart` собранных файлов,
+вместе с `unnecessary_ignore`. У `material.dart` они снимаются с подъёмом пола,
+у `dart:mirrors` — когда тесты обойдутся без зеркал. Открыто:
 
 - P2 Astra (фасад свежести) не сделана — решение исполнителя 157, владелец
   может пересмотреть.
