@@ -79,6 +79,85 @@ void main() {
     await finish(tester, session);
   });
 
+  group('rapid taps', () {
+    testWidgets('flash taps apply in order', (tester) async {
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      // The plugin's controller starts with the flash on auto.
+      expect((session.currentState as Ready).flash, FlashMode.auto);
+      session
+        ..cycleFlash()
+        ..cycleFlash()
+        ..cycleFlash();
+      await tester.pump();
+
+      expect(platform.log.where((l) => l.startsWith('flash')), [
+        'flash #1 always',
+        'flash #1 off',
+        'flash #1 auto',
+      ]);
+      expect((session.currentState as Ready).flash, FlashMode.auto);
+      await finish(tester, session);
+    });
+
+    testWidgets('a shot during a shot is dropped', (tester) async {
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..takePicture()
+        ..takePicture();
+      await tester.pump(platform.captureTime);
+
+      expect(platform.log.where((l) => l == 'capture #1 start'), hasLength(1));
+      expect(captured, hasLength(1));
+      await finish(tester, session);
+    });
+
+    testWidgets('a switch during a shot waits for it', (tester) async {
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..takePicture()
+        ..switchCamera();
+      await tester.pump(platform.captureTime);
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'capture #1 end',
+          'dispose #1 start',
+          'dispose #1 end',
+          'create front #2',
+          'initialize #2 end',
+        ]),
+      );
+      expect(platform.log, isNot(contains('capture #1 failed')));
+      expect(captured, hasLength(1));
+      await finish(tester, session);
+    });
+
+    testWidgets('a tap while the camera opens waits for it', (tester) async {
+      final session = CameraSession(onCaptured: captured.add);
+      session
+        ..open()
+        ..takePicture();
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.captureTime);
+
+      expect(
+        platform.log,
+        containsAllInOrder(['initialize #1 end', 'capture #1 start']),
+      );
+      expect(captured, hasLength(1));
+      await finish(tester, session);
+    });
+  });
+
   testWidgets('release waits for the platform', (tester) async {
     final journal = Journal(platform);
     Solo.observer = journal;

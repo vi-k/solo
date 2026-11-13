@@ -53,16 +53,20 @@ class CameraView extends StatelessWidget {
       Closed() => const SizedBox.expand(),
       Opening() => const Center(child: CircularProgressIndicator()),
       NoCamera() => const Center(child: Text('This device has no camera.')),
-      Ready(:final camera) => Column(
+      Ready(:final camera, :final flash) => Column(
         children: [
           Expanded(child: Center(child: CameraPreview(camera))),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              const IconButton(
-                key: Key('flash'),
-                onPressed: null,
-                icon: Icon(Icons.flash_auto),
+              IconButton(
+                key: const Key('flash'),
+                onPressed: session.cycleFlash,
+                icon: Icon(switch (flash) {
+                  FlashMode.off => Icons.flash_off,
+                  FlashMode.auto => Icons.flash_auto,
+                  _ => Icons.flash_on,
+                }),
               ),
               IconButton(
                 key: const Key('shutter'),
@@ -74,10 +78,10 @@ class CameraView extends StatelessWidget {
                 onPressed: null,
                 icon: Icon(Icons.videocam),
               ),
-              const IconButton(
-                key: Key('switch'),
-                onPressed: null,
-                icon: Icon(Icons.cameraswitch),
+              IconButton(
+                key: const Key('switch'),
+                onPressed: session.switchCamera,
+                icon: const Icon(Icons.cameraswitch),
               ),
             ],
           ),

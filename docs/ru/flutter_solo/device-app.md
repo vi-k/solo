@@ -33,3 +33,128 @@ initialize #1 start
 initialize #1 end
 state Ready
 ```
+
+## Быстрые нажатия
+
+Пользователь нажимает быстрее, чем отвечает камера. Каждое нажатие вспышки
+переводит её на один режим дальше, в порядке нажатий, и вспышка остаётся там,
+куда её поставило последнее. Нажатие затвора во время снимка ничего
+не добавляет: снимок один. Смена камеры во время снимка ждёт, пока снимок
+кончится.
+
+### Первая попытка
+
+Пример плагина зовёт контроллер из каждой кнопки, а второй снимок не пускает
+проверкой `isTakingPicture`:
+
+```dart
+// Первая попытка: смена камеры во время снимка теряет снимок.
+Future<void> shoot() async {
+  // Снимок уже идёт, ничего не делаем.
+  if (camera.value.isTakingPicture) return;
+  try {
+    widget.onCaptured(await camera.takePicture());
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+
+Future<void> switchCamera() async {
+  final next = widget.cameras.firstWhere(
+    (c) => c.name != camera.value.description.name,
+  );
+  try {
+    await camera.setDescription(next);
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+```
+
+Проверка держит затвор в рамках требования. Смену не держит ничего:
+`setDescription` освобождает камеру контроллера и открывает следующую, и идущий
+снимок её не останавливает. Нажатие затвора, затем смены:
+
+```text
+capture #1 start
+dispose #1 start
+capture #1 failed
+dispose #1 end
+create front #2
+initialize #2 start
+initialize #2 end
+```
+
+На Galaxy A55 освобождение теряет снимок, и фейковая платформа делает то же
+самое: приходит ошибка `Image capture failed due to the camera being closed.`,
+`takePicture` бросает исключение, и экран показывает `ImageCaptureException:
+androidx.camera.core.ImageCaptureException: Camera is closed.` Следующая камера
+открывается и работает. iPhone 13 mini освобождает камеру только после снимка,
+и снимок доходит: один и тот же код сохраняет снимок на одном телефоне и теряет
+на другом.
+
+### Одна очередь для кнопок
+
+Каждая команда `CameraSession` — задача в единственной очереди её `Solo`, а он
+выполняет задачи по одной:
+
+```dart
+Job<XFile?> takePicture() => enqueue<Ready, XFile?>(
+  key: _Op.takePicture,
+  policy: Policy.droppable,
+  (ctx) async {
+    final file = await ctx.join(ctx.state.camera.takePicture);
+    onCaptured(file);
+    return file;
+  },
+);
+
+Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
+  final Ready(:camera, :flash, :recording) = ctx.state;
+  final next = switch (flash) {
+    FlashMode.off => FlashMode.auto,
+    FlashMode.auto => FlashMode.always,
+    _ => FlashMode.off,
+  };
+  await ctx.join(() => camera.setFlashMode(next));
+  ctx.emit(Ready(camera: camera, flash: next, recording: recording));
+});
+
+Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
+  final cameras = await ctx.join(availableCameras);
+  final camera = ctx.state.camera;
+  final at = cameras.indexWhere((c) => c.name == camera.description.name);
+  final next = cameras[(at + 1) % cameras.length];
+  await ctx.join(() => camera.setDescription(next));
+});
+
+enum _Op { takePicture }
+```
+
+`Policy.droppable` отдаёт второму нажатию затвора задачу первого, пока та стоит
+в очереди или выполняется, и до `onCaptured` доходит один снимок. Вспышка
+и смена камеры остаются на политике по умолчанию, `Policy.sequential`: каждое
+нажатие — своя задача, и она ждёт предыдущую. Смена, нажатая во время снимка,
+начинается, когда снимок кончился, и `setDescription` освобождает камеру,
+на которой ничего не идёт. Два нажатия затвора, затем одно смены:
+
+```text
+capture #1 start
+capture #1 end
+dispose #1 start
+dispose #1 end
+create front #2
+initialize #2 start
+initialize #2 end
+```
+
+От второго нажатия затвора строки не остаётся. Нажатие, сделанное, пока камера
+открывается, ждёт в той же очереди, за открытием.
+
+Нажатие вспышки берёт режим из состояния, куда его положила предыдущая задача,
+когда платформа уже ответила. Кнопка вспышки первой попытки читает
+`value.flashMode`, который контроллер плагина тоже меняет только после ответа,
+но следующее нажатие ничто не заставляет этого ждать. На iPhone 13 mini нажатия
+с интервалом в кадр, быстрее, чем нажимает палец, читали один и тот же режим,
+и одно нажатие из трёх терялось каждый раз; с интервалом 150 мс нажатия
+доходили до вспышки по порядку.

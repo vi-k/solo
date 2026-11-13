@@ -29,11 +29,37 @@ final class CameraSession extends Solo<CameraState> {
     );
   });
 
-  /// Takes a picture and hands it to [onCaptured].
-  Job<XFile?> takePicture() => enqueue<Ready, XFile?>((ctx) async {
-    final file = await ctx.join(ctx.state.camera.takePicture);
-    onCaptured(file);
-    return file;
+  /// Takes a picture and hands it to [onCaptured]; a tap during a shot
+  /// gets the shot that is under way.
+  Job<XFile?> takePicture() => enqueue<Ready, XFile?>(
+    key: _Op.takePicture,
+    policy: Policy.droppable,
+    (ctx) async {
+      final file = await ctx.join(ctx.state.camera.takePicture);
+      onCaptured(file);
+      return file;
+    },
+  );
+
+  /// Moves the flash to its next mode: off, auto, always, and off again.
+  Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
+    final Ready(:camera, :flash, :recording) = ctx.state;
+    final next = switch (flash) {
+      FlashMode.off => FlashMode.auto,
+      FlashMode.auto => FlashMode.always,
+      _ => FlashMode.off,
+    };
+    await ctx.join(() => camera.setFlashMode(next));
+    ctx.emit(Ready(camera: camera, flash: next, recording: recording));
+  });
+
+  /// Moves to the next camera of the device.
+  Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
+    final cameras = await ctx.join(availableCameras);
+    final camera = ctx.state.camera;
+    final at = cameras.indexWhere((c) => c.name == camera.description.name);
+    final next = cameras[(at + 1) % cameras.length];
+    await ctx.join(() => camera.setDescription(next));
   });
 
   /// Frees the camera on the platform; the job ends once the platform has.
@@ -47,3 +73,6 @@ final class CameraSession extends Solo<CameraState> {
     ctx.emit(const Closed());
   });
 }
+
+/// The keys of the commands whose policy looks at them.
+enum _Op { takePicture }

@@ -11,16 +11,24 @@ library;
 import 'dart:io';
 
 import 'package:camera_platform_interface/camera_platform_interface.dart';
+// Deprecated from Flutter 3.47 for package:material_ui, whose releases
+// since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/device_app_attempts.dart';
 import 'support/fake_camera_platform.dart';
 import 'support/journal.dart';
 import 'support/page_code.dart';
 
 const _doc = '../doc/device-app.md';
 const _intro = '# A device app';
+const _rapid = '## Rapid taps';
+const _first = '### The first attempt';
+const _queue = '### One queue for the buttons';
 
 /// The Dart files a block of the page may stand in: the app, its tests and
 /// their support, but for the helper that does the checking.
@@ -39,37 +47,56 @@ List<String> get _files => [
 List<String> get _parts =>
     File(_doc).readAsStringSync().split(RegExp('^(?=#)', multiLine: true));
 
-/// The part of the page under [heading], up to the next heading.
-String _part(String heading) {
+/// The parts of the page by the section and the `###` heading they stand
+/// under, the heading `null` for the part of the section itself: the
+/// sections share their `###` headings, so a heading alone names none.
+List<((String, String?), String)> get _placed {
+  final placed = <((String, String?), String)>[];
+  var section = '';
   for (final part in _parts) {
-    if (part.split('\n').first == heading) return part;
+    final first = part.split('\n').first;
+    if (first.startsWith('###')) {
+      placed.add(((section, first), part));
+    } else {
+      section = first;
+      placed.add(((section, null), part));
+    }
   }
-  throw StateError('$_doc has no "$heading"');
+  return placed;
 }
 
-/// The headings whose trace a test has read through [_traceUnder].
-final _traced = <String>{};
+/// The part of the page under [heading] of [section], up to the next
+/// heading; the part under [section] itself when no heading is named.
+String _part(String section, [String? heading]) {
+  for (final (place, part) in _placed) {
+    if (place == (section, heading)) return part;
+  }
+  throw StateError('$_doc has no "${heading ?? section}" under "$section"');
+}
 
-/// The lines of the one `text` block under [heading]: a trace the page
-/// quotes.
-List<String> _traceUnder(String heading) {
-  _traced.add(heading);
+/// The parts whose trace a test has read through [_traceUnder].
+final _traced = <(String, String?)>{};
+
+/// The lines of the one `text` block under [heading] of [section]: a trace
+/// the page quotes.
+List<String> _traceUnder(String section, [String? heading]) {
+  _traced.add((section, heading));
   final blocks = RegExp(
     r'```text\n(.*?)\n```',
     dotAll: true,
-  ).allMatches(_part(heading)).toList();
+  ).allMatches(_part(section, heading)).toList();
   if (blocks.length != 1) {
     throw StateError(
-      '$_doc has ${blocks.length} traces under "$heading", not one',
+      '$_doc has ${blocks.length} traces under "${heading ?? section}" '
+      'of "$section", not one',
     );
   }
   return blocks.single.group(1)!.split('\n');
 }
 
-/// Holds the part under [heading] to [sentence]: its prose, the breaks of
-/// its lines aside.
-void _says(String heading, String sentence) => expect(
-  _part(heading)
+/// Holds [part] to [sentence]: its prose, the breaks of its lines aside.
+void _says(String part, String sentence) => expect(
+  part
       .replaceAll(RegExp('```.*?```', dotAll: true), ' ')
       .replaceAll(RegExp(r'\s+'), ' '),
   contains(sentence),
@@ -93,12 +120,81 @@ void main() {
       await tester.pump(platform.openTime);
 
       _says(
-        _intro,
+        _part(_intro),
         'A call on the camera is a line, or two for a call that takes '
         'time, where it starts and where it ends; a change of the state is '
         'a line too.',
       );
       expect(journal.lines, containsRun(_traceUnder(_intro)));
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
+    });
+  });
+
+  group('rapid taps', () {
+    testWidgets('the first attempt loses the shot to a switch', (tester) async {
+      final journal = Journal(platform);
+      final captured = <XFile>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: EagerButtons(
+              cameras: platform.cameras,
+              onCaptured: captured.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump(platform.openTime);
+      await tester.tap(find.byKey(const Key('shutter')));
+      await tester.tap(find.byKey(const Key('switch')));
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'test/support/device_app_attempts.dart',
+          under: _first,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_rapid, _first)));
+      expect(captured, isEmpty);
+      const shown =
+          'ImageCaptureException: androidx.camera.core.ImageCaptureException: '
+          'Camera is closed.';
+      expect(find.text(shown), findsOneWidget);
+      _says(_part(_rapid, _first), shown);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(platform.disposeTime);
+    });
+
+    testWidgets('the queue keeps the shot and holds the switch', (
+      tester,
+    ) async {
+      final journal = Journal(platform);
+      Solo.observer = journal;
+      final captured = <XFile>[];
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..takePicture()
+        ..takePicture()
+        ..switchCamera();
+      await tester.pump(platform.captureTime);
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+
+      expect(
+        codeMissingFrom(_doc, 'lib/camera_session.dart', under: _queue),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_rapid, _queue)));
+      expect(platform.log.where((l) => l == 'capture #1 start'), hasLength(1));
+      expect(captured, hasLength(1));
       final released = session.release().done;
       await tester.pump(platform.disposeTime);
       expect(await released, isA<Done<void>>());
@@ -119,8 +215,8 @@ void main() {
     // Runs last: the tests above have read their traces by now.
     test('every trace of the page is held to a run', () {
       expect(_traced, {
-        for (final part in _parts)
-          if (part.contains('```text\n')) part.split('\n').first,
+        for (final (place, part) in _placed)
+          if (part.contains('```text\n')) place,
       });
     });
   });
