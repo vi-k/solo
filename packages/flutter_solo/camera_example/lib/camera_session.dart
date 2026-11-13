@@ -64,11 +64,13 @@ final class CameraSession extends Solo<CameraState> {
   ///
   /// Without a recording the plugin releases the camera before it opens the
   /// next one, so a switch that fails is [Broken], as a failed opening is.
-  /// During a recording the camera it had goes on recording, and a failure
-  /// stays the error of the job.
+  /// The camera it opens starts with a flash mode of its own, while the
+  /// controller keeps the one it had, so the switch sets the mode of the
+  /// button again. During a recording the camera it had goes on recording,
+  /// and a failure stays the error of the job.
   Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     final cameras = await ctx.join(availableCameras);
-    final Ready(:camera, :recording) = ctx.state;
+    final Ready(:camera, :flash, :recording) = ctx.state;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
     try {
@@ -80,6 +82,7 @@ final class CameraSession extends Solo<CameraState> {
       return;
     }
     _watch(camera);
+    if (!recording) await ctx.join(() => camera.setFlashMode(flash));
   });
 
   /// Starts a video; a tap during a recording adds nothing.

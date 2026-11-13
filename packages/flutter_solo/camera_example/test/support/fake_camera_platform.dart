@@ -97,8 +97,10 @@ class FakeCameraPlatform extends CameraPlatform {
   /// How long releasing a camera takes.
   Duration disposeTime = const Duration(milliseconds: 50);
 
-  /// How long starting a recording takes: about a second on the Galaxy,
-  /// from 0.2 to 2.5 seconds on the iPhone.
+  /// How long starting a recording takes: about a second on the Galaxy.
+  /// The iPhone starts one in 27 to 183 ms in a profile build; in a debug
+  /// build the first recording of the process took 6 to 12.6 s, and a
+  /// later one 25 to 138 ms.
   Duration recordStartTime = const Duration(seconds: 1);
 
   /// How long stopping a recording takes.

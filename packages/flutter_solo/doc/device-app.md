@@ -239,10 +239,12 @@ initialize #2 end
 stop #2 start
 ```
 
-On an iPhone 13 mini a recording can take more than a second and a half to
-start, and a switch tapped in that time loses the recording; the fake platform
-follows the iPhone here. The flag says a recording is on, stop asks the
-platform for it, and the platform has none: the screen shows
+On an iPhone 13 mini the first recording of a debug build's process took 6 to
+12.6 s to start, and a later one 25 to 138 ms; in a profile build the first
+took about 180 ms. A switch tapped before the start has ended loses the
+recording, and the fake platform, whose start takes a second, follows the
+iPhone's rules here. The flag says a recording is on, stop asks the platform
+for it, and the platform has none: the screen shows
 `Error -1008: Video is not recording!` Once the recording has started, a switch
 carries it over to the other camera on an iPhone 13 mini and on a Galaxy A55
 alike, and a stop tapped during that switch ends after it, with one file.
@@ -394,13 +396,14 @@ class CameraApp extends StatelessWidget {
 The wait for the key and the wait for `disposeData` are bounded, 3 s each by
 default. When either expires, scopo goes on as if the wait had ended, and the
 new screen opens the camera while the old one still holds it: the break of the
-first attempt, only later. A picture on a Galaxy A55 takes up to 3.4 s, a
-recording on an iPhone 13 mini up to 2.5 s to start, and the release waits for
-either, so the screen sets both bounds to `releaseTimeout`, ten seconds, with
-room to spare:
+first attempt, only later. A picture on a Galaxy A55 takes up to 3.4 s. A
+recording on an iPhone 13 mini starts in about 180 ms in a profile build, but
+the first recording of a debug build's process took up to 12.6 s, and the
+release waits for either. So the screen sets both bounds to `releaseTimeout`,
+twenty seconds: that debug start alone went past ten.
 
 ```dart
-static const releaseTimeout = Duration(seconds: 10);
+static const releaseTimeout = Duration(seconds: 20);
 
 @override
 Widget build(BuildContext context) => AsyncDataScope<CameraSession>(
@@ -750,7 +753,7 @@ Future<void> _initialize(
 
 Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
   final cameras = await ctx.join(availableCameras);
-  final Ready(:camera, :recording) = ctx.state;
+  final Ready(:camera, :flash, :recording) = ctx.state;
   final at = cameras.indexWhere((c) => c.name == camera.description.name);
   final next = cameras[(at + 1) % cameras.length];
   try {
@@ -762,16 +765,20 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     return;
   }
   _watch(camera);
+  if (!recording) await ctx.join(() => camera.setFlashMode(flash));
 });
 ```
 
 A camera that fails to open is `Broken` as well, and `_letGo` releases what the
 plugin's controller has created on the platform. A switch without a recording
 is an opening too: the plugin releases the camera before it opens the next one,
-so a switch that fails is `Broken` the same way. During a recording the plugin
-does not release the camera, the camera goes on recording, and a failure stays
-the error of the job with the state `Ready`. A stop that fails is the last way
-to `Broken`:
+so a switch that fails is `Broken` the same way. The camera it opens starts
+with a flash mode of its own, while the plugin's controller keeps the one it
+had, so the switch sets the mode of the button again: without that, on an
+iPhone 13 mini the button showed `always` after a switch, and the picture was
+taken in `auto`. During a recording the plugin does not release the camera, the
+camera goes on recording, and a failure stays the error of the job with the
+state `Ready`. A stop that fails is the last way to `Broken`:
 
 ```dart
 Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
@@ -1049,8 +1056,10 @@ Duration switchTime = const Duration(milliseconds: 150);
 /// How long releasing a camera takes.
 Duration disposeTime = const Duration(milliseconds: 50);
 
-/// How long starting a recording takes: about a second on the Galaxy,
-/// from 0.2 to 2.5 seconds on the iPhone.
+/// How long starting a recording takes: about a second on the Galaxy.
+/// The iPhone starts one in 27 to 183 ms in a profile build; in a debug
+/// build the first recording of the process took 6 to 12.6 s, and a
+/// later one 25 to 138 ms.
 Duration recordStartTime = const Duration(seconds: 1);
 
 /// How long stopping a recording takes.
