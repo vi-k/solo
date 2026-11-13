@@ -84,13 +84,17 @@ final class CameraSession extends Solo<CameraState> {
   /// on the platform: the app has left the screen.
   ///
   /// The state is [Closed] before the release starts: a preview built on a
-  /// controller being disposed throws.
+  /// controller being disposed throws. A stop that fails still lets the
+  /// camera go, and its error is the error of the job.
   Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
     if (ctx.state case Ready(:final camera, :final recording)) {
-      if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
       _suspended = camera.description;
-      ctx.emit(const Closed());
-      await ctx.join(camera.dispose);
+      try {
+        if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
+      } finally {
+        ctx.emit(const Closed());
+        await ctx.join(camera.dispose);
+      }
     }
   });
 

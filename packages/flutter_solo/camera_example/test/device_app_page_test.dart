@@ -479,65 +479,68 @@ void main() {
       });
     }
 
-    testWidgets('the suspend stops the recording, the resume waits', (
-      tester,
-    ) async {
-      final journal = Journal(platform);
-      Solo.observer = journal;
-      final record = find.byKey(const Key('record'));
-      // A scope of scopo builds its ready branch some frames after its
-      // initialization ends.
-      Future<void> untilRecord() async {
-        for (var i = 0; i < 50 && record.evaluate().isEmpty; i++) {
-          await tester.pump(const Duration(milliseconds: 50));
+    for (final phone in FakePhone.values) {
+      testWidgets('the suspend stops the recording, the resume waits '
+          '(${phone.name})', (tester) async {
+        platform.phone = phone;
+        final journal = Journal(platform);
+        Solo.observer = journal;
+        final record = find.byKey(const Key('record'));
+        // A scope of scopo builds its ready branch some frames after its
+        // initialization ends.
+        Future<void> untilRecord() async {
+          for (var i = 0; i < 50 && record.evaluate().isEmpty; i++) {
+            await tester.pump(const Duration(milliseconds: 50));
+          }
         }
-      }
 
-      await tester.pumpWidget(const CameraApp());
-      await tester.tap(find.byKey(const Key('open-camera')));
-      await tester.pumpAndSettle();
-      await untilRecord();
-      await tester.tap(record);
-      await tester.pump(platform.recordStartTime);
-      _homeAndBack.forEach(tester.binding.handleAppLifecycleStateChanged);
-      await tester.pump(platform.stopTime);
-      await tester.pump(platform.disposeTime);
-      await tester.pump(platform.openTime);
-      await untilRecord();
+        await tester.pumpWidget(const CameraApp());
+        await tester.tap(find.byKey(const Key('open-camera')));
+        await tester.pumpAndSettle();
+        await untilRecord();
+        await tester.tap(record);
+        await tester.pump(platform.recordStartTime);
+        _homeAndBack.forEach(tester.binding.handleAppLifecycleStateChanged);
+        await tester.pump(platform.stopTime);
+        await tester.pump(platform.disposeTime);
+        await tester.pump(platform.openTime);
+        await untilRecord();
 
-      expect(
-        codeMissingFrom(
-          _doc,
-          'lib/camera_session.dart',
-          alsoIn: ['lib/camera_screen.dart'],
-          under: _suspend,
-        ),
-        isEmpty,
-      );
-      expect(journal.lines, containsRun(_traceUnder(_background, _suspend)));
-      expect(platform.openCameras, 1);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      await tester.pump(platform.disposeTime);
-      expect(find.byKey(const Key('last-shot')), findsOneWidget);
-      _says(
-        _part(_background, _suspend),
-        'The stop comes before the release, and the recording goes up to '
-        'the home screen. The camera opens again once the release has '
-        'ended:',
-      );
-      // Coming back at once draws frames during the release, and the
-      // emit after the release would leave the preview on them.
-      expect(tester.takeException(), isNull);
-      _says(
-        _part(_background, _suspend),
-        '`suspend()` emits `Closed` before the release starts, and the screen '
-        'takes the preview down: a preview built on a controller that is being '
-        'released throws `buildPreview() was called on a disposed '
-        'CameraController.`',
-      );
-      expect(platform.openCameras, 0);
-    });
+        expect(
+          codeMissingFrom(
+            _doc,
+            'lib/camera_session.dart',
+            alsoIn: ['lib/camera_screen.dart'],
+            under: _suspend,
+          ),
+          isEmpty,
+        );
+        expect(journal.lines, containsRun(_traceUnder(_background, _suspend)));
+        expect(platform.openCameras, 1);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        await tester.pump(platform.disposeTime);
+        final shown = tester.widget<Image>(find.byKey(const Key('last-shot')));
+        expect((shown.image as FileImage).file.path, '/fake/video-1.mp4');
+        _says(
+          _part(_background, _suspend),
+          'The stop comes before the release, and the recording goes up to '
+          'the home screen. The camera opens again once the release has '
+          'ended:',
+        );
+        // Coming back at once draws frames during the release, and the
+        // emit after the release would leave the preview on them.
+        expect(tester.takeException(), isNull);
+        _says(
+          _part(_background, _suspend),
+          '`suspend()` emits `Closed` before the release starts, and the screen '
+          'takes the preview down: a preview built on a controller that is being '
+          'released throws `buildPreview() was called on a disposed '
+          'CameraController.`',
+        );
+        expect(platform.openCameras, 0);
+      });
+    }
 
     testWidgets('a permission dialog during the opening releases nothing', (
       tester,

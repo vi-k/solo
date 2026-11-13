@@ -440,7 +440,7 @@ state Ready
 
 ## Уход в фон
 
-Пользователь уходит из приложения в другое, пока идёт запись видео, и может
+Пользователь уходит на главный экран телефона, пока идёт запись видео, и может
 тут же вернуться. Запись сохраняется и доходит до главного экрана. Пока
 приложение в фоне, камера отпущена, а возврат открывает её снова, и только
 после того, как её отпустили.
@@ -513,10 +513,13 @@ initialize #2 end
 ```dart
 Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
   if (ctx.state case Ready(:final camera, :final recording)) {
-    if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
     _suspended = camera.description;
-    ctx.emit(const Closed());
-    await ctx.join(camera.dispose);
+    try {
+      if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
+    } finally {
+      ctx.emit(const Closed());
+      await ctx.join(camera.dispose);
+    }
   }
 });
 
@@ -531,8 +534,12 @@ Job<void> resume() => enqueue<CameraState, void>((ctx) async {
 
 `suspend()` выдаёт `Closed` до начала освобождения, и экран убирает превью:
 превью, построенное на контроллере, который освобождается, бросает
-`buildPreview() was called on a disposed CameraController.` `resume()`,
-пришедший до конца освобождения, ждёт в очереди за ним.
+`buildPreview() was called on a disposed CameraController.` Поэтому здесь
+`Closed` приходит чуть раньше, чем камера свободна, тогда как `release()`
+выдаёт его, когда камера уже свободна: в `suspend()` он говорит, что превью
+убрано, а камера свободна, когда `suspend()` кончился. Упавший стоп всё равно
+освобождает камеру, из `finally`, а его сбой становится ошибкой `suspend()`.
+`resume()`, пришедший до конца освобождения, ждёт в очереди за ним.
 
 `CameraView`, часть экрана, которая показывает сессию, слушает жизненный цикл
 приложения, пока она на экране:
@@ -562,7 +569,7 @@ void dispose() {
 и камера открывается.
 
 Нажатие записи, главный экран телефона и сразу обратно, на фейковой платформе
-по правилам Galaxy:
+по правилам любого из телефонов — здесь они совпадают:
 
 ```text
 record #1 start
@@ -582,4 +589,6 @@ state Ready
 
 Остановка приходит раньше освобождения, и запись доходит до главного экрана.
 Камера открывается снова, когда освобождение кончилось: `dispose #1 end` идёт
-раньше `create back #2`.
+раньше `create back #2`. На Galaxy A55 стоп на `hidden` отдаёт файл, а возврат
+сразу приходит посреди стопа и открывает камеру после освобождения, в том же
+порядке.

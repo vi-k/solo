@@ -6,13 +6,18 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo_camera_example/camera_screen.dart';
+import 'package:flutter_solo_camera_example/camera_state.dart';
+import 'package:scopo/scopo.dart';
 
 import '../test/support/device_app_attempts.dart';
 import 'support/probe.dart';
 
 /// The first attempts that need a person at the phone: the permission
 /// dialog, another app taking the camera, leaving the app during a
-/// recording.
+/// recording; and the app's answer to leaving the app, its own camera
+/// screen, with the states and errors of its session in the journal.
 ///
 /// Each attempt opens from the menu; the journal of every call, event and
 /// state of the lifecycle shows under it and is kept in
@@ -32,7 +37,9 @@ Future<void> main() async {
   AppLifecycleListener(
     onStateChange: (state) => journal.note('lifecycle ${state.name}'),
   );
-  runApp(MaterialApp(home: _Menu(journal)));
+  Solo.observer = _SessionNotes(journal);
+  // The camera screen waits on its `scopeKey`, which the coordinator keeps.
+  runApp(AsyncScopeCoordinator(child: MaterialApp(home: _Menu(journal))));
 }
 
 typedef _Attempt =
@@ -40,6 +47,7 @@ typedef _Attempt =
 
 final Map<String, _Attempt> _attempts = {
   'Leaving the app': (c, f) => ReadmeLifecycle(cameras: c, onCaptured: f),
+  'Leaving the app (answer)': (_, f) => CameraScreen(onCaptured: f),
   'Losing the camera': (c, f) => ErrorListener(cameras: c, onCaptured: f),
   'Permissions': (c, f) => PermissionMessages(cameras: c, onCaptured: f),
 };
@@ -99,4 +107,30 @@ class _JournalView extends StatelessWidget {
       );
     },
   );
+}
+
+/// Writes down every change of the state of a session and every error of
+/// its jobs.
+final class _SessionNotes extends SoloObserver {
+  _SessionNotes(this.journal);
+
+  final ProbeJournal journal;
+
+  @override
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => journal.note(switch (transition.current) {
+    Ready(:final recording) => 'state Ready recording $recording',
+    final state => 'state ${state.runtimeType}',
+  });
+
+  @override
+  void onError(
+    SoloController<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) => journal.note('error ${'$error'.split('\n').first}');
 }

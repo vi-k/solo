@@ -332,6 +332,36 @@ void main() {
       await finish(tester, session);
     });
 
+    testWidgets('a failed stop still lets the camera go', (tester) async {
+      final unanswered = <Object>[];
+      Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+          unanswered.add(error);
+      addTearDown(() => Solo.unansweredHandler = null);
+      platform.failStop = CameraException('stopFailed', 'The stop failed.');
+      final session = await openShown(tester);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      lifecycle(tester, leave);
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(captured, isEmpty);
+      expect(platform.openCameras, 0);
+      expect(session.currentState, isA<Closed>());
+      // The failure stays the error of the job, which nobody awaits.
+      expect(unanswered, [isA<CameraException>()]);
+      lifecycle(tester, back);
+      await tester.pump(platform.openTime);
+
+      expect(
+        session.currentState,
+        isA<Ready>().having((s) => s.recording, 'recording', isFalse),
+      );
+      expect(platform.openCameras, 1);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+
     testWidgets('coming back opens the camera that was let go', (tester) async {
       final session = await openShown(tester);
       session.switchCamera();

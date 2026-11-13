@@ -105,6 +105,11 @@ class FakeCameraPlatform extends CameraPlatform {
   /// When set, an opening ends with this exception instead of an event.
   PlatformException? failOpen;
 
+  /// When set, a stop of a recording ends with this exception, after
+  /// [stopTime], and the platform has no recording left. A knob for the
+  /// tests, not a rule of a phone.
+  CameraException? failStop;
+
   /// When set, creating a camera throws this, as both phones do without
   /// the permission: the denial comes from `createCameraWithSettings`,
   /// not from `initialize`. See [deniedOnAndroid] and the others for the texts.
@@ -310,6 +315,12 @@ class FakeCameraPlatform extends CameraPlatform {
     }
     final id = _recording!;
     await Future<void>.delayed(stopTime);
+    final failure = failStop;
+    if (failure != null) {
+      _recording = null;
+      log.add('stop #$cameraId failed');
+      throw failure;
+    }
     _recording = null;
     log.add('record #$cameraId end');
     // Galaxy: the camera rebinds after the recording and sends a closing

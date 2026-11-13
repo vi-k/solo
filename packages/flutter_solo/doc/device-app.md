@@ -445,10 +445,10 @@ the key and builds `progressBuilder`, an empty screen.
 
 ## Going to the background
 
-A user leaves the app for another one while a video records, and may come back
-at once. The recording is kept and reaches the home screen. The camera is let
-go while the app is away, and coming back opens it again, only once it has been
-let go.
+A user goes to the home screen of the phone while a video records, and may come
+back at once. The recording is kept and reaches the home screen. The camera is
+let go while the app is away, and coming back opens it again, only once it has
+been let go.
 
 ### The first attempt
 
@@ -518,10 +518,13 @@ the controller and initializes it:
 ```dart
 Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
   if (ctx.state case Ready(:final camera, :final recording)) {
-    if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
     _suspended = camera.description;
-    ctx.emit(const Closed());
-    await ctx.join(camera.dispose);
+    try {
+      if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
+    } finally {
+      ctx.emit(const Closed());
+      await ctx.join(camera.dispose);
+    }
   }
 });
 
@@ -536,7 +539,11 @@ Job<void> resume() => enqueue<CameraState, void>((ctx) async {
 
 `suspend()` emits `Closed` before the release starts, and the screen takes the
 preview down: a preview built on a controller that is being released throws
-`buildPreview() was called on a disposed CameraController.` A `resume()` that
+`buildPreview() was called on a disposed CameraController.` So here `Closed`
+comes a moment before the camera is free, while `release()` emits it once the
+camera is free: in `suspend()` it says the preview is down, and the camera is
+free once `suspend()` has ended. A stop that fails still releases the camera,
+from `finally`, and its failure is the error of `suspend()`. A `resume()` that
 comes before the release has ended waits behind it in the queue.
 
 `CameraView`, the part of the screen that shows the session, listens to the
@@ -567,7 +574,7 @@ opens the camera. A dialog that comes while the camera opens releases nothing,
 and the camera opens.
 
 A tap of record, the home screen of the phone and back at once, with the fake
-platform on the Galaxy's rules:
+platform on the rules of either phone, which agree here:
 
 ```text
 record #1 start
@@ -587,4 +594,6 @@ state Ready
 
 The stop comes before the release, and the recording goes up to the home
 screen. The camera opens again once the release has ended: `dispose #1 end`
-comes before `create back #2`.
+comes before `create back #2`. On a Galaxy A55 the stop on `hidden` gives the
+file, and a return at once comes in the middle of the stop and opens the camera
+after the release, in the same order.
