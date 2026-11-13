@@ -22,13 +22,16 @@ enum FakePhone { android, iphone }
 /// start and one for the end of every call that takes time on a phone, so
 /// the order of the lines is the order in which the platform was asked.
 /// The tests run on the fake clock of `testWidgets`: a call that takes
-/// time finishes when the test pumps that long.
+/// time finishes when the test pumps that long. A recording has a third
+/// line, `record #N started`, when the start of the recording completes:
+/// `record #N start` is the call, `record #N end` the end of the stop.
 ///
 /// Where a call meets another one, the fake does what the phones did; each
 /// such rule names the phone it was seen on, and [phone] picks between
 /// the two where they differ.
 class FakeCameraPlatform extends CameraPlatform {
-  /// The text of a denied camera on Android, from `createCamera`: the only
+  /// The text of a denied camera on Android, from
+  /// `createCameraWithSettings`: the only
   /// code the Galaxy gives, the first time and after "don't ask again".
   static CameraException get deniedOnAndroid => CameraException(
     'CameraAccessDenied',
@@ -103,8 +106,8 @@ class FakeCameraPlatform extends CameraPlatform {
   PlatformException? failOpen;
 
   /// When set, creating a camera throws this, as both phones do without
-  /// the permission: the denial comes from `createCamera`, not from
-  /// `initialize`. See [deniedOnAndroid] and the others for the texts.
+  /// the permission: the denial comes from `createCameraWithSettings`,
+  /// not from `initialize`. See [deniedOnAndroid] and the others for the texts.
   CameraException? failCreate;
 
   /// The calls the platform got, in order.
@@ -152,7 +155,12 @@ class FakeCameraPlatform extends CameraPlatform {
     if (failure != null) throw failure;
     final id = ++_lastId;
     final camera = _Camera(cameraDescription);
-    final others = _cameras.values.where((c) => !c.closed).toList();
+    // A camera whose release failed stays open (see `dispose`) but is
+    // left out: what the Galaxy does with a camera opened after that was
+    // not filmed, and counting it would mark every later camera.
+    final others = _cameras.values
+        .where((c) => !c.closed && !c.releaseFailed)
+        .toList();
     switch (phone) {
       case FakePhone.android:
         // Galaxy: a camera opened before the previous one was released
@@ -243,12 +251,21 @@ class FakeCameraPlatform extends CameraPlatform {
     await Future<void>.delayed(recordStartTime);
     final camera = _cameras[id];
     if (camera == null || camera.closed) {
-      // iPhone: a camera released while its recording was starting; the
-      // start still completes, and the controller, now on the next
-      // camera, believes it records.
-      return;
+      switch (phone) {
+        case FakePhone.android:
+          throw UnsupportedError(
+            'Not filmed on the Galaxy: a camera released while its '
+            'recording was starting.',
+          );
+        case FakePhone.iphone:
+          // iPhone: a camera released while its recording was starting;
+          // the start still completes, and the controller, now on the
+          // next camera, believes it records. No `started` line.
+          return;
+      }
     }
     _recording = id;
+    log.add('record #$id started');
     // Galaxy: the camera rebinds to start a recording and sends a closing
     // event, though it stays open.
     if (phone == FakePhone.android) closeFromOutside(id);
@@ -276,12 +293,20 @@ class FakeCameraPlatform extends CameraPlatform {
     // Both phones: a stop asked during a switch ends after the switch.
     await _switching;
     if (_recording == null) {
-      // iPhone: a stop with no recording on the platform side.
-      throw PlatformException(
-        code: 'Error -1008',
-        message: 'Video is not recording!',
-        details: 'NSCocoaErrorDomain',
-      );
+      switch (phone) {
+        case FakePhone.android:
+          throw UnsupportedError(
+            'Not filmed on the Galaxy: a stop with no recording on the '
+            'platform side.',
+          );
+        case FakePhone.iphone:
+          // iPhone: a stop with no recording on the platform side.
+          throw PlatformException(
+            code: 'Error -1008',
+            message: 'Video is not recording!',
+            details: 'NSCocoaErrorDomain',
+          );
+      }
     }
     final id = _recording!;
     await Future<void>.delayed(stopTime);
@@ -323,6 +348,7 @@ class FakeCameraPlatform extends CameraPlatform {
         if (camera != null && camera.openedOverAnother) {
           // Galaxy: the camera opened over another one cannot release
           // its preview; it stays open.
+          camera.releaseFailed = true;
           throw PlatformException(
             code: 'IllegalStateException',
             message:
@@ -338,7 +364,10 @@ class FakeCameraPlatform extends CameraPlatform {
           if (other.openedOverAnother) other.previewLost = true;
         }
       case FakePhone.iphone:
-        // iPhone: the release waits for a picture in progress.
+        // iPhone: the release waits for a picture in progress (the
+        // plugin's session queue). The picture reaches the controller,
+        // but a `CameraController` disposed meanwhile throws in debug
+        // when `takePicture` writes its `value`.
         await camera?.capture?.shot.future;
         await Future<void>.delayed(disposeTime);
         // iPhone: the plugin releases the camera it holds, whatever the
@@ -387,4 +416,7 @@ class _Camera {
 
   /// Galaxy: the preview went empty.
   bool previewLost = false;
+
+  /// Galaxy: `dispose` threw and the camera stayed open.
+  bool releaseFailed = false;
 }

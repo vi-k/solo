@@ -17,17 +17,19 @@ import 'support/probe.dart';
 ///
 /// Nothing here expects: every probe writes down what the phone did, and
 /// the probes report reads the lines. A line `ACTION <name>` asks the host
-/// for what a test cannot do from inside the app: a watcher on the output
-/// answers `home`, `home-and-back` and `other-camera` by bringing another
-/// app to the front and this one back, with `adb` on Android and with
-/// `xcrun devicectl` on iOS, and `deny` with `adb`. The permission probe
-/// runs only with `--dart-define=probePermissions=true`, after the host
-/// took the permission away.
+/// for what a test cannot do from inside the app:
+/// `integration_test/support/answer_actions.py` follows the output of the
+/// run and answers `home`, `home-and-back` and `other-camera` by bringing
+/// another app to the front and this one back, with `adb` on Android and
+/// with `xcrun devicectl` on iOS, and `deny` with `adb`. The permission
+/// probe runs only with `--dart-define=probePermissions=true`, after the
+/// host took the permission away.
 ///
 /// Run from the app's folder:
 /// `flutter test integration_test/attempts_test.dart -d <device>`; an
 /// iPhone needs `flutter run -t integration_test/attempts_test.dart`,
-/// which `flutter test` cannot replace for a wireless one.
+/// which `flutter test` cannot replace for a wireless one. The script's
+/// docstring has its usage.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   final phone = CameraPlatform.instance;

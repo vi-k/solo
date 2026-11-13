@@ -140,6 +140,7 @@ void main() {
         ]),
       );
       expect(platform.log, isNot(contains(startsWith('switch'))));
+      expect(platform.log, isNot(contains('record #1 started')));
       await finish(tester);
     });
   });
@@ -160,6 +161,35 @@ void main() {
       expect(
         platform.log,
         containsAllInOrder(['capture #1 start', 'capture #1 failed']),
+      );
+      expect(
+        uncaught.map((e) => '$e'),
+        contains(contains('A CameraController was used after being disposed.')),
+      );
+      await finish(tester);
+    });
+
+    testWidgets('leaving during a long shot loses the picture in debug '
+        '(iPhone)', (tester) async {
+      // On the iPhone the shot (0.2 to 0.6 s) ended before the pop did;
+      // a longer one ends after the controller was disposed.
+      platform
+        ..phone = FakePhone.iphone
+        ..captureTime = const Duration(seconds: 1);
+      await start(tester);
+      await open(tester, (c, f) => LeavingShutter(cameras: c, onCaptured: f));
+      await tap(tester, 'shutter');
+      await pop(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(captured, isEmpty);
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'capture #1 start',
+          'dispose #1 start',
+          'capture #1 end',
+          'dispose #1 end',
+        ]),
       );
       expect(
         uncaught.map((e) => '$e'),
@@ -259,7 +289,7 @@ void main() {
   });
 
   group('section 5, losing the camera', () {
-    testWidgets('the error of a lost camera stays after it is back (Galaxy)', (
+    testWidgets('the first error stays and a second is not seen (Galaxy)', (
       tester,
     ) async {
       await start(tester);
@@ -270,23 +300,34 @@ void main() {
       await tap(tester, 'shutter');
       await tester.pump(platform.captureTime);
       expect(captured, hasLength(1));
+      // The controller listens to the first error event only.
+      platform.failFromOutside(1, 'a second failure');
+      await tester.pump();
       expect(shownError(), 'Camera error ${FakeCameraPlatform.takenOnAndroid}');
-      expect(find.byKey(const Key('retry')), findsNothing);
       await finish(tester);
     });
   });
 
   group('section 6, no permission', () {
-    testWidgets('a denial after "don\'t ask again" says nothing more '
+    testWidgets('a denial with and without the dialog reads the same '
         '(Galaxy)', (tester) async {
+      // The Galaxy gives the same code from `createCameraWithSettings`
+      // the first time and after "don't ask again".
       platform.failCreate = FakeCameraPlatform.deniedOnAndroid;
       await start(tester);
-      await open(
-        tester,
-        (c, f) => PermissionMessages(cameras: c, onCaptured: f),
-      );
-      expect(shownError(), 'You have denied camera access.');
-      expect(find.byType(TextButton), findsNothing);
+      final shown = <String?>[];
+      for (var i = 0; i < 2; i++) {
+        await open(
+          tester,
+          (c, f) => PermissionMessages(cameras: c, onCaptured: f),
+        );
+        shown.add(shownError());
+        await pop(tester);
+      }
+      expect(shown, [
+        'You have denied camera access.',
+        'You have denied camera access.',
+      ]);
       await finish(tester);
     });
   });

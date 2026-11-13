@@ -58,6 +58,7 @@ void main() {
       'initialize #1 end',
       'flash #1 auto',
       'record #1 start',
+      'record #1 started',
       'switch #1 front start',
       'switch #1 front end',
       'stop #1 start',
