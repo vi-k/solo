@@ -39,6 +39,8 @@ const _intro = '# A device app';
 const _rapid = '## Rapid taps';
 const _first = '### The first attempt';
 const _queue = '### One queue for the buttons';
+const _torch = '## Rapid taps of the torch';
+const _latest = '### The latest tap in the queue';
 const _recording = '## A switch during a recording';
 const _recordingQueue = '### The recording in the queue';
 const _leaving = '## Leaving the screen';
@@ -235,6 +237,129 @@ void main() {
       expect(journal.lines, containsRun(_traceUnder(_rapid, _queue)));
       expect(platform.log.where((l) => l == 'capture #1 start'), hasLength(1));
       expect(captured, hasLength(1));
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
+    });
+  });
+
+  group('rapid taps of the torch', () {
+    /// A shot with on and off tapped during it, then on, off and on, the
+    /// last two while the torch lights.
+    Future<void> tapTorch(
+      WidgetTester tester, {
+      required void Function() shoot,
+      required void Function() toggle,
+    }) async {
+      shoot();
+      toggle();
+      toggle();
+      await tester.pump(platform.captureTime);
+      await tester.pump(platform.torchTime);
+      toggle();
+      await tester.pump(platform.torchTime ~/ 2);
+      toggle();
+      toggle();
+      await tester.pump(platform.torchTime);
+      await tester.pump(platform.torchTime);
+    }
+
+    testWidgets('the first attempt blinks the torch and flashes it', (
+      tester,
+    ) async {
+      final journal = Journal(platform);
+      Solo.observer = journal;
+      final torch = FlippingTorch()..open(platform.cameras.first);
+      await tester.pump(platform.openTime);
+      await tapTorch(
+        tester,
+        shoot: torch.takePicture,
+        toggle: torch.toggleTorch,
+      );
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'test/support/device_app_attempts.dart',
+          under: _first,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_torch, _first)));
+      expect(platform.torchOn(1), isTrue);
+      final released = torch.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await torch.close();
+    });
+
+    testWidgets('the latest tap calls once, or not at all', (tester) async {
+      final journal = Journal(platform);
+      Solo.observer = journal;
+      final session = CameraSession(onCaptured: (XFile file) {});
+      session.open();
+      await tester.pump(platform.openTime);
+      await tapTorch(
+        tester,
+        shoot: session.takePicture,
+        toggle: session.toggleTorch,
+      );
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'lib/camera_session.dart',
+          alsoIn: ['lib/camera_state.dart', 'lib/camera_screen.dart'],
+          under: _latest,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_torch, _latest)));
+      expect(platform.log.where((line) => line.startsWith('flash ')), [
+        'flash #1 torch start',
+        'flash #1 torch end',
+      ]);
+      expect((session.currentState as Ready).torch, isTrue);
+      _says(
+        _part(_torch, _latest),
+        'The two taps during the shot leave no line: off took the place of '
+        'on in the queue and found the torch off.',
+      );
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
+    });
+
+    testWidgets('a tap dropped at its start leaves the next tap its target', (
+      tester,
+    ) async {
+      final session = CameraSession(onCaptured: (XFile file) {});
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..startRecording()
+        ..toggleTorch();
+      await tester.pump(platform.recordStartTime ~/ 2);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.disposeTime);
+      expect(session.currentState, isA<Broken>());
+      session.open();
+      await tester.pump(platform.openTime);
+      session.toggleTorch();
+      await tester.pump(platform.torchTime);
+
+      expect(platform.log, isNot(contains('flash #1 torch start')));
+      expect(platform.log, contains('flash #2 torch end'));
+      expect((session.currentState as Ready).torch, isTrue);
+      _says(
+        _part(_torch, _latest),
+        '`whenFinished` forgets the target once the job of the latest tap has '
+        'ended: when it has run, and when it was dropped at its start because '
+        'the camera was no longer `Ready`.',
+      );
       final released = session.release().done;
       await tester.pump(platform.disposeTime);
       expect(await released, isA<Done<void>>());
@@ -962,6 +1087,11 @@ void main() {
         '| Rapid taps | `on<CameraCommand>` with `sequential()`; `_shooting`, '
             'set in `add` | the queue of `Solo`; `Policy.droppable` on the '
             'key of `takePicture` | nothing more |',
+        '| Rapid taps of the torch | the target and the number of the tap, '
+            'set in `add`; `SetTorch`, which the handler skips when a later '
+            'tap has passed it | `Policy.keepLatest` on the key of '
+            '`toggleTorch`; the target taken at the tap; `whenFinished` | '
+            'nothing more |',
         '| A switch during a recording | the same handler | the same queue '
             '| nothing more |',
         '| Leaving the screen | `Release` with a `Completer`; '

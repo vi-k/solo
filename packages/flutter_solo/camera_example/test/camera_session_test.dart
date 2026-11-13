@@ -41,6 +41,9 @@ final class SessionDriver implements CameraDriver {
   void cycleFlash() => session.cycleFlash();
 
   @override
+  void toggleTorch() => session.toggleTorch();
+
+  @override
   void switchCamera() => session.switchCamera();
 
   @override

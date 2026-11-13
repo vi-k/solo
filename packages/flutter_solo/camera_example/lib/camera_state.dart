@@ -21,15 +21,20 @@ final class NoCamera extends CameraState {
 }
 
 /// The camera is open and takes commands.
+///
+/// [flash] is the mode of the flash button; [torch] says the torch is on,
+/// and it is off when a camera opens.
 final class Ready extends CameraState {
   final CameraController camera;
   final FlashMode flash;
   final bool recording;
+  final bool torch;
 
   const Ready({
     required this.camera,
     required this.flash,
     required this.recording,
+    this.torch = false,
   });
 }
 
@@ -47,3 +52,8 @@ final class Denied extends CameraState {
 
   const Denied(this.code);
 }
+
+/// Whether [camera] has a torch. The plugin cannot say: the screen gives
+/// the torch to the back camera, and to no other.
+bool hasTorch(CameraDescription camera) =>
+    camera.lensDirection == CameraLensDirection.back;

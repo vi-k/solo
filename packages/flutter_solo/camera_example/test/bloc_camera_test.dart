@@ -46,6 +46,9 @@ final class BlocDriver implements CameraDriver {
   void cycleFlash() => bloc.add(const CycleFlash());
 
   @override
+  void toggleTorch() => bloc.add(const ToggleTorch());
+
+  @override
   void switchCamera() => bloc.add(const SwitchCamera());
 
   @override

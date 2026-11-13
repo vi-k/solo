@@ -5,6 +5,7 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/device_app_attempts.dart';
@@ -13,6 +14,8 @@ import 'support/fake_camera_platform.dart';
 /// The first attempts that broke on a phone, on the fake platform, with
 /// the phone's outcome as the expectation. Each test names the phone; the
 /// probes report, `2026-11-13-device-app-probes-report.md`, has the runs.
+/// The torch's attempt has no run on a phone: its tests hold what it does
+/// on the fake.
 void main() {
   late FakeCameraPlatform platform;
   late List<XFile> captured;
@@ -109,6 +112,62 @@ void main() {
         ]),
       );
       await finish(tester);
+    });
+  });
+
+  group('the torch', () {
+    /// Opens a [FlippingTorch] on the back camera.
+    Future<FlippingTorch> openTorch(WidgetTester tester) async {
+      final torch = FlippingTorch()..open(platform.cameras.first);
+      await tester.pump(platform.openTime);
+      return torch;
+    }
+
+    Future<void> close(WidgetTester tester, FlippingTorch torch) async {
+      final released = torch.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await torch.close();
+    }
+
+    Iterable<String> flashes() =>
+        platform.log.where((line) => line.startsWith('flash '));
+
+    testWidgets('off and on while it lights blink it', (tester) async {
+      final torch = await openTorch(tester);
+      torch.toggleTorch();
+      await tester.pump(platform.torchTime ~/ 2);
+      torch
+        ..toggleTorch()
+        ..toggleTorch();
+      await tester.pump(platform.torchTime);
+      await tester.pump(platform.torchTime);
+      expect(flashes(), [
+        'flash #1 torch start',
+        'flash #1 torch end',
+        'flash #1 auto',
+        'flash #1 torch start',
+        'flash #1 torch end',
+      ]);
+      expect(platform.torchOn(1), isTrue);
+      await close(tester, torch);
+    });
+
+    testWidgets('on and off during a shot flash it', (tester) async {
+      final torch = await openTorch(tester);
+      torch
+        ..takePicture()
+        ..toggleTorch()
+        ..toggleTorch();
+      await tester.pump(platform.captureTime);
+      await tester.pump(platform.torchTime);
+      expect(flashes(), [
+        'flash #1 torch start',
+        'flash #1 torch end',
+        'flash #1 auto',
+      ]);
+      expect(platform.torchOn(1), isFalse);
+      await close(tester, torch);
     });
   });
 

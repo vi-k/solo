@@ -37,6 +37,7 @@ abstract interface class CameraDriver {
   void open();
   void takePicture();
   void cycleFlash();
+  void toggleTorch();
   void switchCamera();
   void startRecording();
   void stopRecording();
@@ -228,6 +229,183 @@ void controllerCases(MakeDriver make) {
         containsAllInOrder(['initialize #1 end', 'capture #1 start']),
       );
       expect(captured, hasLength(1));
+      await finish(tester, controller);
+    });
+  });
+
+  group('the torch', () {
+    /// The calls of the flash and the torch the platform got.
+    Iterable<String> flashes() =>
+        platform.log.where((line) => line.startsWith('flash '));
+
+    bool torch(CameraDriver controller) =>
+        (controller.currentState as Ready).torch;
+
+    testWidgets('on, then off and on while it lights: one call', (
+      tester,
+    ) async {
+      final controller = make(captured.add);
+      controller.open();
+      await tester.pump(platform.openTime);
+      expect(torch(controller), isFalse);
+      controller.toggleTorch();
+      await tester.pump(platform.torchTime ~/ 2);
+      expect(platform.log.last, 'flash #1 torch start');
+      controller
+        ..toggleTorch()
+        ..toggleTorch();
+      await tester.pump(platform.torchTime);
+      await tester.pump();
+
+      expect(flashes(), ['flash #1 torch start', 'flash #1 torch end']);
+      expect(torch(controller), isTrue);
+      expect(platform.torchOn(1), isTrue);
+      await finish(tester, controller);
+    });
+
+    testWidgets('on and off during a shot: no call', (tester) async {
+      final controller = make(captured.add);
+      controller.open();
+      await tester.pump(platform.openTime);
+      controller
+        ..takePicture()
+        ..toggleTorch()
+        ..toggleTorch();
+      await tester.pump(platform.captureTime);
+      await tester.pump();
+
+      expect(platform.log, contains('capture #1 end'));
+      expect(flashes(), isEmpty);
+      expect(torch(controller), isFalse);
+      await finish(tester, controller);
+    });
+
+    testWidgets('three taps from off while a recording starts: one call', (
+      tester,
+    ) async {
+      final controller = make(captured.add);
+      controller.open();
+      await tester.pump(platform.openTime);
+      controller
+        ..startRecording()
+        ..toggleTorch()
+        ..toggleTorch()
+        ..toggleTorch();
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.torchTime);
+      await tester.pump();
+
+      expect(flashes(), ['flash #1 torch start', 'flash #1 torch end']);
+      expect(torch(controller), isTrue);
+      expect((controller.currentState as Ready).recording, isTrue);
+      controller.stopRecording();
+      await tester.pump(platform.stopTime);
+      expect((controller.currentState as Ready).recording, isFalse);
+      expect(torch(controller), isTrue);
+      await finish(tester, controller);
+    });
+
+    testWidgets('a recording keeps the torch on', (tester) async {
+      final controller = make(captured.add);
+      controller.open();
+      await tester.pump(platform.openTime);
+      controller
+        ..toggleTorch()
+        ..startRecording();
+      await tester.pump(platform.torchTime);
+      await tester.pump(platform.recordStartTime);
+      expect((controller.currentState as Ready).recording, isTrue);
+      expect(torch(controller), isTrue);
+      controller.stopRecording();
+      await tester.pump(platform.stopTime);
+
+      expect((controller.currentState as Ready).recording, isFalse);
+      expect(torch(controller), isTrue);
+      expect(flashes(), ['flash #1 torch start', 'flash #1 torch end']);
+      await finish(tester, controller);
+    });
+
+    testWidgets('the flash waits while the torch is on', (tester) async {
+      final controller = make(captured.add);
+      controller.open();
+      await tester.pump(platform.openTime);
+      controller.toggleTorch();
+      await tester.pump(platform.torchTime);
+      controller.cycleFlash();
+      await tester.pump();
+
+      expect(flashes(), ['flash #1 torch start', 'flash #1 torch end']);
+      expect((controller.currentState as Ready).flash, FlashMode.always);
+      expect(torch(controller), isTrue);
+      controller.toggleTorch();
+      await tester.pump();
+      expect(flashes().last, 'flash #1 always');
+      expect(torch(controller), isFalse);
+      expect(platform.torchOn(1), isFalse);
+      await finish(tester, controller);
+    });
+
+    testWidgets('a tap that finds the camera lost leaves the next its own', (
+      tester,
+    ) async {
+      final controller = make(captured.add);
+      controller.open();
+      await tester.pump(platform.openTime);
+      controller
+        ..startRecording()
+        ..toggleTorch();
+      await tester.pump(platform.recordStartTime ~/ 2);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.disposeTime);
+      expect(controller.currentState, isA<Broken>());
+      controller.open();
+      await tester.pump(platform.openTime);
+      controller.toggleTorch();
+      await tester.pump(platform.torchTime);
+
+      expect(flashes(), ['flash #2 torch start', 'flash #2 torch end']);
+      expect(torch(controller), isTrue);
+      await finish(tester, controller);
+    });
+
+    testWidgets('a switch to a camera without a torch puts it out', (
+      tester,
+    ) async {
+      final controller = await openShown(tester);
+      final button = find.byKey(const Key('torch'));
+      expect(find.byIcon(Icons.flashlight_off), findsOneWidget);
+      await tester.tap(button);
+      await tester.pump(platform.torchTime);
+      await tester.pump();
+      expect(find.byIcon(Icons.flashlight_on), findsOneWidget);
+      controller.switchCamera();
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      await tester.pump();
+
+      final front = controller.currentState as Ready;
+      expect(front.camera.description.lensDirection, CameraLensDirection.front);
+      expect(front.torch, isFalse);
+      expect(button, findsNothing);
+      expect(flashes(), [
+        'flash #1 torch start',
+        'flash #1 torch end',
+        'flash #2 auto',
+      ]);
+      controller.switchCamera();
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      await tester.pump();
+
+      final back = controller.currentState as Ready;
+      expect(back.camera.description.lensDirection, CameraLensDirection.back);
+      expect(back.torch, isFalse);
+      expect(button, findsOneWidget);
+      expect(find.byIcon(Icons.flashlight_off), findsOneWidget);
+      expect(flashes().last, 'flash #3 auto');
+      expect(platform.torchOn(3), isFalse);
+      await tester.pumpWidget(const SizedBox());
       await finish(tester, controller);
     });
   });
@@ -1022,6 +1200,24 @@ void appCases(String controller) {
         'initialize #2 end',
       ]),
     );
+    await goBack(tester);
+    expect(platform.openCameras, 0);
+  });
+
+  testWidgets('the torch button reaches the camera', (tester) async {
+    await openCamera(tester);
+    await until(tester, find.byIcon(Icons.flashlight_off));
+    await tester.tap(find.byKey(const Key('torch')));
+    await tester.pump(platform.torchTime);
+    await tester.pump();
+
+    expect(find.byIcon(Icons.flashlight_on), findsOneWidget);
+    expect(platform.torchOn(1), isTrue);
+    await tester.tap(find.byKey(const Key('torch')));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.flashlight_off), findsOneWidget);
+    expect(platform.log.last, 'flash #1 auto');
     await goBack(tester);
     expect(platform.openCameras, 0);
   });

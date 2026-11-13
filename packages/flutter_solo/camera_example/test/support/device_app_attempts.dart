@@ -2,8 +2,8 @@
 /// [CameraController], written the way the plugin's README and its example
 /// lead to.
 ///
-/// One widget per section. The buttons call the controller at once, without
-/// a queue; the switch of the camera is `setDescription`; leaving the screen
+/// One widget per section, but for the torch. The buttons call the
+/// controller at once, without a queue; the switch of the camera is `setDescription`; leaving the screen
 /// is `dispose()` in `State.dispose`; the lifecycle follows "Handling
 /// Lifecycle states" of the README; errors are the example's: a caught
 /// [CameraException] and `value.errorDescription` are shown as text. Zoom
@@ -12,6 +12,10 @@
 ///
 /// The buttons have the keys `shutter`, `flash`, `switch`, `record` and
 /// `stop`; the shown error has the key `error`.
+///
+/// The torch's attempt builds on the answer of the section before it: the
+/// queue of `CameraSession`, where a tap of the torch is a job like a tap of
+/// the flash.
 library;
 
 import 'package:camera/camera.dart';
@@ -19,6 +23,8 @@ import 'package:camera/camera.dart';
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo_camera_example/camera_state.dart';
 
 /// Section 1, quick taps: the flash, the shutter and the switch of the
 /// camera call the controller as soon as they are pressed.
@@ -103,6 +109,44 @@ class _EagerButtonsState extends State<EagerButtons> {
     error: error,
     buttons: {'flash': cycleFlash, 'shutter': shoot, 'switch': switchCamera},
   );
+}
+
+/// The torch: each tap is a job in the one queue of the buttons that flips
+/// the torch, the way a tap of the flash moves the flash on.
+final class FlippingTorch extends Solo<CameraState> {
+  FlippingTorch() : super(const Closed());
+
+  /// Opens the camera of [description], as `open()` of `CameraSession`
+  /// does when nothing fails.
+  Job<void> open(CameraDescription description) => enqueue<CameraState, void>((
+    ctx,
+  ) async {
+    final camera = CameraController(description, ResolutionPreset.medium);
+    await ctx.join(camera.initialize);
+    ctx.emit(
+      Ready(camera: camera, flash: camera.value.flashMode, recording: false),
+    );
+  });
+
+  /// Takes a picture: a command that holds the queue for a while.
+  Job<XFile> takePicture() =>
+      enqueue<Ready, XFile>((ctx) => ctx.join(ctx.state.camera.takePicture));
+
+  Job<void> toggleTorch() => enqueue<Ready, void>((ctx) async {
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+    await ctx.join(() => camera.setFlashMode(torch ? flash : FlashMode.torch));
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: recording, torch: !torch),
+    );
+  });
+
+  /// Lets the camera go, as `release()` of `CameraSession` does.
+  Job<void> release() => enqueue<CameraState, void>((ctx) async {
+    if (ctx.state case Ready(:final camera)) {
+      await ctx.join(camera.dispose);
+    }
+    ctx.emit(const Closed());
+  });
 }
 
 /// Section 2, switching the camera during a recording: `setDescription`

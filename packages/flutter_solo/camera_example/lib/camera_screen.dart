@@ -94,42 +94,57 @@ class _CameraViewState extends State<CameraView> {
       Closed() => const SizedBox.expand(),
       Opening() => const Center(child: CircularProgressIndicator()),
       NoCamera() => const Center(child: Text('This device has no camera.')),
-      Ready(:final camera, :final flash, :final recording) => Column(
-        children: [
-          Expanded(child: Center(child: CameraPreview(camera))),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                key: const Key('flash'),
-                onPressed: widget.session.cycleFlash,
-                icon: Icon(switch (flash) {
-                  FlashMode.off => Icons.flash_off,
-                  FlashMode.auto => Icons.flash_auto,
-                  _ => Icons.flash_on,
-                }),
-              ),
-              IconButton(
-                key: const Key('shutter'),
-                onPressed: widget.session.takePicture,
-                icon: const Icon(Icons.camera),
-              ),
-              IconButton(
-                key: const Key('record'),
-                onPressed: recording
-                    ? widget.session.stopRecording
-                    : widget.session.startRecording,
-                icon: Icon(recording ? Icons.stop : Icons.videocam),
-              ),
-              IconButton(
-                key: const Key('switch'),
-                onPressed: widget.session.switchCamera,
-                icon: const Icon(Icons.cameraswitch),
-              ),
-            ],
-          ),
-        ],
-      ),
+      Ready(:final camera, :final flash, :final recording, :final torch) =>
+        Column(
+          children: [
+            Expanded(child: Center(child: CameraPreview(camera))),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  key: const Key('flash'),
+                  onPressed: widget.session.cycleFlash,
+                  icon: Icon(switch (flash) {
+                    FlashMode.off => Icons.flash_off,
+                    FlashMode.auto => Icons.flash_auto,
+                    _ => Icons.flash_on,
+                  }),
+                ),
+                // A switch changes the camera and leaves the state: the
+                // plugin's controller says which camera it holds.
+                ValueListenableBuilder<CameraValue>(
+                  valueListenable: camera,
+                  builder: (context, value, _) => hasTorch(value.description)
+                      ? IconButton(
+                          key: const Key('torch'),
+                          onPressed: widget.session.toggleTorch,
+                          icon: Icon(
+                            torch ? Icons.flashlight_on : Icons.flashlight_off,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                IconButton(
+                  key: const Key('shutter'),
+                  onPressed: widget.session.takePicture,
+                  icon: const Icon(Icons.camera),
+                ),
+                IconButton(
+                  key: const Key('record'),
+                  onPressed: recording
+                      ? widget.session.stopRecording
+                      : widget.session.startRecording,
+                  icon: Icon(recording ? Icons.stop : Icons.videocam),
+                ),
+                IconButton(
+                  key: const Key('switch'),
+                  onPressed: widget.session.switchCamera,
+                  icon: const Icon(Icons.cameraswitch),
+                ),
+              ],
+            ),
+          ],
+        ),
       Broken(:final error) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

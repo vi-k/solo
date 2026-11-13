@@ -46,6 +46,22 @@ final class SwitchCamera extends CameraCommand {
   const SwitchCamera();
 }
 
+/// A tap of the torch button. [CameraBloc.add] turns it into a [SetTorch]
+/// with the torch the tap asks for: the opposite of the tap before it, or
+/// of the torch when no tap waits.
+final class ToggleTorch extends CameraEvent {
+  const ToggleTorch();
+}
+
+/// Turns the torch [on], for the tap numbered [tap]; a later tap
+/// supersedes it.
+final class SetTorch extends CameraCommand {
+  final bool on;
+  final int tap;
+
+  const SetTorch(this.on, this.tap);
+}
+
 final class StartRecording extends CameraCommand {
   const StartRecording();
 }
@@ -112,11 +128,26 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   /// only when the one before it is over.
   bool _shooting = false;
 
+  /// The torch the latest [ToggleTorch] asked for, until its [SetTorch]
+  /// has run, and the number of the latest tap.
+  bool? _torchAsked;
+  int _torchTaps = 0;
+
   @override
   void add(CameraEvent event) {
     if (event is TakePicture) {
       if (_shooting) return;
       _shooting = true;
+    }
+    if (event is ToggleTorch) {
+      final lit = switch (state) {
+        Ready(:final torch) => torch,
+        _ => false,
+      };
+      final on = !(_torchAsked ?? lit);
+      _torchAsked = on;
+      super.add(SetTorch(on, ++_torchTaps));
+      return;
     }
     super.add(event);
   }
@@ -145,6 +176,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
           await _takePicture();
         case CycleFlash():
           await _cycleFlash(emit);
+        case SetTorch():
+          await _setTorch(command, emit);
         case SwitchCamera():
           await _switchCamera(emit);
         case StartRecording():
@@ -168,6 +201,9 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
       }
     } finally {
       if (command is TakePicture) _shooting = false;
+      if (command is SetTorch && command.tap == _torchTaps) {
+        _torchAsked = null;
+      }
     }
   }
 
@@ -194,18 +230,41 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     onCaptured(file);
   }
 
+  /// While the torch is on, the mode waits in the state: the platform has
+  /// one setting for the flash and the torch.
   Future<void> _cycleFlash(Emitter<CameraState> emit) async {
     final ready = state;
     if (ready is! Ready) return;
-    final Ready(:camera, :flash, :recording) = ready;
+    final Ready(:camera, :flash, :recording, :torch) = ready;
     final next = switch (flash) {
       FlashMode.off => FlashMode.auto,
       FlashMode.auto => FlashMode.always,
       _ => FlashMode.off,
     };
-    await camera.setFlashMode(next);
+    if (!torch) await camera.setFlashMode(next);
     if (state != ready) return;
-    emit(Ready(camera: camera, flash: next, recording: recording));
+    emit(
+      Ready(camera: camera, flash: next, recording: recording, torch: torch),
+    );
+  }
+
+  /// A [SetTorch] that a later tap superseded calls nothing, and nor does
+  /// one that finds the torch where it asks.
+  Future<void> _setTorch(SetTorch command, Emitter<CameraState> emit) async {
+    final ready = state;
+    if (command.tap != _torchTaps || ready is! Ready) return;
+    final Ready(:camera, :flash, :recording, :torch) = ready;
+    if (command.on == torch || !hasTorch(camera.description)) return;
+    await camera.setFlashMode(command.on ? FlashMode.torch : flash);
+    if (state != ready) return;
+    emit(
+      Ready(
+        camera: camera,
+        flash: flash,
+        recording: recording,
+        torch: command.on,
+      ),
+    );
   }
 
   /// Without a recording the plugin releases the camera before it opens the
@@ -216,7 +275,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     if (ready is! Ready) return;
     final cameras = await availableCameras();
     if (state != ready) return;
-    final Ready(:camera, :flash, :recording) = ready;
+    final Ready(:camera, :flash, :recording, :torch) = ready;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
     try {
@@ -230,8 +289,17 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     }
     if (state != ready) return;
     _watch(camera);
+    // A camera without a torch puts it out.
+    final lit = torch && hasTorch(next);
+    if (lit != torch) {
+      emit(
+        Ready(camera: camera, flash: flash, recording: recording, torch: lit),
+      );
+    }
     // The camera the plugin opens starts with a flash mode of its own.
-    if (!recording) await camera.setFlashMode(flash);
+    if (!recording) {
+      await camera.setFlashMode(lit ? FlashMode.torch : flash);
+    }
   }
 
   Future<void> _startRecording(Emitter<CameraState> emit) async {
@@ -239,7 +307,14 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     if (ready is! Ready || ready.recording) return;
     await ready.camera.startVideoRecording();
     if (state != ready) return;
-    emit(Ready(camera: ready.camera, flash: ready.flash, recording: true));
+    emit(
+      Ready(
+        camera: ready.camera,
+        flash: ready.flash,
+        recording: true,
+        torch: ready.torch,
+      ),
+    );
   }
 
   /// A stop that fails leaves the plugin's controller recording for good,
@@ -257,7 +332,14 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
       return;
     }
     if (state != ready) return;
-    emit(Ready(camera: ready.camera, flash: ready.flash, recording: false));
+    emit(
+      Ready(
+        camera: ready.camera,
+        flash: ready.flash,
+        recording: false,
+        torch: ready.torch,
+      ),
+    );
     onCaptured(file);
   }
 
@@ -424,42 +506,61 @@ class _BlocCameraViewState extends State<BlocCameraView> {
         Closed() => const SizedBox.expand(),
         Opening() => const Center(child: CircularProgressIndicator()),
         NoCamera() => const Center(child: Text('This device has no camera.')),
-        Ready(:final camera, :final flash, :final recording) => Column(
-          children: [
-            Expanded(child: Center(child: CameraPreview(camera))),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  key: const Key('flash'),
-                  onPressed: () => bloc.add(const CycleFlash()),
-                  icon: Icon(switch (flash) {
-                    FlashMode.off => Icons.flash_off,
-                    FlashMode.auto => Icons.flash_auto,
-                    _ => Icons.flash_on,
-                  }),
-                ),
-                IconButton(
-                  key: const Key('shutter'),
-                  onPressed: () => bloc.add(const TakePicture()),
-                  icon: const Icon(Icons.camera),
-                ),
-                IconButton(
-                  key: const Key('record'),
-                  onPressed: () => bloc.add(
-                    recording ? const StopRecording() : const StartRecording(),
+        Ready(:final camera, :final flash, :final recording, :final torch) =>
+          Column(
+            children: [
+              Expanded(child: Center(child: CameraPreview(camera))),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  IconButton(
+                    key: const Key('flash'),
+                    onPressed: () => bloc.add(const CycleFlash()),
+                    icon: Icon(switch (flash) {
+                      FlashMode.off => Icons.flash_off,
+                      FlashMode.auto => Icons.flash_auto,
+                      _ => Icons.flash_on,
+                    }),
                   ),
-                  icon: Icon(recording ? Icons.stop : Icons.videocam),
-                ),
-                IconButton(
-                  key: const Key('switch'),
-                  onPressed: () => bloc.add(const SwitchCamera()),
-                  icon: const Icon(Icons.cameraswitch),
-                ),
-              ],
-            ),
-          ],
-        ),
+                  // A switch changes the camera and leaves the state: the
+                  // plugin's controller says which camera it holds.
+                  ValueListenableBuilder<CameraValue>(
+                    valueListenable: camera,
+                    builder: (context, value, _) => hasTorch(value.description)
+                        ? IconButton(
+                            key: const Key('torch'),
+                            onPressed: () => bloc.add(const ToggleTorch()),
+                            icon: Icon(
+                              torch
+                                  ? Icons.flashlight_on
+                                  : Icons.flashlight_off,
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  IconButton(
+                    key: const Key('shutter'),
+                    onPressed: () => bloc.add(const TakePicture()),
+                    icon: const Icon(Icons.camera),
+                  ),
+                  IconButton(
+                    key: const Key('record'),
+                    onPressed: () => bloc.add(
+                      recording
+                          ? const StopRecording()
+                          : const StartRecording(),
+                    ),
+                    icon: Icon(recording ? Icons.stop : Icons.videocam),
+                  ),
+                  IconButton(
+                    key: const Key('switch'),
+                    onPressed: () => bloc.add(const SwitchCamera()),
+                    icon: const Icon(Icons.cameraswitch),
+                  ),
+                ],
+              ),
+            ],
+          ),
         Broken(:final error) => Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,

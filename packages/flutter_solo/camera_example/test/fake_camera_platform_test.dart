@@ -69,6 +69,51 @@ void main() {
     await closed;
   });
 
+  testWidgets('the torch takes time, and the back camera alone has one', (
+    tester,
+  ) async {
+    final platform = FakeCameraPlatform();
+    CameraPlatform.instance = platform;
+    final cameras = await availableCameras();
+    final camera = CameraController(cameras.first, ResolutionPreset.low);
+    final opened = camera.initialize();
+    await tester.pump(platform.openTime);
+    await opened;
+    final lit = camera.setFlashMode(FlashMode.torch);
+    await tester.pump(platform.torchTime);
+    await lit;
+    expect(platform.torchOn(1), isTrue);
+    await camera.setFlashMode(FlashMode.auto);
+    expect(platform.torchOn(1), isFalse);
+    final switched = camera.setDescription(cameras.last);
+    await tester.pump(platform.disposeTime);
+    await tester.pump(platform.openTime);
+    await switched;
+    final front = expectLater(
+      camera.setFlashMode(FlashMode.torch),
+      throwsA(
+        isA<CameraException>().having(
+          (e) => e.description,
+          'description',
+          'Device does not support torch mode',
+        ),
+      ),
+    );
+    await tester.pump(platform.torchTime);
+    await front;
+    expect(platform.log.where((l) => l.startsWith('flash ')), [
+      'flash #1 torch start',
+      'flash #1 torch end',
+      'flash #1 auto',
+      'flash #2 torch start',
+      'flash #2 torch failed',
+    ]);
+    expect(platform.torchOn(2), isFalse);
+    final closed = camera.dispose();
+    await tester.pump(platform.disposeTime);
+    await closed;
+  });
+
   testWidgets('a failed opening has no end line and reaches initialize', (
     tester,
   ) async {

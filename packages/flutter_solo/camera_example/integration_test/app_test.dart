@@ -369,6 +369,84 @@ void main() {
     });
   });
 
+  group('rapid taps of the torch', () {
+    /// The lines of the calls of the flash and the torch on camera [id].
+    List<String> flashes(int id) => [
+      for (final line in trace())
+        if (line.startsWith('flash #$id ')) line,
+    ];
+
+    bool lit(WidgetTester tester) => (state(tester) as Ready).torch;
+
+    phoneTest('off and on while the torch lights: one call', (tester) async {
+      await openCamera(tester);
+      final id = created().single;
+      expect(shown('torch'), isTrue, reason: 'the first camera has no torch');
+      expect(lit(tester), isFalse);
+      await press(tester, 'torch');
+      await reach('flash #$id torch start');
+      await press(tester, 'torch');
+      await press(tester, 'torch');
+      await until(
+        tester,
+        'the torch',
+        () => trace().contains('flash #$id torch end'),
+      );
+      await settle(tester, const Duration(milliseconds: 500));
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'flash #$id torch start',
+          'tap torch',
+          'tap torch',
+          'flash #$id torch end',
+        ]),
+      );
+      expect(flashes(id), ['flash #$id torch start', 'flash #$id torch end']);
+      expect(lit(tester), isTrue);
+      expect(find.byIcon(Icons.flashlight_on), findsOneWidget);
+      journal.note(
+        'torch lit in '
+        '${at('flash #$id torch end') - at('flash #$id torch start')} ms',
+      );
+      await tap(tester, 'torch');
+      await until(tester, 'the torch out', () => !lit(tester));
+      await goBack(tester);
+    });
+
+    phoneTest('on and off during a shot: no call', (tester) async {
+      await openCamera(tester);
+      final id = created().single;
+      expect(shown('torch'), isTrue, reason: 'the first camera has no torch');
+      await press(tester, 'shutter');
+      await reach('capture #$id start');
+      await press(tester, 'torch');
+      await press(tester, 'torch');
+      await until(
+        tester,
+        'the shot',
+        () => trace().contains('capture #$id end'),
+      );
+      await settle(tester, const Duration(seconds: 1));
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'capture #$id start',
+          'tap torch',
+          'tap torch',
+          'capture #$id end',
+        ]),
+      );
+      expect(flashes(id), isEmpty);
+      expect(lit(tester), isFalse);
+      expect(find.byIcon(Icons.flashlight_off), findsOneWidget);
+      await goBack(tester);
+      expectShot();
+    });
+  });
+
   group('a switch during a recording', () {
     phoneTest('a switch while the recording starts waits for the start', (
       tester,

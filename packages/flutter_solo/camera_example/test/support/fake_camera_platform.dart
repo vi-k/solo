@@ -15,8 +15,8 @@ enum FakePhone { android, iphone }
 
 /// A [CameraPlatform] with durations instead of hardware.
 ///
-/// It covers the calls this app makes: opening, a picture, the flash, a
-/// recording with a switch of the camera, and releasing. Zoom, exposure,
+/// It covers the calls this app makes: opening, a picture, the flash and
+/// the torch, a recording with a switch of the camera, and releasing. Zoom, exposure,
 /// focus and the preview pause are not overridden and throw
 /// `UnimplementedError`. [log] holds one line for the
 /// start and one for the end of every call that takes time on a phone, so
@@ -106,6 +106,11 @@ class FakeCameraPlatform extends CameraPlatform {
   /// How long stopping a recording takes.
   Duration stopTime = const Duration(milliseconds: 100);
 
+  /// How long lighting the torch takes: `setFlashMode(FlashMode.torch)`,
+  /// with the lines `flash #N torch start` and `flash #N torch end`. Any
+  /// other mode is set at once, with one line, and puts the torch out.
+  Duration torchTime = const Duration(milliseconds: 50);
+
   /// When set, an opening ends with this exception instead of an event.
   PlatformException? failOpen;
 
@@ -148,6 +153,10 @@ class FakeCameraPlatform extends CameraPlatform {
     final camera = _cameras[cameraId];
     return camera != null && !camera.closed && !camera.previewLost;
   }
+
+  /// Whether the torch of the camera is on: the last mode it was set to is
+  /// `FlashMode.torch`.
+  bool torchOn(int cameraId) => _cameras[cameraId]?.torch ?? false;
 
   /// The platform takes the camera from the app, as another app would.
   void closeFromOutside(int cameraId) {
@@ -263,7 +272,26 @@ class FakeCameraPlatform extends CameraPlatform {
 
   @override
   Future<void> setFlashMode(int cameraId, FlashMode mode) async {
-    log.add('flash #$cameraId ${mode.name}');
+    final camera = _cameras[cameraId];
+    if (mode != FlashMode.torch) {
+      log.add('flash #$cameraId ${mode.name}');
+      camera?.torch = false;
+      return;
+    }
+    log.add('flash #$cameraId torch start');
+    // Both plugins: the flash mode and the torch are one setting, and
+    // `camera_avfoundation` 0.11.1 refuses the torch to a camera without
+    // one. The fake gives a torch to the back camera alone.
+    if (camera?.description.lensDirection != CameraLensDirection.back) {
+      log.add('flash #$cameraId torch failed');
+      throw PlatformException(
+        code: 'setFlashModeFailed',
+        message: 'Device does not support torch mode',
+      );
+    }
+    await Future<void>.delayed(torchTime);
+    camera?.torch = true;
+    log.add('flash #$cameraId torch end');
   }
 
   @override
@@ -443,6 +471,9 @@ class _Camera {
 
   /// The picture in progress, if any.
   _Capture? capture;
+
+  /// The torch is on.
+  bool torch = false;
 
   /// iPhone: the plugin no longer holds this camera.
   bool closed = false;

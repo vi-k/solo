@@ -49,16 +49,56 @@ final class CameraSession extends Solo<CameraState> {
   );
 
   /// Moves the flash to its next mode: off, auto, always, and off again.
+  ///
+  /// The platform has one setting for the flash and the torch: while the
+  /// torch is on, the mode waits in the state, and [toggleTorch] sets it
+  /// when it puts the torch out.
   Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
-    final Ready(:camera, :flash, :recording) = ctx.state;
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     final next = switch (flash) {
       FlashMode.off => FlashMode.auto,
       FlashMode.auto => FlashMode.always,
       _ => FlashMode.off,
     };
-    await ctx.join(() => camera.setFlashMode(next));
-    ctx.emit(Ready(camera: camera, flash: next, recording: recording));
+    if (!torch) await ctx.join(() => camera.setFlashMode(next));
+    ctx.emit(
+      Ready(camera: camera, flash: next, recording: recording, torch: torch),
+    );
   });
+
+  /// The torch the latest tap asked for, and its job, until that job ends.
+  ({bool on, Job<void> job})? _torchAsked;
+
+  /// Turns the torch on or off: a tap asks for the opposite of the tap
+  /// before it, or of the torch when no tap waits.
+  ///
+  /// Only the latest tap waits in the queue, and its job calls nothing
+  /// when the torch is already where the tap asks: taps faster than the
+  /// camera neither blink the torch nor flash it.
+  Job<void> toggleTorch() {
+    final lit = switch (currentState) {
+      Ready(:final torch) => torch,
+      _ => false,
+    };
+    final on = !(_torchAsked?.on ?? lit);
+    final job = enqueue<Ready, void>(
+      key: _Op.torch,
+      policy: Policy.keepLatest,
+      (ctx) async {
+        final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+        if (on == torch || !hasTorch(camera.description)) return;
+        await ctx.join(() => camera.setFlashMode(on ? FlashMode.torch : flash));
+        ctx.emit(
+          Ready(camera: camera, flash: flash, recording: recording, torch: on),
+        );
+      },
+    );
+    _torchAsked = (on: on, job: job);
+    job.whenFinished((_) {
+      if (identical(_torchAsked?.job, job)) _torchAsked = null;
+    });
+    return job;
+  }
 
   /// Moves to the next camera of the device.
   ///
@@ -66,11 +106,12 @@ final class CameraSession extends Solo<CameraState> {
   /// next one, so a switch that fails is [Broken], as a failed opening is.
   /// The camera it opens starts with a flash mode of its own, while the
   /// controller keeps the one it had, so the switch sets the mode of the
-  /// button again. During a recording the camera it had goes on recording,
+  /// button again, or lights the torch again. A camera without a torch
+  /// puts it out. During a recording the camera it had goes on recording,
   /// and a failure stays the error of the job.
   Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     final cameras = await ctx.join(availableCameras);
-    final Ready(:camera, :flash, :recording) = ctx.state;
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
     try {
@@ -82,15 +123,25 @@ final class CameraSession extends Solo<CameraState> {
       return;
     }
     _watch(camera);
-    if (!recording) await ctx.join(() => camera.setFlashMode(flash));
+    final lit = torch && hasTorch(next);
+    if (lit != torch) {
+      ctx.emit(
+        Ready(camera: camera, flash: flash, recording: recording, torch: lit),
+      );
+    }
+    if (!recording) {
+      await ctx.join(() => camera.setFlashMode(lit ? FlashMode.torch : flash));
+    }
   });
 
   /// Starts a video; a tap during a recording adds nothing.
   Job<void> startRecording() => enqueue<Ready, void>((ctx) async {
-    final Ready(:camera, :flash, :recording) = ctx.state;
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     if (recording) return;
     await ctx.join(camera.startVideoRecording);
-    ctx.emit(Ready(camera: camera, flash: flash, recording: true));
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: true, torch: torch),
+    );
   });
 
   /// Stops the video and hands it to [onCaptured]; with no recording it
@@ -99,7 +150,7 @@ final class CameraSession extends Solo<CameraState> {
   /// A stop that fails leaves the plugin's controller recording for good,
   /// so the camera is [Broken] and let go.
   Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-    final Ready(:camera, :flash, :recording) = ctx.state;
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     if (!recording) return null;
     final XFile file;
     try {
@@ -109,7 +160,9 @@ final class CameraSession extends Solo<CameraState> {
       _letGo(camera);
       return null;
     }
-    ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: false, torch: torch),
+    );
     onCaptured(file);
     return file;
   });
@@ -211,7 +264,7 @@ final class CameraSession extends Solo<CameraState> {
 }
 
 /// The keys of the commands whose policy looks at them.
-enum _Op { takePicture }
+enum _Op { takePicture, torch }
 
 /// The `cameraId` of the plugin's controller until the platform has
 /// created its camera: `CameraController.kUninitializedCameraId`, which the

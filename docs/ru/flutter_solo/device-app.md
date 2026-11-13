@@ -1,11 +1,11 @@
 # Приложение устройства
 
 Приложение камеры с двумя экранами. Главный экран показывает последний снимок
-или видео. На экране камеры — превью и кнопки снимка, видео, вспышки и смены
-камеры. Камера — плагин `camera`, и экран владеет ею через `CameraSession`,
-`Solo<CameraState>`. Каждая команда занимает на телефоне время, телефон может
-забрать камеру, а камеру нужно отпустить, прежде чем её откроет следующий
-экран.
+или видео. На экране камеры — превью и кнопки снимка, видео, вспышки, фонарика
+и смены камеры. Камера — плагин `camera`, и экран владеет ею через
+`CameraSession`, `Solo<CameraState>`. Каждая команда занимает на телефоне
+время, телефон может забрать камеру, а камеру нужно отпустить, прежде чем её
+откроет следующий экран.
 
 Разделы о ситуациях приложения открываются первой попыткой — версией, к которой
 ведут README плагина и его пример. Раздел показывает, что этот код делает
@@ -174,6 +174,169 @@ initialize #2 end
 открывается, ждёт в той же очереди, за открытием. Нажатие вспышки ждёт там
 предыдущее и берёт режим из состояния, куда его положило то нажатие.
 
+## Быстрые нажатия фонарика
+
+Пользователь нажимает на фонарик быстрее, чем отвечает камера. Фонарик
+оказывается там, куда его поставило последнее нажатие, и по пути ничего
+не делает. Выключение и новое включение, пока он загорается, оставляют его
+включённым, без мигания; включение и выключение во время снимка оставляют его
+выключенным, без вспышки. Кнопка фонарика стоит рядом с кнопкой вспышки,
+на задней камере.
+
+### Первая попытка
+
+Своего вызова для фонарика у плагина нет: `setFlashMode` с `FlashMode.torch`
+зажигает его, а любой другой режим гасит — и в `camera_avfoundation`,
+и в `camera_android_camerax`. `Ready` получает поле `torch`, а кнопка
+фонарика — команду в очереди кнопок, как у вспышки: каждое нажатие — задача,
+которая переключает фонарик, взяв его положение из состояния. Фонарик гаснет
+в режим кнопки вспышки:
+
+```dart
+// Первая попытка: от быстрых нажатий фонарик мигает и вспыхивает.
+Job<void> toggleTorch() => enqueue<Ready, void>((ctx) async {
+  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+  await ctx.join(() => camera.setFlashMode(torch ? flash : FlashMode.torch));
+  ctx.emit(
+    Ready(camera: camera, flash: flash, recording: recording, torch: !torch),
+  );
+});
+```
+
+Очередь выполняет каждое нажатие по порядку, и фонарик оказывается там, куда
+его поставило последнее. По пути он делает то, о чём просило каждое нажатие.
+Два нажатия во время снимка ждут за снимком, потом зажигают фонарик и гасят
+его — вспышка. Выключение и включение, нажатые, пока фонарик загорается, гасят
+его, как только он загорелся, и зажигают снова — мигание. На фейковой платформе
+фонарик загорается не сразу, от `flash #N torch start` до `flash #N torch end`,
+а гаснет сразу, строкой режима, в который гаснет. Снимок с включением
+и выключением во время него, затем включение, выключение и включение, последние
+два — пока фонарик загорается:
+
+```text
+capture #1 start
+capture #1 end
+flash #1 torch start
+flash #1 torch end
+state Ready
+flash #1 auto
+state Ready
+flash #1 torch start
+flash #1 torch end
+state Ready
+flash #1 auto
+state Ready
+flash #1 torch start
+flash #1 torch end
+state Ready
+```
+
+### Последнее нажатие в очереди
+
+`toggleTorch()` у `CameraSession` берёт положение фонарика, о котором просит
+нажатие, в момент нажатия, а не когда выполняется его задача: противоположное
+предыдущему нажатию, пока задача того нажатия ждёт или выполняется,
+и противоположное фонарику в состоянии, когда ни одно нажатие не ждёт. Задача
+несёт эту цель. `Policy.keepLatest` под собственным ключом оставляет в очереди
+только последнюю из этих задач: новое нажатие встаёт на место ждущего, а идущая
+задача доходит до конца. Задача, которая застаёт фонарик там, куда просит её
+нажатие, ничего не вызывает:
+
+```dart
+({bool on, Job<void> job})? _torchAsked;
+
+Job<void> toggleTorch() {
+  final lit = switch (currentState) {
+    Ready(:final torch) => torch,
+    _ => false,
+  };
+  final on = !(_torchAsked?.on ?? lit);
+  final job = enqueue<Ready, void>(
+    key: _Op.torch,
+    policy: Policy.keepLatest,
+    (ctx) async {
+      final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+      if (on == torch || !hasTorch(camera.description)) return;
+      await ctx.join(() => camera.setFlashMode(on ? FlashMode.torch : flash));
+      ctx.emit(
+        Ready(camera: camera, flash: flash, recording: recording, torch: on),
+      );
+    },
+  );
+  _torchAsked = (on: on, job: job);
+  job.whenFinished((_) {
+    if (identical(_torchAsked?.job, job)) _torchAsked = null;
+  });
+  return job;
+}
+
+enum _Op { takePicture, torch }
+```
+
+`whenFinished` забывает цель, когда задача последнего нажатия закончилась:
+когда она выполнилась и когда её отбросили на старте, потому что камера уже
+не была `Ready`. Задача, которую заменило новое нажатие, тоже заканчивается,
+и её колбэк не трогает новую цель.
+
+Вспышка и фонарик — одна настройка платформы. Пока фонарик горит,
+`cycleFlash()` двигает только режим кнопки, и фонарик гаснет в этот режим:
+
+```dart
+Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
+  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+  final next = switch (flash) {
+    FlashMode.off => FlashMode.auto,
+    FlashMode.auto => FlashMode.always,
+    _ => FlashMode.off,
+  };
+  if (!torch) await ctx.join(() => camera.setFlashMode(next));
+  ctx.emit(
+    Ready(camera: camera, flash: next, recording: recording, torch: torch),
+  );
+});
+```
+
+Плагин не может сказать, есть ли у камеры фонарик, поэтому приложение даёт его
+только задней камере. Смена на другую камеру гасит фонарик, а смена без записи
+зажигает его снова на камере, у которой он есть, как снова ставит режим
+вспышки: [Потеря камеры](#потеря-камеры) показывает смену целиком. Когда
+фонарик выключен, смена оставляет состояние как было, поэтому кнопка слушает
+контроллер плагина, который держит камеру:
+
+```dart
+bool hasTorch(CameraDescription camera) =>
+    camera.lensDirection == CameraLensDirection.back;
+
+ValueListenableBuilder<CameraValue>(
+  valueListenable: camera,
+  builder: (context, value, _) => hasTorch(value.description)
+      ? IconButton(
+          key: const Key('torch'),
+          onPressed: widget.session.toggleTorch,
+          icon: Icon(
+            torch ? Icons.flashlight_on : Icons.flashlight_off,
+          ),
+        )
+      : const SizedBox.shrink(),
+),
+```
+
+Те же нажатия: снимок с включением и выключением во время него, затем
+включение, выключение и включение, последние два — пока фонарик загорается:
+
+```text
+capture #1 start
+capture #1 end
+flash #1 torch start
+flash #1 torch end
+state Ready
+```
+
+От двух нажатий во время снимка строк не остаётся: выключение встало в очереди
+на место включения и застало фонарик выключенным. Из трёх нажатий после снимка
+первое зажигает фонарик, третье встаёт на место второго, а когда оно
+выполняется, фонарик уже горит.
+
 ## Смена камеры во время записи
 
 Пользователь переключается на другую камеру, пока идёт запись видео. Запись
@@ -252,17 +415,21 @@ stop #2 start
 
 ```dart
 Job<void> startRecording() => enqueue<Ready, void>((ctx) async {
-  final Ready(:camera, :flash, :recording) = ctx.state;
+  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
   if (recording) return;
   await ctx.join(camera.startVideoRecording);
-  ctx.emit(Ready(camera: camera, flash: flash, recording: true));
+  ctx.emit(
+    Ready(camera: camera, flash: flash, recording: true, torch: torch),
+  );
 });
 
 Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-  final Ready(:camera, :flash, :recording) = ctx.state;
+  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
   if (!recording) return null;
   final file = await ctx.join(camera.stopVideoRecording);
-  ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+  ctx.emit(
+    Ready(camera: camera, flash: flash, recording: false, torch: torch),
+  );
   onCaptured(file);
   return file;
 });
@@ -747,7 +914,7 @@ Future<void> _initialize(
 
 Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
   final cameras = await ctx.join(availableCameras);
-  final Ready(:camera, :flash, :recording) = ctx.state;
+  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
   final at = cameras.indexWhere((c) => c.name == camera.description.name);
   final next = cameras[(at + 1) % cameras.length];
   try {
@@ -759,7 +926,15 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     return;
   }
   _watch(camera);
-  if (!recording) await ctx.join(() => camera.setFlashMode(flash));
+  final lit = torch && hasTorch(next);
+  if (lit != torch) {
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: recording, torch: lit),
+    );
+  }
+  if (!recording) {
+    await ctx.join(() => camera.setFlashMode(lit ? FlashMode.torch : flash));
+  }
 });
 ```
 
@@ -769,13 +944,15 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
 неудачная смена так же `Broken`. Камера, которую он открывает, начинает
 со своего режима вспышки, а контроллер плагина хранит прежний, поэтому смена
 заново ставит режим кнопки: без этого на iPhone 13 mini кнопка после смены
-показывала `always`, а снимок шёл в `auto`. Во время записи плагин камеру
-не освобождает, камера продолжает писать, а сбой остаётся ошибкой джобы при
-состоянии `Ready`. Стоп, который не удался, — последний путь к `Broken`:
+показывала `always`, а снимок шёл в `auto`. Когда фонарик горит, смена зажигает
+его снова вместо режима; камера без фонарика гасит его в состоянии, и во время
+записи тоже. Во время записи плагин камеру не освобождает, камера продолжает
+писать, а сбой остаётся ошибкой джобы при состоянии `Ready`. Стоп, который
+не удался, — последний путь к `Broken`:
 
 ```dart
 Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-  final Ready(:camera, :flash, :recording) = ctx.state;
+  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
   if (!recording) return null;
   final XFile file;
   try {
@@ -785,7 +962,9 @@ Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
     _letGo(camera);
     return null;
   }
-  ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+  ctx.emit(
+    Ready(camera: camera, flash: flash, recording: false, torch: torch),
+  );
   onCaptured(file);
   return file;
 });
@@ -1054,6 +1233,11 @@ Duration recordStartTime = const Duration(seconds: 1);
 
 /// Сколько длится остановка записи.
 Duration stopTime = const Duration(milliseconds: 100);
+
+/// Сколько фонарик загорается: `setFlashMode(FlashMode.torch)`, со строками
+/// `flash #N torch start` и `flash #N torch end`. Любой другой режим
+/// ставится сразу, одной строкой, и гасит фонарик.
+Duration torchTime = const Duration(milliseconds: 50);
 ```
 
 Где два вызова встречаются, фейк делает то же, что делали телефоны, а `phone`
@@ -1297,12 +1481,16 @@ CameraBloc({required this.onCaptured}) : super(const Closed()) {
 платформе, и прогон приложения через его кнопки в их числе. Код —
 [`camera_bloc.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/lib/camera_bloc.dart)
 в приложении. Переключатель на главном экране выбирает контроллер экрана
-камеры: solo, выбранный по умолчанию, или bloc.
+камеры: solo, выбранный по умолчанию, или bloc. На iPhone 13 mini экран на bloc
+делает то же, что экран на solo, в быстрых нажатиях, при смене камеры во время
+записи, при уходе с экрана и при уходе в фон.
 
 `droppable()` на собственном обработчике отбросил бы второе нажатие затвора,
 но смена камеры перестала бы ждать снимка. В общем обработчике `sequential()`
 читает нажатие, только когда команда перед ним кончилась, а к тому времени
-второе нажатие уже в очереди. Блок отбрасывает его в `add`:
+второе нажатие уже в очереди. Блок отбрасывает его в `add`. Там же получает
+цель и нажатие фонарика — от предыдущего нажатия — и идёт дальше как `SetTorch`
+с целью и номером нажатия:
 
 ```dart
 /// [TakePicture] ждёт в очереди или выполняется: нажатие во время снимка
@@ -1310,15 +1498,35 @@ CameraBloc({required this.onCaptured}) : super(const Closed()) {
 /// читает событие, только когда предыдущее кончилось.
 bool _shooting = false;
 
+/// Фонарик, о котором просил последний [ToggleTorch], пока его [SetTorch]
+/// не выполнился, и номер последнего нажатия.
+bool? _torchAsked;
+int _torchTaps = 0;
+
 @override
 void add(CameraEvent event) {
   if (event is TakePicture) {
     if (_shooting) return;
     _shooting = true;
   }
+  if (event is ToggleTorch) {
+    final lit = switch (state) {
+      Ready(:final torch) => torch,
+      _ => false,
+    };
+    final on = !(_torchAsked ?? lit);
+    _torchAsked = on;
+    super.add(SetTorch(on, ++_torchTaps));
+    return;
+  }
   super.add(event);
 }
 ```
+
+`sequential()` не умеет вынуть событие из очереди, поэтому каждый `SetTorch`
+доходит до обработчика. Обработчик ничего не вызывает для того, чей номер
+обогнало более позднее нажатие, и для того, что застаёт фонарик там, куда
+просит, а последний из них забывает цель.
 
 Потеря меняет состояние, пока команда ждёт камеру. Команда над готовой камерой
 держит состояние, с которого начала, и смотрит на него снова после каждого
@@ -1330,7 +1538,14 @@ Future<void> _startRecording(Emitter<CameraState> emit) async {
   if (ready is! Ready || ready.recording) return;
   await ready.camera.startVideoRecording();
   if (state != ready) return;
-  emit(Ready(camera: ready.camera, flash: ready.flash, recording: true));
+  emit(
+    Ready(
+      camera: ready.camera,
+      flash: ready.flash,
+      recording: true,
+      torch: ready.torch,
+    ),
+  );
 }
 ```
 
@@ -1386,9 +1601,10 @@ case Release(:final done):
 
 `BlocProvider` закрывает созданный им блок без ожидания и ничего не знает
 об экране перед ним. `BlocCameraScreen` владеет блоком через тот же
-`AsyncDataScope`, что и `CameraScreen`, с его `scopeKey` и таймаутами, и отдаёт
-блок вниз через `BlocProvider.value`. Скоуп ждёт освобождения, а затем
-`close()`, как и у сессии:
+`AsyncDataScope`, что и `CameraScreen`, с теми же таймаутами, и отдаёт блок
+вниз через `BlocProvider.value`. Он берёт `scopeKey` у `CameraScreen`, поэтому
+экран камеры на любом из контроллеров ждёт освобождения экрана перед ним. Скоуп
+ждёт освобождения, а затем `close()`, как и у сессии:
 
 ```dart
 disposeData: (bloc) async {
@@ -1415,6 +1631,7 @@ Future<void> letCloseEnd(WidgetTester tester) => tester.runAsync(() async {});
 | Ситуация | bloc | solo | Что понадобилось тестам |
 | --- | --- | --- | --- |
 | Быстрые нажатия | `on<CameraCommand>` с `sequential()`; `_shooting`, который ставится в `add` | очередь `Solo`; `Policy.droppable` на ключе `takePicture` | ничего сверх |
+| Быстрые нажатия фонарика | цель и номер нажатия, которые ставятся в `add`; `SetTorch`, который обработчик пропускает, когда его обогнало более позднее нажатие | `Policy.keepLatest` на ключе `toggleTorch`; цель, взятая в момент нажатия; `whenFinished` | ничего сверх |
 | Смена камеры во время записи | тот же обработчик | та же очередь | ничего сверх |
 | Уход с экрана | `Release` с `Completer`; `AsyncDataScope` со `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` со `scopeKey` | bloc: `letCloseEnd`, для `close()` |
 | Уход в фон | `Suspend` и `Resume` в очереди | `suspend()` и `resume()` в очереди | для упавшего стопа, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |

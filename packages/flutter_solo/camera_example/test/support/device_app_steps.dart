@@ -10,6 +10,38 @@ import 'package:camera/camera.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 
+/// `CameraSession` before "Rapid taps of the torch": the flash button sets
+/// the mode on the platform whatever the torch, and the queue has one key.
+final class SessionBeforeTorch extends Solo<CameraState> {
+  /// Takes every picture the camera makes.
+  final void Function(XFile file) onCaptured;
+
+  SessionBeforeTorch({required this.onCaptured}) : super(const Closed());
+
+  /// "Rapid taps": takes a picture and hands it to [onCaptured].
+  Job<XFile?> takePicture() => enqueue<Ready, XFile?>(
+    key: _Op.takePicture,
+    policy: Policy.droppable,
+    (ctx) async {
+      final file = await ctx.join(ctx.state.camera.takePicture);
+      onCaptured(file);
+      return file;
+    },
+  );
+
+  /// "Rapid taps": moves the flash to its next mode.
+  Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
+    final Ready(:camera, :flash, :recording) = ctx.state;
+    final next = switch (flash) {
+      FlashMode.off => FlashMode.auto,
+      FlashMode.auto => FlashMode.always,
+      _ => FlashMode.off,
+    };
+    await ctx.join(() => camera.setFlashMode(next));
+    ctx.emit(Ready(camera: camera, flash: next, recording: recording));
+  });
+}
+
 /// `CameraSession` before "Losing the camera": the switch does not follow
 /// the errors of the next camera, and a failed stop leaves the state
 /// recording.
@@ -31,10 +63,12 @@ final class SessionBeforeLosing extends Solo<CameraState> {
   /// "A switch during a recording": stops the video and hands it to
   /// [onCaptured].
   Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-    final Ready(:camera, :flash, :recording) = ctx.state;
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     if (!recording) return null;
     final file = await ctx.join(camera.stopVideoRecording);
-    ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: false, torch: torch),
+    );
     onCaptured(file);
     return file;
   });
@@ -79,3 +113,6 @@ final class SessionBeforeDenied extends Solo<CameraState> {
   /// steps are not run.
   void _letGo(CameraController camera) {}
 }
+
+/// The keys of [SessionBeforeTorch].
+enum _Op { takePicture }
