@@ -43,7 +43,9 @@ void main() {
     await tester.pump(platform.openTime);
     await opened;
     await camera.setFlashMode(FlashMode.auto);
-    await camera.startVideoRecording();
+    final recording = camera.startVideoRecording();
+    await tester.pump(platform.recordStartTime);
+    await recording;
     final switched = camera.setDescription(cameras.last);
     await tester.pump(platform.switchTime);
     await switched;
