@@ -18,6 +18,7 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_app.dart';
+import 'package:flutter_solo_camera_example/camera_screen.dart';
 import 'package:flutter_solo_camera_example/camera_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -35,6 +36,18 @@ const _recording = '## A switch during a recording';
 const _recordingQueue = '### The recording in the queue';
 const _leaving = '## Leaving the screen';
 const _release = '### A release the next screen waits for';
+const _background = '## Going to the background';
+const _suspend = '### A suspend in the queue';
+
+/// Home during a recording and back, as both phones report it.
+const _homeAndBack = [
+  AppLifecycleState.inactive,
+  AppLifecycleState.hidden,
+  AppLifecycleState.paused,
+  AppLifecycleState.hidden,
+  AppLifecycleState.inactive,
+  AppLifecycleState.resumed,
+];
 
 /// The Dart files a block of the page may stand in: the app, its tests and
 /// their support, but for the helper that does the checking.
@@ -412,6 +425,151 @@ void main() {
         'goes up to the home screen.',
       );
       expect(platform.openCameras, 0);
+    });
+  });
+
+  group('going to the background', () {
+    for (final phone in FakePhone.values) {
+      testWidgets('the first attempt loses the recording (${phone.name})', (
+        tester,
+      ) async {
+        platform.phone = phone;
+        final journal = Journal(platform);
+        final captured = <XFile>[];
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ReadmeLifecycle(
+                cameras: platform.cameras,
+                onCaptured: captured.add,
+              ),
+            ),
+          ),
+        );
+        await tester.pump(platform.openTime);
+        await tester.tap(find.byKey(const Key('record')));
+        await tester.pump(platform.recordStartTime);
+        for (final state in _homeAndBack) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+          await tester.pump(platform.disposeTime);
+        }
+        await tester.pump(platform.openTime);
+        await tester.tap(find.byKey(const Key('stop')));
+        await tester.pump(platform.stopTime);
+
+        expect(
+          codeMissingFrom(
+            _doc,
+            'test/support/device_app_attempts.dart',
+            under: _first,
+          ),
+          isEmpty,
+        );
+        expect(journal.lines, containsRun(_traceUnder(_background, _first)));
+        expect(captured, isEmpty);
+        expect(platform.log, isNot(contains(startsWith('stop'))));
+        _says(
+          _part(_background, _first),
+          'The trace has no `stop` line: the recording does not reach the '
+          'home screen.',
+        );
+        expect(platform.hasPicture(2), isTrue);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(platform.disposeTime);
+      });
+    }
+
+    testWidgets('the suspend stops the recording, the resume waits', (
+      tester,
+    ) async {
+      final journal = Journal(platform);
+      Solo.observer = journal;
+      final record = find.byKey(const Key('record'));
+      // A scope of scopo builds its ready branch some frames after its
+      // initialization ends.
+      Future<void> untilRecord() async {
+        for (var i = 0; i < 50 && record.evaluate().isEmpty; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+      }
+
+      await tester.pumpWidget(const CameraApp());
+      await tester.tap(find.byKey(const Key('open-camera')));
+      await tester.pumpAndSettle();
+      await untilRecord();
+      await tester.tap(record);
+      await tester.pump(platform.recordStartTime);
+      _homeAndBack.forEach(tester.binding.handleAppLifecycleStateChanged);
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      await untilRecord();
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'lib/camera_session.dart',
+          alsoIn: ['lib/camera_screen.dart'],
+          under: _suspend,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_background, _suspend)));
+      expect(platform.openCameras, 1);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.pump(platform.disposeTime);
+      expect(find.byKey(const Key('last-shot')), findsOneWidget);
+      _says(
+        _part(_background, _suspend),
+        'The stop comes before the release, and the recording goes up to '
+        'the home screen. The camera opens again once the release has '
+        'ended:',
+      );
+      // Coming back at once draws frames during the release, and the
+      // emit after the release would leave the preview on them.
+      expect(tester.takeException(), isNull);
+      _says(
+        _part(_background, _suspend),
+        '`suspend()` emits `Closed` before the release starts, and the screen '
+        'takes the preview down: a preview built on a controller that is being '
+        'released throws `buildPreview() was called on a disposed '
+        'CameraController.`',
+      );
+      expect(platform.openCameras, 0);
+    });
+
+    testWidgets('a permission dialog during the opening releases nothing', (
+      tester,
+    ) async {
+      final session = CameraSession(onCaptured: (XFile file) {});
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CameraView(session: session),
+        ),
+      );
+      session.open();
+      await tester.pump(platform.openTime ~/ 2);
+      // The lifecycle of a permission dialog on both phones.
+      tester.binding
+        ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
+        ..handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(platform.log, isNot(contains(startsWith('dispose'))));
+      expect(platform.openCameras, 1);
+      _says(
+        _part(_background, _suspend),
+        'A dialog that comes while the camera opens releases nothing, and '
+        'the camera opens.',
+      );
+      await tester.pumpWidget(const SizedBox());
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
     });
   });
 

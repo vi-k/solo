@@ -14,6 +14,9 @@ final class CameraSession extends Solo<CameraState> {
 
   CameraSession({required this.onCaptured}) : super(const Closed());
 
+  /// The camera [suspend] let go, for [resume] to open again.
+  CameraDescription? _suspended;
+
   /// Opens the first camera of the device.
   Job<void> open() => enqueue<CameraState, void>((ctx) async {
     ctx.emit(const Opening());
@@ -22,11 +25,7 @@ final class CameraSession extends Solo<CameraState> {
       ctx.emit(const NoCamera());
       return;
     }
-    final camera = CameraController(cameras.first, ResolutionPreset.medium);
-    await ctx.join(camera.initialize);
-    ctx.emit(
-      Ready(camera: camera, flash: camera.value.flashMode, recording: false),
-    );
+    await _initialize(ctx, cameras.first);
   });
 
   /// Takes a picture and hands it to [onCaptured]; a tap during a shot
@@ -81,6 +80,29 @@ final class CameraSession extends Solo<CameraState> {
     return file;
   });
 
+  /// Stops a recording and hands it to [onCaptured], then frees the camera
+  /// on the platform: the app has left the screen.
+  ///
+  /// The state is [Closed] before the release starts: a preview built on a
+  /// controller being disposed throws.
+  Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
+    if (ctx.state case Ready(:final camera, :final recording)) {
+      if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
+      _suspended = camera.description;
+      ctx.emit(const Closed());
+      await ctx.join(camera.dispose);
+    }
+  });
+
+  /// Opens the camera that [suspend] let go: the app is back on the screen.
+  Job<void> resume() => enqueue<CameraState, void>((ctx) async {
+    final description = _suspended;
+    if (description == null) return;
+    _suspended = null;
+    ctx.emit(const Opening());
+    await _initialize(ctx, description);
+  });
+
   /// Frees the camera on the platform; the job ends once the platform has.
   ///
   /// The owner awaits it before [close]: a release started from `onClose`
@@ -91,6 +113,18 @@ final class CameraSession extends Solo<CameraState> {
     }
     ctx.emit(const Closed());
   });
+}
+
+/// Creates the camera of [description] on the platform and opens it.
+Future<void> _initialize(
+  SoloContext<CameraState, CameraState> ctx,
+  CameraDescription description,
+) async {
+  final camera = CameraController(description, ResolutionPreset.medium);
+  await ctx.join(camera.initialize);
+  ctx.emit(
+    Ready(camera: camera, flash: camera.value.flashMode, recording: false),
+  );
 }
 
 /// The keys of the commands whose policy looks at them.

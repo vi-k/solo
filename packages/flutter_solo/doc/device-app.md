@@ -442,3 +442,149 @@ home screen. The second session opens its camera after the first one has
 released its camera and closed: `state Closed` of the first comes before
 `state Opening` of the second. Until then the scope of the new screen waits for
 the key and builds `progressBuilder`, an empty screen.
+
+## Going to the background
+
+A user leaves the app for another one while a video records, and may come back
+at once. The recording is kept and reaches the home screen. The camera is let
+go while the app is away, and coming back opens it again, only once it has been
+let go.
+
+### The first attempt
+
+The plugin's README leaves the lifecycle of the app to the app. Its section
+"Handling Lifecycle states" releases the controller on `inactive` and makes a
+new one for the same camera on `resumed`. The stop button checks that a
+recording is on:
+
+```dart
+// The first attempt: leaving during a recording loses the recording.
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  final CameraController? cameraController = controller;
+
+  // App state changed before we got the chance to initialize.
+  if (cameraController == null || !cameraController.value.isInitialized) {
+    return;
+  }
+
+  if (state == AppLifecycleState.inactive) {
+    cameraController.dispose();
+  } else if (state == AppLifecycleState.resumed) {
+    _initializeCameraController(cameraController.description);
+  }
+}
+
+Future<void> stop() async {
+  final camera = controller;
+  if (camera == null || !camera.value.isRecordingVideo) return;
+  try {
+    widget.onCaptured(await camera.stopVideoRecording());
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+```
+
+On a Galaxy A55 and on an iPhone 13 mini alike, leaving for the home screen of
+the phone gives `inactive`, `hidden` and `paused`, and coming back gives
+`hidden`, `inactive` and `resumed`. `dispose()` on the first `inactive`
+releases the camera under the recording, and nothing asks for the file. The
+controller made on `resumed` has no recording, so a tap of stop does nothing. A
+tap of record, the home screen of the phone and back, then a tap of stop, with
+the fake platform on the rules of either phone, which agree here:
+
+```text
+record #1 start
+record #1 started
+dispose #1 start
+dispose #1 end
+create back #2
+initialize #2 start
+initialize #2 end
+```
+
+The trace has no `stop` line: the recording does not reach the home screen. On
+both phones the recording is lost, and the camera opened on `resumed` works.
+
+### A suspend in the queue
+
+`suspend()` and `resume()` of `CameraSession` are commands in the queue of the
+buttons. `suspend()` stops a recording and hands the file to `onCaptured`
+before it releases the camera, and it keeps the camera it let go; `resume()`
+opens that camera again with `_initialize`, the end of `open()`, which creates
+the controller and initializes it:
+
+```dart
+Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
+  if (ctx.state case Ready(:final camera, :final recording)) {
+    if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
+    _suspended = camera.description;
+    ctx.emit(const Closed());
+    await ctx.join(camera.dispose);
+  }
+});
+
+Job<void> resume() => enqueue<CameraState, void>((ctx) async {
+  final description = _suspended;
+  if (description == null) return;
+  _suspended = null;
+  ctx.emit(const Opening());
+  await _initialize(ctx, description);
+});
+```
+
+`suspend()` emits `Closed` before the release starts, and the screen takes the
+preview down: a preview built on a controller that is being released throws
+`buildPreview() was called on a disposed CameraController.` A `resume()` that
+comes before the release has ended waits behind it in the queue.
+
+`CameraView`, the part of the screen that shows the session, listens to the
+lifecycle of the app for as long as it is there:
+
+```dart
+@override
+void initState() {
+  super.initState();
+  _lifecycle = AppLifecycleListener(
+    onHide: () => widget.session.suspend(),
+    onShow: () => widget.session.resume(),
+  );
+}
+
+@override
+void dispose() {
+  _lifecycle.dispose();
+  super.dispose();
+}
+```
+
+`onHide` comes when the app goes from `inactive` to `hidden`, and `onShow` on
+the way back, from `hidden` to `inactive`. The screen does not release the
+camera on `inactive`: on both phones a permission dialog gives `inactive` and
+`resumed` and nothing else, and the plugin asks for the permission while it
+opens the camera. A dialog that comes while the camera opens releases nothing,
+and the camera opens.
+
+A tap of record, the home screen of the phone and back at once, with the fake
+platform on the Galaxy's rules:
+
+```text
+record #1 start
+record #1 started
+state Ready
+stop #1 start
+record #1 end
+state Closed
+dispose #1 start
+dispose #1 end
+state Opening
+create back #2
+initialize #2 start
+initialize #2 end
+state Ready
+```
+
+The stop comes before the release, and the recording goes up to the home
+screen. The camera opens again once the release has ended: `dispose #1 end`
+comes before `create back #2`.

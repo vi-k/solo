@@ -55,14 +55,39 @@ class CameraScreen extends StatelessWidget {
 }
 
 /// What the camera screen shows for each state of [session].
-class CameraView extends StatelessWidget {
+///
+/// While it is there, it lets the camera go when the app is hidden and
+/// opens it again when the app is shown.
+class CameraView extends StatefulWidget {
   final CameraSession session;
 
   const CameraView({super.key, required this.session});
 
   @override
+  State<CameraView> createState() => _CameraViewState();
+}
+
+class _CameraViewState extends State<CameraView> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(
+      onHide: () => widget.session.suspend(),
+      onShow: () => widget.session.resume(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => SoloBuilder<CameraState>(
-    solo: session,
+    solo: widget.session,
     builder: (context, state, _) => switch (state) {
       Closed() => const SizedBox.expand(),
       Opening() => const Center(child: CircularProgressIndicator()),
@@ -75,7 +100,7 @@ class CameraView extends StatelessWidget {
             children: [
               IconButton(
                 key: const Key('flash'),
-                onPressed: session.cycleFlash,
+                onPressed: widget.session.cycleFlash,
                 icon: Icon(switch (flash) {
                   FlashMode.off => Icons.flash_off,
                   FlashMode.auto => Icons.flash_auto,
@@ -84,19 +109,19 @@ class CameraView extends StatelessWidget {
               ),
               IconButton(
                 key: const Key('shutter'),
-                onPressed: session.takePicture,
+                onPressed: widget.session.takePicture,
                 icon: const Icon(Icons.camera),
               ),
               IconButton(
                 key: const Key('record'),
                 onPressed: recording
-                    ? session.stopRecording
-                    : session.startRecording,
+                    ? widget.session.stopRecording
+                    : widget.session.startRecording,
                 icon: Icon(recording ? Icons.stop : Icons.videocam),
               ),
               IconButton(
                 key: const Key('switch'),
-                onPressed: session.switchCamera,
+                onPressed: widget.session.switchCamera,
                 icon: const Icon(Icons.cameraswitch),
               ),
             ],
@@ -110,7 +135,7 @@ class CameraView extends StatelessWidget {
             Text('The camera failed: $error'),
             TextButton(
               key: const Key('retry'),
-              onPressed: session.open,
+              onPressed: widget.session.open,
               child: const Text('Retry'),
             ),
           ],

@@ -262,6 +262,121 @@ void main() {
     });
   });
 
+  group('the app leaves the foreground', () {
+    /// Shows the view of [session], which listens to the lifecycle of the
+    /// app, and opens the camera.
+    Future<CameraSession> openShown(WidgetTester tester) async {
+      final session = CameraSession(onCaptured: captured.add);
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CameraView(session: session),
+        ),
+      );
+      session.open();
+      await tester.pump(platform.openTime);
+      return session;
+    }
+
+    /// Takes the app through [states] as the platform reports them, all at
+    /// once.
+    void lifecycle(WidgetTester tester, List<AppLifecycleState> states) {
+      for (final state in states) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+    }
+
+    const leave = [AppLifecycleState.inactive, AppLifecycleState.hidden];
+    const back = [AppLifecycleState.inactive, AppLifecycleState.resumed];
+
+    testWidgets('recording is kept when the app leaves', (tester) async {
+      final session = await openShown(tester);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      lifecycle(tester, leave);
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(captured, hasLength(1));
+      expect(captured.single.path, '/fake/video-1.mp4');
+      expect(platform.openCameras, 0);
+      expect(session.currentState, isA<Closed>());
+      expect(
+        platform.log,
+        containsAllInOrder(['record #1 end', 'dispose #1 start']),
+      );
+      lifecycle(tester, back);
+      await tester.pump(platform.openTime);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+
+    testWidgets('coming back opens after the release', (tester) async {
+      final session = await openShown(tester);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      // Shown again at once, the view draws frames during the release: the
+      // end of the recording rebuilds the preview, which must be gone.
+      lifecycle(tester, [...leave, ...back]);
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+
+      expect(
+        platform.log,
+        containsAllInOrder(['dispose #1 end', 'create back #2']),
+      );
+      expect(platform.openCameras, 1);
+      expect(session.currentState, isA<Ready>());
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+
+    testWidgets('coming back opens the camera that was let go', (tester) async {
+      final session = await openShown(tester);
+      session.switchCamera();
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      lifecycle(tester, [...leave, ...back]);
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'create front #2',
+          'dispose #2 end',
+          'create front #3',
+        ]),
+      );
+      expect(session.currentState, isA<Ready>());
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+
+    testWidgets('a permission dialog during open releases nothing', (
+      tester,
+    ) async {
+      final session = CameraSession(onCaptured: captured.add);
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CameraView(session: session),
+        ),
+      );
+      session.open();
+      await tester.pump(platform.openTime ~/ 2);
+      lifecycle(tester, back);
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(platform.log.where((l) => l.startsWith('dispose')), isEmpty);
+      expect(session.currentState, isA<Ready>());
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+  });
+
   testWidgets('release waits for the platform', (tester) async {
     final journal = Journal(platform);
     Solo.observer = journal;

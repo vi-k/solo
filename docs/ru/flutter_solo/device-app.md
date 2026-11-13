@@ -437,3 +437,149 @@ state Ready
 камеру и закрылась: `state Closed` первой идёт раньше `state Opening` второй.
 До тех пор скоуп нового экрана ждёт ключа и строит `progressBuilder` — пустой
 экран.
+
+## Уход в фон
+
+Пользователь уходит из приложения в другое, пока идёт запись видео, и может
+тут же вернуться. Запись сохраняется и доходит до главного экрана. Пока
+приложение в фоне, камера отпущена, а возврат открывает её снова, и только
+после того, как её отпустили.
+
+### Первая попытка
+
+README плагина оставляет жизненный цикл приложения самому приложению. Его
+раздел «Handling Lifecycle states» освобождает контроллер на `inactive`
+и создаёт новый для той же камеры на `resumed`. Кнопка стопа проверяет, что
+запись идёт:
+
+```dart
+// Первая попытка: уход посреди записи теряет запись.
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  final CameraController? cameraController = controller;
+
+  // Состояние приложения сменилось до инициализации.
+  if (cameraController == null || !cameraController.value.isInitialized) {
+    return;
+  }
+
+  if (state == AppLifecycleState.inactive) {
+    cameraController.dispose();
+  } else if (state == AppLifecycleState.resumed) {
+    _initializeCameraController(cameraController.description);
+  }
+}
+
+Future<void> stop() async {
+  final camera = controller;
+  if (camera == null || !camera.value.isRecordingVideo) return;
+  try {
+    widget.onCaptured(await camera.stopVideoRecording());
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+```
+
+На Galaxy A55 и на iPhone 13 mini одинаково: уход на главный экран телефона
+даёт `inactive`, `hidden` и `paused`, а возврат — `hidden`, `inactive`
+и `resumed`. `dispose()` на первом же `inactive` освобождает камеру из-под
+записи, и файл никто не просит. У контроллера, созданного на `resumed`, записи
+нет, поэтому нажатие стопа ничего не делает. Нажатие записи, главный экран
+телефона и обратно, затем нажатие стопа, на фейковой платформе по правилам
+любого из телефонов — здесь они совпадают:
+
+```text
+record #1 start
+record #1 started
+dispose #1 start
+dispose #1 end
+create back #2
+initialize #2 start
+initialize #2 end
+```
+
+В трассе нет строки `stop`: запись до главного экрана не доходит. На обоих
+телефонах запись потеряна, а камера, открытая на `resumed`, работает.
+
+### Приостановка в очереди
+
+`suspend()` и `resume()` у `CameraSession` — команды в очереди кнопок.
+`suspend()` останавливает запись и отдаёт файл в `onCaptured`, прежде чем
+освободить камеру, и запоминает отпущенную камеру; `resume()` открывает эту
+камеру снова через `_initialize` — конец `open()`, который создаёт контроллер
+и инициализирует его:
+
+```dart
+Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
+  if (ctx.state case Ready(:final camera, :final recording)) {
+    if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
+    _suspended = camera.description;
+    ctx.emit(const Closed());
+    await ctx.join(camera.dispose);
+  }
+});
+
+Job<void> resume() => enqueue<CameraState, void>((ctx) async {
+  final description = _suspended;
+  if (description == null) return;
+  _suspended = null;
+  ctx.emit(const Opening());
+  await _initialize(ctx, description);
+});
+```
+
+`suspend()` выдаёт `Closed` до начала освобождения, и экран убирает превью:
+превью, построенное на контроллере, который освобождается, бросает
+`buildPreview() was called on a disposed CameraController.` `resume()`,
+пришедший до конца освобождения, ждёт в очереди за ним.
+
+`CameraView`, часть экрана, которая показывает сессию, слушает жизненный цикл
+приложения, пока она на экране:
+
+```dart
+@override
+void initState() {
+  super.initState();
+  _lifecycle = AppLifecycleListener(
+    onHide: () => widget.session.suspend(),
+    onShow: () => widget.session.resume(),
+  );
+}
+
+@override
+void dispose() {
+  _lifecycle.dispose();
+  super.dispose();
+}
+```
+
+`onHide` приходит, когда приложение переходит из `inactive` в `hidden`,
+а `onShow` — на обратном пути, из `hidden` в `inactive`. На `inactive` экран
+камеру не освобождает: на обоих телефонах диалог разрешения даёт `inactive`
+и `resumed` и больше ничего, а плагин спрашивает разрешение, пока открывает
+камеру. Диалог, пришедший, пока камера открывается, ничего не освобождает,
+и камера открывается.
+
+Нажатие записи, главный экран телефона и сразу обратно, на фейковой платформе
+по правилам Galaxy:
+
+```text
+record #1 start
+record #1 started
+state Ready
+stop #1 start
+record #1 end
+state Closed
+dispose #1 start
+dispose #1 end
+state Opening
+create back #2
+initialize #2 start
+initialize #2 end
+state Ready
+```
+
+Остановка приходит раньше освобождения, и запись доходит до главного экрана.
+Камера открывается снова, когда освобождение кончилось: `dispose #1 end` идёт
+раньше `create back #2`.
