@@ -27,6 +27,9 @@ for what they bring and what breaks there.
 - `doc/mixins.md` adds "A base for both kinds": the shared base as a mixin on
   `SoloController`, for a `Solo` and a `SoloLanes` alike, and the order of
   `with` that decides whether its report of a listener's failure runs.
+- A new guide, [A device app](doc/device-app.md): a camera app on the `camera`
+  plugin, with its code in the repository, a section for each situation of the
+  phone, tests, and the same screen on bloc.
 
 ## 1.1.0
 
