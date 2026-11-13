@@ -286,3 +286,7 @@ stop #1 start
 record #1 end
 state Ready
 ```
+
+The trace has no `dispose` line: the switch releases no camera, and the
+recording goes on from the front one. The stop starts once the switch has ended
+and gives one file.

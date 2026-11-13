@@ -276,6 +276,13 @@ void main() {
         containsRun(_traceUnder(_recording, _recordingQueue)),
       );
       expect(captured, hasLength(1));
+      expect(journal.lines, isNot(contains(startsWith('dispose'))));
+      _says(
+        _part(_recording, _recordingQueue),
+        'The trace has no `dispose` line: the switch releases no camera, and '
+        'the recording goes on from the front one. The stop starts once the '
+        'switch has ended and gives one file.',
+      );
       final released = session.release().done;
       await tester.pump(platform.disposeTime);
       expect(await released, isA<Done<void>>());

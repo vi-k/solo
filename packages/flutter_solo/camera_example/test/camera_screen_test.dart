@@ -87,6 +87,9 @@ void main() {
     expect(find.byIcon(Icons.stop), findsOneWidget);
     await tester.tap(find.byKey(const Key('record')));
     await tester.pump(platform.stopTime);
+    await tester.pump();
+
+    expect(find.byIcon(Icons.videocam), findsOneWidget);
     await goBack(tester);
 
     expect(
