@@ -1,2 +1,6 @@
 # Russian translation, kept in the repository but not published.
 README.ru.md
+
+# The camera app of the device app page: a project of its own, built on this
+# package, and not part of what a user takes.
+camera_example/

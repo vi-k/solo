@@ -236,14 +236,20 @@
 с `--output=none --set-exit-if-changed` и краснеет на неформатированном файле),
 `dart analyze --fatal-infos` без замечаний и `dart test` зелёный
 (`flutter test` для `packages/flutter_solo`). Пример `packages/solo/example/`
-со своим `pubspec.yaml` проверяется отдельно из его папки. Подробности
+со своим `pubspec.yaml` проверяется отдельно из его папки. Приложение
+`packages/flutter_solo/camera_example/` — тоже своё: `dart format`
+на `lib test`, `flutter analyze`, `dart analyze --fatal-infos`, `flutter test`.
+`flutter analyze` пакета `flutter_solo` обходит и приложение, поэтому сперва
+`flutter pub get` в `camera_example`. Приложение зависит от scopo во время
+работы, тогда как `flutter_solo` — только в тестах. Подробности
 в `docs/conventions.md`.
 
 Те же команды гоняет CI — `.github/workflows/gate.yml`, пять заданий: `dart`
 (ядро, его пример, `async_job_lints` и `solo_lints`, без Flutter в PATH — так
 проверяется заодно и обещание «никакого Flutter в ядре»; шаг «Plugins» гоняет
 оба плагина из дерева через сервер анализа, `tool/plugin_probe.py`), `flutter`
-(`flutter_solo` и его пример), `floor` (о нём ниже), `snippets` (пять стендов,
+(`flutter_solo`, его пример и приложение `packages/flutter_solo/camera_example`
+на плагине `camera`), `floor` (о нём ниже), `snippets` (пять стендов,
 `tool/doc_snippets.py`, `tool/accumulation_snippets.py`,
 `tool/adapter_snippets.py`, `tool/riverpod_snippets.py`
 и `tool/bloc_snippets.py`: собирают код `packages/solo/doc/vs-bloc.md`,
@@ -272,7 +278,8 @@ dev-зависимостей, на полу. `tool/archive_floor.py stage <ка�
 краснеет и на пакете без тестов в архиве. Задание ставит Flutter 3.38.1 с его
 Dart 3.10.0 — один SDK на все пять пакетов; скрипт сверяет SDK с полом
 из `pubspec.yaml` и на другом SDK краснеет, поэтому пол поднимают
-в `pubspec.yaml` всех пяти и в задании одним коммитом.
+в `pubspec.yaml` всех пяти, в `pubspec.yaml` приложения `camera_example`
+и в задании одним коммитом.
 
 Локально пол лежит в `~/fvm/versions/3.38.1`. Каталог раскладки — вне
 репозитория: новый, пустой или с прежней раскладкой; в чужой непустой каталог
@@ -315,18 +322,18 @@ PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run <ката
 
 Поэтому между выпусками в дереве живут файлы `pubspec_overrides.yaml` —
 у `packages/solo`, у `packages/solo/example`, у `packages/async_job_lints`,
-у `packages/solo_lints`, у `packages/flutter_solo`
-и у `packages/flutter_solo/example`. Они под гитом, а не в `.gitignore`: их
-состояние — часть состояния репозитория. Первой строкой в каждом комментарий
-о том, до чего оверрайд живёт. Оверрайды обоих пакетов линтов ведут
-на `async_job` и `solo`: против них идут тесты правил. Оверрайд
-`packages/solo_lints` ведёт ещё и на `async_job_lints`: от него `solo_lints`
-зависит во время работы.
+у `packages/solo_lints`, у `packages/flutter_solo`,
+у `packages/flutter_solo/example` и у `packages/flutter_solo/camera_example`.
+Они под гитом, а не в `.gitignore`: их состояние — часть состояния репозитория.
+Первой строкой в каждом комментарий о том, до чего оверрайд живёт. Оверрайды
+обоих пакетов линтов ведут на `async_job` и `solo`: против них идут тесты
+правил. Оверрайд `packages/solo_lints` ведёт ещё и на `async_job_lints`:
+от него `solo_lints` зависит во время работы.
 
-Последний нужен именно отдельным файлом: pub применяет оверрайды только того
-пакета, который разрешает, а путевая зависимость приносит с собой один свой
-`pubspec.yaml`. Без него пример `flutter_solo` разрешается против
-опубликованного `solo` и о дереве не говорит ничего.
+Два последних нужны именно отдельными файлами: pub применяет оверрайды только
+того пакета, который разрешает, а путевая зависимость приносит с собой один
+свой `pubspec.yaml`. Без них пример и приложение `flutter_solo` разрешаются
+против опубликованного `solo` и о дереве не говорят ничего.
 
 Правило простое: **правишь нижний пакет — верни оверрайды**, иначе проверки
 верхнего лгут. Не нужны они только тогда, когда всё опубликовано и правок ниже
@@ -357,8 +364,9 @@ PATH=~/fvm/versions/3.38.1/bin:$PATH python3 tool/archive_floor.py run <ката
 на `engine.dart`, протокол которого меняется и в миноре. Поэтому минорный
 выпуск ядра оставляет `flutter_solo` без разрешимых dev-зависимостей, пока
 не выйдет scopo под новое ядро; `flutter_solo` выходит после него. Пока между
-выпусками живут оверрайды, ломающая правка ядра роняет загрузку одного
-`test/readme_scopo_test.dart`: остальные сторожа README от scopo не зависят.
+выпусками живут оверрайды, ломающая правка ядра роняет загрузку
+`test/readme_scopo_test.dart` и всего приложения `camera_example`, которому
+scopo нужен во время работы: остальные сторожа README от scopo не зависят.
 
 `async_job_lints` и `solo_lints` во время работы от ядра не зависят, но их
 тесты идут против `async_job` и `solo`, и после снятия оверрайдов — против

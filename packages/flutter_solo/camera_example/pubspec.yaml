@@ -1,0 +1,31 @@
+name: flutter_solo_camera_example
+description: A camera app built on flutter_solo, the code of the device app page.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+  flutter: '>=3.38.1'
+
+dependencies:
+  camera: ^0.12.0+2
+  # CameraPlatform and its events are not re-exported by `camera`, and
+  # `depend_on_referenced_packages` wants the direct dependency.
+  camera_platform_interface: ^2.12.0
+  flutter:
+    sdk: flutter
+  flutter_solo:
+    path: ../
+  scopo: ^1.0.0
+
+dev_dependencies:
+  bloc_concurrency: ^0.3.0
+  flutter_bloc: ^9.1.1
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
