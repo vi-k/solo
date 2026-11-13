@@ -350,7 +350,8 @@ class _ReadmeLifecycleState extends State<ReadmeLifecycle>
 }
 
 /// Section 5, losing the camera: the example's listener, which shows
-/// `value.errorDescription` when the controller has one.
+/// `value.errorDescription` when the controller has one. The example shows
+/// it in a snack bar; here it stays on the screen as the shown error.
 class ErrorListener extends StatefulWidget {
   const ErrorListener({
     super.key,

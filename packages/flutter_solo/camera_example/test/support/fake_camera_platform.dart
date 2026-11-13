@@ -24,7 +24,9 @@ enum FakePhone { android, iphone }
 /// The tests run on the fake clock of `testWidgets`: a call that takes
 /// time finishes when the test pumps that long. A recording has a third
 /// line, `record #N started`, when the start of the recording completes:
-/// `record #N start` is the call, `record #N end` the end of the stop.
+/// `record #N start` is the call, `record #N end` the end of the stop. An
+/// error a test sends through [failFromOutside] is the line
+/// `camera #N error`.
 ///
 /// Where a call meets another one, the fake does what the phones did; each
 /// such rule names the phone it was seen on, and [phone] picks between
@@ -145,7 +147,10 @@ class FakeCameraPlatform extends CameraPlatform {
 
   /// The platform reports a failure of the camera.
   void failFromOutside(int cameraId, String description) {
-    _cameras[cameraId]?.errors.add(CameraErrorEvent(cameraId, description));
+    final camera = _cameras[cameraId];
+    if (camera == null) return;
+    log.add('camera #$cameraId error');
+    camera.errors.add(CameraErrorEvent(cameraId, description));
   }
 
   @override
@@ -338,12 +343,15 @@ class FakeCameraPlatform extends CameraPlatform {
         final capture = camera?.capture;
         if (capture != null) {
           // Galaxy: releasing the camera under a picture loses the
-          // picture: an error event, then the capture throws.
+          // picture: an error event, then the capture throws. The line of
+          // the rule is `capture #N failed`.
           capture.timer.cancel();
           camera!.capture = null;
-          failFromOutside(
-            cameraId,
-            'Image capture failed due to the camera being closed.',
+          camera.errors.add(
+            CameraErrorEvent(
+              cameraId,
+              'Image capture failed due to the camera being closed.',
+            ),
           );
           log.add('capture #$cameraId failed');
           capture.shot.completeError(

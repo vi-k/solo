@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
+import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
 import 'camera_state.dart';
@@ -17,8 +20,13 @@ final class CameraSession extends Solo<CameraState> {
   /// The camera [suspend] let go, for [resume] to open again.
   CameraDescription? _suspended;
 
-  /// Opens the first camera of the device.
+  /// The errors the platform reports for the open camera.
+  StreamSubscription<CameraErrorEvent>? _errors;
+
+  /// Opens the first camera of the device; with a camera open already it
+  /// does nothing.
   Job<void> open() => enqueue<CameraState, void>((ctx) async {
+    if (ctx.state is Ready) return;
     ctx.emit(const Opening());
     final cameras = await ctx.join(availableCameras);
     if (cameras.isEmpty) {
@@ -59,6 +67,7 @@ final class CameraSession extends Solo<CameraState> {
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
     await ctx.join(() => camera.setDescription(next));
+    _watch(camera);
   });
 
   /// Starts a video; a tap during a recording adds nothing.
@@ -71,10 +80,20 @@ final class CameraSession extends Solo<CameraState> {
 
   /// Stops the video and hands it to [onCaptured]; with no recording it
   /// gives `null`.
+  ///
+  /// A stop that fails leaves the plugin's controller recording for good,
+  /// so the camera is [Broken] and let go.
   Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
     final Ready(:camera, :flash, :recording) = ctx.state;
     if (!recording) return null;
-    final file = await ctx.join(camera.stopVideoRecording);
+    final XFile file;
+    try {
+      file = await ctx.join(camera.stopVideoRecording);
+    } on CameraException catch (error) {
+      ctx.emit(Broken(error));
+      _letGo(camera);
+      return null;
+    }
     ctx.emit(Ready(camera: camera, flash: flash, recording: false));
     onCaptured(file);
     return file;
@@ -117,18 +136,52 @@ final class CameraSession extends Solo<CameraState> {
     }
     ctx.emit(const Closed());
   });
-}
 
-/// Creates the camera of [description] on the platform and opens it.
-Future<void> _initialize(
-  SoloContext<CameraState, CameraState> ctx,
-  CameraDescription description,
-) async {
-  final camera = CameraController(description, ResolutionPreset.medium);
-  await ctx.join(camera.initialize);
-  ctx.emit(
-    Ready(camera: camera, flash: camera.value.flashMode, recording: false),
-  );
+  @override
+  void onClose() => unawaited(_errors?.cancel());
+
+  /// Creates the camera of [description] on the platform and opens it; a
+  /// camera that fails to open is [Broken] and let go.
+  Future<void> _initialize(
+    SoloContext<CameraState, CameraState> ctx,
+    CameraDescription description,
+  ) async {
+    final camera = CameraController(description, ResolutionPreset.medium);
+    try {
+      await ctx.join(camera.initialize);
+    } on CameraException catch (error) {
+      ctx.emit(Broken(error));
+      _letGo(camera);
+      return;
+    }
+    _watch(camera);
+    ctx.emit(
+      Ready(camera: camera, flash: camera.value.flashMode, recording: false),
+    );
+  }
+
+  /// Follows the errors of [camera] in place of those of the camera before
+  /// it: the id changes with every opening and with a switch without a
+  /// recording.
+  void _watch(CameraController camera) {
+    unawaited(_errors?.cancel());
+    _errors = CameraPlatform.instance
+        .onCameraError(camera.cameraId)
+        .listen((event) => _lose(event.description));
+  }
+
+  /// The platform says the open camera failed: the state shows it at once,
+  /// and the camera is let go.
+  void _lose(String description) {
+    if (currentState case Ready(:final camera)) {
+      externalSetState(Broken(description));
+      _letGo(camera);
+    }
+  }
+
+  /// Frees [camera], which the state no longer holds, in a job of its own.
+  void _letGo(CameraController camera) =>
+      enqueue<CameraState, void>((ctx) => ctx.join(camera.dispose));
 }
 
 /// The keys of the commands whose policy looks at them.

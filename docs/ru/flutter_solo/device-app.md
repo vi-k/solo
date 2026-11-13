@@ -592,3 +592,214 @@ state Ready
 раньше `create back #2`. На Galaxy A55 стоп на `hidden` отдаёт файл, а возврат
 сразу приходит посреди стопа и открывает камеру после освобождения, в том же
 порядке.
+
+## Потеря камеры
+
+Камеру забирает другое приложение, или камера отказывает. Экран показывает сбой
+и кнопку повтора, и повтор открывает камеру снова.
+
+### Первая попытка
+
+Пример плагина слушает свой контроллер и, как только в `value` контроллера
+появляется ошибка, показывает `Camera error` с описанием ошибки. Пример
+показывает этот текст во всплывающей полосе; здесь он остаётся на экране как
+`Text`, так что экран в любой момент говорит, что слушатель показал последним:
+
+```dart
+// Первая попытка: первая ошибка остаётся, а вторую не видно.
+@override
+void initState() {
+  super.initState();
+  camera.addListener(() {
+    if (mounted) setState(() {});
+    if (camera.value.hasError) {
+      show('Camera error ${camera.value.errorDescription}');
+    }
+  });
+  camera.initialize().catchError(show);
+}
+```
+
+Контроллер плагина слушает ошибки своей камеры через
+`onCameraError(cameraId).first`. Первую ошибку он кладёт
+в `value.errorDescription`, никогда её не стирает и следующих ошибок не слышит.
+Каждое следующее изменение `value` — после снимка или нажатия вспышки — находит
+там старую ошибку, и слушатель примера показывает её снова. У экрана нет
+состояния для потерянной камеры и нет способа открыть её заново.
+
+На Galaxy A55 камеру забирает собственное приложение камеры телефона, открытое
+на весь экран: приложение получает ошибку
+`The camera was already in use, possibly by a higher-priority camera client.`
+и никакого события закрытия. После возврата в приложение камера сама работает
+снова. iPhone 13 mini ошибки не присылает: его приложение камеры уводит это
+приложение в фон, а после возврата оттуда камера работает. Строка
+`camera #1 error` — ошибка, о которой сообщает платформа. Камеру забрали,
+снимок и вторая ошибка той же камеры, на фейковой платформе по правилам Galaxy:
+
+```text
+camera #1 error
+capture #1 start
+capture #1 end
+camera #1 error
+```
+
+Снимок проходит, а экран всё ещё говорит
+`Camera error The camera was already in use,
+possibly by a higher-priority camera client.` Вторая ошибка не оставляет следа:
+контроллер перестал слушать после первой.
+
+### Сбой в состоянии
+
+`CameraSession` следит за ошибками своей камеры через собственную подписку. Это
+поле контроллера, а не джоба: джоба, которая следит за потоком, держит очередь,
+пока поток открыт. `id` камеры меняется с каждым открытием и со сменой камеры
+без записи, поэтому `_watch` снимает подписку прежней камеры и оформляет новую,
+а `onClose` снимает последнюю:
+
+```dart
+StreamSubscription<CameraErrorEvent>? _errors;
+
+@override
+void onClose() => unawaited(_errors?.cancel());
+
+void _watch(CameraController camera) {
+  unawaited(_errors?.cancel());
+  _errors = CameraPlatform.instance
+      .onCameraError(camera.cameraId)
+      .listen((event) => _lose(event.description));
+}
+
+void _lose(String description) {
+  if (currentState case Ready(:final camera)) {
+    externalSetState(Broken(description));
+    _letGo(camera);
+  }
+}
+
+void _letGo(CameraController camera) =>
+    enqueue<CameraState, void>((ctx) => ctx.join(camera.dispose));
+```
+
+Ошибка говорит, что камера уже отказала, поэтому `_lose` пишет её в состояние
+сразу, через `externalSetState`, а не в джобе, которая ждала бы за идущей
+командой. Командам кнопок нужен `Ready`, и те, что ждут в очереди,
+на потерянной камере не стартуют. `_letGo` освобождает камеру в отдельной
+джобе. Ошибка, которая застаёт состояние не в `Ready`, ничего не меняет: вторая
+ошибка той же камеры — не второй сбой. Камера, которую Galaxy A55 вернул бы
+сам, тоже освобождается: ошибка не говорит, надолго ли потеря, а повтор откроет
+камеру, когда пользователь вернётся.
+
+Сессия не слушает `onCameraClosing`. Galaxy A55 присылает событие закрытия,
+когда начинается запись, при смене камеры во время записи и после стопа,
+а камера всё это время остаётся открытой; отнятая камера приходит ошибкой.
+
+`open()` ничего не делает, когда камера в `Ready`. Камера открывается
+в `_initialize` — конце `open()`, который начинает следить за ней, когда она
+открылась; смена камеры начинает следить заново, потому что без записи камера
+получает новый `id`:
+
+```dart
+Job<void> open() => enqueue<CameraState, void>((ctx) async {
+  if (ctx.state is Ready) return;
+  ctx.emit(const Opening());
+  final cameras = await ctx.join(availableCameras);
+  if (cameras.isEmpty) {
+    ctx.emit(const NoCamera());
+    return;
+  }
+  await _initialize(ctx, cameras.first);
+});
+
+Future<void> _initialize(
+  SoloContext<CameraState, CameraState> ctx,
+  CameraDescription description,
+) async {
+  final camera = CameraController(description, ResolutionPreset.medium);
+  try {
+    await ctx.join(camera.initialize);
+  } on CameraException catch (error) {
+    ctx.emit(Broken(error));
+    _letGo(camera);
+    return;
+  }
+  _watch(camera);
+  ctx.emit(
+    Ready(camera: camera, flash: camera.value.flashMode, recording: false),
+  );
+}
+
+Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
+  final cameras = await ctx.join(availableCameras);
+  final camera = ctx.state.camera;
+  final at = cameras.indexWhere((c) => c.name == camera.description.name);
+  final next = cameras[(at + 1) % cameras.length];
+  await ctx.join(() => camera.setDescription(next));
+  _watch(camera);
+});
+```
+
+Камера, которая не открылась, тоже `Broken`, и `_letGo` освобождает то, что
+контроллер плагина успел создать на платформе. Стоп, который не удался, —
+третий путь к `Broken`:
+
+```dart
+Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
+  final Ready(:camera, :flash, :recording) = ctx.state;
+  if (!recording) return null;
+  final XFile file;
+  try {
+    file = await ctx.join(camera.stopVideoRecording);
+  } on CameraException catch (error) {
+    ctx.emit(Broken(error));
+    _letGo(camera);
+    return null;
+  }
+  ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+  onCaptured(file);
+  return file;
+});
+```
+
+Контроллер плагина снимает `isRecordingVideo` только после удачного стопа.
+После неудачного он навсегда считает, что пишет: новая запись бросает
+исключение, а смена камеры идёт путём записи. `stopRecording` нужен `Ready`,
+и после того как она выдала `Broken`, её собственные вызовы через `ctx` сдаются
+с `Cancelled`, поэтому освобождение и здесь уходит в отдельную джобу.
+
+Экран показывает `Broken` с кнопкой, которая зовёт `open()`:
+
+```dart
+Broken(:final error) => Center(
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text('The camera failed: $error'),
+      TextButton(
+        key: const Key('retry'),
+        onPressed: widget.session.open,
+        child: const Text('Retry'),
+      ),
+    ],
+  ),
+),
+```
+
+Два нажатия повтора до кадра, который убирает кнопку, ставят в очередь два
+открытия, и второе застаёт камеру открытой. Камеру забрали и дважды нажали
+повтор, на фейковой платформе по правилам Galaxy:
+
+```text
+camera #1 error
+state Broken
+dispose #1 start
+dispose #1 end
+state Opening
+create back #2
+initialize #2 start
+initialize #2 end
+state Ready
+```
+
+`state Broken` идёт сразу за ошибкой, а освобождение — за ним. Открытие
+начинается, когда потерянную камеру освободили, а второе нажатие не оставляет
+строки.

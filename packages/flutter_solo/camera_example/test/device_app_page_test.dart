@@ -5,7 +5,8 @@
 /// the same situation; every sentence a test checks is held to the page
 /// through [_says]. A section adds its checks here: its answer held to
 /// `lib/` with `under:` its heading, its first attempt to
-/// `support/device_app_attempts.dart`.
+/// `support/device_app_attempts.dart`; a block a later section changed
+/// stands in `support/device_app_steps.dart`.
 library;
 
 import 'dart:async';
@@ -20,6 +21,7 @@ import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_app.dart';
 import 'package:flutter_solo_camera_example/camera_screen.dart';
 import 'package:flutter_solo_camera_example/camera_session.dart';
+import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/device_app_attempts.dart';
@@ -28,6 +30,9 @@ import 'support/journal.dart';
 import 'support/page_code.dart';
 
 const _doc = '../doc/device-app.md';
+
+/// The earlier versions of the answers, for a section a later one changed.
+const _steps = 'test/support/device_app_steps.dart';
 const _intro = '# A device app';
 const _rapid = '## Rapid taps';
 const _first = '### The first attempt';
@@ -38,6 +43,8 @@ const _leaving = '## Leaving the screen';
 const _release = '### A release the next screen waits for';
 const _background = '## Going to the background';
 const _suspend = '### A suspend in the queue';
+const _losing = '## Losing the camera';
+const _failure = '### A failure in the state';
 
 /// Home during a recording and back, as both phones report it.
 const _homeAndBack = [
@@ -208,7 +215,12 @@ void main() {
       await tester.pump(platform.openTime);
 
       expect(
-        codeMissingFrom(_doc, 'lib/camera_session.dart', under: _queue),
+        codeMissingFrom(
+          _doc,
+          'lib/camera_session.dart',
+          alsoIn: [_steps],
+          under: _queue,
+        ),
         isEmpty,
       );
       expect(journal.lines, containsRun(_traceUnder(_rapid, _queue)));
@@ -284,6 +296,7 @@ void main() {
         codeMissingFrom(
           _doc,
           'lib/camera_session.dart',
+          alsoIn: [_steps],
           under: _recordingQueue,
         ),
         isEmpty,
@@ -572,6 +585,158 @@ void main() {
       final released = session.release().done;
       await tester.pump(platform.disposeTime);
       expect(await released, isA<Done<void>>());
+      await session.close();
+    });
+  });
+
+  group('losing the camera', () {
+    testWidgets('the first attempt keeps the first error, misses the second', (
+      tester,
+    ) async {
+      final journal = Journal(platform);
+      final captured = <XFile>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ErrorListener(
+              cameras: platform.cameras,
+              onCaptured: captured.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump(platform.openTime);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('shutter')));
+      await tester.pump(platform.captureTime);
+      platform.failFromOutside(1, 'A second failure.');
+      await tester.pump();
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'test/support/device_app_attempts.dart',
+          under: _first,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_losing, _first)));
+      expect(captured, hasLength(1));
+      final shown = 'Camera error ${FakeCameraPlatform.takenOnAndroid}';
+      expect(find.text(shown), findsOneWidget);
+      _says(
+        _part(_losing, _first),
+        'The picture comes through, and the screen still says `$shown` The '
+        'second error leaves no mark:',
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(platform.disposeTime);
+    });
+
+    testWidgets('the failure is the state, and retry opens again', (
+      tester,
+    ) async {
+      final journal = Journal(platform);
+      Solo.observer = journal;
+      final retry = find.byKey(const Key('retry'));
+      final shutter = find.byKey(const Key('shutter'));
+      // A scope of scopo builds its ready branch some frames after its
+      // initialization ends.
+      Future<void> untilShutter() async {
+        for (var i = 0; i < 50 && shutter.evaluate().isEmpty; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+      }
+
+      await tester.pumpWidget(const CameraApp());
+      await tester.tap(find.byKey(const Key('open-camera')));
+      await tester.pumpAndSettle();
+      await untilShutter();
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      // The event comes after the frame it is sent in.
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.text('The camera failed: ${FakeCameraPlatform.takenOnAndroid}'),
+        findsOneWidget,
+      );
+      await tester.tap(retry);
+      await tester.tap(retry);
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      await untilShutter();
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'lib/camera_session.dart',
+          alsoIn: ['lib/camera_screen.dart'],
+          under: _failure,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_losing, _failure)));
+      expect(platform.openCameras, 1);
+      _says(
+        _part(_losing, _failure),
+        'The opening starts once the lost camera is released, and the second '
+        'tap leaves no line.',
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.pump(platform.disposeTime);
+      expect(platform.openCameras, 0);
+    });
+
+    testWidgets("the Galaxy's closing events are not a failure", (
+      tester,
+    ) async {
+      final session = CameraSession(onCaptured: (XFile file) {});
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..startRecording()
+        ..switchCamera()
+        ..stopRecording();
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.switchTime);
+      await tester.pump(platform.stopTime);
+
+      expect(session.currentState, isA<Ready>());
+      _says(
+        _part(_losing, _failure),
+        'The session does not listen to `onCameraClosing`. A Galaxy A55 sends '
+        'a closing event when a recording starts, at a switch during a '
+        'recording and after a stop,',
+      );
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
+    });
+
+    testWidgets('a failed stop is a failure, and the camera is let go', (
+      tester,
+    ) async {
+      platform.failStop = CameraException('stopFailed', 'The stop failed.');
+      final session = CameraSession(onCaptured: (XFile file) {});
+      session.open();
+      await tester.pump(platform.openTime);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      final stopped = session.stopRecording().done;
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(session.currentState, isA<Broken>());
+      expect(await stopped, isA<Done<XFile?>>());
+      expect(platform.openCameras, 0);
+      _says(
+        _part(_losing, _failure),
+        'once it has emitted `Broken` its own calls through `ctx` give up '
+        'with `Cancelled`, so the release goes to a job of its own here too.',
+      );
       await session.close();
     });
   });

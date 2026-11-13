@@ -597,3 +597,215 @@ screen. The camera opens again once the release has ended: `dispose #1 end`
 comes before `create back #2`. On a Galaxy A55 the stop on `hidden` gives the
 file, and a return at once comes in the middle of the stop and opens the camera
 after the release, in the same order.
+
+## Losing the camera
+
+Another app takes the camera, or the camera fails. The screen shows the failure
+and a button to retry, and a retry opens the camera again.
+
+### The first attempt
+
+The plugin's example listens to its controller and, once the controller's
+`value` holds an error, shows `Camera error` with the description of the error.
+The example shows it in a snack bar; here the text stays on the screen as a
+`Text`, so the screen says at any moment what the listener last showed:
+
+```dart
+// The first attempt: the first error stays, and the second is not seen.
+@override
+void initState() {
+  super.initState();
+  camera.addListener(() {
+    if (mounted) setState(() {});
+    if (camera.value.hasError) {
+      show('Camera error ${camera.value.errorDescription}');
+    }
+  });
+  camera.initialize().catchError(show);
+}
+```
+
+The plugin's controller listens to the errors of its camera through
+`onCameraError(cameraId).first`. It puts the first error into
+`value.errorDescription`, never clears it, and hears no error after it. Every
+later change of `value`, after a picture or a tap of the flash, finds the old
+error there, and the example's listener shows it again. The screen has no state
+for a camera that is lost and no way to open it again.
+
+On a Galaxy A55 the phone's own camera app, opened full screen, takes the
+camera: the app gets the error
+`The camera was already in use, possibly by a higher-priority camera client.`
+and no closing event. Back in the app, the camera works again by itself. An
+iPhone 13 mini reports no error: its camera app sends this app to the
+background, and back from there the camera works. A line `camera #1 error` is
+an error the platform reports. The camera taken away, a picture, and a second
+error of the same camera, with the fake platform on the Galaxy's rules:
+
+```text
+camera #1 error
+capture #1 start
+capture #1 end
+camera #1 error
+```
+
+The picture comes through, and the screen still says
+`Camera error The camera was already in use,
+possibly by a higher-priority camera client.` The second error leaves no mark:
+the controller stopped listening after the first.
+
+### A failure in the state
+
+`CameraSession` follows the errors of its camera through a subscription of its
+own. It is a field of the controller rather than a job: a job that follows a
+stream holds the queue for as long as the stream is open. The id of the camera
+changes with every opening and with a switch without a recording, so `_watch`
+drops the subscription of the camera before and makes a new one, and `onClose`
+cancels the last:
+
+```dart
+StreamSubscription<CameraErrorEvent>? _errors;
+
+@override
+void onClose() => unawaited(_errors?.cancel());
+
+void _watch(CameraController camera) {
+  unawaited(_errors?.cancel());
+  _errors = CameraPlatform.instance
+      .onCameraError(camera.cameraId)
+      .listen((event) => _lose(event.description));
+}
+
+void _lose(String description) {
+  if (currentState case Ready(:final camera)) {
+    externalSetState(Broken(description));
+    _letGo(camera);
+  }
+}
+
+void _letGo(CameraController camera) =>
+    enqueue<CameraState, void>((ctx) => ctx.join(camera.dispose));
+```
+
+An error says the camera has already failed, so `_lose` writes it into the
+state at once with `externalSetState`, rather than in a job that would wait
+behind the command under way. The commands of the buttons need `Ready`, and
+those waiting in the queue do not start on a lost camera. `_letGo` releases the
+camera in a job of its own. An error that finds the state other than `Ready`
+changes nothing: a second error of the same camera is not a second failure. The
+camera that a Galaxy A55 would give back by itself is released too: an error
+does not say whether the loss lasts, and Retry opens the camera when the user
+is back.
+
+The session does not listen to `onCameraClosing`. A Galaxy A55 sends a closing
+event when a recording starts, at a switch during a recording and after a stop,
+and the camera stays open all the while; a camera taken away comes as an error.
+
+`open()` does nothing when the camera is `Ready`. A camera opens in
+`_initialize`, the end of `open()`, which watches it once it has opened; a
+switch watches the camera again, since without a recording it gets a new id:
+
+```dart
+Job<void> open() => enqueue<CameraState, void>((ctx) async {
+  if (ctx.state is Ready) return;
+  ctx.emit(const Opening());
+  final cameras = await ctx.join(availableCameras);
+  if (cameras.isEmpty) {
+    ctx.emit(const NoCamera());
+    return;
+  }
+  await _initialize(ctx, cameras.first);
+});
+
+Future<void> _initialize(
+  SoloContext<CameraState, CameraState> ctx,
+  CameraDescription description,
+) async {
+  final camera = CameraController(description, ResolutionPreset.medium);
+  try {
+    await ctx.join(camera.initialize);
+  } on CameraException catch (error) {
+    ctx.emit(Broken(error));
+    _letGo(camera);
+    return;
+  }
+  _watch(camera);
+  ctx.emit(
+    Ready(camera: camera, flash: camera.value.flashMode, recording: false),
+  );
+}
+
+Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
+  final cameras = await ctx.join(availableCameras);
+  final camera = ctx.state.camera;
+  final at = cameras.indexWhere((c) => c.name == camera.description.name);
+  final next = cameras[(at + 1) % cameras.length];
+  await ctx.join(() => camera.setDescription(next));
+  _watch(camera);
+});
+```
+
+A camera that fails to open is `Broken` as well, and `_letGo` releases what the
+plugin's controller has created on the platform. A stop that fails is the third
+way to `Broken`:
+
+```dart
+Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
+  final Ready(:camera, :flash, :recording) = ctx.state;
+  if (!recording) return null;
+  final XFile file;
+  try {
+    file = await ctx.join(camera.stopVideoRecording);
+  } on CameraException catch (error) {
+    ctx.emit(Broken(error));
+    _letGo(camera);
+    return null;
+  }
+  ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+  onCaptured(file);
+  return file;
+});
+```
+
+The plugin's controller turns `isRecordingVideo` off only after a stop that has
+succeeded. After a failed one it believes it records for good: a new recording
+throws, and a switch takes the way of a recording. `stopRecording` needs
+`Ready`, and once it has emitted `Broken` its own calls through `ctx` give up
+with `Cancelled`, so the release goes to a job of its own here too.
+
+The screen shows `Broken` with a button that calls `open()`:
+
+```dart
+Broken(:final error) => Center(
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text('The camera failed: $error'),
+      TextButton(
+        key: const Key('retry'),
+        onPressed: widget.session.open,
+        child: const Text('Retry'),
+      ),
+    ],
+  ),
+),
+```
+
+Two taps of Retry made before the frame that takes the button away queue two
+openings, and the second finds the camera open. The camera taken away and two
+taps of Retry, with the fake platform on the Galaxy's rules:
+
+```text
+camera #1 error
+state Broken
+dispose #1 start
+dispose #1 end
+state Opening
+create back #2
+initialize #2 start
+initialize #2 end
+state Ready
+```
+
+`state Broken` comes right after the error, and the release follows it. The
+opening starts once the lost camera is released, and the second tap leaves no
+line.

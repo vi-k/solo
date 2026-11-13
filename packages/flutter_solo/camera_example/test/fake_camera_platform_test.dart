@@ -109,6 +109,7 @@ void main() {
     expect((await closing).cameraId, 1);
     expect((await errors).description, 'taken');
     expect(camera.value.errorDescription, 'taken');
+    expect(platform.log.last, 'camera #1 error');
     final closed = camera.dispose();
     await tester.pump(platform.disposeTime);
     await closed;
