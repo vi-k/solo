@@ -391,8 +391,13 @@ void controllerCases(MakeDriver make) {
       expect(flashes(), [
         'flash #1 torch start',
         'flash #1 torch end',
+        'flash #1 auto',
         'flash #2 auto',
       ]);
+      expect(
+        platform.log,
+        containsAllInOrder(['flash #1 auto', 'dispose #1 start']),
+      );
       controller.switchCamera();
       await tester.pump(platform.disposeTime);
       await tester.pump(platform.openTime);
@@ -407,6 +412,159 @@ void controllerCases(MakeDriver make) {
       expect(platform.torchOn(3), isFalse);
       await tester.pumpWidget(const SizedBox());
       await finish(tester, controller);
+    });
+
+    // The torch flag of `camera_android_camerax` belongs to the platform,
+    // not to a camera: a torch left lit when its camera goes keeps the next
+    // camera from lighting its own, and a camera without a torch refuses
+    // to put it out. The fake runs as the Galaxy here.
+    group('the torch goes out while its camera is open', () {
+      /// Lights the torch of the camera [controller] opened.
+      Future<void> light(WidgetTester tester, CameraDriver controller) async {
+        controller.toggleTorch();
+        await tester.pump(platform.torchTime);
+        await tester.pump();
+        expect(torch(controller), isTrue);
+      }
+
+      testWidgets('before the release: the next screen lights its torch', (
+        tester,
+      ) async {
+        final first = make(captured.add);
+        first.open();
+        await tester.pump(platform.openTime);
+        await light(tester, first);
+        await finish(tester, first);
+        final next = make(captured.add);
+        next.open();
+        await tester.pump(platform.openTime);
+        await light(tester, next);
+
+        expect(flashes(), [
+          'flash #1 torch start',
+          'flash #1 torch end',
+          'flash #1 auto',
+          'flash #2 torch start',
+          'flash #2 torch end',
+        ]);
+        expect(
+          platform.log,
+          containsAllInOrder(['flash #1 auto', 'dispose #1 start']),
+        );
+        expect(platform.torchOn(2), isTrue);
+        await finish(tester, next);
+      });
+
+      testWidgets('before the app leaves: back, it lights the torch', (
+        tester,
+      ) async {
+        final controller = await openShown(tester);
+        await light(tester, controller);
+        for (final state in [
+          AppLifecycleState.inactive,
+          AppLifecycleState.hidden,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+        await tester.pump();
+        await tester.pump(platform.disposeTime);
+        expect(controller.currentState, isA<Closed>());
+        for (final state in [
+          AppLifecycleState.inactive,
+          AppLifecycleState.resumed,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+        await tester.pump(platform.openTime);
+        expect(torch(controller), isFalse);
+        await light(tester, controller);
+
+        expect(flashes(), [
+          'flash #1 torch start',
+          'flash #1 torch end',
+          'flash #1 auto',
+          'flash #2 torch start',
+          'flash #2 torch end',
+        ]);
+        expect(
+          platform.log,
+          containsAllInOrder(['flash #1 auto', 'dispose #1 start']),
+        );
+        expect(platform.torchOn(2), isTrue);
+        await tester.pumpWidget(const SizedBox());
+        await finish(tester, controller);
+      });
+
+      testWidgets('before a switch to another camera with a torch', (
+        tester,
+      ) async {
+        platform.cameras = const [
+          CameraDescription(
+            name: 'back',
+            lensDirection: CameraLensDirection.back,
+            sensorOrientation: 90,
+          ),
+          CameraDescription(
+            name: 'wide',
+            lensDirection: CameraLensDirection.back,
+            sensorOrientation: 90,
+          ),
+        ];
+        final controller = make(captured.add);
+        controller.open();
+        await tester.pump(platform.openTime);
+        await light(tester, controller);
+        controller.switchCamera();
+        await tester.pump(platform.disposeTime);
+        await tester.pump(platform.openTime);
+        await tester.pump(platform.torchTime);
+        await tester.pump();
+
+        expect(flashes(), [
+          'flash #1 torch start',
+          'flash #1 torch end',
+          'flash #1 auto',
+          'flash #2 torch start',
+          'flash #2 torch end',
+        ]);
+        expect(torch(controller), isTrue);
+        expect(platform.torchOn(2), isTrue);
+        await finish(tester, controller);
+      });
+
+      testWidgets('before a switch to the front during a recording', (
+        tester,
+      ) async {
+        final controller = make(captured.add);
+        controller.open();
+        await tester.pump(platform.openTime);
+        await light(tester, controller);
+        controller
+          ..startRecording()
+          ..switchCamera()
+          ..stopRecording()
+          ..cycleFlash();
+        await tester.pump(platform.recordStartTime);
+        await tester.pump(platform.switchTime);
+        await tester.pump(platform.stopTime);
+        await tester.pump();
+
+        final ready = controller.currentState as Ready;
+        expect(ready.torch, isFalse);
+        expect(ready.flash, FlashMode.always);
+        expect(flashes(), [
+          'flash #1 torch start',
+          'flash #1 torch end',
+          'flash #1 auto',
+          'flash #1 always',
+        ]);
+        expect(
+          platform.log,
+          containsAllInOrder(['flash #1 auto', 'switch #1 front start']),
+        );
+        expect(platform.log, isNot(contains('camera #1 error')));
+        await finish(tester, controller);
+      });
     });
   });
 

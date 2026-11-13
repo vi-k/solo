@@ -187,10 +187,12 @@ back camera.
 
 The plugin has no call of its own for the torch: `setFlashMode` with
 `FlashMode.torch` lights it, and any other mode puts it out, in
-`camera_avfoundation` and in `camera_android_camerax` alike. `Ready` gets a
-field `torch`, and the torch button gets a command in the queue of the buttons,
-the way the flash has: each tap is a job that flips the torch the state holds.
-The torch goes out to the mode of the flash button:
+`camera_avfoundation` and in `camera_android_camerax` alike. The second also
+keeps whether the torch is lit for the platform rather than for a camera; the
+end of the section shows what that costs. `Ready` gets a field `torch`, and the
+torch button gets a command in the queue of the buttons, the way the flash has:
+each tap is a job that flips the torch the state holds. The torch goes out to
+the mode of the flash button:
 
 ```dart
 // The first attempt: rapid taps blink the torch and flash it.
@@ -296,11 +298,13 @@ Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
 ```
 
 The plugin cannot say whether a camera has a torch, so the app gives one to the
-back camera alone. A switch to another camera puts the torch out, and a switch
-without a recording lights it again on a camera that has one, as it sets the
-mode of the flash again: [Losing the camera](#losing-the-camera) shows the
-switch whole. A switch leaves the state as it was when the torch is off, so the
-button listens to the plugin's controller, which holds the camera:
+back camera alone. A switch without a recording puts the torch out and lights
+it again on the next camera if that one has a torch, as it sets the mode of the
+flash again; a switch during a recording keeps the torch on a camera with one
+and puts it out before a camera without one.
+[Losing the camera](#losing-the-camera) shows the switch whole. A switch leaves
+the state as it was when the torch is off, so the button listens to the
+plugin's controller, which holds the camera:
 
 ```dart
 bool hasTorch(CameraDescription camera) =>
@@ -335,6 +339,23 @@ The two taps during the shot leave no line: off took the place of on in the
 queue and found the torch off. Of the three taps after it the first lights the
 torch, the third takes the place of the second, and when it runs, the torch is
 on already.
+
+`camera_android_camerax` 0.7.6+1 keeps whether the torch is lit in a flag of
+the platform, not of a camera, and only `setFlashMode` changes it: a release
+leaves it up, and so does the next camera. With the flag up, `FlashMode.torch`
+returns at once, so the torch of the next camera stays dark while the state and
+the icon say it is lit. Any other mode first puts the torch out on the camera
+open now, and a camera without a torch refuses that with an error of the
+camera, which takes the screen to `Broken`. So the app puts a lit torch out
+while its camera is still open: before a release, before the app leaves the
+foreground, and before a switch, but for a switch during a recording to a
+camera with a torch. [Leaving the screen](#leaving-the-screen),
+[Going to the background](#going-to-the-background) and
+[Losing the camera](#losing-the-camera) show these commands whole. A camera the
+platform has lost takes no more calls, so after a loss the flag stays up: the
+first tap of the torch on the camera opened next changes only the icon. The
+fake platform keeps the flag when it runs as the Galaxy; the Galaxy itself has
+not run the torch.
 
 ## A switch during a recording
 
@@ -527,8 +548,12 @@ second: the preview freezes, and a picture on it never comes.
 
 ```dart
 Job<void> release() => enqueue<CameraState, void>((ctx) async {
-  if (ctx.state case Ready(:final camera)) {
-    await ctx.join(camera.dispose);
+  if (ctx.state case Ready(:final camera, :final flash, :final torch)) {
+    try {
+      if (torch) await ctx.join(() => camera.setFlashMode(flash));
+    } finally {
+      await ctx.join(camera.dispose);
+    }
   }
   ctx.emit(const Closed());
 });
@@ -536,7 +561,9 @@ Job<void> release() => enqueue<CameraState, void>((ctx) async {
 
 It starts once the command before it is over, a picture included, and ends once
 the platform has released the camera. A release that comes while the camera
-opens waits for the opening and releases the camera it opened.
+opens waits for the opening and releases the camera it opened. A lit torch goes
+out first, while the camera is open, for the reason the end of
+[Rapid taps of the torch](#rapid-taps-of-the-torch) gives.
 
 `CameraScreen` owns the session through an `AsyncDataScope` of
 [scopo](https://pub.dev/packages/scopo). The scope makes the session when the
@@ -686,10 +713,16 @@ the controller and initializes it:
 
 ```dart
 Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
-  if (ctx.state case Ready(:final camera, :final recording)) {
+  if (ctx.state case Ready(
+    :final camera,
+    :final flash,
+    :final recording,
+    :final torch,
+  )) {
     _suspended = camera.description;
     try {
       if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
+      if (torch) await ctx.join(() => camera.setFlashMode(flash));
     } finally {
       ctx.emit(const Closed());
       await ctx.join(camera.dispose);
@@ -712,7 +745,8 @@ preview down: a preview built on a controller that is being released throws
 comes a moment before the camera is free, while `release()` emits it once the
 camera is free: in `suspend()` it says the preview is down, and the camera is
 free once `suspend()` has ended. A stop that fails still releases the camera,
-from `finally`, and its failure is the error of `suspend()`. A `resume()` that
+from `finally`, and its failure is the error of `suspend()`. A lit torch goes
+out after the stop and before the release, as in `release()`. A `resume()` that
 comes before the release has ended waits behind it in the queue.
 
 `CameraView`, the part of the screen that shows the session, listens to the
@@ -921,6 +955,10 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
   final Ready(:camera, :flash, :recording, :torch) = ctx.state;
   final at = cameras.indexWhere((c) => c.name == camera.description.name);
   final next = cameras[(at + 1) % cameras.length];
+  if (torch && !(recording && hasTorch(next))) {
+    await ctx.join(() => camera.setFlashMode(flash));
+    ctx.emit(Ready(camera: camera, flash: flash, recording: recording));
+  }
   try {
     await ctx.join(() => camera.setDescription(next));
   } on CameraException catch (error) {
@@ -930,14 +968,14 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     return;
   }
   _watch(camera);
-  final lit = torch && hasTorch(next);
-  if (lit != torch) {
-    ctx.emit(
-      Ready(camera: camera, flash: flash, recording: recording, torch: lit),
-    );
-  }
   if (!recording) {
+    final lit = torch && hasTorch(next);
     await ctx.join(() => camera.setFlashMode(lit ? FlashMode.torch : flash));
+    if (lit) {
+      ctx.emit(
+        Ready(camera: camera, flash: flash, recording: false, torch: true),
+      );
+    }
   }
 });
 ```
@@ -949,11 +987,12 @@ so a switch that fails is `Broken` the same way. The camera it opens starts
 with a flash mode of its own, while the plugin's controller keeps the one it
 had, so the switch sets the mode of the button again: without that, on an
 iPhone 13 mini the button showed `always` after a switch, and the picture was
-taken in `auto`. When the torch is on, the switch lights it again in place of
-the mode; a camera without a torch puts it out in the state, during a recording
-as well. During a recording the plugin does not release the camera, the camera
-goes on recording, and a failure stays the error of the job with the state
-`Ready`. A stop that fails is the last way to `Broken`:
+taken in `auto`. A lit torch goes out before the switch, while its camera is
+open, and lights again in place of the mode on a camera that has one; during a
+recording a camera with a torch keeps it. During a recording the plugin does
+not release the camera, the camera goes on recording, and a failure stays the
+error of the job with the state `Ready`. A stop that fails is the last way to
+`Broken`:
 
 ```dart
 Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
@@ -1490,8 +1529,10 @@ fake platform, the run of the app through its buttons among them. The code is
 [`camera_bloc.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/lib/camera_bloc.dart)
 in the app. A switch on the home screen picks the controller of the camera
 screen: solo, the default, or bloc. On an iPhone 13 mini the screen on bloc
-does what the screen on solo does in rapid taps, a switch during a recording,
-leaving the screen and going to the background.
+does what the screen on solo does in [Rapid taps](#rapid-taps),
+[A switch during a recording](#a-switch-during-a-recording),
+[Leaving the screen](#leaving-the-screen) and
+[Going to the background](#going-to-the-background).
 
 `droppable()` on a handler of its own would drop a second tap of the shutter,
 and the switch would no longer wait for the shot. In the shared handler
@@ -1581,7 +1622,8 @@ Future<void> _letGo() async {
 
 The owner waits for the release through a `Completer` in the event. `close()`
 stops the errors of the platform first: an error after it would add an event to
-a closed bloc, and `add` throws there:
+a closed bloc, and `add` throws there. The release puts a lit torch out first,
+in `_putTorchOut`, as `release()` of the session does:
 
 ```dart
 Future<void> release() {
@@ -1598,7 +1640,11 @@ Future<void> close() {
 
 case Release(:final done):
   try {
-    await _letGo();
+    try {
+      await _putTorchOut();
+    } finally {
+      await _letGo();
+    }
     emit(const Closed());
     done.complete();
   } catch (error, stackTrace) {

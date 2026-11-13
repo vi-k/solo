@@ -114,6 +114,51 @@ void main() {
     await closed;
   });
 
+  testWidgets('the Galaxy keeps the torch flag across cameras', (tester) async {
+    final platform = FakeCameraPlatform();
+    CameraPlatform.instance = platform;
+    final cameras = await availableCameras();
+    final first = CameraController(cameras.first, ResolutionPreset.low);
+    final opened = first.initialize();
+    await tester.pump(platform.openTime);
+    await opened;
+    final lit = first.setFlashMode(FlashMode.torch);
+    await tester.pump(platform.torchTime);
+    await lit;
+    final released = first.dispose();
+    await tester.pump(platform.disposeTime);
+    await released;
+    final next = CameraController(cameras.first, ResolutionPreset.low);
+    final reopened = next.initialize();
+    await tester.pump(platform.openTime);
+    await reopened;
+    await next.setFlashMode(FlashMode.torch);
+    expect(platform.torchOn(2), isFalse);
+    final switched = next.setDescription(cameras.last);
+    await tester.pump(platform.disposeTime);
+    await tester.pump(platform.openTime);
+    await switched;
+    final errors = platform.onCameraError(3).first;
+    await next.setFlashMode(FlashMode.auto);
+    expect(
+      (await errors).description,
+      'java.lang.IllegalStateException: No flash unit',
+    );
+    expect(
+      platform.log.where((l) => l.startsWith('flash ') || l.contains('error')),
+      [
+        'flash #1 torch start',
+        'flash #1 torch end',
+        'flash #2 torch skipped',
+        'camera #3 error',
+        'flash #3 auto',
+      ],
+    );
+    final closed = next.dispose();
+    await tester.pump(platform.disposeTime);
+    await closed;
+  });
+
   testWidgets('a failed opening has no end line and reaches initialize', (
     tester,
   ) async {

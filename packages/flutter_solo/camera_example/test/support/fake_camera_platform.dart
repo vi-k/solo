@@ -15,17 +15,16 @@ enum FakePhone { android, iphone }
 
 /// A [CameraPlatform] with durations instead of hardware.
 ///
-/// It covers the calls this app makes: opening, a picture, the flash and
-/// the torch, a recording with a switch of the camera, and releasing. Zoom, exposure,
-/// focus and the preview pause are not overridden and throw
-/// `UnimplementedError`. [log] holds one line for the
-/// start and one for the end of every call that takes time on a phone, so
-/// the order of the lines is the order in which the platform was asked.
-/// The tests run on the fake clock of `testWidgets`: a call that takes
-/// time finishes when the test pumps that long. A recording has a third
-/// line, `record #N started`, when the start of the recording completes:
-/// `record #N start` is the call, `record #N end` the end of the stop. An
-/// error a test sends through [failFromOutside] is the line
+/// It covers the calls this app makes: opening, a picture, the flash and the
+/// torch, a recording with a switch of the camera, and releasing. Zoom,
+/// exposure, focus and the preview pause are not overridden and throw
+/// `UnimplementedError`. [log] holds one line for the start and one for the end
+/// of every call that takes time on a phone, so the order of the lines is the
+/// order in which the platform was asked. The tests run on the fake clock of
+/// `testWidgets`: a call that takes time finishes when the test pumps that
+/// long. A recording has a third line, `record #N started`, when the start of
+/// the recording completes: `record #N start` is the call, `record #N end` the
+/// end of the stop. An error a test sends through [failFromOutside] is the line
 /// `camera #N error`.
 ///
 /// Where a call meets another one, the fake does what the phones did; each
@@ -110,6 +109,11 @@ class FakeCameraPlatform extends CameraPlatform {
   /// with the lines `flash #N torch start` and `flash #N torch end`. Any
   /// other mode is set at once, with one line, and puts the torch out.
   Duration torchTime = const Duration(milliseconds: 50);
+
+  /// Galaxy: the torch flag of `camera_android_camerax` 0.7.6+1, one for
+  /// the platform rather than one for a camera. Only `setFlashMode` changes
+  /// it: neither a release nor a new camera puts it down.
+  bool _torchEnabled = false;
 
   /// When set, an opening ends with this exception instead of an event.
   PlatformException? failOpen;
@@ -273,6 +277,30 @@ class FakeCameraPlatform extends CameraPlatform {
   @override
   Future<void> setFlashMode(int cameraId, FlashMode mode) async {
     final camera = _cameras[cameraId];
+    final hasTorch =
+        camera?.description.lensDirection == CameraLensDirection.back;
+    if (phone == FakePhone.android && _torchEnabled) {
+      if (mode == FlashMode.torch) {
+        // Galaxy, from the plugin's source: with the flag up the torch is
+        // taken as lit, and the call returns at once.
+        log.add('flash #$cameraId torch skipped');
+        return;
+      }
+      // Galaxy, from the plugin's source: any other mode first puts the
+      // torch out on the camera open now. A camera without one refuses,
+      // and the plugin reports that as an error of the camera; the text is
+      // CameraX's, the event was not filmed.
+      _torchEnabled = false;
+      if (!hasTorch && camera != null) {
+        log.add('camera #$cameraId error');
+        camera.errors.add(
+          CameraErrorEvent(
+            cameraId,
+            'java.lang.IllegalStateException: No flash unit',
+          ),
+        );
+      }
+    }
     if (mode != FlashMode.torch) {
       log.add('flash #$cameraId ${mode.name}');
       camera?.torch = false;
@@ -282,7 +310,7 @@ class FakeCameraPlatform extends CameraPlatform {
     // Both plugins: the flash mode and the torch are one setting, and
     // `camera_avfoundation` 0.11.1 refuses the torch to a camera without
     // one. The fake gives a torch to the back camera alone.
-    if (camera?.description.lensDirection != CameraLensDirection.back) {
+    if (!hasTorch) {
       log.add('flash #$cameraId torch failed');
       throw PlatformException(
         code: 'setFlashModeFailed',
@@ -291,6 +319,7 @@ class FakeCameraPlatform extends CameraPlatform {
     }
     await Future<void>.delayed(torchTime);
     camera?.torch = true;
+    _torchEnabled = true;
     log.add('flash #$cameraId torch end');
   }
 
@@ -338,6 +367,7 @@ class FakeCameraPlatform extends CameraPlatform {
       throw failure;
     }
     log.add('switch #$id $direction end');
+    _cameras[id]?.description = description;
     // Galaxy: the switch rebinds the camera and sends a closing event.
     if (id != null && phone == FakePhone.android) closeFromOutside(id);
   }
@@ -464,7 +494,9 @@ class _Capture {
 class _Camera {
   _Camera(this.description);
 
-  final CameraDescription description;
+  /// The camera it opened, or the one a switch during a recording moved
+  /// it to.
+  CameraDescription description;
   final initialized = StreamController<CameraInitializedEvent>.broadcast();
   final errors = StreamController<CameraErrorEvent>.broadcast();
   final closing = StreamController<CameraClosingEvent>.broadcast();

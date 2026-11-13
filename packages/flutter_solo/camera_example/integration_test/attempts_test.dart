@@ -7,6 +7,7 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -214,6 +215,66 @@ void main() {
       await settle(tester, const Duration(seconds: 4));
       look(tester);
       await finish(tester);
+    });
+  });
+
+  group('the torch, quick taps', () {
+    /// Opens a [FlippingTorch] on the first camera, with no screen: the
+    /// probe reads the calls of the platform, not the picture.
+    Future<FlippingTorch> openTorch(WidgetTester tester) async {
+      await start(tester);
+      journal.note('torch open');
+      final torch = FlippingTorch()..open(cameras.first);
+      await waitFor(
+        () => torch.currentState is Ready,
+        const Duration(seconds: 20),
+      );
+      journal.note('state ${torch.currentState.runtimeType}');
+      return torch;
+    }
+
+    void toggle(FlippingTorch torch) {
+      journal.note('tap torch');
+      torch.toggleTorch();
+    }
+
+    /// Lets the camera go once the torch is out: on the Galaxy a torch
+    /// left lit would keep the plugin's flag up for the next probe.
+    Future<void> close(WidgetTester tester, FlippingTorch torch) async {
+      if (torch.currentState case Ready(torch: true)) {
+        toggle(torch);
+        await settle(tester, const Duration(seconds: 1));
+      }
+      journal.note('finish');
+      journal.note('release ${(await torch.release().done).runtimeType}');
+      await torch.close();
+      await settle(tester, const Duration(seconds: 1));
+    }
+
+    testWidgets('off and on while the torch lights', (tester) async {
+      final torch = await openTorch(tester);
+      toggle(torch);
+      final end = DateTime.now().add(const Duration(seconds: 5));
+      while (!journal.lines.any((l) => l.endsWith(' torch start')) &&
+          DateTime.now().isBefore(end)) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      toggle(torch);
+      toggle(torch);
+      await settle(tester, const Duration(seconds: 2));
+      journal.note('state torch ${(torch.currentState as Ready).torch}');
+      await close(tester, torch);
+    });
+
+    testWidgets('on and off during a shot', (tester) async {
+      final torch = await openTorch(tester);
+      journal.note('tap shutter');
+      torch.takePicture();
+      toggle(torch);
+      toggle(torch);
+      await settle(tester, const Duration(seconds: 3));
+      journal.note('state torch ${(torch.currentState as Ready).torch}');
+      await close(tester, torch);
     });
   });
 

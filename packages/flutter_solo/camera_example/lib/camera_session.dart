@@ -106,14 +106,19 @@ final class CameraSession extends Solo<CameraState> {
   /// next one, so a switch that fails is [Broken], as a failed opening is.
   /// The camera it opens starts with a flash mode of its own, while the
   /// controller keeps the one it had, so the switch sets the mode of the
-  /// button again, or lights the torch again. A camera without a torch
-  /// puts it out. During a recording the camera it had goes on recording,
-  /// and a failure stays the error of the job.
+  /// button again, or lights the torch again. A lit torch goes out before
+  /// the switch, while its camera is open (see [release]), and stays out
+  /// on a camera without one. During a recording the camera it had goes on
+  /// recording, with the torch, and a failure stays the error of the job.
   Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     final cameras = await ctx.join(availableCameras);
     final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
+    if (torch && !(recording && hasTorch(next))) {
+      await ctx.join(() => camera.setFlashMode(flash));
+      ctx.emit(Ready(camera: camera, flash: flash, recording: recording));
+    }
     try {
       await ctx.join(() => camera.setDescription(next));
     } on CameraException catch (error) {
@@ -123,14 +128,14 @@ final class CameraSession extends Solo<CameraState> {
       return;
     }
     _watch(camera);
-    final lit = torch && hasTorch(next);
-    if (lit != torch) {
-      ctx.emit(
-        Ready(camera: camera, flash: flash, recording: recording, torch: lit),
-      );
-    }
     if (!recording) {
+      final lit = torch && hasTorch(next);
       await ctx.join(() => camera.setFlashMode(lit ? FlashMode.torch : flash));
+      if (lit) {
+        ctx.emit(
+          Ready(camera: camera, flash: flash, recording: false, torch: true),
+        );
+      }
     }
   });
 
@@ -171,13 +176,20 @@ final class CameraSession extends Solo<CameraState> {
   /// on the platform: the app has left the screen.
   ///
   /// The state is [Closed] before the release starts: a preview built on a
-  /// controller being disposed throws. A stop that fails still lets the
-  /// camera go, and its error is the error of the job.
+  /// controller being disposed throws. A lit torch goes out before it, as
+  /// in [release]. A stop that fails still lets the camera go, and its
+  /// error is the error of the job.
   Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
-    if (ctx.state case Ready(:final camera, :final recording)) {
+    if (ctx.state case Ready(
+      :final camera,
+      :final flash,
+      :final recording,
+      :final torch,
+    )) {
       _suspended = camera.description;
       try {
         if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
+        if (torch) await ctx.join(() => camera.setFlashMode(flash));
       } finally {
         ctx.emit(const Closed());
         await ctx.join(camera.dispose);
@@ -198,9 +210,18 @@ final class CameraSession extends Solo<CameraState> {
   ///
   /// The owner awaits it before [close]: a release started from `onClose`
   /// would not be waited for.
+  ///
+  /// A lit torch goes out first, while its camera is open:
+  /// `camera_android_camerax` keeps the torch on for the platform rather
+  /// than for a camera, and would take the next camera's torch as lit. A
+  /// camera the platform lost goes without that.
   Job<void> release() => enqueue<CameraState, void>((ctx) async {
-    if (ctx.state case Ready(:final camera)) {
-      await ctx.join(camera.dispose);
+    if (ctx.state case Ready(:final camera, :final flash, :final torch)) {
+      try {
+        if (torch) await ctx.join(() => camera.setFlashMode(flash));
+      } finally {
+        await ctx.join(camera.dispose);
+      }
     }
     ctx.emit(const Closed());
   });

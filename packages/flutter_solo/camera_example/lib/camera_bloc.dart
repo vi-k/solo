@@ -190,7 +190,11 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
           await _resume(emit);
         case Release(:final done):
           try {
-            await _letGo();
+            try {
+              await _putTorchOut();
+            } finally {
+              await _letGo();
+            }
             emit(const Closed());
             done.complete();
           } catch (error, stackTrace) {
@@ -271,13 +275,21 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   /// next one, so a switch that fails is [Broken]; during a recording the
   /// camera goes on recording, and the failure goes on to the zone.
   Future<void> _switchCamera(Emitter<CameraState> emit) async {
-    final ready = state;
+    var ready = state;
     if (ready is! Ready) return;
     final cameras = await availableCameras();
     if (state != ready) return;
     final Ready(:camera, :flash, :recording, :torch) = ready;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
+    // A lit torch goes out while its camera is open (see [_putTorchOut]);
+    // during a recording a camera with a torch keeps it.
+    if (torch && !(recording && hasTorch(next))) {
+      await camera.setFlashMode(flash);
+      if (state != ready) return;
+      ready = Ready(camera: camera, flash: flash, recording: recording);
+      emit(ready);
+    }
     try {
       await camera.setDescription(next);
     } on CameraException catch (error) {
@@ -289,16 +301,15 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     }
     if (state != ready) return;
     _watch(camera);
-    // A camera without a torch puts it out.
-    final lit = torch && hasTorch(next);
-    if (lit != torch) {
-      emit(
-        Ready(camera: camera, flash: flash, recording: recording, torch: lit),
-      );
-    }
     // The camera the plugin opens starts with a flash mode of its own.
     if (!recording) {
+      final lit = torch && hasTorch(next);
       await camera.setFlashMode(lit ? FlashMode.torch : flash);
+      if (lit && state == ready) {
+        emit(
+          Ready(camera: camera, flash: flash, recording: false, torch: true),
+        );
+      }
     }
   }
 
@@ -355,6 +366,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
         final file = await ready.camera.stopVideoRecording();
         if (state == ready) onCaptured(file);
       }
+      await _putTorchOut();
     } finally {
       emit(const Closed());
       await _letGo();
@@ -408,6 +420,16 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     if (state is! Ready) return;
     emit(Broken(event.description));
     add(const LetGo());
+  }
+
+  /// Puts a lit torch out while its camera is open:
+  /// `camera_android_camerax` keeps the torch on for the platform rather
+  /// than for a camera, and would take the next camera's torch as lit. A
+  /// camera the platform lost goes without that.
+  Future<void> _putTorchOut() async {
+    if (state case Ready(:final camera, :final flash, torch: true)) {
+      await camera.setFlashMode(flash);
+    }
   }
 
   /// Frees the camera the platform holds for this bloc, if there is one.
