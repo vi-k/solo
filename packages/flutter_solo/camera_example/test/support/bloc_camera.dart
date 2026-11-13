@@ -107,7 +107,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   StreamSubscription<CameraErrorEvent>? _errors;
 
   /// A [TakePicture] waits in the queue or runs: a tap during a shot is
-  /// dropped. The flag is set in [add], since a transformer sees an event
+  /// dropped. The flag is set in [add], since `sequential()` reads an event
   /// only when the one before it is over.
   bool _shooting = false;
 

@@ -1082,6 +1082,9 @@ Future<void> finish(WidgetTester tester, CameraDriver controller) async {
 }
 ```
 
+`letCloseEnd` is for the bloc of the next section, and the solo cases pass
+without it: [The same screen on bloc](#the-same-screen-on-bloc) explains it.
+
 `controller` is a `CameraDriver`, an interface of the tests with a method for
 each command. For `CameraSession` its `release` reads `done` on the spot, while
 `finish` has not pumped yet:
@@ -1273,18 +1276,11 @@ testWidgets('retry asks again, and the next answer shows (iPhone)', (
 
 ## The same screen on bloc
 
-`CameraBloc` is the controller of the camera screen on bloc: the same states,
-an event for each command of `CameraSession`, and `BlocCameraScreen` with
-`BlocProvider` and `BlocBuilder` over the same buttons. It passes the cases of
-the previous section on the same fake platform, the run of the app through its
-buttons among them. The code is
-[`bloc_camera.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/test/support/bloc_camera.dart)
-in the tests of the app.
-
-The commands share one handler with `sequential()` of `bloc_concurrency`: a
-switch waits for the shot under way, and a stop for the switch. A failure the
-platform reports has a handler of its own, with the default transformer, which
-runs it at once:
+`CameraBloc` is the controller of the camera screen on bloc: the same states
+and an event for each command of `CameraSession`. The commands share one
+handler with `sequential()` of `bloc_concurrency`: a switch waits for the shot
+under way, and a stop for the switch. A failure the platform reports has a
+handler of its own, with the default transformer, which runs it at once:
 
 ```dart
 CameraBloc({required this.onCaptured}) : super(const Closed()) {
@@ -1297,14 +1293,20 @@ CameraBloc({required this.onCaptured}) : super(const Closed()) {
 }
 ```
 
+`BlocCameraScreen` puts the bloc under `BlocProvider` and `BlocBuilder` over
+the same buttons. The bloc passes the cases of the previous section on the same
+fake platform, the run of the app through its buttons among them. The code is
+[`bloc_camera.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/test/support/bloc_camera.dart)
+in the tests of the app.
+
 `droppable()` on a handler of its own would drop a second tap of the shutter,
-and the switch would no longer wait for the shot. In the shared handler a
-transformer sees a tap only when the command before it is over, and by then the
-second tap is in the queue. The bloc drops it in `add`:
+and the switch would no longer wait for the shot. In the shared handler
+`sequential()` reads a tap only when the command before it is over, and by then
+the second tap is in the queue. The bloc drops it in `add`:
 
 ```dart
 /// A [TakePicture] waits in the queue or runs: a tap during a shot is
-/// dropped. The flag is set in [add], since a transformer sees an event
+/// dropped. The flag is set in [add], since `sequential()` reads an event
 /// only when the one before it is over.
 bool _shooting = false;
 
