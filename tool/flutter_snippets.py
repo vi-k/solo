@@ -2290,9 +2290,23 @@ for _path, _taken in ((DOC, _taken_doc), (FLUTTER_README, _taken_readme),
             'the first of them beginning\n    '
             + _left[0].split('\n')[0])
 
+# The documents import material.dart the way a reader's app does. It is
+# deprecated from Flutter 3.47 for package:material_ui, whose releases since
+# 0.0.2 need Flutter 3.44, while the floor is Flutter 3.38.1; the package
+# ignores the deprecation on its own imports. Here `unnecessary_ignore` is
+# on, and the ignore is needed on one side of 3.47 only, so it ignores
+# itself as well, on the line it would be reported at.
+MATERIAL = "import 'package:flutter/material.dart';"
+MATERIAL_IGNORED = (
+    MATERIAL + ' // ignore: deprecated_member_use, unnecessary_ignore'
+)
+
 for key, body in FILES.items():
     directory = f'{ROOT}/flutter_check/test/v'
     os.makedirs(directory, exist_ok=True)
+    body = re.sub(
+        rf'^{re.escape(MATERIAL)}$', lambda _: MATERIAL_IGNORED, body,
+        flags=re.M)
     open(f'{directory}/{key}.dart', 'w').write(body)
 
 open(f'{ROOT}/flutter_check/pubspec.yaml', 'w').write(PUBSPEC)
