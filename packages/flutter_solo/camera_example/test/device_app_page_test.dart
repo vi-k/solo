@@ -8,6 +8,7 @@
 /// `support/device_app_attempts.dart`.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:camera_platform_interface/camera_platform_interface.dart';
@@ -16,6 +17,7 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo_camera_example/camera_app.dart';
 import 'package:flutter_solo_camera_example/camera_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,6 +33,8 @@ const _first = '### The first attempt';
 const _queue = '### One queue for the buttons';
 const _recording = '## A switch during a recording';
 const _recordingQueue = '### The recording in the queue';
+const _leaving = '## Leaving the screen';
+const _release = '### A release the next screen waits for';
 
 /// The Dart files a block of the page may stand in: the app, its tests and
 /// their support, but for the helper that does the checking.
@@ -287,6 +291,127 @@ void main() {
       await tester.pump(platform.disposeTime);
       expect(await released, isA<Done<void>>());
       await session.close();
+    });
+  });
+
+  group('leaving the screen', () {
+    testWidgets('the first attempt loses the shot and opens two cameras', (
+      tester,
+    ) async {
+      // A picture on the Galaxy takes from 0.5 to 3.4 s, longer than the
+      // pop of a route takes to remove the screen.
+      platform.captureTime = const Duration(seconds: 1);
+      final journal = Journal(platform);
+      final captured = <XFile>[];
+      final uncaught = <Object>[];
+      final navigator = GlobalKey<NavigatorState>();
+      Route<void> screen() => MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          body: LeavingShutter(
+            cameras: platform.cameras,
+            onCaptured: captured.add,
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: navigator, home: const SizedBox.expand()),
+      );
+      // The routes live as long as their screens; nothing awaits them.
+      // ignore: unawaited_futures
+      navigator.currentState!.push(screen());
+      await tester.pumpAndSettle();
+      await tester.pump(platform.openTime);
+      // The shot throws once the release takes the camera from under it,
+      // in the zone the tap ran in.
+      await runZonedGuarded(
+        () => tester.tap(find.byKey(const Key('shutter'))),
+        (e, _) => uncaught.add(e),
+      );
+      navigator.currentState!.pop();
+      // ignore: unawaited_futures
+      navigator.currentState!.push(screen());
+      await tester.pumpAndSettle();
+      await tester.pump(platform.captureTime);
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'test/support/device_app_attempts.dart',
+          under: _first,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_leaving, _first)));
+      expect(captured, isEmpty);
+      const thrown = 'A CameraController was used after being disposed.';
+      expect(uncaught.map((e) => '$e'), [contains(thrown)]);
+      _says(_part(_leaving, _first), thrown);
+      expect(platform.hasPicture(2), isFalse);
+      navigator.currentState!.pop();
+      await runZonedGuarded(() async {
+        await tester.pumpAndSettle();
+        await tester.pump(platform.disposeTime);
+      }, (e, _) => uncaught.add(e));
+      expect('${uncaught.last}', contains('IllegalStateException'));
+      _says(
+        _part(_leaving, _first),
+        'its own release throws `IllegalStateException`.',
+      );
+      expect(platform.openCameras, 1);
+    });
+
+    testWidgets('the release waits for the shot, the next screen for it', (
+      tester,
+    ) async {
+      platform.captureTime = const Duration(seconds: 1);
+      final journal = Journal(platform);
+      Solo.observer = journal;
+      final shutter = find.byKey(const Key('shutter'));
+      final openCamera = find.byKey(const Key('open-camera'));
+      // A scope of scopo builds its ready branch some frames after its
+      // initialization ends.
+      Future<void> untilShutter() async {
+        for (var i = 0; i < 50 && shutter.evaluate().isEmpty; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+      }
+
+      await tester.pumpWidget(const CameraApp());
+      await tester.tap(openCamera);
+      await tester.pumpAndSettle();
+      await untilShutter();
+      await tester.tap(shutter);
+      await tester.pump();
+      await tester.pageBack();
+      await tester.pump();
+      await tester.tap(openCamera);
+      await tester.pumpAndSettle();
+      await tester.pump(platform.captureTime);
+      await tester.pump(platform.disposeTime);
+      await untilShutter();
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'lib/camera_screen.dart',
+          alsoIn: ['lib/camera_app.dart', 'lib/camera_session.dart'],
+          under: _release,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_leaving, _release)));
+      expect(platform.openCameras, 1);
+      expect(platform.hasPicture(2), isTrue);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.pump(platform.disposeTime);
+      expect(find.byKey(const Key('last-shot')), findsOneWidget);
+      _says(
+        _part(_leaving, _release),
+        'The release starts once the picture has ended, and the picture '
+        'goes up to the home screen.',
+      );
+      expect(platform.openCameras, 0);
     });
   });
 

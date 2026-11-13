@@ -290,3 +290,151 @@ state Ready
 The trace has no `dispose` line: the switch releases no camera, and the
 recording goes on from the front one. The stop starts once the switch has ended
 and gives one file.
+
+## Leaving the screen
+
+A user leaves the camera screen while a picture is being taken, and may open it
+again at once. The picture reaches the home screen. The camera screen opened
+again opens the camera only once the screen before it has let the camera go.
+
+### The first attempt
+
+The plugin's README releases the controller in `dispose` of the `State`, and
+the screen hands a picture up through `onCaptured`, to the home screen, which
+outlives the camera screen:
+
+```dart
+// The first attempt: leaving loses the shot, and coming back opens two cameras.
+@override
+void dispose() {
+  camera.dispose();
+  super.dispose();
+}
+
+Future<void> shoot() async {
+  // A capture is already pending, do nothing.
+  if (camera.value.isTakingPicture) return;
+  try {
+    widget.onCaptured(await camera.takePicture());
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+```
+
+`dispose` of the `State` comes once the route of the screen has gone, at the
+end of the transition of `pop`, and `camera.dispose()` releases the camera
+whatever the controller is doing. Nothing waits for that release: a camera
+screen pushed again creates its controller on its first frame, while the screen
+before it still holds the camera. A tap of the shutter, then of back, and the
+camera screen opened again at once, with a picture longer than the transition:
+
+```text
+capture #1 start
+create back #2
+initialize #2 start
+initialize #2 end
+dispose #1 start
+capture #1 failed
+dispose #1 end
+```
+
+The second camera is created before the first one is released, and the release
+comes in the middle of the picture. On a Galaxy A55 the release ends the
+picture, and the fake platform does the same. The plugin's `takePicture` then
+writes the `value` of a controller that is disposed by then, and a debug build
+throws `A CameraController was used after being disposed.` rather than the
+`CameraException` the screen catches. The picture does not reach the home
+screen. The second camera, created while the first one was open, shows an empty
+preview, and its own release throws `IllegalStateException`. An iPhone 13 mini
+finishes the picture before it releases the camera, though a picture that
+outlasts the transition throws the same error in a debug build. Its plugin
+holds one camera at a time, and the release of the first camera closes the
+second: the preview freezes, and a picture on it never comes.
+
+### A release the next screen waits for
+
+`release()` of `CameraSession` is a command in the queue of the buttons:
+
+```dart
+Job<void> release() => enqueue<CameraState, void>((ctx) async {
+  if (ctx.state case Ready(:final camera)) {
+    await ctx.join(camera.dispose);
+  }
+  ctx.emit(const Closed());
+});
+```
+
+It starts once the command before it is over, a picture included, and ends once
+the platform has released the camera. A release that comes while the camera
+opens waits for the opening and releases the camera it opened.
+
+`CameraScreen` owns the session through an `AsyncDataScope` of
+[scopo](https://pub.dev/packages/scopo). The scope makes the session when the
+screen comes in. When the screen leaves, the scope runs `disposeData`, which
+awaits the release and closes the session after it: `close()` of a `Solo` does
+not wait for what `onClose` starts. `scopeKey` puts the scopes of all camera
+screens in one queue, which the `AsyncScopeCoordinator` above the navigator
+keeps. A scope with the key starts once the scope before it on the key has
+finished `disposeData`:
+
+```dart
+class CameraApp extends StatelessWidget {
+  const CameraApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => const AsyncScopeCoordinator(
+    child: MaterialApp(title: 'Camera', home: HomeScreen()),
+  );
+}
+```
+
+The wait for the key and the wait for `disposeData` are bounded, 3 s each by
+default, and scopo goes on as if an expired wait had ended. A picture on a
+Galaxy A55 can take more than 3 s, and the release waits for it, so the screen
+sets both to `releaseTimeout`:
+
+```dart
+static const releaseTimeout = Duration(seconds: 10);
+
+@override
+Widget build(BuildContext context) => AsyncDataScope<CameraSession>(
+  scopeKey: CameraScreen,
+  scopeKeyTimeout: releaseTimeout,
+  disposeScopeTimeout: releaseTimeout,
+  initData: (context, ctx) async =>
+      CameraSession(onCaptured: onCaptured)..open(),
+  disposeData: (session) async {
+    try {
+      await session.release().value;
+    } finally {
+      await session.close();
+    }
+  },
+  progressBuilder: (context, progress) => const SizedBox.expand(),
+  errorBuilder: (context, error, stackTrace, progress) =>
+      Center(child: Text('$error')),
+  builder: (context, session) => CameraView(session: session),
+);
+```
+
+The same taps: the shutter, back, and the camera screen opened again at once:
+
+```text
+capture #1 start
+capture #1 end
+dispose #1 start
+dispose #1 end
+state Closed
+state Opening
+create back #2
+initialize #2 start
+initialize #2 end
+state Ready
+```
+
+The release starts once the picture has ended, and the picture goes up to the
+home screen. The second session opens its camera after the first one has
+released its camera and closed: `state Closed` of the first comes before
+`state Opening` of the second. Until then the scope of the new screen waits for
+the key and builds `progressBuilder`, an empty screen.

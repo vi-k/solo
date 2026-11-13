@@ -100,6 +100,69 @@ void main() {
     expect(platform.openCameras, 0);
   });
 
+  testWidgets('a shot started before leaving reaches home', (tester) async {
+    // A picture on the Galaxy takes from 0.5 to 3.4 s, longer than the
+    // pop of a route takes to remove the screen.
+    platform.captureTime = const Duration(seconds: 1);
+    await openCamera(tester);
+    await until(tester, find.byKey(const Key('shutter')));
+    await tester.tap(find.byKey(const Key('shutter')));
+    await tester.pump();
+    await goBack(tester);
+    await tester.pump(platform.captureTime);
+    await tester.pump(platform.disposeTime);
+
+    expect(find.byKey(const Key('last-shot')), findsOneWidget);
+    expect(
+      platform.log,
+      containsAllInOrder(['capture #1 end', 'dispose #1 start']),
+    );
+    expect(platform.openCameras, 0);
+  });
+
+  testWidgets('a new camera screen waits for the old one', (tester) async {
+    await openCamera(tester);
+    await until(tester, find.byKey(const Key('shutter')));
+    await tester.pageBack();
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-camera')));
+    await tester.pumpAndSettle();
+    await tester.pump(platform.disposeTime);
+    await until(tester, find.byKey(const Key('shutter')));
+
+    expect(
+      platform.log,
+      containsAllInOrder(['dispose #1 end', 'create back #2']),
+    );
+    expect(platform.openCameras, 1);
+    expect(platform.hasPicture(2), isTrue);
+    await goBack(tester);
+    expect(platform.openCameras, 0);
+  });
+
+  testWidgets('leaving while the camera opens', (tester) async {
+    // Longer than the pop of a route takes to remove the screen.
+    platform.openTime = const Duration(seconds: 1);
+    await tester.pumpWidget(const CameraApp());
+    await tester.tap(find.byKey(const Key('open-camera')));
+    await tester.pump();
+    // The route is offstage on its first frame, its back button with it.
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(platform.log.last, 'initialize #1 start');
+    await tester.pump(platform.openTime);
+    await tester.pump(platform.disposeTime);
+
+    expect(
+      platform.log,
+      containsAllInOrder(['initialize #1 end', 'dispose #1 start']),
+    );
+    expect(platform.log.where((l) => l == 'dispose #1 start'), hasLength(1));
+    expect(platform.openCameras, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a device without a camera says so', (tester) async {
     platform.cameras = const [];
     await openCamera(tester);

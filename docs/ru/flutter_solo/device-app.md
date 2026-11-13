@@ -286,3 +286,150 @@ state Ready
 
 Строки `dispose` в трассе нет: смена не освобождает камеру, и запись идёт
 дальше с фронтальной. Стоп начинается, когда смена кончилась, и даёт один файл.
+
+## Уход с экрана
+
+Пользователь уходит с экрана камеры, пока идёт снимок, и может тут же открыть
+его снова. Снимок доходит до главного экрана. Заново открытый экран камеры
+открывает камеру только после того, как экран до него её отпустил.
+
+### Первая попытка
+
+README плагина освобождает контроллер в `dispose` у `State`, а экран отдаёт
+снимок наверх через `onCaptured` — главному экрану, который живёт дольше экрана
+камеры:
+
+```dart
+// Первая попытка: уход теряет снимок, а возврат открывает две камеры.
+@override
+void dispose() {
+  camera.dispose();
+  super.dispose();
+}
+
+Future<void> shoot() async {
+  // Снимок уже идёт, ничего не делаем.
+  if (camera.value.isTakingPicture) return;
+  try {
+    widget.onCaptured(await camera.takePicture());
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+```
+
+`dispose` у `State` приходит, когда маршрут экрана уже ушёл, в конце перехода
+`pop`, и `camera.dispose()` освобождает камеру, что бы ни делал контроллер.
+Этого освобождения никто не ждёт: экран камеры, открытый снова, создаёт свой
+контроллер на первом же кадре, пока экран до него ещё держит камеру. Нажатие
+затвора, затем «назад», и сразу снова экран камеры, со снимком дольше перехода:
+
+```text
+capture #1 start
+create back #2
+initialize #2 start
+initialize #2 end
+dispose #1 start
+capture #1 failed
+dispose #1 end
+```
+
+Вторая камера создаётся раньше, чем освобождена первая, а освобождение приходит
+посреди снимка. На Galaxy A55 освобождение обрывает снимок, и фейковая
+платформа делает то же самое. Тогда `takePicture` плагина пишет `value`
+контроллера, который к этому времени освобождён, и отладочная сборка бросает
+`A CameraController was used after being disposed.` вместо `CameraException`,
+которое ловит экран. Снимок до главного экрана не доходит. Вторая камера,
+созданная, пока первая была открыта, показывает пустое превью, а её собственное
+освобождение бросает `IllegalStateException`. iPhone 13 mini доводит снимок
+до конца и только потом освобождает камеру, но снимок, который длится дольше
+перехода, бросает в отладочной сборке ту же ошибку. Его плагин держит одну
+камеру, и освобождение первой камеры закрывает вторую: превью замирает,
+а снимок на ней не приходит никогда.
+
+### Освобождение, которого ждёт следующий экран
+
+`release()` у `CameraSession` — команда в очереди кнопок:
+
+```dart
+Job<void> release() => enqueue<CameraState, void>((ctx) async {
+  if (ctx.state case Ready(:final camera)) {
+    await ctx.join(camera.dispose);
+  }
+  ctx.emit(const Closed());
+});
+```
+
+Она начинается, когда кончилась команда перед ней, в том числе снимок,
+и кончается, когда платформа освободила камеру. Освобождение, пришедшее, пока
+камера открывается, ждёт открытия и освобождает открытую камеру.
+
+`CameraScreen` владеет сессией через `AsyncDataScope` пакета
+[scopo](https://pub.dev/packages/scopo). Скоуп создаёт сессию, когда экран
+появляется. Когда экран уходит, скоуп запускает `disposeData`, а тот ждёт
+освобождения и только после него закрывает сессию: `close()` у `Solo` не ждёт
+того, что запущено в `onClose`. `scopeKey` ставит скоупы всех экранов камеры
+в одну очередь, которую держит `AsyncScopeCoordinator` над навигатором. Скоуп
+с этим ключом начинает работу, когда скоуп перед ним на том же ключе закончил
+`disposeData`:
+
+```dart
+class CameraApp extends StatelessWidget {
+  const CameraApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => const AsyncScopeCoordinator(
+    child: MaterialApp(title: 'Camera', home: HomeScreen()),
+  );
+}
+```
+
+Ожидание ключа и ожидание `disposeData` ограничены, по умолчанию 3 с каждое,
+и scopo продолжает работу так, будто истёкшее ожидание кончилось. Снимок
+на Galaxy A55 может идти дольше 3 с, а освобождение его ждёт, поэтому экран
+ставит оба ограничения в `releaseTimeout`:
+
+```dart
+static const releaseTimeout = Duration(seconds: 10);
+
+@override
+Widget build(BuildContext context) => AsyncDataScope<CameraSession>(
+  scopeKey: CameraScreen,
+  scopeKeyTimeout: releaseTimeout,
+  disposeScopeTimeout: releaseTimeout,
+  initData: (context, ctx) async =>
+      CameraSession(onCaptured: onCaptured)..open(),
+  disposeData: (session) async {
+    try {
+      await session.release().value;
+    } finally {
+      await session.close();
+    }
+  },
+  progressBuilder: (context, progress) => const SizedBox.expand(),
+  errorBuilder: (context, error, stackTrace, progress) =>
+      Center(child: Text('$error')),
+  builder: (context, session) => CameraView(session: session),
+);
+```
+
+Те же нажатия: затвор, «назад» и сразу снова экран камеры:
+
+```text
+capture #1 start
+capture #1 end
+dispose #1 start
+dispose #1 end
+state Closed
+state Opening
+create back #2
+initialize #2 start
+initialize #2 end
+state Ready
+```
+
+Освобождение начинается, когда снимок кончился, и снимок уходит на главный
+экран. Вторая сессия открывает камеру после того, как первая освободила свою
+камеру и закрылась: `state Closed` первой идёт раньше `state Opening` второй.
+До тех пор скоуп нового экрана ждёт ключа и строит `progressBuilder` — пустой
+экран.

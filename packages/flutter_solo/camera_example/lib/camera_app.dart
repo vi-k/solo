@@ -5,16 +5,22 @@ import 'package:camera/camera.dart';
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:scopo/scopo.dart';
 
 import 'camera_screen.dart';
 
 /// The app: the home screen, and the camera screen over it.
+///
+/// The coordinator above the navigator keeps the `scopeKey` of the camera
+/// screen: a camera screen opens the camera only once the one before it
+/// has let the camera go.
 class CameraApp extends StatelessWidget {
   const CameraApp({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      const MaterialApp(title: 'Camera', home: HomeScreen());
+  Widget build(BuildContext context) => const AsyncScopeCoordinator(
+    child: MaterialApp(title: 'Camera', home: HomeScreen()),
+  );
 }
 
 /// The home screen: it opens the camera screen and shows the last picture

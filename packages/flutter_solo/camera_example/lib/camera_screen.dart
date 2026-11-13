@@ -15,8 +15,19 @@ import 'camera_state.dart';
 /// The scope opens the camera when it comes in. When it leaves, it waits
 /// for the camera to be released on the platform, and closes the session
 /// after that; a release that failed is closed all the same, and its error
-/// goes on to the scope.
+/// goes on to the scope. A camera screen opened again waits on the
+/// `scopeKey` for that release before it opens the camera; the key needs
+/// the [AsyncScopeCoordinator] that `CameraApp` puts above the navigator.
 class CameraScreen extends StatelessWidget {
+  /// How long a camera screen waits for the one before it to let the
+  /// camera go, and how long a leaving one waits for its release.
+  ///
+  /// The release waits in the queue behind the command under way: a
+  /// picture takes up to 3.4 s on a Galaxy A55, and a recording up to
+  /// 2.5 s to start on an iPhone 13 mini. With scopo's default of 3 s
+  /// either wait could end first and hand the camera on unreleased.
+  static const releaseTimeout = Duration(seconds: 10);
+
   /// Takes every picture and video the camera makes.
   final void Function(XFile file) onCaptured;
 
@@ -24,6 +35,9 @@ class CameraScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AsyncDataScope<CameraSession>(
+    scopeKey: CameraScreen,
+    scopeKeyTimeout: releaseTimeout,
+    disposeScopeTimeout: releaseTimeout,
     initData: (context, ctx) async =>
         CameraSession(onCaptured: onCaptured)..open(),
     disposeData: (session) async {
