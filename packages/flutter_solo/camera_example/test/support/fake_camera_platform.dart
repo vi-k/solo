@@ -112,6 +112,11 @@ class FakeCameraPlatform extends CameraPlatform {
   /// tests, not a rule of a phone.
   CameraException? failStop;
 
+  /// When set, a switch during a recording ends with this exception, after
+  /// [switchTime], and the recording stays on the camera it had. A knob for
+  /// the tests, not a rule of a phone.
+  CameraException? failSwitch;
+
   /// When set, creating a camera throws this, as both phones do without
   /// the permission: the denial comes from `createCameraWithSettings`,
   /// not from `initialize`. See [deniedOnAndroid] and the others for the texts.
@@ -292,6 +297,11 @@ class FakeCameraPlatform extends CameraPlatform {
     _switching = switched;
     await switched;
     if (identical(_switching, switched)) _switching = null;
+    final failure = failSwitch;
+    if (failure != null) {
+      log.add('switch #$id $direction failed');
+      throw failure;
+    }
     log.add('switch #$id $direction end');
     // Galaxy: the switch rebinds the camera and sends a closing event.
     if (id != null && phone == FakePhone.android) closeFromOutside(id);

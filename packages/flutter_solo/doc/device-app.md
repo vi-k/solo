@@ -682,19 +682,32 @@ void _lose(String description) {
   }
 }
 
-void _letGo(CameraController camera) =>
-    enqueue<CameraState, void>((ctx) => ctx.join(camera.dispose));
+void _letGo(CameraController camera) => enqueueJob(
+  job<CameraState, void>((ctx) => ctx.join(camera.dispose)),
+  first: true,
+);
 ```
 
-An error says the camera has already failed, so `_lose` writes it into the
-state at once with `externalSetState`, rather than in a job that would wait
-behind the command under way. The commands of the buttons need `Ready`, and
-those waiting in the queue do not start on a lost camera. `_letGo` releases the
-camera in a job of its own. An error that finds the state other than `Ready`
-changes nothing: a second error of the same camera is not a second failure. The
-camera that a Galaxy A55 would give back by itself is released too: an error
-does not say whether the loss lasts, and Retry opens the camera when the user
-is back.
+The session takes every error of its camera for a lost camera. This is its own
+choice, not something the plugin says: an error carries only its description,
+and the plugin reports into the same stream errors of a single operation and
+errors it calls recoverable. On Android a picture that failed reports
+`The camera framework failed to fulfill the image capture request.`, and
+CameraX reports an error it says it will recover from; on iOS a recording that
+cannot add its audio output reports
+`Unable to add Audio input/output to session capture`. The cost is that a
+single failed picture ends in `Broken` as well, and the user taps Retry.
+
+`_lose` writes the failure into the state at once with `externalSetState`,
+rather than in a job that would wait behind the command under way. The commands
+of the buttons need `Ready`, and those waiting in the queue do not start on a
+lost camera. `_letGo` releases the camera in a job of its own at the front of
+the queue: a `release()` of a screen that leaves may already wait there, finds
+no camera in `Broken` and would end before the lost one is released. An error
+that finds the state other than `Ready` changes nothing: a second error of the
+same camera is not a second failure. The camera that a Galaxy A55 would give
+back by itself is released too: an error does not say whether the loss lasts,
+and Retry opens the camera when the user is back.
 
 The session does not listen to `onCameraClosing`. A Galaxy A55 sends a closing
 event when a recording starts, at a switch during a recording and after a stop,
@@ -736,17 +749,28 @@ Future<void> _initialize(
 
 Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
   final cameras = await ctx.join(availableCameras);
-  final camera = ctx.state.camera;
+  final Ready(:camera, :recording) = ctx.state;
   final at = cameras.indexWhere((c) => c.name == camera.description.name);
   final next = cameras[(at + 1) % cameras.length];
-  await ctx.join(() => camera.setDescription(next));
+  try {
+    await ctx.join(() => camera.setDescription(next));
+  } on CameraException catch (error) {
+    if (recording) rethrow;
+    ctx.emit(Broken(error));
+    _letGo(camera);
+    return;
+  }
   _watch(camera);
 });
 ```
 
 A camera that fails to open is `Broken` as well, and `_letGo` releases what the
-plugin's controller has created on the platform. A stop that fails is the third
-way to `Broken`:
+plugin's controller has created on the platform. A switch without a recording
+is an opening too: the plugin releases the camera before it opens the next one,
+so a switch that fails is `Broken` the same way. During a recording the plugin
+does not release the camera, the camera goes on recording, and a failure stays
+the error of the job with the state `Ready`. A stop that fails is the last way
+to `Broken`:
 
 ```dart
 Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {

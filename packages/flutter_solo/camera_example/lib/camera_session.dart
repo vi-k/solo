@@ -61,12 +61,24 @@ final class CameraSession extends Solo<CameraState> {
   });
 
   /// Moves to the next camera of the device.
+  ///
+  /// Without a recording the plugin releases the camera before it opens the
+  /// next one, so a switch that fails is [Broken], as a failed opening is.
+  /// During a recording the camera it had goes on recording, and a failure
+  /// stays the error of the job.
   Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     final cameras = await ctx.join(availableCameras);
-    final camera = ctx.state.camera;
+    final Ready(:camera, :recording) = ctx.state;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
-    await ctx.join(() => camera.setDescription(next));
+    try {
+      await ctx.join(() => camera.setDescription(next));
+    } on CameraException catch (error) {
+      if (recording) rethrow;
+      ctx.emit(Broken(error));
+      _letGo(camera);
+      return;
+    }
     _watch(camera);
   });
 
@@ -179,9 +191,13 @@ final class CameraSession extends Solo<CameraState> {
     }
   }
 
-  /// Frees [camera], which the state no longer holds, in a job of its own.
-  void _letGo(CameraController camera) =>
-      enqueue<CameraState, void>((ctx) => ctx.join(camera.dispose));
+  /// Frees [camera], which the state no longer holds, in a job of its own
+  /// ahead of everything waiting in the queue: a [release] that waits there
+  /// finds no camera in [Broken] and would end before this one.
+  void _letGo(CameraController camera) => enqueueJob(
+    job<CameraState, void>((ctx) => ctx.join(camera.dispose)),
+    first: true,
+  );
 }
 
 /// The keys of the commands whose policy looks at them.

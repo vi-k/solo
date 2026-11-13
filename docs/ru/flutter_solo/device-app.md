@@ -676,18 +676,31 @@ void _lose(String description) {
   }
 }
 
-void _letGo(CameraController camera) =>
-    enqueue<CameraState, void>((ctx) => ctx.join(camera.dispose));
+void _letGo(CameraController camera) => enqueueJob(
+  job<CameraState, void>((ctx) => ctx.join(camera.dispose)),
+  first: true,
+);
 ```
 
-Ошибка говорит, что камера уже отказала, поэтому `_lose` пишет её в состояние
-сразу, через `externalSetState`, а не в джобе, которая ждала бы за идущей
-командой. Командам кнопок нужен `Ready`, и те, что ждут в очереди,
-на потерянной камере не стартуют. `_letGo` освобождает камеру в отдельной
-джобе. Ошибка, которая застаёт состояние не в `Ready`, ничего не меняет: вторая
-ошибка той же камеры — не второй сбой. Камера, которую Galaxy A55 вернул бы
-сам, тоже освобождается: ошибка не говорит, надолго ли потеря, а повтор откроет
-камеру, когда пользователь вернётся.
+Сессия считает любую ошибку своей камеры потерей камеры. Это её собственный
+выбор, а не слова плагина: ошибка несёт только описание, а плагин шлёт в тот же
+поток ошибки одной операции и ошибки, которые сам называет восстановимыми.
+На Android неудачный снимок сообщает
+`The camera framework failed to fulfill the image capture request.`, а CameraX
+сообщает об ошибке, от которой обещает восстановиться; на iOS запись, которой
+не удалось добавить выход звука, сообщает
+`Unable to add Audio input/output to session capture`. Цена в том, что и один
+неудачный снимок кончается `Broken`, и пользователь нажимает повтор.
+
+`_lose` пишет сбой в состояние сразу, через `externalSetState`, а не в джобе,
+которая ждала бы за идущей командой. Командам кнопок нужен `Ready`, и те, что
+ждут в очереди, на потерянной камере не стартуют. `_letGo` освобождает камеру
+в отдельной джобе в голове очереди: там уже может ждать `release()` уходящего
+экрана, который в `Broken` камеры не находит и кончился бы раньше, чем
+потерянную камеру освободили. Ошибка, которая застаёт состояние не в `Ready`,
+ничего не меняет: вторая ошибка той же камеры — не второй сбой. Камера, которую
+Galaxy A55 вернул бы сам, тоже освобождается: ошибка не говорит, надолго ли
+потеря, а повтор откроет камеру, когда пользователь вернётся.
 
 Сессия не слушает `onCameraClosing`. Galaxy A55 присылает событие закрытия,
 когда начинается запись, при смене камеры во время записи и после стопа,
@@ -730,17 +743,27 @@ Future<void> _initialize(
 
 Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
   final cameras = await ctx.join(availableCameras);
-  final camera = ctx.state.camera;
+  final Ready(:camera, :recording) = ctx.state;
   final at = cameras.indexWhere((c) => c.name == camera.description.name);
   final next = cameras[(at + 1) % cameras.length];
-  await ctx.join(() => camera.setDescription(next));
+  try {
+    await ctx.join(() => camera.setDescription(next));
+  } on CameraException catch (error) {
+    if (recording) rethrow;
+    ctx.emit(Broken(error));
+    _letGo(camera);
+    return;
+  }
   _watch(camera);
 });
 ```
 
 Камера, которая не открылась, тоже `Broken`, и `_letGo` освобождает то, что
-контроллер плагина успел создать на платформе. Стоп, который не удался, —
-третий путь к `Broken`:
+контроллер плагина успел создать на платформе. Смена камеры без записи — тоже
+открытие: плагин освобождает камеру, прежде чем открыть следующую, поэтому
+неудачная смена так же `Broken`. Во время записи плагин камеру не освобождает,
+камера продолжает писать, а сбой остаётся ошибкой джобы при состоянии `Ready`.
+Стоп, который не удался, — последний путь к `Broken`:
 
 ```dart
 Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {

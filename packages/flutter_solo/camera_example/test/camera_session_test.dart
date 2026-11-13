@@ -508,6 +508,71 @@ void main() {
       await finish(tester, session);
     });
 
+    testWidgets('a failed switch without a recording is a failure', (
+      tester,
+    ) async {
+      final session = await openShown(tester);
+      // Without a recording the switch releases the camera, then opens the
+      // next one, which fails.
+      platform.failOpen = PlatformException(
+        code: 'CameraError',
+        message: 'The camera failed to open.',
+      );
+      session.switchCamera();
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(session.currentState, isA<Broken>());
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'dispose #1 end',
+          'create front #2',
+          'dispose #2 end',
+        ]),
+      );
+      expect(platform.openCameras, 0);
+      platform.failOpen = null;
+      await tester.pump();
+      await tester.tap(retry);
+      await tester.pump(platform.openTime);
+
+      expect(session.currentState, isA<Ready>());
+      expect(platform.openCameras, 1);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+
+    testWidgets('a failed switch during a recording keeps the camera', (
+      tester,
+    ) async {
+      final unanswered = <Object>[];
+      Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+          unanswered.add(error);
+      addTearDown(() => Solo.unansweredHandler = null);
+      platform.failSwitch = CameraException('switchFailed', 'It failed.');
+      final session = await openShown(tester);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      session.switchCamera();
+      await tester.pump(platform.switchTime);
+
+      // The recording goes on from the camera it had, and the state says so.
+      expect(
+        session.currentState,
+        isA<Ready>().having((s) => s.recording, 'recording', isTrue),
+      );
+      expect(platform.log, isNot(contains(startsWith('dispose'))));
+      expect(unanswered, [isA<CameraException>()]);
+      platform.failSwitch = null;
+      final stopped = session.stopRecording().value;
+      await tester.pump(platform.stopTime);
+      expect((await stopped)?.path, '/fake/video-1.mp4');
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+
     testWidgets('retry opens again', (tester) async {
       final session = await openShown(tester);
       await fail(tester, 1, FakeCameraPlatform.takenOnAndroid);
@@ -647,15 +712,20 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       session.takePicture();
       // The screen leaves during the picture, and the camera is lost
-      // before the picture ends. The screen closes the session as soon as
-      // the release is over.
-      final closed = session.release().done.then((_) => session.close());
+      // before the picture ends. The next screen opens its camera once the
+      // release is over, and the platform's release takes whatever camera
+      // is open: the lost one has to be released by then.
+      late final List<String> atRelease;
+      final closed = session.release().done.then((_) {
+        atRelease = [...platform.log];
+        return session.close();
+      });
       platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
       await tester.pump(platform.captureTime);
       await tester.pump(platform.disposeTime);
       await closed;
 
-      expect(platform.log, contains('dispose #1 end'));
+      expect(atRelease, contains('dispose #1 end'));
       expect(platform.openCameras, 0);
       expect(session.currentState, isA<Closed>());
     });
