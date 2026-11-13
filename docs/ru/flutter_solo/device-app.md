@@ -1295,8 +1295,9 @@ CameraBloc({required this.onCaptured}) : super(const Closed()) {
 `BlocCameraScreen` кладёт блок под `BlocProvider` и `BlocBuilder` над теми же
 кнопками. Блок проходит случаи предыдущего раздела на той же фейковой
 платформе, и прогон приложения через его кнопки в их числе. Код —
-[`bloc_camera.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/test/support/bloc_camera.dart)
-в тестах приложения.
+[`camera_bloc.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/lib/camera_bloc.dart)
+в приложении. Переключатель на главном экране выбирает контроллер экрана
+камеры: solo, выбранный по умолчанию, или bloc.
 
 `droppable()` на собственном обработчике отбросил бы второе нажатие затвора,
 но смена камеры перестала бы ждать снимка. В общем обработчике `sequential()`

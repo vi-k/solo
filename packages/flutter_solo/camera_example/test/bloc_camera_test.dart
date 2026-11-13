@@ -6,12 +6,10 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_solo_camera_example/camera_app.dart';
+import 'package:flutter_solo_camera_example/camera_bloc.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:scopo/scopo.dart';
 
-import 'support/bloc_camera.dart';
 import 'support/camera_cases.dart';
 import 'support/fake_camera_platform.dart';
 
@@ -65,17 +63,7 @@ final class BlocDriver implements CameraDriver {
 
 void main() {
   group('the camera screen', () => controllerCases(BlocDriver.new));
-  group(
-    'the app',
-    () => appCases(
-      const AsyncScopeCoordinator(
-        child: MaterialApp(
-          title: 'Camera',
-          home: HomeScreen(camera: BlocCameraScreen.new),
-        ),
-      ),
-    ),
-  );
+  group('the app', () => appCases('bloc'));
 
   testWidgets('an event after close changes nothing', (tester) async {
     final platform = FakeCameraPlatform();

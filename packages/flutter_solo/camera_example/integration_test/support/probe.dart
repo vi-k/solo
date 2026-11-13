@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 
@@ -244,10 +245,7 @@ final class SessionNotes extends SoloObserver {
   void onChange(
     SoloController<Object> solo,
     SoloTransition<Object> transition,
-  ) => journal.note(switch (transition.current) {
-    Ready(:final recording) => 'state Ready recording $recording',
-    final state => 'state ${state.runtimeType}',
-  });
+  ) => journal.note(_stateLine(transition.current));
 
   @override
   void onError(
@@ -256,5 +254,35 @@ final class SessionNotes extends SoloObserver {
     Object error,
     StackTrace stackTrace, {
     required JobErrorAnswer answer,
-  }) => journal.note('error ${'$error'.split('\n').first}');
+  }) => journal.note(_errorLine(error));
 }
+
+/// Writes down every change of the state of a bloc and every error of its
+/// handlers, in the lines of [SessionNotes]: the cases expect the same
+/// lines of either controller.
+final class BlocNotes extends BlocObserver {
+  BlocNotes(this.journal);
+
+  final ProbeJournal journal;
+
+  @override
+  void onChange(BlocBase<dynamic> bloc, Change<dynamic> change) {
+    super.onChange(bloc, change);
+    journal.note(_stateLine(change.nextState as Object));
+  }
+
+  @override
+  void onError(BlocBase<dynamic> bloc, Object error, StackTrace stackTrace) {
+    super.onError(bloc, error, stackTrace);
+    journal.note(_errorLine(error));
+  }
+}
+
+/// The line of a change to [state].
+String _stateLine(Object state) => switch (state) {
+  Ready(:final recording) => 'state Ready recording $recording',
+  _ => 'state ${state.runtimeType}',
+};
+
+/// The line of an [error], without the stack.
+String _errorLine(Object error) => 'error ${_short(error)}';

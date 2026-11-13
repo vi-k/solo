@@ -1,8 +1,8 @@
-/// The camera screen of `doc/device-app.md` on bloc: the same states, the
-/// same buttons and the same platform as `CameraSession` and
-/// `CameraScreen`, with bloc's own means in place of solo's.
+/// The camera screen on bloc: the same states, the same buttons and the
+/// same platform as `CameraSession` and `CameraScreen`, with bloc's own
+/// means in place of solo's.
 ///
-/// `bloc_camera_test.dart` runs it through the cases the app passes.
+/// The switch of the home screen opens the camera screen on either.
 library;
 
 import 'dart:async';
@@ -15,9 +15,10 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_solo_camera_example/camera_screen.dart';
-import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:scopo/scopo.dart';
+
+import 'camera_screen.dart';
+import 'camera_state.dart';
 
 sealed class CameraEvent {
   const CameraEvent();
@@ -355,16 +356,17 @@ const _denials = {
 ///
 /// `BlocProvider` closes the bloc it made without waiting, and knows
 /// nothing of the screen before it: the scope of scopo waits for the
-/// release and holds the next screen on its `scopeKey`, as for
-/// `CameraScreen`.
+/// release and holds the next screen on the `scopeKey` of [CameraScreen],
+/// so a camera screen on either controller waits for the one before it.
 class BlocCameraScreen extends StatelessWidget {
+  /// Takes every picture and video the camera makes.
   final void Function(XFile file) onCaptured;
 
   const BlocCameraScreen({super.key, required this.onCaptured});
 
   @override
   Widget build(BuildContext context) => AsyncDataScope<CameraBloc>(
-    scopeKey: BlocCameraScreen,
+    scopeKey: CameraScreen,
     scopeKeyTimeout: CameraScreen.releaseTimeout,
     disposeScopeTimeout: CameraScreen.releaseTimeout,
     initData: (context, ctx) async =>
@@ -490,7 +492,7 @@ class _BlocCameraViewState extends State<BlocCameraView> {
   }
 }
 
-/// What the screen asks for the [code] of a denial; the same as the app's.
+/// What the screen asks for the [code] of a denial, as `CameraView` does.
 String _denial(String code) {
   final device = code.startsWith('Audio') ? 'microphone' : 'camera';
   if (code.endsWith('WithoutPrompt')) {

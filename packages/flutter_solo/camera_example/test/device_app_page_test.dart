@@ -19,12 +19,12 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_app.dart';
+import 'package:flutter_solo_camera_example/camera_bloc.dart';
 import 'package:flutter_solo_camera_example/camera_screen.dart';
 import 'package:flutter_solo_camera_example/camera_session.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'support/bloc_camera.dart';
 import 'support/camera_cases.dart';
 import 'support/device_app_attempts.dart';
 import 'support/fake_camera_platform.dart';
@@ -53,7 +53,7 @@ const _testing = '## Testing the app';
 const _onBloc = '## The same screen on bloc';
 
 /// The bloc of the section on bloc.
-const _bloc = 'test/support/bloc_camera.dart';
+const _bloc = 'lib/camera_bloc.dart';
 
 /// Home during a recording and back, as both phones report it.
 const _homeAndBack = [

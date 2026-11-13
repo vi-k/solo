@@ -1305,8 +1305,9 @@ CameraBloc({required this.onCaptured}) : super(const Closed()) {
 `BlocCameraScreen` puts the bloc under `BlocProvider` and `BlocBuilder` over
 the same buttons. The bloc passes the cases of the previous section on the same
 fake platform, the run of the app through its buttons among them. The code is
-[`bloc_camera.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/test/support/bloc_camera.dart)
-in the tests of the app.
+[`camera_bloc.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/lib/camera_bloc.dart)
+in the app. A switch on the home screen picks the controller of the camera
+screen: solo, the default, or bloc.
 
 `droppable()` on a handler of its own would drop a second tap of the shutter,
 and the switch would no longer wait for the shot. In the shared handler

@@ -1,11 +1,12 @@
 /// The expectations of the camera screen, for both controllers that run it.
 ///
 /// `CameraSession` of the app runs them in `camera_session_test.dart` and
-/// `camera_screen_test.dart`; `CameraBloc` of the page's bloc section runs
-/// the same ones in `bloc_camera_test.dart`. A case drives the controller
-/// through [CameraDriver], or the whole app through its buttons, and looks
-/// at the platform, the state and the screen; what a controller returns
-/// from a command is its own, and its own test file checks it.
+/// `camera_screen_test.dart`; `CameraBloc`, the app's controller on bloc,
+/// runs the same ones in `bloc_camera_test.dart`. A case drives the
+/// controller through [CameraDriver], or the whole app through its
+/// buttons, and looks at the platform, the state and the screen; what a
+/// controller returns from a command is its own, and its own test file
+/// checks it.
 library;
 
 import 'package:camera/camera.dart';
@@ -15,6 +16,9 @@ import 'package:flutter/services.dart';
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter_solo_camera_example/camera_app.dart';
+import 'package:flutter_solo_camera_example/camera_bloc.dart';
+import 'package:flutter_solo_camera_example/camera_screen.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -937,15 +941,23 @@ void controllerCases(MakeDriver make) {
   });
 }
 
-/// Registers the cases that run [app], the home screen with a camera
-/// screen over it, through its buttons.
-void appCases(Widget app) {
+/// Registers the cases that run the app, the home screen with a camera
+/// screen over it, through its buttons, with [controller] picked on the
+/// switch of the home screen: `solo` or `bloc`.
+void appCases(String controller) {
   late FakeCameraPlatform platform;
 
   setUp(() {
     platform = FakeCameraPlatform();
     CameraPlatform.instance = platform;
   });
+
+  /// Puts the app on the screen and picks [controller] on its switch.
+  Future<void> startApp(WidgetTester tester) async {
+    await tester.pumpWidget(const CameraApp());
+    await tester.tap(find.byKey(Key('controller-$controller')));
+    await tester.pumpAndSettle();
+  }
 
   /// Pumps until [finder] finds a widget: a scope of scopo builds its ready
   /// branch some frames after its initialization ends, and a scope that
@@ -958,11 +970,15 @@ void appCases(Widget app) {
     expect(finder, findsOneWidget);
   }
 
-  /// Opens the camera screen from the home screen.
+  /// Opens the camera screen from the home screen, on [controller].
   Future<void> openCamera(WidgetTester tester) async {
-    await tester.pumpWidget(app);
+    await startApp(tester);
     await tester.tap(find.byKey(const Key('open-camera')));
     await tester.pumpAndSettle();
+    expect(
+      find.byType(controller == 'bloc' ? BlocCameraScreen : CameraScreen),
+      findsOneWidget,
+    );
   }
 
   /// Goes back to the home screen and lets the camera go.
@@ -1076,7 +1092,7 @@ void appCases(Widget app) {
   testWidgets('leaving while the camera opens', (tester) async {
     // Longer than the pop of a route takes to remove the screen.
     platform.openTime = const Duration(seconds: 1);
-    await tester.pumpWidget(app);
+    await startApp(tester);
     await tester.tap(find.byKey(const Key('open-camera')));
     await tester.pump();
     // The route is offstage on its first frame, its back button with it.

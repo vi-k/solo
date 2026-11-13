@@ -6,10 +6,11 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_app.dart';
+import 'package:flutter_solo_camera_example/camera_bloc.dart';
 import 'package:flutter_solo_camera_example/camera_screen.dart';
-import 'package:flutter_solo_camera_example/camera_session.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -23,7 +24,9 @@ import 'support/probe.dart';
 /// `RecordingCameraPlatform` over the phone's platform, and expects on
 /// the journal of the calls and on what the app shows; the journal of the
 /// run is also kept in `app-journal.txt` in the temporary folder of the
-/// app, where the host reads it after the run.
+/// app, where the host reads it after the run. Every case runs twice, once
+/// for each controller the switch of the home screen picks: its name ends
+/// in `(solo)` or `(bloc)`, and the journal has the states of either.
 ///
 /// The cases of the background drive the lifecycle through the binding:
 /// a test on an iPhone cannot press Home, so this simulates the states
@@ -47,6 +50,7 @@ void main() {
   final file = File('${Directory.systemTemp.path}/app-journal.txt');
   late ProbeJournal journal;
   late RecordingCameraPlatform platform;
+  late String controller;
   late List<CameraDescription> cameras;
   var lifecycle = AppLifecycleState.resumed;
 
@@ -113,15 +117,25 @@ void main() {
     }
   }
 
-  /// The session of the camera screen on the screen.
-  CameraSession session(WidgetTester tester) =>
-      tester.widget<CameraView>(find.byType(CameraView)).session;
+  /// The view of the camera screen, on either controller.
+  final view = find.byWidgetPredicate(
+    (widget) => widget is CameraView || widget is BlocCameraView,
+  );
+
+  /// The state of the controller of the camera screen on the screen.
+  CameraState state(WidgetTester tester) {
+    final element = tester.element(view);
+    return switch (element.widget) {
+      CameraView(:final session) => session.currentState,
+      _ => element.read<CameraBloc>().state,
+    };
+  }
 
   bool shown(String key) => find.byKey(Key(key)).evaluate().isNotEmpty;
 
   bool recording(WidgetTester tester) =>
-      find.byType(CameraView).evaluate().isNotEmpty &&
-      switch (session(tester).currentState) {
+      view.evaluate().isNotEmpty &&
+      switch (state(tester)) {
         Ready(:final recording) => recording,
         _ => false,
       };
@@ -151,7 +165,8 @@ void main() {
     }
   }
 
-  /// Starts a case: the app on the screen, the lifecycle in the journal.
+  /// Starts a case: the app on the screen, the lifecycle in the journal,
+  /// and the controller of the case picked on the switch.
   Future<void> start(WidgetTester tester) async {
     final listener = AppLifecycleListener(
       onStateChange: (state) {
@@ -161,12 +176,19 @@ void main() {
     );
     addTearDown(listener.dispose);
     await tester.pumpWidget(const CameraApp());
+    await tap(tester, 'controller-$controller');
+    await settle(tester, const Duration(milliseconds: 300));
   }
 
   /// Opens the camera screen and waits for its buttons.
   Future<void> openCamera(WidgetTester tester) async {
     await tap(tester, 'open-camera');
     await until(tester, 'shutter', () => shown('shutter'));
+    expect(
+      find.byType(controller == 'bloc' ? BlocCameraView : CameraView),
+      findsOneWidget,
+      reason: 'the camera screen runs on another controller',
+    );
   }
 
   /// The file the home screen shows, whether it is on top or under the
@@ -200,35 +222,40 @@ void main() {
     await until(
       tester,
       'release of #$last',
-      () =>
-          find.byType(CameraView).evaluate().isEmpty &&
-          trace().contains('dispose #$last end'),
+      () => view.evaluate().isEmpty && trace().contains('dispose #$last end'),
     );
     await settle(tester, const Duration(milliseconds: 300));
   }
 
+  /// Registers the case [name] once for each controller of the switch.
   void phoneTest(
     String name,
     Future<void> Function(WidgetTester tester) body, {
     bool skip = false,
-  }) => testWidgets(name, (tester) async {
-    journal = ProbeJournal(file: file);
-    journal.note('test $name');
-    platform = RecordingCameraPlatform(phone, journal);
-    CameraPlatform.instance = platform;
-    Solo.observer = SessionNotes(journal);
-    cameras = await availableCameras();
-    journal.note(
-      'cameras ${cameras.map((c) => '${c.name} ${c.lensDirection.name}')}',
-    );
-    await start(tester);
-    await body(tester);
-    expect(
-      trace().where((line) => line.contains(' threw ')),
-      isEmpty,
-      reason: 'a call of the platform threw',
-    );
-  }, skip: skip);
+  }) {
+    for (final picked in const ['solo', 'bloc']) {
+      testWidgets('$name ($picked)', (tester) async {
+        controller = picked;
+        journal = ProbeJournal(file: file);
+        journal.note('test $name ($picked)');
+        platform = RecordingCameraPlatform(phone, journal);
+        CameraPlatform.instance = platform;
+        Solo.observer = SessionNotes(journal);
+        Bloc.observer = BlocNotes(journal);
+        cameras = await availableCameras();
+        journal.note(
+          'cameras ${cameras.map((c) => '${c.name} ${c.lensDirection.name}')}',
+        );
+        await start(tester);
+        await body(tester);
+        expect(
+          trace().where((line) => line.contains(' threw ')),
+          isEmpty,
+          reason: 'a call of the platform threw',
+        );
+      }, skip: skip);
+    }
+  }
 
   group('rapid taps', () {
     phoneTest('flash taps apply in order, and the last one wins', (
@@ -236,7 +263,7 @@ void main() {
     ) async {
       await openCamera(tester);
       final id = created().single;
-      expect((session(tester).currentState as Ready).flash, FlashMode.auto);
+      expect((state(tester) as Ready).flash, FlashMode.auto);
       // The platform answers the flash in a few milliseconds, sooner than
       // a frame: the three taps go in before its first answer.
       await press(tester, 'flash');
@@ -269,7 +296,7 @@ void main() {
           'flash #$id auto end',
         ]),
       );
-      final ready = session(tester).currentState as Ready;
+      final ready = state(tester) as Ready;
       expect(ready.flash, FlashMode.auto);
       expect(ready.camera.value.flashMode, FlashMode.auto);
       expect(find.byIcon(Icons.flash_auto), findsOneWidget);
@@ -657,7 +684,7 @@ void main() {
         await settle(tester, const Duration(seconds: 1));
       }
       final last = created().last;
-      final ready = session(tester).currentState as Ready;
+      final ready = state(tester) as Ready;
       expect(ready.camera.description.name, cameras.first.name);
       expect(ready.flash, FlashMode.always);
       expect(ready.camera.value.flashMode, FlashMode.always);
