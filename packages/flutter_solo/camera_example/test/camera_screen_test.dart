@@ -77,6 +77,26 @@ void main() {
     expect(platform.openCameras, 0);
   });
 
+  testWidgets('the record button starts and stops a video', (tester) async {
+    await openCamera(tester);
+    await until(tester, find.byIcon(Icons.videocam));
+    await tester.tap(find.byKey(const Key('record')));
+    await tester.pump(platform.recordStartTime);
+    await tester.pump();
+
+    expect(find.byIcon(Icons.stop), findsOneWidget);
+    await tester.tap(find.byKey(const Key('record')));
+    await tester.pump(platform.stopTime);
+    await goBack(tester);
+
+    expect(
+      platform.log,
+      containsAllInOrder(['record #1 start', 'stop #1 start', 'record #1 end']),
+    );
+    expect(find.byKey(const Key('last-shot')), findsOneWidget);
+    expect(platform.openCameras, 0);
+  });
+
   testWidgets('a device without a camera says so', (tester) async {
     platform.cameras = const [];
     await openCamera(tester);

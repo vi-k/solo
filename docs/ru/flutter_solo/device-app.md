@@ -172,3 +172,114 @@ initialize #2 end
 От второго нажатия затвора строки не остаётся. Нажатие, сделанное, пока камера
 открывается, ждёт в той же очереди, за открытием. Нажатие вспышки ждёт там
 предыдущее и берёт режим из состояния, куда его положило то нажатие.
+
+## Смена камеры во время записи
+
+Пользователь переключается на другую камеру, пока идёт запись видео. Запись
+продолжается с другой камеры, и стоп даёт один файл. Нажатие стопа во время
+смены ждёт, пока смена кончится.
+
+### Первая попытка
+
+`setDescription` контроллера плагина смотрит на `value.isRecordingVideo`.
+Во время записи он отдаёт записи следующую камеру, а иначе освобождает камеру
+и открывает следующую. На Android плагин хочет запись, начатую
+с `enablePersistentRecording`, и `startVideoRecording` включает его
+по умолчанию. Кнопки зовут контроллер, а запись и стоп сперва проверяют флаг:
+
+```dart
+// Первая попытка: смена камеры во время старта записи теряет запись.
+Future<void> record() async {
+  // Запись уже идёт, ничего не делаем.
+  if (camera.value.isRecordingVideo) return;
+  try {
+    await camera.startVideoRecording();
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+
+Future<void> switchCamera() async {
+  final next = widget.cameras.firstWhere(
+    (c) => c.name != camera.value.description.name,
+  );
+  try {
+    await camera.setDescription(next);
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+
+Future<void> stop() async {
+  if (!camera.value.isRecordingVideo) return;
+  try {
+    widget.onCaptured(await camera.stopVideoRecording());
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+```
+
+Контроллер ставит `isRecordingVideo` только после ответа `startVideoRecording`.
+Смена, нажатая раньше, идёт другим путём: освобождает камеру под стартующей
+записью и открывает следующую. Старт кончается уже после этого, и контроллер,
+к тому времени на новой камере, ставит флаг. Нажатие записи, смены, пока запись
+стартует, затем стопа:
+
+```text
+record #1 start
+dispose #1 start
+dispose #1 end
+create front #2
+initialize #2 start
+initialize #2 end
+stop #2 start
+```
+
+На iPhone 13 mini запись может стартовать дольше полутора секунд, и смена,
+нажатая за это время, теряет запись; фейковая платформа здесь следует iPhone.
+Флаг говорит, что запись идёт, стоп просит её у платформы, а у платформы записи
+нет: экран показывает `Error -1008: Video is not recording!` Когда запись уже
+началась, смена переводит её на другую камеру и на iPhone 13 mini, и на Galaxy
+A55, а стоп, нажатый во время такой смены, кончается после неё, с одним файлом.
+
+### Запись в очереди
+
+Старт и стоп записи — задачи в очереди кнопок:
+
+```dart
+Job<void> startRecording() => enqueue<Ready, void>((ctx) async {
+  final Ready(:camera, :flash, :recording) = ctx.state;
+  if (recording) return;
+  await ctx.join(camera.startVideoRecording);
+  ctx.emit(Ready(camera: camera, flash: flash, recording: true));
+});
+
+Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
+  final Ready(:camera, :flash, :recording) = ctx.state;
+  if (!recording) return null;
+  final file = await ctx.join(camera.stopVideoRecording);
+  ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+  onCaptured(file);
+  return file;
+});
+```
+
+Смена, нажатая, пока запись стартует, ждёт за стартом, как смена во время
+снимка ждёт за снимком. Когда смена выполняется, запись уже идёт,
+и `setDescription` отдаёт ей следующую камеру. Нажатие стопа во время смены
+ждёт за сменой. Идёт ли запись, задача читает из состояния, которое ей оставила
+предыдущая задача, поэтому второе нажатие записи или стопа ничего не делает.
+Нажатие записи, смены, пока запись стартует, затем стопа во время смены,
+на фейковой платформе по правилам iPhone:
+
+```text
+record #1 start
+record #1 started
+state Ready
+switch #1 front start
+switch #1 front end
+stop #1 start
+record #1 end
+state Ready
+```

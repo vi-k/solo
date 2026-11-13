@@ -29,6 +29,8 @@ const _intro = '# A device app';
 const _rapid = '## Rapid taps';
 const _first = '### The first attempt';
 const _queue = '### One queue for the buttons';
+const _recording = '## A switch during a recording';
+const _recordingQueue = '### The recording in the queue';
 
 /// The Dart files a block of the page may stand in: the app, its tests and
 /// their support, but for the helper that does the checking.
@@ -194,6 +196,85 @@ void main() {
       );
       expect(journal.lines, containsRun(_traceUnder(_rapid, _queue)));
       expect(platform.log.where((l) => l == 'capture #1 start'), hasLength(1));
+      expect(captured, hasLength(1));
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
+    });
+  });
+
+  group('a switch during a recording', () {
+    testWidgets('the first attempt loses the recording to a switch', (
+      tester,
+    ) async {
+      platform.phone = FakePhone.iphone;
+      final journal = Journal(platform);
+      final captured = <XFile>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SwitchWhileRecording(
+              cameras: platform.cameras,
+              onCaptured: captured.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump(platform.openTime);
+      await tester.tap(find.byKey(const Key('record')));
+      await tester.pump(platform.recordStartTime ~/ 2);
+      await tester.tap(find.byKey(const Key('switch')));
+      await tester.pump(platform.recordStartTime);
+      await tester.tap(find.byKey(const Key('stop')));
+      await tester.pump(platform.stopTime);
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'test/support/device_app_attempts.dart',
+          under: _first,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_recording, _first)));
+      expect(captured, isEmpty);
+      const shown = 'Error -1008: Video is not recording!';
+      expect(find.text(shown), findsOneWidget);
+      _says(_part(_recording, _first), shown);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(platform.disposeTime);
+    });
+
+    testWidgets('the queue holds the switch and the stop', (tester) async {
+      platform.phone = FakePhone.iphone;
+      final journal = Journal(platform);
+      Solo.observer = journal;
+      final captured = <XFile>[];
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..startRecording()
+        ..switchCamera();
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.switchTime ~/ 2);
+      session.stopRecording();
+      await tester.pump(platform.switchTime);
+      await tester.pump(platform.stopTime);
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'lib/camera_session.dart',
+          under: _recordingQueue,
+        ),
+        isEmpty,
+      );
+      expect(
+        journal.lines,
+        containsRun(_traceUnder(_recording, _recordingQueue)),
+      );
       expect(captured, hasLength(1));
       final released = session.release().done;
       await tester.pump(platform.disposeTime);

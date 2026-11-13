@@ -62,6 +62,25 @@ final class CameraSession extends Solo<CameraState> {
     await ctx.join(() => camera.setDescription(next));
   });
 
+  /// Starts a video; a tap during a recording adds nothing.
+  Job<void> startRecording() => enqueue<Ready, void>((ctx) async {
+    final Ready(:camera, :flash, :recording) = ctx.state;
+    if (recording) return;
+    await ctx.join(camera.startVideoRecording);
+    ctx.emit(Ready(camera: camera, flash: flash, recording: true));
+  });
+
+  /// Stops the video and hands it to [onCaptured]; with no recording it
+  /// gives `null`.
+  Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
+    final Ready(:camera, :flash, :recording) = ctx.state;
+    if (!recording) return null;
+    final file = await ctx.join(camera.stopVideoRecording);
+    ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+    onCaptured(file);
+    return file;
+  });
+
   /// Frees the camera on the platform; the job ends once the platform has.
   ///
   /// The owner awaits it before [close]: a release started from `onClose`

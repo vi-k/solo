@@ -173,3 +173,116 @@ initialize #2 end
 The second tap of the shutter leaves no line. A tap made while the camera opens
 waits in the same queue, behind the opening. A tap of the flash waits there for
 the tap before it and reads the mode from the state, where that tap put it.
+
+## A switch during a recording
+
+A user switches to the other camera while a video records. The recording goes
+on from the other camera, and the stop gives one file. A tap of stop during the
+switch waits for the switch to end.
+
+### The first attempt
+
+`setDescription` of the plugin's controller looks at `value.isRecordingVideo`.
+During a recording it hands the next camera to the recording; otherwise it
+releases the camera and opens the next one. On Android the plugin wants the
+recording started with `enablePersistentRecording`, and `startVideoRecording`
+turns it on by default. The buttons call the controller, and record and stop
+check the flag first:
+
+```dart
+// The first attempt: a switch while the recording starts loses the recording.
+Future<void> record() async {
+  // A recording is already started, do nothing.
+  if (camera.value.isRecordingVideo) return;
+  try {
+    await camera.startVideoRecording();
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+
+Future<void> switchCamera() async {
+  final next = widget.cameras.firstWhere(
+    (c) => c.name != camera.value.description.name,
+  );
+  try {
+    await camera.setDescription(next);
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+
+Future<void> stop() async {
+  if (!camera.value.isRecordingVideo) return;
+  try {
+    widget.onCaptured(await camera.stopVideoRecording());
+  } on CameraException catch (e) {
+    show(e);
+  }
+}
+```
+
+The controller sets `isRecordingVideo` only once `startVideoRecording` has
+answered. A switch tapped before that takes the other way: it releases the
+camera under the recording that is starting and opens the next one. The start
+ends after that, and the controller, on the new camera by then, sets the flag.
+A tap of record, of the switch while the recording starts, then of stop:
+
+```text
+record #1 start
+dispose #1 start
+dispose #1 end
+create front #2
+initialize #2 start
+initialize #2 end
+stop #2 start
+```
+
+On an iPhone 13 mini a recording can take more than a second and a half to
+start, and a switch tapped in that time loses the recording; the fake platform
+follows the iPhone here. The flag says a recording is on, stop asks the
+platform for it, and the platform has none: the screen shows
+`Error -1008: Video is not recording!` Once the recording has started, a switch
+carries it over to the other camera on an iPhone 13 mini and on a Galaxy A55
+alike, and a stop tapped during that switch ends after it, with one file.
+
+### The recording in the queue
+
+The start and the stop of a recording are jobs in the queue of the buttons:
+
+```dart
+Job<void> startRecording() => enqueue<Ready, void>((ctx) async {
+  final Ready(:camera, :flash, :recording) = ctx.state;
+  if (recording) return;
+  await ctx.join(camera.startVideoRecording);
+  ctx.emit(Ready(camera: camera, flash: flash, recording: true));
+});
+
+Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
+  final Ready(:camera, :flash, :recording) = ctx.state;
+  if (!recording) return null;
+  final file = await ctx.join(camera.stopVideoRecording);
+  ctx.emit(Ready(camera: camera, flash: flash, recording: false));
+  onCaptured(file);
+  return file;
+});
+```
+
+A switch tapped while the recording starts waits behind the start, as a switch
+during a shot waits behind the shot. When the switch runs, the recording is on,
+and `setDescription` hands the next camera to it. A tap of stop during the
+switch waits behind the switch. A job reads whether a recording is on from the
+state, which the job before it has left, so a second tap of record or of stop
+does nothing. A tap of record, of the switch while the recording starts, then
+of stop during the switch, with the fake platform on the iPhone's rules:
+
+```text
+record #1 start
+record #1 started
+state Ready
+switch #1 front start
+switch #1 front end
+stop #1 start
+record #1 end
+state Ready
+```

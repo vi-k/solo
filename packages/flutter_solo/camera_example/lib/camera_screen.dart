@@ -53,7 +53,7 @@ class CameraView extends StatelessWidget {
       Closed() => const SizedBox.expand(),
       Opening() => const Center(child: CircularProgressIndicator()),
       NoCamera() => const Center(child: Text('This device has no camera.')),
-      Ready(:final camera, :final flash) => Column(
+      Ready(:final camera, :final flash, :final recording) => Column(
         children: [
           Expanded(child: Center(child: CameraPreview(camera))),
           Row(
@@ -73,10 +73,12 @@ class CameraView extends StatelessWidget {
                 onPressed: session.takePicture,
                 icon: const Icon(Icons.camera),
               ),
-              const IconButton(
-                key: Key('record'),
-                onPressed: null,
-                icon: Icon(Icons.videocam),
+              IconButton(
+                key: const Key('record'),
+                onPressed: recording
+                    ? session.stopRecording
+                    : session.startRecording,
+                icon: Icon(recording ? Icons.stop : Icons.videocam),
               ),
               IconButton(
                 key: const Key('switch'),

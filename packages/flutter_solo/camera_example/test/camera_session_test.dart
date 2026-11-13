@@ -160,6 +160,108 @@ void main() {
     });
   });
 
+  group('a switch during a recording', () {
+    testWidgets('recording goes on across a switch', (tester) async {
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..startRecording()
+        ..switchCamera()
+        ..stopRecording();
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.switchTime);
+      await tester.pump(platform.stopTime);
+
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'record #1 start',
+          'switch #1 front end',
+          'record #1 end',
+        ]),
+      );
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect((session.currentState as Ready).recording, isFalse);
+      await finish(tester, session);
+    });
+
+    testWidgets('stop during a switch waits for it', (tester) async {
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      expect((session.currentState as Ready).recording, isTrue);
+      session
+        ..switchCamera()
+        ..stopRecording();
+      await tester.pump(platform.switchTime);
+      await tester.pump(platform.stopTime);
+
+      expect(
+        platform.log,
+        containsAllInOrder(['switch #1 front end', 'stop #1 start']),
+      );
+      expect(captured, hasLength(1));
+      await finish(tester, session);
+    });
+
+    testWidgets('a switch while the recording starts waits for it (iPhone)', (
+      tester,
+    ) async {
+      platform.phone = FakePhone.iphone;
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..startRecording()
+        ..switchCamera();
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.switchTime);
+
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'record #1 start',
+          'record #1 started',
+          'switch #1 front start',
+          'switch #1 front end',
+        ]),
+      );
+      expect(platform.log, isNot(contains(startsWith('dispose'))));
+      final stopped = session.stopRecording().done;
+      await tester.pump(platform.stopTime);
+
+      expect(await stopped, isA<Done<XFile?>>());
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(platform.log, contains('record #1 end'));
+      await finish(tester, session);
+    });
+
+    testWidgets('a second tap of record or of stop adds nothing', (
+      tester,
+    ) async {
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session
+        ..startRecording()
+        ..startRecording();
+      await tester.pump(platform.recordStartTime);
+      final first = session.stopRecording().value;
+      final second = session.stopRecording().value;
+      await tester.pump(platform.stopTime);
+
+      expect(platform.log.where((l) => l == 'record #1 start'), hasLength(1));
+      expect(platform.log.where((l) => l == 'stop #1 start'), hasLength(1));
+      expect((await first)?.path, '/fake/video-1.mp4');
+      expect(await second, isNull);
+      expect(captured, hasLength(1));
+      await finish(tester, session);
+    });
+  });
+
   testWidgets('release waits for the platform', (tester) async {
     final journal = Journal(platform);
     Solo.observer = journal;
