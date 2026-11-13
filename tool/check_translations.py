@@ -145,6 +145,10 @@ PAIRS = [
         REPO / "docs" / "ru" / "flutter_solo" / "testing.md",
     ),
     (
+        REPO / "packages" / "flutter_solo" / "doc" / "device-app.md",
+        REPO / "docs" / "ru" / "flutter_solo" / "device-app.md",
+    ),
+    (
         REPO / "packages" / "async_job" / "doc" / "why.md",
         REPO / "docs" / "ru" / "async_job" / "why.md",
     ),

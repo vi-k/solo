@@ -119,6 +119,7 @@ const topics = [
           page('flutter_solo', 'Overview', 'Обзор'),
           page('flutter_solo/mixins', 'Mixins', 'Миксины'),
           page('flutter_solo/testing', 'Testing', 'Тестирование'),
+          page('flutter_solo/device-app', 'A device app', 'Приложение устройства'),
           changelog('flutter_solo'),
         ],
       },

@@ -3,17 +3,18 @@
 
 `page_code.dart` is the helper the rakes tests hold a page's code to: it
 says which pieces of a page the test does not run. The packages share no
-test code, so the helper lives in four copies, and the first one is the
+test code, so the helper lives in five copies, and the first one is the
 original:
 
     packages/async_job/test/support/page_code.dart
     packages/solo/test/support/page_code.dart
     packages/solo/example/test/support/page_code.dart
     packages/flutter_solo/test/support/page_code.dart
+    packages/flutter_solo/camera_example/test/support/page_code.dart
 
 Until 2026-10-17 only a comment at the head of each said so. A fix that
-reached three of them would have left a fourth package checking its pages
-by the old rule, and every test of it green.
+reached all but one of them would have left the last package checking its
+pages by the old rule, and every test of it green.
 
 Each copy opens with a comment of its own naming the others. That header
 is left out, and the rest has to be the original's, byte for byte. The
@@ -34,6 +35,7 @@ COPIES = (
     'packages/solo/test/support/page_code.dart',
     'packages/solo/example/test/support/page_code.dart',
     'packages/flutter_solo/test/support/page_code.dart',
+    'packages/flutter_solo/camera_example/test/support/page_code.dart',
 )
 
 
