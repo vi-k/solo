@@ -182,46 +182,4 @@ void main() {
     expect(platform.openCameras, 0);
     expect(session.currentState, isA<Closed>());
   });
-
-  group('the flash after a switch', () {
-    // The plugin opens the next camera with a flash mode of its own: on an
-    // iPhone 13 mini `auto`, while the controller keeps the mode it had.
-    testWidgets('a switch gives the next camera the mode of the button', (
-      tester,
-    ) async {
-      final session = await opened(tester);
-      session
-        ..cycleFlash()
-        ..switchCamera();
-      await tester.pump(platform.disposeTime);
-      await tester.pump(platform.openTime);
-      await tester.pump();
-
-      expect(
-        platform.log,
-        containsAllInOrder(['flash #1 always', 'initialize #2 end']),
-      );
-      expect(platform.log.last, 'flash #2 always');
-      expect((session.currentState as Ready).flash, FlashMode.always);
-      await finish(tester, session);
-    });
-
-    testWidgets('a switch during a recording leaves the flash', (tester) async {
-      final session = await opened(tester);
-      session
-        ..cycleFlash()
-        ..startRecording()
-        ..switchCamera()
-        ..stopRecording();
-      await tester.pump(platform.recordStartTime);
-      await tester.pump(platform.switchTime);
-      await tester.pump(platform.stopTime);
-
-      expect(platform.log.where((l) => l.startsWith('flash ')), [
-        'flash #1 always',
-      ]);
-      expect((session.currentState as Ready).flash, FlashMode.always);
-      await finish(tester, session);
-    });
-  });
 }

@@ -215,7 +215,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     if (ready is! Ready) return;
     final cameras = await availableCameras();
     if (state != ready) return;
-    final Ready(:camera, :recording) = ready;
+    final Ready(:camera, :flash, :recording) = ready;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
     try {
@@ -229,6 +229,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     }
     if (state != ready) return;
     _watch(camera);
+    // The camera the plugin opens starts with a flash mode of its own.
+    if (!recording) await camera.setFlashMode(flash);
   }
 
   Future<void> _startRecording(Emitter<CameraState> emit) async {

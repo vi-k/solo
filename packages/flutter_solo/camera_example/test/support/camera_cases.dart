@@ -228,6 +228,52 @@ void controllerCases(MakeDriver make) {
     });
   });
 
+  group('the flash after a switch', () {
+    // The plugin opens the next camera with a flash mode of its own: on an
+    // iPhone 13 mini `auto`, while the controller keeps the mode it had.
+    testWidgets('a switch gives the next camera the mode of the button', (
+      tester,
+    ) async {
+      final controller = make(captured.add);
+      controller.open();
+      await tester.pump(platform.openTime);
+      controller
+        ..cycleFlash()
+        ..switchCamera();
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      await tester.pump();
+
+      expect(
+        platform.log,
+        containsAllInOrder(['flash #1 always', 'initialize #2 end']),
+      );
+      expect(platform.log.last, 'flash #2 always');
+      expect((controller.currentState as Ready).flash, FlashMode.always);
+      await finish(tester, controller);
+    });
+
+    testWidgets('a switch during a recording leaves the flash', (tester) async {
+      final controller = make(captured.add);
+      controller.open();
+      await tester.pump(platform.openTime);
+      controller
+        ..cycleFlash()
+        ..startRecording()
+        ..switchCamera()
+        ..stopRecording();
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.switchTime);
+      await tester.pump(platform.stopTime);
+
+      expect(platform.log.where((l) => l.startsWith('flash ')), [
+        'flash #1 always',
+      ]);
+      expect((controller.currentState as Ready).flash, FlashMode.always);
+      await finish(tester, controller);
+    });
+  });
+
   group('a switch during a recording', () {
     testWidgets('recording goes on across a switch', (tester) async {
       final controller = make(captured.add);
