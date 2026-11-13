@@ -1,0 +1,639 @@
+import 'dart:io';
+
+import 'package:camera/camera.dart';
+import 'package:camera_platform_interface/camera_platform_interface.dart';
+// Deprecated from Flutter 3.47 for package:material_ui, whose releases
+// since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart';
+import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo_camera_example/camera_app.dart';
+import 'package:flutter_solo_camera_example/camera_screen.dart';
+import 'package:flutter_solo_camera_example/camera_session.dart';
+import 'package:flutter_solo_camera_example/camera_state.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+
+import 'support/probe.dart';
+
+/// The app of `doc/device-app.md` on a real camera: what the page says
+/// the answers do, checked on the phone.
+///
+/// Each case runs `CameraApp` through its buttons, with
+/// `RecordingCameraPlatform` over the phone's platform, and expects on
+/// the journal of the calls and on what the app shows; the journal of the
+/// run is also kept in `app-journal.txt` in the temporary folder of the
+/// app, where the host reads it after the run.
+///
+/// The cases of the background drive the lifecycle through the binding:
+/// a test on an iPhone cannot press Home, so this simulates the states
+/// the phones report, and the platform underneath stays in the
+/// foreground. With `--dart-define=realBackground=true` two more cases
+/// leave for real: a line `ACTION home` or `ACTION home-and-back` asks
+/// `integration_test/support/answer_actions.py` on the host to bring
+/// another app to the front and this one back.
+///
+/// Run from the app's folder:
+/// `flutter test integration_test/app_test.dart -d <device> --no-uninstall`;
+/// `--no-uninstall` keeps the files of the run, and on an iPhone the
+/// permissions, on the phone. An iPhone that Flutter sees only over Wi-Fi
+/// needs `flutter run -d <device> -t integration_test/app_test.dart`,
+/// which `flutter test` cannot replace there; the run prints
+/// `All tests passed!` or `Some tests failed.` and stays up.
+void main() {
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final phone = CameraPlatform.instance;
+  const realBackground = bool.fromEnvironment('realBackground');
+  final file = File('${Directory.systemTemp.path}/app-journal.txt');
+  late ProbeJournal journal;
+  late RecordingCameraPlatform platform;
+  late List<CameraDescription> cameras;
+  var lifecycle = AppLifecycleState.resumed;
+
+  setUpAll(() {
+    if (file.existsSync()) file.deleteSync();
+  });
+
+  tearDown(() async {
+    await platform.stopWatching();
+    CameraPlatform.instance = phone;
+  });
+
+  /// The journal without the times: the lines the cases expect.
+  List<String> trace() => [
+    for (final line in journal.lines) line.replaceFirst(_time, ''),
+  ];
+
+  /// The time of the first line [text] of the journal, in milliseconds.
+  int at(String text) {
+    final line = journal.lines.firstWhere(
+      (line) => line.replaceFirst(_time, '') == text,
+    );
+    return int.parse(_time.firstMatch(line)!.group(1)!);
+  }
+
+  /// The ids of the cameras created so far, in order.
+  List<int> created() => [
+    for (final line in trace())
+      if (line.startsWith('created #')) int.parse(line.substring(9)),
+  ];
+
+  /// Lets [time] pass on the phone, with frames while the app has them.
+  ///
+  /// A hidden app gets no frames, so a pump would wait for good; then the
+  /// time passes without them.
+  Future<void> settle(WidgetTester tester, Duration time) async {
+    final end = DateTime.now().add(time);
+    do {
+      if (lifecycle == AppLifecycleState.resumed ||
+          lifecycle == AppLifecycleState.inactive) {
+        await tester.pump(const Duration(milliseconds: 50));
+      } else {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    } while (DateTime.now().isBefore(end));
+  }
+
+  /// Lets time pass until [done], and fails after [timeout].
+  Future<void> until(
+    WidgetTester tester,
+    String what,
+    bool Function() done, {
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    final end = DateTime.now().add(timeout);
+    while (!done()) {
+      if (DateTime.now().isAfter(end)) {
+        journal.note('timeout $what');
+        fail('$what: not in $timeout\n${trace().join('\n')}');
+      }
+      await settle(tester, const Duration(milliseconds: 50));
+    }
+  }
+
+  /// The session of the camera screen on the screen.
+  CameraSession session(WidgetTester tester) =>
+      tester.widget<CameraView>(find.byType(CameraView)).session;
+
+  bool shown(String key) => find.byKey(Key(key)).evaluate().isNotEmpty;
+
+  bool recording(WidgetTester tester) =>
+      find.byType(CameraView).evaluate().isNotEmpty &&
+      switch (session(tester).currentState) {
+        Ready(:final recording) => recording,
+        _ => false,
+      };
+
+  /// Taps the button of [key] and pumps one frame.
+  Future<void> tap(WidgetTester tester, String key) async {
+    journal.note('tap $key');
+    await tester.tap(find.byKey(Key(key)).last);
+    await tester.pump();
+  }
+
+  /// Starts a case: the app on the screen, the lifecycle in the journal.
+  Future<void> start(WidgetTester tester) async {
+    final listener = AppLifecycleListener(
+      onStateChange: (state) {
+        lifecycle = state;
+        journal.note('lifecycle ${state.name}');
+      },
+    );
+    addTearDown(listener.dispose);
+    await tester.pumpWidget(const CameraApp());
+  }
+
+  /// Opens the camera screen and waits for its buttons.
+  Future<void> openCamera(WidgetTester tester) async {
+    await tap(tester, 'open-camera');
+    await until(tester, 'shutter', () => shown('shutter'));
+  }
+
+  /// The file the home screen shows, whether it is on top or under the
+  /// camera screen.
+  File? lastShot() {
+    final images = find
+        .byKey(const Key('last-shot'), skipOffstage: false)
+        .evaluate();
+    if (images.isEmpty) return null;
+    final image = (images.single.widget as Image).image as FileImage;
+    return image.file;
+  }
+
+  /// Expects the home screen to show [file], or a file, not empty.
+  void expectShot({File? not}) {
+    final shot = lastShot();
+    expect(shot, isNotNull, reason: 'the home screen shows no file');
+    expect(shot!.path, isNot(not?.path));
+    final size = shot.lengthSync();
+    journal.note('home shows ${shot.path} $size bytes');
+    expect(size, greaterThan(0));
+  }
+
+  /// Goes back to the home screen and waits for the camera to be
+  /// released.
+  Future<void> goBack(WidgetTester tester) async {
+    journal.note('back');
+    await tester.pageBack();
+    await tester.pump();
+    final last = created().last;
+    await until(
+      tester,
+      'release of #$last',
+      () =>
+          find.byType(CameraView).evaluate().isEmpty &&
+          trace().contains('dispose #$last end'),
+    );
+    await settle(tester, const Duration(milliseconds: 300));
+  }
+
+  void phoneTest(
+    String name,
+    Future<void> Function(WidgetTester tester) body, {
+    bool skip = false,
+  }) => testWidgets(name, (tester) async {
+    journal = ProbeJournal(file: file);
+    journal.note('test $name');
+    platform = RecordingCameraPlatform(phone, journal);
+    CameraPlatform.instance = platform;
+    Solo.observer = SessionNotes(journal);
+    cameras = await availableCameras();
+    journal.note(
+      'cameras ${cameras.map((c) => '${c.name} ${c.lensDirection.name}')}',
+    );
+    await start(tester);
+    await body(tester);
+    expect(
+      trace().where((line) => line.contains(' threw ')),
+      isEmpty,
+      reason: 'a call of the platform threw',
+    );
+  }, skip: skip);
+
+  group('rapid taps', () {
+    phoneTest('flash taps apply in order, and the last one wins', (
+      tester,
+    ) async {
+      await openCamera(tester);
+      final id = created().single;
+      expect((session(tester).currentState as Ready).flash, FlashMode.auto);
+      await tap(tester, 'flash');
+      await tap(tester, 'flash');
+      await tap(tester, 'flash');
+      await until(
+        tester,
+        'three flashes',
+        () => trace().contains('flash #$id auto end'),
+      );
+      await settle(tester, const Duration(milliseconds: 300));
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'flash #$id always start',
+          'flash #$id always end',
+          'flash #$id off start',
+          'flash #$id off end',
+          'flash #$id auto start',
+          'flash #$id auto end',
+        ]),
+      );
+      final ready = session(tester).currentState as Ready;
+      expect(ready.flash, FlashMode.auto);
+      expect(ready.camera.value.flashMode, FlashMode.auto);
+      expect(find.byIcon(Icons.flash_auto), findsOneWidget);
+      await goBack(tester);
+    });
+
+    phoneTest('a shot during a shot is dropped', (tester) async {
+      await openCamera(tester);
+      final id = created().single;
+      await tap(tester, 'shutter');
+      await tap(tester, 'shutter');
+      await until(
+        tester,
+        'the shot',
+        () => trace().contains('capture #$id end'),
+      );
+      await settle(tester, const Duration(seconds: 1));
+
+      expect(trace().where((line) => line.startsWith('capture ')), [
+        'capture #$id start',
+        'capture #$id end',
+      ]);
+      await goBack(tester);
+      expectShot();
+    });
+
+    phoneTest('a switch during a shot waits for the shot', (tester) async {
+      await openCamera(tester);
+      final first = created().single;
+      final next = cameras[1 % cameras.length].lensDirection.name;
+      await tap(tester, 'shutter');
+      await tap(tester, 'switch');
+      await until(tester, 'the next camera', () => created().length == 2);
+      final second = created().last;
+      await until(
+        tester,
+        'the next camera open',
+        () => trace().contains('initialize #$second end') && shown('shutter'),
+      );
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'capture #$first start',
+          'capture #$first end',
+          'dispose #$first start',
+          'dispose #$first end',
+          'create $next start',
+          'initialize #$second end',
+        ]),
+      );
+      journal.note(
+        'switch tapped ${at('tap switch') - at('capture #$first start')} ms '
+        'into the shot of '
+        '${at('capture #$first end') - at('capture #$first start')} ms',
+      );
+      expectShot();
+      await goBack(tester);
+    });
+  });
+
+  group('a switch during a recording', () {
+    phoneTest('a switch while the recording starts waits for the start', (
+      tester,
+    ) async {
+      await openCamera(tester);
+      final id = created().single;
+      final next = cameras[1 % cameras.length].lensDirection.name;
+      await tap(tester, 'record');
+      await tap(tester, 'switch');
+      await until(
+        tester,
+        'the switch',
+        () => trace().contains('switch $next end'),
+      );
+      expect(recording(tester), isTrue);
+      await settle(tester, const Duration(seconds: 2));
+      await tap(tester, 'record');
+      await until(
+        tester,
+        'the stop',
+        () => trace().contains('stop #$id end') && !recording(tester),
+      );
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'record #$id start',
+          'record #$id end',
+          'state Ready recording true',
+          'switch $next start',
+          'switch $next end',
+          'stop #$id start',
+          'stop #$id end',
+          'state Ready recording false',
+        ]),
+      );
+      expect(created(), [id], reason: 'the switch opened a camera');
+      expect(trace(), isNot(contains('dispose #$id start')));
+      journal.note(
+        'record start ${at('record #$id end') - at('record #$id start')} ms',
+      );
+      await goBack(tester);
+      expectShot();
+    });
+
+    phoneTest('a stop during a switch waits for the switch', (tester) async {
+      await openCamera(tester);
+      final id = created().single;
+      final next = cameras[1 % cameras.length].lensDirection.name;
+      await tap(tester, 'record');
+      await until(tester, 'the recording', () => recording(tester));
+      await settle(tester, const Duration(milliseconds: 1500));
+      await tap(tester, 'switch');
+      await tap(tester, 'record');
+      await until(
+        tester,
+        'the stop',
+        () => trace().contains('stop #$id end') && !recording(tester),
+      );
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'record #$id end',
+          'switch $next start',
+          'switch $next end',
+          'stop #$id start',
+          'stop #$id end',
+        ]),
+      );
+      expect(created(), [id], reason: 'the switch opened a camera');
+      journal.note(
+        'record start ${at('record #$id end') - at('record #$id start')} ms',
+      );
+      await goBack(tester);
+      expectShot();
+    });
+  });
+
+  group('leaving the screen', () {
+    phoneTest('the shot reaches home, and the next screen waits', (
+      tester,
+    ) async {
+      await openCamera(tester);
+      final first = created().single;
+      await tap(tester, 'shutter');
+      journal.note('back');
+      await tester.pageBack();
+      // The home screen takes taps once the pop has started, a frame or
+      // two after the tap of back.
+      await until(
+        tester,
+        'the home screen',
+        () => find
+            .byKey(const Key('open-camera'))
+            .hitTestable()
+            .evaluate()
+            .isNotEmpty,
+      );
+      await tap(tester, 'open-camera');
+      await until(tester, 'the next camera', () => created().length == 2);
+      final second = created().last;
+      await until(tester, 'the next shutter', () => shown('shutter'));
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'capture #$first start',
+          'capture #$first end',
+          'dispose #$first start',
+          'dispose #$first end',
+          'state Closed',
+          'state Opening',
+          'create back start',
+          'initialize #$second end',
+          'state Ready recording false',
+        ]),
+      );
+      journal.note(
+        'release ${at('dispose #$first start') - at('capture #$first end')} '
+        'ms after the shot',
+      );
+      expectShot();
+      final firstShot = lastShot()!;
+
+      // The camera of the second screen works: a shot on it comes.
+      await tap(tester, 'shutter');
+      await until(
+        tester,
+        'the shot on the next camera',
+        () => trace().contains('capture #$second end'),
+      );
+      await goBack(tester);
+      expectShot(not: firstShot);
+    });
+  });
+
+  group('going to the background', () {
+    /// What leaving and coming back give on both phones.
+    const away = [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ];
+    const back = [
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ];
+
+    /// Records, leaves through [leave] and comes back, and expects what
+    /// the page says: the recording reaches home, the camera is released
+    /// while away and opens again after the release.
+    Future<void> recordAndLeave(
+      WidgetTester tester,
+      Future<void> Function(int id) leave,
+    ) async {
+      await openCamera(tester);
+      final first = created().single;
+      await tap(tester, 'record');
+      await until(tester, 'the recording', () => recording(tester));
+      await settle(tester, const Duration(milliseconds: 1500));
+      await leave(first);
+      await until(tester, 'the camera again', () => created().length == 2);
+      final second = created().last;
+      await until(tester, 'the shutter again', () => shown('shutter'));
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'record #$first end',
+          'state Ready recording true',
+          'lifecycle hidden',
+          'stop #$first start',
+          'stop #$first end',
+          'state Closed',
+          'dispose #$first start',
+          'dispose #$first end',
+          'state Opening',
+          'create back start',
+          'initialize #$second end',
+          'state Ready recording false',
+        ]),
+      );
+      journal.note(
+        'record start '
+        '${at('record #$first end') - at('record #$first start')} ms',
+      );
+      await goBack(tester);
+      expectShot();
+    }
+
+    // The lifecycle is simulated: the binding reports the states the
+    // phones gave for Home and back, while the app stays in front.
+    phoneTest('back after the release (simulated lifecycle)', (tester) {
+      return recordAndLeave(tester, (id) async {
+        away.forEach(binding.handleAppLifecycleStateChanged);
+        await until(
+          tester,
+          'the release',
+          () => trace().contains('dispose #$id end'),
+        );
+        await settle(tester, const Duration(seconds: 1));
+        back.forEach(binding.handleAppLifecycleStateChanged);
+      });
+    });
+
+    phoneTest('back at once (simulated lifecycle)', (tester) {
+      return recordAndLeave(tester, (id) async {
+        [...away, ...back].forEach(binding.handleAppLifecycleStateChanged);
+      });
+    });
+
+    /// Waits for the host to take the app to the background and back.
+    Future<void> leaveForReal(WidgetTester tester, String action) async {
+      journal.note('ACTION $action');
+      // A return at once can pass `paused` between two looks, so the
+      // journal is read rather than the state of the moment.
+      Iterable<String> after(String line) =>
+          trace().skipWhile((l) => l != line).skip(1);
+      await until(
+        tester,
+        'paused',
+        () => after('ACTION $action').contains('lifecycle paused'),
+        timeout: const Duration(seconds: 30),
+      );
+      await until(
+        tester,
+        'resumed',
+        () => after('ACTION $action')
+            .skipWhile((l) => l != 'lifecycle paused')
+            .contains('lifecycle resumed'),
+        timeout: const Duration(seconds: 30),
+      );
+    }
+
+    phoneTest(
+      'home and back after seconds (real)',
+      (tester) => recordAndLeave(tester, (_) => leaveForReal(tester, 'home')),
+      skip: !realBackground,
+    );
+
+    phoneTest(
+      'home and back at once (real)',
+      (tester) =>
+          recordAndLeave(tester, (_) => leaveForReal(tester, 'home-and-back')),
+      skip: !realBackground,
+    );
+  });
+
+  group('measures', () {
+    // Not a claim of the page: what the flash is after a switch, and how
+    // long a recording takes to start, for the report of the phones.
+    phoneTest('the flash after a switch there and back', (tester) async {
+      await openCamera(tester);
+      await tap(tester, 'flash');
+      final first = created().single;
+      await until(
+        tester,
+        'the flash',
+        () => trace().contains('flash #$first always end'),
+      );
+      await tap(tester, 'shutter');
+      await until(
+        tester,
+        'the shot with the flash',
+        () => trace().contains('capture #$first end'),
+      );
+      await settle(tester, const Duration(milliseconds: 300));
+      journal.note('picture before the switch ${lastShot()!.path}');
+      for (var i = 1; i <= cameras.length; i++) {
+        await tap(tester, 'switch');
+        await until(
+          tester,
+          'switch $i',
+          () => created().length == i + 1 && shown('shutter'),
+        );
+        final id = created().last;
+        await until(
+          tester,
+          'camera #$id',
+          () => trace().contains('initialize #$id end'),
+        );
+        await settle(tester, const Duration(seconds: 1));
+      }
+      final last = created().last;
+      final ready = session(tester).currentState as Ready;
+      final calls = trace()
+          .skipWhile((line) => line != 'tap switch')
+          .where((line) => line.startsWith('flash '));
+      journal.note(
+        'after the switches: ${ready.camera.description.name}, '
+        'state flash ${ready.flash.name}, '
+        'controller flash ${ready.camera.value.flashMode.name}, '
+        'calls of the flash since the first switch $calls',
+      );
+      await tap(tester, 'shutter');
+      await until(
+        tester,
+        'the shot after the switches',
+        () => trace().contains('capture #$last end'),
+      );
+      await settle(tester, const Duration(milliseconds: 300));
+      journal.note('picture after the switches ${lastShot()!.path}');
+      await goBack(tester);
+    });
+
+    phoneTest('the start of five recordings', (tester) async {
+      await openCamera(tester);
+      final id = created().single;
+      for (var i = 0; i < 5; i++) {
+        await tap(tester, 'record');
+        await until(tester, 'recording $i', () => recording(tester));
+        await settle(tester, const Duration(seconds: 1));
+        await tap(tester, 'record');
+        await until(tester, 'stop $i', () => !recording(tester));
+        await settle(tester, const Duration(milliseconds: 500));
+      }
+      final starts = [
+        for (final line in journal.lines)
+          if (line.endsWith('record #$id start') ||
+              line.endsWith('record #$id end'))
+            int.parse(_time.firstMatch(line)!.group(1)!),
+      ];
+      final durations = [
+        for (var i = 0; i + 1 < starts.length; i += 2)
+          starts[i + 1] - starts[i],
+      ];
+      journal.note('record starts $durations ms');
+      await goBack(tester);
+      expectShot();
+    });
+  });
+}
+
+/// The time at the start of a line of the journal.
+final _time = RegExp(r'^\+(\d+) ms ');

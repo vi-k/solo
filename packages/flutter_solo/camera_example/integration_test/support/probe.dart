@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo_camera_example/camera_state.dart';
 
 /// What a probe saw on the phone, one line per call, event or error, with
 /// the milliseconds since the probe started.
@@ -230,3 +232,29 @@ class RecordingCameraPlatform extends CameraPlatform {
 
 /// The first line of [e], without the stack.
 String _short(Object e) => '$e'.split('\n').first;
+
+/// Writes down every change of the state of a session and every error of
+/// its jobs.
+final class SessionNotes extends SoloObserver {
+  SessionNotes(this.journal);
+
+  final ProbeJournal journal;
+
+  @override
+  void onChange(
+    SoloController<Object> solo,
+    SoloTransition<Object> transition,
+  ) => journal.note(switch (transition.current) {
+    Ready(:final recording) => 'state Ready recording $recording',
+    final state => 'state ${state.runtimeType}',
+  });
+
+  @override
+  void onError(
+    SoloController<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) => journal.note('error ${'$error'.split('\n').first}');
+}

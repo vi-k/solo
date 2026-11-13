@@ -8,7 +8,6 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_screen.dart';
-import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:scopo/scopo.dart';
 
 import '../test/support/device_app_attempts.dart';
@@ -37,7 +36,7 @@ Future<void> main() async {
   AppLifecycleListener(
     onStateChange: (state) => journal.note('lifecycle ${state.name}'),
   );
-  Solo.observer = _SessionNotes(journal);
+  Solo.observer = SessionNotes(journal);
   // The camera screen waits on its `scopeKey`, which the coordinator keeps.
   runApp(AsyncScopeCoordinator(child: MaterialApp(home: _Menu(journal))));
 }
@@ -107,30 +106,4 @@ class _JournalView extends StatelessWidget {
       );
     },
   );
-}
-
-/// Writes down every change of the state of a session and every error of
-/// its jobs.
-final class _SessionNotes extends SoloObserver {
-  _SessionNotes(this.journal);
-
-  final ProbeJournal journal;
-
-  @override
-  void onChange(
-    SoloController<Object> solo,
-    SoloTransition<Object> transition,
-  ) => journal.note(switch (transition.current) {
-    Ready(:final recording) => 'state Ready recording $recording',
-    final state => 'state ${state.runtimeType}',
-  });
-
-  @override
-  void onError(
-    SoloController<Object> solo,
-    Job<Object?> job,
-    Object error,
-    StackTrace stackTrace, {
-    required JobErrorAnswer answer,
-  }) => journal.note('error ${'$error'.split('\n').first}');
 }
