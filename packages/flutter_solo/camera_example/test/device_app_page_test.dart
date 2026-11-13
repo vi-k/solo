@@ -24,6 +24,7 @@ import 'package:flutter_solo_camera_example/camera_session.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/bloc_camera.dart';
 import 'support/device_app_attempts.dart';
 import 'support/fake_camera_platform.dart';
 import 'support/journal.dart';
@@ -47,6 +48,11 @@ const _losing = '## Losing the camera';
 const _failure = '### A failure in the state';
 const _denied = '## A denied permission';
 const _explained = '### A denial the screen explains';
+const _testing = '## Testing the app';
+const _onBloc = '## The same screen on bloc';
+
+/// The bloc of the section on bloc.
+const _bloc = 'test/support/bloc_camera.dart';
 
 /// Home during a recording and back, as both phones report it.
 const _homeAndBack = [
@@ -922,6 +928,103 @@ void main() {
       await tester.pump(platform.disposeTime);
       expect(await released, isA<Done<void>>());
       await session.close();
+    });
+  });
+
+  group('testing the app', () {
+    test('the blocks are the fake and the cases of the app', () {
+      expect(
+        codeMissingFrom(
+          _doc,
+          'test/support/camera_cases.dart',
+          alsoIn: [
+            'test/support/fake_camera_platform.dart',
+            'test/camera_session_test.dart',
+          ],
+          under: _testing,
+        ),
+        isEmpty,
+      );
+      _says(
+        _part(_testing),
+        "On the Galaxy's a `dispose` under a picture loses the picture, with "
+        "the line `capture #N failed`; on the iPhone's the `dispose` waits "
+        'for the picture.',
+      );
+    });
+  });
+
+  group('the same screen on bloc', () {
+    /// The rows of the table, the number in them counted in the bloc.
+    List<String> rows() {
+      final checks = RegExp(
+        r'if \(state != ready\) return;',
+      ).allMatches(File(_bloc).readAsStringSync()).length;
+      return [
+        '| Rapid taps | `on<CameraCommand>` with `sequential()`; `_shooting`, '
+            'set in `add` | the queue of `Solo`; `Policy.droppable` on the '
+            'key of `takePicture` | nothing more |',
+        '| A switch during a recording | the same handler | the same queue '
+            '| nothing more |',
+        '| Leaving the screen | `Release` with a `Completer`; '
+            '`AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | '
+            '`release()`; `AsyncDataScope` with a `scopeKey` | bloc: '
+            '`close()` not awaited |',
+        '| Going to the background | `Suspend` and `Resume` in the queue | '
+            '`suspend()` and `resume()` in the queue | for a failed stop, '
+            'bloc: the bloc made in `runZonedGuarded`; solo: '
+            '`Solo.unansweredHandler` |',
+        '| Losing the camera | `on<CameraLost>` of its own; '
+            '`if (state != ready) return;` $checks times; `LetGo` in the '
+            'queue; `_camera`; `close()` that cancels `_errors` | '
+            '`externalSetState`; commands on `Ready` with `ctx.join`; `_letGo` '
+            'with `first: true`; `onClose` that cancels `_errors` | for a '
+            'failed switch during a recording, bloc: the bloc made in '
+            '`runZonedGuarded`; solo: `Solo.unansweredHandler` |',
+        '| A denied permission | `_initialize`, which awaits `dispose` '
+            'itself | `_initialize`, with `_letGo` | nothing more |',
+      ];
+    }
+
+    test('the blocks are the bloc', () {
+      expect(codeMissingFrom(_doc, _bloc, under: _onBloc), isEmpty);
+    });
+
+    test('the table holds every situation, with the count of the bloc', () {
+      for (final row in rows()) {
+        _says(_part(_onBloc), row);
+      }
+    });
+
+    test('every name in the table stands in the code', () {
+      final code = [
+        _bloc,
+        'test/bloc_camera_test.dart',
+        'lib/camera_session.dart',
+        'lib/camera_screen.dart',
+        'test/camera_session_test.dart',
+      ].map((file) => File(file).readAsStringSync()).join('\n');
+      for (final row in rows()) {
+        for (final name in RegExp('`([^`]+)`').allMatches(row)) {
+          expect(code, contains(name.group(1)), reason: row);
+        }
+      }
+    });
+
+    testWidgets('close does not return under the fake clock', (tester) async {
+      final bloc = CameraBloc(onCaptured: (XFile file) {});
+      var closed = false;
+      unawaited(bloc.close().then((_) => closed = true));
+      for (var frame = 0; frame < 10; frame++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      expect(closed, isFalse);
+      _says(
+        _part(_onBloc),
+        'under the fake clock of `testWidgets` the `close()` of this bloc '
+        'does not return:',
+      );
     });
   });
 

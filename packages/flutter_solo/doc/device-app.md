@@ -9,7 +9,8 @@ to be let go before the next screen opens it.
 
 The sections on the situations of the app open with a first attempt: the
 version the plugin's README and its example lead to. A section shows what that
-code does on a phone and ends on the app's code.
+code does on a phone and ends on the app's code. Two sections close the page:
+the tests of the app, and the same camera screen on bloc.
 
 The app is
 [`camera_example`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example)
@@ -1026,3 +1027,388 @@ of the plugin has no other code for this denial, so on Android the screen does
 not send the user to Settings. `CameraAccessRestricted` and
 `AudioAccessRestricted` come from the README: neither phone was put under a
 policy that forbids the camera.
+
+## Testing the app
+
+The tests of the app run under `flutter test`, on `FakeCameraPlatform`: a
+`CameraPlatform` of the tests with durations in place of the hardware. A call
+that takes time on a phone writes a line where it starts and one where it ends,
+and it ends when the test has moved the clock that far:
+
+```dart
+/// How long an opening takes.
+Duration openTime = const Duration(milliseconds: 100);
+
+/// How long a picture takes: from 0.5 to 3.4 s on the Galaxy, from 0.2
+/// to 0.6 s on the iPhone.
+Duration captureTime = const Duration(milliseconds: 300);
+
+/// How long a switch of the camera during a recording takes.
+Duration switchTime = const Duration(milliseconds: 150);
+
+/// How long releasing a camera takes.
+Duration disposeTime = const Duration(milliseconds: 50);
+
+/// How long starting a recording takes: about a second on the Galaxy,
+/// from 0.2 to 2.5 seconds on the iPhone.
+Duration recordStartTime = const Duration(seconds: 1);
+
+/// How long stopping a recording takes.
+Duration stopTime = const Duration(milliseconds: 100);
+```
+
+Where two calls meet, the fake does what the phones did, and `phone` picks
+between the Galaxy's rules and the iPhone's. On the Galaxy's a `dispose` under
+a picture loses the picture, with the line `capture #N failed`; on the iPhone's
+the `dispose` waits for the picture. `failOpen`, `failStop`, `failSwitch` and
+`failCreate` make such a call fail while they are set, and `failFromOutside`
+sends an error of the camera, as the platform does when another app takes it.
+
+The tests keep the three rules of
+[Testing](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md):
+the test moves the clock, with `pump` and the durations of the fake; it reads
+`done` before it pumps, as
+[Waiting for the job](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md#waiting-for-the-job)
+explains; and it releases and closes the controller in its body, as
+[Moving the clock](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md#moving-the-clock)
+explains. Every test ends with `finish`:
+
+```dart
+Future<void> finish(WidgetTester tester, CameraDriver controller) async {
+  final released = controller.release();
+  await tester.pump(platform.disposeTime);
+  await released;
+}
+```
+
+`controller` is a `CameraDriver`, an interface of the tests with a method for
+each command. For `CameraSession` its `release` reads `done` on the spot, while
+`finish` has not pumped yet:
+
+```dart
+Future<void> release() async {
+  // The release ends while the test pumps, where `expect` may not run.
+  final released = await session.release().done;
+  if (released is! Done<void>) throw StateError('release: $released');
+  await session.close();
+}
+```
+
+The same cases run against the bloc of the next section through a driver of its
+own. One test for each situation of the page follows.
+
+Rapid taps: a switch during a shot waits for the shot, on the Galaxy's rules,
+where a `dispose` under the shot would lose it:
+
+```dart
+testWidgets('a switch during a shot waits for it', (tester) async {
+  final controller = make(captured.add);
+  controller.open();
+  await tester.pump(platform.openTime);
+  controller
+    ..takePicture()
+    ..switchCamera();
+  await tester.pump(platform.captureTime);
+  await tester.pump(platform.disposeTime);
+  await tester.pump(platform.openTime);
+
+  expect(
+    platform.log,
+    containsAllInOrder([
+      'capture #1 end',
+      'dispose #1 start',
+      'dispose #1 end',
+      'create front #2',
+      'initialize #2 end',
+    ]),
+  );
+  expect(platform.log, isNot(contains('capture #1 failed')));
+  expect(captured, hasLength(1));
+  await finish(tester, controller);
+});
+```
+
+A switch during a recording: one video, from both cameras:
+
+```dart
+testWidgets('recording goes on across a switch', (tester) async {
+  final controller = make(captured.add);
+  controller.open();
+  await tester.pump(platform.openTime);
+  controller
+    ..startRecording()
+    ..switchCamera()
+    ..stopRecording();
+  await tester.pump(platform.recordStartTime);
+  await tester.pump(platform.switchTime);
+  await tester.pump(platform.stopTime);
+
+  expect(
+    platform.log,
+    containsAllInOrder([
+      'record #1 start',
+      'switch #1 front end',
+      'record #1 end',
+    ]),
+  );
+  expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+  expect((controller.currentState as Ready).recording, isFalse);
+  await finish(tester, controller);
+});
+```
+
+Leaving the screen runs the whole app through its buttons. A camera screen
+opened again while the one before it is still leaving opens the camera after
+the release:
+
+```dart
+testWidgets('a new camera screen waits for the old one', (tester) async {
+  await openCamera(tester);
+  await until(tester, find.byKey(const Key('shutter')));
+  await tester.pageBack();
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('open-camera')));
+  await tester.pumpAndSettle();
+  await tester.pump(platform.disposeTime);
+  await until(tester, find.byKey(const Key('shutter')));
+
+  expect(
+    platform.log,
+    containsAllInOrder(['dispose #1 end', 'create back #2']),
+  );
+  expect(platform.openCameras, 1);
+  expect(platform.hasPicture(2), isTrue);
+  await goBack(tester);
+  expect(platform.openCameras, 0);
+});
+```
+
+Going to the background: the app reports its lifecycle through the binding of
+the test, and the recording reaches `onCaptured` before the release:
+
+```dart
+testWidgets('recording is kept when the app leaves', (tester) async {
+  final controller = await openShown(tester);
+  controller.startRecording();
+  await tester.pump(platform.recordStartTime);
+  lifecycle(tester, leave);
+  await tester.pump(platform.stopTime);
+  await tester.pump(platform.disposeTime);
+
+  expect(captured, hasLength(1));
+  expect(captured.single.path, '/fake/video-1.mp4');
+  expect(platform.openCameras, 0);
+  expect(controller.currentState, isA<Closed>());
+  expect(
+    platform.log,
+    containsAllInOrder(['record #1 end', 'dispose #1 start']),
+  );
+  lifecycle(tester, back);
+  await tester.pump(platform.openTime);
+  await tester.pumpWidget(const SizedBox());
+  await finish(tester, controller);
+});
+```
+
+Losing the camera: the error comes after the frame it is sent in, so `fail`
+pumps twice, and the screen shows the failure before the camera is let go:
+
+```dart
+testWidgets('a camera taken away shows the failure', (tester) async {
+  final controller = await openShown(tester);
+  // The Galaxy reports a camera taken by another app as an error, with
+  // no closing event.
+  await fail(tester, 1, FakeCameraPlatform.takenOnAndroid);
+
+  expect(
+    controller.currentState,
+    isA<Broken>().having(
+      (s) => s.error,
+      'error',
+      FakeCameraPlatform.takenOnAndroid,
+    ),
+  );
+  expect(retry, findsOneWidget);
+  await tester.pump(platform.disposeTime);
+  expect(platform.log, contains('dispose #1 end'));
+  expect(platform.openCameras, 0);
+  await tester.pumpWidget(const SizedBox());
+  await finish(tester, controller);
+});
+```
+
+A denied permission: a denial, Retry, and a denial the iPhone no longer asks
+about, with no camera created and none released:
+
+```dart
+testWidgets('retry asks again, and the next answer shows (iPhone)', (
+  tester,
+) async {
+  platform
+    ..phone = FakePhone.iphone
+    ..failCreate = FakeCameraPlatform.deniedOnIphone;
+  final controller = await openShown(tester);
+  await tester.pump();
+  platform.failCreate = FakeCameraPlatform.deniedWithoutPromptOnIphone;
+  await tester.tap(retry);
+  await tester.pump();
+  await tester.pump();
+
+  expect(
+    controller.currentState,
+    isA<Denied>().having(
+      (s) => s.code,
+      'code',
+      'CameraAccessDeniedWithoutPrompt',
+    ),
+  );
+  expect(find.textContaining('Settings'), findsOneWidget);
+  expect(retry, findsNothing);
+  expect(platform.log, ['create back failed', 'create back failed']);
+  await tester.pumpWidget(const SizedBox());
+  await finish(tester, controller);
+});
+```
+
+## The same screen on bloc
+
+`CameraBloc` is the controller of the camera screen on bloc: the same states,
+an event for each command of `CameraSession`, and `BlocCameraScreen` with
+`BlocProvider` and `BlocBuilder` over the same buttons. It passes the cases of
+the previous section on the same fake platform, the run of the app through its
+buttons among them. The code is
+[`bloc_camera.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/test/support/bloc_camera.dart)
+in the tests of the app.
+
+The commands share one handler with `sequential()` of `bloc_concurrency`: a
+switch waits for the shot under way, and a stop for the switch. A failure the
+platform reports has a handler of its own, with the default transformer, which
+runs it at once:
+
+```dart
+CameraBloc({required this.onCaptured}) : super(const Closed()) {
+  // One handler for every command: a switch waits for the shot under way,
+  // a stop for the switch, and a release for whatever runs.
+  on<CameraCommand>(_run, transformer: sequential());
+  // A failure has a handler of its own, with the concurrent transformer:
+  // it shows at once, not after the command under way.
+  on<CameraLost>(_lose);
+}
+```
+
+`droppable()` on a handler of its own would drop a second tap of the shutter,
+and the switch would no longer wait for the shot. In the shared handler a
+transformer sees a tap only when the command before it is over, and by then the
+second tap is in the queue. The bloc drops it in `add`:
+
+```dart
+/// A [TakePicture] waits in the queue or runs: a tap during a shot is
+/// dropped. The flag is set in [add], since a transformer sees an event
+/// only when the one before it is over.
+bool _shooting = false;
+
+@override
+void add(CameraEvent event) {
+  if (event is TakePicture) {
+    if (_shooting) return;
+    _shooting = true;
+  }
+  super.add(event);
+}
+```
+
+A loss changes the state while a command waits on the camera. A command on a
+ready camera keeps the state it started from and looks at it again after every
+`await`:
+
+```dart
+Future<void> _startRecording(Emitter<CameraState> emit) async {
+  final ready = state;
+  if (ready is! Ready || ready.recording) return;
+  await ready.camera.startVideoRecording();
+  if (state != ready) return;
+  emit(Ready(camera: ready.camera, flash: ready.flash, recording: true));
+}
+```
+
+The command under way may still use the lost camera, so `_lose` puts `LetGo` in
+the queue after it. A `Release` already waiting there runs first, and it finds
+the camera in `_camera`, which holds it after the state no longer does:
+
+```dart
+/// The camera the platform holds for this bloc, lost or not: a [Release]
+/// that runs after a loss still finds it, before the [LetGo] of the loss.
+CameraController? _camera;
+
+void _lose(CameraLost event, Emitter<CameraState> emit) {
+  if (state is! Ready) return;
+  emit(Broken(event.description));
+  add(const LetGo());
+}
+
+Future<void> _letGo() async {
+  final camera = _camera;
+  _camera = null;
+  await camera?.dispose();
+}
+```
+
+The owner waits for the release through a `Completer` in the event. `close()`
+stops the errors of the platform first: an error after it would add an event to
+a closed bloc, and `add` throws there:
+
+```dart
+Future<void> release() {
+  final release = Release(Completer());
+  add(release);
+  return release.done.future;
+}
+
+@override
+Future<void> close() {
+  unawaited(_errors?.cancel());
+  return super.close();
+}
+
+case Release(:final done):
+  try {
+    await _letGo();
+    emit(const Closed());
+    done.complete();
+  } catch (error, stackTrace) {
+    done.completeError(error, stackTrace);
+  }
+```
+
+`BlocProvider` closes the bloc it made without waiting, and it knows nothing of
+the screen before it. `BlocCameraScreen` owns the bloc through the same
+`AsyncDataScope` as `CameraScreen`, with its `scopeKey` and its timeouts, and
+hands it down with `BlocProvider.value`. The scope waits for the release and
+not for `close()`: the camera is free once the release ends, and under the fake
+clock of `testWidgets` the `close()` of this bloc does not return:
+
+```dart
+disposeData: (bloc) async {
+  try {
+    await bloc.release();
+  } finally {
+    // Not awaited: the camera is free by now, and under the fake clock
+    // of a widget test `close` does not return.
+    unawaited(bloc.close());
+  }
+},
+```
+
+What each situation takes, on bloc and on solo:
+
+| Situation | bloc | solo | What the tests needed |
+| --- | --- | --- | --- |
+| Rapid taps | `on<CameraCommand>` with `sequential()`; `_shooting`, set in `add` | the queue of `Solo`; `Policy.droppable` on the key of `takePicture` | nothing more |
+| A switch during a recording | the same handler | the same queue | nothing more |
+| Leaving the screen | `Release` with a `Completer`; `AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` with a `scopeKey` | bloc: `close()` not awaited |
+| Going to the background | `Suspend` and `Resume` in the queue | `suspend()` and `resume()` in the queue | for a failed stop, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| Losing the camera | `on<CameraLost>` of its own; `if (state != ready) return;` 8 times; `LetGo` in the queue; `_camera`; `close()` that cancels `_errors` | `externalSetState`; commands on `Ready` with `ctx.join`; `_letGo` with `first: true`; `onClose` that cancels `_errors` | for a failed switch during a recording, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| A denied permission | `_initialize`, which awaits `dispose` itself | `_initialize`, with `_letGo` | nothing more |
+
+The bloc's tests are the cases of the previous section and one of their own: an
+error of the camera after `close()` changes nothing.

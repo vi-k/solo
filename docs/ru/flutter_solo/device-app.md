@@ -9,7 +9,8 @@
 
 Разделы о ситуациях приложения открываются первой попыткой — версией, к которой
 ведут README плагина и его пример. Раздел показывает, что этот код делает
-на телефоне, и заканчивается кодом приложения.
+на телефоне, и заканчивается кодом приложения. Страницу закрывают два раздела:
+тесты приложения и тот же экран камеры на bloc.
 
 Приложение —
 [`camera_example`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example)
@@ -1017,3 +1018,389 @@ state Closed
 пользователя в Настройки. `CameraAccessRestricted` и `AudioAccessRestricted`
 взяты из README: ни один из телефонов не ставили под политику, которая
 запрещает камеру.
+
+## Тесты приложения
+
+Тесты приложения идут под `flutter test`, на `FakeCameraPlatform`: это
+`CameraPlatform` из тестов, где вместо железа длительности. Вызов, который
+на телефоне занимает время, пишет строку там, где начинается, и строку там, где
+кончается, а кончается он, когда тест сдвинул часы на столько же:
+
+```dart
+/// Сколько длится открытие.
+Duration openTime = const Duration(milliseconds: 100);
+
+/// Сколько длится снимок: от 0,5 до 3,4 с на Galaxy, от 0,2 до 0,6 с
+/// на iPhone.
+Duration captureTime = const Duration(milliseconds: 300);
+
+/// Сколько длится смена камеры во время записи.
+Duration switchTime = const Duration(milliseconds: 150);
+
+/// Сколько длится освобождение камеры.
+Duration disposeTime = const Duration(milliseconds: 50);
+
+/// Сколько длится старт записи: около секунды на Galaxy, от 0,2
+/// до 2,5 секунды на iPhone.
+Duration recordStartTime = const Duration(seconds: 1);
+
+/// Сколько длится остановка записи.
+Duration stopTime = const Duration(milliseconds: 100);
+```
+
+Где два вызова встречаются, фейк делает то же, что делали телефоны, а `phone`
+выбирает между правилами Galaxy и правилами iPhone. По правилам Galaxy
+`dispose` под снимком теряет снимок, со строкой `capture #N failed`;
+по правилам iPhone `dispose` ждёт снимка. `failOpen`, `failStop`, `failSwitch`
+и `failCreate`, пока заданы, роняют такой вызов, а `failFromOutside` присылает
+ошибку камеры, как это делает платформа, когда камеру забирает другое
+приложение.
+
+Тесты держат три правила
+[Testing](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md):
+часы двигает тест, через `pump` и длительности фейка; `done` тест читает
+до `pump`, как объясняет
+[Waiting for the job](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md#waiting-for-the-job);
+а освобождает и закрывает контроллер в своём теле, как объясняет
+[Moving the clock](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md#moving-the-clock).
+Каждый тест кончается вызовом `finish`:
+
+```dart
+Future<void> finish(WidgetTester tester, CameraDriver controller) async {
+  final released = controller.release();
+  await tester.pump(platform.disposeTime);
+  await released;
+}
+```
+
+`controller` — это `CameraDriver`, интерфейс тестов с методом на каждую
+команду. Для `CameraSession` его `release` читает `done` сразу, пока `finish`
+ещё не вызвал `pump`:
+
+```dart
+Future<void> release() async {
+  // Освобождение кончается, пока тест качает кадры, а там `expect` нельзя.
+  final released = await session.release().done;
+  if (released is! Done<void>) throw StateError('release: $released');
+  await session.close();
+}
+```
+
+Те же случаи идут и против блока из следующего раздела, через его собственный
+драйвер. Дальше — по одному тесту на каждую ситуацию страницы.
+
+Быстрые нажатия: смена камеры во время снимка ждёт снимка, по правилам Galaxy,
+где `dispose` под снимком потерял бы его:
+
+```dart
+testWidgets('a switch during a shot waits for it', (tester) async {
+  final controller = make(captured.add);
+  controller.open();
+  await tester.pump(platform.openTime);
+  controller
+    ..takePicture()
+    ..switchCamera();
+  await tester.pump(platform.captureTime);
+  await tester.pump(platform.disposeTime);
+  await tester.pump(platform.openTime);
+
+  expect(
+    platform.log,
+    containsAllInOrder([
+      'capture #1 end',
+      'dispose #1 start',
+      'dispose #1 end',
+      'create front #2',
+      'initialize #2 end',
+    ]),
+  );
+  expect(platform.log, isNot(contains('capture #1 failed')));
+  expect(captured, hasLength(1));
+  await finish(tester, controller);
+});
+```
+
+Смена камеры во время записи: одно видео, с обеих камер:
+
+```dart
+testWidgets('recording goes on across a switch', (tester) async {
+  final controller = make(captured.add);
+  controller.open();
+  await tester.pump(platform.openTime);
+  controller
+    ..startRecording()
+    ..switchCamera()
+    ..stopRecording();
+  await tester.pump(platform.recordStartTime);
+  await tester.pump(platform.switchTime);
+  await tester.pump(platform.stopTime);
+
+  expect(
+    platform.log,
+    containsAllInOrder([
+      'record #1 start',
+      'switch #1 front end',
+      'record #1 end',
+    ]),
+  );
+  expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+  expect((controller.currentState as Ready).recording, isFalse);
+  await finish(tester, controller);
+});
+```
+
+Уход с экрана гоняет всё приложение через его кнопки. Экран камеры, открытый
+снова, пока прежний ещё уходит, открывает камеру после освобождения:
+
+```dart
+testWidgets('a new camera screen waits for the old one', (tester) async {
+  await openCamera(tester);
+  await until(tester, find.byKey(const Key('shutter')));
+  await tester.pageBack();
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('open-camera')));
+  await tester.pumpAndSettle();
+  await tester.pump(platform.disposeTime);
+  await until(tester, find.byKey(const Key('shutter')));
+
+  expect(
+    platform.log,
+    containsAllInOrder(['dispose #1 end', 'create back #2']),
+  );
+  expect(platform.openCameras, 1);
+  expect(platform.hasPicture(2), isTrue);
+  await goBack(tester);
+  expect(platform.openCameras, 0);
+});
+```
+
+Уход в фон: приложение сообщает о своём жизненном цикле через `binding` теста,
+и запись доходит до `onCaptured` раньше освобождения:
+
+```dart
+testWidgets('recording is kept when the app leaves', (tester) async {
+  final controller = await openShown(tester);
+  controller.startRecording();
+  await tester.pump(platform.recordStartTime);
+  lifecycle(tester, leave);
+  await tester.pump(platform.stopTime);
+  await tester.pump(platform.disposeTime);
+
+  expect(captured, hasLength(1));
+  expect(captured.single.path, '/fake/video-1.mp4');
+  expect(platform.openCameras, 0);
+  expect(controller.currentState, isA<Closed>());
+  expect(
+    platform.log,
+    containsAllInOrder(['record #1 end', 'dispose #1 start']),
+  );
+  lifecycle(tester, back);
+  await tester.pump(platform.openTime);
+  await tester.pumpWidget(const SizedBox());
+  await finish(tester, controller);
+});
+```
+
+Потеря камеры: ошибка приходит после кадра, в котором её прислали, поэтому
+`fail` качает два кадра, и экран показывает сбой раньше, чем камеру отпускают:
+
+```dart
+testWidgets('a camera taken away shows the failure', (tester) async {
+  final controller = await openShown(tester);
+  // Камеру, которую забрало другое приложение, Galaxy сообщает ошибкой,
+  // без события закрытия.
+  await fail(tester, 1, FakeCameraPlatform.takenOnAndroid);
+
+  expect(
+    controller.currentState,
+    isA<Broken>().having(
+      (s) => s.error,
+      'error',
+      FakeCameraPlatform.takenOnAndroid,
+    ),
+  );
+  expect(retry, findsOneWidget);
+  await tester.pump(platform.disposeTime);
+  expect(platform.log, contains('dispose #1 end'));
+  expect(platform.openCameras, 0);
+  await tester.pumpWidget(const SizedBox());
+  await finish(tester, controller);
+});
+```
+
+Отказ в разрешении: отказ, повтор и отказ, о котором iPhone уже не спрашивает;
+камеры не создано, и освобождать нечего:
+
+```dart
+testWidgets('retry asks again, and the next answer shows (iPhone)', (
+  tester,
+) async {
+  platform
+    ..phone = FakePhone.iphone
+    ..failCreate = FakeCameraPlatform.deniedOnIphone;
+  final controller = await openShown(tester);
+  await tester.pump();
+  platform.failCreate = FakeCameraPlatform.deniedWithoutPromptOnIphone;
+  await tester.tap(retry);
+  await tester.pump();
+  await tester.pump();
+
+  expect(
+    controller.currentState,
+    isA<Denied>().having(
+      (s) => s.code,
+      'code',
+      'CameraAccessDeniedWithoutPrompt',
+    ),
+  );
+  expect(find.textContaining('Settings'), findsOneWidget);
+  expect(retry, findsNothing);
+  expect(platform.log, ['create back failed', 'create back failed']);
+  await tester.pumpWidget(const SizedBox());
+  await finish(tester, controller);
+});
+```
+
+## Тот же экран на bloc
+
+`CameraBloc` — контроллер экрана камеры на bloc: те же состояния, по событию
+на каждую команду `CameraSession` и `BlocCameraScreen` с `BlocProvider`
+и `BlocBuilder` над теми же кнопками. Он проходит случаи предыдущего раздела
+на той же фейковой платформе, и прогон приложения через его кнопки в их числе.
+Код —
+[`bloc_camera.dart`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/camera_example/test/support/bloc_camera.dart)
+в тестах приложения.
+
+Команды делят один обработчик с `sequential()` из `bloc_concurrency`: смена
+камеры ждёт идущего снимка, а стоп — смены. У сбоя, о котором сообщает
+платформа, свой обработчик, с трансформером по умолчанию, и тот запускает его
+сразу:
+
+```dart
+CameraBloc({required this.onCaptured}) : super(const Closed()) {
+  // Один обработчик на все команды: смена ждёт идущего снимка, стоп —
+  // смены, а освобождение — того, что идёт.
+  on<CameraCommand>(_run, transformer: sequential());
+  // У сбоя свой обработчик, с параллельным трансформером: сбой виден
+  // сразу, а не после идущей команды.
+  on<CameraLost>(_lose);
+}
+```
+
+`droppable()` на собственном обработчике отбросил бы второе нажатие затвора,
+но смена камеры перестала бы ждать снимка. В общем обработчике трансформер
+видит нажатие, только когда команда перед ним кончилась, а к тому времени
+второе нажатие уже в очереди. Блок отбрасывает его в `add`:
+
+```dart
+/// [TakePicture] ждёт в очереди или выполняется: нажатие во время снимка
+/// отбрасывается. Флаг ставится в [add], потому что трансформер видит
+/// событие, только когда предыдущее кончилось.
+bool _shooting = false;
+
+@override
+void add(CameraEvent event) {
+  if (event is TakePicture) {
+    if (_shooting) return;
+    _shooting = true;
+  }
+  super.add(event);
+}
+```
+
+Потеря меняет состояние, пока команда ждёт камеру. Команда над готовой камерой
+держит состояние, с которого начала, и смотрит на него снова после каждого
+`await`:
+
+```dart
+Future<void> _startRecording(Emitter<CameraState> emit) async {
+  final ready = state;
+  if (ready is! Ready || ready.recording) return;
+  await ready.camera.startVideoRecording();
+  if (state != ready) return;
+  emit(Ready(camera: ready.camera, flash: ready.flash, recording: true));
+}
+```
+
+Идущая команда может ещё пользоваться потерянной камерой, поэтому `_lose`
+ставит `LetGo` в очередь после неё. `Release`, который уже ждёт там,
+выполняется первым и находит камеру в `_camera`: поле держит её и тогда, когда
+состояние уже нет:
+
+```dart
+/// Камера, которую платформа держит для этого блока, потерянная или нет:
+/// [Release], выполненный после потери, ещё находит её, раньше [LetGo].
+CameraController? _camera;
+
+void _lose(CameraLost event, Emitter<CameraState> emit) {
+  if (state is! Ready) return;
+  emit(Broken(event.description));
+  add(const LetGo());
+}
+
+Future<void> _letGo() async {
+  final camera = _camera;
+  _camera = null;
+  await camera?.dispose();
+}
+```
+
+Владелец ждёт освобождения через `Completer` в событии. `close()` сначала
+перестаёт слушать ошибки платформы: ошибка после него добавила бы событие
+в закрытый блок, а `add` там бросает:
+
+```dart
+Future<void> release() {
+  final release = Release(Completer());
+  add(release);
+  return release.done.future;
+}
+
+@override
+Future<void> close() {
+  unawaited(_errors?.cancel());
+  return super.close();
+}
+
+case Release(:final done):
+  try {
+    await _letGo();
+    emit(const Closed());
+    done.complete();
+  } catch (error, stackTrace) {
+    done.completeError(error, stackTrace);
+  }
+```
+
+`BlocProvider` закрывает созданный им блок без ожидания и ничего не знает
+об экране перед ним. `BlocCameraScreen` владеет блоком через тот же
+`AsyncDataScope`, что и `CameraScreen`, с его `scopeKey` и таймаутами, и отдаёт
+блок вниз через `BlocProvider.value`. Скоуп ждёт освобождения, а не `close()`:
+камера свободна, как только освобождение кончилось, а на фальшивых часах
+`testWidgets` `close()` этого блока не возвращается:
+
+```dart
+disposeData: (bloc) async {
+  try {
+    await bloc.release();
+  } finally {
+    // Без ожидания: камера к этому времени свободна, а на фальшивых часах
+    // виджет-теста `close` не возвращается.
+    unawaited(bloc.close());
+  }
+},
+```
+
+Что берёт каждая ситуация на bloc и на solo:
+
+| Ситуация | bloc | solo | Что понадобилось тестам |
+| --- | --- | --- | --- |
+| Быстрые нажатия | `on<CameraCommand>` с `sequential()`; `_shooting`, который ставится в `add` | очередь `Solo`; `Policy.droppable` на ключе `takePicture` | ничего сверх |
+| Смена камеры во время записи | тот же обработчик | та же очередь | ничего сверх |
+| Уход с экрана | `Release` с `Completer`; `AsyncDataScope` со `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` со `scopeKey` | bloc: `close()` без ожидания |
+| Уход в фон | `Suspend` и `Resume` в очереди | `suspend()` и `resume()` в очереди | для упавшего стопа, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| Потеря камеры | свой `on<CameraLost>`; `if (state != ready) return;` 8 раз; `LetGo` в очереди; `_camera`; `close()`, который отменяет `_errors` | `externalSetState`; команды над `Ready` с `ctx.join`; `_letGo` с `first: true`; `onClose`, который отменяет `_errors` | для упавшей смены камеры во время записи, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| Отказ в разрешении | `_initialize`, который сам ждёт `dispose` | `_initialize`, с `_letGo` | ничего сверх |
+
+Тесты блока — случаи предыдущего раздела и один свой: ошибка камеры после
+`close()` ничего не меняет.

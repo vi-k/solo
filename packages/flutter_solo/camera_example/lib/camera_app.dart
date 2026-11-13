@@ -29,7 +29,11 @@ class CameraApp extends StatelessWidget {
 /// It outlives the camera screen, so a picture taken just before the
 /// camera screen left still reaches it.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  /// The camera screen the button opens; the tests put the same app on
+  /// another controller through it.
+  final Widget Function({required void Function(XFile file) onCaptured}) camera;
+
+  const HomeScreen({super.key, this.camera = CameraScreen.new});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -49,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
           appBar: AppBar(title: const Text('Camera')),
-          body: CameraScreen(onCaptured: _captured),
+          body: widget.camera(onCaptured: _captured),
         ),
       ),
     );
