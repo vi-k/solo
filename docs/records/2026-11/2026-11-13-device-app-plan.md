@@ -1,5 +1,5 @@
-> **Состояние на 2026-11-13:** план написан, ждёт ревью и одобрения
-> владельца; ничего не построено.
+> **Состояние на 2026-11-13:** план написан, прошёл ревью на Opus, находки
+> приняты в текст; ждёт одобрения владельца, ничего не построено.
 > **Что это:** план работ по странице `packages/flutter_solo/doc/device-app.md`
 > и приложению `packages/flutter_solo/camera_example/`: задачи, имена, тесты,
 > проверки, порядок.
@@ -35,7 +35,9 @@
 - Пол: Dart 3.10.0, Flutter 3.38.1; `environment` приложения — `sdk: ^3.10.0`,
   `flutter: '>=3.38.1'`, как у `example/`.
 - Рантайм-зависимости не выше пинов Flutter на полу, dev — свежие.
-- Нижняя граница `camera` — `^0.12.0+2`.
+- Нижняя граница `camera` — `^0.12.0+2`. На стабильном SDK разрешается выпуск
+  новее (на Flutter 3.47 — 0.12.2), на полу — 0.12.0+2; вывод о плагине,
+  который различается между ними, на страницу идёт с версией или не идёт.
 - Новых членов API в `async_job`, `solo`, `flutter_solo` нет (решение 131).
   Ответ раздела требует члена, которого нет, — стоп, вопрос владельцу.
 - Код `yx_camera` не попадает никуда, и сам проект в публичных файлах,
@@ -54,6 +56,7 @@
   и скилла `doc-reader`.
 - Коммиты — Conventional Commits, в конце
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- `docs/handoff.md` обновляется после каждой задачи, а не только в конце.
 - Публикация — только отдельной просьбой владельца; пуш — по его слову.
 
 ## На что смотреть ревьюеру
@@ -68,7 +71,7 @@
    до конца `initialize()`: команда ждёт открытия, а не ловит `CameraException`
    «Uninitialized CameraController». Задача 4.
 3. **Экран закрыт, пока камера открывается** — закрытие посреди `open()`:
-   камера на платформе освобождается ровно один раз, и после закрытия
+   камера на платформе освобождается ровно один раз, и после `release()`
    `CameraController` плагина никто не трогает. Задача 6.
 4. **«Повторить» дважды подряд** — две команды открытия после сбоя:
    на платформе открыта одна камера, а не две. Задача 8.
@@ -92,6 +95,16 @@
   `text` сверяются с журналом подставной платформы, фразы прозы — через
   `_says`. `tool/check_traces.py` и генератор не нужны; цели дизайна — блок
   собирается, попытки и ответы идут, трассы сверены — выполняет этот тест.
+  Дизайн дал выбор между расширением `tool/flutter_snippets.py` и своим
+  генератором; тест страницы — третий путь, и он вынесен владельцу при
+  одобрении плана. Тест строится по `camera_rakes_test.dart`: блоки ответа
+  держатся `under:` своего заголовка, блоки попытки — в файле попыток, трассы —
+  в общем журнале прогона (`test/support/journal.dart`): строки платформы,
+  смены состояния и пойманные исключения.
+- **Прежние версии ответов** — `test/support/device_app_steps.dart`. Задача,
+  которая меняет метод, уже процитированный страницей, переносит его прежнюю
+  версию туда тем же коммитом, и раздел, цитирующий прежнюю, держится этим
+  файлом. Так тест страницы не краснеет в чужой задаче.
 - **Пятая копия `page_code.dart`** — в `camera_example/test/support/`: тест
   страницы не может жить в `packages/flutter_solo/test/`, потому что `floor`
   гоняет тесты пакета из архива, а приложения в архиве нет.
@@ -104,14 +117,27 @@
   `flutter_bloc` и `bloc_concurrency` — dev-зависимости приложения.
 - **Пол `camera`** проверяется шагом задания `floor`: на Flutter 3.38.1
   `flutter pub downgrade` и `flutter test` приложения, затем проверка, что
-  в `pubspec.lock` стоит `camera` 0.12.0+2. Если `downgrade` на полу
-  не разрешается, шаг не заводится, а отказ записывается в `docs/settled.md`.
+  в `pubspec.lock` стоит `camera` 0.12.0+2. Пробный прогон — уже в конце задачи
+  1, шаг в CI — задача 12. Если `downgrade` на полу не разрешается, шаг
+  не заводится, а отказ записывается в `docs/settled.md`.
 - **Подпись iOS** — файл `ios/Flutter/Signing.xcconfig` с `DEVELOPMENT_TEAM`
   вне гита (`.gitignore` приложения), подключённый через `#include?`
   из `Debug.xcconfig` и `Release.xcconfig`. Команду разработчика исполнитель
   спрашивает у владельца, в репозиторий она не идёт.
-- **Зонды на телефонах — до кода разделов**, задача 2. Финальная проверка
-  на телефонах остаётся последним этапом, задача 13.
+- **Зонды на телефонах — до кода разделов**, задача 2, вместе с ручным списком
+  владельцу: правила подставной платформы для разделов 4–6 иначе были бы
+  выдуманы. Финальная проверка на телефонах остаётся последним этапом, задача
+  13, и перепроверяет ответы.
+- **Освобождение камеры — своя команда `release()`.** `close()` у `Solo`
+  не ждёт ничего, что запущено в `onClose` (dartdoc `onClose`
+  в `packages/solo/lib/src/solo.dart`), а переопределять `close()` dartdoc
+  запрещает. Поэтому ветвь закрытия экрана ждёт `release().done`, потом зовёт
+  `close()`, как раздел «Awaiting the disposal» страницы
+  `packages/solo/doc/camera.md`. Это член приложения, а не API.
+- **Уход в фон — по `hidden`, а не по `inactive`.** На iOS `inactive` приходит
+  и от системного диалога разрешения, и от шторки; README плагина освобождает
+  камеру на `inactive`, и это кандидат в первую попытку раздела 4. Что выбрать,
+  подтверждает iPhone в задаче 2.
 - **Требования разделов**, которые дизайн отдал разделам:
   - 1: вспышка — каждое нажатие применяется по порядку, итог — последнее;
     снимок во время снимка — нажатие пропадает; смена камеры во время снимка —
@@ -125,8 +151,10 @@
     после освобождения.
   - 5: камера, отнятая извне или упавшая, переводит экран в сбой с кнопкой
     «повторить»; повтор открывает камеру заново.
-  - 6: отказ в разрешении — экран с объяснением, что разрешить и где; повтор
-    доступен.
+  - 6: отказ в разрешении — экран с объяснением, что разрешить: камеру или
+    микрофон. Обычный отказ — кнопка «повторить», которая спросит снова; отказ
+    без вопроса (`…WithoutPrompt`) — «разрешите в Settings»; ограничение
+    (`…Restricted`) — «запрещено политикой устройства».
 
 ## Имена
 
@@ -147,7 +175,10 @@
   3.
 - `CameraApp`, `HomeScreen` — приложение и главный экран,
   `lib/camera_app.dart`, задача 3.
-- `CameraBloc` — вариант bloc, `test/support/bloc_camera.dart`, задача 10.
+- `Journal` — общий журнал прогона, `test/support/journal.dart`, задача 3.
+- Прежние версии ответов — `test/support/device_app_steps.dart`, с задачи 4.
+- `CameraBloc`, `BlocCameraScreen` — вариант bloc,
+  `test/support/bloc_camera.dart`, задача 10.
 
 Состояние, `lib/camera_state.dart`:
 
@@ -166,8 +197,8 @@ final class Ready extends CameraState {
   final FlashMode flash;
   final bool recording;
 }
-final class Failed extends CameraState {
-  const Failed(this.error);
+final class Broken extends CameraState {
+  const Broken(this.error);
   final Object error;
 }
 final class Denied extends CameraState {
@@ -175,6 +206,9 @@ final class Denied extends CameraState {
   final String code;
 }
 ```
+
+Не `Failed`: это имя исхода `async_job`, его реэкспортируют `solo`,
+`flutter_solo` и scopo, и импорт стал бы неоднозначным.
 
 Контроллер, `lib/camera_session.dart`:
 
@@ -189,12 +223,15 @@ final class CameraSession extends Solo<CameraState> {
   Job<XFile?> stopRecording();
   Job<void> suspend(); // the app leaves the foreground
   Job<void> resume(); // the app comes back
+  Job<void> release(); // frees the camera on the platform, awaited
 }
 ```
 
 Тела, ключи, политики — дело задач 3–8; страница показывает, что вышло.
-`close()` — свой у `Solo`. Снимок и видео уходят наверх через `onCaptured`:
-главный экран держит последний файл и сам живёт дольше экрана камеры.
+`close()` — свой у `Solo`, перед ним владелец ждёт `release().done`. Состояние
+читается через `currentState` (у `Solo` нет `state`). Снимок и видео уходят
+наверх через `onCaptured`: главный экран держит последний файл и сам живёт
+дольше экрана камеры.
 
 Журнал подставной платформы — строки `FakeCameraPlatform.log`, по одной
 на начало и конец каждого вызова, который на телефоне занимает время:
@@ -206,16 +243,22 @@ initialize #1 end
 capture #1 start
 capture #1 end
 flash #1 auto
-switch #1 front
+switch #1 front start
+switch #1 front end
 record #1 start
+stop #1 start
 record #1 end
 dispose #1 start
 dispose #1 end
 ```
 
-Трассы на странице — отрезки этого журнала. Длительности по умолчанию — поля
+`Journal` теста добавляет к ним строки `state Ready`, `state Broken`
+и `error CameraException(…)`. Трассы на странице — отрезки журнала. Порядок
+в тестах сверяется `containsAllInOrder`, а не `indexOf`: строка, которой нет,
+даёт `-1` и прошла бы любое «раньше». Длительности по умолчанию — поля
 `FakeCameraPlatform`: открытие 100 мс, снимок 300 мс, смена камеры 150 мс,
-освобождение 50 мс; тесты идут на фальшивых часах `testWidgets`.
+освобождение 50 мс, остановка записи 100 мс; тесты идут на фальшивых часах
+`testWidgets`.
 
 ---
 
@@ -238,9 +281,15 @@ dispose #1 end
   проверки `docs` обходят `packages/**/*.md`.
 
 **Интерфейсы:**
-- Производит: `FakeCameraPlatform extends CameraPlatform` с полями
+- Производит: `FakeCameraPlatform extends CameraPlatform`. Переопределяет то,
+  что зовёт `CameraController`: `availableCameras`, `createCameraWithSettings`,
+  `initializeCamera`, `onCameraInitialized` (событие с размером превью — без
+  него `initialize()` не кончается), `onCameraError`, `onCameraClosing`,
+  `onDeviceOrientationChanged`, `takePicture`, `setFlashMode`,
+  `setDescriptionWhileRecording`, `startVideoCapturing`, `stopVideoRecording`,
+  `dispose`, `buildPreview` (базовый бросает `UnimplementedError`). Поля
   `List<CameraDescription> cameras` (задняя `back`, передняя `front`),
-  `Duration openTime`, `captureTime`, `switchTime`, `disposeTime`,
+  `Duration openTime`, `captureTime`, `switchTime`, `disposeTime`, `stopTime`,
   `PlatformException? failOpen`, `List<String> log`, методами
   `void closeFromOutside(int cameraId)` (шлёт `CameraClosingEvent`)
   и `void failFromOutside(int cameraId, String description)` (шлёт
@@ -284,6 +333,9 @@ testWidgets('the fake logs an opening and a shot', (tester) async {
   `camera_android_camerax` выбранной версии. `Signing.xcconfig` — по разделу
   «Решения плана».
 - [ ] **Шаг 6: зависимости.** `pubspec.yaml`: `camera: ^0.12.0+2`,
+  `camera_platform_interface` с той нижней границей, что требует `camera`
+  0.12.0+2 (`CameraPlatform` и события плагин наружу не отдаёт,
+  а `depend_on_referenced_packages` требует прямой зависимости),
   `flutter_solo: {path: ../}`, `scopo: ^1.0.0`; dev — `flutter_test`,
   `integration_test` (оба `sdk: flutter`), `flutter_lints: ^6.0.0`,
   `flutter_bloc: ^9.1.1`, `bloc_concurrency: ^0.3.0`.
@@ -295,16 +347,25 @@ testWidgets('the fake logs an opening and a shot', (tester) async {
 - [ ] **Шаг 8: CI.** Задание `flutter`: `flutter pub get` приложения
   в «Dependencies» — до анализа пакета, потому что `flutter analyze`
   `flutter_solo` обходит и `camera_example/`; формат
-  `lib test integration_test`; `flutter analyze` приложения; `flutter test`
-  приложения. Ключи кэша —
+  `lib test integration_test`; `flutter analyze` и `dart analyze --fatal-infos`
+  приложения (`analysis_options.yaml` из `example/` называет плагин
+  `solo_lints`, а `flutter analyze` с 3.44 его диагностик не показывает);
+  `flutter test` приложения. Ключи кэша —
   с `packages/flutter_solo/camera_example/pubspec.yaml`. Шапка `gate.yml`
   называет приложение одной фразой.
 - [ ] **Шаг 9: `AGENTS.md`.** «Проверки» — задание `flutter` проверяет ещё
-  и `camera_example`; «Оверрайды разработки» — седьмой файл.
+  и `camera_example`, а локальный `flutter analyze` пакета требует сперва
+  `flutter pub get` в `camera_example`; пол поднимается и в `pubspec.yaml`
+  приложения; приложение зависит от scopo во время работы. «Оверрайды
+  разработки» — седьмой файл.
 - [ ] **Шаг 10: проверки.** Из `camera_example`:
   `dart format --output=none --set-exit-if-changed lib test integration_test`,
   `flutter analyze`, `flutter test`; из `packages/flutter_solo`:
   `flutter analyze`; из корня — шаги задания `docs` из `gate.yml`, все зелёные.
+  Пробный пол: `PATH=~/fvm/versions/3.38.1/bin:$PATH`, в копии дерева
+  `flutter pub downgrade` и `flutter test` приложения, строка `camera`
+  в `pubspec.lock` — `0.12.0+2`. Не разрешается — стоп, ограничения задачи
+  пересматриваются до задачи 2.
 - [ ] **Шаг 11: коммит**
   `build(camera_example): scaffold the camera app with a fake platform`.
 
@@ -323,6 +384,8 @@ testWidgets('the fake logs an opening and a shot', (tester) async {
   `value.errorDescription`.
 - Создать: `integration_test/attempts_test.dart` — те же попытки на настоящей
   камере, печать того, что произошло.
+- Прочитать: исходник `camera` 0.12.0+2 и последнего выпуска — что различается
+  в `takePicture`, `dispose`, `setDescription`, обработке ошибок.
 - Создать: `test/attempts_test.dart` — те же попытки на подставной платформе.
 - Создать: `docs/records/2026-11/<дата>-device-app-probes-report.md`.
 
@@ -336,18 +399,31 @@ testWidgets('the fake logs an opening and a shot', (tester) async {
 - [ ] **Шаг 2: телефоны.** Скилл `device-lease`: `take_device` перед каждым
   телефоном, `drop_device` после. Galaxy A55 (`RZCXC0LYZ8Y`) и iPhone
   (`00008110-001600DE0E0B801E`):
-  `flutter test integration_test/attempts_test.dart -d <id>`. Что требует руки
-  человека — разрешение на iOS, другое приложение с камерой, — в этот шаг
-  не входит, а записывается в отчёт как «ждёт владельца».
+  `flutter test integration_test/attempts_test.dart -d <id>`. Разрешения
+  до прогона: на Android —
+  `adb shell pm grant <пакет> android.permission.CAMERA`
+  и `android.permission.RECORD_AUDIO` после первой установки; на iOS владелец
+  один раз нажимает «Разрешить» — это ожидание владельца, и агент просит о нём
+  заранее.
+- [ ] **Шаг 2а: список владельцу** — короткий, по шагам, проходится один раз
+  здесь: диалог разрешения на iOS и что приходит в жизненный цикл во время
+  него; отказ и повторный запуск (`…WithoutPrompt`); другое приложение забирает
+  камеру — что приходит, `CameraClosingEvent` или `CameraErrorEvent`, и с каким
+  текстом; уход в фон посреди записи на iPhone — что стало с файлом. Ответы —
+  в отчёт.
 - [ ] **Шаг 3: отчёт.** Для каждой попытки на каждом телефоне — что произошло:
   исключение с текстом, потерянный файл, зависший экран, сбой открытия второй
-  камеры, ничего.
+  камеры, ничего; версии `camera` и его платформенных пакетов, на которых это
+  снято.
 - [ ] **Шаг 4: правила подставной платформы** — ровно то, что показали
   телефоны: например, открытие второй камеры до освобождения первой бросает
   `PlatformException` с тем кодом, что на телефоне. Каждое правило —
   с комментарием, на каком телефоне оно увидено.
 - [ ] **Шаг 5:** `test/attempts_test.dart` — тест на каждую попытку, которая
-  ломается, с ожиданием того, что увидено на телефоне.
+  ломается, с ожиданием того, что увидено на телефоне. Прогон — на стабильном
+  SDK и на полу (`~/fvm/versions/3.38.1`, после `flutter pub downgrade`);
+  поломка, которая есть только на одной из версий `camera`, в отчёте так
+  и названа.
 - [ ] **Шаг 6: решение по разделам** — в отчёт и в журнал исполнителя: раздел
   открывается первой попыткой, если она на телефоне делает то, что требование
   раздела запрещает; иначе — ответом. Поломка в Dart-коде плагина
@@ -363,18 +439,20 @@ testWidgets('the fake logs an opening and a shot', (tester) async {
   `lib/camera_screen.dart`, `lib/camera_app.dart`.
 - Создать: `test/camera_session_test.dart`, `test/camera_screen_test.dart`,
   `test/device_app_page_test.dart`, `test/support/page_code.dart` (пятая
-  копия).
+  копия), `test/support/journal.dart`.
 - Создать: `packages/flutter_solo/doc/device-app.md` — только вступление;
   разделы добавляют задачи 4–10, пустых заголовков нет.
-- Изменить: `tool/check_page_code.py` (`COPIES`), шапки четырёх копий
-  `page_code.dart`, `docs/conventions.md` («четыре копии» — «пять копий»).
+- Изменить: `tool/check_page_code.py` (`COPIES` и docstring), шапки четырёх
+  копий `page_code.dart`, комментарий о копиях в `gate.yml`,
+  `docs/conventions.md` («четыре копии» — «пять копий»).
 
 **Интерфейсы:**
 - Потребляет: `FakeCameraPlatform` задачи 1.
 - Производит: `CameraState`, `CameraSession`, `CameraScreen`, `CameraApp`
-  из раздела «Имена». `CameraScreen` — scope scopo с `scopeKey`, как
-  в `packages/flutter_solo/test/support/readme_scopo.dart`; в этой задаче без
-  ожидания освобождения — его вводит задача 6.
+  из раздела «Имена». `CameraScreen` — scope scopo (как его собирает
+  `packages/flutter_solo/test/support/readme_scopo.dart`); `scopeKey`
+  и `AsyncScopeCoordinator` над `Navigator` в `CameraApp` вводит задача 6 —
+  по dartdoc scopo 1.0.0, образца с `scopeKey` в дереве нет.
 
 - [ ] **Шаг 1: тесты.** Каждый тест ставит `CameraPlatform.instance = platform`
   и создаёт `CameraSession(onCaptured: captured.add)`, где `captured` —
@@ -382,30 +460,34 @@ testWidgets('the fake logs an opening and a shot', (tester) async {
 
 ```dart
 testWidgets('open shows the preview', (tester) async { /* … */
-  expect(session.state, isA<Ready>());
+  expect(session.currentState, isA<Ready>());
   expect(platform.log.take(3),
       ['create back #1', 'initialize #1 start', 'initialize #1 end']);
 });
 testWidgets('no camera on the device', (tester) async {
   platform.cameras.clear();
   // open(), pump
-  expect(session.state, isA<NoCamera>());
+  expect(session.currentState, isA<NoCamera>());
   expect(platform.openCameras, 0);
 });
 testWidgets('the home screen shows the last shot', (tester) async {
   // pump CameraApp, open the camera screen, tap the shutter, go back
   expect(find.byKey(const Key('last-shot')), findsOneWidget);
 });
-testWidgets('close releases the camera once', (tester) async {
-  // open, close, pump disposeTime
+testWidgets('release waits for the platform', (tester) async {
+  // open, pump; final done = session.release().done; pump disposeTime;
+  // await done, then session.close()
+  expect(platform.log,
+      containsAllInOrder(['dispose #1 start', 'dispose #1 end']));
   expect(platform.log.where((l) => l == 'dispose #1 start'), hasLength(1));
+  expect(platform.openCameras, 0);
 });
 ```
 
 - [ ] **Шаг 2:** `flutter test` — не компилируется.
-- [ ] **Шаг 3:** `CameraSession.open()` и `close()`, `takePicture()` без защит
-  раздела 1, экраны. Кнопки — с ключами `shutter`, `flash`, `switch`, `record`,
-  `retry`.
+- [ ] **Шаг 3:** `CameraSession.open()`, `release()`, `takePicture()` без защит
+  раздела 1, экраны; ветвь закрытия экрана — `release().done`, потом `close()`.
+  Кнопки — с ключами `shutter`, `flash`, `switch`, `record`, `retry`.
 - [ ] **Шаг 4:** `flutter test` — зелёный.
 - [ ] **Шаг 5: страница.** Вступление по дизайну: что за приложение, где лежит
   код (ссылка на `camera_example/` адресом на GitHub, потому что pub.dev
@@ -418,13 +500,16 @@ test('every block of the page stands in the app or its tests', () {
   expect(codeMissingFrom(_doc, 'lib/camera_session.dart', alsoIn: _files),
       isEmpty);
 });
-test('no stray fences', () => expect(strayFences(_doc), isEmpty));
+test('no stray fences', () => expect(strayFences(_doc), ['```sh']));
 ```
 
-  `_doc` — `'../doc/device-app.md'`, `_files` — все `lib/*.dart`
-  и `test/support/*.dart`, кроме `page_code.dart`. Сверка трасс — функция
-  `_traceUnder(String heading)`: блок `text` под заголовком, строки которого
-  обязаны стоять подряд в `platform.log` прогона.
+  `_doc` — `'../doc/device-app.md'`, `_files` — все `lib/*.dart`,
+  `test/*_test.dart` и `test/support/*.dart`, кроме `page_code.dart`. Задачи
+  4–10 добавляют проверку на свой раздел: ответ —
+  `codeMissingFrom(_doc, …, under: '## …')` против `lib/`
+  и `device_app_steps.dart`, попытка — против `device_app_attempts.dart`.
+  Сверка трасс — функция `_traceUnder(String heading)`: блок `text` под
+  заголовком, строки которого обязаны стоять подряд в `Journal` прогона.
 - [ ] **Шаг 7: проверки** задачи 1 шаг 10 и `python3 tool/check_page_code.py`;
   коммит `feat(camera_example): open the camera through a Solo`.
 
@@ -449,19 +534,20 @@ testWidgets('a shot during a shot is dropped', (tester) async {
 });
 testWidgets('a switch during a shot waits for it', (tester) async {
   // takePicture(), switchCamera(), pump
-  expect(platform.log.indexOf('capture #1 end'),
-      lessThan(platform.log.indexOf('dispose #1 start')));
+  expect(platform.log,
+      containsAllInOrder(['capture #1 end', 'dispose #1 start']));
 });
 testWidgets('a tap while the camera opens waits for it', (tester) async {
   // open(), takePicture() at once, pump
-  expect(platform.log.indexOf('initialize #1 end'),
-      lessThan(platform.log.indexOf('capture #1 start')));
+  expect(platform.log,
+      containsAllInOrder(['initialize #1 end', 'capture #1 start']));
 });
 ```
 
-- [ ] **Шаг 2:** `flutter test` — первые три красные: нет `cycleFlash`
-  и `switchCamera`, второй снимок не отброшен. Четвёртый может быть зелёным уже
-  с задачи 3 — очередь там есть; тогда он остаётся сторожем.
+- [ ] **Шаг 2:** `flutter test` — файл не компилируется: нет `cycleFlash`
+  и `switchCamera`. С заглушками, которые бросают `UnimplementedError`, красные
+  первые три; четвёртый может быть зелёным уже с задачи 3 — очередь там есть, —
+  и остаётся сторожем.
 - [ ] **Шаг 3:** ключи и политики очереди `Solo`, по докам
   `packages/solo/doc/jobs.md`; смена камеры — через `setDescription` плагина.
 - [ ] **Шаг 4:** зелёный.
@@ -483,13 +569,14 @@ testWidgets('a tap while the camera opens waits for it', (tester) async {
 testWidgets('recording goes on across a switch', (tester) async {
   // startRecording(), switchCamera(), stopRecording(), pump
   expect(platform.log, containsAllInOrder(
-      ['record #1 start', 'switch #1 front', 'record #1 end']));
+      ['record #1 start', 'switch #1 front end', 'record #1 end']));
   expect(captured, hasLength(1));
-  expect((session.state as Ready).recording, isFalse);
+  expect((session.currentState as Ready).recording, isFalse);
 });
 testWidgets('stop during a switch waits for it', (tester) async {
-  expect(platform.log.indexOf('switch #1 front'),
-      lessThan(platform.log.indexOf('record #1 end')));
+  // startRecording(), pump; switchCamera(), stopRecording() at once, pump
+  expect(platform.log,
+      containsAllInOrder(['switch #1 front end', 'stop #1 start']));
 });
 ```
 
@@ -512,13 +599,14 @@ testWidgets('stop during a switch waits for it', (tester) async {
 testWidgets('a shot started before leaving reaches home', (tester) async {
   // tap shutter, pop the camera screen at once, pump
   expect(find.byKey(const Key('last-shot')), findsOneWidget);
-  expect(platform.log.indexOf('capture #1 end'),
-      lessThan(platform.log.indexOf('dispose #1 start')));
+  expect(platform.log,
+      containsAllInOrder(['capture #1 end', 'dispose #1 start']));
 });
 testWidgets('a new camera screen waits for the old one', (tester) async {
   // pop, push again before dispose ends, pump
-  expect(platform.log.indexOf('dispose #1 end'),
-      lessThan(platform.log.indexOf('create back #2')));
+  expect(platform.log,
+      containsAllInOrder(['dispose #1 end', 'create back #2']));
+  expect(platform.openCameras, 1);
 });
 testWidgets('leaving while the camera opens', (tester) async {
   // push, pop before openTime, pump
@@ -528,8 +616,10 @@ testWidgets('leaving while the camera opens', (tester) async {
 });
 ```
 
-- [ ] **Шаг 2–4:** красный; ожидаемое закрытие — ветвь закрытия scope ждёт
-  `session.close()`, `scopeKey` держит новый экран до конца; зелёный.
+- [ ] **Шаг 2–4:** красный; ветвь закрытия scope ждёт `release().done`, потом
+  `close()`; `scopeKey` с `AsyncScopeCoordinator` над `Navigator` держит новый
+  экран до конца; таймаут ожидания `scopeKey` (по умолчанию 3 с) — больше
+  самого долгого освобождения; зелёный.
 - [ ] **Шаг 5:** раздел; коммит
   `feat(camera_example): let the camera go before the next screen takes it`.
 
@@ -542,20 +632,27 @@ testWidgets('leaving while the camera opens', (tester) async {
 
 ```dart
 testWidgets('recording is kept when the app leaves', (tester) async {
-  // startRecording(), lifecycle inactive, pump
+  // startRecording(), lifecycle inactive -> hidden, pump
   expect(captured, hasLength(1));
   expect(platform.openCameras, 0);
 });
 testWidgets('coming back opens after the release', (tester) async {
-  // inactive, resumed at once, pump
-  expect(platform.log.indexOf('dispose #1 end'),
-      lessThan(platform.log.indexOf('create back #2')));
-  expect(session.state, isA<Ready>());
+  // hidden, then resumed at once, pump
+  expect(platform.log,
+      containsAllInOrder(['dispose #1 end', 'create back #2']));
+  expect(platform.openCameras, 1);
+  expect(session.currentState, isA<Ready>());
+});
+testWidgets('a permission dialog during open releases nothing',
+    (tester) async {
+  // open(), inactive -> resumed before openTime, pump
+  expect(platform.log.where((l) => l.startsWith('dispose')), isEmpty);
+  expect(session.currentState, isA<Ready>());
 });
 ```
 
-- [ ] **Шаг 2–4:** красный; `suspend()` и `resume()`, слушатель жизненного
-  цикла — в экране; зелёный.
+- [ ] **Шаг 2–4:** красный; `suspend()` и `resume()`, `AppLifecycleListener`
+  в экране — состояние, на котором освобождать, по задаче 2; зелёный.
 - [ ] **Шаг 5:** раздел; коммит
   `feat(camera_example): release the camera in the background`.
 
@@ -570,16 +667,22 @@ testWidgets('coming back opens after the release', (tester) async {
 testWidgets('a camera taken away shows the failure', (tester) async {
   platform.closeFromOutside(1);
   await tester.pump();
-  expect(session.state, isA<Failed>());
+  expect(session.currentState, isA<Broken>());
   expect(find.byKey(const Key('retry')), findsOneWidget);
 });
 testWidgets('a platform error shows the failure', (tester) async {
   platform.failFromOutside(1, 'camera error');
   // pump
-  expect(session.state, isA<Failed>());
+  expect(session.currentState, isA<Broken>());
+});
+testWidgets('an error of the camera after a switch shows', (tester) async {
+  // switchCamera() without recording, pump; the id is now 2
+  platform.failFromOutside(2, 'camera error');
+  // pump
+  expect(session.currentState, isA<Broken>());
 });
 testWidgets('retry opens again', (tester) async { /* … */
-  expect(session.state, isA<Ready>());
+  expect(session.currentState, isA<Ready>());
 });
 testWidgets('retry twice opens one camera', (tester) async {
   // two taps on retry, pump
@@ -587,14 +690,17 @@ testWidgets('retry twice opens one camera', (tester) async {
 });
 testWidgets('an event after close changes nothing', (tester) async {
   // close, pump, failFromOutside(1, …), pump
-  expect(session.state, isA<Closed>());
+  expect(session.currentState, isA<Closed>());
   expect(tester.takeException(), isNull);
 });
 ```
 
-- [ ] **Шаг 2–4:** красный; подписка на `onCameraClosing` и `onCameraError`
-  платформы — так, как подписки держит `solo` (`packages/solo/doc/streams.md`),
-  чтобы закрытие снимало их; зелёный.
+- [ ] **Шаг 2–4:** красный; подписка — поле контроллера, а не `ctx.each`
+  в джобе: та держала бы очередь, пока поток не кончится
+  (`packages/solo/doc/streams.md`). `cameraId` меняется при каждом открытии
+  и при смене камеры без записи, поэтому джоба открытия снимает прежнюю
+  подписку и оформляет новую, `onClose` снимает последнюю; событие пишется
+  в состояние через `externalSetState` или короткую джобу; зелёный.
 - [ ] **Шаг 5:** раздел; коммит `feat(camera_example): recover a lost camera`.
 
 ### Задача 9: раздел 6 — нет разрешения
@@ -612,16 +718,20 @@ for (final code in _deniedCodes) {
   testWidgets('$code explains what to allow', (tester) async {
     platform.failOpen = PlatformException(code: code);
     // open, pump
-    expect(session.state, isA<Denied>());
-    expect(find.textContaining('Settings'), findsOneWidget);
+    expect(session.currentState, isA<Denied>());
+    expect(find.textContaining(code.startsWith('Audio') ? 'microphone'
+        : 'camera'), findsOneWidget);
+    expect(find.textContaining('Settings'),
+        code.endsWith('WithoutPrompt') ? findsOneWidget : findsNothing);
+    expect(find.byKey(const Key('retry')),
+        code.endsWith('Denied') ? findsOneWidget : findsNothing);
     expect(platform.openCameras, 0);
   });
 }
 ```
 
-- [ ] **Шаг 2–4:** красный; разбор кодов в `open()`, текст экрана — что
-  разрешить (камеру или микрофон) и что `WithoutPrompt` значит «только
-  в настройках»; зелёный.
+- [ ] **Шаг 2–4:** красный; разбор кодов в `open()`, текст экрана —
+  по требованию раздела 6 в «Решениях плана»; зелёный.
 - [ ] **Шаг 5:** раздел; коммит
   `feat(camera_example): explain a denied permission`.
 
@@ -634,14 +744,16 @@ for (final code in _deniedCodes) {
 **Интерфейсы:**
 - Потребляет: `FakeCameraPlatform`, `CameraState`, тесты задач 3–9.
 - Производит: `CameraBloc extends Bloc<CameraEvent, CameraState>` — те же
-  состояния; события по командам `CameraSession`.
+  состояния; события по командам `CameraSession`; `BlocCameraScreen`
+  с `BlocProvider` и `BlocBuilder` — тот же экран, те же ключи кнопок, чтобы
+  виджетные ожидания задач 6, 7 и 9 шли и против bloc.
 
 - [ ] **Шаг 1: раздел 7.** Блоки — подставная платформа и по одному тесту
   на ситуацию 1–6 из файлов тестов приложения; правила `doc/testing.md` (часы
   двигает тест, `done` читается до `pump`, закрытие в теле) названы ссылкой
   на тот раздел, а не пересказаны.
-- [ ] **Шаг 2: тесты bloc** — те же ожидания задач 4–9 против `CameraBloc`,
-  в `test/bloc_camera_test.dart`, на той же платформе.
+- [ ] **Шаг 2: тесты bloc** — те же ожидания задач 4–9 против `CameraBloc`
+  и `BlocCameraScreen`, в `test/bloc_camera_test.dart`, на той же платформе.
 - [ ] **Шаг 3:** красный.
 - [ ] **Шаг 4: `CameraBloc`** — сильнейшие средства: трансформеры
   `bloc_concurrency` (`sequential`, `droppable`), `close()`, `BlocProvider`,
@@ -682,8 +794,8 @@ for (final code in _deniedCodes) {
 **Файлы:** `.github/workflows/gate.yml` (задание `floor`) или
 `docs/settled.md`.
 
-- [ ] **Шаг 1:** локально, в копии дерева:
-  `PATH=~/fvm/versions/3.38.1/bin:$PATH` — в `camera_example`
+- [ ] **Шаг 1:** повтор пробы задачи 1 на законченном приложении, локально,
+  в копии дерева: `PATH=~/fvm/versions/3.38.1/bin:$PATH` — в `camera_example`
   `flutter pub downgrade`, `flutter test`, затем строка `camera`
   в `pubspec.lock`. Ожидается `version: "0.12.0+2"` и зелёные тесты.
 - [ ] **Шаг 2:** сошлось — шаг «The camera app on the floor» в задании `floor`,
@@ -705,10 +817,9 @@ for (final code in _deniedCodes) {
 - [ ] **Шаг 2:** оба телефона через `device-lease`,
   `flutter test integration_test/app_test.dart -d <id>`; фон на Android — ещё
   и `adb shell input keyevent KEYCODE_HOME` во время записи.
-- [ ] **Шаг 3: список владельцу** — короткий, по шагам: диалог разрешения
-  на iOS, отказ и повторный запуск, другое приложение забирает камеру, то же
-  на Android, если `adb` этого не делает. Владелец проходит его один раз;
-  ответы — в отчёт.
+- [ ] **Шаг 3: перепроверка владельцем** — список задачи 2, но уже против
+  ответов: диалог разрешения на iOS, отказ без вопроса, другое приложение
+  забирает камеру, уход в фон на iPhone посреди записи. Ответы — в отчёт.
 - [ ] **Шаг 4:** вывод, который не сошёлся, уходит со страницы или
   переписывается под телефон, в обоих языках; тест страницы и тесты
   приложения — под новое.
@@ -721,8 +832,46 @@ for (final code in _deniedCodes) {
   выпуска; шапки дизайна, плана и отчётов — «сделано» с коммитом.
 - [ ] **Шаг 2:** полный прогон: проверки задания `flutter` из дерева
   на стабильном SDK, `flutter test` приложения, задание `docs`,
-  `python3 tool/archive_floor.py stage` во временный каталог.
+  `python3 tool/archive_floor.py stage` во временный каталог и `run` по нему
+  на полу — `.pubignore` правился.
 - [ ] **Шаг 3:** ревью всей ветки на Opus; находки — по правилам `AGENTS.md`
   о ревью.
 - [ ] **Шаг 4:** коммит `docs: close the device app work`; вливание `--ff-only`
   в `main` по правилу CLAUDE.md. Пуш — по слову владельца.
+
+## Ревью плана
+
+Ревьюер на Opus 2026-11-13, по копии дерева на коммите `5ba76606`, с зондом
+`flutter create` и `pub get` вне дерева. Вердикт: исполнять после правок.
+Находки сверены по исходникам и приняты в текст выше тем же коммитом, что этот
+раздел.
+
+- К1. `close()` у `Solo` не ждёт освобождения камеры — команда `release()`,
+  «Решения плана», задачи 3 и 6.
+- В1. Имя `Failed` занято исходом `async_job` — состояние `Broken`.
+- В2. `CameraPlatform` и события плагин не экспортирует — зависимость
+  `camera_platform_interface`, задача 1.
+- В3. Плагин прочитан с 0.12.0+1, а граница с 0.12.0+2 и на стабильном SDK
+  разрешается 0.12.2 — общие ограничения, задача 2: обе версии, версии
+  в отчёте.
+- В4. Ответы ранних разделов перестанут стоять в коде —
+  `device_app_steps.dart`.
+- В5. Тесты порядка на `indexOf` не краснеют без строки — `containsAllInOrder`,
+  журнал с началом и концом смены и остановки.
+- В6. Указатель на `streams.md` вёл к подписке в джобе — форма подписки
+  названа, тест ошибки после смены камеры.
+- В7. У bloc не было экрана — `BlocCameraScreen`.
+- В8. Тест страницы вместо генератора — отход от буквы дизайна, вынесен
+  владельцу; тест усилен `under:` и общим журналом.
+- В9. Попытки на телефонах не запустятся без разрешений — `pm grant`
+  на Android, «Разрешить» владельцем на iOS.
+- В10. Правила подставной платформы для разделов 5–6 выдумывались бы — ручной
+  список владельцу перенесён в задачу 2.
+- В11. `inactive` на iOS приходит от диалога разрешения — освобождение
+  по `hidden`, тест диалога во время открытия.
+- М1–М11. Блок `sh` в `strayFences`, тесты в `_files`, `currentState` вместо
+  `state`, красный шаг задачи 4, полный интерфейс подставной платформы,
+  `AsyncScopeCoordinator`, `dart analyze` приложения в CI, хвосты «четырёх
+  копий» и пола, проба пола в задаче 1 и `run` на полу в задаче 14,
+  `docs/handoff.md` после каждой задачи, тексты отказа по кодам — каждая
+  в своей задаче.
