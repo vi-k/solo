@@ -8,6 +8,7 @@ import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_camera_platform.dart';
+import 'support/journal.dart';
 
 void main() {
   late FakeCameraPlatform platform;
@@ -18,6 +19,7 @@ void main() {
     CameraPlatform.instance = platform;
     captured = [];
   });
+  tearDown(() => Solo.observer = null);
 
   /// Releases the camera of [session] and closes it, the way the camera
   /// screen does when it leaves.
@@ -78,17 +80,28 @@ void main() {
   });
 
   testWidgets('release waits for the platform', (tester) async {
+    final journal = Journal(platform);
+    Solo.observer = journal;
     final session = CameraSession(onCaptured: captured.add);
     session.open();
     await tester.pump(platform.openTime);
-    final done = session.release().done;
-    await tester.pump(platform.disposeTime);
+    var released = false;
+    final done = session.release().done..then((_) => released = true);
+    await tester.pump(platform.disposeTime - const Duration(milliseconds: 1));
 
+    expect(released, isFalse);
+    expect(session.currentState, isA<Ready>());
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(released, isTrue);
     expect(await done, isA<Done<void>>());
     await session.close();
     expect(
-      platform.log,
-      containsAllInOrder(['dispose #1 start', 'dispose #1 end']),
+      journal.lines,
+      containsAllInOrder([
+        'dispose #1 start',
+        'dispose #1 end',
+        'state Closed',
+      ]),
     );
     expect(platform.log.where((l) => l == 'dispose #1 start'), hasLength(1));
     expect(platform.openCameras, 0);

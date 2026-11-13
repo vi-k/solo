@@ -38,8 +38,8 @@ final class CameraSession extends Solo<CameraState> {
 
   /// Frees the camera on the platform; the job ends once the platform has.
   ///
-  /// The owner awaits its `done` before [close]: a release started from
-  /// `onClose` would not be waited for.
+  /// The owner awaits it before [close]: a release started from `onClose`
+  /// would not be waited for.
   Job<void> release() => enqueue<CameraState, void>((ctx) async {
     if (ctx.state case Ready(:final camera)) {
       await ctx.join(camera.dispose);

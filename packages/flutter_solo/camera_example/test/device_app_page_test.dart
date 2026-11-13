@@ -1,3 +1,13 @@
+/// The page `doc/device-app.md` held to the app.
+///
+/// Every `dart` block of the page stands in the files of the app or of its
+/// tests; every trace the page quotes is a run of lines of a [Journal] of
+/// the same situation; every sentence a test checks is held to the page
+/// through [_says]. A section adds its checks here: its answer held to
+/// `lib/` with `under:` its heading, its first attempt to
+/// `support/device_app_attempts.dart`.
+library;
+
 import 'dart:io';
 
 import 'package:camera_platform_interface/camera_platform_interface.dart';
@@ -8,15 +18,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fake_camera_platform.dart';
 import 'support/journal.dart';
 import 'support/page_code.dart';
-
-/// The page `doc/device-app.md` held to the app.
-///
-/// Every `dart` block of the page stands in the files of the app or of its
-/// tests; every trace the page quotes is a run of lines of a [Journal] of
-/// the same situation; every sentence a test checks is held to the page
-/// through [_says]. A section adds its checks here: its answer held to
-/// `lib/` with `under:` its heading, its first attempt to
-/// `support/device_app_attempts.dart`.
 
 const _doc = '../doc/device-app.md';
 const _intro = '# A device app';
@@ -34,19 +35,25 @@ List<String> get _files => [
         file.path,
 ]..sort();
 
+/// The parts of the page, each from a heading up to the next one.
+List<String> get _parts =>
+    File(_doc).readAsStringSync().split(RegExp('^(?=#)', multiLine: true));
+
 /// The part of the page under [heading], up to the next heading.
 String _part(String heading) {
-  for (final part in File(
-    _doc,
-  ).readAsStringSync().split(RegExp('^(?=#)', multiLine: true))) {
+  for (final part in _parts) {
     if (part.split('\n').first == heading) return part;
   }
   throw StateError('$_doc has no "$heading"');
 }
 
+/// The headings whose trace a test has read through [_traceUnder].
+final _traced = <String>{};
+
 /// The lines of the one `text` block under [heading]: a trace the page
 /// quotes.
 List<String> _traceUnder(String heading) {
+  _traced.add(heading);
   final blocks = RegExp(
     r'```text\n(.*?)\n```',
     dotAll: true,
@@ -87,7 +94,7 @@ void main() {
 
       _says(
         _intro,
-        'A call to the platform is a line, or two for a call that takes '
+        'A call on the camera is a line, or two for a call that takes '
         'time, where it starts and where it ends; a change of the state is '
         'a line too.',
       );
@@ -108,5 +115,13 @@ void main() {
     });
 
     test('no stray fences', () => expect(strayFences(_doc), ['```sh']));
+
+    // Runs last: the tests above have read their traces by now.
+    test('every trace of the page is held to a run', () {
+      expect(_traced, {
+        for (final part in _parts)
+          if (part.contains('```text\n')) part.split('\n').first,
+      });
+    });
   });
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reports a copy of `page_code.dart` that has drifted from the original.
 
-`page_code.dart` is the helper the rakes tests hold a page's code to: it
+`page_code.dart` is the helper the page tests hold a page's code to: it
 says which pieces of a page the test does not run. The packages share no
 test code, so the helper lives in five copies, and the first one is the
 original:

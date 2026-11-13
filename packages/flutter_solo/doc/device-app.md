@@ -23,9 +23,9 @@ flutter run
 
 The code on this page is the app's code. A trace is what the app does to the
 camera under `flutter test`, where a fake camera platform stands in for the
-phone. A call to the platform is a line, or two for a call that takes time,
-where it starts and where it ends; a change of the state is a line too. Opening
-the camera:
+phone. A call on the camera is a line, or two for a call that takes time, where
+it starts and where it ends; a change of the state is a line too. Opening the
+camera:
 
 ```text
 state Opening
