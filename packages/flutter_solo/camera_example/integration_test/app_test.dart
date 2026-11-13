@@ -64,11 +64,13 @@ void main() {
     for (final line in journal.lines) line.replaceFirst(_time, ''),
   ];
 
-  /// The time of the first line [text] of the journal, in milliseconds.
-  int at(String text) {
-    final line = journal.lines.firstWhere(
-      (line) => line.replaceFirst(_time, '') == text,
-    );
+  /// The time of the first line [text] of the journal, or of the [last]
+  /// one, in milliseconds.
+  int at(String text, {bool last = false}) {
+    bool same(String line) => line.replaceFirst(_time, '') == text;
+    final line = last
+        ? journal.lines.lastWhere(same)
+        : journal.lines.firstWhere(same);
     return int.parse(_time.firstMatch(line)!.group(1)!);
   }
 
@@ -129,6 +131,24 @@ void main() {
     journal.note('tap $key');
     await tester.tap(find.byKey(Key(key)).last);
     await tester.pump();
+  }
+
+  /// Taps the button of [key] without a frame: the tap lands before the
+  /// platform has answered a call that is under way.
+  Future<void> press(WidgetTester tester, String key) async {
+    journal.note('tap $key');
+    await tester.tap(find.byKey(Key(key)).last);
+  }
+
+  /// Turns the event loop, without a frame, until the journal has [line]:
+  /// a call has reached the platform, and the next tap lands while it
+  /// runs.
+  Future<void> reach(String line) async {
+    final end = DateTime.now().add(const Duration(seconds: 5));
+    while (!trace().contains(line)) {
+      if (DateTime.now().isAfter(end)) fail('$line: not reached');
+      await Future<void>.delayed(Duration.zero);
+    }
   }
 
   /// Starts a case: the app on the screen, the lifecycle in the journal.
@@ -217,9 +237,11 @@ void main() {
       await openCamera(tester);
       final id = created().single;
       expect((session(tester).currentState as Ready).flash, FlashMode.auto);
-      await tap(tester, 'flash');
-      await tap(tester, 'flash');
-      await tap(tester, 'flash');
+      // The platform answers the flash in a few milliseconds, sooner than
+      // a frame: the three taps go in before its first answer.
+      await press(tester, 'flash');
+      await press(tester, 'flash');
+      await press(tester, 'flash');
       await until(
         tester,
         'three flashes',
@@ -227,6 +249,15 @@ void main() {
       );
       await settle(tester, const Duration(milliseconds: 300));
 
+      expect(
+        trace(),
+        containsAllInOrder([
+          'tap flash',
+          'tap flash',
+          'tap flash',
+          'flash #$id always end',
+        ]),
+      );
       expect(
         trace(),
         containsAllInOrder([
@@ -248,8 +279,9 @@ void main() {
     phoneTest('a shot during a shot is dropped', (tester) async {
       await openCamera(tester);
       final id = created().single;
-      await tap(tester, 'shutter');
-      await tap(tester, 'shutter');
+      await press(tester, 'shutter');
+      await reach('capture #$id start');
+      await press(tester, 'shutter');
       await until(
         tester,
         'the shot',
@@ -257,6 +289,14 @@ void main() {
       );
       await settle(tester, const Duration(seconds: 1));
 
+      expect(
+        trace(),
+        containsAllInOrder([
+          'capture #$id start',
+          'tap shutter',
+          'capture #$id end',
+        ]),
+      );
       expect(trace().where((line) => line.startsWith('capture ')), [
         'capture #$id start',
         'capture #$id end',
@@ -269,8 +309,9 @@ void main() {
       await openCamera(tester);
       final first = created().single;
       final next = cameras[1 % cameras.length].lensDirection.name;
-      await tap(tester, 'shutter');
-      await tap(tester, 'switch');
+      await press(tester, 'shutter');
+      await reach('capture #$first start');
+      await press(tester, 'switch');
       await until(tester, 'the next camera', () => created().length == 2);
       final second = created().last;
       await until(
@@ -283,6 +324,7 @@ void main() {
         trace(),
         containsAllInOrder([
           'capture #$first start',
+          'tap switch',
           'capture #$first end',
           'dispose #$first start',
           'dispose #$first end',
@@ -307,8 +349,9 @@ void main() {
       await openCamera(tester);
       final id = created().single;
       final next = cameras[1 % cameras.length].lensDirection.name;
-      await tap(tester, 'record');
-      await tap(tester, 'switch');
+      await press(tester, 'record');
+      await reach('record #$id start');
+      await press(tester, 'switch');
       await until(
         tester,
         'the switch',
@@ -327,6 +370,7 @@ void main() {
         trace(),
         containsAllInOrder([
           'record #$id start',
+          'tap switch',
           'record #$id end',
           'state Ready recording true',
           'switch $next start',
@@ -352,8 +396,9 @@ void main() {
       await tap(tester, 'record');
       await until(tester, 'the recording', () => recording(tester));
       await settle(tester, const Duration(milliseconds: 1500));
-      await tap(tester, 'switch');
-      await tap(tester, 'record');
+      await press(tester, 'switch');
+      await reach('switch $next start');
+      await press(tester, 'record');
       await until(
         tester,
         'the stop',
@@ -365,6 +410,7 @@ void main() {
         containsAllInOrder([
           'record #$id end',
           'switch $next start',
+          'tap record',
           'switch $next end',
           'stop #$id start',
           'stop #$id end',
@@ -385,25 +431,42 @@ void main() {
     ) async {
       await openCamera(tester);
       final first = created().single;
-      await tap(tester, 'shutter');
+      await press(tester, 'shutter');
+      await reach('capture #$first start');
       journal.note('back');
       await tester.pageBack();
       // The home screen takes taps once the pop has started, a frame or
-      // two after the tap of back.
-      await until(
-        tester,
-        'the home screen',
-        () => find
-            .byKey(const Key('open-camera'))
-            .hitTestable()
-            .evaluate()
-            .isNotEmpty,
-      );
+      // two after the tap of back; one frame at a time, the tap comes as
+      // soon as it can.
+      final home = find.byKey(const Key('open-camera')).hitTestable();
+      for (var frame = 0; home.evaluate().isEmpty; frame++) {
+        if (frame == 60) fail('the home screen takes no taps');
+        await tester.pump();
+      }
       await tap(tester, 'open-camera');
       await until(tester, 'the next camera', () => created().length == 2);
       final second = created().last;
       await until(tester, 'the next shutter', () => shown('shutter'));
 
+      // The page says: back during the shot, the next screen opened
+      // before the release has ended, and its camera after the release.
+      expect(
+        trace(),
+        containsAllInOrder([
+          'capture #$first start',
+          'back',
+          'capture #$first end',
+        ]),
+      );
+      expect(
+        trace(),
+        containsAllInOrder([
+          'back',
+          'tap open-camera',
+          'dispose #$first end',
+          'state Opening',
+        ]),
+      );
       expect(
         trace(),
         containsAllInOrder([
@@ -418,9 +481,11 @@ void main() {
           'state Ready recording false',
         ]),
       );
+      final opened = at('tap open-camera', last: true);
       journal.note(
         'release ${at('dispose #$first start') - at('capture #$first end')} '
-        'ms after the shot',
+        'ms after the shot; open tapped '
+        '${at('dispose #$first end') - opened} ms before the release ended',
       );
       expectShot();
       final firstShot = lastShot()!;
@@ -550,10 +615,12 @@ void main() {
     );
   });
 
-  group('measures', () {
-    // Not a claim of the page: what the flash is after a switch, and how
-    // long a recording takes to start, for the report of the phones.
-    phoneTest('the flash after a switch there and back', (tester) async {
+  group('the flash after a switch', () {
+    // The pictures before and after the switches are named in the journal;
+    // the host reads the flash they were taken with from their EXIF.
+    phoneTest('a switch there and back keeps the mode of the button', (
+      tester,
+    ) async {
       await openCamera(tester);
       await tap(tester, 'flash');
       final first = created().single;
@@ -580,22 +647,21 @@ void main() {
         final id = created().last;
         await until(
           tester,
-          'camera #$id',
-          () => trace().contains('initialize #$id end'),
+          'the flash of camera #$id',
+          () => trace().contains('flash #$id always end'),
+        );
+        expect(
+          trace(),
+          containsAllInOrder(['initialize #$id end', 'flash #$id always end']),
         );
         await settle(tester, const Duration(seconds: 1));
       }
       final last = created().last;
       final ready = session(tester).currentState as Ready;
-      final calls = trace()
-          .skipWhile((line) => line != 'tap switch')
-          .where((line) => line.startsWith('flash '));
-      journal.note(
-        'after the switches: ${ready.camera.description.name}, '
-        'state flash ${ready.flash.name}, '
-        'controller flash ${ready.camera.value.flashMode.name}, '
-        'calls of the flash since the first switch $calls',
-      );
+      expect(ready.camera.description.name, cameras.first.name);
+      expect(ready.flash, FlashMode.always);
+      expect(ready.camera.value.flashMode, FlashMode.always);
+      expect(find.byIcon(Icons.flash_on), findsOneWidget);
       await tap(tester, 'shutter');
       await until(
         tester,
@@ -606,7 +672,11 @@ void main() {
       journal.note('picture after the switches ${lastShot()!.path}');
       await goBack(tester);
     });
+  });
 
+  group('measures', () {
+    // Not a claim of the page: how long a recording takes to start, for
+    // the report of the phones.
     phoneTest('the start of five recordings', (tester) async {
       await openCamera(tester);
       final id = created().single;
