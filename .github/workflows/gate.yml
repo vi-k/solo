@@ -206,7 +206,7 @@ jobs:
       - name: Formatting
         run: |
           (cd packages/flutter_solo && dart format --output=none --set-exit-if-changed lib test example)
-          (cd packages/flutter_solo/camera_example && dart format --output=none --set-exit-if-changed lib test)
+          (cd packages/flutter_solo/camera_example && dart format --output=none --set-exit-if-changed lib test integration_test)
 
       # `flutter analyze` of the package walks the example and the camera
       # app as well, under their own `analysis_options.yaml`. The runs in

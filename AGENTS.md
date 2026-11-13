@@ -238,11 +238,13 @@
 (`flutter test` для `packages/flutter_solo`). Пример `packages/solo/example/`
 со своим `pubspec.yaml` проверяется отдельно из его папки. Приложение
 `packages/flutter_solo/camera_example/` — тоже своё: `dart format`
-на `lib test`, `flutter analyze`, `dart analyze --fatal-infos`, `flutter test`.
-`flutter analyze` пакета `flutter_solo` обходит и приложение, поэтому сперва
-`flutter pub get` в `camera_example`. Приложение зависит от scopo во время
-работы, тогда как `flutter_solo` — только в тестах. Подробности
-в `docs/conventions.md`.
+на `lib test integration_test`, `flutter analyze`,
+`dart analyze --fatal-infos`, `flutter test`. Его `integration_test/` идёт
+только на телефоне: `flutter test` без пути берёт один `test/`, и CI телефонных
+зондов не гоняет. `flutter analyze` пакета `flutter_solo` обходит и приложение,
+поэтому сперва `flutter pub get` в `camera_example`. Приложение зависит
+от scopo во время работы, тогда как `flutter_solo` — только в тестах.
+Подробности в `docs/conventions.md`.
 
 Те же команды гоняет CI — `.github/workflows/gate.yml`, пять заданий: `dart`
 (ядро, его пример, `async_job_lints` и `solo_lints`, без Flutter в PATH — так
