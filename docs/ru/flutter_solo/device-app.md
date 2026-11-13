@@ -826,3 +826,194 @@ state Ready
 `state Broken` идёт сразу за ошибкой, а освобождение — за ним. Открытие
 начинается, когда потерянную камеру освободили, а второе нажатие не оставляет
 строки.
+
+## Отказ в разрешении
+
+Пользователь не даёт приложению камеру или микрофон. Экран говорит, что из двух
+разрешить. После обычного отказа кнопка повтора спрашивает снова; когда телефон
+больше не спрашивает, экран говорит разрешить в Настройках, а когда это
+запрещает политика устройства, экран так и говорит.
+
+### Первая попытка
+
+Плагин сам спрашивает разрешения, пока создаёт камеру, и `initialize` бросает
+`CameraException`, код которого говорит, в чём отказано. README плагина
+перечисляет шесть кодов, от `CameraAccessDenied` до `AudioAccessRestricted`,
+а его пример ловит их вокруг `initialize` и на каждый показывает своё сообщение
+во всплывающей полосе. Здесь сообщение остаётся на экране как `Text`, а уходя,
+экран освобождает свой контроллер:
+
+```dart
+// Первая попытка: одно сообщение и ничего, что спросило бы снова.
+@override
+void dispose() {
+  camera.dispose();
+  super.dispose();
+}
+
+Future<void> open() async {
+  try {
+    await camera.initialize();
+  } on CameraException catch (e) {
+    switch (e.code) {
+      case 'CameraAccessDenied':
+        show('You have denied camera access.');
+      case 'CameraAccessDeniedWithoutPrompt':
+        // только iOS
+        show('Please go to Settings app to enable camera access.');
+      case 'CameraAccessRestricted':
+        // только iOS
+        show('Camera access is restricted.');
+      case 'AudioAccessDenied':
+        show('You have denied audio access.');
+      case 'AudioAccessDeniedWithoutPrompt':
+        // только iOS
+        show('Please go to Settings app to enable audio access.');
+      case 'AudioAccessRestricted':
+        // только iOS
+        show('Audio access is restricted.');
+      default:
+        show(e);
+    }
+  }
+}
+```
+
+README помечает коды с `WithoutPrompt` и `Restricted` как пока только для iOS.
+Android-часть плагина, `camera_android_camerax`, знает для отказа
+`CameraAccessDenied` и `AudioAccessDenied`, а для запроса, сделанного, пока
+идёт другой, — `CameraPermissionsRequestOngoing`. Galaxy A55 во второй раз
+спрашивает с выбором «запретить и больше не спрашивать»; после этого открытие
+не показывает диалога и примерно за 200 мс кончается тем же
+`CameraAccessDenied`. На iPhone 13 mini первый отказ — `CameraAccessDenied`,
+а следующее открытие без диалога кончается `CameraAccessDeniedWithoutPrompt`.
+Отказ в микрофоне на iPhone — `AudioAccessDenied`. Неудачное создание камеры —
+строка `create back failed`. Экран, открытый дважды, второй раз после
+«запретить и не спрашивать», на фейковой платформе по правилам Galaxy:
+
+```text
+create back failed
+dispose #-1 start
+dispose #-1 end
+create back failed
+dispose #-1 start
+dispose #-1 end
+```
+
+Оба открытия говорят `You have denied camera access.`, и на экране нет ничего,
+что спросило бы снова: к диалогу можно вернуться, только уйдя с экрана и открыв
+его заново. После «не спрашивать» Galaxy больше не спрашивает, а сообщение
+не отправляет пользователя в Настройки. На iPhone 13 mini второе открытие
+говорит `Please go to Settings app to enable camera access.` Уход с экрана
+освобождает контроллер, и контроллер шлёт платформе `dispose` для камеры `-1`:
+камеры не создали, поэтому у контроллера остался `id`, с которого он начинает,
+а его `dispose` зовёт платформу, раз `initialize` уже начался.
+
+### Отказ, который объясняет экран
+
+`_initialize` — конец `open()` и `resume()` — отличает отказ от сбоя по коду
+исключения: шесть кодов README дают `Denied` с этим кодом, а любой другой —
+`Broken`. Камеру он освобождает, только если платформа её создала. Контроллер
+плагина держит `cameraId`, равный `-1`, пока `createCameraWithSettings` не даст
+ему `id`, а отказ приходит именно оттуда:
+
+```dart
+Future<void> _initialize(
+  SoloContext<CameraState, CameraState> ctx,
+  CameraDescription description,
+) async {
+  final camera = CameraController(description, ResolutionPreset.medium);
+  try {
+    await ctx.join(camera.initialize);
+  } on CameraException catch (error) {
+    final code = error.code;
+    ctx.emit(_denials.contains(code) ? Denied(code) : Broken(error));
+    if (camera.cameraId != _noCamera) {
+      _letGo(camera);
+    }
+    return;
+  }
+  _watch(camera);
+  ctx.emit(
+    Ready(camera: camera, flash: camera.value.flashMode, recording: false),
+  );
+}
+
+const _noCamera = -1;
+
+const _denials = {
+  'CameraAccessDenied',
+  'CameraAccessDeniedWithoutPrompt',
+  'CameraAccessRestricted',
+  'AudioAccessDenied',
+  'AudioAccessDeniedWithoutPrompt',
+  'AudioAccessRestricted',
+};
+```
+
+Плагин называет `-1` именем `kUninitializedCameraId` и держит это имя для своих
+тестов, поэтому у сессии своя константа. Контроллер, которому отказали,
+не освобождается: именно его `dispose` послал бы платформе `dispose` для `-1`.
+После него остаётся его слушатель ориентации устройства, который он заводит
+до создания камеры, — по одному на каждое открытие с отказом.
+
+Экран показывает `Denied` — что разрешить и где, а при обычном отказе ещё
+и кнопку повтора. Повтор зовёт `open()`, как и для `Broken`, и плагин
+спрашивает снова, пока создаёт камеру:
+
+```dart
+Denied(:final code) => Center(
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(_denial(code)),
+      if (code.endsWith('Denied'))
+        TextButton(
+          key: const Key('retry'),
+          onPressed: widget.session.open,
+          child: const Text('Retry'),
+        ),
+    ],
+  ),
+),
+
+String _denial(String code) {
+  final device = code.startsWith('Audio') ? 'microphone' : 'camera';
+  if (code.endsWith('WithoutPrompt')) {
+    return 'Allow the app to use the $device in Settings.';
+  }
+  if (code.endsWith('Restricted')) {
+    return 'The policy of this device does not let the app use the $device.';
+  }
+  return 'Allow the app to use the $device.';
+}
+```
+
+Отказ, нажатие повтора, когда iPhone уже не спрашивает, и уход с экрана,
+на фейковой платформе по правилам iPhone:
+
+```text
+state Opening
+create back failed
+state Denied
+state Opening
+create back failed
+state Denied
+state Closed
+```
+
+Первый `Denied` — это `CameraAccessDenied`: экран говорит
+`Allow the app to use the camera.` и показывает повтор. Второй —
+`CameraAccessDeniedWithoutPrompt`: экран говорит
+`Allow the app to use the camera in Settings.`, и кнопки нет. В трассе нет
+строки `dispose`: камеры не создали, и освобождение экрана её не находит.
+На iPhone 13 mini переключатель в Настройках перезапускает приложение.
+
+На Galaxy A55 повтор — это второе открытие, которое снова показывает диалог,
+и отказ там — снова `CameraAccessDenied`. После «запретить и не спрашивать»
+повтор ничего не спрашивает: открытие без диалога кончается тем же кодом,
+и экран возвращается с тем же текстом и той же кнопкой. Другого кода для такого
+отказа у Android-части плагина нет, поэтому на Android экран не отправляет
+пользователя в Настройки. `CameraAccessRestricted` и `AudioAccessRestricted`
+взяты из README: ни один из телефонов не ставили под политику, которая
+запрещает камеру.

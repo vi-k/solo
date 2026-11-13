@@ -39,3 +39,43 @@ final class SessionBeforeLosing extends Solo<CameraState> {
     return file;
   });
 }
+
+/// `CameraSession` before "A denied permission": a failed opening is
+/// [Broken] whatever its code, and it is let go even when the platform has
+/// created no camera.
+final class SessionBeforeDenied extends Solo<CameraState> {
+  SessionBeforeDenied() : super(const Closed());
+
+  /// Opens the camera of [description], as `open()` and `resume()` do.
+  Job<void> openCamera(CameraDescription description) =>
+      enqueue<CameraState, void>((ctx) => _initialize(ctx, description));
+
+  /// "Losing the camera": creates the camera of [description] on the
+  /// platform and opens it; a camera that fails to open is [Broken] and
+  /// let go.
+  Future<void> _initialize(
+    SoloContext<CameraState, CameraState> ctx,
+    CameraDescription description,
+  ) async {
+    final camera = CameraController(description, ResolutionPreset.medium);
+    try {
+      await ctx.join(camera.initialize);
+    } on CameraException catch (error) {
+      ctx.emit(Broken(error));
+      _letGo(camera);
+      return;
+    }
+    _watch(camera);
+    ctx.emit(
+      Ready(camera: camera, flash: camera.value.flashMode, recording: false),
+    );
+  }
+
+  /// Stands for the method of `CameraSession`, which did not change; the
+  /// steps are not run.
+  void _watch(CameraController camera) {}
+
+  /// Stands for the method of `CameraSession`, which did not change; the
+  /// steps are not run.
+  void _letGo(CameraController camera) {}
+}

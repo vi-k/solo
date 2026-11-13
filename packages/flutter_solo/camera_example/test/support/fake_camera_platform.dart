@@ -119,7 +119,9 @@ class FakeCameraPlatform extends CameraPlatform {
 
   /// When set, creating a camera throws this, as both phones do without
   /// the permission: the denial comes from `createCameraWithSettings`,
-  /// not from `initialize`. See [deniedOnAndroid] and the others for the texts.
+  /// not from `initialize`. See [deniedOnAndroid] and the others for the
+  /// texts. The line of a create that failed is `create back failed`, with
+  /// no id: no camera was created.
   CameraException? failCreate;
 
   /// The calls the platform got, in order.
@@ -167,7 +169,10 @@ class FakeCameraPlatform extends CameraPlatform {
     MediaSettings mediaSettings,
   ) async {
     final failure = failCreate;
-    if (failure != null) throw failure;
+    if (failure != null) {
+      log.add('create ${cameraDescription.lensDirection.name} failed');
+      throw failure;
+    }
     final id = ++_lastId;
     final camera = _Camera(cameraDescription);
     // A camera whose release failed stays open (see `dispose`) but is

@@ -45,6 +45,8 @@ const _background = '## Going to the background';
 const _suspend = '### A suspend in the queue';
 const _losing = '## Losing the camera';
 const _failure = '### A failure in the state';
+const _denied = '## A denied permission';
+const _explained = '### A denial the screen explains';
 
 /// Home during a recording and back, as both phones report it.
 const _homeAndBack = [
@@ -671,7 +673,7 @@ void main() {
         codeMissingFrom(
           _doc,
           'lib/camera_session.dart',
-          alsoIn: ['lib/camera_screen.dart'],
+          alsoIn: ['lib/camera_screen.dart', _steps],
           under: _failure,
         ),
         isEmpty,
@@ -737,6 +739,188 @@ void main() {
         'once it has emitted `Broken` its own calls through `ctx` give up '
         'with `Cancelled`, so the release goes to a job of its own here too.',
       );
+      await session.close();
+    });
+  });
+
+  group('a denied permission', () {
+    final retry = find.byKey(const Key('retry'));
+
+    /// Opens the first attempt twice, leaving it in between, with the
+    /// platform denying the camera with [denials] in turn; gives what the
+    /// screen said each time.
+    Future<List<String>> openTwice(
+      WidgetTester tester,
+      List<CameraException> denials,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: navigator, home: const SizedBox.expand()),
+      );
+      final shown = <String>[];
+      for (final denial in denials) {
+        platform.failCreate = denial;
+        // The route lives as long as its screen; nothing awaits it.
+        // ignore: unawaited_futures
+        navigator.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              body: PermissionMessages(
+                cameras: platform.cameras,
+                onCaptured: (XFile file) {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        shown.add(tester.widget<Text>(find.byKey(const Key('error'))).data!);
+        expect(find.byType(TextButton), findsNothing);
+        navigator.currentState!.pop();
+        await tester.pumpAndSettle();
+        await tester.pump(platform.disposeTime);
+      }
+      return shown;
+    }
+
+    testWidgets('the first attempt says the same twice (Galaxy)', (
+      tester,
+    ) async {
+      final journal = Journal(platform);
+      // The Galaxy denies with the same code after "don't ask again".
+      final shown = await openTwice(tester, [
+        FakeCameraPlatform.deniedOnAndroid,
+        FakeCameraPlatform.deniedOnAndroid,
+      ]);
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'test/support/device_app_attempts.dart',
+          under: _first,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_denied, _first)));
+      expect(shown, [
+        'You have denied camera access.',
+        'You have denied camera access.',
+      ]);
+      _says(
+        _part(_denied, _first),
+        'Both openings say `You have denied camera access.`, and the screen '
+        'has nothing that asks again:',
+      );
+      _says(
+        _part(_denied, _first),
+        'and the controller sends the platform `dispose` for the camera `-1`:',
+      );
+    });
+
+    testWidgets('the first attempt sends the iPhone to Settings', (
+      tester,
+    ) async {
+      platform.phone = FakePhone.iphone;
+      final shown = await openTwice(tester, [
+        FakeCameraPlatform.deniedOnIphone,
+        FakeCameraPlatform.deniedWithoutPromptOnIphone,
+      ]);
+
+      expect(shown.last, 'Please go to Settings app to enable camera access.');
+      _says(
+        _part(_denied, _first),
+        'On an iPhone 13 mini the second opening says '
+        '`Please go to Settings app to enable camera access.`',
+      );
+    });
+
+    testWidgets('the screen explains, and retry asks again (iPhone)', (
+      tester,
+    ) async {
+      platform
+        ..phone = FakePhone.iphone
+        ..failCreate = FakeCameraPlatform.deniedOnIphone;
+      final journal = Journal(platform);
+      Solo.observer = journal;
+      final session = CameraSession(onCaptured: (XFile file) {});
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CameraView(session: session),
+        ),
+      );
+      session.open();
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Allow the app to use the camera.'), findsOneWidget);
+      platform.failCreate = FakeCameraPlatform.deniedWithoutPromptOnIphone;
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.text('Allow the app to use the camera in Settings.'),
+        findsOneWidget,
+      );
+      expect(retry, findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
+
+      expect(
+        codeMissingFrom(
+          _doc,
+          'lib/camera_session.dart',
+          alsoIn: ['lib/camera_screen.dart'],
+          under: _explained,
+        ),
+        isEmpty,
+      );
+      expect(journal.lines, containsRun(_traceUnder(_denied, _explained)));
+      expect(platform.log, isNot(contains(startsWith('dispose'))));
+      _says(
+        _part(_denied, _explained),
+        'The trace has no `dispose` line: no camera was created, and the '
+        'release of the screen finds none.',
+      );
+    });
+
+    testWidgets("retry on the Galaxy after \"don't ask again\" asks nothing", (
+      tester,
+    ) async {
+      platform.failCreate = FakeCameraPlatform.deniedOnAndroid;
+      final session = CameraSession(onCaptured: (XFile file) {});
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CameraView(session: session),
+        ),
+      );
+      session.open();
+      await tester.pump();
+      await tester.pump();
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(retry);
+        await tester.pump();
+        await tester.pump();
+        expect(
+          session.currentState,
+          isA<Denied>().having((s) => s.code, 'code', 'CameraAccessDenied'),
+        );
+        expect(find.text('Allow the app to use the camera.'), findsOneWidget);
+        expect(retry, findsOneWidget);
+      }
+      expect(platform.log, everyElement('create back failed'));
+      _says(
+        _part(_denied, _explained),
+        "After \"deny and don't ask again\" Retry asks nothing: the opening "
+        'fails without a dialog with the same code, and the screen comes '
+        'back with the same text and the same button.',
+      );
+      await tester.pumpWidget(const SizedBox());
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
       await session.close();
     });
   });

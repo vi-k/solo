@@ -731,6 +731,117 @@ void main() {
     });
   });
 
+  group('a denied permission', () {
+    final retry = find.byKey(const Key('retry'));
+
+    /// The codes of a permission error the plugin's README lists.
+    const deniedCodes = [
+      'CameraAccessDenied',
+      'CameraAccessDeniedWithoutPrompt',
+      'CameraAccessRestricted',
+      'AudioAccessDenied',
+      'AudioAccessDeniedWithoutPrompt',
+      'AudioAccessRestricted',
+    ];
+
+    for (final code in deniedCodes) {
+      testWidgets('$code explains what to allow', (tester) async {
+        // Both phones deny from `createCameraWithSettings`.
+        platform.failCreate = CameraException(code, 'Denied.');
+        final session = await openShown(tester);
+        await tester.pump();
+
+        expect(
+          session.currentState,
+          isA<Denied>().having((s) => s.code, 'code', code),
+        );
+        expect(
+          find.textContaining(
+            code.startsWith('Audio') ? 'microphone' : 'camera',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Settings'),
+          code.endsWith('WithoutPrompt') ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.textContaining('policy'),
+          code.endsWith('Restricted') ? findsOneWidget : findsNothing,
+        );
+        expect(retry, code.endsWith('Denied') ? findsOneWidget : findsNothing);
+        // No camera was created, and none is released.
+        expect(platform.log, isNot(contains(startsWith('dispose'))));
+        expect(platform.openCameras, 0);
+        await tester.pumpWidget(const SizedBox());
+        await finish(tester, session);
+        expect(platform.log, isNot(contains(startsWith('dispose'))));
+      });
+    }
+
+    testWidgets('retry asks again, and the next answer shows (iPhone)', (
+      tester,
+    ) async {
+      platform
+        ..phone = FakePhone.iphone
+        ..failCreate = FakeCameraPlatform.deniedOnIphone;
+      final session = await openShown(tester);
+      await tester.pump();
+      platform.failCreate = FakeCameraPlatform.deniedWithoutPromptOnIphone;
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        session.currentState,
+        isA<Denied>().having(
+          (s) => s.code,
+          'code',
+          'CameraAccessDeniedWithoutPrompt',
+        ),
+      );
+      expect(find.textContaining('Settings'), findsOneWidget);
+      expect(retry, findsNothing);
+      expect(platform.log, ['create back failed', 'create back failed']);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+
+    testWidgets('retry after the permission is given opens the camera', (
+      tester,
+    ) async {
+      platform.failCreate = FakeCameraPlatform.deniedOnAndroid;
+      final session = await openShown(tester);
+      await tester.pump();
+      platform.failCreate = null;
+      await tester.tap(retry);
+      await tester.pump(platform.openTime);
+
+      expect(session.currentState, isA<Ready>());
+      expect(platform.openCameras, 1);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+
+    testWidgets('a failed create that is no denial is a failure, and '
+        'nothing is let go', (tester) async {
+      // The Galaxy's answer to a second opening while its dialog is up.
+      platform.failCreate = CameraException(
+        'CameraPermissionsRequestOngoing',
+        'Another request is ongoing and multiple requests cannot be '
+            'handled at once.',
+      );
+      final session = await openShown(tester);
+      await tester.pump(platform.disposeTime);
+
+      expect(session.currentState, isA<Broken>());
+      expect(retry, findsOneWidget);
+      expect(platform.log, isNot(contains(startsWith('dispose'))));
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, session);
+    });
+  });
+
   testWidgets('release waits for the platform', (tester) async {
     final journal = Journal(platform);
     Solo.observer = journal;

@@ -141,7 +141,33 @@ class _CameraViewState extends State<CameraView> {
           ],
         ),
       ),
-      Denied(:final code) => Center(child: Text(code)),
+      Denied(:final code) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_denial(code)),
+            if (code.endsWith('Denied'))
+              TextButton(
+                key: const Key('retry'),
+                onPressed: widget.session.open,
+                child: const Text('Retry'),
+              ),
+          ],
+        ),
+      ),
     },
   );
+}
+
+/// What the screen asks for the [code] of a denial: the device to allow,
+/// and where the user can allow it.
+String _denial(String code) {
+  final device = code.startsWith('Audio') ? 'microphone' : 'camera';
+  if (code.endsWith('WithoutPrompt')) {
+    return 'Allow the app to use the $device in Settings.';
+  }
+  if (code.endsWith('Restricted')) {
+    return 'The policy of this device does not let the app use the $device.';
+  }
+  return 'Allow the app to use the $device.';
 }

@@ -152,8 +152,12 @@ final class CameraSession extends Solo<CameraState> {
   @override
   void onClose() => unawaited(_errors?.cancel());
 
-  /// Creates the camera of [description] on the platform and opens it; a
-  /// camera that fails to open is [Broken] and let go.
+  /// Creates the camera of [description] on the platform and opens it.
+  ///
+  /// A permission the app does not have is [Denied], and any other failure
+  /// is [Broken]. A camera the platform has created is let go; a create
+  /// that failed leaves the plugin's controller on [_noCamera], with
+  /// nothing to let go.
   Future<void> _initialize(
     SoloContext<CameraState, CameraState> ctx,
     CameraDescription description,
@@ -162,8 +166,11 @@ final class CameraSession extends Solo<CameraState> {
     try {
       await ctx.join(camera.initialize);
     } on CameraException catch (error) {
-      ctx.emit(Broken(error));
-      _letGo(camera);
+      final code = error.code;
+      ctx.emit(_denials.contains(code) ? Denied(code) : Broken(error));
+      if (camera.cameraId != _noCamera) {
+        _letGo(camera);
+      }
       return;
     }
     _watch(camera);
@@ -202,3 +209,19 @@ final class CameraSession extends Solo<CameraState> {
 
 /// The keys of the commands whose policy looks at them.
 enum _Op { takePicture }
+
+/// The `cameraId` of the plugin's controller until the platform has
+/// created its camera: `CameraController.kUninitializedCameraId`, which the
+/// plugin keeps for its own tests.
+const _noCamera = -1;
+
+/// The codes of the plugin's `CameraException` for a permission the app
+/// does not have, as its README lists them.
+const _denials = {
+  'CameraAccessDenied',
+  'CameraAccessDeniedWithoutPrompt',
+  'CameraAccessRestricted',
+  'AudioAccessDenied',
+  'AudioAccessDeniedWithoutPrompt',
+  'AudioAccessRestricted',
+};

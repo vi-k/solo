@@ -833,3 +833,196 @@ state Ready
 `state Broken` comes right after the error, and the release follows it. The
 opening starts once the lost camera is released, and the second tap leaves no
 line.
+
+## A denied permission
+
+The user denies the app the camera or the microphone. The screen says which of
+the two to allow. After a plain denial a Retry button asks again; when the
+phone no longer asks, the screen says to allow it in Settings, and when the
+policy of the device forbids it, the screen says that.
+
+### The first attempt
+
+The plugin asks for the permissions itself, while it creates the camera, and
+`initialize` throws a `CameraException` whose code says what was denied. The
+plugin's README lists six codes, from `CameraAccessDenied` to
+`AudioAccessRestricted`, and its example catches them around `initialize` with
+a message for each in a snack bar. Here the message stays on the screen as a
+`Text`, and the screen disposes its controller when it leaves:
+
+```dart
+// The first attempt: one message, and nothing that asks again.
+@override
+void dispose() {
+  camera.dispose();
+  super.dispose();
+}
+
+Future<void> open() async {
+  try {
+    await camera.initialize();
+  } on CameraException catch (e) {
+    switch (e.code) {
+      case 'CameraAccessDenied':
+        show('You have denied camera access.');
+      case 'CameraAccessDeniedWithoutPrompt':
+        // iOS only
+        show('Please go to Settings app to enable camera access.');
+      case 'CameraAccessRestricted':
+        // iOS only
+        show('Camera access is restricted.');
+      case 'AudioAccessDenied':
+        show('You have denied audio access.');
+      case 'AudioAccessDeniedWithoutPrompt':
+        // iOS only
+        show('Please go to Settings app to enable audio access.');
+      case 'AudioAccessRestricted':
+        // iOS only
+        show('Audio access is restricted.');
+      default:
+        show(e);
+    }
+  }
+}
+```
+
+The README marks the codes with `WithoutPrompt` and `Restricted` as iOS only
+for now. The Android side of the plugin, `camera_android_camerax`, has
+`CameraAccessDenied` and `AudioAccessDenied` for a denial, and
+`CameraPermissionsRequestOngoing` for a request made while another is under
+way. A Galaxy A55 asks a second time with a choice to deny and not ask again;
+after that an opening shows no dialog and fails in about 200 ms with the same
+`CameraAccessDenied`. On an iPhone 13 mini the first denial is
+`CameraAccessDenied`, and the next opening fails without a dialog with
+`CameraAccessDeniedWithoutPrompt`. A denied microphone on the iPhone is
+`AudioAccessDenied`. A create that fails is the line `create back failed`. The
+screen opened twice, the second time after "deny and don't ask again", with the
+fake platform on the Galaxy's rules:
+
+```text
+create back failed
+dispose #-1 start
+dispose #-1 end
+create back failed
+dispose #-1 start
+dispose #-1 end
+```
+
+Both openings say `You have denied camera access.`, and the screen has nothing
+that asks again: the way back to the dialog is to leave the screen and open it
+again. After "don't ask again" the Galaxy asks no more, and the message does
+not send the user to Settings. On an iPhone 13 mini the second opening says
+`Please go to Settings app to enable camera access.` Leaving the screen
+disposes the controller, and the controller sends the platform `dispose` for
+the camera `-1`: no camera was created, so the controller still has the id it
+starts with, and its `dispose` calls the platform once `initialize` has
+started.
+
+### A denial the screen explains
+
+`_initialize`, the end of `open()` and of `resume()`, tells a denial from a
+failure by the code of the exception: the six codes of the README are `Denied`,
+with the code, and any other is `Broken`. It lets the camera go only when the
+platform has created one. The plugin's controller keeps the `cameraId` of `-1`
+until `createCameraWithSettings` gives it an id, and a denial comes from there:
+
+```dart
+Future<void> _initialize(
+  SoloContext<CameraState, CameraState> ctx,
+  CameraDescription description,
+) async {
+  final camera = CameraController(description, ResolutionPreset.medium);
+  try {
+    await ctx.join(camera.initialize);
+  } on CameraException catch (error) {
+    final code = error.code;
+    ctx.emit(_denials.contains(code) ? Denied(code) : Broken(error));
+    if (camera.cameraId != _noCamera) {
+      _letGo(camera);
+    }
+    return;
+  }
+  _watch(camera);
+  ctx.emit(
+    Ready(camera: camera, flash: camera.value.flashMode, recording: false),
+  );
+}
+
+const _noCamera = -1;
+
+const _denials = {
+  'CameraAccessDenied',
+  'CameraAccessDeniedWithoutPrompt',
+  'CameraAccessRestricted',
+  'AudioAccessDenied',
+  'AudioAccessDeniedWithoutPrompt',
+  'AudioAccessRestricted',
+};
+```
+
+The plugin names `-1` `kUninitializedCameraId` and keeps the name for its own
+tests, so the session has a constant of its own. A controller that was denied
+is not disposed: its `dispose` is what would send the platform `dispose` for
+`-1`. What it leaves is its listener of the orientation of the device, which it
+starts before it creates the camera, one for each denied opening.
+
+The screen shows `Denied` with what to allow and where, and with Retry for a
+plain denial. Retry calls `open()`, as for `Broken`, and the plugin asks again
+while it creates the camera:
+
+```dart
+Denied(:final code) => Center(
+  child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(_denial(code)),
+      if (code.endsWith('Denied'))
+        TextButton(
+          key: const Key('retry'),
+          onPressed: widget.session.open,
+          child: const Text('Retry'),
+        ),
+    ],
+  ),
+),
+
+String _denial(String code) {
+  final device = code.startsWith('Audio') ? 'microphone' : 'camera';
+  if (code.endsWith('WithoutPrompt')) {
+    return 'Allow the app to use the $device in Settings.';
+  }
+  if (code.endsWith('Restricted')) {
+    return 'The policy of this device does not let the app use the $device.';
+  }
+  return 'Allow the app to use the $device.';
+}
+```
+
+A denial, a tap of Retry once the iPhone asks no more, and the screen left,
+with the fake platform on the iPhone's rules:
+
+```text
+state Opening
+create back failed
+state Denied
+state Opening
+create back failed
+state Denied
+state Closed
+```
+
+The first `Denied` is `CameraAccessDenied` and says
+`Allow the app to use the camera.` with Retry; the second is
+`CameraAccessDeniedWithoutPrompt` and says
+`Allow the app to use the camera in Settings.` with no button. The trace has no
+`dispose` line: no camera was created, and the release of the screen finds
+none. On an iPhone 13 mini the switch in Settings restarts the app.
+
+On a Galaxy A55 Retry is the second opening, which shows the dialog again, and
+a denial there is `CameraAccessDenied` again. After "deny and don't ask again"
+Retry asks nothing: the opening fails without a dialog with the same code, and
+the screen comes back with the same text and the same button. The Android side
+of the plugin has no other code for this denial, so on Android the screen does
+not send the user to Settings. `CameraAccessRestricted` and
+`AudioAccessRestricted` come from the README: neither phone was put under a
+policy that forbids the camera.
