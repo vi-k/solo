@@ -1,13 +1,17 @@
 # Testing
 
 A controller is tested through its jobs: a call queues one and returns it, and
-the state it publishes arrives later. Each of the eight sections below comes
-down to one rule. Four are for a test that awaits its job or the controller's
+the state it publishes arrives later. Each of the nine sections below comes
+down to one rule. Five are for a test that awaits its job or the controller's
 `close`:
 
 - [Awaiting a job](#awaiting-a-job): the call only queues the job, so the test
   awaits its `done` or `value` before it reads the state. A test that skips the
   wait fails with the state `Initial`.
+- [The states on the way](#the-states-on-the-way): the state after `done` is
+  the last one alone, so a test of the states a load goes through collects them
+  with a listener added before the call. A test that reads the last state stays
+  green on a load that never shows `Loading`.
 - [Closing the controller](#closing-the-controller): a plain `close()` cancels
   the load, and the test sees `Initial`; a test that holds no job waits with
   `SoloCloseMode.drain`.
@@ -99,7 +103,7 @@ outcome is the only signal it needs, and the fake's twenty milliseconds are
 waited out for real. The other has to look between the events — the order two
 calls ended up in, a deadline five seconds away — and can await nothing at all.
 It runs under `package:fake_async`, where the clock moves when the test says
-so. The first four sections below await; `fakeAsync` starts with the fifth.
+so. The first five sections below await; `fakeAsync` starts with the sixth.
 
 ## Awaiting a job
 
@@ -192,6 +196,70 @@ queue, its body never ran, and its `ifCancelled` handler was not called at all.
 A load cancelled while it runs ends `Cancelled` as well, with `started: true`,
 and the state it ends in is the one its `ifCancelled` handler published.
 
+## The states on the way
+
+While the name loads, the screen shows `Loading`, and a test of the load should
+catch that state as well as the one the load ends in.
+
+### The first attempt
+
+```dart
+// The first attempt: the test sees the last state alone.
+test('load fills in the name', () async {
+  final profile = ProfileController(FakeProfileApi());
+
+  final outcome = await profile.load().done;
+
+  expect(outcome, isA<Done<String>>());
+  expect(
+    profile.currentState,
+    isA<Loaded>().having((state) => state.name, 'name', 'Ada Lovelace'),
+  );
+
+  await profile.close();
+});
+```
+
+This is the test of [Awaiting the outcome](#awaiting-the-outcome), and it says
+nothing about `Loading`. Take the line `ctx.emit(const Loading());` out of
+`load`, and the test is still green. It reads the state once, after `done`, and
+by then `Loading` has given way to `Loaded`: whatever the load went through,
+the test sees where it ended.
+
+### A listener before the call
+
+```dart
+test('load shows Loading, then the name', () async {
+  final profile = ProfileController(FakeProfileApi());
+  final states = <ProfileState>[];
+  profile.addListener(() => states.add(profile.currentState));
+
+  await profile.load().done;
+
+  expect(states, [isA<Loading>(), isA<Loaded>()]);
+
+  await profile.close();
+});
+```
+
+The listener is called on every change of the state, and it keeps what
+`currentState` holds at each one. On a `load` without that line the test fails,
+with `Loaded` alone in the list. By the time `done` completes the list is
+whole: the state handlers `ifFailed` and `ifCancelled` publish before it as
+well, so a load that fails lists `Loading, Failure`.
+
+The listener goes on before the call: the body emits `Loading` a microtask
+after `load()` returns, and a listener added after the first `await` has missed
+it. A controller with `SoloStream` gives the same list through its `stream` and
+`emitsInOrder`, and under `fakeAsync` the list is whole once `elapse` has moved
+past the fake's twenty milliseconds.
+
+A look at `currentState` at one moment — after `flushMicrotasks()` under
+`fakeAsync`, or after a `Future.delayed(Duration.zero)` — catches a `load`
+without that line as well, but it sees what has happened by that moment:
+against a fake that answers at once it finds `Loaded` already, and the test is
+red on a `load` that is right. The list does not depend on when the test looks.
+
 ## Closing the controller
 
 `close()` returns a future that completes once the controller has shut down. It
@@ -235,8 +303,8 @@ test('load fills in the name', () async {
 `SoloCloseMode.drain` runs what is already in the queue instead of dropping it,
 so this `close` is a way to wait. It suits a test that holds no job — a
 controller that queues work of its own, a widget that fills the queue. A test
-that holds the job awaits its `done`, as in the section above, and its `close`
-is only the end of the test.
+that holds the job awaits its `done`, as in [Awaiting a job](#awaiting-a-job),
+and its `close` is only the end of the test.
 
 A drain runs the queue; it does not promise the work succeeds. A drained job
 can still fail, and what that costs a test is the next section.

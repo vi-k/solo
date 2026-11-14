@@ -12,6 +12,7 @@ import 'package:test_api/hooks_testing.dart' as nested;
 
 import 'support/page_code.dart';
 import 'support/testing_camera.dart';
+import 'support/testing_first_attempt_states.dart' as skipping;
 import 'support/testing_first_attempt_timeout.dart' as deadline;
 import 'support/testing_first_attempts.dart' as first;
 import 'support/testing_page.dart' as page;
@@ -24,8 +25,10 @@ import 'support/testing_stubs.dart' hide test;
 /// The code of the page is tests, and it stands verbatim in
 /// `test/support/testing_*.dart`: the controller, the fake and the journal
 /// in one file, the tests that work in another, the first attempts in a
-/// third, the deadline of the last section in a fourth, and the controller
-/// that names its expected errors, with its test, in a fifth. A test that
+/// third, the deadline of the last section in a fourth, the controller
+/// that names its expected errors, with its test, in a fifth, and the
+/// controller that never emits `Loading`, with the two tests of "The states
+/// on the way" on it, in a sixth. A test that
 /// works is declared here as a test of this suite, under the name the page
 /// gives it. A first attempt is run as the body of a test case of its own —
 /// `TestCaseMonitor` of `package:test_api`, the same machinery the runner
@@ -36,7 +39,7 @@ import 'support/testing_stubs.dart' hide test;
 /// What the prose of the page says about that code is pinned next to it:
 /// a test that checks a sentence holds the page to it through [_says].
 ///
-/// The first four sections of the page await real time, twenty
+/// The first five sections of the page await real time, twenty
 /// milliseconds a load, and so do the tests of them here.
 
 String _page() => File('doc/testing.md').readAsStringSync();
@@ -203,6 +206,34 @@ final class _Finished extends SoloObserver {
 
   @override
   void onFinish(SoloController<Object> solo, Job<Object?> job) => jobs.add(job);
+}
+
+/// An API that answers at once: its call is over within microtasks.
+final class _AtOnceApi implements ProfileApi {
+  @override
+  Future<String> fetchName() async => 'Ada Lovelace';
+}
+
+/// The page's controller with a `stream`, for what the page says of a
+/// controller that has one.
+final class _StreamedProfile extends Solo<ProfileState>
+    with SoloStream<ProfileState> {
+  final ProfileApi api;
+
+  _StreamedProfile(this.api) : super(const Initial());
+
+  Job<String> load() => enqueue<ProfileState, String>(
+    key: 'load',
+    policy: Policy.droppable,
+    ifFailed: (state, error, stackTrace) => Failure(error),
+    ifCancelled: (state, cancelled) => const Initial(),
+    (ctx) async {
+      ctx.emit(const Loading());
+      final name = await ctx.abandonable(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    },
+  );
 }
 
 const _failed = nested.State.failed;
@@ -560,6 +591,267 @@ void main() {
           await profile.close();
         },
       );
+    });
+  });
+
+  group('The states on the way', () {
+    /// The section of the page under its `## ` heading.
+    String section() => _sections().singleWhere(
+      (section) => section.startsWith('## The states on the way\n'),
+    );
+
+    /// The `dart` blocks of [text], without the mark of an attempt.
+    List<String> blocks(String text) => [
+      for (final block in RegExp(
+        r'```dart\n(.*?)\n```',
+        dotAll: true,
+      ).allMatches(text))
+        block.group(1)!.replaceFirst(RegExp(r'^// The \w+ attempt\b.*\n'), ''),
+    ];
+
+    /// Collects the states [solo] publishes from now on.
+    List<String> listen(Solo<ProfileState> solo) {
+      final states = <String>[];
+      solo.addListener(() => states.add(_state(solo)));
+      return states;
+    }
+
+    group('the first attempt', () {
+      test('is the test of "Awaiting the outcome", as is', () {
+        final page = _page();
+        final awaiting = page.substring(
+          page.indexOf('\n### Awaiting the outcome\n'),
+        );
+
+        expect(blocks(section()).first, blocks(awaiting).first);
+        _says(
+          'This is the test of [Awaiting the outcome](#awaiting-the-outcome)',
+        );
+      });
+
+      test("the controller that skips Loading is the page's without that "
+          'line', () {
+        /// The body of `load` as [file] writes it.
+        String load(String file) {
+          final source = File(file).readAsStringSync();
+          final start = source.indexOf('  Job<String> load() =>');
+          return source.substring(start, source.indexOf('\n  );\n', start));
+        }
+
+        const line = '      ctx.emit(const Loading());\n';
+        final page = load('test/support/testing_page_fixtures.dart');
+        final skipping = load('test/support/testing_first_attempt_states.dart');
+
+        expect(page, contains(line));
+        expect(page.replaceFirst(line, ''), skipping);
+      });
+
+      test('the code of the section is a run of lines of the file of that '
+          'controller', () {
+        final dir = Directory.systemTemp.createTempSync('testing_states_');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        final file = File('${dir.path}/section.md')
+          ..writeAsStringSync(section());
+
+        expect(blocks(section()), hasLength(2));
+        expect(
+          codeMissingFrom(
+            file.path,
+            'test/support/testing_first_attempt_states.dart',
+          ),
+          isEmpty,
+        );
+      });
+
+      test('stays green on a controller that never emits Loading', () async {
+        final run = await _run(skipping.lastStateAlone.body);
+
+        expect(run.state, _passed);
+        expect(_errors(run), isEmpty);
+        _says(
+          'Take the line `ctx.emit(const Loading());` out of `load`, and the '
+          'test is still green',
+        );
+      });
+
+      test(
+        'reads the state once, after Loading has given way to Loaded',
+        () async {
+          final profile = ProfileController(FakeProfileApi());
+          final states = listen(profile);
+
+          await profile.load().done;
+
+          expect(states, ['Loading', 'Loaded']);
+          expect(_state(profile), 'Loaded');
+          _says(
+            'It reads the state once, after `done`, and by then `Loading` has '
+            'given way to `Loaded`',
+          );
+
+          await profile.close();
+        },
+      );
+    });
+
+    group('a listener before the call, as the page writes it:', () {
+      _asWritten(page.listened);
+    });
+
+    group('a listener before the call', () {
+      test('fails on the controller that never emits Loading, with Loaded '
+          'alone in the list', () async {
+        final run = await _run(skipping.listened.body);
+
+        expect(run.state, _failed);
+        expect(_errors(run), ['TestFailure']);
+        expect(_message(run), contains("Actual: [Instance of 'Loaded']"));
+        _says(
+          'On a `load` without that line the test fails, with `Loaded` alone '
+          'in the list',
+        );
+      });
+
+      test('the state handlers publish before done completes', () async {
+        final failed = ProfileController(
+          FakeProfileApi(error: const ApiException('no network')),
+        );
+        final failedStates = listen(failed);
+        final cancelled = ProfileController(FakeProfileApi());
+        final cancelledStates = listen(cancelled);
+
+        await failed.load().done;
+        final job = cancelled.load();
+        await pumpEventQueue();
+        unawaited(job.cancel());
+        await job.done;
+
+        expect(failedStates, ['Loading', 'Failure']);
+        expect(cancelledStates, ['Loading', 'Initial']);
+        _says(
+          'the state handlers `ifFailed` and `ifCancelled` publish before it '
+          'as well, so a load that fails lists `Loading, Failure`',
+        );
+
+        await failed.close();
+        await cancelled.close();
+      });
+
+      test('a listener added after the first await misses Loading', () async {
+        final profile = ProfileController(FakeProfileApi());
+
+        final job = profile.load();
+        await Future<void>.microtask(() {});
+        final states = listen(profile);
+        await job.done;
+
+        expect(states, ['Loaded']);
+        _says(
+          'The listener goes on before the call: the body emits `Loading` a '
+          'microtask after `load()` returns, and a listener added after the '
+          'first `await` has missed it.',
+        );
+
+        await profile.close();
+      });
+
+      test('a controller with SoloStream gives the same list through '
+          'emitsInOrder', () async {
+        final profile = _StreamedProfile(FakeProfileApi());
+
+        final states = expectLater(
+          profile.stream,
+          emitsInOrder([isA<Loading>(), isA<Loaded>()]),
+        );
+        await profile.load().done;
+        await states;
+        _says(
+          'A controller with `SoloStream` gives the same list through its '
+          '`stream` and `emitsInOrder`',
+        );
+
+        await profile.close();
+      });
+
+      test('under fakeAsync the list is whole once elapse is past the '
+          'twenty milliseconds', () {
+        fakeAsync((async) {
+          final profile = ProfileController(FakeProfileApi());
+          final states = listen(profile);
+
+          profile.load();
+          async.elapse(const Duration(milliseconds: 19));
+          expect(states, ['Loading']);
+          async.elapse(const Duration(milliseconds: 1));
+          expect(states, ['Loading', 'Loaded']);
+          _says(
+            'under `fakeAsync` the list is whole once `elapse` has moved '
+            "past the fake's twenty milliseconds",
+          );
+
+          profile.close();
+          async.flushTimers();
+        });
+      });
+
+      test('a look at one moment catches the controller that skips Loading, '
+          'and finds Loaded with a fake that answers at once', () {
+        /// The state after one `flushMicrotasks()` under fake time, then the
+        /// list a listener collected by the end.
+        String look(Solo<ProfileState> profile, Job<String> Function() load) {
+          var seen = '';
+          fakeAsync((async) {
+            final states = listen(profile);
+            load();
+            async.flushMicrotasks();
+            final now = _state(profile);
+            async.elapse(const Duration(milliseconds: 20));
+            seen = '$now; ${states.join(', ')}';
+            profile.close();
+            async.flushTimers();
+          });
+          return seen;
+        }
+
+        final right = ProfileController(FakeProfileApi());
+        final wrong = skipping.ProfileController(FakeProfileApi());
+        final atOnce = ProfileController(_AtOnceApi());
+
+        expect(look(right, right.load), 'Loading; Loading, Loaded');
+        expect(look(wrong, wrong.load), 'Initial; Loaded');
+        expect(look(atOnce, atOnce.load), 'Loaded; Loading, Loaded');
+        _says(
+          'A look at `currentState` at one moment — after '
+          '`flushMicrotasks()` under `fakeAsync`, or after a '
+          '`Future.delayed(Duration.zero)` — catches a `load` without that '
+          'line as well',
+        );
+        _says('against a fake that answers at once it finds `Loaded` already');
+      });
+
+      test('so does a look after a zero delay in real time', () async {
+        Future<String> look(
+          Solo<ProfileState> profile,
+          Job<String> Function() load,
+        ) async {
+          final job = load();
+          await Future<void>.delayed(Duration.zero);
+          final now = _state(profile);
+          await job.done;
+          await profile.close();
+          return now;
+        }
+
+        final right = ProfileController(FakeProfileApi());
+        final wrong = skipping.ProfileController(FakeProfileApi());
+        final atOnce = ProfileController(_AtOnceApi());
+
+        expect(await look(right, right.load), 'Loading');
+        expect(await look(wrong, wrong.load), 'Initial');
+        expect(await look(atOnce, atOnce.load), 'Loaded');
+        _says('or after a `Future.delayed(Duration.zero)`');
+        _says('against a fake that answers at once it finds `Loaded` already');
+      });
     });
   });
 
@@ -2075,11 +2367,11 @@ final name = await ctx.abandonable(
           RegExp(r'^### (.*)$', multiLine: true).firstMatch(section)?.group(1),
       ];
 
-      expect(sections, hasLength(8));
+      expect(sections, hasLength(9));
       expect(opening, everyElement('The first attempt'));
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
-        hasLength(8),
+        hasLength(9),
       );
     });
 
@@ -2095,18 +2387,18 @@ final name = await ctx.abandonable(
       }
     });
 
-    test('the four sections that await come first, fakeAsync starts with '
-        'the fifth', () {
+    test('the five sections that await come first, fakeAsync starts with '
+        'the sixth', () {
       final sections = _sections();
       final underFakeTime = [
         for (final section in sections) section.contains('fakeAsync(('),
       ];
 
-      expect(underFakeTime.take(5), [false, false, false, false, true]);
-      expect(sections[3], startsWith('## Assertions inside a zone'));
+      expect(underFakeTime.take(6), [false, false, false, false, false, true]);
+      expect(sections[4], startsWith('## Assertions inside a zone'));
       _says(
-        'The first four sections below await; `fakeAsync` starts with '
-        'the fifth.',
+        'The first five sections below await; `fakeAsync` starts with '
+        'the sixth.',
       );
     });
 
@@ -2129,7 +2421,8 @@ final name = await ctx.abandonable(
       );
     });
 
-    test('the rules on top name every section, four of each kind of test', () {
+    test('the rules on top name every section, five for a test that awaits '
+        'and four for one under fakeAsync', () {
       final page = _page();
       final rules = [
         for (final match in RegExp(
@@ -2149,8 +2442,8 @@ final name = await ctx.abandonable(
       List<int> places(Iterable<String> headings) => [
         for (final heading in headings) sections.keys.toList().indexOf(heading),
       ];
-      final awaiting = rules.take(4).map((rule) => rule.heading);
-      final underFakeTime = rules.skip(4).map((rule) => rule.heading);
+      final awaiting = rules.take(5).map((rule) => rule.heading);
+      final underFakeTime = rules.skip(5).map((rule) => rule.heading);
 
       // The rules in the order of the sections.
       expect(rules.map((rule) => rule.heading), orderedEquals(sections.keys));
@@ -2177,9 +2470,9 @@ final name = await ctx.abandonable(
           reason: heading,
         );
       }
-      _says('Each of the eight sections below comes down to one rule.');
+      _says('Each of the nine sections below comes down to one rule.');
       _says(
-        "Four are for a test that awaits its job or the controller's "
+        "Five are for a test that awaits its job or the controller's "
         '`close`:',
       );
       _says(
@@ -2193,7 +2486,7 @@ final name = await ctx.abandonable(
         for (final section in _sections()) section.contains('connect()'),
       ];
 
-      expect(ofTheCamera, [...List.filled(7, false), true]);
+      expect(ofTheCamera, [...List.filled(8, false), true]);
       _says('all but the last drive the `load` of the controller');
     });
 
@@ -2237,10 +2530,12 @@ final name = await ctx.abandonable(
     const attempts = 'test/support/testing_first_attempts.dart';
     const timeout = 'test/support/testing_first_attempt_timeout.dart';
     const expected = 'test/support/testing_page_expected.dart';
+    const states = 'test/support/testing_first_attempt_states.dart';
     const holders = {
       '# Testing': [fixtures],
-      '### The first attempt': [attempts, timeout, fixtures],
+      '### The first attempt': [attempts, timeout, states, fixtures],
       '### Awaiting the outcome': [answers],
+      '### A listener before the call': [answers],
       '### Letting the work finish': [answers],
       '### ignoreFailure': [answers],
       '### isExpectedError': [expected],
@@ -2271,7 +2566,7 @@ final name = await ctx.abandonable(
           codeMissingFrom(
             'doc/testing.md',
             answers,
-            alsoIn: [attempts, timeout, fixtures, expected],
+            alsoIn: [attempts, timeout, states, fixtures, expected],
           ),
           isEmpty,
         );

@@ -61,6 +61,19 @@ final cancelledLoad = test('a cancelled load ends Cancelled', () async {
   await profile.close();
 });
 
+/// `### A listener before the call`: every state the load goes through.
+final listened = test('load shows Loading, then the name', () async {
+  final profile = ProfileController(FakeProfileApi());
+  final states = <ProfileState>[];
+  profile.addListener(() => states.add(profile.currentState));
+
+  await profile.load().done;
+
+  expect(states, [isA<Loading>(), isA<Loaded>()]);
+
+  await profile.close();
+});
+
 /// `### Letting the work finish`: the drain, for a job the test does not
 /// hold.
 final drained = test('load fills in the name', () async {
