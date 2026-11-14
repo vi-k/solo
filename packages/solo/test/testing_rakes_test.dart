@@ -23,18 +23,17 @@ import 'support/testing_stubs.dart' hide test;
 /// The sentinel of `doc/testing.md`.
 ///
 /// The code of the page is tests, and it stands verbatim in
-/// `test/support/testing_*.dart`: the controller, the fake and the journal
-/// in one file, the tests that work in another, the first attempts in a
-/// third, the deadline of the last section in a fourth, the controller
-/// that names its expected errors, with its test, in a fifth, and the
-/// controller that never emits `Loading`, with the two tests of "The states
-/// on the way" on it, in a sixth. A test that
-/// works is declared here as a test of this suite, under the name the page
-/// gives it. A first attempt is run as the body of a test case of its own —
-/// `TestCaseMonitor` of `package:test_api`, the same machinery the runner
-/// puts a test in — and what it ends with is looked at from outside: a
-/// failure, an error that reached its zone, an error that came after it was
-/// over, or no end at all.
+/// `test/support/testing_*.dart`: the controller, the fake and the journal in
+/// one file, the tests that work in another, the first attempts in a third,
+/// the deadline of the last section in a fourth, the controller that names its
+/// expected errors, with its test, in a fifth, and the controller that never
+/// emits `Loading`, with the two tests of "The states on the way" on it, in a
+/// sixth. A test that works is declared here as a test of this suite, under
+/// the name the page gives it. A first attempt is run as the body of a test
+/// case of its own — `TestCaseMonitor` of `package:test_api`, the same
+/// machinery the runner puts a test in — and what it ends with is looked at
+/// from outside: a failure, an error that reached its zone, an error that came
+/// after it was over, or no end at all.
 ///
 /// What the prose of the page says about that code is pinned next to it:
 /// a test that checks a sentence holds the page to it through [_says].
@@ -609,6 +608,17 @@ void main() {
         block.group(1)!.replaceFirst(RegExp(r'^// The \w+ attempt\b.*\n'), ''),
     ];
 
+    /// The body of `load` as [file] writes it, in the class that [after]
+    /// opens when it is given.
+    String load(String file, {String after = ''}) {
+      final source = File(file).readAsStringSync();
+      final start = source.indexOf(
+        '  Job<String> load() =>',
+        source.indexOf(after),
+      );
+      return source.substring(start, source.indexOf('\n  );\n', start));
+    }
+
     /// Collects the states [solo] publishes from now on.
     List<String> listen(Solo<ProfileState> solo) {
       final states = <String>[];
@@ -631,13 +641,6 @@ void main() {
 
       test("the controller that skips Loading is the page's without that "
           'line', () {
-        /// The body of `load` as [file] writes it.
-        String load(String file) {
-          final source = File(file).readAsStringSync();
-          final start = source.indexOf('  Job<String> load() =>');
-          return source.substring(start, source.indexOf('\n  );\n', start));
-        }
-
         const line = '      ctx.emit(const Loading());\n';
         final page = load('test/support/testing_page_fixtures.dart');
         final skipping = load('test/support/testing_first_attempt_states.dart');
@@ -741,10 +744,12 @@ void main() {
         final profile = ProfileController(FakeProfileApi());
 
         final job = profile.load();
-        await Future<void>.microtask(() {});
+        await null;
+        final missed = _state(profile);
         final states = listen(profile);
         await job.done;
 
+        expect(missed, 'Loading');
         expect(states, ['Loaded']);
         _says(
           'The listener goes on before the call: the body emits `Loading` a '
@@ -757,6 +762,14 @@ void main() {
 
       test('a controller with SoloStream gives the same list through '
           'emitsInOrder', () async {
+        // The controller of the page with a stream: its `load` is the page's.
+        expect(
+          load(
+            'test/testing_rakes_test.dart',
+            after: 'final class _StreamedProfile ',
+          ),
+          load('test/support/testing_page_fixtures.dart'),
+        );
         final profile = _StreamedProfile(FakeProfileApi());
 
         final states = expectLater(

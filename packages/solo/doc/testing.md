@@ -9,7 +9,7 @@ down to one rule. Five are for a test that awaits its job or the controller's
   awaits its `done` or `value` before it reads the state. A test that skips the
   wait fails with the state `Initial`.
 - [The states on the way](#the-states-on-the-way): the state after `done` is
-  the last one alone, so a test of the states a load goes through collects them
+  only the last one, so a test of the states a load goes through collects them
   with a listener added before the call. A test that reads the last state stays
   green on a load that never shows `Loading`.
 - [Closing the controller](#closing-the-controller): a plain `close()` cancels
