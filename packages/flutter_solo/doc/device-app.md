@@ -232,6 +232,11 @@ flash #1 torch end
 state Ready
 ```
 
+An iPhone 13 mini lights the torch in 1 to 14 ms, and the first attempt makes
+the same calls there. Off and on tapped 1 ms after the torch had lit put it out
+and lit it again within 7 ms. On and off tapped during a shot lit the torch
+once the shot was over and put it out 1 ms later.
+
 ### The latest tap in the queue
 
 `toggleTorch()` of `CameraSession` takes the torch a tap asks for at the tap,
@@ -339,6 +344,11 @@ The two taps during the shot leave no line: off took the place of on in the
 queue and found the torch off. Of the three taps after it the first lights the
 torch, the third takes the place of the second, and when it runs, the torch is
 on already.
+
+On an iPhone 13 mini the same taps through the buttons, on solo and on bloc, in
+a debug and a profile build: off and on came 0 to 3 ms into a torch call of 6
+to 14 ms, and the torch got that one call; on and off during a shot made no
+call.
 
 `camera_android_camerax` 0.7.6+1 keeps whether the torch is lit in a flag of
 the platform, not of a camera, and only `setFlashMode` changes it: a release
@@ -1530,6 +1540,7 @@ fake platform, the run of the app through its buttons among them. The code is
 in the app. A switch on the home screen picks the controller of the camera
 screen: solo, the default, or bloc. On an iPhone 13 mini the screen on bloc
 does what the screen on solo does in [Rapid taps](#rapid-taps),
+[Rapid taps of the torch](#rapid-taps-of-the-torch),
 [A switch during a recording](#a-switch-during-a-recording),
 [Leaving the screen](#leaving-the-screen) and
 [Going to the background](#going-to-the-background).

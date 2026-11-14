@@ -14,8 +14,9 @@ import 'support/fake_camera_platform.dart';
 /// The first attempts that broke on a phone, on the fake platform, with
 /// the phone's outcome as the expectation. Each test names the phone; the
 /// probes report, `2026-11-13-device-app-probes-report.md`, has the runs.
-/// The torch's attempt has no run on a phone: its tests hold what it does
-/// on the fake.
+/// The torch's attempt ran on an iPhone 13 mini in the probe of
+/// `integration_test/attempts_test.dart`, with the calls its tests expect
+/// here; `2026-11-13-device-app-phones-report.md` has that run.
 void main() {
   late FakeCameraPlatform platform;
   late List<XFile> captured;
