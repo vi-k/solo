@@ -65,6 +65,10 @@ final class BlocDriver implements CameraDriver {
 
   @override
   Future<void> close() => bloc.close();
+
+  /// The bloc runs the event of the release to its end before it closes.
+  @override
+  Matcher get releaseCutByClose => isNull;
 }
 
 void main() {

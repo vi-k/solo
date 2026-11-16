@@ -592,8 +592,9 @@ Job<void> release() => enqueue<CameraState, void>((ctx) async {
   )) {
     await ctx.join(() async {
       try {
-        if (recording) await stopBeforeRelease(camera, onCaptured);
-        if (torch && currentState is Ready) {
+        final stopped =
+            !recording || await stopBeforeRelease(camera, onCaptured);
+        if (stopped && torch && currentState is Ready) {
           await camera.setFlashMode(flash);
         }
       } finally {
@@ -625,7 +626,7 @@ the app goes to the background, and the video is lost then:
 ```dart
 const releaseStopTimeout = Duration(seconds: 3);
 
-Future<void> stopBeforeRelease(
+Future<bool> stopBeforeRelease(
   CameraController camera,
   void Function(XFile file) onCaptured,
 ) async {
@@ -633,13 +634,18 @@ Future<void> stopBeforeRelease(
   try {
     file = await camera.stopVideoRecording().timeout(releaseStopTimeout);
   } on CameraException {
-    return;
+    return true;
   } on TimeoutException {
-    return;
+    return false;
   }
   onCaptured(file);
+  return true;
 }
 ```
+
+`stopBeforeRelease` says whether the stop ended. After a stop that ran out of
+time the release leaves a lit torch alone: the platform has not answered, and a
+call to it could hang as well and keep the camera from its release.
 
 `CameraScreen` owns the session through an `AsyncDataScope` of
 [scopo](https://pub.dev/packages/scopo). The scope makes the session when the
@@ -798,8 +804,12 @@ Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
   )) {
     _suspended = camera.description;
     try {
-      if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
-      if (torch) await ctx.join(() => camera.setFlashMode(flash));
+      final stopped =
+          !recording ||
+          await ctx.join(() => stopBeforeRelease(camera, onCaptured));
+      if (stopped && torch) {
+        await ctx.join(() => camera.setFlashMode(flash));
+      }
     } finally {
       ctx.emit(const Closed());
       await ctx.join(camera.dispose);
@@ -821,10 +831,12 @@ preview down: a preview built on a controller that is being released throws
 `buildPreview() was called on a disposed CameraController.` So here `Closed`
 comes a moment before the camera is free, while `release()` emits it once the
 camera is free: in `suspend()` it says the preview is down, and the camera is
-free once `suspend()` has ended. A stop that fails still releases the camera,
-from `finally`, and its failure is the error of `suspend()`. A lit torch goes
-out after the stop and before the release, as in `release()`. A `resume()` that
-comes before the release has ended waits behind it in the queue.
+free once `suspend()` has ended. The stop is that of `release()`, with its
+bound, and an error it does not catch still releases the camera, from
+`finally`, and is the error of `suspend()`. A lit torch goes out after the stop
+and before the release, as in `release()`, and stays lit after a stop that ran
+out of time. A `resume()` that comes before the release has ended waits behind
+it in the queue.
 
 `CameraView`, the part of the screen that shows the session, listens to the
 lifecycle of the app for as long as it is there:
@@ -1015,7 +1027,7 @@ records, so `_letGo` asks the plugin's controller, whose
 well. On a Galaxy A55 a camera released under a recording went on recording
 sound into the file for 8 to 15 s, until the garbage collector closed the
 recording, while the video ended at the loss; a stop on the lost camera took
-1.1 s there and left the file whole. `_letGo` stops it with
+1.1 s there and left the file whole. `_letGo` stops the recording with
 `stopBeforeRelease`, the stop of `release()`, which gives up after 3 s and
 loses the video then.
 
@@ -1440,9 +1452,14 @@ each command. For `CameraSession` its `release` reads `done` on the spot, while
 ```dart
 Future<void> release() async {
   // The release ends while the test pumps, where `expect` may not run.
-  final released = await session.release().done;
-  if (released is! Done<void>) throw StateError('release: $released');
-  await session.close();
+  switch (await session.release().done) {
+    case Done():
+      await session.close();
+    case final Cancelled cancelled:
+      throw cancelled;
+    case Failed(:final error, :final stackTrace):
+      Error.throwWithStackTrace(error, stackTrace);
+  }
 }
 ```
 
@@ -1752,10 +1769,11 @@ Future<void> _letGo({bool leaving = false}) async {
   _lost = false;
   if (camera == null) return;
   try {
+    var stopped = true;
     if ((lost || leaving) && camera.value.isRecordingVideo) {
-      await stopBeforeRelease(camera, onCaptured);
+      stopped = await stopBeforeRelease(camera, onCaptured);
     }
-    if (leaving) await _putTorchOut();
+    if (leaving && stopped) await _putTorchOut();
   } finally {
     await camera.dispose();
   }
@@ -1826,7 +1844,7 @@ What each situation takes, on bloc and on solo:
 | Rapid taps of the torch | the target and the number of the tap, set in `add`; `SetTorch`, which the handler skips when a later tap has passed it | `Policy.keepLatest` on the key of `toggleTorch`; the target taken at the tap; `whenFinished` | nothing more |
 | A switch during a recording | the same handler | the same queue | nothing more |
 | Leaving the screen | `Release` with a `Completer`; `_letGo` with `leaving`; `AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` with a `scopeKey` | bloc: `letCloseEnd`, for `close()` |
-| Going to the background | `Suspend` and `Resume` in the queue | `suspend()` and `resume()` in the queue | for a failed stop, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| Going to the background | `Suspend` and `Resume` in the queue | `suspend()` and `resume()` in the queue | for a stop that breaks, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | Losing the camera | `on<CameraLost>` of its own; a check of the state after every `await`; `LetGo` in the queue; `_camera` and `_lost`; `close()` that cancels `_errors` | `externalSetState`; `ctx.join` at every `await` of a command on `Ready`; `_letGo` with `first: true`; `onClose` that cancels `_errors` | for a failed switch during a recording, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | A denied permission | `_initialize`, which awaits `dispose` itself | `_initialize`, with `_letGo` | nothing more |
 

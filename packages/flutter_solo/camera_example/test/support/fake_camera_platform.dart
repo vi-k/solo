@@ -128,6 +128,11 @@ class FakeCameraPlatform extends CameraPlatform {
   /// a rule of a phone.
   bool hangStop = false;
 
+  /// When set, setting the flash mode never ends, with the line
+  /// `flash #<id> <mode> start`: a platform stuck after a stop that hung.
+  /// A knob for the tests, not a rule of a phone.
+  bool hangFlash = false;
+
   /// When set, a switch during a recording ends with this exception, after
   /// [switchTime], and the recording stays on the camera it had. A knob for
   /// the tests, not a rule of a phone.
@@ -291,6 +296,10 @@ class FakeCameraPlatform extends CameraPlatform {
 
   @override
   Future<void> setFlashMode(int cameraId, FlashMode mode) async {
+    if (hangFlash) {
+      log.add('flash #$cameraId ${mode.name} start');
+      return Completer<void>().future;
+    }
     final camera = _cameras[cameraId];
     final hasTorch =
         camera?.description.lensDirection == CameraLensDirection.back;

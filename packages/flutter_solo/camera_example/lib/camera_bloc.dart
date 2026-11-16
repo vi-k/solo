@@ -359,15 +359,18 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   }
 
   /// The state is [Closed] before the release starts: a preview built on a
-  /// controller being disposed throws. A stop that fails still lets the
-  /// camera go, and its error goes on to the zone.
+  /// controller being disposed throws. The stop is that of a release, and a
+  /// lit torch goes out after it unless the stop ran out of time. An error
+  /// the stop does not catch still lets the camera go, and goes on to the
+  /// zone.
   Future<void> _suspend(Emitter<CameraState> emit) async {
     final ready = state;
     if (ready is! Ready) return;
     _suspended = ready.camera.description;
     try {
-      if (ready.recording) onCaptured(await ready.camera.stopVideoRecording());
-      await _putTorchOut();
+      final stopped =
+          !ready.recording || await stopBeforeRelease(ready.camera, onCaptured);
+      if (stopped) await _putTorchOut();
     } finally {
       emit(const Closed());
       await _letGo();
@@ -439,8 +442,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   /// A camera that records stops first when it is lost or the screen is
   /// [leaving], and its video goes to [onCaptured]: released under a
   /// recording, the Galaxy's camera went on recording sound into the file.
-  /// A screen that leaves puts a lit torch out after that. A stop that
-  /// throws still lets the camera go.
+  /// A screen that leaves puts a lit torch out after that, unless the stop
+  /// ran out of time. A stop that throws still lets the camera go.
   Future<void> _letGo({bool leaving = false}) async {
     final camera = _camera;
     final lost = _lost;
@@ -448,10 +451,11 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     _lost = false;
     if (camera == null) return;
     try {
+      var stopped = true;
       if ((lost || leaving) && camera.value.isRecordingVideo) {
-        await stopBeforeRelease(camera, onCaptured);
+        stopped = await stopBeforeRelease(camera, onCaptured);
       }
-      if (leaving) await _putTorchOut();
+      if (leaving && stopped) await _putTorchOut();
     } finally {
       await camera.dispose();
     }

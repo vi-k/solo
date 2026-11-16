@@ -72,7 +72,10 @@ const releaseStopTimeout = Duration(seconds: 3);
 /// Stops the recording of [camera], which is about to be released, and
 /// hands its file to [onCaptured]; a stop that fails or takes longer than
 /// [releaseStopTimeout] hands nothing.
-Future<void> stopBeforeRelease(
+///
+/// Gives `false` for a stop that ran out of time: the platform has not
+/// answered, and a call to it before the release could hang as well.
+Future<bool> stopBeforeRelease(
   CameraController camera,
   void Function(XFile file) onCaptured,
 ) async {
@@ -80,9 +83,10 @@ Future<void> stopBeforeRelease(
   try {
     file = await camera.stopVideoRecording().timeout(releaseStopTimeout);
   } on CameraException {
-    return;
+    return true;
   } on TimeoutException {
-    return;
+    return false;
   }
   onCaptured(file);
+  return true;
 }

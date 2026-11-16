@@ -177,9 +177,9 @@ final class CameraSession extends Solo<CameraState> {
   /// on the platform: the app has left the screen.
   ///
   /// The state is [Closed] before the release starts: a preview built on a
-  /// controller being disposed throws. A lit torch goes out before it, as
-  /// in [release]. A stop that fails still lets the camera go, and its
-  /// error is the error of the job.
+  /// controller being disposed throws. The stop is that of [release], and
+  /// a lit torch goes out after it, as in [release]. An error the stop
+  /// does not catch still lets the camera go, and is the error of the job.
   Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
     if (ctx.state case Ready(
       :final camera,
@@ -189,8 +189,12 @@ final class CameraSession extends Solo<CameraState> {
     )) {
       _suspended = camera.description;
       try {
-        if (recording) onCaptured(await ctx.join(camera.stopVideoRecording));
-        if (torch) await ctx.join(() => camera.setFlashMode(flash));
+        final stopped =
+            !recording ||
+            await ctx.join(() => stopBeforeRelease(camera, onCaptured));
+        if (stopped && torch) {
+          await ctx.join(() => camera.setFlashMode(flash));
+        }
       } finally {
         ctx.emit(const Closed());
         await ctx.join(camera.dispose);
@@ -216,8 +220,9 @@ final class CameraSession extends Solo<CameraState> {
   /// A lit torch goes out after the stop, while its camera is open:
   /// `camera_android_camerax` keeps the torch on for the platform rather
   /// than for a camera, and would take the next camera's torch as lit. A
-  /// camera the platform lost goes without that. The steps are one call to
-  /// `join`, as in [_letGo].
+  /// camera the platform lost goes without that, and so does one whose
+  /// stop ran out of time. The steps are one call to `join`, as in
+  /// [_letGo].
   Job<void> release() => enqueue<CameraState, void>((ctx) async {
     if (ctx.state case Ready(
       :final camera,
@@ -227,8 +232,9 @@ final class CameraSession extends Solo<CameraState> {
     )) {
       await ctx.join(() async {
         try {
-          if (recording) await stopBeforeRelease(camera, onCaptured);
-          if (torch && currentState is Ready) {
+          final stopped =
+              !recording || await stopBeforeRelease(camera, onCaptured);
+          if (stopped && torch && currentState is Ready) {
             await camera.setFlashMode(flash);
           }
         } finally {

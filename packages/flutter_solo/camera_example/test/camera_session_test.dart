@@ -55,13 +55,22 @@ final class SessionDriver implements CameraDriver {
   @override
   Future<void> release() async {
     // The release ends while the test pumps, where `expect` may not run.
-    final released = await session.release().done;
-    if (released is! Done<void>) throw StateError('release: $released');
-    await session.close();
+    switch (await session.release().done) {
+      case Done():
+        await session.close();
+      case final Cancelled cancelled:
+        throw cancelled;
+      case Failed(:final error, :final stackTrace):
+        Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   @override
   Future<void> close() => session.close();
+
+  /// The close cancels the job of the release, once the camera is let go.
+  @override
+  Matcher get releaseCutByClose => isA<Cancelled>();
 }
 
 void main() {

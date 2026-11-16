@@ -705,6 +705,39 @@ void main() {
         'released.',
       );
     });
+
+    testWidgets('a stop out of time leaves the torch and releases', (
+      tester,
+    ) async {
+      final session = CameraSession(onCaptured: (XFile file) {});
+      session
+        ..open()
+        ..toggleTorch()
+        ..startRecording();
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.torchTime);
+      await tester.pump(platform.recordStartTime);
+      platform
+        ..hangStop = true
+        ..hangFlash = true;
+      final released = session.release().done;
+      await tester.pump(releaseStopTimeout);
+      await tester.pump(platform.disposeTime);
+
+      // Checked before the wait: a release that hangs would never end it.
+      expect(platform.log, contains('dispose #1 end'));
+      expect(await released, isA<Done<void>>());
+      expect(
+        platform.log.skipWhile((l) => l != 'stop #1 start'),
+        isNot(contains(startsWith('flash'))),
+      );
+      _says(
+        _part(_leaving, _release),
+        'After a stop that ran out of time the release leaves a lit torch '
+        'alone:',
+      );
+      await session.close();
+    });
   });
 
   group('going to the background', () {
@@ -986,7 +1019,8 @@ void main() {
       );
       _says(
         _part(_losing, _failure),
-        '`_letGo` stops it with `stopBeforeRelease`, the stop of `release()`,',
+        '`_letGo` stops the recording with `stopBeforeRelease`, the stop of '
+        '`release()`,',
       );
       await session.close();
     });
@@ -1352,8 +1386,8 @@ void main() {
             '`release()`; `AsyncDataScope` with a `scopeKey` | bloc: '
             '`letCloseEnd`, for `close()` |',
         '| Going to the background | `Suspend` and `Resume` in the queue | '
-            '`suspend()` and `resume()` in the queue | for a failed stop, '
-            'bloc: the bloc made in `runZonedGuarded`; solo: '
+            '`suspend()` and `resume()` in the queue | for a stop that '
+            'breaks, bloc: the bloc made in `runZonedGuarded`; solo: '
             '`Solo.unansweredHandler` |',
         '| Losing the camera | `on<CameraLost>` of its own; '
             'a check of the state after every `await`; `LetGo` in the '
