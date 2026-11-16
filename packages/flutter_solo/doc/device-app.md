@@ -983,25 +983,29 @@ file, and a return at once comes in the middle of the stop and opens the camera
 after the release, in the same order.
 
 A picture under way when the app leaves is lost on a Galaxy A55: once the app
-is `hidden`, CameraX closes the camera, the picture fails with
-`Image capture failed due to the camera being closed.`, and the screen goes to
-`Broken`. The lost shot ends quietly: the screen shows the loss already, so a
-`CameraException` of a picture whose camera has left the screen is no error of
-the app, and the bloc's handler ends without one too. A picture that fails
-while its camera is still on the screen stays the error of the job:
+is `hidden`, CameraX closes the camera. On the phone the camera reported the
+error `Image capture failed due to the camera being closed.` first, the screen
+went to `Broken`, and the picture failed after it. By then its camera has left
+the screen, and the lost shot ends quietly: the job of the picture ends
+cancelled by its rules, which ask for `Ready`, and its failure is no error of
+the app. The plugin on the Galaxy reports every picture the camera fails to
+take as an error of the camera before the failure itself, so there such a
+picture always ends this way. A picture that fails while its camera is still on
+the screen stays the error of the job:
 
 ```dart
 Job<XFile?> takePicture() => enqueue<Ready, XFile?>(
   key: _Op.takePicture,
   policy: Policy.droppable,
   (ctx) async {
-    final ready = ctx.state;
     final XFile file;
     try {
-      file = await ctx.join(ready.camera.takePicture);
+      file = await ctx.join(ctx.state.camera.takePicture);
     } on CameraException {
-      if (identical(currentState, ready)) rethrow;
-      return null;
+      // A lost camera has taken the state out of `Ready`, and `check`
+      // ends the job with the cancellation of its rules.
+      ctx.check();
+      rethrow;
     }
     onCaptured(file);
     return file;
@@ -1553,16 +1557,17 @@ Duration torchTime = const Duration(milliseconds: 50);
 
 Where two calls meet, the fake does what the phones did, and `phone` picks
 between the Galaxy's rules and the iPhone's. On the Galaxy's a `dispose` under
-a picture loses the picture, with the line `capture #N failed`, and so does
-`closeOnHide`, as the Galaxy does once the app is `hidden`; on the iPhone's the
-`dispose` waits for the picture. `failOpen`, `failCapture`, `failStop`,
-`failSwitch` and `failCreate` make such a call fail while they are set, and
+a picture loses the picture, with the line `capture #N failed`; on the iPhone's
+the `dispose` waits for the picture. `failOpen`, `failCapture`, `failStop`,
+`failSwitch` and `failCreate` make such a call fail while they are set.
 `failFromOutside` sends an error of the camera, as the platform does when
-another app takes it. On the Galaxy's rules the fake also sends a closing
-event, `CameraClosingEvent`, when a recording starts, at a switch during a
-recording and after a stop, as the Galaxy does with the camera still open; the
-session does not listen to `onCameraClosing` and takes none of them for a loss.
-The fake answers the channel of `CameraLights` as well, from `lights`: its back
+another app takes it, and `closeOnHide` loses the picture under way, as the
+Galaxy does once the app is `hidden`: both are steps of a test, on the rules of
+either phone. On the Galaxy's rules the fake also sends a closing event,
+`CameraClosingEvent`, when a recording starts, at a switch during a recording
+and after a stop, as the Galaxy does with the camera still open; the session
+does not listen to `onCameraClosing` and takes none of them for a loss. The
+fake answers the channel of `CameraLights` as well, from `lights`: its back
 camera has a torch and a flash, its front camera a flash alone, and
 `useCamerasOf` puts in the cameras and the answer of either phone.
 
@@ -1899,6 +1904,11 @@ Future<void> _startRecording(Emitter<CameraState> emit) async {
   );
 }
 ```
+
+A picture looks at the state after a failure too: `_takePicture` ends quietly
+once its camera has left the screen, as the session's job does in
+[Going to the background](#going-to-the-background), and a picture that fails
+on the camera still on the screen stays an error of the handler.
 
 A stop is the one command that goes on past a changed state: once the platform
 has made the file, `_stopRecording` and `_suspend` hand it to `onCaptured`

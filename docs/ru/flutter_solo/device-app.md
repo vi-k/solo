@@ -979,25 +979,30 @@ state Ready
 порядке.
 
 Снимок, который идёт, когда приложение уходит, на Galaxy A55 пропадает: как
-только приложение в `hidden`, CameraX закрывает камеру, снимок кончается
-`Image capture failed due to the camera being closed.`, а экран уходит
-в `Broken`. Потерянный снимок кончается тихо: экран уже показывает потерю,
-поэтому `CameraException` снимка, чья камера ушла с экрана, — не ошибка
-приложения, и обработчик блока тоже кончается без неё. Снимок, который
-не удался, пока его камера ещё на экране, остаётся ошибкой джоба:
+только приложение в `hidden`, CameraX закрывает камеру. На телефоне камера
+сперва сообщила об ошибке
+`Image capture failed due to the camera being closed.`, экран ушёл в `Broken`,
+и лишь после этого снимок не удался. К этому времени его камера уже ушла
+с экрана, и потерянный снимок кончается тихо: джоб снимка кончается отменой
+по своим правилам, которые требуют `Ready`, а его отказ — не ошибка приложения.
+Плагин на Galaxy о каждом снимке, который камере не удался, сообщает ошибкой
+камеры раньше самого отказа, поэтому там такой снимок всегда кончается так же.
+Снимок, который не удался, пока его камера ещё на экране, остаётся ошибкой
+джоба:
 
 ```dart
 Job<XFile?> takePicture() => enqueue<Ready, XFile?>(
   key: _Op.takePicture,
   policy: Policy.droppable,
   (ctx) async {
-    final ready = ctx.state;
     final XFile file;
     try {
-      file = await ctx.join(ready.camera.takePicture);
+      file = await ctx.join(ctx.state.camera.takePicture);
     } on CameraException {
-      if (identical(currentState, ready)) rethrow;
-      return null;
+      // A lost camera has taken the state out of `Ready`, and `check`
+      // ends the job with the cancellation of its rules.
+      ctx.check();
+      rethrow;
     }
     onCaptured(file);
     return file;
@@ -1540,18 +1545,19 @@ Duration torchTime = const Duration(milliseconds: 50);
 
 Где два вызова встречаются, фейк делает то же, что делали телефоны, а `phone`
 выбирает между правилами Galaxy и правилами iPhone. По правилам Galaxy
-`dispose` под снимком теряет снимок, со строкой `capture #N failed`, и так же
-его теряет `closeOnHide`, как Galaxy, когда приложение в `hidden`; по правилам
-iPhone `dispose` ждёт снимка. `failOpen`, `failCapture`, `failStop`,
-`failSwitch` и `failCreate`, пока заданы, роняют такой вызов,
-а `failFromOutside` присылает ошибку камеры, как это делает платформа, когда
-камеру забирает другое приложение. По правилам Galaxy фейк, как и сам Galaxy,
-присылает ещё событие закрытия, `CameraClosingEvent`, когда начинается запись,
-при смене во время записи и после стопа, хотя камера остаётся открытой; сессия
-`onCameraClosing` не слушает и потерей ни одно из них не считает. Фейк отвечает
-и на канал `CameraLights`, из `lights`: у его задней камеры есть фонарик
-и вспышка, у фронтальной — одна вспышка, а `useCamerasOf` ставит камеры и ответ
-любого из двух телефонов.
+`dispose` под снимком теряет снимок, со строкой `capture #N failed`;
+по правилам iPhone `dispose` ждёт снимка. `failOpen`, `failCapture`,
+`failStop`, `failSwitch` и `failCreate`, пока заданы, роняют такой вызов.
+`failFromOutside` присылает ошибку камеры, как это делает платформа, когда
+камеру забирает другое приложение, а `closeOnHide` теряет идущий снимок, как
+Galaxy, когда приложение в `hidden`: оба — шаги теста, по правилам любого
+телефона. По правилам Galaxy фейк, как и сам Galaxy, присылает ещё событие
+закрытия, `CameraClosingEvent`, когда начинается запись, при смене во время
+записи и после стопа, хотя камера остаётся открытой; сессия `onCameraClosing`
+не слушает и потерей ни одно из них не считает. Фейк отвечает и на канал
+`CameraLights`, из `lights`: у его задней камеры есть фонарик и вспышка,
+у фронтальной — одна вспышка, а `useCamerasOf` ставит камеры и ответ любого
+из двух телефонов.
 
 Тесты держат три правила
 [Testing](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md):
@@ -1885,6 +1891,11 @@ Future<void> _startRecording(Emitter<CameraState> emit) async {
   );
 }
 ```
+
+Снимок тоже смотрит на состояние после отказа: `_takePicture` кончается тихо,
+если его камера ушла с экрана, как джоб сессии в [Уходе в фон](#уход-в-фон),
+а снимок, который не удался на камере, что ещё на экране, остаётся ошибкой
+обработчика.
 
 Стоп — единственная команда, которая идёт дальше после смены состояния: раз
 платформа записала файл, `_stopRecording` и `_suspend` отдают его

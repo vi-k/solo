@@ -125,6 +125,45 @@ void main() {
       await finish(tester, session);
     });
 
+    testWidgets('a lost shot ends cancelled by the rules', (tester) async {
+      final unanswered = <Object>[];
+      Solo.unansweredHandler = (solo, job, error, stackTrace) =>
+          unanswered.add(error);
+      addTearDown(() => Solo.unansweredHandler = null);
+      final session = await opened(tester);
+      final shot = session.takePicture();
+      Object? valueError;
+      shot.value.then<void>(
+        (_) {},
+        onError: (Object e) {
+          valueError = e;
+        },
+      );
+      await tester.pump(platform.captureTime ~/ 2);
+      // The Galaxy once the app is hidden: an error of the camera, and the
+      // picture fails a turn later.
+      platform.closeOnHide(1);
+      await tester.pump();
+      await tester.pump();
+      // The job ends once the lost camera is let go.
+      await tester.pump(platform.disposeTime);
+
+      expect(platform.log, contains('capture #1 failed'));
+      expect(session.currentState, isA<Broken>());
+      // No `null`: the state is no longer `Ready`, and the job ends with
+      // the cancellation of its rules.
+      expect(
+        shot.outcome,
+        isA<Cancelled>()
+            .having((c) => c.reason, 'reason', isA<RulesCancelReason>())
+            .having((c) => c.description, 'description', 'is not Ready'),
+      );
+      expect(valueError, isA<Cancelled>());
+      expect(unanswered, isEmpty);
+      expect(captured, isEmpty);
+      await finish(tester, session);
+    });
+
     testWidgets('a stop with no recording gives null', (tester) async {
       final session = await opened(tester);
       session.startRecording();

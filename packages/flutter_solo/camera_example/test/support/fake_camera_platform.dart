@@ -277,7 +277,8 @@ class FakeCameraPlatform extends CameraPlatform {
 
   /// Galaxy: once the app is hidden, CameraX closes the camera, and a
   /// picture in progress fails as a release makes it fail (see `dispose`).
-  /// Only the picture is lost here: the camera is let go by the app.
+  /// Only the picture is lost here: the camera is let go by the app. A step
+  /// of the test, as [failFromOutside] is, on the rules of either phone.
   void closeOnHide(int cameraId) {
     final camera = _cameras[cameraId];
     if (camera != null) _loseCapture(cameraId, camera);

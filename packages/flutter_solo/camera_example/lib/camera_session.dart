@@ -48,20 +48,22 @@ final class CameraSession extends Solo<CameraState> {
   /// Takes a picture and hands it to [onCaptured]; a tap during a shot
   /// gets the shot that is under way.
   ///
-  /// A picture lost once its camera has left the screen ends with `null`:
-  /// the state already shows what happened. One that fails on the camera
-  /// still on the screen is the error of the job.
+  /// A picture lost once its camera has left the screen ends the job
+  /// cancelled by its rules, quietly: the state is no longer [Ready] and
+  /// already shows what happened. One that fails on the camera still on
+  /// the screen is the error of the job.
   Job<XFile?> takePicture() => enqueue<Ready, XFile?>(
     key: _Op.takePicture,
     policy: Policy.droppable,
     (ctx) async {
-      final ready = ctx.state;
       final XFile file;
       try {
-        file = await ctx.join(ready.camera.takePicture);
+        file = await ctx.join(ctx.state.camera.takePicture);
       } on CameraException {
-        if (identical(currentState, ready)) rethrow;
-        return null;
+        // A lost camera has taken the state out of `Ready`, and `check`
+        // ends the job with the cancellation of its rules.
+        ctx.check();
+        rethrow;
       }
       onCaptured(file);
       return file;

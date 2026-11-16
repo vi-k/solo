@@ -1620,6 +1620,31 @@ void controllerCases(MakeDriver make) {
     await finish(tester, controller);
   });
 
+  testWidgets('an error not of the camera stays an error after a loss', (
+    tester,
+  ) async {
+    final unanswered = <Object>[];
+    // A failure the plugin does not turn into a `CameraException`, as a
+    // bug would give: a lost camera does not make it quiet.
+    platform.failCapture = StateError('not the camera');
+    final controller = await openShown(tester, onUnanswered: unanswered.add);
+    controller.takePicture();
+    await tester.pump(platform.captureTime ~/ 2);
+    platform.failFromOutside(1, 'camera error');
+    await tester.pump();
+    await tester.pump();
+    expect(controller.currentState, isA<Broken>());
+    await tester.pump(platform.captureTime);
+    await tester.pump(platform.disposeTime);
+
+    expect(platform.log, contains('capture #1 failed'));
+    expect(unanswered, [isA<StateError>()]);
+    expect(controller.currentState, isA<Broken>());
+    expect(captured, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await finish(tester, controller);
+  });
+
   group('the camera is lost', () {
     final retry = find.byKey(const Key('retry'));
 
