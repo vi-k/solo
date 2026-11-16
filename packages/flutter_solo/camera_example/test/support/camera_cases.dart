@@ -992,7 +992,12 @@ void controllerCases(MakeDriver make) {
       expect(platform.log.last, 'record #1 start');
       await tapRecord(tester);
       expect(showing(Icons.videocam), findsOneWidget);
-      await tester.pump(platform.recordStartTime);
+      // The start has ended and the stop runs: the button still shows the
+      // latest tap, not the recording the state holds.
+      await tester.pump(platform.recordStartTime ~/ 2);
+      await tester.pump();
+      expect(platform.log.last, 'stop #1 start');
+      expect(showing(Icons.videocam), findsOneWidget);
       await tester.pump(platform.stopTime);
       await tester.pump();
 
@@ -1016,8 +1021,17 @@ void controllerCases(MakeDriver make) {
       await tapRecord(tester);
       await tapRecord(tester);
       expect(showing(Icons.stop), findsOneWidget);
-      await tester.pump(platform.recordStartTime);
+      // The first start has ended and the stop runs, then the stop has
+      // ended and the second start runs: the button shows the latest tap
+      // all along.
+      await tester.pump(platform.recordStartTime ~/ 2);
+      await tester.pump();
+      expect(platform.log.last, 'stop #1 start');
+      expect(showing(Icons.stop), findsOneWidget);
       await tester.pump(platform.stopTime);
+      await tester.pump();
+      expect(platform.log.last, 'record #1 start');
+      expect(showing(Icons.stop), findsOneWidget);
       await tester.pump(platform.recordStartTime);
       await tester.pump();
 
