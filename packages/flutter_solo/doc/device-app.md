@@ -988,8 +988,8 @@ error `Image capture failed due to the camera being closed.` first, the screen
 went to `Broken`, and the picture failed after it. By then its camera has left
 the screen, and the lost shot ends quietly: the job of the picture ends
 cancelled by its rules, which ask for `Ready`, and its failure is no error of
-the app. The plugin on the Galaxy reports every picture the camera fails to
-take as an error of the camera before the failure itself, so there such a
+the app. The plugin on the Galaxy reports a picture that fails once CameraX has
+begun it as an error of the camera before the failure itself, so there such a
 picture always ends this way. A picture that fails while its camera is still on
 the screen stays the error of the job:
 
