@@ -312,7 +312,26 @@ void main() {
           );
         }
         await start(tester);
-        await body(tester);
+        try {
+          await body(tester);
+        } catch (_) {
+          // `flutter_test` leaves the screens of a failed test up, and they
+          // go between the cases: the release runs behind the command under
+          // way, and its calls land in the next case's journal, or in none.
+          // The case takes the app down itself and waits for the release;
+          // a release that does not end leaves the failure as it was.
+          await tester.pumpWidget(const SizedBox());
+          try {
+            await until(
+              tester,
+              'the release after the failure',
+              () => _unreleased(trace()).isEmpty,
+            );
+          } on TestFailure {
+            // The timeout is in the journal.
+          }
+          rethrow;
+        }
         expect(
           trace().where(
             (line) =>
@@ -1101,13 +1120,22 @@ void main() {
 
       final flash = ready().flash.name;
       final direction = second.lensDirection.name;
-      Iterable<String> sinceSwitch() =>
-          trace().skipWhile((line) => line != 'tap switch');
+      // The case taps the switch before the recording too, and the torch
+      // was lit before it: only the lines of the last switch count.
+      Iterable<String> sinceSwitch() {
+        final lines = trace();
+        return lines.skip(lines.lastIndexOf('tap switch'));
+      }
+
       await tap(tester, 'switch');
       await until(
         tester,
         'the torch of the next camera',
-        () => sinceSwitch().contains('flash #$id torch end') && ready().torch,
+        () =>
+            sinceSwitch()
+                .skipWhile((line) => line != 'switch $direction end')
+                .contains('flash #$id torch end') &&
+            ready().torch,
       );
       expect(
         sinceSwitch(),
@@ -1388,3 +1416,15 @@ double? videoSeconds(File file) {
 
 /// The time at the start of a line of the journal.
 final _time = RegExp(r'^\+(\d+) ms ');
+
+/// The ids of the cameras in [trace] that were created and not released:
+/// no `dispose #N end` line, and no `dispose #N threw` either.
+Set<int> _unreleased(List<String> trace) =>
+    {
+      for (final line in trace)
+        if (line.startsWith('created #')) int.parse(line.substring(9)),
+    }..removeWhere(
+      (id) =>
+          trace.contains('dispose #$id end') ||
+          trace.any((line) => line.startsWith('dispose #$id threw')),
+    );
