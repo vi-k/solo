@@ -1574,7 +1574,9 @@ void controllerCases(MakeDriver make) {
       await tester.pump(platform.captureTime ~/ 2);
       lifecycle(tester, leave);
       platform.closeOnHide(1);
-      await tester.pump();
+      // The failure comes in a timer of zero, and a pump without a
+      // duration runs no timer of the fake time.
+      await tester.pump(Duration.zero);
       await tester.pump(platform.disposeTime);
 
       expect(platform.log, contains('capture #1 failed'));

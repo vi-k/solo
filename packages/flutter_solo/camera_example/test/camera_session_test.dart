@@ -143,10 +143,9 @@ void main() {
       // The Galaxy once the app is hidden: an error of the camera, and the
       // picture fails a turn later.
       platform.closeOnHide(1);
-      await tester.pump();
-      await tester.pump();
-      // The job ends once the lost camera is let go.
-      await tester.pump(platform.disposeTime);
+      // The failure comes in a timer of zero, and a pump without a
+      // duration runs no timer of the fake time.
+      await tester.pump(Duration.zero);
 
       expect(platform.log, contains('capture #1 failed'));
       expect(session.currentState, isA<Broken>());
