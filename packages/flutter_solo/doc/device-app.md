@@ -237,6 +237,12 @@ the same calls there. Off and on tapped 1 ms after the torch had lit put it out
 and lit it again within 7 ms. On and off tapped during a shot lit the torch
 once the shot was over and put it out 1 ms later.
 
+A Galaxy A55 makes the same calls, and slower: the torch lit in 0.36 to 0.64 s
+and went out in 0.35 to 0.41 s. Off and on tapped while the torch lit put it
+out once it had lit and lit it again, and the lamp went dark for these two
+calls. On and off tapped during a shot lit the torch once the shot was over and
+put it out with the next call, 0.35 s long.
+
 ### The latest tap in the queue
 
 `toggleTorch()` of `CameraSession` takes the torch a tap asks for at the tap,
@@ -348,6 +354,8 @@ on already.
 On an iPhone 13 mini the same taps through the buttons, on solo and on bloc, in
 a debug and a profile build: off and on came 0 to 3 ms into a torch call of 6
 to 14 ms, and the torch got that one call; on and off during a shot made no
+call. On a Galaxy A55 the same: off and on came 1 to 17 ms into a torch call of
+0.4 to 0.8 s, and the torch got that one call; on and off during a shot made no
 call.
 
 `camera_android_camerax` 0.7.6+1 keeps whether the torch is lit in a flag of
@@ -364,8 +372,14 @@ camera with a torch. [Leaving the screen](#leaving-the-screen),
 [Losing the camera](#losing-the-camera) show these commands whole. A camera the
 platform has lost takes no more calls, so after a loss the flag stays up: the
 first tap of the torch on the camera opened next changes only the icon. The
-fake platform keeps the flag when it runs as the Galaxy; the Galaxy itself has
-not run the torch.
+fake platform keeps the flag when it runs as the Galaxy.
+
+On a Galaxy A55 a lit torch went out before each switch around its four
+cameras, in 0.25 to 0.56 s, and back on the first camera a tap lit it with one
+call. The second back camera of the Galaxy has no flash unit, though the app
+gives it a torch: a tap there takes the screen to `Broken` with
+`java.lang.IllegalStateException: No flash unit`, and the flag stays up as
+after a loss, so after Retry the first tap of the torch changes only the icon.
 
 ## A switch during a recording
 
@@ -540,17 +554,21 @@ dispose #1 end
 ```
 
 The second camera is created before the first one is released, and the release
-comes in the middle of the picture. On a Galaxy A55 the release ends the
-picture, and the fake platform does the same. The plugin's `takePicture` then
-writes the `value` of a controller that is disposed by then, and a debug build
-throws `A CameraController was used after being disposed.` rather than the
-`CameraException` the screen catches. The picture does not reach the home
-screen. The second camera, created while the first one was open, shows an empty
-preview, and its own release throws `IllegalStateException`. An iPhone 13 mini
-finishes the picture before it releases the camera, though a picture that
-outlasts the transition throws the same error in a debug build. Its plugin
-holds one camera at a time, and the release of the first camera closes the
-second: the preview freezes, and a picture on it never comes.
+comes in the middle of the picture. The fake platform ends the picture at the
+release, and so does a Galaxy A55 when the screen is not opened again. The
+plugin's `takePicture` then writes the `value` of a controller that is disposed
+by then, and a debug build throws
+`A CameraController was used after being disposed.` rather than the
+`CameraException` the screen catches. Opened again at once, a Galaxy ends the
+picture even before the release: its plugin creates a camera by unbinding the
+one before, and the picture fails with `Camera is closed.` as the second camera
+is created. Either way the picture does not reach the home screen. The second
+camera, created while the first one was open, shows an empty preview, and its
+own release throws `IllegalStateException`. An iPhone 13 mini finishes the
+picture before it releases the camera, though a picture that outlasts the
+transition throws the same error in a debug build. Its plugin holds one camera
+at a time, and the release of the first camera closes the second: the preview
+freezes, and a picture on it never comes.
 
 ### A release the next screen waits for
 
@@ -598,7 +616,7 @@ class CameraApp extends StatelessWidget {
 The wait for the key and the wait for `disposeData` are bounded, 3 s each by
 default. When either expires, scopo goes on as if the wait had ended, and the
 new screen opens the camera while the old one still holds it: the break of the
-first attempt, only later. A picture on a Galaxy A55 takes up to 3.4 s. A
+first attempt, only later. A picture on a Galaxy A55 takes up to 3.9 s. A
 recording on an iPhone 13 mini starts in about 180 ms in a profile build, but
 the first recording of a debug build's process took up to 12.6 s, and the
 release waits for either. So the screen sets both bounds to `releaseTimeout`,
@@ -909,7 +927,16 @@ errors it calls recoverable. On Android a picture that failed reports
 CameraX reports an error it says it will recover from; on iOS a recording that
 cannot add its audio output reports
 `Unable to add Audio input/output to session capture`. The cost is that a
-single failed picture ends in `Broken` as well, and the user taps Retry.
+single failed picture ends in `Broken` as well, and the user taps Retry. On a
+Galaxy A55 this came in one of three runs of the app's test: on a camera just
+opened, CameraX reported `Configuring the camera has failed.` during a picture,
+the platform finished the picture 2.6 s later, and with the camera screen in
+`Broken` by then the picture did not reach the home screen.
+
+On a Galaxy A55 an error of a single operation, such as a torch on a camera
+without one, comes at once for every id that has a listener, while an error of
+the camera itself, such as another app taking it, comes for the id of that
+camera.
 
 `_lose` writes the failure into the state at once with `externalSetState`,
 rather than in a job that would wait behind the command under way. The commands
@@ -920,7 +947,9 @@ no camera in `Broken` and would end before the lost one is released. An error
 that finds the state other than `Ready` changes nothing: a second error of the
 same camera is not a second failure. The camera that a Galaxy A55 would give
 back by itself is released too: an error does not say whether the loss lasts,
-and Retry opens the camera when the user is back.
+and Retry opens the camera when the user is back. A recording under way when
+the camera is lost does not reach the home screen: the session releases the
+camera without a stop.
 
 The session does not listen to `onCameraClosing`. A Galaxy A55 sends a closing
 event when a recording starts, at a switch during a recording and after a stop,
@@ -1272,7 +1301,7 @@ and it ends when the test has moved the clock that far:
 /// How long an opening takes.
 Duration openTime = const Duration(milliseconds: 100);
 
-/// How long a picture takes: from 0.5 to 3.4 s on the Galaxy, from 0.2
+/// How long a picture takes: from 0.5 to 3.9 s on the Galaxy, from 0.2
 /// to 0.6 s on the iPhone.
 Duration captureTime = const Duration(milliseconds: 300);
 
@@ -1543,7 +1572,9 @@ does what the screen on solo does in [Rapid taps](#rapid-taps),
 [Rapid taps of the torch](#rapid-taps-of-the-torch),
 [A switch during a recording](#a-switch-during-a-recording),
 [Leaving the screen](#leaving-the-screen) and
-[Going to the background](#going-to-the-background).
+[Going to the background](#going-to-the-background). On a Galaxy A55 it does so
+in these sections, and in [Losing the camera](#losing-the-camera) and
+[A denied permission](#a-denied-permission) as well.
 
 `droppable()` on a handler of its own would drop a second tap of the shutter,
 and the switch would no longer wait for the shot. In the shared handler

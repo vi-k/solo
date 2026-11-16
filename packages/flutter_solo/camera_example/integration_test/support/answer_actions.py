@@ -19,7 +19,11 @@ Actions:
                  the app back after a few seconds;
   home-and-back  the same, the app back at once;
   other-camera   the system camera to the front, the app back after 5 s;
-  deny           Android: press "deny" on each permission dialog;
+  deny           Android: press "deny" on the dialogs of one request,
+                 the camera's and the microphone's;
+  forget-denials Android: clear the flags a denial leaves on the camera
+                 and the microphone, so the next request shows the dialog
+                 as the first one did;
   screenshot     Android: a screenshot into --shots; iOS: skipped.
 """
 import argparse
@@ -77,7 +81,9 @@ class Android:
                 return
 
     def deny(self, note):
-        # Camera and microphone come as two dialogs; deny each that shows.
+        # Camera and microphone come as two dialogs of one request; deny
+        # each that shows, and no more than these two: the dialog of the
+        # next request is the next action's.
         for _ in range(40):
             found = [f for f in self.buttons() if 'deny' in f[0]]
             if found:
@@ -92,11 +98,11 @@ class Android:
         for _ in range(3):
             time.sleep(1)
             found = [f for f in self.buttons() if 'deny' in f[0]]
-            if not found:
+            if found:
+                rid, text, x, y = found[0]
+                self.tap(x, y)
+                note(f'tapped {rid} "{text}"')
                 return
-            rid, text, x, y = found[0]
-            self.tap(x, y)
-            note(f'tapped {rid} "{text}"')
 
     def answer(self, action, note):
         if action in ('home', 'home-and-back'):
@@ -110,6 +116,12 @@ class Android:
             self.front()
         elif action == 'deny':
             self.deny(note)
+        elif action == 'forget-denials':
+            for permission in ('CAMERA', 'RECORD_AUDIO'):
+                self.adb('shell', 'pm', 'clear-permission-flags',
+                         ANDROID_PACKAGE, f'android.permission.{permission}',
+                         'user-set', 'user-fixed')
+            note('denials forgotten')
         elif action == 'screenshot':
             name = os.path.join(self.shots,
                                 f'shot-{time.strftime("%H%M%S")}.png')

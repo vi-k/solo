@@ -23,7 +23,7 @@ class CameraScreen extends StatelessWidget {
   /// camera go, and how long a leaving one waits for its release.
   ///
   /// The release waits in the queue behind the command under way: a
-  /// picture takes up to 3.4 s on a Galaxy A55. A recording on an
+  /// picture takes up to 3.9 s on a Galaxy A55. A recording on an
   /// iPhone 13 mini starts in about 180 ms in a profile build, but the
   /// first recording of a debug build's process took up to 12.6 s.
   /// With scopo's default of 3 s, or with 10 s, a wait could end first

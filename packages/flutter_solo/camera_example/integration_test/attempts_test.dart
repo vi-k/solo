@@ -322,6 +322,26 @@ void main() {
       await finish(tester);
     });
 
+    // The trace of the page puts the two together: a shot, back, and the
+    // screen opened again at once.
+    testWidgets('leaving during a shot and opening again at once', (
+      tester,
+    ) async {
+      await start(tester);
+      await open(tester, (c, f) => LeavingShutter(cameras: c, onCaptured: f));
+      await tap(tester, 'shutter');
+      await pop(tester);
+      await open(tester, (c, f) => LeavingShutter(cameras: c, onCaptured: f));
+      await settle(tester, const Duration(seconds: 4));
+      look(tester);
+      journal.note('ACTION screenshot');
+      await settle(tester, const Duration(seconds: 2));
+      await tap(tester, 'shutter');
+      await settle(tester, const Duration(seconds: 4));
+      look(tester);
+      await finish(tester);
+    });
+
     testWidgets('opening again before the release', (tester) async {
       await start(tester);
       await open(tester, (c, f) => LeavingShutter(cameras: c, onCaptured: f));

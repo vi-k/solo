@@ -47,6 +47,7 @@ void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   final phone = CameraPlatform.instance;
   const realBackground = bool.fromEnvironment('realBackground');
+  const permissions = bool.fromEnvironment('probePermissions');
   final file = File('${Directory.systemTemp.path}/app-journal.txt');
   late ProbeJournal journal;
   late RecordingCameraPlatform platform;
@@ -227,12 +228,42 @@ void main() {
     await settle(tester, const Duration(milliseconds: 300));
   }
 
+  /// Waits for the host to take the app to the background and back.
+  Future<void> leaveForReal(WidgetTester tester, String action) async {
+    journal.note('ACTION $action');
+    // A return at once can pass `paused` between two looks, so the
+    // journal is read rather than the state of the moment.
+    Iterable<String> after(String line) =>
+        trace().skipWhile((l) => l != line).skip(1);
+    await until(
+      tester,
+      'paused',
+      () => after('ACTION $action').contains('lifecycle paused'),
+      timeout: const Duration(seconds: 30),
+    );
+    await until(
+      tester,
+      'resumed',
+      () => after(
+        'ACTION $action',
+      ).skipWhile((l) => l != 'lifecycle paused').contains('lifecycle resumed'),
+      timeout: const Duration(seconds: 30),
+    );
+  }
+
   /// Registers the case [name] once for each controller of the switch.
+  ///
+  /// A case of [permission] runs only with
+  /// `--dart-define=probePermissions=true`, and the others only without
+  /// it: the host takes the permissions away for that run. Its create may
+  /// throw the denial.
   void phoneTest(
     String name,
     Future<void> Function(WidgetTester tester) body, {
     bool skip = false,
+    bool permission = false,
   }) {
+    final skipped = permission ? !permissions : skip || permissions;
     for (final picked in const ['solo', 'bloc']) {
       testWidgets('$name ($picked)', (tester) async {
         controller = picked;
@@ -249,11 +280,15 @@ void main() {
         await start(tester);
         await body(tester);
         expect(
-          trace().where((line) => line.contains(' threw ')),
+          trace().where(
+            (line) =>
+                line.contains(' threw ') &&
+                !(permission && line.startsWith('create ')),
+          ),
           isEmpty,
           reason: 'a call of the platform threw',
         );
-      }, skip: skip);
+      }, skip: skipped);
     }
   }
 
@@ -276,15 +311,25 @@ void main() {
       );
       await settle(tester, const Duration(milliseconds: 300));
 
-      expect(
-        trace(),
-        containsAllInOrder([
-          'tap flash',
-          'tap flash',
-          'tap flash',
-          'flash #$id always end',
-        ]),
+      // An iPhone 13 mini answers in 1 to 12 ms, after the three taps. A
+      // Galaxy A55 answers in 1 to 3 ms, before the next tap of the test
+      // lands, so there the case checks the order alone, as the first
+      // attempt would pass it too.
+      journal.note(
+        'flash taps ${at('tap flash', last: true) - at('tap flash')} ms, '
+        'always end ${at('flash #$id always end') - at('tap flash')} ms',
       );
+      if (!Platform.isAndroid) {
+        expect(
+          trace(),
+          containsAllInOrder([
+            'tap flash',
+            'tap flash',
+            'tap flash',
+            'flash #$id always end',
+          ]),
+        );
+      }
       expect(
         trace(),
         containsAllInOrder([
@@ -683,29 +728,6 @@ void main() {
       });
     });
 
-    /// Waits for the host to take the app to the background and back.
-    Future<void> leaveForReal(WidgetTester tester, String action) async {
-      journal.note('ACTION $action');
-      // A return at once can pass `paused` between two looks, so the
-      // journal is read rather than the state of the moment.
-      Iterable<String> after(String line) =>
-          trace().skipWhile((l) => l != line).skip(1);
-      await until(
-        tester,
-        'paused',
-        () => after('ACTION $action').contains('lifecycle paused'),
-        timeout: const Duration(seconds: 30),
-      );
-      await until(
-        tester,
-        'resumed',
-        () => after('ACTION $action')
-            .skipWhile((l) => l != 'lifecycle paused')
-            .contains('lifecycle resumed'),
-        timeout: const Duration(seconds: 30),
-      );
-    }
-
     phoneTest(
       'home and back after seconds (real)',
       (tester) => recordAndLeave(tester, (_) => leaveForReal(tester, 'home')),
@@ -777,6 +799,241 @@ void main() {
       journal.note('picture after the switches ${lastShot()!.path}');
       await goBack(tester);
     });
+  });
+
+  group('the torch across a switch', () {
+    // The lamp itself cannot be seen from the test: the host reads it from
+    // the log of the phone, where CameraX on a Galaxy A55 writes every
+    // request of the torch. The torch is lit on the first camera alone: the
+    // second back camera of a Galaxy A55 has no flash unit.
+    phoneTest('a lit torch around the cameras, and lit again at the end', (
+      tester,
+    ) async {
+      await openCamera(tester);
+      Ready ready() => state(tester) as Ready;
+      Future<void> light() async {
+        await tap(tester, 'torch');
+        await until(tester, 'the torch', () => ready().torch);
+        await settle(tester, const Duration(milliseconds: 500));
+      }
+
+      await light();
+      for (var i = 1; i <= cameras.length; i++) {
+        final before = created().last;
+        final wasLit = ready().torch;
+        await tap(tester, 'switch');
+        await until(
+          tester,
+          'switch $i',
+          () => created().length == i + 1 && shown('shutter'),
+        );
+        final id = created().last;
+        final next = cameras[i % cameras.length];
+        final lit = wasLit && hasTorch(next);
+        await until(
+          tester,
+          'the flash of camera #$id',
+          () => trace().contains(
+            'flash #$id ${lit ? 'torch' : ready().flash.name} end',
+          ),
+        );
+        await settle(tester, const Duration(milliseconds: 500));
+        expect(ready().camera.description.name, next.name);
+        if (wasLit) {
+          // Put out to the mode of the button while the camera is open.
+          expect(
+            trace(),
+            containsAllInOrder([
+              'tap switch',
+              'flash #$before ${ready().flash.name} end',
+              'dispose #$before start',
+            ]),
+          );
+        }
+        expect(ready().torch, lit);
+        expect(shown('torch'), hasTorch(next));
+        journal.note(
+          'camera #$id ${next.lensDirection.name} torch ${ready().torch}',
+        );
+      }
+      // Back on the first camera, the torch lights again: a flag of the
+      // plugin left up would skip the call.
+      final last = created().last;
+      await light();
+      expect(
+        trace(),
+        containsAllInOrder([
+          'flash #$last torch start',
+          'flash #$last torch end',
+        ]),
+      );
+      await tap(tester, 'torch');
+      await until(tester, 'the torch out', () => !ready().torch);
+      await goBack(tester);
+    });
+  });
+
+  group('losing the camera', () {
+    // The phone's camera app comes to the front and takes the camera, and
+    // this app comes back after a few seconds. A Galaxy A55 reports that
+    // as an error of the camera; an iPhone 13 mini sends the app to the
+    // background and reports none, so the cases run on Android.
+    final away = !realBackground || !Platform.isAndroid;
+
+    /// Waits for the camera app to take camera [id] and expects what the
+    /// page says: the error, `Broken` at once, the camera let go, and
+    /// Retry on the screen once the app is back.
+    Future<void> lose(WidgetTester tester, int id) async {
+      await leaveForReal(tester, 'other-camera');
+      await until(tester, 'retry', () => shown('retry'));
+      final errors = trace().where((l) => l.startsWith('event error #$id '));
+      expect(errors, isNotEmpty, reason: 'no error of camera #$id');
+      expect(
+        trace(),
+        containsAllInOrder([
+          'ACTION other-camera',
+          errors.first,
+          'state Broken',
+          'dispose #$id start',
+          'dispose #$id end',
+        ]),
+      );
+      expect(state(tester), isA<Broken>());
+    }
+
+    /// Taps Retry and expects the camera open again and a shot on it.
+    Future<void> retry(WidgetTester tester) async {
+      final before = created().length;
+      await tap(tester, 'retry');
+      await until(
+        tester,
+        'the camera again',
+        () => created().length == before + 1 && shown('shutter'),
+      );
+      final id = created().last;
+      expect(
+        trace(),
+        containsAllInOrder([
+          'tap retry',
+          'state Opening',
+          'create back start',
+          'initialize #$id end',
+          'state Ready recording false',
+        ]),
+      );
+      await tap(tester, 'shutter');
+      await until(
+        tester,
+        'the shot on the camera again',
+        () => trace().contains('capture #$id end'),
+      );
+    }
+
+    phoneTest('another app takes the camera, and Retry opens it (real)', (
+      tester,
+    ) async {
+      await openCamera(tester);
+      // A switch first: the journal follows the errors of every camera the
+      // case has created, and shows which of them one error reaches.
+      await tap(tester, 'switch');
+      await until(
+        tester,
+        'the next camera',
+        () => created().length == 2 && shown('shutter'),
+      );
+      await settle(tester, const Duration(milliseconds: 500));
+      await lose(tester, created().last);
+      journal.note(
+        'errors ${trace().where((l) => l.startsWith('event error #')).toList()}',
+      );
+      await retry(tester);
+      await goBack(tester);
+      expectShot();
+    }, skip: away);
+
+    phoneTest('another app takes the camera during a recording (real)', (
+      tester,
+    ) async {
+      await openCamera(tester);
+      final first = created().single;
+      await tap(tester, 'record');
+      await until(tester, 'the recording', () => recording(tester));
+      await settle(tester, const Duration(milliseconds: 1500));
+      final since = DateTime.now();
+      await lose(tester, first);
+      // The session lets the camera go without a stop: the recording
+      // never reaches the home screen. What the platform left on disk is
+      // written down for the report.
+      expect(trace(), isNot(contains('stop #$first start')));
+      expect(lastShot(), isNull, reason: 'the recording reached home');
+      // The Android side of the plugin writes its files to `cache`, beside
+      // `code_cache`, the temporary folder of the app.
+      final cache = Directory('${Directory.systemTemp.parent.path}/cache');
+      final videos = [
+        for (final file in cache.listSync().whereType<File>())
+          if (file.path.endsWith('.mp4') &&
+              file.lastModifiedSync().isAfter(
+                since.subtract(const Duration(seconds: 5)),
+              ))
+            '${file.path} ${file.lengthSync()} bytes',
+      ];
+      journal.note('videos on disk $videos');
+      await retry(tester);
+      await goBack(tester);
+      expectShot();
+    }, skip: away);
+  });
+
+  group('a denied permission', () {
+    // The host takes the permissions of the camera and the microphone away
+    // before the run, answers `ACTION deny` by denying each dialog, and
+    // `ACTION forget-denials` by letting the next request show the dialog
+    // again; on a Galaxy A55 the second denial is for good.
+    phoneTest('denied, denied for good, and Retry asks no more (real)', (
+      tester,
+    ) async {
+      journal.note('ACTION forget-denials');
+      await settle(tester, const Duration(seconds: 3));
+      int denials() => trace().where((l) => l == 'state Denied').length;
+      for (var round = 1; round <= 3; round++) {
+        // The third opening shows no dialog, and there is nothing to deny.
+        if (round < 3) journal.note('ACTION deny');
+        await tap(tester, round == 1 ? 'open-camera' : 'retry');
+        await until(
+          tester,
+          'denial $round',
+          () => denials() == round && shown('retry'),
+          timeout: const Duration(seconds: 40),
+        );
+        final asked = at(
+          round == 1 ? 'tap open-camera' : 'tap retry',
+          last: true,
+        );
+        final took = at('state Denied', last: true) - asked;
+        // A request that shows no dialog still passes through the screen of
+        // the permissions, so `inactive` comes either way. A dialog waits
+        // for the host, which takes seconds to find the button; a denial
+        // without one comes in about 200 ms.
+        final dialog = took > 1000;
+        journal.note(
+          'denial $round ${(state(tester) as Denied).code} dialog $dialog '
+          'in $took ms',
+        );
+        expect((state(tester) as Denied).code, 'CameraAccessDenied');
+        expect(find.text('Allow the app to use the camera.'), findsOneWidget);
+        expect(dialog, round < 3, reason: 'the dialog of round $round');
+        expect(created(), isEmpty);
+      }
+      journal.note('back');
+      await tester.pageBack();
+      await until(
+        tester,
+        'the screen closed',
+        () =>
+            view.evaluate().isEmpty &&
+            trace().skipWhile((l) => l != 'back').contains('state Closed'),
+      );
+    }, permission: true);
   });
 
   group('measures', () {

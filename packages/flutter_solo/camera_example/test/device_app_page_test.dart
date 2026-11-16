@@ -458,7 +458,7 @@ void main() {
     testWidgets('the first attempt loses the shot and opens two cameras', (
       tester,
     ) async {
-      // A picture on the Galaxy takes from 0.5 to 3.4 s, longer than the
+      // A picture on the Galaxy takes from 0.5 to 3.9 s, longer than the
       // pop of a route takes to remove the screen.
       platform.captureTime = const Duration(seconds: 1);
       final journal = Journal(platform);

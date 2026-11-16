@@ -1404,7 +1404,7 @@ void appCases(String controller) {
   });
 
   testWidgets('a shot started before leaving reaches home', (tester) async {
-    // A picture on the Galaxy takes from 0.5 to 3.4 s, longer than the
+    // A picture on the Galaxy takes from 0.5 to 3.9 s, longer than the
     // pop of a route takes to remove the screen.
     platform.captureTime = const Duration(seconds: 1);
     await openCamera(tester);

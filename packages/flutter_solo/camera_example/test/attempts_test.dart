@@ -209,7 +209,7 @@ void main() {
     testWidgets('leaving during a shot loses the picture (Galaxy)', (
       tester,
     ) async {
-      // The Galaxy took from 0.5 to 3.4 s for a picture, longer than the
+      // The Galaxy took from 0.5 to 3.9 s for a picture, longer than the
       // pop of a route takes to release the screen.
       platform.captureTime = const Duration(seconds: 1);
       await start(tester);

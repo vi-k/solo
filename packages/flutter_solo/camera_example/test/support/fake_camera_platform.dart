@@ -86,7 +86,7 @@ class FakeCameraPlatform extends CameraPlatform {
   /// How long an opening takes.
   Duration openTime = const Duration(milliseconds: 100);
 
-  /// How long a picture takes: from 0.5 to 3.4 s on the Galaxy, from 0.2
+  /// How long a picture takes: from 0.5 to 3.9 s on the Galaxy, from 0.2
   /// to 0.6 s on the iPhone.
   Duration captureTime = const Duration(milliseconds: 300);
 
