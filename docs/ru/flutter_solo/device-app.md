@@ -910,13 +910,18 @@ void _lose(String description) {
 }
 
 void _letGo(CameraController camera, {bool lost = false}) => enqueueJob(
-  job<CameraState, void>((ctx) async {
-    if (lost && camera.value.isRecordingVideo) {
-      final file = await ctx.join(() => stopLost(camera));
-      if (file != null) onCaptured(file);
-    }
-    await ctx.join(camera.dispose);
-  }),
+  job<CameraState, void>(
+    (ctx) => ctx.join(() async {
+      try {
+        if (lost && camera.value.isRecordingVideo) {
+          final file = await stopLost(camera);
+          if (file != null) onCaptured(file);
+        }
+      } finally {
+        await camera.dispose();
+      }
+    }),
+  ),
   first: true,
 );
 ```
@@ -976,7 +981,10 @@ Future<XFile?> stopLost(CameraController camera) async {
 
 Стоп идёт в джобе `_letGo`, в голове очереди: `release()` экрана, который
 уходит в это время, и нажатие повтора ждут его, и видео доходит до главного
-экрана в любом случае.
+экрана в любом случае. Стоп и освобождение — один вызов `join`, а он ждёт своё
+действие целиком: `close()` во время стопа отменяет джобу только после того,
+как камера освобождена, а ошибка стопа, которую `stopLost` не ловит, всё равно
+отпускает камеру и остаётся ошибкой джобы.
 
 Сессия не слушает `onCameraClosing`. Galaxy A55 присылает событие закрытия,
 когда начинается запись, при смене камеры во время записи и после стопа,
@@ -1066,7 +1074,7 @@ Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
   if (!recording) return null;
   final XFile file;
   try {
-    file = await ctx.join(camera.stopVideoRecording);
+    file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
   } on CameraException catch (error) {
     ctx.emit(Broken(error));
     _letGo(camera);
@@ -1084,7 +1092,10 @@ Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
 После неудачного он навсегда считает, что пишет: новая запись бросает
 исключение, а смена камеры идёт путём записи. `stopRecording` нужен `Ready`,
 и после того как она выдала `Broken`, её собственные вызовы через `ctx` сдаются
-с `Cancelled`, поэтому освобождение и здесь уходит в отдельную джобу.
+с `Cancelled`, поэтому освобождение и здесь уходит в отдельную джобу. Потеря
+во время удачного стопа отменяет джобу так же, уже после того как платформа
+записала файл: `join` отдаёт этот файл в `discard`, и видео всё равно доходит
+до главного экрана.
 
 Экран показывает `Broken` с кнопкой, которая зовёт `open()`:
 
@@ -1664,6 +1675,10 @@ Future<void> _startRecording(Emitter<CameraState> emit) async {
 }
 ```
 
+Стоп — единственная команда, которая идёт дальше после смены состояния: раз
+платформа записала файл, `_stopRecording` и `_suspend` отдают его
+в `onCaptured` при любом состоянии.
+
 Идущая команда может ещё пользоваться потерянной камерой, поэтому `_lose`
 ставит `LetGo` в очередь после неё. `Release`, который уже ждёт там,
 выполняется первым и находит камеру в `_camera`: поле держит её и тогда, когда
@@ -1692,11 +1707,14 @@ Future<void> _letGo() async {
   _camera = null;
   _lost = false;
   if (camera == null) return;
-  if (lost && camera.value.isRecordingVideo) {
-    final file = await stopLost(camera);
-    if (file != null) onCaptured(file);
+  try {
+    if (lost && camera.value.isRecordingVideo) {
+      final file = await stopLost(camera);
+      if (file != null) onCaptured(file);
+    }
+  } finally {
+    await camera.dispose();
   }
-  await camera.dispose();
 }
 ```
 

@@ -118,10 +118,11 @@ class FakeCameraPlatform extends CameraPlatform {
   /// When set, an opening ends with this exception instead of an event.
   PlatformException? failOpen;
 
-  /// When set, a stop of a recording ends with this exception, after
-  /// [stopTime], and the platform has no recording left. A knob for the
-  /// tests, not a rule of a phone.
-  CameraException? failStop;
+  /// When set, a stop of a recording ends with this error, after
+  /// [stopTime], and the platform has no recording left: a
+  /// [CameraException] as the plugin gives, or any other error as a bug
+  /// would. A knob for the tests, not a rule of a phone.
+  Object? failStop;
 
   /// When set, a stop of a recording never ends. A knob for the tests, not
   /// a rule of a phone.

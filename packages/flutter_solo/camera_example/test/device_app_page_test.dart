@@ -917,6 +917,90 @@ void main() {
       await session.close();
     });
 
+    testWidgets('a close during the stop of a lost camera waits for it', (
+      tester,
+    ) async {
+      final captured = <XFile>[];
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await tester.pump(platform.stopTime ~/ 2);
+      final closed = session.close();
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      await closed;
+
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(
+        platform.log,
+        containsAllInOrder(['record #1 end', 'dispose #1 end']),
+      );
+      expect(platform.openCameras, 0);
+      _says(
+        _part(_losing, _failure),
+        'a `close()` during the stop cancels the job only once the camera is '
+        'released,',
+      );
+    });
+
+    testWidgets('a stop the loss cuts short still reaches home', (
+      tester,
+    ) async {
+      final captured = <XFile>[];
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      final stopped = session.stopRecording().done;
+      await tester.pump(platform.stopTime ~/ 2);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(await stopped, isA<Cancelled>());
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      _says(
+        _part(_losing, _failure),
+        '`join` hands that file to `discard`, and the video still reaches '
+        'the home screen.',
+      );
+      await session.close();
+    });
+
+    testWidgets('a stop the loss cuts short reaches home on bloc', (
+      tester,
+    ) async {
+      final captured = <XFile>[];
+      final bloc = CameraBloc(onCaptured: captured.add)
+        ..add(const OpenCamera());
+      await tester.pump(platform.openTime);
+      bloc.add(const StartRecording());
+      await tester.pump(platform.recordStartTime);
+      bloc.add(const StopRecording());
+      await tester.pump(platform.stopTime ~/ 2);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(bloc.state, isA<Broken>());
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      _says(
+        _part(_onBloc),
+        '`_stopRecording` and `_suspend` hand it to `onCaptured` whatever '
+        'the state.',
+      );
+      final closed = bloc.close();
+      await letCloseEnd(tester);
+      await closed;
+    });
+
     testWidgets("the Galaxy's closing events are not a failure", (
       tester,
     ) async {

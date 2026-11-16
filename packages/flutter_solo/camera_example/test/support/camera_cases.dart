@@ -46,6 +46,10 @@ abstract interface class CameraDriver {
   /// does when it leaves; the future ends once the platform has let the
   /// camera go.
   Future<void> release();
+
+  /// Closes the controller without a release before it, as the camera
+  /// screen does once a release has failed.
+  Future<void> close();
 }
 
 /// Makes a [CameraDriver] whose controller hands every picture and video
@@ -1081,6 +1085,111 @@ void controllerCases(MakeDriver make) {
         expect(controller.currentState, isA<Broken>());
         expect(platform.openCameras, 0);
         expect(unanswered, isEmpty);
+        await tester.pumpWidget(const SizedBox());
+        await finish(tester, controller);
+      });
+
+      testWidgets('a stop that breaks still lets the camera go', (
+        tester,
+      ) async {
+        final unanswered = <Object>[];
+        platform.failStop = StateError('The stop broke.');
+        final controller = await recordAndLose(tester, unanswered);
+        await tester.pump(platform.stopTime);
+        await tester.pump(platform.disposeTime);
+
+        expect(
+          platform.log,
+          containsAllInOrder(['stop #1 failed', 'dispose #1 end']),
+        );
+        expect(captured, isEmpty);
+        expect(platform.openCameras, 0);
+        // The error is not swallowed: it stays the error of the release.
+        expect(unanswered, [isA<StateError>()]);
+        await tester.pumpWidget(const SizedBox());
+        await finish(tester, controller);
+      });
+
+      testWidgets('a close during the stop still lets the camera go', (
+        tester,
+      ) async {
+        final unanswered = <Object>[];
+        final controller = await recordAndLose(tester, unanswered);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(platform.stopTime ~/ 2);
+        expect(platform.log, contains('stop #1 start'));
+        final closed = controller.close();
+        await tester.pump(platform.stopTime);
+        await tester.pump(platform.disposeTime);
+        await letCloseEnd(tester);
+        await closed;
+
+        expect(
+          platform.log,
+          containsAllInOrder(['record #1 end', 'dispose #1 end']),
+        );
+        expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+        expect(platform.openCameras, 0);
+      });
+    });
+
+    group('a camera lost while a stop runs', () {
+      testWidgets('the stop of the record button hands its video on', (
+        tester,
+      ) async {
+        final controller = await openShown(tester);
+        controller.startRecording();
+        await tester.pump(platform.recordStartTime);
+        controller.stopRecording();
+        await tester.pump(platform.stopTime ~/ 2);
+        await fail(tester, 1, FakeCameraPlatform.takenOnAndroid);
+        await tester.pump(platform.stopTime);
+        await tester.pump(platform.disposeTime);
+
+        expect(
+          platform.log,
+          containsAllInOrder([
+            'stop #1 start',
+            'camera #1 error',
+            'record #1 end',
+            'dispose #1 end',
+          ]),
+        );
+        expect(platform.log.where((l) => l == 'stop #1 start'), hasLength(1));
+        expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+        expect(controller.currentState, isA<Broken>());
+        expect(platform.openCameras, 0);
+        await tester.pumpWidget(const SizedBox());
+        await finish(tester, controller);
+      });
+
+      testWidgets('the stop of an app that leaves hands its video on', (
+        tester,
+      ) async {
+        final controller = await openShown(tester);
+        controller.startRecording();
+        await tester.pump(platform.recordStartTime);
+        for (final state in const [
+          AppLifecycleState.inactive,
+          AppLifecycleState.hidden,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+        await tester.pump(platform.stopTime ~/ 2);
+        await fail(tester, 1, FakeCameraPlatform.takenOnAndroid);
+        await tester.pump(platform.stopTime);
+        await tester.pump(platform.disposeTime);
+
+        expect(
+          platform.log,
+          containsAllInOrder([
+            'stop #1 start',
+            'camera #1 error',
+            'record #1 end',
+          ]),
+        );
+        expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+        expect(platform.openCameras, 0);
         await tester.pumpWidget(const SizedBox());
         await finish(tester, controller);
       });

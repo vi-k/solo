@@ -50,11 +50,19 @@ class Android:
                               timeout=60).stdout
 
     def camera_app(self):
-        """The package that answers `STILL_IMAGE_CAMERA`, or None."""
+        """The package that answers `STILL_IMAGE_CAMERA`, or None.
+
+        None as well when no single app answers: the intent then goes to the
+        system chooser, whose package `android` is the system itself and is
+        not to be stopped.
+        """
         found = self.adb('shell', 'cmd', 'package', 'resolve-activity',
                          '--brief', '-a', STILL_IMAGE_CAMERA)
         lines = [line for line in found.split('\n') if '/' in line]
-        return lines[-1].split('/')[0].strip() if lines else None
+        if not lines:
+            return None
+        package = lines[-1].split('/')[0].strip()
+        return None if package == 'android' else package
 
     def front(self):
         self.adb('shell', 'am', 'start', '-n',
@@ -127,6 +135,8 @@ class Android:
             if camera:
                 self.adb('shell', 'am', 'force-stop', camera)
                 note(f'stopped {camera}')
+            else:
+                note('no camera app to stop')
             self.front()
         elif action == 'deny':
             self.deny(note)

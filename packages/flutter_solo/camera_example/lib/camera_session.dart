@@ -153,13 +153,14 @@ final class CameraSession extends Solo<CameraState> {
   /// gives `null`.
   ///
   /// A stop that fails leaves the plugin's controller recording for good,
-  /// so the camera is [Broken] and let go.
+  /// so the camera is [Broken] and let go. A stop the loss of the camera
+  /// cuts short still hands its video on, through `discard`.
   Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
     final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     if (!recording) return null;
     final XFile file;
     try {
-      file = await ctx.join(camera.stopVideoRecording);
+      file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
     } on CameraException catch (error) {
       ctx.emit(Broken(error));
       _letGo(camera);
@@ -281,15 +282,22 @@ final class CameraSession extends Solo<CameraState> {
   ///
   /// A [lost] camera that records stops first, and its video goes to
   /// [onCaptured]: released under a recording, the Galaxy's camera went on
-  /// recording sound into the file.
+  /// recording sound into the file. The stop and the release are one call
+  /// to `join`, so a [close] during the stop waits for the release, and a
+  /// stop that throws still lets the camera go.
   void _letGo(CameraController camera, {bool lost = false}) => enqueueJob(
-    job<CameraState, void>((ctx) async {
-      if (lost && camera.value.isRecordingVideo) {
-        final file = await ctx.join(() => stopLost(camera));
-        if (file != null) onCaptured(file);
-      }
-      await ctx.join(camera.dispose);
-    }),
+    job<CameraState, void>(
+      (ctx) => ctx.join(() async {
+        try {
+          if (lost && camera.value.isRecordingVideo) {
+            final file = await stopLost(camera);
+            if (file != null) onCaptured(file);
+          }
+        } finally {
+          await camera.dispose();
+        }
+      }),
+    ),
     first: true,
   );
 }

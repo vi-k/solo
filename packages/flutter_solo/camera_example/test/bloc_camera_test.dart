@@ -62,6 +62,9 @@ final class BlocDriver implements CameraDriver {
     await bloc.release();
     await bloc.close();
   }
+
+  @override
+  Future<void> close() => bloc.close();
 }
 
 void main() {

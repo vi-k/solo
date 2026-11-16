@@ -332,7 +332,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   }
 
   /// A stop that fails leaves the plugin's controller recording for good,
-  /// so the camera is [Broken] and let go.
+  /// so the camera is [Broken] and let go. A stop the loss of the camera
+  /// cuts short still hands its video on.
   Future<void> _stopRecording(Emitter<CameraState> emit) async {
     final ready = state;
     if (ready is! Ready || !ready.recording) return;
@@ -345,7 +346,10 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
       await _letGo();
       return;
     }
-    if (state != ready) return;
+    if (state != ready) {
+      onCaptured(file);
+      return;
+    }
     emit(
       Ready(
         camera: ready.camera,
@@ -365,10 +369,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     if (ready is! Ready) return;
     _suspended = ready.camera.description;
     try {
-      if (ready.recording) {
-        final file = await ready.camera.stopVideoRecording();
-        if (state == ready) onCaptured(file);
-      }
+      if (ready.recording) onCaptured(await ready.camera.stopVideoRecording());
       await _putTorchOut();
     } finally {
       emit(const Closed());
@@ -440,18 +441,22 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   ///
   /// A lost camera that records stops first, and its video goes to
   /// [onCaptured]: released under a recording, the Galaxy's camera went on
-  /// recording sound into the file.
+  /// recording sound into the file. A stop that throws still lets the
+  /// camera go.
   Future<void> _letGo() async {
     final camera = _camera;
     final lost = _lost;
     _camera = null;
     _lost = false;
     if (camera == null) return;
-    if (lost && camera.value.isRecordingVideo) {
-      final file = await stopLost(camera);
-      if (file != null) onCaptured(file);
+    try {
+      if (lost && camera.value.isRecordingVideo) {
+        final file = await stopLost(camera);
+        if (file != null) onCaptured(file);
+      }
+    } finally {
+      await camera.dispose();
     }
-    await camera.dispose();
   }
 }
 

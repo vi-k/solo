@@ -914,13 +914,18 @@ void _lose(String description) {
 }
 
 void _letGo(CameraController camera, {bool lost = false}) => enqueueJob(
-  job<CameraState, void>((ctx) async {
-    if (lost && camera.value.isRecordingVideo) {
-      final file = await ctx.join(() => stopLost(camera));
-      if (file != null) onCaptured(file);
-    }
-    await ctx.join(camera.dispose);
-  }),
+  job<CameraState, void>(
+    (ctx) => ctx.join(() async {
+      try {
+        if (lost && camera.value.isRecordingVideo) {
+          final file = await stopLost(camera);
+          if (file != null) onCaptured(file);
+        }
+      } finally {
+        await camera.dispose();
+      }
+    }),
+  ),
   first: true,
 );
 ```
@@ -982,7 +987,11 @@ Future<XFile?> stopLost(CameraController camera) async {
 
 The stop runs in the job of `_letGo`, ahead of the queue: a `release()` of a
 screen that leaves meanwhile and a tap of Retry wait for it, and the video
-reaches the home screen either way.
+reaches the home screen either way. The stop and the release are one call to
+`join`, which waits for its action whole: a `close()` during the stop cancels
+the job only once the camera is released, and an error of the stop that
+`stopLost` does not catch lets the camera go all the same and stays the error
+of the job.
 
 The session does not listen to `onCameraClosing`. A Galaxy A55 sends a closing
 event when a recording starts, at a switch during a recording and after a stop,
@@ -1072,7 +1081,7 @@ Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
   if (!recording) return null;
   final XFile file;
   try {
-    file = await ctx.join(camera.stopVideoRecording);
+    file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
   } on CameraException catch (error) {
     ctx.emit(Broken(error));
     _letGo(camera);
@@ -1090,7 +1099,10 @@ The plugin's controller turns `isRecordingVideo` off only after a stop that has
 succeeded. After a failed one it believes it records for good: a new recording
 throws, and a switch takes the way of a recording. `stopRecording` needs
 `Ready`, and once it has emitted `Broken` its own calls through `ctx` give up
-with `Cancelled`, so the release goes to a job of its own here too.
+with `Cancelled`, so the release goes to a job of its own here too. A loss
+during a stop that succeeds cancels the job the same way, after the platform
+has made the file: `join` hands that file to `discard`, and the video still
+reaches the home screen.
 
 The screen shows `Broken` with a button that calls `open()`:
 
@@ -1673,6 +1685,10 @@ Future<void> _startRecording(Emitter<CameraState> emit) async {
 }
 ```
 
+A stop is the one command that goes on past a changed state: once the platform
+has made the file, `_stopRecording` and `_suspend` hand it to `onCaptured`
+whatever the state.
+
 The command under way may still use the lost camera, so `_lose` puts `LetGo` in
 the queue after it. A `Release` already waiting there runs first, and it finds
 the camera in `_camera`, which holds it after the state no longer does. The
@@ -1701,11 +1717,14 @@ Future<void> _letGo() async {
   _camera = null;
   _lost = false;
   if (camera == null) return;
-  if (lost && camera.value.isRecordingVideo) {
-    final file = await stopLost(camera);
-    if (file != null) onCaptured(file);
+  try {
+    if (lost && camera.value.isRecordingVideo) {
+      final file = await stopLost(camera);
+      if (file != null) onCaptured(file);
+    }
+  } finally {
+    await camera.dispose();
   }
-  await camera.dispose();
 }
 ```
 

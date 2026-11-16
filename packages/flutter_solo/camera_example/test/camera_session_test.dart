@@ -59,6 +59,9 @@ final class SessionDriver implements CameraDriver {
     if (released is! Done<void>) throw StateError('release: $released');
     await session.close();
   }
+
+  @override
+  Future<void> close() => session.close();
 }
 
 void main() {
