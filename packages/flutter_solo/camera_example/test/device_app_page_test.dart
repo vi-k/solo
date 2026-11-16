@@ -981,7 +981,7 @@ void main() {
       _says(
         _part(_losing, _first),
         'The picture comes through, and the screen still says `$shown` The '
-        'second error leaves no mark:',
+        'second error leaves no mark on the screen:',
       );
       await tester.pumpWidget(const SizedBox());
       await tester.pump(platform.disposeTime);

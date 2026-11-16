@@ -926,6 +926,11 @@ comes before `create back #2`. On a Galaxy A55 the stop on `hidden` gives the
 file, and a return at once comes in the middle of the stop and opens the camera
 after the release, in the same order.
 
+A picture under way when the app leaves is lost on a Galaxy A55: once the app
+is `hidden`, CameraX closes the camera, the picture fails with
+`Image capture failed due to the camera being closed.`, and the screen goes to
+`Broken`.
+
 ## Losing the camera
 
 Another app takes the camera, or the camera fails. The screen shows the failure
@@ -978,8 +983,8 @@ camera #1 error
 
 The picture comes through, and the screen still says
 `Camera error The camera was already in use,
-possibly by a higher-priority camera client.` The second error leaves no mark:
-the controller stopped listening after the first.
+possibly by a higher-priority camera client.` The second error leaves no mark
+on the screen: the controller stopped listening after the first.
 
 ### A failure in the state
 
@@ -1290,9 +1295,11 @@ after that an opening shows no dialog and fails in about 200 ms with the same
 `CameraAccessDenied`. On an iPhone 13 mini the first denial is
 `CameraAccessDenied`, and the next opening fails without a dialog with
 `CameraAccessDeniedWithoutPrompt`. A denied microphone on the iPhone is
-`AudioAccessDenied`. A create that fails is the line `create back failed`. The
-screen opened twice, the second time after "deny and don't ask again", with the
-fake platform on the Galaxy's rules:
+`AudioAccessDenied`. A create that fails is the line `create back failed`. On
+the Galaxy, denied each time, the openings fail with the same code: the first
+two through a dialog, the second of them with "deny and don't ask again", and
+each one after with no dialog. The fake fails every opening alike. The screen
+opened twice, with the fake platform on the Galaxy's rules:
 
 ```text
 create back failed
@@ -1358,8 +1365,13 @@ const _denials = {
 The plugin names `-1` `kUninitializedCameraId` and keeps the name for its own
 tests, so the session has a constant of its own. A controller that was denied
 is not disposed: its `dispose` is what would send the platform `dispose` for
-`-1`. What it leaves is its listener of the orientation of the device, which it
-starts before it creates the camera, one for each denied opening.
+`-1`. `camera_android_camerax` 0.7.6+1 calls `unbindAll` there, whatever the
+id, and so releases any camera the app has bound; `camera_avfoundation` 0.11.1
+passes the `-1` to its native side, which closes whatever camera the plugin
+holds. Such a `dispose` would close a camera opened after the denial as well.
+What the denied controller leaves is its listener of the orientation of the
+device, which it starts before it creates the camera, one for each denied
+opening.
 
 The screen shows `Denied` with what to allow and where, and with Retry for a
 plain denial. Retry calls `open()`, as for `Broken`, and the plugin asks again
@@ -1464,7 +1476,11 @@ a picture loses the picture, with the line `capture #N failed`; on the iPhone's
 the `dispose` waits for the picture. `failOpen`, `failStop`, `failSwitch` and
 `failCreate` make such a call fail while they are set, and `failFromOutside`
 sends an error of the camera, as the platform does when another app takes it.
-The fake answers the channel of `CameraLights` as well, from `lights`: its back
+On the Galaxy's rules the fake also sends a closing event,
+`CameraClosingEvent`, when a recording starts, at a switch during a recording
+and after a stop, as the Galaxy does with the camera still open; the session
+does not listen to `onCameraClosing` and takes none of them for a loss. The
+fake answers the channel of `CameraLights` as well, from `lights`: its back
 camera has a torch and a flash, its front camera a flash alone, and
 `useCamerasOf` puts in the cameras and the answer of either phone.
 
