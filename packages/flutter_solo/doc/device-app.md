@@ -1815,6 +1815,8 @@ int _torchTaps = 0;
 /// Whether the latest [StartRecording] or [StopRecording] asked for a
 /// recording, until it has run; `null` when none is pending. The record
 /// button shows it while the platform starts or stops the recording.
+///
+/// It is not disposed: a command under way at [close] still resets it.
 ValueListenable<bool?> get recordingAsked => _recordingAsked;
 final _recordingAsked = ValueNotifier<bool?>(null);
 

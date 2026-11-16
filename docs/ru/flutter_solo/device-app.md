@@ -1800,6 +1800,9 @@ int _torchTaps = 0;
 /// Просил ли запись последний [StartRecording] или [StopRecording], пока
 /// он не выполнился; `null`, когда ни один не ждёт. Кнопка записи
 /// показывает это, пока платформа стартует или останавливает запись.
+///
+/// Не освобождается: команда, идущая во время [close], всё равно его
+/// сбросит.
 ValueListenable<bool?> get recordingAsked => _recordingAsked;
 final _recordingAsked = ValueNotifier<bool?>(null);
 

@@ -627,6 +627,14 @@ void main() {
       await press(tester, 'record');
       await reach('record #$id start');
       await tester.pump();
+      // Whether the icon was looked at while the start was still under
+      // way: after it, the state alone shows stop as well.
+      final lookedInStart = !trace().contains('record #$id end');
+      journal.note(
+        lookedInStart
+            ? 'stop icon looked at during the start'
+            : 'stop icon looked at after the start',
+      );
       expect(showing(Icons.stop), isTrue, reason: 'record shows no stop');
       await press(tester, 'record');
       await tester.pump();

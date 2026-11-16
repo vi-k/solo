@@ -154,13 +154,15 @@ final class CameraSession extends Solo<CameraState> {
   /// Whether the latest start or stop asked for a recording, until its job
   /// ends; `null` when none is pending. The record button shows it while
   /// the platform starts or stops the recording.
+  ///
+  /// It is not disposed: a job that [close] drops still ends and resets it.
   ValueListenable<bool?> get recordingAsked => _recordingAsked;
   final _recordingAsked = ValueNotifier<bool?>(null);
 
   /// The job of the latest start or stop, until it ends.
   Job<Object?>? _recordingJob;
 
-  /// Starts a video; a tap during a recording adds nothing.
+  /// Starts a video; a start that finds a recording on does nothing.
   Job<void> startRecording() => _ask(
     true,
     enqueue<Ready, void>((ctx) async {
