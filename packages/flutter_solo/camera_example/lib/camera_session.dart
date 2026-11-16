@@ -191,27 +191,30 @@ final class CameraSession extends Solo<CameraState> {
   /// controller being disposed throws. The stop is that of [release], and
   /// a lit torch goes out after it, as in [release]. An error the stop
   /// does not catch still lets the camera go, and is the error of the job.
-  Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
-    if (ctx.state case Ready(
-      :final camera,
-      :final flash,
-      :final recording,
-      :final torch,
-    )) {
-      _suspended = camera.description;
-      try {
-        final stopped =
-            !recording ||
-            await ctx.join(() => stopBeforeRelease(camera, onCaptured));
-        if (stopped && torch) {
-          await ctx.join(() => camera.setFlashMode(flash));
+  /// The job turns a [close] down once it runs, so a [close] during the
+  /// stop waits for the release.
+  Job<void> suspend() =>
+      enqueue<CameraState, void>(cancellable: false, (ctx) async {
+        if (ctx.state case Ready(
+          :final camera,
+          :final flash,
+          :final recording,
+          :final torch,
+        )) {
+          _suspended = camera.description;
+          try {
+            final stopped =
+                !recording ||
+                await ctx.join(() => stopBeforeRelease(camera, onCaptured));
+            if (stopped && torch && currentState is Ready) {
+              await ctx.join(() => camera.setFlashMode(flash));
+            }
+          } finally {
+            ctx.emit(const Closed());
+            await ctx.join(camera.dispose);
+          }
         }
-      } finally {
-        ctx.emit(const Closed());
-        await ctx.join(camera.dispose);
-      }
-    }
-  });
+      });
 
   /// Opens the camera that [suspend] let go: the app is back on the screen.
   Job<void> resume() => enqueue<CameraState, void>((ctx) async {

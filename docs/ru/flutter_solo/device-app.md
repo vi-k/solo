@@ -813,27 +813,28 @@ initialize #2 end
 и инициализирует его:
 
 ```dart
-Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
-  if (ctx.state case Ready(
-    :final camera,
-    :final flash,
-    :final recording,
-    :final torch,
-  )) {
-    _suspended = camera.description;
-    try {
-      final stopped =
-          !recording ||
-          await ctx.join(() => stopBeforeRelease(camera, onCaptured));
-      if (stopped && torch) {
-        await ctx.join(() => camera.setFlashMode(flash));
+Job<void> suspend() =>
+    enqueue<CameraState, void>(cancellable: false, (ctx) async {
+      if (ctx.state case Ready(
+        :final camera,
+        :final flash,
+        :final recording,
+        :final torch,
+      )) {
+        _suspended = camera.description;
+        try {
+          final stopped =
+              !recording ||
+              await ctx.join(() => stopBeforeRelease(camera, onCaptured));
+          if (stopped && torch && currentState is Ready) {
+            await ctx.join(() => camera.setFlashMode(flash));
+          }
+        } finally {
+          ctx.emit(const Closed());
+          await ctx.join(camera.dispose);
+        }
       }
-    } finally {
-      ctx.emit(const Closed());
-      await ctx.join(camera.dispose);
-    }
-  }
-});
+    });
 
 Job<void> resume() => enqueue<CameraState, void>((ctx) async {
   final description = _suspended;
@@ -852,9 +853,12 @@ Job<void> resume() => enqueue<CameraState, void>((ctx) async {
 убрано, а камера свободна, когда `suspend()` кончился. Стоп здесь тот же, что
 в `release()`, с той же границей, а ошибка, которую он не ловит, всё равно
 освобождает камеру, из `finally`, и становится ошибкой `suspend()`. Горящий
-фонарик гаснет после стопа и до освобождения, как в `release()`, и остаётся
-гореть после стопа, который вышел по времени. `resume()`, пришедший до конца
-освобождения, ждёт в очереди за ним.
+фонарик гаснет после стопа и до освобождения, как в `release()`; он остаётся
+гореть после стопа, который вышел по времени, а камера, которую платформа
+потеряла во время стопа, обходится без этого. `cancellable: false` отклоняет
+`close()`, когда задача уже идёт, поэтому `close()` во время стопа ждёт
+освобождения, как и у `release()`. `resume()`, пришедший до конца освобождения,
+ждёт в очереди за ним.
 
 `CameraView`, часть экрана, которая показывает сессию, слушает жизненный цикл
 приложения, пока она на экране:

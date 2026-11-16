@@ -817,27 +817,28 @@ opens that camera again with `_initialize`, the end of `open()`, which creates
 the controller and initializes it:
 
 ```dart
-Job<void> suspend() => enqueue<CameraState, void>((ctx) async {
-  if (ctx.state case Ready(
-    :final camera,
-    :final flash,
-    :final recording,
-    :final torch,
-  )) {
-    _suspended = camera.description;
-    try {
-      final stopped =
-          !recording ||
-          await ctx.join(() => stopBeforeRelease(camera, onCaptured));
-      if (stopped && torch) {
-        await ctx.join(() => camera.setFlashMode(flash));
+Job<void> suspend() =>
+    enqueue<CameraState, void>(cancellable: false, (ctx) async {
+      if (ctx.state case Ready(
+        :final camera,
+        :final flash,
+        :final recording,
+        :final torch,
+      )) {
+        _suspended = camera.description;
+        try {
+          final stopped =
+              !recording ||
+              await ctx.join(() => stopBeforeRelease(camera, onCaptured));
+          if (stopped && torch && currentState is Ready) {
+            await ctx.join(() => camera.setFlashMode(flash));
+          }
+        } finally {
+          ctx.emit(const Closed());
+          await ctx.join(camera.dispose);
+        }
       }
-    } finally {
-      ctx.emit(const Closed());
-      await ctx.join(camera.dispose);
-    }
-  }
-});
+    });
 
 Job<void> resume() => enqueue<CameraState, void>((ctx) async {
   final description = _suspended;
@@ -856,9 +857,11 @@ camera is free: in `suspend()` it says the preview is down, and the camera is
 free once `suspend()` has ended. The stop is that of `release()`, with its
 bound, and an error it does not catch still releases the camera, from
 `finally`, and is the error of `suspend()`. A lit torch goes out after the stop
-and before the release, as in `release()`, and stays lit after a stop that ran
-out of time. A `resume()` that comes before the release has ended waits behind
-it in the queue.
+and before the release, as in `release()`; it stays lit after a stop that ran
+out of time, and a camera the platform lost during the stop goes without that.
+`cancellable: false` turns a `close()` down once the job runs, so a `close()`
+during the stop waits for the release, as with `release()`. A `resume()` that
+comes before the release has ended waits behind it in the queue.
 
 `CameraView`, the part of the screen that shows the session, listens to the
 lifecycle of the app for as long as it is there:

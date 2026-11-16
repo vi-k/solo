@@ -1384,6 +1384,30 @@ void controllerCases(MakeDriver make) {
       await finish(tester, controller);
     });
 
+    testWidgets('a close during the stop still lets the camera go', (
+      tester,
+    ) async {
+      final controller = await openShown(tester);
+      controller.startRecording();
+      await tester.pump(platform.recordStartTime);
+      lifecycle(tester, leave);
+      await tester.pump(platform.stopTime ~/ 2);
+      expect(platform.log, contains('stop #1 start'));
+      await tester.pumpWidget(const SizedBox());
+      final closed = controller.close();
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      await letCloseEnd(tester);
+      await closed;
+
+      expect(
+        platform.log,
+        containsAllInOrder(['record #1 end', 'dispose #1 end']),
+      );
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(platform.openCameras, 0);
+    });
+
     testWidgets('coming back opens the camera that was let go', (tester) async {
       final controller = await openShown(tester);
       controller.switchCamera();
