@@ -506,9 +506,10 @@ and gives one file.
 
 ## Leaving the screen
 
-A user leaves the camera screen while a picture is being taken, and may open it
-again at once. The picture reaches the home screen. The camera screen opened
-again opens the camera only once the screen before it has let the camera go.
+A user leaves the camera screen while a picture is being taken or a video
+records, and may open it again at once. The picture or the video reaches the
+home screen. The camera screen opened again opens the camera only once the
+screen before it has let the camera go.
 
 ### The first attempt
 
@@ -570,18 +571,35 @@ outlasts the transition throws the same error in a debug build. Its plugin
 holds one camera at a time, and the release of the first camera closes the
 second: the preview freezes, and a picture on it never comes.
 
+A video that records when the screen leaves goes the same way:
+`camera.dispose()` releases the camera under the recording, and nothing stops
+it. The video does not reach the home screen, and on a Galaxy A55 the camera
+went on recording sound into the file after the release: a video of 2.2 s came
+with 8 to 9 s of sound, and the file grew by 0.16 MB in the 5 s after the
+release.
+
 ### A release the next screen waits for
 
 `release()` of `CameraSession` is a command in the queue of the buttons:
 
 ```dart
 Job<void> release() => enqueue<CameraState, void>((ctx) async {
-  if (ctx.state case Ready(:final camera, :final flash, :final torch)) {
-    try {
-      if (torch) await ctx.join(() => camera.setFlashMode(flash));
-    } finally {
-      await ctx.join(camera.dispose);
-    }
+  if (ctx.state case Ready(
+    :final camera,
+    :final flash,
+    :final recording,
+    :final torch,
+  )) {
+    await ctx.join(() async {
+      try {
+        if (recording) await stopBeforeRelease(camera, onCaptured);
+        if (torch && currentState is Ready) {
+          await camera.setFlashMode(flash);
+        }
+      } finally {
+        await camera.dispose();
+      }
+    });
   }
   ctx.emit(const Closed());
 });
@@ -589,9 +607,39 @@ Job<void> release() => enqueue<CameraState, void>((ctx) async {
 
 It starts once the command before it is over, a picture included, and ends once
 the platform has released the camera. A release that comes while the camera
-opens waits for the opening and releases the camera it opened. A lit torch goes
-out first, while the camera is open, for the reason the end of
-[Rapid taps of the torch](#rapid-taps-of-the-torch) gives.
+opens waits for the opening and releases the camera it opened. A recording
+under way stops first, and the video goes up to the home screen. A lit torch
+goes out after the stop, while the camera is open, for the reason the end of
+[Rapid taps of the torch](#rapid-taps-of-the-torch) gives; the video keeps its
+light to the end, and a camera the platform lost during the stop goes without
+that. The stop, the torch and the release are one call to `join`, which waits
+for its action whole: a `close()` during the stop cancels the job only once the
+camera is released.
+
+On a Galaxy A55 the stop when the screen leaves took 0.14 to 0.18 s, as long as
+a stop of the button, and the release waited for it. A stop that fails or does
+not end must not keep the camera from its release, so `stopBeforeRelease` gives
+up after 3 s, close to three times the longest stop the Galaxy made, 1.1 s when
+the app goes to the background, and the video is lost then:
+
+```dart
+const releaseStopTimeout = Duration(seconds: 3);
+
+Future<void> stopBeforeRelease(
+  CameraController camera,
+  void Function(XFile file) onCaptured,
+) async {
+  final XFile file;
+  try {
+    file = await camera.stopVideoRecording().timeout(releaseStopTimeout);
+  } on CameraException {
+    return;
+  } on TimeoutException {
+    return;
+  }
+  onCaptured(file);
+}
+```
 
 `CameraScreen` owns the session through an `AsyncDataScope` of
 [scopo](https://pub.dev/packages/scopo). The scope makes the session when the
@@ -619,8 +667,9 @@ new screen opens the camera while the old one still holds it: the break of the
 first attempt, only later. A picture on a Galaxy A55 takes up to 3.9 s. A
 recording on an iPhone 13 mini starts in about 180 ms in a profile build, but
 the first recording of a debug build's process took up to 12.6 s, and the
-release waits for either. So the screen sets both bounds to `releaseTimeout`,
-twenty seconds: that debug start alone went past ten.
+release waits for either, and then for the stop of a recording, up to 3 s. So
+the screen sets both bounds to `releaseTimeout`, twenty seconds: that debug
+start alone went past ten.
 
 ```dart
 static const releaseTimeout = Duration(seconds: 20);
@@ -918,8 +967,7 @@ void _letGo(CameraController camera, {bool lost = false}) => enqueueJob(
     (ctx) => ctx.join(() async {
       try {
         if (lost && camera.value.isRecordingVideo) {
-          final file = await stopLost(camera);
-          if (file != null) onCaptured(file);
+          await stopBeforeRelease(camera, onCaptured);
         }
       } finally {
         await camera.dispose();
@@ -967,31 +1015,17 @@ records, so `_letGo` asks the plugin's controller, whose
 well. On a Galaxy A55 a camera released under a recording went on recording
 sound into the file for 8 to 15 s, until the garbage collector closed the
 recording, while the video ended at the loss; a stop on the lost camera took
-1.1 s there and left the file whole. A stop that fails or does not end must not
-keep the camera from its release, so `stopLost` gives up after 3 s, close to
-three times the Galaxy's stop, and the video is lost then:
-
-```dart
-const lostStopTimeout = Duration(seconds: 3);
-
-Future<XFile?> stopLost(CameraController camera) async {
-  try {
-    return await camera.stopVideoRecording().timeout(lostStopTimeout);
-  } on CameraException {
-    return null;
-  } on TimeoutException {
-    return null;
-  }
-}
-```
+1.1 s there and left the file whole. `_letGo` stops it with
+`stopBeforeRelease`, the stop of `release()`, which gives up after 3 s and
+loses the video then.
 
 The stop runs in the job of `_letGo`, ahead of the queue: a `release()` of a
 screen that leaves meanwhile and a tap of Retry wait for it, and the video
 reaches the home screen either way. The stop and the release are one call to
 `join`, which waits for its action whole: a `close()` during the stop cancels
 the job only once the camera is released, and an error of the stop that
-`stopLost` does not catch lets the camera go all the same and stays the error
-of the job.
+`stopBeforeRelease` does not catch lets the camera go all the same and stays
+the error of the job.
 
 The session does not listen to `onCameraClosing`. A Galaxy A55 sends a closing
 event when a recording starts, at a switch during a recording and after a stop,
@@ -1694,7 +1728,7 @@ the queue after it. A `Release` already waiting there runs first, and it finds
 the camera in `_camera`, which holds it after the state no longer does. The
 session's `_letGo` hears from `_lose` that the camera is lost; here either of
 the two may let the lost camera go, and `_lost` tells it to stop a recording
-first, with the same `stopLost`:
+first, with the same `stopBeforeRelease`:
 
 ```dart
 /// The camera the platform holds for this bloc, lost or not: a [Release]
@@ -1711,17 +1745,17 @@ void _lose(CameraLost event, Emitter<CameraState> emit) {
   add(const LetGo());
 }
 
-Future<void> _letGo() async {
+Future<void> _letGo({bool leaving = false}) async {
   final camera = _camera;
   final lost = _lost;
   _camera = null;
   _lost = false;
   if (camera == null) return;
   try {
-    if (lost && camera.value.isRecordingVideo) {
-      final file = await stopLost(camera);
-      if (file != null) onCaptured(file);
+    if ((lost || leaving) && camera.value.isRecordingVideo) {
+      await stopBeforeRelease(camera, onCaptured);
     }
+    if (leaving) await _putTorchOut();
   } finally {
     await camera.dispose();
   }
@@ -1730,8 +1764,9 @@ Future<void> _letGo() async {
 
 The owner waits for the release through a `Completer` in the event. `close()`
 stops the errors of the platform first: an error after it would add an event to
-a closed bloc, and `add` throws there. The release puts a lit torch out first,
-in `_putTorchOut`, as `release()` of the session does:
+a closed bloc, and `add` throws there. The release goes through `_letGo` with
+`leaving`, which stops a recording and puts a lit torch out after the stop, in
+`_putTorchOut`, as `release()` of the session does:
 
 ```dart
 Future<void> release() {
@@ -1748,11 +1783,7 @@ Future<void> close() {
 
 case Release(:final done):
   try {
-    try {
-      await _putTorchOut();
-    } finally {
-      await _letGo();
-    }
+    await _letGo(leaving: true);
     emit(const Closed());
     done.complete();
   } catch (error, stackTrace) {
@@ -1794,7 +1825,7 @@ What each situation takes, on bloc and on solo:
 | Rapid taps | `on<CameraCommand>` with `sequential()`; `_shooting`, set in `add` | the queue of `Solo`; `Policy.droppable` on the key of `takePicture` | nothing more |
 | Rapid taps of the torch | the target and the number of the tap, set in `add`; `SetTorch`, which the handler skips when a later tap has passed it | `Policy.keepLatest` on the key of `toggleTorch`; the target taken at the tap; `whenFinished` | nothing more |
 | A switch during a recording | the same handler | the same queue | nothing more |
-| Leaving the screen | `Release` with a `Completer`; `AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` with a `scopeKey` | bloc: `letCloseEnd`, for `close()` |
+| Leaving the screen | `Release` with a `Completer`; `_letGo` with `leaving`; `AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` with a `scopeKey` | bloc: `letCloseEnd`, for `close()` |
 | Going to the background | `Suspend` and `Resume` in the queue | `suspend()` and `resume()` in the queue | for a failed stop, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | Losing the camera | `on<CameraLost>` of its own; a check of the state after every `await`; `LetGo` in the queue; `_camera` and `_lost`; `close()` that cancels `_errors` | `externalSetState`; `ctx.join` at every `await` of a command on `Ready`; `_letGo` with `first: true`; `onClose` that cancels `_errors` | for a failed switch during a recording, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | A denied permission | `_initialize`, which awaits `dispose` itself | `_initialize`, with `_letGo` | nothing more |

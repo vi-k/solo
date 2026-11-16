@@ -718,6 +718,232 @@ void controllerCases(MakeDriver make) {
     });
   });
 
+  group('the screen leaves during a recording', () {
+    /// Opens the camera and records, with errors of commands nobody waits
+    /// for in [unanswered].
+    Future<CameraDriver> record(
+      WidgetTester tester, [
+      List<Object>? unanswered,
+    ]) async {
+      final controller = make(captured.add, onUnanswered: unanswered?.add);
+      controller
+        ..open()
+        ..startRecording();
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.recordStartTime);
+      expect((controller.currentState as Ready).recording, isTrue);
+      return controller;
+    }
+
+    /// Lets the release under way end, with the stop and the release
+    /// before it.
+    Future<void> release(WidgetTester tester, Future<void> released) async {
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      await letCloseEnd(tester);
+      await released;
+    }
+
+    testWidgets('stops it, hands it on, then lets the camera go', (
+      tester,
+    ) async {
+      final unanswered = <Object>[];
+      final controller = await record(tester, unanswered);
+      late final List<String> atRelease;
+      await release(
+        tester,
+        controller.release().then((_) => atRelease = [...platform.log]),
+      );
+
+      expect(
+        atRelease,
+        containsAllInOrder([
+          'stop #1 start',
+          'record #1 end',
+          'dispose #1 start',
+          'dispose #1 end',
+        ]),
+      );
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(controller.currentState, isA<Closed>());
+      expect(platform.openCameras, 0);
+      expect(unanswered, isEmpty);
+    });
+
+    testWidgets('a stop that fails still lets the camera go', (tester) async {
+      final unanswered = <Object>[];
+      platform.failStop = CameraException('stopFailed', 'The stop failed.');
+      final controller = await record(tester, unanswered);
+      await release(tester, controller.release());
+
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'stop #1 start',
+          'stop #1 failed',
+          'dispose #1 start',
+          'dispose #1 end',
+        ]),
+      );
+      expect(captured, isEmpty);
+      expect(controller.currentState, isA<Closed>());
+      expect(platform.openCameras, 0);
+      expect(unanswered, isEmpty);
+    });
+
+    testWidgets('a stop that hangs lets the camera go after a while', (
+      tester,
+    ) async {
+      platform.hangStop = true;
+      final controller = await record(tester);
+      var done = false;
+      final released = controller.release().then((_) => done = true);
+      await tester.pump(releaseStopTimeout - const Duration(milliseconds: 1));
+
+      expect(platform.log, contains('stop #1 start'));
+      expect(platform.log, isNot(contains(startsWith('dispose'))));
+      expect(done, isFalse);
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump(platform.disposeTime);
+      await letCloseEnd(tester);
+      await released;
+
+      expect(platform.log, contains('dispose #1 end'));
+      expect(captured, isEmpty);
+      expect(platform.openCameras, 0);
+    });
+
+    testWidgets('a stop that breaks still lets the camera go', (tester) async {
+      final unanswered = <Object>[];
+      platform.failStop = StateError('The stop broke.');
+      final controller = await record(tester, unanswered);
+      // The error is not swallowed: the release ends with it.
+      final failed = expectLater(controller.release(), throwsA(anything));
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      await failed;
+
+      expect(
+        platform.log,
+        containsAllInOrder(['stop #1 failed', 'dispose #1 end']),
+      );
+      expect(captured, isEmpty);
+      expect(platform.openCameras, 0);
+      expect(unanswered, isEmpty);
+      final closed = controller.close();
+      await letCloseEnd(tester);
+      await closed;
+    });
+
+    testWidgets('a close during the stop still lets the camera go', (
+      tester,
+    ) async {
+      final controller = await record(tester);
+      // The release of the session ends cancelled by the close, and that
+      // of the bloc ends as usual: either way the camera is let go.
+      final released = controller.release().then((_) {}, onError: (_) {});
+      await tester.pump(platform.stopTime ~/ 2);
+      expect(platform.log, contains('stop #1 start'));
+      final closed = controller.close();
+      await release(tester, released);
+      await closed;
+
+      expect(
+        platform.log,
+        containsAllInOrder(['record #1 end', 'dispose #1 end']),
+      );
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(platform.openCameras, 0);
+    });
+
+    testWidgets('a stop of the record button under way gives one video', (
+      tester,
+    ) async {
+      final controller = await record(tester);
+      controller.stopRecording();
+      await tester.pump(platform.stopTime ~/ 2);
+      await release(tester, controller.release());
+
+      expect(platform.log.where((l) => l == 'stop #1 start'), hasLength(1));
+      expect(
+        platform.log,
+        containsAllInOrder(['record #1 end', 'dispose #1 start']),
+      );
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(platform.openCameras, 0);
+    });
+
+    // The torch goes out after the stop, while the camera is open, as it
+    // does when the app leaves: the video keeps its light to the end, and
+    // the next screen finds the platform's flag of the torch down.
+    testWidgets(
+      'a lit torch goes out after the stop, before the release',
+      (tester) async {
+        final controller = make(captured.add);
+        controller
+          ..open()
+          ..toggleTorch()
+          ..startRecording();
+        await tester.pump(platform.openTime);
+        await tester.pump(platform.torchTime);
+        await tester.pump(platform.recordStartTime);
+        expect((controller.currentState as Ready).torch, isTrue);
+        await release(tester, controller.release());
+
+        expect(
+          platform.log
+              .skipWhile((l) => l != 'flash #1 torch end')
+              .skip(1)
+              .toList(),
+          [
+            'record #1 start',
+            'record #1 started',
+            'stop #1 start',
+            'record #1 end',
+            'flash #1 auto',
+            'dispose #1 start',
+            'dispose #1 end',
+          ],
+        );
+        expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+        final next = make(captured.add);
+        next
+          ..open()
+          ..toggleTorch();
+        await tester.pump(platform.openTime);
+        await tester.pump(platform.torchTime);
+        expect(platform.torchOn(2), isTrue);
+        await finish(tester, next);
+      },
+    );
+
+    testWidgets('a camera lost during the stop is let go once', (tester) async {
+      final controller = make(captured.add);
+      controller
+        ..open()
+        ..toggleTorch()
+        ..startRecording();
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.torchTime);
+      await tester.pump(platform.recordStartTime);
+      final released = controller.release();
+      await tester.pump(platform.stopTime ~/ 2);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await release(tester, released);
+
+      expect(platform.log.where((l) => l == 'stop #1 start'), hasLength(1));
+      expect(platform.log.where((l) => l == 'dispose #1 start'), hasLength(1));
+      // A camera the platform lost goes without the torch.
+      expect(
+        platform.log.skipWhile((l) => l != 'camera #1 error'),
+        isNot(contains(startsWith('flash'))),
+      );
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(platform.openCameras, 0);
+    });
+  });
+
   group('the app leaves the foreground', () {
     /// Takes the app through [states] as the platform reports them, all at
     /// once.
@@ -1073,7 +1299,7 @@ void controllerCases(MakeDriver make) {
         final unanswered = <Object>[];
         platform.hangStop = true;
         final controller = await recordAndLose(tester, unanswered);
-        await tester.pump(lostStopTimeout - const Duration(milliseconds: 1));
+        await tester.pump(releaseStopTimeout - const Duration(milliseconds: 1));
 
         expect(platform.log, contains('stop #1 start'));
         expect(platform.log, isNot(contains(startsWith('dispose'))));
@@ -1666,6 +1892,32 @@ void appCases(String controller) {
       platform.log,
       containsAllInOrder(['capture #1 end', 'dispose #1 start']),
     );
+    expect(platform.openCameras, 0);
+  });
+
+  testWidgets('a recording under way when leaving reaches home', (
+    tester,
+  ) async {
+    await openCamera(tester);
+    await until(tester, find.byIcon(Icons.videocam));
+    await tester.tap(find.byKey(const Key('record')));
+    await tester.pump(platform.recordStartTime);
+    await tester.pump();
+    expect(find.byIcon(Icons.stop), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.pump(platform.stopTime);
+    await tester.pump(platform.disposeTime);
+
+    expect(
+      platform.log,
+      containsAllInOrder([
+        'stop #1 start',
+        'record #1 end',
+        'dispose #1 start',
+      ]),
+    );
+    expect(find.byKey(const Key('last-shot')), findsOneWidget);
     expect(platform.openCameras, 0);
   });
 

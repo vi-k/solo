@@ -213,6 +213,24 @@ void main() {
     expect(size, greaterThan(0));
   }
 
+  /// The videos written since [since], each with its size.
+  ///
+  /// The Android side of the plugin writes its files to `cache`, beside
+  /// `code_cache`, the temporary folder of the app; elsewhere the video
+  /// the home screen shows stands for them.
+  List<String> videosSince(DateTime since) {
+    final cache = Directory('${Directory.systemTemp.parent.path}/cache');
+    final files = cache.existsSync()
+        ? cache.listSync().whereType<File>()
+        : [?lastShot()];
+    return [
+      for (final file in files)
+        if (file.path.endsWith('.mp4') &&
+            file.lastModifiedSync().isAfter(since))
+          '${file.path} ${file.lengthSync()} bytes',
+    ];
+  }
+
   /// Goes back to the home screen and waits for the camera to be
   /// released.
   Future<void> goBack(WidgetTester tester) async {
@@ -649,6 +667,44 @@ void main() {
       );
       await goBack(tester);
       expectShot(not: firstShot);
+    });
+
+    phoneTest('back during a recording stops it, and the video reaches home', (
+      tester,
+    ) async {
+      await openCamera(tester);
+      final first = created().single;
+      final since = DateTime.now();
+      await tap(tester, 'record');
+      await until(tester, 'the recording', () => recording(tester));
+      await settle(tester, const Duration(milliseconds: 1500));
+      await goBack(tester);
+      // What the platform left on disk is written down before the
+      // expectations: released under a recording, the Galaxy's camera went
+      // on recording sound into the file.
+      final released = videosSince(since);
+      await settle(tester, const Duration(seconds: 5));
+      final later = videosSince(since);
+      journal.note('videos on disk $released, 5 s later $later');
+
+      expect(
+        trace(),
+        containsAllInOrder([
+          'back',
+          'stop #$first start',
+          'stop #$first end',
+          'dispose #$first start',
+          'dispose #$first end',
+        ]),
+      );
+      journal.note(
+        'stop on leaving '
+        '${at('stop #$first end') - at('stop #$first start')} ms',
+      );
+      final video = lastShot();
+      expect(video, isNotNull, reason: 'the recording did not reach home');
+      expect(video!.path, endsWith('.mp4'));
+      expect(later, released, reason: 'a file grows after the release');
     });
   });
 

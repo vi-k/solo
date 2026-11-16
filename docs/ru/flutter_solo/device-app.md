@@ -505,9 +505,10 @@ state Ready
 
 ## Уход с экрана
 
-Пользователь уходит с экрана камеры, пока идёт снимок, и может тут же открыть
-его снова. Снимок доходит до главного экрана. Заново открытый экран камеры
-открывает камеру только после того, как экран до него её отпустил.
+Пользователь уходит с экрана камеры, пока идёт снимок или пишется видео,
+и может тут же открыть его снова. Снимок или видео доходит до главного экрана.
+Заново открытый экран камеры открывает камеру только после того, как экран
+до него её отпустил.
 
 ### Первая попытка
 
@@ -567,18 +568,34 @@ A55 обрывает снимок прямо тут: его плагин соз�
 держит одну камеру, и освобождение первой камеры закрывает вторую: превью
 замирает, а снимок на ней не приходит никогда.
 
+Видео, которое пишется, когда экран уходит, ждёт то же: `camera.dispose()`
+освобождает камеру под записью, и запись никто не останавливает. Видео
+до главного экрана не доходит, а камера Galaxy A55 после освобождения
+продолжала писать звук в файл: к видео в 2,2 с пришло 8–9 с звука, и за 5
+с после освобождения файл вырос на 0,16 МБ.
+
 ### Освобождение, которого ждёт следующий экран
 
 `release()` у `CameraSession` — команда в очереди кнопок:
 
 ```dart
 Job<void> release() => enqueue<CameraState, void>((ctx) async {
-  if (ctx.state case Ready(:final camera, :final flash, :final torch)) {
-    try {
-      if (torch) await ctx.join(() => camera.setFlashMode(flash));
-    } finally {
-      await ctx.join(camera.dispose);
-    }
+  if (ctx.state case Ready(
+    :final camera,
+    :final flash,
+    :final recording,
+    :final torch,
+  )) {
+    await ctx.join(() async {
+      try {
+        if (recording) await stopBeforeRelease(camera, onCaptured);
+        if (torch && currentState is Ready) {
+          await camera.setFlashMode(flash);
+        }
+      } finally {
+        await camera.dispose();
+      }
+    });
   }
   ctx.emit(const Closed());
 });
@@ -586,9 +603,39 @@ Job<void> release() => enqueue<CameraState, void>((ctx) async {
 
 Она начинается, когда кончилась команда перед ней, в том числе снимок,
 и кончается, когда платформа освободила камеру. Освобождение, пришедшее, пока
-камера открывается, ждёт открытия и освобождает открытую камеру. Горящий
-фонарик сначала гаснет, пока камера открыта, по причине, которую называет конец
-раздела [Быстрые нажатия фонарика](#быстрые-нажатия-фонарика).
+камера открывается, ждёт открытия и освобождает открытую камеру. Идущая запись
+сначала останавливается, и видео уходит на главный экран. Горящий фонарик
+гаснет после стопа, пока камера открыта, по причине, которую называет конец
+раздела [Быстрые нажатия фонарика](#быстрые-нажатия-фонарика); видео сохраняет
+свет до конца, а камера, которую платформа потеряла во время стопа, обходится
+без этого. Стоп, фонарик и освобождение — один вызов `join`, а он ждёт своё
+действие целиком: `close()` во время стопа отменяет джобу только после того,
+как камера освобождена.
+
+На Galaxy A55 стоп при уходе с экрана шёл 0,14–0,18 с, как стоп кнопкой,
+и освобождение его ждало. Стоп, который падает или не кончается, не должен
+удерживать камеру от освобождения, поэтому `stopBeforeRelease` бросает его
+через 3 с — почти втрое дольше самого долгого стопа Galaxy, 1,1 с при уходе
+приложения в фон, — и тогда видео теряется:
+
+```dart
+const releaseStopTimeout = Duration(seconds: 3);
+
+Future<void> stopBeforeRelease(
+  CameraController camera,
+  void Function(XFile file) onCaptured,
+) async {
+  final XFile file;
+  try {
+    file = await camera.stopVideoRecording().timeout(releaseStopTimeout);
+  } on CameraException {
+    return;
+  } on TimeoutException {
+    return;
+  }
+  onCaptured(file);
+}
+```
 
 `CameraScreen` владеет сессией через `AsyncDataScope` пакета
 [scopo](https://pub.dev/packages/scopo). Скоуп создаёт сессию, когда экран
@@ -616,8 +663,9 @@ class CameraApp extends StatelessWidget {
 поломка первой попытки, только позже. На Galaxy A55 снимок длится до 3,9 с.
 На iPhone 13 mini запись в profile-сборке стартует примерно за 180 мс,
 но первая запись процесса в debug-сборке стартовала до 12,6 с, а освобождение
-ждёт любого из них. Поэтому экран ставит оба ограничения в `releaseTimeout` —
-двадцать секунд: один такой старт в debug уже превысил десять.
+ждёт любого из них, а потом ещё и стопа записи, до 3 с. Поэтому экран ставит
+оба ограничения в `releaseTimeout` — двадцать секунд: один такой старт в debug
+уже превысил десять.
 
 ```dart
 static const releaseTimeout = Duration(seconds: 20);
@@ -914,8 +962,7 @@ void _letGo(CameraController camera, {bool lost = false}) => enqueueJob(
     (ctx) => ctx.join(() async {
       try {
         if (lost && camera.value.isRecordingVideo) {
-          final file = await stopLost(camera);
-          if (file != null) onCaptured(file);
+          await stopBeforeRelease(camera, onCaptured);
         }
       } finally {
         await camera.dispose();
@@ -960,31 +1007,16 @@ Galaxy A55 вернул бы сам, тоже освобождается: оши
 знает и о записи, которая началась через потерю. На Galaxy A55 камера,
 освобождённая под записью, продолжала писать звук в файл ещё 8–15 с, пока
 сборщик мусора не закрывал запись, а видео кончалось на потере; стоп
-на потерянной камере шёл там 1,1 с, и файл оставался целым. Стоп, который
-падает или не кончается, не должен удерживать камеру от освобождения, поэтому
-`stopLost` бросает его через 3 с — почти втрое дольше стопа Galaxy, — и тогда
-видео теряется:
-
-```dart
-const lostStopTimeout = Duration(seconds: 3);
-
-Future<XFile?> stopLost(CameraController camera) async {
-  try {
-    return await camera.stopVideoRecording().timeout(lostStopTimeout);
-  } on CameraException {
-    return null;
-  } on TimeoutException {
-    return null;
-  }
-}
-```
+на потерянной камере шёл там 1,1 с, и файл оставался целым. `_letGo`
+останавливает её через `stopBeforeRelease`, стоп из `release()`: он бросает
+стоп через 3 с, и тогда видео теряется.
 
 Стоп идёт в джобе `_letGo`, в голове очереди: `release()` экрана, который
 уходит в это время, и нажатие повтора ждут его, и видео доходит до главного
 экрана в любом случае. Стоп и освобождение — один вызов `join`, а он ждёт своё
 действие целиком: `close()` во время стопа отменяет джобу только после того,
-как камера освобождена, а ошибка стопа, которую `stopLost` не ловит, всё равно
-отпускает камеру и остаётся ошибкой джобы.
+как камера освобождена, а ошибка стопа, которую `stopBeforeRelease` не ловит,
+всё равно отпускает камеру и остаётся ошибкой джобы.
 
 Сессия не слушает `onCameraClosing`. Galaxy A55 присылает событие закрытия,
 когда начинается запись, при смене камеры во время записи и после стопа,
@@ -1684,7 +1716,7 @@ Future<void> _startRecording(Emitter<CameraState> emit) async {
 выполняется первым и находит камеру в `_camera`: поле держит её и тогда, когда
 состояние уже нет. `_letGo` сессии узнаёт о потере камеры от `_lose`; здесь
 потерянную камеру может освободить любой из двух, и `_lost` велит ему сначала
-остановить запись тем же `stopLost`:
+остановить запись тем же `stopBeforeRelease`:
 
 ```dart
 /// Камера, которую платформа держит для этого блока, потерянная или нет:
@@ -1701,17 +1733,17 @@ void _lose(CameraLost event, Emitter<CameraState> emit) {
   add(const LetGo());
 }
 
-Future<void> _letGo() async {
+Future<void> _letGo({bool leaving = false}) async {
   final camera = _camera;
   final lost = _lost;
   _camera = null;
   _lost = false;
   if (camera == null) return;
   try {
-    if (lost && camera.value.isRecordingVideo) {
-      final file = await stopLost(camera);
-      if (file != null) onCaptured(file);
+    if ((lost || leaving) && camera.value.isRecordingVideo) {
+      await stopBeforeRelease(camera, onCaptured);
     }
+    if (leaving) await _putTorchOut();
   } finally {
     await camera.dispose();
   }
@@ -1720,8 +1752,9 @@ Future<void> _letGo() async {
 
 Владелец ждёт освобождения через `Completer` в событии. `close()` сначала
 перестаёт слушать ошибки платформы: ошибка после него добавила бы событие
-в закрытый блок, а `add` там бросает. Освобождение сначала гасит горящий
-фонарик, в `_putTorchOut`, как это делает `release()` сессии:
+в закрытый блок, а `add` там бросает. Освобождение идёт через `_letGo`
+с `leaving`, который останавливает запись, а после стопа гасит горящий фонарик,
+в `_putTorchOut`, как это делает `release()` сессии:
 
 ```dart
 Future<void> release() {
@@ -1738,11 +1771,7 @@ Future<void> close() {
 
 case Release(:final done):
   try {
-    try {
-      await _putTorchOut();
-    } finally {
-      await _letGo();
-    }
+    await _letGo(leaving: true);
     emit(const Closed());
     done.complete();
   } catch (error, stackTrace) {
@@ -1784,7 +1813,7 @@ Future<void> letCloseEnd(WidgetTester tester) => tester.runAsync(() async {});
 | Быстрые нажатия | `on<CameraCommand>` с `sequential()`; `_shooting`, который ставится в `add` | очередь `Solo`; `Policy.droppable` на ключе `takePicture` | ничего сверх |
 | Быстрые нажатия фонарика | цель и номер нажатия, которые ставятся в `add`; `SetTorch`, который обработчик пропускает, когда его обогнало более позднее нажатие | `Policy.keepLatest` на ключе `toggleTorch`; цель, взятая в момент нажатия; `whenFinished` | ничего сверх |
 | Смена камеры во время записи | тот же обработчик | та же очередь | ничего сверх |
-| Уход с экрана | `Release` с `Completer`; `AsyncDataScope` со `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` со `scopeKey` | bloc: `letCloseEnd`, для `close()` |
+| Уход с экрана | `Release` с `Completer`; `_letGo` с `leaving`; `AsyncDataScope` со `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` со `scopeKey` | bloc: `letCloseEnd`, для `close()` |
 | Уход в фон | `Suspend` и `Resume` в очереди | `suspend()` и `resume()` в очереди | для упавшего стопа, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | Потеря камеры | свой `on<CameraLost>`; проверка состояния после каждого `await`; `LetGo` в очереди; `_camera` и `_lost`; `close()`, который отменяет `_errors` | `externalSetState`; `ctx.join` при каждом `await` команды над `Ready`; `_letGo` с `first: true`; `onClose`, который отменяет `_errors` | для упавшей смены камеры во время записи, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | Отказ в разрешении | `_initialize`, который сам ждёт `dispose` | `_initialize`, с `_letGo` | ничего сверх |

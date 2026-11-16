@@ -78,8 +78,8 @@ final class Resume extends CameraCommand {
   const Resume();
 }
 
-/// Frees the camera on the platform; [done] completes once the platform
-/// has, for the owner to wait on.
+/// Stops a recording and frees the camera on the platform; [done]
+/// completes once the platform has, for the owner to wait on.
 final class Release extends CameraCommand {
   final Completer<void> done;
 
@@ -155,7 +155,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     super.add(event);
   }
 
-  /// Frees the camera; the future ends once the platform has.
+  /// Stops a recording and frees the camera; the future ends once the
+  /// platform has.
   Future<void> release() {
     final release = Release(Completer());
     add(release);
@@ -193,11 +194,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
           await _resume(emit);
         case Release(:final done):
           try {
-            try {
-              await _putTorchOut();
-            } finally {
-              await _letGo();
-            }
+            await _letGo(leaving: true);
             emit(const Closed());
             done.complete();
           } catch (error, stackTrace) {
@@ -439,21 +436,22 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
 
   /// Frees the camera the platform holds for this bloc, if there is one.
   ///
-  /// A lost camera that records stops first, and its video goes to
-  /// [onCaptured]: released under a recording, the Galaxy's camera went on
-  /// recording sound into the file. A stop that throws still lets the
-  /// camera go.
-  Future<void> _letGo() async {
+  /// A camera that records stops first when it is lost or the screen is
+  /// [leaving], and its video goes to [onCaptured]: released under a
+  /// recording, the Galaxy's camera went on recording sound into the file.
+  /// A screen that leaves puts a lit torch out after that. A stop that
+  /// throws still lets the camera go.
+  Future<void> _letGo({bool leaving = false}) async {
     final camera = _camera;
     final lost = _lost;
     _camera = null;
     _lost = false;
     if (camera == null) return;
     try {
-      if (lost && camera.value.isRecordingVideo) {
-        final file = await stopLost(camera);
-        if (file != null) onCaptured(file);
+      if ((lost || leaving) && camera.value.isRecordingVideo) {
+        await stopBeforeRelease(camera, onCaptured);
       }
+      if (leaving) await _putTorchOut();
     } finally {
       await camera.dispose();
     }

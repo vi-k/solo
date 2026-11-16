@@ -614,7 +614,11 @@ void main() {
         codeMissingFrom(
           _doc,
           'lib/camera_screen.dart',
-          alsoIn: ['lib/camera_app.dart', 'lib/camera_session.dart'],
+          alsoIn: [
+            'lib/camera_app.dart',
+            'lib/camera_session.dart',
+            'lib/camera_state.dart',
+          ],
           under: _release,
         ),
         isEmpty,
@@ -632,6 +636,74 @@ void main() {
         'goes up to the home screen.',
       );
       expect(platform.openCameras, 0);
+    });
+
+    testWidgets('a recording stops before the release and reaches home', (
+      tester,
+    ) async {
+      final captured = <XFile>[];
+      final session = CameraSession(onCaptured: captured.add);
+      session
+        ..open()
+        ..startRecording();
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.recordStartTime);
+      final released = session.release().done;
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(await released, isA<Done<void>>());
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'stop #1 start',
+          'record #1 end',
+          'dispose #1 start',
+        ]),
+      );
+      _says(
+        _part(_leaving, _release),
+        'A recording under way stops first, and the video goes up to the home '
+        'screen.',
+      );
+      expect(releaseStopTimeout, const Duration(seconds: 3));
+      _says(
+        _part(_leaving, _release),
+        '`stopBeforeRelease` gives up after 3 s,',
+      );
+      await session.close();
+    });
+
+    testWidgets('a close during the stop of a release waits for it', (
+      tester,
+    ) async {
+      final captured = <XFile>[];
+      final session = CameraSession(onCaptured: captured.add);
+      session
+        ..open()
+        ..startRecording();
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.recordStartTime);
+      final released = session.release().done;
+      await tester.pump(platform.stopTime ~/ 2);
+      final closed = session.close();
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      await closed;
+
+      expect(await released, isA<Cancelled>());
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(
+        platform.log,
+        containsAllInOrder(['record #1 end', 'dispose #1 end']),
+      );
+      expect(platform.openCameras, 0);
+      _says(
+        _part(_leaving, _release),
+        'a `close()` during the stop cancels the job only once the camera is '
+        'released.',
+      );
     });
   });
 
@@ -912,8 +984,10 @@ void main() {
         'A recording under way when the camera is lost stops before the '
         'release, and the video goes to the home screen.',
       );
-      expect(lostStopTimeout, const Duration(seconds: 3));
-      _says(_part(_losing, _failure), '`stopLost` gives up after 3 s,');
+      _says(
+        _part(_losing, _failure),
+        '`_letGo` stops it with `stopBeforeRelease`, the stop of `release()`,',
+      );
       await session.close();
     });
 
@@ -1272,8 +1346,9 @@ void main() {
             'nothing more |',
         '| A switch during a recording | the same handler | the same queue '
             '| nothing more |',
-        '| Leaving the screen | `Release` with a `Completer`; '
-            '`AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | '
+        '| Leaving the screen | `Release` with a `Completer`; `_letGo` with '
+            '`leaving`; `AsyncDataScope` with a `scopeKey`; '
+            '`BlocProvider.value` | '
             '`release()`; `AsyncDataScope` with a `scopeKey` | bloc: '
             '`letCloseEnd`, for `close()` |',
         '| Going to the background | `Suspend` and `Resume` in the queue | '

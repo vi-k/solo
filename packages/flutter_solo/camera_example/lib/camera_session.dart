@@ -207,22 +207,34 @@ final class CameraSession extends Solo<CameraState> {
     await _initialize(ctx, description);
   });
 
-  /// Frees the camera on the platform; the job ends once the platform has.
+  /// Stops a recording and hands it to [onCaptured], then frees the camera
+  /// on the platform; the job ends once the platform has.
   ///
   /// The owner awaits it before [close]: a release started from `onClose`
   /// would not be waited for.
   ///
-  /// A lit torch goes out first, while its camera is open:
+  /// A lit torch goes out after the stop, while its camera is open:
   /// `camera_android_camerax` keeps the torch on for the platform rather
   /// than for a camera, and would take the next camera's torch as lit. A
-  /// camera the platform lost goes without that.
+  /// camera the platform lost goes without that. The steps are one call to
+  /// `join`, as in [_letGo].
   Job<void> release() => enqueue<CameraState, void>((ctx) async {
-    if (ctx.state case Ready(:final camera, :final flash, :final torch)) {
-      try {
-        if (torch) await ctx.join(() => camera.setFlashMode(flash));
-      } finally {
-        await ctx.join(camera.dispose);
-      }
+    if (ctx.state case Ready(
+      :final camera,
+      :final flash,
+      :final recording,
+      :final torch,
+    )) {
+      await ctx.join(() async {
+        try {
+          if (recording) await stopBeforeRelease(camera, onCaptured);
+          if (torch && currentState is Ready) {
+            await camera.setFlashMode(flash);
+          }
+        } finally {
+          await camera.dispose();
+        }
+      });
     }
     ctx.emit(const Closed());
   });
@@ -290,8 +302,7 @@ final class CameraSession extends Solo<CameraState> {
       (ctx) => ctx.join(() async {
         try {
           if (lost && camera.value.isRecordingVideo) {
-            final file = await stopLost(camera);
-            if (file != null) onCaptured(file);
+            await stopBeforeRelease(camera, onCaptured);
           }
         } finally {
           await camera.dispose();

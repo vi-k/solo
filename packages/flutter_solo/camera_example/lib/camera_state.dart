@@ -60,21 +60,29 @@ final class Denied extends CameraState {
 bool hasTorch(CameraDescription camera) =>
     camera.lensDirection == CameraLensDirection.back;
 
-/// How long a camera the platform lost has to stop its recording.
+/// How long a camera about to be released has to stop its recording.
 ///
-/// A Galaxy A55 stopped a recording on a camera another app had taken in
-/// 1.1 s, as long as a stop takes there when the app leaves; a stop that
-/// takes longer than this loses the file, and the camera is let go.
-const lostStopTimeout = Duration(seconds: 3);
+/// A Galaxy A55 stopped a recording in 1.1 s when the app left, and as
+/// long on a camera another app had taken; a stop that takes longer than
+/// this loses the file, and the camera is let go. The owner of the screen
+/// waits for the release for `CameraScreen.releaseTimeout`, 20 s, and this
+/// bound keeps the stop well inside it.
+const releaseStopTimeout = Duration(seconds: 3);
 
-/// Stops the recording of [camera], which the platform lost, and gives its
-/// file: `null` when the stop fails or takes longer than [lostStopTimeout].
-Future<XFile?> stopLost(CameraController camera) async {
+/// Stops the recording of [camera], which is about to be released, and
+/// hands its file to [onCaptured]; a stop that fails or takes longer than
+/// [releaseStopTimeout] hands nothing.
+Future<void> stopBeforeRelease(
+  CameraController camera,
+  void Function(XFile file) onCaptured,
+) async {
+  final XFile file;
   try {
-    return await camera.stopVideoRecording().timeout(lostStopTimeout);
+    file = await camera.stopVideoRecording().timeout(releaseStopTimeout);
   } on CameraException {
-    return null;
+    return;
   } on TimeoutException {
-    return null;
+    return;
   }
+  onCaptured(file);
 }
