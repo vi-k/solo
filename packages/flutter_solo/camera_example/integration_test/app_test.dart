@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:camera_platform_interface/camera_platform_interface.dart';
@@ -43,12 +44,15 @@ import 'support/probe.dart';
 /// permissions, on the phone. An iPhone that Flutter sees only over Wi-Fi
 /// needs `flutter run -d <device> -t integration_test/app_test.dart`,
 /// which `flutter test` cannot replace there; the run prints
-/// `All tests passed!` or `Some tests failed.` and stays up.
+/// `All tests passed!` or `Some tests failed.` and stays up. With
+/// `--dart-define=only=<pattern>` only the cases whose names match the
+/// regular expression run, on both controllers.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   final phone = CameraPlatform.instance;
   const realBackground = bool.fromEnvironment('realBackground');
   const permissions = bool.fromEnvironment('probePermissions');
+  const only = String.fromEnvironment('only');
   final file = File('${Directory.systemTemp.path}/app-journal.txt');
   late ProbeJournal journal;
   late RecordingCameraPlatform platform;
@@ -283,7 +287,10 @@ void main() {
     bool skip = false,
     bool permission = false,
   }) {
-    final skipped = skip || (permission ? !permissions : permissions);
+    final skipped =
+        skip ||
+        (permission ? !permissions : permissions) ||
+        (only.isNotEmpty && !RegExp(only).hasMatch(name));
     for (final picked in const ['solo', 'bloc']) {
       testWidgets('$name ($picked)', (tester) async {
         controller = picked;
@@ -956,6 +963,112 @@ void main() {
       await until(tester, 'the torch out', () => !ready().torch);
       await goBack(tester);
     });
+
+    // Neither plugin lights the torch of the next camera when a switch
+    // happens during a recording, so the controller puts it out before the
+    // switch and lights it again after. On an iPhone 13 mini the pair is
+    // its second back camera and then its first.
+    phoneTest('a switch during a recording to a camera with a torch lights '
+        'it again', (tester) async {
+      final pairs = [
+        for (var i = 0; i < cameras.length; i++)
+          if (cameras.length > 1 &&
+              lights.torch(cameras[i]) &&
+              lights.torch(cameras[(i + 1) % cameras.length]))
+            i,
+      ];
+      if (pairs.isEmpty) {
+        // A Galaxy A55 has one camera with a torch.
+        markTestSkipped(
+          'no two cameras with a torch, one after the other in the switches',
+        );
+        return;
+      }
+      final first = cameras[pairs.first];
+      final second = cameras[(pairs.first + 1) % cameras.length];
+      Ready ready() => state(tester) as Ready;
+      await openCamera(tester);
+      for (var i = 1; i <= pairs.first; i++) {
+        await tap(tester, 'switch');
+        await until(
+          tester,
+          'switch $i',
+          () => created().length == i + 1 && shown('shutter'),
+        );
+        final id = created().last;
+        if (lights.flash(cameras[i])) {
+          await until(
+            tester,
+            'the flash of camera #$id',
+            () => trace().contains('flash #$id ${ready().flash.name} end'),
+          );
+        }
+        await settle(tester, const Duration(milliseconds: 500));
+      }
+      final id = created().last;
+      expect(ready().camera.description.name, first.name);
+      await tap(tester, 'torch');
+      await until(tester, 'the torch', () => ready().torch);
+      await tap(tester, 'record');
+      await until(tester, 'the recording', () => recording(tester));
+      await settle(tester, const Duration(milliseconds: 1500));
+
+      final flash = ready().flash.name;
+      final direction = second.lensDirection.name;
+      Iterable<String> sinceSwitch() =>
+          trace().skipWhile((line) => line != 'tap switch');
+      await tap(tester, 'switch');
+      await until(
+        tester,
+        'the torch of the next camera',
+        () => sinceSwitch().contains('flash #$id torch end') && ready().torch,
+      );
+      expect(
+        sinceSwitch(),
+        containsAllInOrder([
+          'tap switch',
+          'flash #$id $flash start',
+          'flash #$id $flash end',
+          'switch $direction start',
+          'switch $direction end',
+          'flash #$id torch start',
+          'flash #$id torch end',
+        ]),
+      );
+      expect(ready().camera.description.name, second.name);
+      expect(ready().torch, isTrue);
+      expect(ready().recording, isTrue);
+      expect(created(), hasLength(pairs.first + 1), reason: 'a camera opened');
+      // The lamp cannot be seen from the test: how long the next camera
+      // went without it.
+      final lit = at('flash #$id torch end', last: true);
+      journal.note(
+        'torch lit again ${lit - at('tap switch', last: true)} ms after the '
+        'tap, ${lit - at('switch $direction start', last: true)} ms after the '
+        'switch began',
+      );
+
+      await settle(tester, const Duration(seconds: 1));
+      await tap(tester, 'record');
+      await until(
+        tester,
+        'the stop',
+        () => trace().contains('stop #$id end') && !recording(tester),
+      );
+      expect(trace().where((line) => line.startsWith('stop #')), [
+        'stop #$id start',
+        'stop #$id end',
+      ]);
+      await tap(tester, 'torch');
+      await until(tester, 'the torch out', () => !ready().torch);
+      await goBack(tester);
+      expectShot();
+      final video = lastShot()!;
+      expect(video.path, endsWith('.mp4'));
+      final seconds = videoSeconds(video);
+      journal.note('video ${video.path} $seconds s');
+      expect(seconds, greaterThan(0));
+    });
   });
 
   group('losing the camera', () {
@@ -1164,6 +1277,27 @@ void main() {
       expectShot();
     });
   });
+}
+
+/// The length of the video in [file], in seconds, from the header of its
+/// movie, the box `mvhd`; null when it has none.
+double? videoSeconds(File file) {
+  final bytes = file.readAsBytesSync();
+  final data = ByteData.sublistView(bytes);
+  const mvhd = [0x6d, 0x76, 0x68, 0x64];
+  for (var i = 4; i + 36 <= bytes.length; i++) {
+    if (bytes[i] != mvhd[0] ||
+        bytes[i + 1] != mvhd[1] ||
+        bytes[i + 2] != mvhd[2] ||
+        bytes[i + 3] != mvhd[3]) {
+      continue;
+    }
+    final long = bytes[i + 4] == 1;
+    final scale = data.getUint32(i + (long ? 24 : 16));
+    final duration = long ? data.getUint64(i + 28) : data.getUint32(i + 20);
+    return scale == 0 ? null : duration / scale;
+  }
+  return null;
 }
 
 /// The time at the start of a line of the journal.
