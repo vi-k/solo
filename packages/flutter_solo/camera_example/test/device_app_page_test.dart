@@ -17,6 +17,7 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_app.dart';
 import 'package:flutter_solo_camera_example/camera_bloc.dart';
@@ -364,6 +365,59 @@ void main() {
       await tester.pump(platform.disposeTime);
       expect(await released, isA<Done<void>>());
       await session.close();
+    });
+
+    testWidgets('the buttons of the lights follow the answer of the platform', (
+      tester,
+    ) async {
+      final torch = find.byKey(const Key('torch'));
+      final flash = find.byKey(const Key('flash'));
+      Future<CameraSession> open() async {
+        final session = CameraSession(onCaptured: (XFile file) {});
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: CameraView(session: session),
+          ),
+        );
+        session.open();
+        await tester.pump(platform.openTime);
+        return session;
+      }
+
+      Future<void> finish(CameraSession session) async {
+        await tester.pumpWidget(const SizedBox());
+        final released = session.release().done;
+        await tester.pump(platform.disposeTime);
+        expect(await released, isA<Done<void>>());
+        await session.close();
+      }
+
+      platform.useCamerasOf(FakePhone.android);
+      final answered = await open();
+      expect(torch, findsOneWidget);
+      expect(flash, findsOneWidget);
+      for (final name in ['1', '2', '3']) {
+        answered.switchCamera();
+        await tester.pump(platform.disposeTime);
+        await tester.pump(platform.openTime);
+        await tester.pump();
+        expect((answered.currentState as Ready).camera.description.name, name);
+        expect(torch, findsNothing, reason: name);
+        expect(flash, findsNothing, reason: name);
+      }
+      await finish(answered);
+
+      platform.failLights = MissingPluginException();
+      final unanswered = await open();
+      expect(torch, findsNothing);
+      expect(flash, findsOneWidget);
+      _says(
+        _part(_torch, _latest),
+        'Without an answer, on a platform without the handler or one that '
+        'fails, no camera has a torch and every camera has a flash',
+      );
+      await finish(unanswered);
     });
   });
 

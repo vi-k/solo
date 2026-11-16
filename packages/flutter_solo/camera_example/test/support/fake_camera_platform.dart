@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_solo_camera_example/camera_lights.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// The phone whose behaviour [FakeCameraPlatform] copies where the two
 /// phones of the probes differ.
@@ -30,7 +32,17 @@ enum FakePhone { android, iphone }
 /// Where a call meets another one, the fake does what the phones did; each
 /// such rule names the phone it was seen on, and [phone] picks between
 /// the two where they differ.
+///
+/// The fake answers the channel of `CameraLights` as well, from [lights]:
+/// the app asks the platform which cameras have a torch and a flash.
 class FakeCameraPlatform extends CameraPlatform {
+  /// A fake that answers the channel of `CameraLights` until the next fake
+  /// takes it.
+  FakeCameraPlatform() {
+    TestWidgetsFlutterBinding.ensureInitialized().defaultBinaryMessenger
+        .setMockMethodCallHandler(CameraLights.channel, _answerLights);
+  }
+
   /// The text of a denied camera on Android, from
   /// `createCameraWithSettings`: the only
   /// code the Galaxy gives, the first time and after "don't ask again".
@@ -80,8 +92,87 @@ class FakeCameraPlatform extends CameraPlatform {
     ),
   ];
 
+  /// What the channel of `CameraLights` answers for each camera, by its
+  /// name; a camera left out gets no answer. The back camera of [cameras]
+  /// has a torch and a flash, the front one a flash alone, as the first
+  /// two cameras of an iPhone 13 mini.
+  Map<String, ({bool torch, bool flash})> lights = const {
+    'back': (torch: true, flash: true),
+    'front': (torch: false, flash: true),
+  };
+
+  /// When set, the channel of `CameraLights` gives this in place of an
+  /// answer: a `PlatformException` as a failing platform would, or a
+  /// `MissingPluginException` as a platform without the app's handler.
+  Exception? failLights;
+
   /// The phone the fake copies where the phones differ.
   FakePhone phone = FakePhone.android;
+
+  /// Puts the cameras of [phone] in [cameras] and its answer in [lights],
+  /// as `availableCameras` and the channel gave them on that phone.
+  ///
+  /// A Galaxy A55 has a flash unit on camera `0` alone, its first back
+  /// camera; `1` and `3` are front cameras, `2` the second back one. An
+  /// iPhone 13 mini has a torch on its back cameras and a flash on all
+  /// three.
+  void useCamerasOf(FakePhone phone) {
+    const none = (torch: false, flash: false);
+    switch (phone) {
+      case FakePhone.android:
+        cameras = const [
+          CameraDescription(
+            name: '0',
+            lensDirection: CameraLensDirection.back,
+            sensorOrientation: 90,
+          ),
+          CameraDescription(
+            name: '1',
+            lensDirection: CameraLensDirection.front,
+            sensorOrientation: 270,
+          ),
+          CameraDescription(
+            name: '2',
+            lensDirection: CameraLensDirection.back,
+            sensorOrientation: 90,
+          ),
+          CameraDescription(
+            name: '3',
+            lensDirection: CameraLensDirection.front,
+            sensorOrientation: 270,
+          ),
+        ];
+        lights = const {
+          '0': (torch: true, flash: true),
+          '1': none,
+          '2': none,
+          '3': none,
+        };
+      case FakePhone.iphone:
+        cameras = const [
+          CameraDescription(
+            name: _iphoneBack,
+            lensDirection: CameraLensDirection.back,
+            sensorOrientation: 90,
+          ),
+          CameraDescription(
+            name: _iphoneFront,
+            lensDirection: CameraLensDirection.front,
+            sensorOrientation: 90,
+          ),
+          CameraDescription(
+            name: _iphoneWide,
+            lensDirection: CameraLensDirection.back,
+            sensorOrientation: 90,
+          ),
+        ];
+        lights = const {
+          _iphoneBack: (torch: true, flash: true),
+          _iphoneFront: (torch: false, flash: true),
+          _iphoneWide: (torch: true, flash: true),
+        };
+    }
+  }
 
   /// How long an opening takes.
   Duration openTime = const Duration(milliseconds: 100);
@@ -301,8 +392,7 @@ class FakeCameraPlatform extends CameraPlatform {
       return Completer<void>().future;
     }
     final camera = _cameras[cameraId];
-    final hasTorch =
-        camera?.description.lensDirection == CameraLensDirection.back;
+    final hasTorch = camera != null && _lightsOf(camera.description).torch;
     if (phone == FakePhone.android && _torchEnabled) {
       if (mode == FlashMode.torch) {
         // Galaxy, from the plugin's source: with the flag up the torch is
@@ -333,7 +423,7 @@ class FakeCameraPlatform extends CameraPlatform {
     log.add('flash #$cameraId torch start');
     // Both plugins: the flash mode and the torch are one setting, and
     // `camera_avfoundation` 0.11.1 refuses the torch to a camera without
-    // one. The fake gives a torch to the back camera alone.
+    // one. Which cameras have one is in [lights].
     if (!hasTorch) {
       log.add('flash #$cameraId torch failed');
       throw PlatformException(
@@ -342,7 +432,7 @@ class FakeCameraPlatform extends CameraPlatform {
       );
     }
     await Future<void>.delayed(torchTime);
-    camera?.torch = true;
+    camera.torch = true;
     _torchEnabled = true;
     log.add('flash #$cameraId torch end');
   }
@@ -482,6 +572,22 @@ class FakeCameraPlatform extends CameraPlatform {
   @override
   Widget buildPreview(int cameraId) => const SizedBox.expand();
 
+  /// The answer of [lights] for [camera]: none for a camera left out.
+  ({bool torch, bool flash}) _lightsOf(CameraDescription camera) =>
+      lights[camera.name] ?? (torch: false, flash: false);
+
+  /// Answers the channel of `CameraLights`: the names of the cameras in,
+  /// what each can light out.
+  Future<Object?> _answerLights(MethodCall call) async {
+    final failure = failLights;
+    if (failure != null) throw failure;
+    return {
+      for (final name in (call.arguments as List<Object?>).cast<String>())
+        if (lights[name] case final light?)
+          name: {'torch': light.torch, 'flash': light.flash},
+    };
+  }
+
   /// Galaxy: a picture in progress on camera [id] fails: an error event,
   /// then the capture throws. The line of the rule is `capture #N failed`.
   void _loseCapture(int id, _Camera camera) {
@@ -506,6 +612,12 @@ class FakeCameraPlatform extends CameraPlatform {
     );
   }
 }
+
+/// The names of the cameras of an iPhone 13 mini: the wide back camera,
+/// the front one, and the ultra wide back one.
+const _iphoneBack = 'com.apple.avfoundation.avcapturedevice.built-in_video:0';
+const _iphoneFront = 'com.apple.avfoundation.avcapturedevice.built-in_video:1';
+const _iphoneWide = 'com.apple.avfoundation.avcapturedevice.built-in_video:5';
 
 /// A picture in progress: the future the caller waits on and the timer
 /// that completes it.

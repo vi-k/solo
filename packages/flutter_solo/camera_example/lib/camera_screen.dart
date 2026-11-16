@@ -102,28 +102,33 @@ class _CameraViewState extends State<CameraView> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                IconButton(
-                  key: const Key('flash'),
-                  onPressed: widget.session.cycleFlash,
-                  icon: Icon(switch (flash) {
-                    FlashMode.off => Icons.flash_off,
-                    FlashMode.auto => Icons.flash_auto,
-                    _ => Icons.flash_on,
-                  }),
-                ),
                 // A switch changes the camera and leaves the state: the
                 // plugin's controller says which camera it holds.
                 ValueListenableBuilder<CameraValue>(
                   valueListenable: camera,
-                  builder: (context, value, _) => hasTorch(value.description)
-                      ? IconButton(
+                  builder: (context, value, _) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.session.lights.flash(value.description))
+                        IconButton(
+                          key: const Key('flash'),
+                          onPressed: widget.session.cycleFlash,
+                          icon: Icon(switch (flash) {
+                            FlashMode.off => Icons.flash_off,
+                            FlashMode.auto => Icons.flash_auto,
+                            _ => Icons.flash_on,
+                          }),
+                        ),
+                      if (widget.session.lights.torch(value.description))
+                        IconButton(
                           key: const Key('torch'),
                           onPressed: widget.session.toggleTorch,
                           icon: Icon(
                             torch ? Icons.flashlight_on : Icons.flashlight_off,
                           ),
-                        )
-                      : const SizedBox.shrink(),
+                        ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   key: const Key('shutter'),

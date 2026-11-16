@@ -181,7 +181,7 @@ initialize #2 end
 не делает. Выключение и новое включение, пока он загорается, оставляют его
 включённым, без мигания; включение и выключение во время снимка оставляют его
 выключенным, без вспышки. Кнопка фонарика стоит рядом с кнопкой вспышки,
-на задней камере.
+на камере с фонариком.
 
 ### Первая попытка
 
@@ -269,7 +269,7 @@ Job<void> toggleTorch() {
     policy: Policy.keepLatest,
     (ctx) async {
       final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-      if (on == torch || !hasTorch(camera.description)) return;
+      if (on == torch || !lights.torch(camera.description)) return;
       await ctx.join(() => camera.setFlashMode(on ? FlashMode.torch : flash));
       ctx.emit(
         Ready(camera: camera, flash: flash, recording: recording, torch: on),
@@ -309,29 +309,46 @@ Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
 });
 ```
 
-Плагин не может сказать, есть ли у камеры фонарик, поэтому приложение даёт его
-только задней камере. Смена без записи гасит фонарик и зажигает его снова
-на следующей камере, если у той он есть, как снова ставит режим вспышки; смена
+Плагин не может сказать, есть ли у камеры фонарик или вспышка, поэтому
+приложение спрашивает платформу своим каналом: `open()` отправляет имена камер,
+а `CameraLights`, ответ, говорит, что может зажечь каждая из них. На Android
+ответ — есть ли у камеры вспышка, которая служит ей и фонариком; на iOS —
+есть ли у устройства захвата фонарик и вспышка. Без ответа, на платформе без
+обработчика или на отказавшей, фонарика нет ни у одной камеры, а вспышка есть
+у каждой: фонарик, запрошенный у камеры без него, ломает экран, режим вспышки —
+нет. Смена без записи гасит фонарик и зажигает его снова на следующей камере,
+если у той он есть, или снова ставит режим вспышки на камере со вспышкой; смена
 во время записи оставляет фонарик на камере, у которой он есть, и гасит его
 перед камерой без него. [Потеря камеры](#потеря-камеры) показывает смену
 целиком. Когда фонарик выключен, смена оставляет состояние как было, поэтому
-кнопка слушает контроллер плагина, который держит камеру:
+кнопки вспышки и фонарика слушают контроллер плагина, который держит камеру:
 
 ```dart
-bool hasTorch(CameraDescription camera) =>
-    camera.lensDirection == CameraLensDirection.back;
-
 ValueListenableBuilder<CameraValue>(
   valueListenable: camera,
-  builder: (context, value, _) => hasTorch(value.description)
-      ? IconButton(
+  builder: (context, value, _) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (widget.session.lights.flash(value.description))
+        IconButton(
+          key: const Key('flash'),
+          onPressed: widget.session.cycleFlash,
+          icon: Icon(switch (flash) {
+            FlashMode.off => Icons.flash_off,
+            FlashMode.auto => Icons.flash_auto,
+            _ => Icons.flash_on,
+          }),
+        ),
+      if (widget.session.lights.torch(value.description))
+        IconButton(
           key: const Key('torch'),
           onPressed: widget.session.toggleTorch,
           icon: Icon(
             torch ? Icons.flashlight_on : Icons.flashlight_off,
           ),
-        )
-      : const SizedBox.shrink(),
+        ),
+    ],
+  ),
 ),
 ```
 
@@ -375,13 +392,14 @@ state Ready
 фонарика на камере, открытой следом, меняет только значок. Фейковая платформа
 хранит флаг, когда работает как Galaxy.
 
-На Galaxy A55 горящий фонарик гас перед сменой, пока его камера ещё была
-открыта, за 0,25–0,56 с; после круга через четыре камеры и обратно на первую
-нажатие зажигало его одним вызовом. У второй задней камеры Galaxy вспышки нет,
-хотя приложение даёт ей фонарик: нажатие на ней переводит экран в `Broken`
+На Galaxy A55 платформа даёт вспышку только первой задней камере: у его
+фронтальных камер и у второй задней нет ни одной из двух кнопок, и вызовов
+вспышки и фонарика они не получают. Фонарик, запрошенный у этой второй задней
+камеры, переводит экран в `Broken`
 с `java.lang.IllegalStateException: No flash unit`, а флаг остаётся поднятым,
-как после потери, так что после Retry первое нажатие фонарика меняет только
-значок.
+как после потери. Горящий фонарик гас перед сменой, пока его камера ещё была
+открыта, за 0,25–0,56 с; после круга через четыре камеры и обратно на первую
+нажатие зажигало его одним вызовом.
 
 ## Смена камеры во время записи
 
@@ -1035,9 +1053,9 @@ Galaxy A55 вернул бы сам, тоже освобождается: оши
 а камера всё это время остаётся открытой; отнятая камера приходит ошибкой.
 
 `open()` ничего не делает, когда камера в `Ready`. Камера открывается
-в `_initialize` — конце `open()`, который начинает следить за ней, когда она
-открылась; смена камеры начинает следить заново, потому что без записи камера
-получает новый `id`:
+в `_initialize` — конце `open()`, после ответа `CameraLights`, и `_initialize`
+начинает следить за ней, когда она открылась; смена камеры начинает следить
+заново, потому что без записи камера получает новый `id`:
 
 ```dart
 Job<void> open() => enqueue<CameraState, void>((ctx) async {
@@ -1048,6 +1066,7 @@ Job<void> open() => enqueue<CameraState, void>((ctx) async {
     ctx.emit(const NoCamera());
     return;
   }
+  _lights = await ctx.join(() => CameraLights.ask(cameras));
   await _initialize(ctx, cameras.first);
 });
 
@@ -1074,7 +1093,7 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
   final Ready(:camera, :flash, :recording, :torch) = ctx.state;
   final at = cameras.indexWhere((c) => c.name == camera.description.name);
   final next = cameras[(at + 1) % cameras.length];
-  if (torch && !(recording && hasTorch(next))) {
+  if (torch && !(recording && lights.torch(next))) {
     await ctx.join(() => camera.setFlashMode(flash));
     ctx.emit(Ready(camera: camera, flash: flash, recording: recording));
   }
@@ -1087,14 +1106,14 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     return;
   }
   _watch(camera);
-  if (!recording) {
-    final lit = torch && hasTorch(next);
-    await ctx.join(() => camera.setFlashMode(lit ? FlashMode.torch : flash));
-    if (lit) {
-      ctx.emit(
-        Ready(camera: camera, flash: flash, recording: false, torch: true),
-      );
-    }
+  if (recording) return;
+  if (torch && lights.torch(next)) {
+    await ctx.join(() => camera.setFlashMode(FlashMode.torch));
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: false, torch: true),
+    );
+  } else if (lights.flash(next)) {
+    await ctx.join(() => camera.setFlashMode(flash));
   }
 });
 ```
@@ -1104,13 +1123,13 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
 открытие: плагин освобождает камеру, прежде чем открыть следующую, поэтому
 неудачная смена так же `Broken`. Камера, которую он открывает, начинает
 со своего режима вспышки, а контроллер плагина хранит прежний, поэтому смена
-заново ставит режим кнопки: без этого на iPhone 13 mini кнопка после смены
-показывала `always`, а снимок шёл в `auto`. Горящий фонарик гаснет перед
-сменой, пока его камера открыта, и снова зажигается вместо режима на камере,
-у которой он есть; во время записи камера с фонариком его сохраняет. Во время
-записи плагин камеру не освобождает, камера продолжает писать, а сбой остаётся
-ошибкой джобы при состоянии `Ready`. Стоп, который не удался, — последний путь
-к `Broken`:
+заново ставит режим кнопки на камере со вспышкой: без этого на iPhone 13 mini
+кнопка после смены показывала `always`, а снимок шёл в `auto`. Горящий фонарик
+гаснет перед сменой, пока его камера открыта, и снова зажигается вместо режима
+на камере, у которой он есть; во время записи камера с фонариком его сохраняет.
+Во время записи плагин камеру не освобождает, камера продолжает писать, а сбой
+остаётся ошибкой джобы при состоянии `Ready`. Стоп, который не удался, —
+последний путь к `Broken`:
 
 ```dart
 Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
@@ -1411,7 +1430,9 @@ Duration torchTime = const Duration(milliseconds: 50);
 по правилам iPhone `dispose` ждёт снимка. `failOpen`, `failStop`, `failSwitch`
 и `failCreate`, пока заданы, роняют такой вызов, а `failFromOutside` присылает
 ошибку камеры, как это делает платформа, когда камеру забирает другое
-приложение.
+приложение. Фейк отвечает и на канал `CameraLights`, из `lights`: у его задней
+камеры есть фонарик и вспышка, у фронтальной — одна вспышка, а `useCamerasOf`
+ставит камеры и ответ любого из двух телефонов.
 
 Тесты держат три правила
 [Testing](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md):

@@ -10,6 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_app.dart';
 import 'package:flutter_solo_camera_example/camera_bloc.dart';
+import 'package:flutter_solo_camera_example/camera_lights.dart';
 import 'package:flutter_solo_camera_example/camera_screen.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +54,7 @@ void main() {
   late RecordingCameraPlatform platform;
   late String controller;
   late List<CameraDescription> cameras;
+  late CameraLights lights;
   var lifecycle = AppLifecycleState.resumed;
 
   setUpAll(() {
@@ -295,6 +297,13 @@ void main() {
         journal.note(
           'cameras ${cameras.map((c) => '${c.name} ${c.lensDirection.name}')}',
         );
+        lights = await CameraLights.ask(cameras);
+        for (final camera in cameras) {
+          journal.note(
+            'lights ${camera.name} torch ${lights.torch(camera)} '
+            'flash ${lights.flash(camera)}',
+          );
+        }
         await start(tester);
         await body(tester);
         expect(
@@ -828,16 +837,28 @@ void main() {
           () => created().length == i + 1 && shown('shutter'),
         );
         final id = created().last;
-        await until(
-          tester,
-          'the flash of camera #$id',
-          () => trace().contains('flash #$id always end'),
-        );
-        expect(
-          trace(),
-          containsAllInOrder(['initialize #$id end', 'flash #$id always end']),
-        );
+        final next = cameras[i % cameras.length];
+        // A camera without a flash gets no mode and shows no button.
+        if (lights.flash(next)) {
+          await until(
+            tester,
+            'the flash of camera #$id',
+            () => trace().contains('flash #$id always end'),
+          );
+          expect(
+            trace(),
+            containsAllInOrder([
+              'initialize #$id end',
+              'flash #$id always end',
+            ]),
+          );
+        }
         await settle(tester, const Duration(seconds: 1));
+        expect(
+          trace().where((line) => line.startsWith('flash #$id ')),
+          lights.flash(next) ? isNotEmpty : isEmpty,
+        );
+        expect(shown('flash'), lights.flash(next));
       }
       final last = created().last;
       final ready = state(tester) as Ready;
@@ -860,8 +881,8 @@ void main() {
   group('the torch across a switch', () {
     // The lamp itself cannot be seen from the test: the host reads it from
     // the log of the phone, where CameraX on a Galaxy A55 writes every
-    // request of the torch. The torch is lit on the first camera alone: the
-    // second back camera of a Galaxy A55 has no flash unit.
+    // request of the torch. Which cameras have a torch is the answer of the
+    // platform, `lights`, and the journal names it.
     phoneTest('a lit torch around the cameras, and lit again at the end', (
       tester,
     ) async {
@@ -885,14 +906,16 @@ void main() {
         );
         final id = created().last;
         final next = cameras[i % cameras.length];
-        final lit = wasLit && hasTorch(next);
-        await until(
-          tester,
-          'the flash of camera #$id',
-          () => trace().contains(
-            'flash #$id ${lit ? 'torch' : ready().flash.name} end',
-          ),
-        );
+        final lit = wasLit && lights.torch(next);
+        if (lit || lights.flash(next)) {
+          await until(
+            tester,
+            'the flash of camera #$id',
+            () => trace().contains(
+              'flash #$id ${lit ? 'torch' : ready().flash.name} end',
+            ),
+          );
+        }
         await settle(tester, const Duration(milliseconds: 500));
         expect(ready().camera.description.name, next.name);
         if (wasLit) {
@@ -907,7 +930,13 @@ void main() {
           );
         }
         expect(ready().torch, lit);
-        expect(shown('torch'), hasTorch(next));
+        expect(shown('torch'), lights.torch(next));
+        if (!lights.torch(next)) {
+          expect(
+            trace().where((line) => line.startsWith('flash #$id torch')),
+            isEmpty,
+          );
+        }
         journal.note(
           'camera #$id ${next.lensDirection.name} torch ${ready().torch}',
         );

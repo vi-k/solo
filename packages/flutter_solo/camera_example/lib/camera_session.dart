@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
+import 'camera_lights.dart';
 import 'camera_state.dart';
 
 /// The controller of the camera screen: it owns the plugin's
@@ -17,14 +18,20 @@ final class CameraSession extends Solo<CameraState> {
 
   CameraSession({required this.onCaptured}) : super(const Closed());
 
+  /// What the cameras of the phone can light, as the platform said at the
+  /// last [open]: the screen shows the buttons of the flash and the torch
+  /// by it.
+  CameraLights get lights => _lights;
+  CameraLights _lights = CameraLights.none;
+
   /// The camera [suspend] let go, for [resume] to open again.
   CameraDescription? _suspended;
 
   /// The errors the platform reports for the open camera.
   StreamSubscription<CameraErrorEvent>? _errors;
 
-  /// Opens the first camera of the device; with a camera open already it
-  /// does nothing.
+  /// Asks the platform what the cameras of the device can light, and
+  /// opens the first of them; with a camera open already it does nothing.
   Job<void> open() => enqueue<CameraState, void>((ctx) async {
     if (ctx.state is Ready) return;
     ctx.emit(const Opening());
@@ -33,6 +40,7 @@ final class CameraSession extends Solo<CameraState> {
       ctx.emit(const NoCamera());
       return;
     }
+    _lights = await ctx.join(() => CameraLights.ask(cameras));
     await _initialize(ctx, cameras.first);
   });
 
@@ -86,7 +94,7 @@ final class CameraSession extends Solo<CameraState> {
       policy: Policy.keepLatest,
       (ctx) async {
         final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-        if (on == torch || !hasTorch(camera.description)) return;
+        if (on == torch || !lights.torch(camera.description)) return;
         await ctx.join(() => camera.setFlashMode(on ? FlashMode.torch : flash));
         ctx.emit(
           Ready(camera: camera, flash: flash, recording: recording, torch: on),
@@ -106,16 +114,17 @@ final class CameraSession extends Solo<CameraState> {
   /// next one, so a switch that fails is [Broken], as a failed opening is.
   /// The camera it opens starts with a flash mode of its own, while the
   /// controller keeps the one it had, so the switch sets the mode of the
-  /// button again, or lights the torch again. A lit torch goes out before
-  /// the switch, while its camera is open (see [release]), and stays out
-  /// on a camera without one. During a recording the camera it had goes on
-  /// recording, with the torch, and a failure stays the error of the job.
+  /// button again on a camera with a flash, or lights the torch again. A
+  /// lit torch goes out before the switch, while its camera is open (see
+  /// [release]), and stays out on a camera without one. During a recording
+  /// the camera it had goes on recording, with the torch, and a failure
+  /// stays the error of the job.
   Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     final cameras = await ctx.join(availableCameras);
     final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
-    if (torch && !(recording && hasTorch(next))) {
+    if (torch && !(recording && lights.torch(next))) {
       await ctx.join(() => camera.setFlashMode(flash));
       ctx.emit(Ready(camera: camera, flash: flash, recording: recording));
     }
@@ -128,14 +137,14 @@ final class CameraSession extends Solo<CameraState> {
       return;
     }
     _watch(camera);
-    if (!recording) {
-      final lit = torch && hasTorch(next);
-      await ctx.join(() => camera.setFlashMode(lit ? FlashMode.torch : flash));
-      if (lit) {
-        ctx.emit(
-          Ready(camera: camera, flash: flash, recording: false, torch: true),
-        );
-      }
+    if (recording) return;
+    if (torch && lights.torch(next)) {
+      await ctx.join(() => camera.setFlashMode(FlashMode.torch));
+      ctx.emit(
+        Ready(camera: camera, flash: flash, recording: false, torch: true),
+      );
+    } else if (lights.flash(next)) {
+      await ctx.join(() => camera.setFlashMode(flash));
     }
   });
 

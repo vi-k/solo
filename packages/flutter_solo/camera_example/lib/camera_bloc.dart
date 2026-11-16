@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:scopo/scopo.dart';
 
+import 'camera_lights.dart';
 import 'camera_screen.dart';
 import 'camera_state.dart';
 
@@ -120,6 +121,12 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   /// The platform lost [_camera]: [_letGo] stops its recording first.
   bool _lost = false;
 
+  /// What the cameras of the phone can light, as the platform said at the
+  /// last [OpenCamera]: the screen shows the buttons of the flash and the
+  /// torch by it.
+  CameraLights get lights => _lights;
+  CameraLights _lights = CameraLights.none;
+
   /// The camera [Suspend] let go, for [Resume] to open again.
   CameraDescription? _suspended;
 
@@ -219,6 +226,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
       emit(const NoCamera());
       return;
     }
+    _lights = await CameraLights.ask(cameras);
     await _initialize(cameras.first, emit);
   }
 
@@ -258,7 +266,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     final ready = state;
     if (command.tap != _torchTaps || ready is! Ready) return;
     final Ready(:camera, :flash, :recording, :torch) = ready;
-    if (command.on == torch || !hasTorch(camera.description)) return;
+    if (command.on == torch || !lights.torch(camera.description)) return;
     await camera.setFlashMode(command.on ? FlashMode.torch : flash);
     if (state != ready) return;
     emit(
@@ -273,7 +281,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
 
   /// Without a recording the plugin releases the camera before it opens the
   /// next one, so a switch that fails is [Broken]; during a recording the
-  /// camera goes on recording, and the failure goes on to the zone.
+  /// camera goes on recording, and the failure goes on to the zone. A
+  /// camera without a flash gets no mode of the flash.
   Future<void> _switchCamera(Emitter<CameraState> emit) async {
     var ready = state;
     if (ready is! Ready) return;
@@ -284,7 +293,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     final next = cameras[(at + 1) % cameras.length];
     // A lit torch goes out while its camera is open (see [_putTorchOut]);
     // during a recording a camera with a torch keeps it.
-    if (torch && !(recording && hasTorch(next))) {
+    if (torch && !(recording && lights.torch(next))) {
       await camera.setFlashMode(flash);
       if (state != ready) return;
       ready = Ready(camera: camera, flash: flash, recording: recording);
@@ -302,14 +311,13 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     if (state != ready) return;
     _watch(camera);
     // The camera the plugin opens starts with a flash mode of its own.
-    if (!recording) {
-      final lit = torch && hasTorch(next);
-      await camera.setFlashMode(lit ? FlashMode.torch : flash);
-      if (lit && state == ready) {
-        emit(
-          Ready(camera: camera, flash: flash, recording: false, torch: true),
-        );
-      }
+    if (recording) return;
+    if (torch && lights.torch(next)) {
+      await camera.setFlashMode(FlashMode.torch);
+      if (state != ready) return;
+      emit(Ready(camera: camera, flash: flash, recording: false, torch: true));
+    } else if (lights.flash(next)) {
+      await camera.setFlashMode(flash);
     }
   }
 
@@ -557,21 +565,25 @@ class _BlocCameraViewState extends State<BlocCameraView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  IconButton(
-                    key: const Key('flash'),
-                    onPressed: () => bloc.add(const CycleFlash()),
-                    icon: Icon(switch (flash) {
-                      FlashMode.off => Icons.flash_off,
-                      FlashMode.auto => Icons.flash_auto,
-                      _ => Icons.flash_on,
-                    }),
-                  ),
                   // A switch changes the camera and leaves the state: the
                   // plugin's controller says which camera it holds.
                   ValueListenableBuilder<CameraValue>(
                     valueListenable: camera,
-                    builder: (context, value, _) => hasTorch(value.description)
-                        ? IconButton(
+                    builder: (context, value, _) => Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (bloc.lights.flash(value.description))
+                          IconButton(
+                            key: const Key('flash'),
+                            onPressed: () => bloc.add(const CycleFlash()),
+                            icon: Icon(switch (flash) {
+                              FlashMode.off => Icons.flash_off,
+                              FlashMode.auto => Icons.flash_auto,
+                              _ => Icons.flash_on,
+                            }),
+                          ),
+                        if (bloc.lights.torch(value.description))
+                          IconButton(
                             key: const Key('torch'),
                             onPressed: () => bloc.add(const ToggleTorch()),
                             icon: Icon(
@@ -579,8 +591,9 @@ class _BlocCameraViewState extends State<BlocCameraView> {
                                   ? Icons.flashlight_on
                                   : Icons.flashlight_off,
                             ),
-                          )
-                        : const SizedBox.shrink(),
+                          ),
+                      ],
+                    ),
                   ),
                   IconButton(
                     key: const Key('shutter'),

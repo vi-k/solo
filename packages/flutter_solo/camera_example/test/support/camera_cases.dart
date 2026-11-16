@@ -518,6 +518,10 @@ void controllerCases(MakeDriver make) {
             sensorOrientation: 90,
           ),
         ];
+        platform.lights = const {
+          'back': (torch: true, flash: true),
+          'wide': (torch: true, flash: true),
+        };
         final controller = make(captured.add);
         controller.open();
         await tester.pump(platform.openTime);
@@ -574,6 +578,138 @@ void controllerCases(MakeDriver make) {
         await finish(tester, controller);
       });
     });
+  });
+
+  // The platform says which cameras have a torch and a flash: a Galaxy A55
+  // has a flash unit on its first back camera alone, and its second back
+  // camera refuses a torch with an error that takes the screen to
+  // `Broken`.
+  group('the cameras the platform gives no torch', () {
+    final torchButton = find.byKey(const Key('torch'));
+    final flashButton = find.byKey(const Key('flash'));
+
+    /// The calls of the flash and the torch on camera [id].
+    Iterable<String> flashes(int id) =>
+        platform.log.where((line) => line.startsWith('flash #$id '));
+
+    /// Switches to the next camera of the device.
+    Future<void> next(WidgetTester tester, CameraDriver controller) async {
+      controller.switchCamera();
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      await tester.pump(platform.torchTime);
+      await tester.pump();
+    }
+
+    testWidgets('a back camera without one: no button, and a tap calls '
+        'nothing', (tester) async {
+      platform.useCamerasOf(FakePhone.android);
+      final controller = await openShown(tester);
+      expect(torchButton, findsOneWidget);
+      await next(tester, controller);
+      expect(torchButton, findsNothing);
+      await next(tester, controller);
+      final ready = controller.currentState as Ready;
+      expect(ready.camera.description.name, '2');
+      expect(torchButton, findsNothing);
+      expect(flashButton, findsNothing);
+      controller.toggleTorch();
+      await tester.pump(platform.torchTime);
+      await tester.pump();
+
+      expect(flashes(3), isEmpty);
+      expect((controller.currentState as Ready).torch, isFalse);
+      expect(platform.log, isNot(contains('camera #3 error')));
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('a lit torch goes out before a switch to a back camera '
+        'without one, and lights again back on its own', (tester) async {
+      platform
+        ..useCamerasOf(FakePhone.android)
+        ..cameras = [platform.cameras[0], platform.cameras[2]];
+      final controller = await openShown(tester);
+      await tester.tap(torchButton);
+      await tester.pump(platform.torchTime);
+      await tester.pump();
+      expect((controller.currentState as Ready).torch, isTrue);
+      await next(tester, controller);
+
+      final second = controller.currentState as Ready;
+      expect(second.camera.description.name, '2');
+      expect(second.torch, isFalse);
+      expect(torchButton, findsNothing);
+      expect(flashes(1), [
+        'flash #1 torch start',
+        'flash #1 torch end',
+        'flash #1 auto',
+      ]);
+      expect(
+        platform.log,
+        containsAllInOrder(['flash #1 auto', 'dispose #1 start']),
+      );
+      expect(flashes(2), isEmpty);
+      expect(platform.log, isNot(contains('camera #2 error')));
+      await next(tester, controller);
+      expect(torchButton, findsOneWidget);
+      expect(find.byIcon(Icons.flashlight_off), findsOneWidget);
+      await tester.tap(torchButton);
+      await tester.pump(platform.torchTime);
+      await tester.pump();
+
+      expect(flashes(3), [
+        'flash #3 auto',
+        'flash #3 torch start',
+        'flash #3 torch end',
+      ]);
+      expect((controller.currentState as Ready).torch, isTrue);
+      expect(platform.torchOn(3), isTrue);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('a camera without a flash: no button, and a switch sets no '
+        'mode', (tester) async {
+      platform.useCamerasOf(FakePhone.android);
+      final controller = await openShown(tester);
+      await tester.tap(flashButton);
+      await tester.pump();
+      for (var id = 2; id <= 4; id++) {
+        await next(tester, controller);
+        expect(flashButton, findsNothing, reason: 'camera #$id');
+        expect(flashes(id), isEmpty, reason: 'camera #$id');
+      }
+      await next(tester, controller);
+
+      expect((controller.currentState as Ready).flash, FlashMode.always);
+      expect(flashes(5), ['flash #5 always']);
+      expect(find.byIcon(Icons.flash_on), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    for (final (name, failure) in [
+      ('no handler', MissingPluginException()),
+      ('a failure', PlatformException(code: 'error')),
+    ]) {
+      testWidgets('without an answer ($name): no torch, and the flash', (
+        tester,
+      ) async {
+        platform.failLights = failure;
+        final controller = await openShown(tester);
+        expect(torchButton, findsNothing);
+        expect(flashButton, findsOneWidget);
+        controller.toggleTorch();
+        await tester.pump(platform.torchTime);
+        await tester.pump();
+
+        expect(flashes(1), isEmpty);
+        expect((controller.currentState as Ready).torch, isFalse);
+        await tester.pumpWidget(const SizedBox());
+        await finish(tester, controller);
+      });
+    }
   });
 
   group('the flash after a switch', () {

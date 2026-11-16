@@ -55,11 +55,6 @@ final class Denied extends CameraState {
   const Denied(this.code);
 }
 
-/// Whether [camera] has a torch. The plugin cannot say: the screen gives
-/// the torch to the back camera, and to no other.
-bool hasTorch(CameraDescription camera) =>
-    camera.lensDirection == CameraLensDirection.back;
-
 /// How long a camera about to be released has to stop its recording.
 ///
 /// A Galaxy A55 stopped a recording in 1.1 s when the app left, and as
