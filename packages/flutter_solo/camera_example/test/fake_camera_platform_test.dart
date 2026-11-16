@@ -159,6 +159,46 @@ void main() {
     await closed;
   });
 
+  for (final phone in FakePhone.values) {
+    testWidgets('a switch during a recording leaves the next torch dark '
+        '(${phone.name})', (tester) async {
+      final platform = FakeCameraPlatform()..useCamerasOf(phone);
+      CameraPlatform.instance = platform;
+      final cameras = await availableCameras();
+      final camera = CameraController(cameras.first, ResolutionPreset.low);
+      final opened = camera.initialize();
+      await tester.pump(platform.openTime);
+      await opened;
+      final lit = camera.setFlashMode(FlashMode.torch);
+      await tester.pump(platform.torchTime);
+      await lit;
+      final started = camera.startVideoRecording();
+      await tester.pump(platform.recordStartTime);
+      await started;
+      final switched = camera.setDescription(cameras.last);
+      await tester.pump(platform.switchTime);
+      await switched;
+      expect(platform.torchOn(1), isFalse);
+      final relit = camera.setFlashMode(FlashMode.torch);
+      await tester.pump(platform.torchTime);
+      await relit;
+      // The Galaxy's flag is still up, and the call returns at once.
+      expect(
+        platform.log.where((l) => l.startsWith('flash ')).last,
+        switch (phone) {
+          FakePhone.android => 'flash #1 torch skipped',
+          FakePhone.iphone => 'flash #1 torch end',
+        },
+      );
+      final stopped = camera.stopVideoRecording();
+      await tester.pump(platform.stopTime);
+      await stopped;
+      final closed = camera.dispose();
+      await tester.pump(platform.disposeTime);
+      await closed;
+    });
+  }
+
   testWidgets('a failed opening has no end line and reaches initialize', (
     tester,
   ) async {

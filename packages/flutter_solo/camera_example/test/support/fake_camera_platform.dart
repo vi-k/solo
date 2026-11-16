@@ -483,7 +483,13 @@ class FakeCameraPlatform extends CameraPlatform {
       throw failure;
     }
     log.add('switch #$id $direction end');
-    _cameras[id]?.description = description;
+    // Both plugins, from their source: the next camera's torch is dark.
+    // `camera_android_camerax` 0.7.6+1 unbinds the camera and binds the
+    // next one, its torch flag left as it was; `camera_avfoundation`
+    // 0.11.1 takes a new capture device and sets no torch on it.
+    _cameras[id]
+      ?..description = description
+      ..torch = false;
     // Galaxy: the switch rebinds the camera and sends a closing event.
     if (id != null && phone == FakePhone.android) closeFromOutside(id);
   }

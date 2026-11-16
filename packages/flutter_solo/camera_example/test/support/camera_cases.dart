@@ -590,6 +590,53 @@ void controllerCases(MakeDriver make) {
         expect(platform.log, isNot(contains('camera #1 error')));
         await finish(tester, controller);
       });
+
+      testWidgets('before a switch during a recording to another camera '
+          'with a torch, which lights it again', (tester) async {
+        // An iPhone 13 mini goes from its second back camera to its first
+        // while it records: both have a torch, and neither plugin lights
+        // the torch of the next camera.
+        platform.useCamerasOf(FakePhone.iphone);
+        final controller = make(captured.add);
+        controller.open();
+        await tester.pump(platform.openTime);
+        for (var i = 0; i < 2; i++) {
+          controller.switchCamera();
+          await tester.pump(platform.disposeTime);
+          await tester.pump(platform.openTime);
+          await tester.pump();
+        }
+        await light(tester, controller);
+        controller
+          ..startRecording()
+          ..switchCamera();
+        await tester.pump(platform.recordStartTime);
+        await tester.pump(platform.switchTime);
+        await tester.pump(platform.torchTime);
+        await tester.pump();
+
+        final ready = controller.currentState as Ready;
+        expect(ready.camera.description.name, platform.cameras[0].name);
+        expect(ready.recording, isTrue);
+        expect(ready.torch, isTrue);
+        expect(platform.torchOn(3), isTrue);
+        expect(
+          platform.log,
+          containsAllInOrder([
+            'flash #3 torch end',
+            'flash #3 auto',
+            'switch #3 back start',
+            'switch #3 back end',
+            'flash #3 torch start',
+            'flash #3 torch end',
+          ]),
+        );
+        controller.stopRecording();
+        await tester.pump(platform.stopTime);
+        await tester.pump();
+        expect(captured, hasLength(1));
+        await finish(tester, controller);
+      });
     });
   });
 

@@ -319,14 +319,13 @@ Android the answer is whether the camera has a flash unit, which is its torch
 as well; on iOS whether the capture device has a torch and a flash. Without an
 answer, on a platform without the handler or one that fails, no camera has a
 torch and every camera has a flash: a torch asked of a camera without one
-breaks the screen, a mode of the flash does not. A switch without a recording
-puts the torch out and lights it again on the next camera if that one has a
-torch, or sets the mode of the flash again on a camera with a flash; a switch
-during a recording keeps the torch on a camera with one and puts it out before
-a camera without one. [Losing the camera](#losing-the-camera) shows the switch
-whole. A switch leaves the state as it was when the torch is off, so the
-buttons of the flash and the torch listen to the plugin's controller, which
-holds the camera:
+breaks the screen, a mode of the flash does not. A switch puts a lit torch out
+and lights it again on the next camera if that one has a torch, during a
+recording too; otherwise a switch without a recording sets the mode of the
+flash again on a camera with a flash. [Losing the camera](#losing-the-camera)
+shows the switch whole. A switch leaves the state as it was when the torch is
+off, so the buttons of the flash and the torch listen to the plugin's
+controller, which holds the camera:
 
 ```dart
 ValueListenableBuilder<CameraValue>(
@@ -388,8 +387,8 @@ the icon say it is lit. Any other mode first puts the torch out on the camera
 open now, and a camera without a torch refuses that with an error of the
 camera, which takes the screen to `Broken`. So the app puts a lit torch out
 while its camera is still open: before a release, before the app leaves the
-foreground, and before a switch, but for a switch during a recording to a
-camera with a torch. [Leaving the screen](#leaving-the-screen),
+foreground, and before every switch, during a recording too.
+[Leaving the screen](#leaving-the-screen),
 [Going to the background](#going-to-the-background) and
 [Losing the camera](#losing-the-camera) show these commands whole. A camera the
 platform has lost takes no more calls, so after a loss the flag stays up: the
@@ -1107,7 +1106,7 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
   final Ready(:camera, :flash, :recording, :torch) = ctx.state;
   final at = cameras.indexWhere((c) => c.name == camera.description.name);
   final next = cameras[(at + 1) % cameras.length];
-  if (torch && !(recording && lights.torch(next))) {
+  if (torch) {
     await ctx.join(() => camera.setFlashMode(flash));
     ctx.emit(Ready(camera: camera, flash: flash, recording: recording));
   }
@@ -1120,13 +1119,12 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     return;
   }
   _watch(camera);
-  if (recording) return;
   if (torch && lights.torch(next)) {
     await ctx.join(() => camera.setFlashMode(FlashMode.torch));
     ctx.emit(
-      Ready(camera: camera, flash: flash, recording: false, torch: true),
+      Ready(camera: camera, flash: flash, recording: recording, torch: true),
     );
-  } else if (lights.flash(next)) {
+  } else if (!recording && lights.flash(next)) {
     await ctx.join(() => camera.setFlashMode(flash));
   }
 });
@@ -1141,10 +1139,12 @@ had, so the switch sets the mode of the button again on a camera with a flash:
 without that, on an iPhone 13 mini the button showed `always` after a switch,
 and the picture was taken in `auto`. A lit torch goes out before the switch,
 while its camera is open, and lights again in place of the mode on a camera
-that has one; during a recording a camera with a torch keeps it. During a
-recording the plugin does not release the camera, the camera goes on recording,
-and a failure stays the error of the job with the state `Ready`. A stop that
-fails is the last way to `Broken`:
+that has one. It does so during a recording as well: by their source,
+`camera_android_camerax` 0.7.6+1 binds the next camera and
+`camera_avfoundation` 0.11.1 takes its capture device, and neither lights its
+torch. During a recording the plugin does not release the camera, the camera
+goes on recording, and a failure stays the error of the job with the state
+`Ready`. A stop that fails is the last way to `Broken`:
 
 ```dart
 Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {

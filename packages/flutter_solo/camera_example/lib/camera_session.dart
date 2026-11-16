@@ -117,17 +117,17 @@ final class CameraSession extends Solo<CameraState> {
   /// next one, so a switch that fails is [Broken], as a failed opening is.
   /// The camera it opens starts with a flash mode of its own, while the
   /// controller keeps the one it had, so the switch sets the mode of the
-  /// button again on a camera with a flash, or lights the torch again. A
-  /// lit torch goes out before the switch, while its camera is open (see
-  /// [release]), and stays out on a camera without one. During a recording
-  /// the camera it had goes on recording, with the torch, and a failure
-  /// stays the error of the job.
+  /// button again on a camera with a flash. A lit torch goes out before
+  /// the switch, while its camera is open (see [release]), and lights again
+  /// on a camera with one, during a recording too: neither plugin lights
+  /// the torch of the next camera. During a recording the camera it had
+  /// goes on recording, and a failure stays the error of the job.
   Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
     final cameras = await ctx.join(availableCameras);
     final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
-    if (torch && !(recording && lights.torch(next))) {
+    if (torch) {
       await ctx.join(() => camera.setFlashMode(flash));
       ctx.emit(Ready(camera: camera, flash: flash, recording: recording));
     }
@@ -140,13 +140,12 @@ final class CameraSession extends Solo<CameraState> {
       return;
     }
     _watch(camera);
-    if (recording) return;
     if (torch && lights.torch(next)) {
       await ctx.join(() => camera.setFlashMode(FlashMode.torch));
       ctx.emit(
-        Ready(camera: camera, flash: flash, recording: false, torch: true),
+        Ready(camera: camera, flash: flash, recording: recording, torch: true),
       );
-    } else if (lights.flash(next)) {
+    } else if (!recording && lights.flash(next)) {
       await ctx.join(() => camera.setFlashMode(flash));
     }
   });

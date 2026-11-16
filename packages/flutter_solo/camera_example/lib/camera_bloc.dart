@@ -285,7 +285,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   /// Without a recording the plugin releases the camera before it opens the
   /// next one, so a switch that fails is [Broken]; during a recording the
   /// camera goes on recording, and the failure goes on to the zone. A
-  /// camera without a flash gets no mode of the flash.
+  /// camera without a flash gets no mode of the flash, and a lit torch
+  /// lights again on a camera with one, during a recording too.
   Future<void> _switchCamera(Emitter<CameraState> emit) async {
     var ready = state;
     if (ready is! Ready) return;
@@ -294,9 +295,9 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     final Ready(:camera, :flash, :recording, :torch) = ready;
     final at = cameras.indexWhere((c) => c.name == camera.description.name);
     final next = cameras[(at + 1) % cameras.length];
-    // A lit torch goes out while its camera is open (see [_putTorchOut]);
-    // during a recording a camera with a torch keeps it.
-    if (torch && !(recording && lights.torch(next))) {
+    // A lit torch goes out while its camera is open (see [_putTorchOut]):
+    // neither plugin lights the torch of the next camera.
+    if (torch) {
       await camera.setFlashMode(flash);
       if (state != ready) return;
       ready = Ready(camera: camera, flash: flash, recording: recording);
@@ -314,12 +315,13 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
     if (state != ready) return;
     _watch(camera);
     // The camera the plugin opens starts with a flash mode of its own.
-    if (recording) return;
     if (torch && lights.torch(next)) {
       await camera.setFlashMode(FlashMode.torch);
       if (state != ready) return;
-      emit(Ready(camera: camera, flash: flash, recording: false, torch: true));
-    } else if (lights.flash(next)) {
+      emit(
+        Ready(camera: camera, flash: flash, recording: recording, torch: true),
+      );
+    } else if (!recording && lights.flash(next)) {
       await camera.setFlashMode(flash);
     }
   }
