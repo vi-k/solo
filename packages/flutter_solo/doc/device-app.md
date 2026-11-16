@@ -239,7 +239,7 @@ once the shot was over and put it out 1 ms later.
 
 A Galaxy A55 makes the same calls, and slower: the torch lit in 0.36 to 0.64 s
 and went out in 0.35 to 0.41 s. Off and on tapped while the torch lit put it
-out 0.41 s after it had lit and lit it again in 0.36 s. On and off tapped
+out in 0.41 s once it had lit and lit it again in 0.36 s. On and off tapped
 during a shot lit the torch once the shot was over and put it out with the next
 call, 0.35 s long.
 
