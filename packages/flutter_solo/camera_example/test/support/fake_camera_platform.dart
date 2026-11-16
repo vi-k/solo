@@ -212,6 +212,13 @@ class FakeCameraPlatform extends CameraPlatform {
     _cameras[id] = camera;
     _current = id;
     log.add('create ${cameraDescription.lensDirection.name} #$id');
+    if (phone == FakePhone.android) {
+      // Galaxy: the plugin creates a camera by unbinding the ones open,
+      // and a picture in progress on them fails as the camera is created.
+      for (final MapEntry(:key, :value) in _cameras.entries) {
+        if (key != id) _loseCapture(key, value);
+      }
+    }
     return id;
   }
 
@@ -415,29 +422,8 @@ class FakeCameraPlatform extends CameraPlatform {
     final camera = _cameras[cameraId];
     switch (phone) {
       case FakePhone.android:
-        final capture = camera?.capture;
-        if (capture != null) {
-          // Galaxy: releasing the camera under a picture loses the
-          // picture: an error event, then the capture throws. The line of
-          // the rule is `capture #N failed`.
-          capture.timer.cancel();
-          camera!.capture = null;
-          camera.errors.add(
-            CameraErrorEvent(
-              cameraId,
-              'Image capture failed due to the camera being closed.',
-            ),
-          );
-          log.add('capture #$cameraId failed');
-          capture.shot.completeError(
-            PlatformException(
-              code: 'ImageCaptureException',
-              message:
-                  'androidx.camera.core.ImageCaptureException: '
-                  'Camera is closed.',
-            ),
-          );
-        }
+        // Galaxy: releasing the camera under a picture loses the picture.
+        if (camera != null) _loseCapture(cameraId, camera);
         await Future<void>.delayed(disposeTime);
         if (camera != null && camera.openedOverAnother) {
           // Galaxy: the camera opened over another one cannot release
@@ -477,6 +463,30 @@ class FakeCameraPlatform extends CameraPlatform {
 
   @override
   Widget buildPreview(int cameraId) => const SizedBox.expand();
+
+  /// Galaxy: a picture in progress on camera [id] fails: an error event,
+  /// then the capture throws. The line of the rule is `capture #N failed`.
+  void _loseCapture(int id, _Camera camera) {
+    final capture = camera.capture;
+    if (capture == null) return;
+    capture.timer.cancel();
+    camera.capture = null;
+    camera.errors.add(
+      CameraErrorEvent(
+        id,
+        'Image capture failed due to the camera being closed.',
+      ),
+    );
+    log.add('capture #$id failed');
+    capture.shot.completeError(
+      PlatformException(
+        code: 'ImageCaptureException',
+        message:
+            'androidx.camera.core.ImageCaptureException: '
+            'Camera is closed.',
+      ),
+    );
+  }
 }
 
 /// A picture in progress: the future the caller waits on and the timer

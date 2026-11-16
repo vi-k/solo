@@ -239,9 +239,9 @@ once the shot was over and put it out 1 ms later.
 
 A Galaxy A55 makes the same calls, and slower: the torch lit in 0.36 to 0.64 s
 and went out in 0.35 to 0.41 s. Off and on tapped while the torch lit put it
-out once it had lit and lit it again, and the lamp went dark for these two
-calls. On and off tapped during a shot lit the torch once the shot was over and
-put it out with the next call, 0.35 s long.
+out 0.41 s after it had lit and lit it again in 0.36 s. On and off tapped
+during a shot lit the torch once the shot was over and put it out with the next
+call, 0.35 s long.
 
 ### The latest tap in the queue
 
@@ -374,11 +374,11 @@ platform has lost takes no more calls, so after a loss the flag stays up: the
 first tap of the torch on the camera opened next changes only the icon. The
 fake platform keeps the flag when it runs as the Galaxy.
 
-On a Galaxy A55 a lit torch went out before each switch around its four
-cameras, in 0.25 to 0.56 s, and back on the first camera a tap lit it with one
-call. The second back camera of the Galaxy has no flash unit, though the app
-gives it a torch: a tap there takes the screen to `Broken` with
-`java.lang.IllegalStateException: No flash unit`, and the flag stays up as
+On a Galaxy A55 a lit torch went out before the switch while its camera was
+still open, in 0.25 to 0.56 s; around the four cameras and back on the first, a
+tap lit it with one call. The second back camera of the Galaxy has no flash
+unit, though the app gives it a torch: a tap there takes the screen to `Broken`
+with `java.lang.IllegalStateException: No flash unit`, and the flag stays up as
 after a loss, so after Retry the first tap of the torch changes only the icon.
 
 ## A switch during a recording
@@ -546,29 +546,29 @@ and the fake platform on the Galaxy's rules:
 ```text
 capture #1 start
 create back #2
+capture #1 failed
 initialize #2 start
 initialize #2 end
 dispose #1 start
-capture #1 failed
 dispose #1 end
 ```
 
-The second camera is created before the first one is released, and the release
-comes in the middle of the picture. The fake platform ends the picture at the
-release, and so does a Galaxy A55 when the screen is not opened again. The
-plugin's `takePicture` then writes the `value` of a controller that is disposed
-by then, and a debug build throws
+The second camera is created before the first one is released, in the middle of
+the picture. A Galaxy A55 ends the picture right there: its plugin creates a
+camera by unbinding the one before, and the picture fails with
+`Camera is closed.` as the second camera is created. The fake platform does the
+same. The screen catches that `CameraException`, though it has left by then.
+When the screen is not opened again, the Galaxy ends the picture at the release
+instead. The plugin's `takePicture` then writes the `value` of a controller
+that is disposed by then, and a debug build throws
 `A CameraController was used after being disposed.` rather than the
-`CameraException` the screen catches. Opened again at once, a Galaxy ends the
-picture even before the release: its plugin creates a camera by unbinding the
-one before, and the picture fails with `Camera is closed.` as the second camera
-is created. Either way the picture does not reach the home screen. The second
-camera, created while the first one was open, shows an empty preview, and its
-own release throws `IllegalStateException`. An iPhone 13 mini finishes the
-picture before it releases the camera, though a picture that outlasts the
-transition throws the same error in a debug build. Its plugin holds one camera
-at a time, and the release of the first camera closes the second: the preview
-freezes, and a picture on it never comes.
+`CameraException` the screen catches. Either way the picture does not reach the
+home screen. The second camera, created while the first one was open, shows an
+empty preview, and its own release throws `IllegalStateException`. An iPhone 13
+mini finishes the picture before it releases the camera, though a picture that
+outlasts the transition throws the same error in a debug build. Its plugin
+holds one camera at a time, and the release of the first camera closes the
+second: the preview freezes, and a picture on it never comes.
 
 ### A release the next screen waits for
 
@@ -928,10 +928,10 @@ CameraX reports an error it says it will recover from; on iOS a recording that
 cannot add its audio output reports
 `Unable to add Audio input/output to session capture`. The cost is that a
 single failed picture ends in `Broken` as well, and the user taps Retry. On a
-Galaxy A55 this came in one of three runs of the app's test: on a camera just
-opened, CameraX reported `Configuring the camera has failed.` during a picture,
-the platform finished the picture 2.6 s later, and with the camera screen in
-`Broken` by then the picture did not reach the home screen.
+Galaxy A55 this came in one of the three runs on a phone in good order: on a
+camera just opened, CameraX reported `Configuring the camera has failed.`
+during a picture, the platform finished the picture 2.6 s later, and with the
+camera screen in `Broken` by then the picture did not reach the home screen.
 
 On a Galaxy A55 an error of a single operation, such as a torch on a camera
 without one, comes at once for every id that has a listener, while an error of

@@ -256,14 +256,14 @@ void main() {
   /// A case of [permission] runs only with
   /// `--dart-define=probePermissions=true`, and the others only without
   /// it: the host takes the permissions away for that run. Its create may
-  /// throw the denial.
+  /// throw the denial. [skip] skips either kind.
   void phoneTest(
     String name,
     Future<void> Function(WidgetTester tester) body, {
     bool skip = false,
     bool permission = false,
   }) {
-    final skipped = permission ? !permissions : skip || permissions;
+    final skipped = skip || (permission ? !permissions : permissions);
     for (final picked in const ['solo', 'bloc']) {
       testWidgets('$name ($picked)', (tester) async {
         controller = picked;
@@ -988,52 +988,57 @@ void main() {
     // The host takes the permissions of the camera and the microphone away
     // before the run, answers `ACTION deny` by denying each dialog, and
     // `ACTION forget-denials` by letting the next request show the dialog
-    // again; on a Galaxy A55 the second denial is for good.
-    phoneTest('denied, denied for good, and Retry asks no more (real)', (
-      tester,
-    ) async {
-      journal.note('ACTION forget-denials');
-      await settle(tester, const Duration(seconds: 3));
-      int denials() => trace().where((l) => l == 'state Denied').length;
-      for (var round = 1; round <= 3; round++) {
-        // The third opening shows no dialog, and there is nothing to deny.
-        if (round < 3) journal.note('ACTION deny');
-        await tap(tester, round == 1 ? 'open-camera' : 'retry');
+    // again; on a Galaxy A55 the second denial is for good. On an iPhone
+    // the first one is, and the host answers neither action there, so the
+    // case runs on Android.
+    phoneTest(
+      'denied, denied for good, and Retry asks no more (real)',
+      (tester) async {
+        journal.note('ACTION forget-denials');
+        await settle(tester, const Duration(seconds: 3));
+        int denials() => trace().where((l) => l == 'state Denied').length;
+        for (var round = 1; round <= 3; round++) {
+          // The third opening shows no dialog, and there is nothing to deny.
+          if (round < 3) journal.note('ACTION deny');
+          await tap(tester, round == 1 ? 'open-camera' : 'retry');
+          await until(
+            tester,
+            'denial $round',
+            () => denials() == round && shown('retry'),
+            timeout: const Duration(seconds: 40),
+          );
+          final asked = at(
+            round == 1 ? 'tap open-camera' : 'tap retry',
+            last: true,
+          );
+          final took = at('state Denied', last: true) - asked;
+          // A request that shows no dialog still passes through the screen of
+          // the permissions, so `inactive` comes either way. A dialog waits
+          // for the host, which takes seconds to find the button; a denial
+          // without one comes in about 200 ms.
+          final dialog = took > 1000;
+          journal.note(
+            'denial $round ${(state(tester) as Denied).code} dialog $dialog '
+            'in $took ms',
+          );
+          expect((state(tester) as Denied).code, 'CameraAccessDenied');
+          expect(find.text('Allow the app to use the camera.'), findsOneWidget);
+          expect(dialog, round < 3, reason: 'the dialog of round $round');
+          expect(created(), isEmpty);
+        }
+        journal.note('back');
+        await tester.pageBack();
         await until(
           tester,
-          'denial $round',
-          () => denials() == round && shown('retry'),
-          timeout: const Duration(seconds: 40),
+          'the screen closed',
+          () =>
+              view.evaluate().isEmpty &&
+              trace().skipWhile((l) => l != 'back').contains('state Closed'),
         );
-        final asked = at(
-          round == 1 ? 'tap open-camera' : 'tap retry',
-          last: true,
-        );
-        final took = at('state Denied', last: true) - asked;
-        // A request that shows no dialog still passes through the screen of
-        // the permissions, so `inactive` comes either way. A dialog waits
-        // for the host, which takes seconds to find the button; a denial
-        // without one comes in about 200 ms.
-        final dialog = took > 1000;
-        journal.note(
-          'denial $round ${(state(tester) as Denied).code} dialog $dialog '
-          'in $took ms',
-        );
-        expect((state(tester) as Denied).code, 'CameraAccessDenied');
-        expect(find.text('Allow the app to use the camera.'), findsOneWidget);
-        expect(dialog, round < 3, reason: 'the dialog of round $round');
-        expect(created(), isEmpty);
-      }
-      journal.note('back');
-      await tester.pageBack();
-      await until(
-        tester,
-        'the screen closed',
-        () =>
-            view.evaluate().isEmpty &&
-            trace().skipWhile((l) => l != 'back').contains('state Closed'),
-      );
-    }, permission: true);
+      },
+      permission: true,
+      skip: !Platform.isAndroid,
+    );
   });
 
   group('measures', () {

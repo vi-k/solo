@@ -503,9 +503,14 @@ void main() {
       );
       expect(journal.lines, containsRun(_traceUnder(_leaving, _first)));
       expect(captured, isEmpty);
-      const thrown = 'A CameraController was used after being disposed.';
-      expect(uncaught.map((e) => '$e'), [contains(thrown)]);
-      _says(_part(_leaving, _first), thrown);
+      // The screen caught the `CameraException` of the lost shot.
+      expect(uncaught, isEmpty);
+      _says(
+        _part(_leaving, _first),
+        'the picture fails with `Camera is closed.` as the second camera is '
+        'created. The fake platform does the same. The screen catches that '
+        '`CameraException`, though it has left by then.',
+      );
       expect(platform.hasPicture(2), isFalse);
       navigator.currentState!.pop();
       await runZonedGuarded(() async {
@@ -518,6 +523,61 @@ void main() {
         'its own release throws `IllegalStateException`.',
       );
       expect(platform.openCameras, 1);
+    });
+
+    testWidgets('the first attempt, not opened again, throws in debug', (
+      tester,
+    ) async {
+      platform.captureTime = const Duration(seconds: 1);
+      final captured = <XFile>[];
+      final uncaught = <Object>[];
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: navigator, home: const SizedBox.expand()),
+      );
+      // The route lives as long as its screen; nothing awaits it.
+      // ignore: unawaited_futures
+      navigator.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            body: LeavingShutter(
+              cameras: platform.cameras,
+              onCaptured: captured.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(platform.openTime);
+      // The shot throws once the release takes the camera from under it,
+      // in the zone the tap ran in.
+      await runZonedGuarded(
+        () => tester.tap(find.byKey(const Key('shutter'))),
+        (e, _) => uncaught.add(e),
+      );
+      navigator.currentState!.pop();
+      await tester.pumpAndSettle();
+      await tester.pump(platform.captureTime);
+
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'capture #1 start',
+          'dispose #1 start',
+          'capture #1 failed',
+          'dispose #1 end',
+        ]),
+      );
+      expect(platform.log, isNot(contains(startsWith('create back #2'))));
+      expect(captured, isEmpty);
+      const thrown = 'A CameraController was used after being disposed.';
+      expect(uncaught.map((e) => '$e'), [contains(thrown)]);
+      _says(
+        _part(_leaving, _first),
+        'When the screen is not opened again, the Galaxy ends the picture at '
+        'the release instead.',
+      );
+      _says(_part(_leaving, _first), thrown);
     });
 
     testWidgets('the release waits for the shot, the next screen for it', (
