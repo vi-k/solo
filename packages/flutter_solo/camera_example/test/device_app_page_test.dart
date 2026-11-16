@@ -484,7 +484,7 @@ void main() {
         codeMissingFrom(
           _doc,
           'lib/camera_session.dart',
-          alsoIn: [_steps],
+          alsoIn: ['lib/camera_screen.dart', _steps],
           under: _recordingQueue,
         ),
         isEmpty,
@@ -501,6 +501,112 @@ void main() {
         'the recording goes on from the front one. The stop starts once the '
         'switch has ended and gives one file.',
       );
+      final released = session.release().done;
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
+    });
+
+    testWidgets('the record button shows the latest tap', (tester) async {
+      final record = find.byKey(const Key('record'));
+      Finder showing(IconData icon) =>
+          find.descendant(of: record, matching: find.byIcon(icon));
+      final captured = <XFile>[];
+      final session = CameraSession(onCaptured: captured.add);
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CameraView(session: session),
+        ),
+      );
+      session.open();
+      await tester.pump(platform.openTime);
+      await tester.tap(record);
+      await tester.pump();
+      expect(showing(Icons.stop), findsOneWidget);
+      expect(platform.log.last, 'record #1 start');
+      await tester.tap(record);
+      await tester.pump();
+      expect(showing(Icons.videocam), findsOneWidget);
+      await tester.tap(record);
+      await tester.pump();
+      expect(showing(Icons.stop), findsOneWidget);
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.recordStartTime);
+      await tester.pump();
+
+      expect(
+        platform.log.where(
+          (line) => line.startsWith('record ') || line.startsWith('stop '),
+        ),
+        [
+          'record #1 start',
+          'record #1 started',
+          'stop #1 start',
+          'record #1 end',
+          'record #1 start',
+          'record #1 started',
+        ],
+      );
+      expect(captured, hasLength(1));
+      expect((session.currentState as Ready).recording, isTrue);
+      expect(showing(Icons.stop), findsOneWidget);
+      final part = _part(_recording, _recordingQueue);
+      _says(
+        part,
+        'A tap of stop in that time waits behind the start, and the video '
+        'comes out short. The button shows record again, and a tap after '
+        'that queues a new start behind the stop.',
+      );
+      _says(
+        part,
+        'Every tap reaches the platform as a job of its own, in order',
+      );
+      await tester.pumpWidget(const SizedBox());
+      final released = session.release().done;
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      expect(await released, isA<Done<void>>());
+      await session.close();
+      expect(captured, hasLength(2));
+    });
+
+    testWidgets('a job that finds the camera lost gives the state back', (
+      tester,
+    ) async {
+      final record = find.byKey(const Key('record'));
+      final session = CameraSession(onCaptured: (XFile file) {});
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CameraView(session: session),
+        ),
+      );
+      session.open();
+      await tester.pump(platform.openTime);
+      await tester.tap(record);
+      await tester.pump(platform.recordStartTime ~/ 2);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      session.open();
+      await tester.pump(platform.openTime);
+      await tester.pump();
+
+      expect(session.recordingAsked.value, isNull);
+      expect(
+        find.descendant(of: record, matching: find.byIcon(Icons.videocam)),
+        findsOneWidget,
+      );
+      _says(
+        _part(_recording, _recordingQueue),
+        'When the job of the latest tap ends, whether it ran or found the '
+        'camera lost, `whenFinished` forgets what the tap asked, and the '
+        'button follows the state again.',
+      );
+      await tester.pumpWidget(const SizedBox());
       final released = session.release().done;
       await tester.pump(platform.disposeTime);
       expect(await released, isA<Done<void>>());
@@ -1432,8 +1538,10 @@ void main() {
             'tap has passed it | `Policy.keepLatest` on the key of '
             '`toggleTorch`; the target taken at the tap; `whenFinished` | '
             'nothing more |',
-        '| A switch during a recording | the same handler | the same queue '
-            '| nothing more |',
+        '| A switch during a recording | the same handler; '
+            '`recordingAsked` and `_recordingPending`, set in `add` | the '
+            'same queue; `recordingAsked`, kept by `_ask` until the job of '
+            'the latest tap ends | nothing more |',
         '| Leaving the screen | `Release` with a `Completer`; `_letGo` with '
             '`leaving`; `AsyncDataScope` with a `scopeKey`; '
             '`BlocProvider.value` | '

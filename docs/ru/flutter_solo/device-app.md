@@ -486,39 +486,93 @@ stop #2 start
 
 ### Запись в очереди
 
-Старт и стоп записи — задачи в очереди кнопок:
+Старт и стоп записи — задачи в очереди кнопок. Каждая ещё и хранит
+в `recordingAsked`, просило ли её нажатие запись, пока её задача не кончится
+или её место не займёт более поздний старт или стоп. `Ready.recording` остаётся
+тем, что сделала платформа:
 
 ```dart
-Job<void> startRecording() => enqueue<Ready, void>((ctx) async {
-  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-  if (recording) return;
-  await ctx.join(camera.startVideoRecording);
-  ctx.emit(
-    Ready(camera: camera, flash: flash, recording: true, torch: torch),
-  );
-});
+ValueListenable<bool?> get recordingAsked => _recordingAsked;
+final _recordingAsked = ValueNotifier<bool?>(null);
 
-Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-  if (!recording) return null;
-  final file = await ctx.join(camera.stopVideoRecording);
-  ctx.emit(
-    Ready(camera: camera, flash: flash, recording: false, torch: torch),
-  );
-  onCaptured(file);
-  return file;
-});
+Job<Object?>? _recordingJob;
+
+Job<void> startRecording() => _ask(
+  true,
+  enqueue<Ready, void>((ctx) async {
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+    if (recording) return;
+    await ctx.join(camera.startVideoRecording);
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: true, torch: torch),
+    );
+  }),
+);
+
+Job<XFile?> stopRecording() => _ask(
+  false,
+  enqueue<Ready, XFile?>((ctx) async {
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+    if (!recording) return null;
+    final file = await ctx.join(camera.stopVideoRecording);
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: false, torch: torch),
+    );
+    onCaptured(file);
+    return file;
+  }),
+);
+
+J _ask<J extends Job<Object?>>(bool on, J job) {
+  _recordingJob = job;
+  _recordingAsked.value = on;
+  job.whenFinished((_) {
+    if (!identical(_recordingJob, job)) return;
+    _recordingJob = null;
+    _recordingAsked.value = null;
+  });
+  return job;
+}
 ```
 
 `stopRecording` приложения — в разделе [Потеря камеры](#потеря-камеры).
+
+Кнопка записи показывает то, о чём просило последнее нажатие, а когда ни одно
+нажатие не ждёт, — состояние:
+
+```dart
+ValueListenableBuilder<bool?>(
+  valueListenable: widget.session.recordingAsked,
+  builder: (context, asked, _) {
+    final on = asked ?? recording;
+    return IconButton(
+      key: const Key('record'),
+      onPressed: on
+          ? widget.session.stopRecording
+          : widget.session.startRecording,
+      icon: Icon(on ? Icons.stop : Icons.videocam),
+    );
+  },
+),
+```
+
+С нажатия записи кнопка показывает стоп, пока платформа ещё стартует запись:
+на iPhone 13 mini это занимало до 12,6 с в debug-сборке. Нажатие стопа в это
+время ждёт за стартом, и видео выходит коротким. Кнопка снова показывает
+запись, и следующее нажатие ставит в очередь новый старт за стопом. Каждое
+нажатие доходит до платформы своей задачей, по порядку: в отличие от нажатий
+фонарика, ни одно не занимает место другого, потому что старт и стоп — это
+видео. Когда задача последнего нажатия кончается — выполнилась она или застала
+камеру потерянной, — `whenFinished` забывает, о чём просило нажатие, и кнопка
+снова следует за состоянием.
 
 Смена, нажатая, пока запись стартует, ждёт за стартом, как смена во время
 снимка ждёт за снимком. Когда смена выполняется, запись уже идёт,
 и `setDescription` отдаёт ей следующую камеру. Нажатие стопа во время смены
 ждёт за сменой. Идёт ли запись, задача читает из состояния, которое ей оставила
-предыдущая задача, поэтому второе нажатие записи или стопа ничего не делает.
-Нажатие записи, смены, пока запись стартует, затем стопа во время смены,
-на фейковой платформе по правилам iPhone:
+предыдущая задача, поэтому старт за стартом или стоп за стопом ничего
+не делает. Нажатие записи, смены, пока запись стартует, затем стопа во время
+смены, на фейковой платформе по правилам iPhone:
 
 ```text
 record #1 start
@@ -1159,23 +1213,26 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
 который не удался, — последний путь к `Broken`:
 
 ```dart
-Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-  if (!recording) return null;
-  final XFile file;
-  try {
-    file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
-  } on CameraException catch (error) {
-    ctx.emit(Broken(error));
-    _letGo(camera);
-    return null;
-  }
-  ctx.emit(
-    Ready(camera: camera, flash: flash, recording: false, torch: torch),
-  );
-  onCaptured(file);
-  return file;
-});
+Job<XFile?> stopRecording() => _ask(
+  false,
+  enqueue<Ready, XFile?>((ctx) async {
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+    if (!recording) return null;
+    final XFile file;
+    try {
+      file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
+    } on CameraException catch (error) {
+      ctx.emit(Broken(error));
+      _letGo(camera);
+      return null;
+    }
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: false, torch: torch),
+    );
+    onCaptured(file);
+    return file;
+  }),
+);
 ```
 
 Контроллер плагина снимает `isRecordingVideo` только после удачного стопа.
@@ -1726,7 +1783,8 @@ CameraBloc({required this.onCaptured}) : super(const Closed()) {
 читает нажатие, только когда команда перед ним кончилась, а к тому времени
 второе нажатие уже в очереди. Блок отбрасывает его в `add`. Там же нажатие
 фонарика получает цель — от предыдущего нажатия — и идёт дальше как `SetTorch`
-с целью и номером нажатия:
+с целью и номером нажатия. Старт или стоп записи ставит там тот же
+`recordingAsked`, что у сессии, и засчитывает себя в `_recordingPending`:
 
 ```dart
 /// [TakePicture] ждёт в очереди или выполняется: нажатие во время снимка
@@ -1739,11 +1797,25 @@ bool _shooting = false;
 bool? _torchAsked;
 int _torchTaps = 0;
 
+/// Просил ли запись последний [StartRecording] или [StopRecording], пока
+/// он не выполнился; `null`, когда ни один не ждёт. Кнопка записи
+/// показывает это, пока платформа стартует или останавливает запись.
+ValueListenable<bool?> get recordingAsked => _recordingAsked;
+final _recordingAsked = ValueNotifier<bool?>(null);
+
+/// Сколько [StartRecording] и [StopRecording] ждут в очереди или
+/// выполняются.
+int _recordingPending = 0;
+
 @override
 void add(CameraEvent event) {
   if (event is TakePicture) {
     if (_shooting) return;
     _shooting = true;
+  }
+  if (event is StartRecording || event is StopRecording) {
+    _recordingPending++;
+    _recordingAsked.value = event is StartRecording;
   }
   if (event is ToggleTorch) {
     final lit = switch (state) {
@@ -1762,7 +1834,9 @@ void add(CameraEvent event) {
 `sequential()` не умеет вынуть событие из очереди, поэтому каждый `SetTorch`
 доходит до обработчика. Обработчик ничего не вызывает для того, чей номер
 обогнало более позднее нажатие, и для того, что застаёт фонарик там, куда
-просит, а последний из них забывает цель.
+просит, а последний из них забывает цель. Каждый старт и стоп записи
+выполняется, и `_run` списывает его, когда он кончился: последний очищает
+`recordingAsked`, и кнопка снова следует за состоянием.
 
 Потеря меняет состояние, пока команда ждёт камеру. Команда над готовой камерой
 держит состояние, с которого начала, и смотрит на него снова после каждого
@@ -1891,7 +1965,7 @@ Future<void> letCloseEnd(WidgetTester tester) => tester.runAsync(() async {});
 | --- | --- | --- | --- |
 | Быстрые нажатия | `on<CameraCommand>` с `sequential()`; `_shooting`, который ставится в `add` | очередь `Solo`; `Policy.droppable` на ключе `takePicture` | ничего сверх |
 | Быстрые нажатия фонарика | цель и номер нажатия, которые ставятся в `add`; `SetTorch`, который обработчик пропускает, когда его обогнало более позднее нажатие | `Policy.keepLatest` на ключе `toggleTorch`; цель, взятая в момент нажатия; `whenFinished` | ничего сверх |
-| Смена камеры во время записи | тот же обработчик | та же очередь | ничего сверх |
+| Смена камеры во время записи | тот же обработчик; `recordingAsked` и `_recordingPending`, которые ставятся в `add` | та же очередь; `recordingAsked`, который `_ask` держит, пока не кончится задача последнего нажатия | ничего сверх |
 | Уход с экрана | `Release` с `Completer`; `_letGo` с `leaving`; `AsyncDataScope` со `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` со `scopeKey` | bloc: `letCloseEnd`, для `close()` |
 | Уход в фон | `Suspend` и `Resume` в очереди | `suspend()` и `resume()` в очереди | для стопа, который ломается, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | Потеря камеры | свой `on<CameraLost>`; проверка состояния после каждого `await`; `LetGo` в очереди; `_camera` и `_lost`; `close()`, который отменяет `_errors` | `externalSetState`; `ctx.join` при каждом `await` команды над `Ready`; `_letGo` с `first: true`; `onClose`, который отменяет `_errors` | для упавшей смены камеры во время записи, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |

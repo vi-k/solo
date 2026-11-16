@@ -135,12 +135,20 @@ class _CameraViewState extends State<CameraView> {
                   onPressed: widget.session.takePicture,
                   icon: const Icon(Icons.camera),
                 ),
-                IconButton(
-                  key: const Key('record'),
-                  onPressed: recording
-                      ? widget.session.stopRecording
-                      : widget.session.startRecording,
-                  icon: Icon(recording ? Icons.stop : Icons.videocam),
+                // The button shows what the latest tap asked for, while the
+                // platform starts or stops the recording.
+                ValueListenableBuilder<bool?>(
+                  valueListenable: widget.session.recordingAsked,
+                  builder: (context, asked, _) {
+                    final on = asked ?? recording;
+                    return IconButton(
+                      key: const Key('record'),
+                      onPressed: on
+                          ? widget.session.stopRecording
+                          : widget.session.startRecording,
+                      icon: Icon(on ? Icons.stop : Icons.videocam),
+                    );
+                  },
                 ),
                 IconButton(
                   key: const Key('switch'),

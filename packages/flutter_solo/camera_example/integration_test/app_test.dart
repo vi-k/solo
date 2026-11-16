@@ -609,6 +609,84 @@ void main() {
     });
   });
 
+  group('the record button while a recording starts', () {
+    /// Whether the record button shows [icon].
+    bool showing(IconData icon) => find
+        .descendant(
+          of: find.byKey(const Key('record')),
+          matching: find.byIcon(icon),
+        )
+        .evaluate()
+        .isNotEmpty;
+
+    phoneTest('shows stop at once, and a stop waits for the start', (
+      tester,
+    ) async {
+      await openCamera(tester);
+      final id = created().single;
+      await press(tester, 'record');
+      await reach('record #$id start');
+      await tester.pump();
+      expect(showing(Icons.stop), isTrue, reason: 'record shows no stop');
+      await press(tester, 'record');
+      await tester.pump();
+      expect(showing(Icons.videocam), isTrue, reason: 'stop shows no record');
+      await until(
+        tester,
+        'the stop',
+        () => trace().contains('stop #$id end') && !recording(tester),
+      );
+
+      // A start on an iPhone 13 mini took about 180 ms in a profile build.
+      // Where the start ends before the second tap, that tap is a stop
+      // after the start, and the case checks the order and the one file
+      // alone.
+      final inStart =
+          trace().lastIndexOf('tap record') <
+          trace().indexOf('record #$id end');
+      final started = at('record #$id end') - at('record #$id start');
+      final tapped = at('tap record', last: true) - at('record #$id start');
+      journal.note(
+        inStart
+            ? 'stop tapped $tapped ms into a start of $started ms'
+            : 'stop tapped after the start, of $started ms',
+      );
+      expect(
+        trace().where(
+          (line) => line.startsWith('record #') || line.startsWith('stop #'),
+        ),
+        [
+          'record #$id start',
+          'record #$id end',
+          'stop #$id start',
+          'stop #$id end',
+        ],
+      );
+      if (inStart) {
+        expect(
+          trace(),
+          containsAllInOrder([
+            'record #$id start',
+            'tap record',
+            'record #$id end',
+            'state Ready recording true',
+            'stop #$id start',
+            'stop #$id end',
+            'state Ready recording false',
+          ]),
+        );
+      }
+      expect(showing(Icons.videocam), isTrue);
+      await goBack(tester);
+      expectShot();
+      final video = lastShot()!;
+      expect(video.path, endsWith('.mp4'));
+      final seconds = videoSeconds(video);
+      journal.note('video ${video.path} $seconds s');
+      expect(seconds, greaterThan(0));
+    });
+  });
+
   group('leaving the screen', () {
     phoneTest('the shot reaches home, and the next screen waits', (
       tester,

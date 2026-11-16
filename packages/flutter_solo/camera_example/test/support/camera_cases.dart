@@ -964,6 +964,107 @@ void controllerCases(MakeDriver make) {
     });
   });
 
+  group('the record button while a recording starts', () {
+    final record = find.byKey(const Key('record'));
+
+    /// The record button with the icon [icon].
+    Finder showing(IconData icon) =>
+        find.descendant(of: record, matching: find.byIcon(icon));
+
+    /// The calls of the recording the platform got.
+    Iterable<String> recordings() => platform.log.where(
+      (line) => line.startsWith('record ') || line.startsWith('stop '),
+    );
+
+    /// Taps the record button and builds the frame after the tap.
+    Future<void> tapRecord(WidgetTester tester) async {
+      await tester.tap(record);
+      await tester.pump();
+    }
+
+    testWidgets('shows stop at once, and a stop waits for the start', (
+      tester,
+    ) async {
+      final controller = await openShown(tester);
+      await tapRecord(tester);
+      expect(showing(Icons.stop), findsOneWidget);
+      await tester.pump(platform.recordStartTime ~/ 2);
+      expect(platform.log.last, 'record #1 start');
+      await tapRecord(tester);
+      expect(showing(Icons.videocam), findsOneWidget);
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.stopTime);
+      await tester.pump();
+
+      expect(recordings(), [
+        'record #1 start',
+        'record #1 started',
+        'stop #1 start',
+        'record #1 end',
+      ]);
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect((controller.currentState as Ready).recording, isFalse);
+      expect(showing(Icons.videocam), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('start, stop and start: each tap in its turn', (tester) async {
+      final controller = await openShown(tester);
+      await tapRecord(tester);
+      await tester.pump(platform.recordStartTime ~/ 2);
+      await tapRecord(tester);
+      await tapRecord(tester);
+      expect(showing(Icons.stop), findsOneWidget);
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.recordStartTime);
+      await tester.pump();
+
+      expect(recordings(), [
+        'record #1 start',
+        'record #1 started',
+        'stop #1 start',
+        'record #1 end',
+        'record #1 start',
+        'record #1 started',
+      ]);
+      expect(captured, hasLength(1));
+      expect((controller.currentState as Ready).recording, isTrue);
+      expect(showing(Icons.stop), findsOneWidget);
+      await tapRecord(tester);
+      await tester.pump(platform.stopTime);
+      expect(captured, hasLength(2));
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('a start the loss of the camera cuts short leaves no stop', (
+      tester,
+    ) async {
+      final controller = await openShown(tester);
+      await tapRecord(tester);
+      expect(showing(Icons.stop), findsOneWidget);
+      await tester.pump(platform.recordStartTime ~/ 2);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await tester.pump();
+      expect(controller.currentState, isA<Broken>());
+      await tester.pump(platform.recordStartTime);
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+      await tester.tap(find.byKey(const Key('retry')));
+      await tester.pump(platform.openTime);
+      await tester.pump();
+
+      expect(controller.currentState, isA<Ready>());
+      expect((controller.currentState as Ready).recording, isFalse);
+      expect(showing(Icons.videocam), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+  });
+
   group('the screen leaves during a recording', () {
     /// Opens the camera and records, with errors of commands nobody waits
     /// for in [unanswered].

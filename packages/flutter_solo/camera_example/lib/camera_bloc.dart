@@ -10,6 +10,7 @@ import 'dart:async';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:camera/camera.dart';
 import 'package:camera_platform_interface/camera_platform_interface.dart';
+import 'package:flutter/foundation.dart';
 // Deprecated from Flutter 3.47 for package:material_ui, whose releases
 // since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
 // ignore: deprecated_member_use
@@ -143,11 +144,25 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   bool? _torchAsked;
   int _torchTaps = 0;
 
+  /// Whether the latest [StartRecording] or [StopRecording] asked for a
+  /// recording, until it has run; `null` when none is pending. The record
+  /// button shows it while the platform starts or stops the recording.
+  ValueListenable<bool?> get recordingAsked => _recordingAsked;
+  final _recordingAsked = ValueNotifier<bool?>(null);
+
+  /// How many [StartRecording] and [StopRecording] wait in the queue or
+  /// run.
+  int _recordingPending = 0;
+
   @override
   void add(CameraEvent event) {
     if (event is TakePicture) {
       if (_shooting) return;
       _shooting = true;
+    }
+    if (event is StartRecording || event is StopRecording) {
+      _recordingPending++;
+      _recordingAsked.value = event is StartRecording;
     }
     if (event is ToggleTorch) {
       final lit = switch (state) {
@@ -214,6 +229,10 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
       if (command is TakePicture) _shooting = false;
       if (command is SetTorch && command.tap == _torchTaps) {
         _torchAsked = null;
+      }
+      if ((command is StartRecording || command is StopRecording) &&
+          --_recordingPending == 0) {
+        _recordingAsked.value = null;
       }
     }
   }
@@ -605,14 +624,20 @@ class _BlocCameraViewState extends State<BlocCameraView> {
                     onPressed: () => bloc.add(const TakePicture()),
                     icon: const Icon(Icons.camera),
                   ),
-                  IconButton(
-                    key: const Key('record'),
-                    onPressed: () => bloc.add(
-                      recording
-                          ? const StopRecording()
-                          : const StartRecording(),
-                    ),
-                    icon: Icon(recording ? Icons.stop : Icons.videocam),
+                  // The button shows what the latest tap asked for, while
+                  // the platform starts or stops the recording.
+                  ValueListenableBuilder<bool?>(
+                    valueListenable: bloc.recordingAsked,
+                    builder: (context, asked, _) {
+                      final on = asked ?? recording;
+                      return IconButton(
+                        key: const Key('record'),
+                        onPressed: () => bloc.add(
+                          on ? const StopRecording() : const StartRecording(),
+                        ),
+                        icon: Icon(on ? Icons.stop : Icons.videocam),
+                      );
+                    },
                   ),
                   IconButton(
                     key: const Key('switch'),

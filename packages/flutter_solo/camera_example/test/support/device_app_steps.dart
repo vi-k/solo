@@ -62,16 +62,23 @@ final class SessionBeforeLosing extends Solo<CameraState> {
 
   /// "A switch during a recording": stops the video and hands it to
   /// [onCaptured].
-  Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-    if (!recording) return null;
-    final file = await ctx.join(camera.stopVideoRecording);
-    ctx.emit(
-      Ready(camera: camera, flash: flash, recording: false, torch: torch),
-    );
-    onCaptured(file);
-    return file;
-  });
+  Job<XFile?> stopRecording() => _ask(
+    false,
+    enqueue<Ready, XFile?>((ctx) async {
+      final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+      if (!recording) return null;
+      final file = await ctx.join(camera.stopVideoRecording);
+      ctx.emit(
+        Ready(camera: camera, flash: flash, recording: false, torch: torch),
+      );
+      onCaptured(file);
+      return file;
+    }),
+  );
+
+  /// Stands for the method of `CameraSession`, which did not change; the
+  /// steps are not run.
+  J _ask<J extends Job<Object?>>(bool on, J job) => job;
 }
 
 /// `CameraSession` before "A denied permission": a failed opening is

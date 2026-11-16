@@ -485,39 +485,94 @@ alike, and a stop tapped during that switch ends after it, with one file.
 
 ### The recording in the queue
 
-The start and the stop of a recording are jobs in the queue of the buttons:
+The start and the stop of a recording are jobs in the queue of the buttons.
+Each also keeps in `recordingAsked` whether its tap asked for a recording,
+until its job ends or a later start or stop takes its place. `Ready.recording`
+stays what the platform has done:
 
 ```dart
-Job<void> startRecording() => enqueue<Ready, void>((ctx) async {
-  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-  if (recording) return;
-  await ctx.join(camera.startVideoRecording);
-  ctx.emit(
-    Ready(camera: camera, flash: flash, recording: true, torch: torch),
-  );
-});
+ValueListenable<bool?> get recordingAsked => _recordingAsked;
+final _recordingAsked = ValueNotifier<bool?>(null);
 
-Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-  if (!recording) return null;
-  final file = await ctx.join(camera.stopVideoRecording);
-  ctx.emit(
-    Ready(camera: camera, flash: flash, recording: false, torch: torch),
-  );
-  onCaptured(file);
-  return file;
-});
+Job<Object?>? _recordingJob;
+
+Job<void> startRecording() => _ask(
+  true,
+  enqueue<Ready, void>((ctx) async {
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+    if (recording) return;
+    await ctx.join(camera.startVideoRecording);
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: true, torch: torch),
+    );
+  }),
+);
+
+Job<XFile?> stopRecording() => _ask(
+  false,
+  enqueue<Ready, XFile?>((ctx) async {
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+    if (!recording) return null;
+    final file = await ctx.join(camera.stopVideoRecording);
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: false, torch: torch),
+    );
+    onCaptured(file);
+    return file;
+  }),
+);
+
+J _ask<J extends Job<Object?>>(bool on, J job) {
+  _recordingJob = job;
+  _recordingAsked.value = on;
+  job.whenFinished((_) {
+    if (!identical(_recordingJob, job)) return;
+    _recordingJob = null;
+    _recordingAsked.value = null;
+  });
+  return job;
+}
 ```
 
 The app's `stopRecording` is in [Losing the camera](#losing-the-camera).
+
+The record button shows what the latest tap asked for, and the state when no
+tap is pending:
+
+```dart
+ValueListenableBuilder<bool?>(
+  valueListenable: widget.session.recordingAsked,
+  builder: (context, asked, _) {
+    final on = asked ?? recording;
+    return IconButton(
+      key: const Key('record'),
+      onPressed: on
+          ? widget.session.stopRecording
+          : widget.session.startRecording,
+      icon: Icon(on ? Icons.stop : Icons.videocam),
+    );
+  },
+),
+```
+
+From the tap of record on, the button shows stop, while the platform still
+starts the recording: on an iPhone 13 mini that took up to 12.6 s in a debug
+build. A tap of stop in that time waits behind the start, and the video comes
+out short. The button shows record again, and a tap after that queues a new
+start behind the stop. Every tap reaches the platform as a job of its own, in
+order: unlike the taps of the torch, none takes the place of another, since a
+start and a stop make a video. When the job of the latest tap ends, whether it
+ran or found the camera lost, `whenFinished` forgets what the tap asked, and
+the button follows the state again.
 
 A switch tapped while the recording starts waits behind the start, as a switch
 during a shot waits behind the shot. When the switch runs, the recording is on,
 and `setDescription` hands the next camera to it. A tap of stop during the
 switch waits behind the switch. A job reads whether a recording is on from the
-state, which the job before it has left, so a second tap of record or of stop
-does nothing. A tap of record, of the switch while the recording starts, then
-of stop during the switch, with the fake platform on the iPhone's rules:
+state, which the job before it has left, so a start behind a start, or a stop
+behind a stop, does nothing. A tap of record, of the switch while the recording
+starts, then of stop during the switch, with the fake platform on the iPhone's
+rules:
 
 ```text
 record #1 start
@@ -1168,23 +1223,26 @@ goes on recording, and a failure stays the error of the job with the state
 `Ready`. A stop that fails is the last way to `Broken`:
 
 ```dart
-Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-  final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-  if (!recording) return null;
-  final XFile file;
-  try {
-    file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
-  } on CameraException catch (error) {
-    ctx.emit(Broken(error));
-    _letGo(camera);
-    return null;
-  }
-  ctx.emit(
-    Ready(camera: camera, flash: flash, recording: false, torch: torch),
-  );
-  onCaptured(file);
-  return file;
-});
+Job<XFile?> stopRecording() => _ask(
+  false,
+  enqueue<Ready, XFile?>((ctx) async {
+    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+    if (!recording) return null;
+    final XFile file;
+    try {
+      file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
+    } on CameraException catch (error) {
+      ctx.emit(Broken(error));
+      _letGo(camera);
+      return null;
+    }
+    ctx.emit(
+      Ready(camera: camera, flash: flash, recording: false, torch: torch),
+    );
+    onCaptured(file);
+    return file;
+  }),
+);
 ```
 
 The plugin's controller turns `isRecordingVideo` off only after a stop that has
@@ -1739,7 +1797,9 @@ and the switch would no longer wait for the shot. In the shared handler
 `sequential()` reads a tap only when the command before it is over, and by then
 the second tap is in the queue. The bloc drops it in `add`. A tap of the torch
 gets its target there too, from the tap before it, and goes on as `SetTorch`
-with the target and the number of the tap:
+with the target and the number of the tap. A start or a stop of a recording
+sets there the `recordingAsked` the session has, and counts itself in
+`_recordingPending`:
 
 ```dart
 /// A [TakePicture] waits in the queue or runs: a tap during a shot is
@@ -1752,11 +1812,25 @@ bool _shooting = false;
 bool? _torchAsked;
 int _torchTaps = 0;
 
+/// Whether the latest [StartRecording] or [StopRecording] asked for a
+/// recording, until it has run; `null` when none is pending. The record
+/// button shows it while the platform starts or stops the recording.
+ValueListenable<bool?> get recordingAsked => _recordingAsked;
+final _recordingAsked = ValueNotifier<bool?>(null);
+
+/// How many [StartRecording] and [StopRecording] wait in the queue or
+/// run.
+int _recordingPending = 0;
+
 @override
 void add(CameraEvent event) {
   if (event is TakePicture) {
     if (_shooting) return;
     _shooting = true;
+  }
+  if (event is StartRecording || event is StopRecording) {
+    _recordingPending++;
+    _recordingAsked.value = event is StartRecording;
   }
   if (event is ToggleTorch) {
     final lit = switch (state) {
@@ -1775,7 +1849,9 @@ void add(CameraEvent event) {
 `sequential()` cannot take an event out of the queue, so every `SetTorch`
 reaches the handler. The handler calls nothing for one whose number a later tap
 has passed, nor for one that finds the torch where it asks, and the last of
-them forgets the target.
+them forgets the target. Every start and stop of a recording runs, and `_run`
+counts each off once it is over: the last one clears `recordingAsked`, and the
+button follows the state again.
 
 A loss changes the state while a command waits on the camera. A command on a
 ready camera keeps the state it started from and looks at it again after every
@@ -1904,7 +1980,7 @@ What each situation takes, on bloc and on solo:
 | --- | --- | --- | --- |
 | Rapid taps | `on<CameraCommand>` with `sequential()`; `_shooting`, set in `add` | the queue of `Solo`; `Policy.droppable` on the key of `takePicture` | nothing more |
 | Rapid taps of the torch | the target and the number of the tap, set in `add`; `SetTorch`, which the handler skips when a later tap has passed it | `Policy.keepLatest` on the key of `toggleTorch`; the target taken at the tap; `whenFinished` | nothing more |
-| A switch during a recording | the same handler | the same queue | nothing more |
+| A switch during a recording | the same handler; `recordingAsked` and `_recordingPending`, set in `add` | the same queue; `recordingAsked`, kept by `_ask` until the job of the latest tap ends | nothing more |
 | Leaving the screen | `Release` with a `Completer`; `_letGo` with `leaving`; `AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` with a `scopeKey` | bloc: `letCloseEnd`, for `close()` |
 | Going to the background | `Suspend` and `Resume` in the queue | `suspend()` and `resume()` in the queue | for a stop that breaks, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | Losing the camera | `on<CameraLost>` of its own; a check of the state after every `await`; `LetGo` in the queue; `_camera` and `_lost`; `close()` that cancels `_errors` | `externalSetState`; `ctx.join` at every `await` of a command on `Ready`; `_letGo` with `first: true`; `onClose` that cancels `_errors` | for a failed switch during a recording, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |

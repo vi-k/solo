@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:camera_platform_interface/camera_platform_interface.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
 import 'camera_lights.dart';
@@ -150,15 +151,27 @@ final class CameraSession extends Solo<CameraState> {
     }
   });
 
+  /// Whether the latest start or stop asked for a recording, until its job
+  /// ends; `null` when none is pending. The record button shows it while
+  /// the platform starts or stops the recording.
+  ValueListenable<bool?> get recordingAsked => _recordingAsked;
+  final _recordingAsked = ValueNotifier<bool?>(null);
+
+  /// The job of the latest start or stop, until it ends.
+  Job<Object?>? _recordingJob;
+
   /// Starts a video; a tap during a recording adds nothing.
-  Job<void> startRecording() => enqueue<Ready, void>((ctx) async {
-    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-    if (recording) return;
-    await ctx.join(camera.startVideoRecording);
-    ctx.emit(
-      Ready(camera: camera, flash: flash, recording: true, torch: torch),
-    );
-  });
+  Job<void> startRecording() => _ask(
+    true,
+    enqueue<Ready, void>((ctx) async {
+      final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+      if (recording) return;
+      await ctx.join(camera.startVideoRecording);
+      ctx.emit(
+        Ready(camera: camera, flash: flash, recording: true, torch: torch),
+      );
+    }),
+  );
 
   /// Stops the video and hands it to [onCaptured]; with no recording it
   /// gives `null`.
@@ -166,23 +179,39 @@ final class CameraSession extends Solo<CameraState> {
   /// A stop that fails leaves the plugin's controller recording for good,
   /// so the camera is [Broken] and let go. A stop the loss of the camera
   /// cuts short still hands its video on, through `discard`.
-  Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
-    final Ready(:camera, :flash, :recording, :torch) = ctx.state;
-    if (!recording) return null;
-    final XFile file;
-    try {
-      file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
-    } on CameraException catch (error) {
-      ctx.emit(Broken(error));
-      _letGo(camera);
-      return null;
-    }
-    ctx.emit(
-      Ready(camera: camera, flash: flash, recording: false, torch: torch),
-    );
-    onCaptured(file);
-    return file;
-  });
+  Job<XFile?> stopRecording() => _ask(
+    false,
+    enqueue<Ready, XFile?>((ctx) async {
+      final Ready(:camera, :flash, :recording, :torch) = ctx.state;
+      if (!recording) return null;
+      final XFile file;
+      try {
+        file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
+      } on CameraException catch (error) {
+        ctx.emit(Broken(error));
+        _letGo(camera);
+        return null;
+      }
+      ctx.emit(
+        Ready(camera: camera, flash: flash, recording: false, torch: torch),
+      );
+      onCaptured(file);
+      return file;
+    }),
+  );
+
+  /// Keeps [on] in [recordingAsked] until [job] ends, unless a later start
+  /// or stop takes its place.
+  J _ask<J extends Job<Object?>>(bool on, J job) {
+    _recordingJob = job;
+    _recordingAsked.value = on;
+    job.whenFinished((_) {
+      if (!identical(_recordingJob, job)) return;
+      _recordingJob = null;
+      _recordingAsked.value = null;
+    });
+    return job;
+  }
 
   /// Stops a recording and hands it to [onCaptured], then frees the camera
   /// on the platform: the app has left the screen.
