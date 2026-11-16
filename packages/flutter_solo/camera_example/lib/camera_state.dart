@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 
 /// What the camera screen shows.
@@ -57,3 +59,22 @@ final class Denied extends CameraState {
 /// the torch to the back camera, and to no other.
 bool hasTorch(CameraDescription camera) =>
     camera.lensDirection == CameraLensDirection.back;
+
+/// How long a camera the platform lost has to stop its recording.
+///
+/// A Galaxy A55 stopped a recording on a camera another app had taken in
+/// 1.1 s, as long as a stop takes there when the app leaves; a stop that
+/// takes longer than this loses the file, and the camera is let go.
+const lostStopTimeout = Duration(seconds: 3);
+
+/// Stops the recording of [camera], which the platform lost, and gives its
+/// file: `null` when the stop fails or takes longer than [lostStopTimeout].
+Future<XFile?> stopLost(CameraController camera) async {
+  try {
+    return await camera.stopVideoRecording().timeout(lostStopTimeout);
+  } on CameraException {
+    return null;
+  } on TimeoutException {
+    return null;
+  }
+}

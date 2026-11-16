@@ -905,12 +905,18 @@ void _watch(CameraController camera) {
 void _lose(String description) {
   if (currentState case Ready(:final camera)) {
     externalSetState(Broken(description));
-    _letGo(camera);
+    _letGo(camera, lost: true);
   }
 }
 
-void _letGo(CameraController camera) => enqueueJob(
-  job<CameraState, void>((ctx) => ctx.join(camera.dispose)),
+void _letGo(CameraController camera, {bool lost = false}) => enqueueJob(
+  job<CameraState, void>((ctx) async {
+    if (lost && camera.value.isRecordingVideo) {
+      final file = await ctx.join(() => stopLost(camera));
+      if (file != null) onCaptured(file);
+    }
+    await ctx.join(camera.dispose);
+  }),
   first: true,
 );
 ```
@@ -941,9 +947,36 @@ A55 так вышло в одном из трёх прогонов на испр
 потерянную камеру освободили. Ошибка, которая застаёт состояние не в `Ready`,
 ничего не меняет: вторая ошибка той же камеры — не второй сбой. Камера, которую
 Galaxy A55 вернул бы сам, тоже освобождается: ошибка не говорит, надолго ли
-потеря, а повтор откроет камеру, когда пользователь вернётся. Запись, которая
-шла, когда камеру потеряли, до главного экрана не доходит: сессия освобождает
-камеру без стопа.
+потеря, а повтор откроет камеру, когда пользователь вернётся.
+
+Запись, которая шла, когда камеру потеряли, останавливается до освобождения,
+и видео уходит на главный экран. Состояние уже не говорит, что камера пишет,
+поэтому `_letGo` спрашивает контроллер плагина: его `value.isRecordingVideo`
+знает и о записи, которая началась через потерю. На Galaxy A55 камера,
+освобождённая под записью, продолжала писать звук в файл ещё 8–15 с, пока
+сборщик мусора не закрывал запись, а видео кончалось на потере; стоп
+на потерянной камере шёл там 1,1 с, и файл оставался целым. Стоп, который
+падает или не кончается, не должен удерживать камеру от освобождения, поэтому
+`stopLost` бросает его через 3 с — почти втрое дольше стопа Galaxy, — и тогда
+видео теряется:
+
+```dart
+const lostStopTimeout = Duration(seconds: 3);
+
+Future<XFile?> stopLost(CameraController camera) async {
+  try {
+    return await camera.stopVideoRecording().timeout(lostStopTimeout);
+  } on CameraException {
+    return null;
+  } on TimeoutException {
+    return null;
+  }
+}
+```
+
+Стоп идёт в джобе `_letGo`, в голове очереди: `release()` экрана, который
+уходит в это время, и нажатие повтора ждут его, и видео доходит до главного
+экрана в любом случае.
 
 Сессия не слушает `onCameraClosing`. Galaxy A55 присылает событие закрытия,
 когда начинается запись, при смене камеры во время записи и после стопа,
@@ -1634,23 +1667,36 @@ Future<void> _startRecording(Emitter<CameraState> emit) async {
 Идущая команда может ещё пользоваться потерянной камерой, поэтому `_lose`
 ставит `LetGo` в очередь после неё. `Release`, который уже ждёт там,
 выполняется первым и находит камеру в `_camera`: поле держит её и тогда, когда
-состояние уже нет:
+состояние уже нет. `_letGo` сессии узнаёт о потере камеры от `_lose`; здесь
+потерянную камеру может освободить любой из двух, и `_lost` велит ему сначала
+остановить запись тем же `stopLost`:
 
 ```dart
 /// Камера, которую платформа держит для этого блока, потерянная или нет:
 /// [Release], выполненный после потери, ещё находит её, раньше [LetGo].
 CameraController? _camera;
 
+/// Платформа потеряла [_camera]: [_letGo] сначала останавливает её запись.
+bool _lost = false;
+
 void _lose(CameraLost event, Emitter<CameraState> emit) {
   if (state is! Ready) return;
   emit(Broken(event.description));
+  _lost = true;
   add(const LetGo());
 }
 
 Future<void> _letGo() async {
   final camera = _camera;
+  final lost = _lost;
   _camera = null;
-  await camera?.dispose();
+  _lost = false;
+  if (camera == null) return;
+  if (lost && camera.value.isRecordingVideo) {
+    final file = await stopLost(camera);
+    if (file != null) onCaptured(file);
+  }
+  await camera.dispose();
 }
 ```
 
@@ -1722,7 +1768,7 @@ Future<void> letCloseEnd(WidgetTester tester) => tester.runAsync(() async {});
 | Смена камеры во время записи | тот же обработчик | та же очередь | ничего сверх |
 | Уход с экрана | `Release` с `Completer`; `AsyncDataScope` со `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` со `scopeKey` | bloc: `letCloseEnd`, для `close()` |
 | Уход в фон | `Suspend` и `Resume` в очереди | `suspend()` и `resume()` в очереди | для упавшего стопа, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
-| Потеря камеры | свой `on<CameraLost>`; проверка состояния после каждого `await`; `LetGo` в очереди; `_camera`; `close()`, который отменяет `_errors` | `externalSetState`; `ctx.join` при каждом `await` команды над `Ready`; `_letGo` с `first: true`; `onClose`, который отменяет `_errors` | для упавшей смены камеры во время записи, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| Потеря камеры | свой `on<CameraLost>`; проверка состояния после каждого `await`; `LetGo` в очереди; `_camera` и `_lost`; `close()`, который отменяет `_errors` | `externalSetState`; `ctx.join` при каждом `await` команды над `Ready`; `_letGo` с `first: true`; `onClose`, который отменяет `_errors` | для упавшей смены камеры во время записи, bloc: блок, созданный в `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | Отказ в разрешении | `_initialize`, который сам ждёт `dispose` | `_initialize`, с `_letGo` | ничего сверх |
 
 Тесты блока — случаи предыдущего раздела и один свой: ошибка камеры после

@@ -959,28 +959,37 @@ void main() {
       await tap(tester, 'record');
       await until(tester, 'the recording', () => recording(tester));
       await settle(tester, const Duration(milliseconds: 1500));
-      final since = DateTime.now();
       await lose(tester, first);
-      // The session lets the camera go without a stop: the recording
-      // never reaches the home screen. What the platform left on disk is
-      // written down for the report.
-      expect(trace(), isNot(contains('stop #$first start')));
-      expect(lastShot(), isNull, reason: 'the recording reached home');
-      // The Android side of the plugin writes its files to `cache`, beside
-      // `code_cache`, the temporary folder of the app.
-      final cache = Directory('${Directory.systemTemp.parent.path}/cache');
-      final videos = [
-        for (final file in cache.listSync().whereType<File>())
-          if (file.path.endsWith('.mp4') &&
-              file.lastModifiedSync().isAfter(
-                since.subtract(const Duration(seconds: 5)),
-              ))
-            '${file.path} ${file.lengthSync()} bytes',
-      ];
-      journal.note('videos on disk $videos');
+      // The recording stops on the lost camera before the release, and the
+      // video reaches the home screen.
+      expect(
+        trace(),
+        containsAllInOrder([
+          'state Broken',
+          'stop #$first start',
+          'stop #$first end',
+          'dispose #$first start',
+        ]),
+      );
+      journal.note(
+        'stop of the lost camera '
+        '${at('stop #$first end') - at('stop #$first start')} ms',
+      );
+      final video = lastShot();
+      expect(video, isNotNull, reason: 'the recording did not reach home');
+      expect(video!.path, endsWith('.mp4'));
+      // Released without a stop, the camera went on recording sound into
+      // the file; stopped, the file stays as it is.
+      final size = video.lengthSync();
+      await settle(tester, const Duration(seconds: 5));
+      journal.note(
+        'video ${video.path} $size bytes, ${video.lengthSync()} bytes 5 s '
+        'later',
+      );
+      expect(video.lengthSync(), size, reason: 'the file grows');
       await retry(tester);
       await goBack(tester);
-      expectShot();
+      expectShot(not: video);
     }, skip: away);
   });
 

@@ -271,15 +271,25 @@ final class CameraSession extends Solo<CameraState> {
   void _lose(String description) {
     if (currentState case Ready(:final camera)) {
       externalSetState(Broken(description));
-      _letGo(camera);
+      _letGo(camera, lost: true);
     }
   }
 
   /// Frees [camera], which the state no longer holds, in a job of its own
   /// ahead of everything waiting in the queue: a [release] that waits there
   /// finds no camera in [Broken] and would end before this one.
-  void _letGo(CameraController camera) => enqueueJob(
-    job<CameraState, void>((ctx) => ctx.join(camera.dispose)),
+  ///
+  /// A [lost] camera that records stops first, and its video goes to
+  /// [onCaptured]: released under a recording, the Galaxy's camera went on
+  /// recording sound into the file.
+  void _letGo(CameraController camera, {bool lost = false}) => enqueueJob(
+    job<CameraState, void>((ctx) async {
+      if (lost && camera.value.isRecordingVideo) {
+        final file = await ctx.join(() => stopLost(camera));
+        if (file != null) onCaptured(file);
+      }
+      await ctx.join(camera.dispose);
+    }),
     first: true,
   );
 }

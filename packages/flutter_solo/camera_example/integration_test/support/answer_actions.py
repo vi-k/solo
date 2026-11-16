@@ -19,6 +19,7 @@ Actions:
                  the app back after a few seconds;
   home-and-back  the same, the app back at once;
   other-camera   the system camera to the front, the app back after 5 s;
+                 Android stops the system camera before the app is back;
   deny           Android: press "deny" on the dialogs of one request,
                  the camera's and the microphone's;
   forget-denials Android: clear the flags a denial leaves on the camera
@@ -35,6 +36,7 @@ import time
 
 ANDROID_PACKAGE = 'dev.yet_another.flutter_solo_camera_example'
 IOS_BUNDLE = 'dev.yetanother.flutterSoloCameraExample'
+STILL_IMAGE_CAMERA = 'android.media.action.STILL_IMAGE_CAMERA'
 
 
 class Android:
@@ -46,6 +48,13 @@ class Android:
         return subprocess.run(['adb', '-s', self.serial, *args],
                               capture_output=True, text=True,
                               timeout=60).stdout
+
+    def camera_app(self):
+        """The package that answers `STILL_IMAGE_CAMERA`, or None."""
+        found = self.adb('shell', 'cmd', 'package', 'resolve-activity',
+                         '--brief', '-a', STILL_IMAGE_CAMERA)
+        lines = [line for line in found.split('\n') if '/' in line]
+        return lines[-1].split('/')[0].strip() if lines else None
 
     def front(self):
         self.adb('shell', 'am', 'start', '-n',
@@ -110,9 +119,14 @@ class Android:
             time.sleep(3 if action == 'home' else 0.3)
             self.front()
         elif action == 'other-camera':
-            self.adb('shell', 'am', 'start', '-a',
-                     'android.media.action.STILL_IMAGE_CAMERA')
+            self.adb('shell', 'am', 'start', '-a', STILL_IMAGE_CAMERA)
             time.sleep(5)
+            # Left in the background, the system camera of a Galaxy A55
+            # kept the camera and slowed the phone down for later runs.
+            camera = self.camera_app()
+            if camera:
+                self.adb('shell', 'am', 'force-stop', camera)
+                note(f'stopped {camera}')
             self.front()
         elif action == 'deny':
             self.deny(note)

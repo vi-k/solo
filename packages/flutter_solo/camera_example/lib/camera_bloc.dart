@@ -117,6 +117,9 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   /// that runs after a loss still finds it, before the [LetGo] of the loss.
   CameraController? _camera;
 
+  /// The platform lost [_camera]: [_letGo] stops its recording first.
+  bool _lost = false;
+
   /// The camera [Suspend] let go, for [Resume] to open again.
   CameraDescription? _suspended;
 
@@ -419,6 +422,7 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   void _lose(CameraLost event, Emitter<CameraState> emit) {
     if (state is! Ready) return;
     emit(Broken(event.description));
+    _lost = true;
     add(const LetGo());
   }
 
@@ -433,10 +437,21 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   }
 
   /// Frees the camera the platform holds for this bloc, if there is one.
+  ///
+  /// A lost camera that records stops first, and its video goes to
+  /// [onCaptured]: released under a recording, the Galaxy's camera went on
+  /// recording sound into the file.
   Future<void> _letGo() async {
     final camera = _camera;
+    final lost = _lost;
     _camera = null;
-    await camera?.dispose();
+    _lost = false;
+    if (camera == null) return;
+    if (lost && camera.value.isRecordingVideo) {
+      final file = await stopLost(camera);
+      if (file != null) onCaptured(file);
+    }
+    await camera.dispose();
   }
 }
 

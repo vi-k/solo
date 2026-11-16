@@ -909,12 +909,18 @@ void _watch(CameraController camera) {
 void _lose(String description) {
   if (currentState case Ready(:final camera)) {
     externalSetState(Broken(description));
-    _letGo(camera);
+    _letGo(camera, lost: true);
   }
 }
 
-void _letGo(CameraController camera) => enqueueJob(
-  job<CameraState, void>((ctx) => ctx.join(camera.dispose)),
+void _letGo(CameraController camera, {bool lost = false}) => enqueueJob(
+  job<CameraState, void>((ctx) async {
+    if (lost && camera.value.isRecordingVideo) {
+      final file = await ctx.join(() => stopLost(camera));
+      if (file != null) onCaptured(file);
+    }
+    await ctx.join(camera.dispose);
+  }),
   first: true,
 );
 ```
@@ -947,9 +953,36 @@ no camera in `Broken` and would end before the lost one is released. An error
 that finds the state other than `Ready` changes nothing: a second error of the
 same camera is not a second failure. The camera that a Galaxy A55 would give
 back by itself is released too: an error does not say whether the loss lasts,
-and Retry opens the camera when the user is back. A recording under way when
-the camera is lost does not reach the home screen: the session releases the
-camera without a stop.
+and Retry opens the camera when the user is back.
+
+A recording under way when the camera is lost stops before the release, and the
+video goes to the home screen. The state no longer says that the camera
+records, so `_letGo` asks the plugin's controller, whose
+`value.isRecordingVideo` holds a recording that started across the loss as
+well. On a Galaxy A55 a camera released under a recording went on recording
+sound into the file for 8 to 15 s, until the garbage collector closed the
+recording, while the video ended at the loss; a stop on the lost camera took
+1.1 s there and left the file whole. A stop that fails or does not end must not
+keep the camera from its release, so `stopLost` gives up after 3 s, close to
+three times the Galaxy's stop, and the video is lost then:
+
+```dart
+const lostStopTimeout = Duration(seconds: 3);
+
+Future<XFile?> stopLost(CameraController camera) async {
+  try {
+    return await camera.stopVideoRecording().timeout(lostStopTimeout);
+  } on CameraException {
+    return null;
+  } on TimeoutException {
+    return null;
+  }
+}
+```
+
+The stop runs in the job of `_letGo`, ahead of the queue: a `release()` of a
+screen that leaves meanwhile and a tap of Retry wait for it, and the video
+reaches the home screen either way.
 
 The session does not listen to `onCameraClosing`. A Galaxy A55 sends a closing
 event when a recording starts, at a switch during a recording and after a stop,
@@ -1642,23 +1675,37 @@ Future<void> _startRecording(Emitter<CameraState> emit) async {
 
 The command under way may still use the lost camera, so `_lose` puts `LetGo` in
 the queue after it. A `Release` already waiting there runs first, and it finds
-the camera in `_camera`, which holds it after the state no longer does:
+the camera in `_camera`, which holds it after the state no longer does. The
+session's `_letGo` hears from `_lose` that the camera is lost; here either of
+the two may let the lost camera go, and `_lost` tells it to stop a recording
+first, with the same `stopLost`:
 
 ```dart
 /// The camera the platform holds for this bloc, lost or not: a [Release]
 /// that runs after a loss still finds it, before the [LetGo] of the loss.
 CameraController? _camera;
 
+/// The platform lost [_camera]: [_letGo] stops its recording first.
+bool _lost = false;
+
 void _lose(CameraLost event, Emitter<CameraState> emit) {
   if (state is! Ready) return;
   emit(Broken(event.description));
+  _lost = true;
   add(const LetGo());
 }
 
 Future<void> _letGo() async {
   final camera = _camera;
+  final lost = _lost;
   _camera = null;
-  await camera?.dispose();
+  _lost = false;
+  if (camera == null) return;
+  if (lost && camera.value.isRecordingVideo) {
+    final file = await stopLost(camera);
+    if (file != null) onCaptured(file);
+  }
+  await camera.dispose();
 }
 ```
 
@@ -1730,7 +1777,7 @@ What each situation takes, on bloc and on solo:
 | A switch during a recording | the same handler | the same queue | nothing more |
 | Leaving the screen | `Release` with a `Completer`; `AsyncDataScope` with a `scopeKey`; `BlocProvider.value` | `release()`; `AsyncDataScope` with a `scopeKey` | bloc: `letCloseEnd`, for `close()` |
 | Going to the background | `Suspend` and `Resume` in the queue | `suspend()` and `resume()` in the queue | for a failed stop, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
-| Losing the camera | `on<CameraLost>` of its own; a check of the state after every `await`; `LetGo` in the queue; `_camera`; `close()` that cancels `_errors` | `externalSetState`; `ctx.join` at every `await` of a command on `Ready`; `_letGo` with `first: true`; `onClose` that cancels `_errors` | for a failed switch during a recording, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
+| Losing the camera | `on<CameraLost>` of its own; a check of the state after every `await`; `LetGo` in the queue; `_camera` and `_lost`; `close()` that cancels `_errors` | `externalSetState`; `ctx.join` at every `await` of a command on `Ready`; `_letGo` with `first: true`; `onClose` that cancels `_errors` | for a failed switch during a recording, bloc: the bloc made in `runZonedGuarded`; solo: `Solo.unansweredHandler` |
 | A denied permission | `_initialize`, which awaits `dispose` itself | `_initialize`, with `_letGo` | nothing more |
 
 The bloc's tests are the cases of the previous section and one of their own: an

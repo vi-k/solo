@@ -865,7 +865,7 @@ void main() {
         codeMissingFrom(
           _doc,
           'lib/camera_session.dart',
-          alsoIn: ['lib/camera_screen.dart', _steps],
+          alsoIn: ['lib/camera_screen.dart', 'lib/camera_state.dart', _steps],
           under: _failure,
         ),
         isEmpty,
@@ -881,6 +881,40 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pump(platform.disposeTime);
       expect(platform.openCameras, 0);
+    });
+
+    testWidgets('a recording on a lost camera stops and reaches home', (
+      tester,
+    ) async {
+      final captured = <XFile>[];
+      final session = CameraSession(onCaptured: captured.add);
+      session.open();
+      await tester.pump(platform.openTime);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(session.currentState, isA<Broken>());
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'stop #1 start',
+          'record #1 end',
+          'dispose #1 start',
+        ]),
+      );
+      _says(
+        _part(_losing, _failure),
+        'A recording under way when the camera is lost stops before the '
+        'release, and the video goes to the home screen.',
+      );
+      expect(lostStopTimeout, const Duration(seconds: 3));
+      _says(_part(_losing, _failure), '`stopLost` gives up after 3 s,');
+      await session.close();
     });
 
     testWidgets("the Galaxy's closing events are not a failure", (
@@ -1164,7 +1198,7 @@ void main() {
             '`Solo.unansweredHandler` |',
         '| Losing the camera | `on<CameraLost>` of its own; '
             'a check of the state after every `await`; `LetGo` in the '
-            'queue; `_camera`; `close()` that cancels `_errors` | '
+            'queue; `_camera` and `_lost`; `close()` that cancels `_errors` | '
             '`externalSetState`; `ctx.join` at every `await` of a command on '
             '`Ready`; `_letGo` with `first: true`; `onClose` that cancels '
             '`_errors` | for a failed switch during a recording, bloc: the '

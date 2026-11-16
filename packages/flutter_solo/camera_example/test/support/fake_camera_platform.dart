@@ -123,6 +123,10 @@ class FakeCameraPlatform extends CameraPlatform {
   /// tests, not a rule of a phone.
   CameraException? failStop;
 
+  /// When set, a stop of a recording never ends. A knob for the tests, not
+  /// a rule of a phone.
+  bool hangStop = false;
+
   /// When set, a switch during a recording ends with this exception, after
   /// [switchTime], and the recording stays on the camera it had. A knob for
   /// the tests, not a rule of a phone.
@@ -168,6 +172,9 @@ class FakeCameraPlatform extends CameraPlatform {
   }
 
   /// The platform reports a failure of the camera.
+  ///
+  /// Galaxy: a recording on the camera goes on, and a stop after the error
+  /// ends it as usual, in about 1.1 s there, with the file whole.
   void failFromOutside(int cameraId, String description) {
     final camera = _cameras[cameraId];
     if (camera == null) return;
@@ -382,6 +389,7 @@ class FakeCameraPlatform extends CameraPlatform {
   @override
   Future<XFile> stopVideoRecording(int cameraId) async {
     log.add('stop #$cameraId start');
+    if (hangStop) return Completer<XFile>().future;
     // Both phones: a stop asked during a switch ends after the switch.
     await _switching;
     if (_recording == null) {
