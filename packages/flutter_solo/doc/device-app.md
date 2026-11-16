@@ -22,12 +22,14 @@ cd solo/packages/flutter_solo/camera_example
 flutter run
 ```
 
-The answers on this page are the app's code; a first attempt is marked by a
-line of its own, `// The first attempt:` and what goes wrong. A trace is what
-the app does to the camera under `flutter test`, where a fake camera platform
-stands in for the phone. A call on the camera is a line, or two for a call that
-takes time, where it starts and where it ends; a change of the state is a line
-too. Opening the camera:
+The answers on this page are the app's code, though a later section may change
+a method an earlier one shows: the last listing of a method is the app's, and a
+line under an earlier one names the section that changes it. A first attempt is
+marked by a line of its own, `// The first attempt:` and what goes wrong. A
+trace is what the app does to the camera under `flutter test`, where a fake
+camera platform stands in for the phone. A call on the camera is a line, or two
+for a call that takes time, where it starts and where it ends; a change of the
+state is a line too. Opening the camera:
 
 ```text
 state Opening
@@ -153,6 +155,10 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
 
 enum _Op { takePicture }
 ```
+
+The app's `cycleFlash` and `_Op` are in
+[Rapid taps of the torch](#rapid-taps-of-the-torch), its `switchCamera` in
+[Losing the camera](#losing-the-camera).
 
 `Policy.droppable` hands a second tap of the shutter the job of the first one
 while that job is queued or running, so one picture reaches `onCaptured`. The
@@ -502,6 +508,8 @@ Job<XFile?> stopRecording() => enqueue<Ready, XFile?>((ctx) async {
   return file;
 });
 ```
+
+The app's `stopRecording` is in [Losing the camera](#losing-the-camera).
 
 A switch tapped while the recording starts waits behind the start, as a switch
 during a shot waits behind the shot. When the switch runs, the recording is on,
@@ -1132,6 +1140,8 @@ Job<void> switchCamera() => enqueue<Ready, void>((ctx) async {
   }
 });
 ```
+
+The app's `_initialize` is in [A denied permission](#a-denied-permission).
 
 A camera that fails to open is `Broken` as well, and `_letGo` releases what the
 plugin's controller has created on the platform. A switch without a recording
