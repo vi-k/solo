@@ -506,25 +506,23 @@ void controllerCases(MakeDriver make) {
       testWidgets('before a switch to another camera with a torch', (
         tester,
       ) async {
-        platform.cameras = const [
-          CameraDescription(
-            name: 'back',
-            lensDirection: CameraLensDirection.back,
-            sensorOrientation: 90,
-          ),
-          CameraDescription(
-            name: 'wide',
-            lensDirection: CameraLensDirection.back,
-            sensorOrientation: 90,
-          ),
-        ];
-        platform.lights = const {
-          'back': (torch: true, flash: true),
-          'wide': (torch: true, flash: true),
-        };
+        // An iPhone 13 mini goes from its front camera to its second back
+        // camera, and from there to its first: both back cameras have a
+        // torch.
+        platform.useCamerasOf(FakePhone.iphone);
         final controller = make(captured.add);
         controller.open();
         await tester.pump(platform.openTime);
+        for (var i = 0; i < 2; i++) {
+          controller.switchCamera();
+          await tester.pump(platform.disposeTime);
+          await tester.pump(platform.openTime);
+          await tester.pump();
+        }
+        expect(
+          (controller.currentState as Ready).camera.description.name,
+          platform.cameras[2].name,
+        );
         await light(tester, controller);
         controller.switchCamera();
         await tester.pump(platform.disposeTime);
@@ -532,15 +530,30 @@ void controllerCases(MakeDriver make) {
         await tester.pump(platform.torchTime);
         await tester.pump();
 
-        expect(flashes(), [
-          'flash #1 torch start',
-          'flash #1 torch end',
-          'flash #1 auto',
-          'flash #2 torch start',
-          'flash #2 torch end',
-        ]);
+        expect(
+          (controller.currentState as Ready).camera.description.name,
+          platform.cameras[0].name,
+        );
+        expect(
+          flashes(),
+          containsAllInOrder([
+            'flash #3 torch start',
+            'flash #3 torch end',
+            'flash #3 auto',
+            'flash #4 torch start',
+            'flash #4 torch end',
+          ]),
+        );
+        expect(
+          flashes().where((line) => line == 'flash #4 torch start'),
+          hasLength(1),
+        );
+        expect(
+          platform.log,
+          containsAllInOrder(['flash #3 auto', 'dispose #3 start']),
+        );
         expect(torch(controller), isTrue);
-        expect(platform.torchOn(2), isTrue);
+        expect(platform.torchOn(4), isTrue);
         await finish(tester, controller);
       });
 
@@ -640,11 +653,15 @@ void controllerCases(MakeDriver make) {
       expect(second.camera.description.name, '2');
       expect(second.torch, isFalse);
       expect(torchButton, findsNothing);
-      expect(flashes(1), [
-        'flash #1 torch start',
-        'flash #1 torch end',
-        'flash #1 auto',
-      ]);
+      expect(
+        flashes(1),
+        containsAllInOrder([
+          'flash #1 torch start',
+          'flash #1 torch end',
+          'flash #1 auto',
+        ]),
+      );
+      expect(flashes(1).where((line) => line == 'flash #1 auto'), hasLength(1));
       expect(
         platform.log,
         containsAllInOrder(['flash #1 auto', 'dispose #1 start']),
@@ -658,11 +675,18 @@ void controllerCases(MakeDriver make) {
       await tester.pump(platform.torchTime);
       await tester.pump();
 
-      expect(flashes(3), [
-        'flash #3 auto',
-        'flash #3 torch start',
-        'flash #3 torch end',
-      ]);
+      expect(
+        flashes(3),
+        containsAllInOrder([
+          'flash #3 auto',
+          'flash #3 torch start',
+          'flash #3 torch end',
+        ]),
+      );
+      expect(
+        flashes(3).where((line) => line == 'flash #3 torch start'),
+        hasLength(1),
+      );
       expect((controller.currentState as Ready).torch, isTrue);
       expect(platform.torchOn(3), isTrue);
       await tester.pumpWidget(const SizedBox());
@@ -683,8 +707,43 @@ void controllerCases(MakeDriver make) {
       await next(tester, controller);
 
       expect((controller.currentState as Ready).flash, FlashMode.always);
-      expect(flashes(5), ['flash #5 always']);
+      expect(flashes(5), contains('flash #5 always'));
+      expect(
+        flashes(5).where((line) => line == 'flash #5 always'),
+        hasLength(1),
+      );
       expect(find.byIcon(Icons.flash_on), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('a tap of the flash behind a switch to a camera without a '
+        'flash: no call on it, and the mode waits', (tester) async {
+      platform
+        ..useCamerasOf(FakePhone.android)
+        ..cameras = [platform.cameras[0], platform.cameras[1]];
+      final controller = await openShown(tester);
+      controller
+        ..switchCamera()
+        ..cycleFlash();
+      await tester.pump(platform.disposeTime);
+      await tester.pump(platform.openTime);
+      await tester.pump();
+      await tester.pump();
+
+      final front = controller.currentState as Ready;
+      expect(front.camera.description.name, '1');
+      expect(front.flash, FlashMode.always);
+      expect(flashes(2), isEmpty);
+      expect(platform.log, isNot(contains('camera #2 error')));
+      await next(tester, controller);
+
+      expect((controller.currentState as Ready).flash, FlashMode.always);
+      expect(flashes(3), contains('flash #3 always'));
+      expect(
+        flashes(3).where((line) => line == 'flash #3 always'),
+        hasLength(1),
+      );
       await tester.pumpWidget(const SizedBox());
       await finish(tester, controller);
     });

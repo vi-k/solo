@@ -60,7 +60,8 @@ final class CameraSession extends Solo<CameraState> {
   ///
   /// The platform has one setting for the flash and the torch: while the
   /// torch is on, the mode waits in the state, and [toggleTorch] sets it
-  /// when it puts the torch out.
+  /// when it puts the torch out. On a camera without a flash the mode
+  /// waits as well, and a switch sets it on a camera with one.
   Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
     final Ready(:camera, :flash, :recording, :torch) = ctx.state;
     final next = switch (flash) {
@@ -68,7 +69,9 @@ final class CameraSession extends Solo<CameraState> {
       FlashMode.auto => FlashMode.always,
       _ => FlashMode.off,
     };
-    if (!torch) await ctx.join(() => camera.setFlashMode(next));
+    if (!torch && lights.flash(camera.description)) {
+      await ctx.join(() => camera.setFlashMode(next));
+    }
     ctx.emit(
       Ready(camera: camera, flash: next, recording: recording, torch: torch),
     );

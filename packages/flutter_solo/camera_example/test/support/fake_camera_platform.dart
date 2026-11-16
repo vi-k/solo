@@ -109,16 +109,18 @@ class FakeCameraPlatform extends CameraPlatform {
   /// The phone the fake copies where the phones differ.
   FakePhone phone = FakePhone.android;
 
-  /// Puts the cameras of [phone] in [cameras] and its answer in [lights],
-  /// as `availableCameras` and the channel gave them on that phone.
+  /// Copies [which] whole: sets [phone] to it, and puts its cameras in
+  /// [cameras] and its answer in [lights], as `availableCameras` and the
+  /// channel gave them on that phone.
   ///
   /// A Galaxy A55 has a flash unit on camera `0` alone, its first back
   /// camera; `1` and `3` are front cameras, `2` the second back one. An
   /// iPhone 13 mini has a torch on its back cameras and a flash on all
   /// three.
-  void useCamerasOf(FakePhone phone) {
+  void useCamerasOf(FakePhone which) {
+    phone = which;
     const none = (torch: false, flash: false);
-    switch (phone) {
+    switch (which) {
       case FakePhone.android:
         cameras = const [
           CameraDescription(

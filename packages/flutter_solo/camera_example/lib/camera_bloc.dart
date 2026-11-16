@@ -243,7 +243,8 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   }
 
   /// While the torch is on, the mode waits in the state: the platform has
-  /// one setting for the flash and the torch.
+  /// one setting for the flash and the torch. On a camera without a flash
+  /// the mode waits as well, and a switch sets it on a camera with one.
   Future<void> _cycleFlash(Emitter<CameraState> emit) async {
     final ready = state;
     if (ready is! Ready) return;
@@ -253,7 +254,9 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
       FlashMode.auto => FlashMode.always,
       _ => FlashMode.off,
     };
-    if (!torch) await camera.setFlashMode(next);
+    if (!torch && lights.flash(camera.description)) {
+      await camera.setFlashMode(next);
+    }
     if (state != ready) return;
     emit(
       Ready(camera: camera, flash: next, recording: recording, torch: torch),

@@ -291,7 +291,9 @@ leaves the newer target alone.
 
 The flash and the torch are one setting of the platform. While the torch is on,
 `cycleFlash()` moves only the mode of the button, and the torch goes out to
-that mode:
+that mode. On a camera without a flash the mode waits in the state as well, and
+a switch sets it on a camera with one; which cameras have a flash, `lights`
+says, as the next paragraphs show:
 
 ```dart
 Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
@@ -301,7 +303,9 @@ Job<void> cycleFlash() => enqueue<Ready, void>((ctx) async {
     FlashMode.auto => FlashMode.always,
     _ => FlashMode.off,
   };
-  if (!torch) await ctx.join(() => camera.setFlashMode(next));
+  if (!torch && lights.flash(camera.description)) {
+    await ctx.join(() => camera.setFlashMode(next));
+  }
   ctx.emit(
     Ready(camera: camera, flash: next, recording: recording, torch: torch),
   );
@@ -394,11 +398,11 @@ fake platform keeps the flag when it runs as the Galaxy.
 
 On a Galaxy A55 the platform gives a flash unit to the first back camera alone:
 its front cameras and its second back camera show neither button and get no
-call of the flash or the torch. A torch asked of that second back camera takes
-the screen to `Broken` with `java.lang.IllegalStateException: No flash unit`,
-and the flag stays up as after a loss. A lit torch went out before the switch
-while its camera was still open, in 0.25 to 0.56 s; around the four cameras and
-back on the first, a tap lit it with one call.
+call of the flash or the torch. That second back camera is why, without an
+answer, no camera has a torch: a torch asked of it takes the screen to `Broken`
+with `java.lang.IllegalStateException: No flash unit`. A lit torch went out
+before the switch while its camera was still open, in 0.25 to 0.56 s; around
+the four cameras and back on the first, a tap lit it with one call.
 
 ## A switch during a recording
 
