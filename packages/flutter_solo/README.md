@@ -846,7 +846,7 @@ Flutter's.
 | Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two; it takes controllers with `SoloListenable`, as [The controller as a `ValueListenable`](#the-controller-as-a-valuelistenable) shows. Work of one screen that must not wait for another goes to a controller of its own: [A tap that does not wait for a reload](https://github.com/vi-k/solo/blob/main/packages/solo/doc/jobs.md#a-tap-that-does-not-wait-for-a-reload). |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |
 | How do I test a screen? | On the fake clock of `testWidgets`: a timer a job waits on, such as the delay of a fake API, fires only when the test moves the clock. [Testing](doc/testing.md) has the three rules that follow from it. |
-| How do I keep a camera app right on a phone? | Rapid taps, a switch during a recording, leaving the screen, the background, a lost camera and a denied permission, one section each, then the tests and the same screen on bloc: [A device app](doc/device-app.md). |
+| How do I keep a camera app right on a phone? | Rapid taps, rapid taps of the torch, a switch during a recording, leaving the screen, the background, a lost camera and a denied permission, one section each, then the tests and the same screen on bloc: [A device app](doc/device-app.md). |
 
 ## Versions
 

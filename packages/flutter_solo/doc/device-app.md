@@ -648,10 +648,11 @@ for its action whole: a `close()` during the stop cancels the job only once the
 camera is released.
 
 On a Galaxy A55 the stop when the screen leaves took 0.14 to 0.18 s, as long as
-a stop of the button, and the release waited for it. A stop that fails or does
-not end must not keep the camera from its release, so `stopBeforeRelease` gives
-up after 3 s, close to three times the longest stop the Galaxy made, 1.1 s when
-the app goes to the background, and the video is lost then:
+a stop of the button, and the release waited for it. The stop the release makes
+must not keep the camera from it when it fails or does not end, so
+`stopBeforeRelease` gives up after 3 s, close to three times the longest stop
+the Galaxy made, 1.1 s when the app goes to the background, and the video is
+lost then:
 
 ```dart
 const releaseStopTimeout = Duration(seconds: 3);
@@ -675,7 +676,9 @@ Future<bool> stopBeforeRelease(
 
 `stopBeforeRelease` says whether the stop ended. After a stop that ran out of
 time the release leaves a lit torch alone: the platform has not answered, and a
-call to it could hang as well and keep the camera from its release.
+call to it could hang as well and keep the camera from its release. The bound
+is for this stop alone: a command already under way in the queue, a stop of the
+record button among them, is waited for whole.
 
 `CameraScreen` owns the session through an `AsyncDataScope` of
 [scopo](https://pub.dev/packages/scopo). The scope makes the session when the
@@ -1230,8 +1233,8 @@ line.
 
 The user denies the app the camera or the microphone. The screen says which of
 the two to allow. After a plain denial a Retry button asks again; when the
-phone no longer asks, the screen says to allow it in Settings, and when the
-policy of the device forbids it, the screen says that.
+plugin reports that the phone no longer asks, the screen says to allow it in
+Settings, and when the policy of the device forbids it, the screen says that.
 
 ### The first attempt
 
@@ -1472,7 +1475,9 @@ the test moves the clock, with `pump` and the durations of the fake; it reads
 [Waiting for the job](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md#waiting-for-the-job)
 explains; and it releases and closes the controller in its body, as
 [Moving the clock](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md#moving-the-clock)
-explains. Every test ends with `finish`:
+explains. A case that drives the controller ends with `finish`, unless it
+closes the controller itself, and a run of the app through its buttons ends
+with `goBack`. `finish` releases the camera and closes the controller:
 
 ```dart
 Future<void> finish(WidgetTester tester, CameraDriver controller) async {
@@ -1784,8 +1789,8 @@ whatever the state.
 The command under way may still use the lost camera, so `_lose` puts `LetGo` in
 the queue after it. A `Release` already waiting there runs first, and it finds
 the camera in `_camera`, which holds it after the state no longer does. The
-session's `_letGo` hears from `_lose` that the camera is lost; here either of
-the two may let the lost camera go, and `_lost` tells it to stop a recording
+session's `_letGo` hears from `_lose` that the camera is lost; here `Release`
+or `LetGo` may let the lost camera go, and `_lost` tells it to stop a recording
 first, with the same `stopBeforeRelease`:
 
 ```dart

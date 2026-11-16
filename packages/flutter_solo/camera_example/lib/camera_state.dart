@@ -61,7 +61,9 @@ final class Denied extends CameraState {
 /// long on a camera another app had taken; a stop that takes longer than
 /// this loses the file, and the camera is let go. The owner of the screen
 /// waits for the release for `CameraScreen.releaseTimeout`, 20 s, and this
-/// bound keeps the stop well inside it.
+/// bound keeps the stop well inside it. The bound is for this stop alone:
+/// a command already under way in the queue before the release is waited
+/// for whole.
 const releaseStopTimeout = Duration(seconds: 3);
 
 /// Stops the recording of [camera], which is about to be released, and
