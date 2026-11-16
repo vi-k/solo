@@ -217,6 +217,11 @@ class FakeCameraPlatform extends CameraPlatform {
   /// would. A knob for the tests, not a rule of a phone.
   Object? failStop;
 
+  /// When set, a picture ends with this error after [captureTime], with
+  /// the line `capture #N failed` and no error event: the camera stays
+  /// open. A knob for the tests, not a rule of a phone.
+  Object? failCapture;
+
   /// When set, a stop of a recording never ends. A knob for the tests, not
   /// a rule of a phone.
   bool hangStop = false;
@@ -268,6 +273,14 @@ class FakeCameraPlatform extends CameraPlatform {
   /// The platform takes the camera from the app, as another app would.
   void closeFromOutside(int cameraId) {
     _cameras[cameraId]?.closing.add(CameraClosingEvent(cameraId));
+  }
+
+  /// Galaxy: once the app is hidden, CameraX closes the camera, and a
+  /// picture in progress fails as a release makes it fail (see `dispose`).
+  /// Only the picture is lost here: the camera is let go by the app.
+  void closeOnHide(int cameraId) {
+    final camera = _cameras[cameraId];
+    if (camera != null) _loseCapture(cameraId, camera);
   }
 
   /// The platform reports a failure of the camera.
@@ -380,6 +393,11 @@ class FakeCameraPlatform extends CameraPlatform {
     }
     final timer = Timer(captureTime, () {
       camera.capture = null;
+      if (failCapture case final failure?) {
+        log.add('capture #$cameraId failed');
+        shot.completeError(failure);
+        return;
+      }
       log.add('capture #$cameraId end');
       shot.complete(XFile('/fake/picture-$cameraId.jpg'));
     });
@@ -598,6 +616,10 @@ class FakeCameraPlatform extends CameraPlatform {
 
   /// Galaxy: a picture in progress on camera [id] fails: an error event,
   /// then the capture throws. The line of the rule is `capture #N failed`.
+  ///
+  /// The plugin sends the event and the failure as two messages, the event
+  /// first, so the capture throws in a later turn of the event loop: on
+  /// the Galaxy the screen showed the loss before the capture threw.
   void _loseCapture(int id, _Camera camera) {
     final capture = camera.capture;
     if (capture == null) return;
@@ -610,12 +632,14 @@ class FakeCameraPlatform extends CameraPlatform {
       ),
     );
     log.add('capture #$id failed');
-    capture.shot.completeError(
-      PlatformException(
-        code: 'ImageCaptureException',
-        message:
-            'androidx.camera.core.ImageCaptureException: '
-            'Camera is closed.',
+    Timer.run(
+      () => capture.shot.completeError(
+        PlatformException(
+          code: 'ImageCaptureException',
+          message:
+              'androidx.camera.core.ImageCaptureException: '
+              'Camera is closed.',
+        ),
       ),
     );
   }

@@ -1566,6 +1566,58 @@ void controllerCases(MakeDriver make) {
       await tester.pumpWidget(const SizedBox());
       await finish(tester, controller);
     });
+
+    testWidgets('a shot the hidden app loses ends quietly', (tester) async {
+      final unanswered = <Object>[];
+      final controller = await openShown(tester, onUnanswered: unanswered.add);
+      controller.takePicture();
+      await tester.pump(platform.captureTime ~/ 2);
+      lifecycle(tester, leave);
+      platform.closeOnHide(1);
+      await tester.pump();
+      await tester.pump(platform.disposeTime);
+
+      expect(platform.log, contains('capture #1 failed'));
+      // The screen shows the loss, so the failed picture is no error of
+      // the app.
+      expect(unanswered, isEmpty);
+      expect(controller.currentState, isA<Broken>());
+      expect(captured, isEmpty);
+      expect(platform.log, contains('dispose #1 end'));
+      expect(platform.openCameras, 0);
+      lifecycle(tester, back);
+      await tester.pump(platform.openTime);
+
+      expect(controller.currentState, isA<Broken>());
+      expect(find.byKey(const Key('retry')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+  });
+
+  testWidgets('a picture that fails on the open camera is an error', (
+    tester,
+  ) async {
+    final unanswered = <Object>[];
+    platform.failCapture = PlatformException(
+      code: 'captureFailed',
+      message: 'The capture failed.',
+    );
+    final controller = await openShown(tester, onUnanswered: unanswered.add);
+    controller.takePicture();
+    await tester.pump(platform.captureTime);
+    await tester.pump();
+
+    expect(platform.log, contains('capture #1 failed'));
+    // The camera is still the one on the screen: the failure is the error
+    // of the shot, which nobody awaits.
+    expect(unanswered, [
+      isA<CameraException>().having((e) => e.code, 'code', 'captureFailed'),
+    ]);
+    expect(controller.currentState, isA<Ready>());
+    expect(captured, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await finish(tester, controller);
   });
 
   group('the camera is lost', () {

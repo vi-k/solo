@@ -255,10 +255,19 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   // looks again after every await: a loss changes the state in between,
   // and a command that goes on would put the lost camera back on screen.
 
+  /// A picture lost once its camera has left the screen ends quietly: the
+  /// state already shows what happened. One that fails on the camera still
+  /// on the screen goes on to the zone.
   Future<void> _takePicture() async {
     final ready = state;
     if (ready is! Ready) return;
-    final file = await ready.camera.takePicture();
+    final XFile file;
+    try {
+      file = await ready.camera.takePicture();
+    } on CameraException {
+      if (state == ready) rethrow;
+      return;
+    }
     if (state != ready) return;
     onCaptured(file);
   }

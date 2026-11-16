@@ -1520,8 +1520,9 @@ void main() {
       _says(
         _part(_testing),
         "On the Galaxy's a `dispose` under a picture loses the picture, with "
-        "the line `capture #N failed`; on the iPhone's the `dispose` waits "
-        'for the picture.',
+        'the line `capture #N failed`, and so does `closeOnHide`, as the '
+        "Galaxy does once the app is `hidden`; on the iPhone's the `dispose` "
+        'waits for the picture.',
       );
     });
   });

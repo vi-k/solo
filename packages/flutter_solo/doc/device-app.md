@@ -157,7 +157,8 @@ enum _Op { takePicture }
 ```
 
 The app's `cycleFlash` and `_Op` are in
-[Rapid taps of the torch](#rapid-taps-of-the-torch), its `switchCamera` in
+[Rapid taps of the torch](#rapid-taps-of-the-torch), its `takePicture` in
+[Going to the background](#going-to-the-background), its `switchCamera` in
 [Losing the camera](#losing-the-camera).
 
 `Policy.droppable` hands a second tap of the shutter the job of the first one
@@ -984,7 +985,29 @@ after the release, in the same order.
 A picture under way when the app leaves is lost on a Galaxy A55: once the app
 is `hidden`, CameraX closes the camera, the picture fails with
 `Image capture failed due to the camera being closed.`, and the screen goes to
-`Broken`.
+`Broken`. The lost shot ends quietly: the screen shows the loss already, so a
+`CameraException` of a picture whose camera has left the screen is no error of
+the app, and the bloc's handler ends without one too. A picture that fails
+while its camera is still on the screen stays the error of the job:
+
+```dart
+Job<XFile?> takePicture() => enqueue<Ready, XFile?>(
+  key: _Op.takePicture,
+  policy: Policy.droppable,
+  (ctx) async {
+    final ready = ctx.state;
+    final XFile file;
+    try {
+      file = await ctx.join(ready.camera.takePicture);
+    } on CameraException {
+      if (identical(currentState, ready)) rethrow;
+      return null;
+    }
+    onCaptured(file);
+    return file;
+  },
+);
+```
 
 ## Losing the camera
 
@@ -1530,15 +1553,16 @@ Duration torchTime = const Duration(milliseconds: 50);
 
 Where two calls meet, the fake does what the phones did, and `phone` picks
 between the Galaxy's rules and the iPhone's. On the Galaxy's a `dispose` under
-a picture loses the picture, with the line `capture #N failed`; on the iPhone's
-the `dispose` waits for the picture. `failOpen`, `failStop`, `failSwitch` and
-`failCreate` make such a call fail while they are set, and `failFromOutside`
-sends an error of the camera, as the platform does when another app takes it.
-On the Galaxy's rules the fake also sends a closing event,
-`CameraClosingEvent`, when a recording starts, at a switch during a recording
-and after a stop, as the Galaxy does with the camera still open; the session
-does not listen to `onCameraClosing` and takes none of them for a loss. The
-fake answers the channel of `CameraLights` as well, from `lights`: its back
+a picture loses the picture, with the line `capture #N failed`, and so does
+`closeOnHide`, as the Galaxy does once the app is `hidden`; on the iPhone's the
+`dispose` waits for the picture. `failOpen`, `failCapture`, `failStop`,
+`failSwitch` and `failCreate` make such a call fail while they are set, and
+`failFromOutside` sends an error of the camera, as the platform does when
+another app takes it. On the Galaxy's rules the fake also sends a closing
+event, `CameraClosingEvent`, when a recording starts, at a switch during a
+recording and after a stop, as the Galaxy does with the camera still open; the
+session does not listen to `onCameraClosing` and takes none of them for a loss.
+The fake answers the channel of `CameraLights` as well, from `lights`: its back
 camera has a torch and a flash, its front camera a flash alone, and
 `useCamerasOf` puts in the cameras and the answer of either phone.
 

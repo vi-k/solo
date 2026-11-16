@@ -156,8 +156,9 @@ enum _Op { takePicture }
 ```
 
 `cycleFlash` и `_Op` приложения — в разделе
-[Быстрые нажатия фонарика](#быстрые-нажатия-фонарика), его `switchCamera` —
-в разделе [Потеря камеры](#потеря-камеры).
+[Быстрые нажатия фонарика](#быстрые-нажатия-фонарика), его `takePicture` —
+в разделе [Уход в фон](#уход-в-фон), его `switchCamera` — в разделе
+[Потеря камеры](#потеря-камеры).
 
 `Policy.droppable` отдаёт второму нажатию затвора задачу первого, пока та стоит
 в очереди или выполняется, и до `onCaptured` доходит один снимок. Вспышка
@@ -980,7 +981,29 @@ state Ready
 Снимок, который идёт, когда приложение уходит, на Galaxy A55 пропадает: как
 только приложение в `hidden`, CameraX закрывает камеру, снимок кончается
 `Image capture failed due to the camera being closed.`, а экран уходит
-в `Broken`.
+в `Broken`. Потерянный снимок кончается тихо: экран уже показывает потерю,
+поэтому `CameraException` снимка, чья камера ушла с экрана, — не ошибка
+приложения, и обработчик блока тоже кончается без неё. Снимок, который
+не удался, пока его камера ещё на экране, остаётся ошибкой джоба:
+
+```dart
+Job<XFile?> takePicture() => enqueue<Ready, XFile?>(
+  key: _Op.takePicture,
+  policy: Policy.droppable,
+  (ctx) async {
+    final ready = ctx.state;
+    final XFile file;
+    try {
+      file = await ctx.join(ready.camera.takePicture);
+    } on CameraException {
+      if (identical(currentState, ready)) rethrow;
+      return null;
+    }
+    onCaptured(file);
+    return file;
+  },
+);
+```
 
 ## Потеря камеры
 
@@ -1517,17 +1540,18 @@ Duration torchTime = const Duration(milliseconds: 50);
 
 Где два вызова встречаются, фейк делает то же, что делали телефоны, а `phone`
 выбирает между правилами Galaxy и правилами iPhone. По правилам Galaxy
-`dispose` под снимком теряет снимок, со строкой `capture #N failed`;
-по правилам iPhone `dispose` ждёт снимка. `failOpen`, `failStop`, `failSwitch`
-и `failCreate`, пока заданы, роняют такой вызов, а `failFromOutside` присылает
-ошибку камеры, как это делает платформа, когда камеру забирает другое
-приложение. По правилам Galaxy фейк, как и сам Galaxy, присылает ещё событие
-закрытия, `CameraClosingEvent`, когда начинается запись, при смене во время
-записи и после стопа, хотя камера остаётся открытой; сессия `onCameraClosing`
-не слушает и потерей ни одно из них не считает. Фейк отвечает и на канал
-`CameraLights`, из `lights`: у его задней камеры есть фонарик и вспышка,
-у фронтальной — одна вспышка, а `useCamerasOf` ставит камеры и ответ любого
-из двух телефонов.
+`dispose` под снимком теряет снимок, со строкой `capture #N failed`, и так же
+его теряет `closeOnHide`, как Galaxy, когда приложение в `hidden`; по правилам
+iPhone `dispose` ждёт снимка. `failOpen`, `failCapture`, `failStop`,
+`failSwitch` и `failCreate`, пока заданы, роняют такой вызов,
+а `failFromOutside` присылает ошибку камеры, как это делает платформа, когда
+камеру забирает другое приложение. По правилам Galaxy фейк, как и сам Galaxy,
+присылает ещё событие закрытия, `CameraClosingEvent`, когда начинается запись,
+при смене во время записи и после стопа, хотя камера остаётся открытой; сессия
+`onCameraClosing` не слушает и потерей ни одно из них не считает. Фейк отвечает
+и на канал `CameraLights`, из `lights`: у его задней камеры есть фонарик
+и вспышка, у фронтальной — одна вспышка, а `useCamerasOf` ставит камеры и ответ
+любого из двух телефонов.
 
 Тесты держат три правила
 [Testing](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md):
