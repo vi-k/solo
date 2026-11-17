@@ -66,6 +66,30 @@ final class Denied extends CameraState {
 /// for whole.
 const releaseStopTimeout = Duration(seconds: 3);
 
+/// How long a stop of the record button has before the camera counts as
+/// lost.
+///
+/// The stops of the button took 16 to 195 ms on the phones, and 1.1 s on
+/// a Galaxy A55 when the app went to the background during one. On that
+/// Galaxy a screen that went off in the middle of the start of a recording
+/// left CameraX without its video encoder, and a stop after that never
+/// ended. The bound is that of [releaseStopTimeout], for the same stops.
+const stopTimeout = Duration(seconds: 3);
+
+/// Stops the recording of [camera] for the record button; a stop that
+/// has not ended within [stopTimeout] fails as a stop that fails does,
+/// with a [CameraException].
+///
+/// A stop that ends after the bound hands its file to no one.
+Future<XFile> stopInTime(CameraController camera) =>
+    camera.stopVideoRecording().timeout(
+      stopTimeout,
+      onTimeout: () => throw CameraException(
+        'stopTimeout',
+        'The recording did not stop in ${stopTimeout.inSeconds} s.',
+      ),
+    );
+
 /// Stops the recording of [camera], which is about to be released, and
 /// hands its file to [onCaptured]; a stop that fails or takes longer than
 /// [releaseStopTimeout] hands nothing.

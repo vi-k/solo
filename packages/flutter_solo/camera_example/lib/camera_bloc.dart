@@ -372,14 +372,15 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
   }
 
   /// A stop that fails leaves the plugin's controller recording for good,
-  /// so the camera is [Broken] and let go. A stop the loss of the camera
-  /// cuts short still hands its video on.
+  /// so the camera is [Broken] and let go; so does a stop that has not
+  /// ended within [stopTimeout]. A stop the loss of the camera cuts short
+  /// still hands its video on.
   Future<void> _stopRecording(Emitter<CameraState> emit) async {
     final ready = state;
     if (ready is! Ready || !ready.recording) return;
     final XFile file;
     try {
-      file = await ready.camera.stopVideoRecording();
+      file = await stopInTime(ready.camera);
     } on CameraException catch (error) {
       if (state != ready) return;
       emit(Broken(error));

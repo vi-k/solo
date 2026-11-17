@@ -1319,6 +1319,33 @@ void main() {
       );
       await session.close();
     });
+
+    testWidgets('a stop that does not end is a failure after 3 s', (
+      tester,
+    ) async {
+      final session = CameraSession(onCaptured: (XFile file) {});
+      session.open();
+      await tester.pump(platform.openTime);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      platform.hangStop = true;
+      final stopped = session.stopRecording().done;
+      await tester.pump(stopTimeout - const Duration(milliseconds: 1));
+      expect(session.currentState, isA<Ready>());
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump(platform.disposeTime);
+
+      expect(session.currentState, isA<Broken>());
+      expect(await stopped, isA<Done<XFile?>>());
+      expect(platform.openCameras, 0);
+      expect(stopTimeout, const Duration(seconds: 3));
+      _says(
+        _part(_losing, _failure),
+        '`stopInTime` gives up after 3 s, as the stop of a release does, and '
+        'a stop that ends later hands its file to no one:',
+      );
+      await session.close();
+    });
   });
 
   group('a denied permission', () {

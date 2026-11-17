@@ -733,8 +733,9 @@ Future<bool> stopBeforeRelease(
 `stopBeforeRelease` says whether the stop ended. After a stop that ran out of
 time the release leaves a lit torch alone: the platform has not answered, and a
 call to it could hang as well and keep the camera from its release. The bound
-is for this stop alone: a command already under way in the queue, a stop of the
-record button among them, is waited for whole.
+is for this stop alone: a command already under way in the queue is waited for
+whole, and a stop of the record button has a bound of its own, in
+[Losing the camera](#losing-the-camera).
 
 `CameraScreen` owns the session through an `AsyncDataScope` of
 [scopo](https://pub.dev/packages/scopo). The scope makes the session when the
@@ -1257,7 +1258,7 @@ Job<XFile?> stopRecording() => _ask(
     if (!recording) return null;
     final XFile file;
     try {
-      file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
+      file = await ctx.join(() => stopInTime(camera), discard: onCaptured);
     } on CameraException catch (error) {
       ctx.emit(Broken(error));
       _letGo(camera);
@@ -1280,6 +1281,27 @@ with `Cancelled`, so the release goes to a job of its own here too. A loss
 during a stop that succeeds cancels the job the same way, after the platform
 has made the file: `join` hands that file to `discard`, and the video still
 reaches the home screen.
+
+A stop that does not end fails the same way. On a Galaxy A55 the screen went
+off in the middle of the start of a recording, CameraX dropped the video
+encoder of the recording, and a stop after that never ended:
+`camera_android_camerax` 0.7.6+1 waits for the end of a recording with no
+bound, and the screen stayed `Ready` with the recording on. `stopInTime` gives
+up after 3 s, as the stop of a release does, and a stop that ends later hands
+its file to no one:
+
+```dart
+const stopTimeout = Duration(seconds: 3);
+
+Future<XFile> stopInTime(CameraController camera) =>
+    camera.stopVideoRecording().timeout(
+      stopTimeout,
+      onTimeout: () => throw CameraException(
+        'stopTimeout',
+        'The recording did not stop in ${stopTimeout.inSeconds} s.',
+      ),
+    );
+```
 
 The screen shows `Broken` with a button that calls `open()`:
 

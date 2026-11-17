@@ -192,8 +192,9 @@ final class CameraSession extends Solo<CameraState> {
   /// gives `null`.
   ///
   /// A stop that fails leaves the plugin's controller recording for good,
-  /// so the camera is [Broken] and let go. A stop the loss of the camera
-  /// cuts short still hands its video on, through `discard`.
+  /// so the camera is [Broken] and let go; so does a stop that has not
+  /// ended within [stopTimeout]. A stop the loss of the camera cuts short
+  /// still hands its video on, through `discard`.
   Job<XFile?> stopRecording() => _ask(
     false,
     enqueue<Ready, XFile?>((ctx) async {
@@ -201,7 +202,7 @@ final class CameraSession extends Solo<CameraState> {
       if (!recording) return null;
       final XFile file;
       try {
-        file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
+        file = await ctx.join(() => stopInTime(camera), discard: onCaptured);
       } on CameraException catch (error) {
         ctx.emit(Broken(error));
         _letGo(camera);

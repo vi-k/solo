@@ -728,8 +728,9 @@ Future<bool> stopBeforeRelease(
 `stopBeforeRelease` говорит, кончился ли стоп. После стопа, который вышел
 по времени, освобождение не трогает горящий фонарик: платформа не ответила,
 и вызов к ней тоже мог бы зависнуть и удержать камеру от освобождения.
-Граница — только для этого стопа: команду, которая уже идёт в очереди, в том
-числе стоп кнопкой записи, освобождение ждёт целиком.
+Граница — только для этого стопа: команду, которая уже идёт в очереди,
+освобождение ждёт целиком, а у стопа кнопкой записи граница своя, в разделе
+[Потеря камеры](#потеря-камеры).
 
 `CameraScreen` владеет сессией через `AsyncDataScope` пакета
 [scopo](https://pub.dev/packages/scopo). Скоуп создаёт сессию, когда экран
@@ -1248,7 +1249,7 @@ Job<XFile?> stopRecording() => _ask(
     if (!recording) return null;
     final XFile file;
     try {
-      file = await ctx.join(camera.stopVideoRecording, discard: onCaptured);
+      file = await ctx.join(() => stopInTime(camera), discard: onCaptured);
     } on CameraException catch (error) {
       ctx.emit(Broken(error));
       _letGo(camera);
@@ -1271,6 +1272,26 @@ Job<XFile?> stopRecording() => _ask(
 во время удачного стопа отменяет задачу так же, уже после того как платформа
 записала файл: `join` отдаёт этот файл в `discard`, и видео всё равно доходит
 до главного экрана.
+
+Стоп, который не кончается, падает так же. На Galaxy A55 экран погас посреди
+старта записи, CameraX отпустил видеокодер записи, и стоп после этого
+не кончился: `camera_android_camerax` 0.7.6+1 ждёт конца записи без границы,
+и экран так и оставался `Ready` с идущей записью. Как и стоп освобождения,
+`stopInTime` сдаётся через 3 с, а стоп, который кончится позже, свой файл
+никому не отдаёт:
+
+```dart
+const stopTimeout = Duration(seconds: 3);
+
+Future<XFile> stopInTime(CameraController camera) =>
+    camera.stopVideoRecording().timeout(
+      stopTimeout,
+      onTimeout: () => throw CameraException(
+        'stopTimeout',
+        'The recording did not stop in ${stopTimeout.inSeconds} s.',
+      ),
+    );
+```
 
 Экран показывает `Broken` с кнопкой, которая зовёт `open()`:
 

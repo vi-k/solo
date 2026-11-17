@@ -1079,6 +1079,174 @@ void controllerCases(MakeDriver make) {
     });
   });
 
+  // On a Galaxy A55 a stop after the loss of the video encoder never ended,
+  // and the plugin waits for the end of a recording with no bound.
+  group('a stop of the record button that does not end', () {
+    final record = find.byKey(const Key('record'));
+    final retry = find.byKey(const Key('retry'));
+
+    /// The record button with the icon [icon].
+    Finder showing(IconData icon) =>
+        find.descendant(of: record, matching: find.byIcon(icon));
+
+    /// Taps the record button and builds the frame after the tap.
+    Future<void> tapRecord(WidgetTester tester) async {
+      await tester.tap(record);
+      await tester.pump();
+    }
+
+    /// Shows the camera, records, and taps stop; the stop has begun.
+    Future<CameraDriver> recordAndStop(WidgetTester tester) async {
+      final controller = await openShown(tester);
+      await tapRecord(tester);
+      await tester.pump(platform.recordStartTime);
+      await tapRecord(tester);
+      expect(platform.log.last, 'stop #1 start');
+      return controller;
+    }
+
+    testWidgets('a stop that hangs is a failure once the bound is over', (
+      tester,
+    ) async {
+      platform.hangStop = true;
+      final controller = await recordAndStop(tester);
+      // The button shows the latest tap: the stop, then a start that waits
+      // behind it with a shot.
+      expect(showing(Icons.videocam), findsOneWidget);
+      controller.takePicture();
+      await tapRecord(tester);
+      expect(showing(Icons.stop), findsOneWidget);
+      await tester.pump(stopTimeout - const Duration(milliseconds: 1));
+
+      expect(
+        controller.currentState,
+        isA<Ready>().having((s) => s.recording, 'recording', isTrue),
+      );
+      expect(showing(Icons.stop), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump();
+
+      expect(controller.currentState, isA<Broken>());
+      expect(retry, findsOneWidget);
+      await tester.pump(platform.disposeTime);
+
+      // The camera is let go, and the shot and the start skip it.
+      expect(platform.log.skipWhile((l) => l != 'stop #1 start'), [
+        'stop #1 start',
+        'dispose #1 start',
+        'dispose #1 end',
+      ]);
+      expect(captured, isEmpty);
+      expect(platform.openCameras, 0);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('a stop that ends just before the bound is a stop', (
+      tester,
+    ) async {
+      platform.stopTime = stopTimeout - const Duration(milliseconds: 1);
+      final controller = await recordAndStop(tester);
+      await tester.pump(platform.stopTime);
+      await tester.pump();
+
+      expect(
+        controller.currentState,
+        isA<Ready>().having((s) => s.recording, 'recording', isFalse),
+      );
+      expect(captured.map((file) => file.path), ['/fake/video-1.mp4']);
+      expect(showing(Icons.videocam), findsOneWidget);
+      await tester.pump(stopTimeout);
+
+      expect(controller.currentState, isA<Ready>());
+      expect(platform.log, isNot(contains(startsWith('dispose'))));
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('a stop that ends after the bound hands nothing on', (
+      tester,
+    ) async {
+      platform.stopTime = stopTimeout + const Duration(seconds: 1);
+      final controller = await recordAndStop(tester);
+      await tester.pump(stopTimeout);
+      await tester.pump(platform.disposeTime);
+
+      expect(controller.currentState, isA<Broken>());
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+
+      expect(platform.log, contains('record #1 end'));
+      expect(controller.currentState, isA<Broken>());
+      expect(retry, findsOneWidget);
+      expect(captured, isEmpty);
+      expect(platform.openCameras, 0);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('retry after a stop that hangs opens the camera', (
+      tester,
+    ) async {
+      platform.hangStop = true;
+      final controller = await recordAndStop(tester);
+      await tester.pump(stopTimeout);
+      await tester.pump(platform.disposeTime);
+      expect(controller.currentState, isA<Broken>());
+      platform.hangStop = false;
+      await tester.tap(retry);
+      await tester.pump(platform.openTime);
+      await tester.pump();
+
+      expect(
+        controller.currentState,
+        isA<Ready>().having((s) => s.recording, 'recording', isFalse),
+      );
+      expect(showing(Icons.videocam), findsOneWidget);
+      expect(
+        platform.log,
+        containsAllInOrder([
+          'dispose #1 end',
+          'create back #2',
+          'initialize #2 end',
+        ]),
+      );
+      expect(platform.openCameras, 1);
+      // The camera it opens records and stops as usual.
+      await tapRecord(tester);
+      await tester.pump(platform.recordStartTime);
+      await tapRecord(tester);
+      await tester.pump(platform.stopTime);
+      await tester.pump();
+
+      expect(captured.map((file) => file.path), ['/fake/video-2.mp4']);
+      expect(showing(Icons.videocam), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    testWidgets('a release behind a stop that hangs ends after the bound', (
+      tester,
+    ) async {
+      platform.hangStop = true;
+      final controller = await recordAndStop(tester);
+      await tester.pumpWidget(const SizedBox());
+      final released = controller.release();
+      await tester.pump(stopTimeout);
+      await tester.pump(platform.disposeTime);
+      await letCloseEnd(tester);
+
+      // Checked before the wait: a release that hangs would never end it.
+      expect(platform.log.where((l) => l == 'dispose #1 start'), hasLength(1));
+      expect(platform.log, contains('dispose #1 end'));
+      await released;
+      expect(controller.currentState, isA<Closed>());
+      expect(platform.log.where((l) => l == 'stop #1 start'), hasLength(1));
+      expect(captured, isEmpty);
+      expect(platform.openCameras, 0);
+    });
+  });
+
   group('the screen leaves during a recording', () {
     /// Opens the camera and records, with errors of commands nobody waits
     /// for in [unanswered].

@@ -189,6 +189,24 @@ void main() {
       expect(session.currentState, isA<Broken>());
       await finish(tester, session);
     });
+
+    testWidgets('a stop out of time ends done with null', (tester) async {
+      platform.hangStop = true;
+      final session = await opened(tester);
+      session.startRecording();
+      await tester.pump(platform.recordStartTime);
+      final stopped = session.stopRecording().done;
+      await tester.pump(stopTimeout);
+      await tester.pump(platform.disposeTime);
+
+      // Checked before the wait: a stop that hangs would never end it.
+      expect(session.currentState, isA<Broken>());
+      expect(
+        await stopped,
+        isA<Done<XFile?>>().having((d) => d.value, 'value', isNull),
+      );
+      await finish(tester, session);
+    });
   });
 
   testWidgets('an event after close changes nothing', (tester) async {
