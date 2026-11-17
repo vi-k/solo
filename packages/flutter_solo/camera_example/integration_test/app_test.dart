@@ -1242,6 +1242,9 @@ void main() {
       tester,
     ) async {
       await openCamera(tester);
+      // CameraX may still be configuring the capture session, and a switch
+      // then can wait 3 s for it, so the other app takes the closed camera.
+      await settle(tester, const Duration(seconds: 1));
       // A switch first: the journal follows the errors of every camera the
       // case has created, and shows which of them one error reaches.
       await tap(tester, 'switch');
