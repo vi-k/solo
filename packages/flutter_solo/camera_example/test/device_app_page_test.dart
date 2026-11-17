@@ -13,10 +13,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:camera_platform_interface/camera_platform_interface.dart';
-// Deprecated from Flutter 3.47 for package:material_ui, whose releases
-// since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
-// ignore: deprecated_member_use
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo_camera_example/camera_app.dart';
@@ -25,6 +21,7 @@ import 'package:flutter_solo_camera_example/camera_screen.dart';
 import 'package:flutter_solo_camera_example/camera_session.dart';
 import 'package:flutter_solo_camera_example/camera_state.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'support/camera_cases.dart';
 import 'support/device_app_attempts.dart';

@@ -273,9 +273,13 @@ CI зелёный на `f30a6324`, Flutter 3.50 и Dart 3.14 из `stable`; по
 SDK — `2026-11-12-ci-sdk-drift-report.md`. Импорты `material.dart` в тестах
 и примере `flutter_solo` и `dart:mirrors` в четырёх тестах держат
 `ignore: deprecated_member_use` с причиной: выпуски `material_ui` с 0.0.2
-требуют Flutter 3.44, а пол — 3.38.1. Стенд экранов `tool/flutter_snippets.py`
-ставит такой же `ignore` в конец импорта `material.dart` собранных файлов,
-вместе с `unnecessary_ignore`. У `material.dart` они снимаются с подъёмом пола,
+требуют Flutter 3.44, а пол — 3.38.1. Приложение `camera_example` по слову
+владельца «переходи на material_ui» импортирует
+`package:material_ui/material_ui.dart` (`^1.2.0`) без `ignore`: его пол —
+Flutter 3.44.0; `flutter_solo` и его пример держат `ignore`, потому что их
+пол — 3.38.1. Стенд экранов `tool/flutter_snippets.py` ставит такой же `ignore`
+в конец импорта `material.dart` собранных файлов, вместе
+с `unnecessary_ignore`. У `material.dart` они снимаются с подъёмом пола,
 у `dart:mirrors` — когда тесты обойдутся без зеркал. Открыто:
 
 - P2 Astra (фасад свежести) не сделана — решение исполнителя 157, владелец

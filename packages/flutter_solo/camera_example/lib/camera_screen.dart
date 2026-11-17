@@ -1,9 +1,6 @@
 import 'package:camera/camera.dart';
-// Deprecated from Flutter 3.47 for package:material_ui, whose releases
-// since 0.0.2 need Flutter 3.44; the floor is Flutter 3.38.1.
-// ignore: deprecated_member_use
-import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:scopo/scopo.dart';
 
 import 'camera_session.dart';

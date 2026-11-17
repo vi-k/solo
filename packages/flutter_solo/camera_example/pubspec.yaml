@@ -20,6 +20,7 @@ dependencies:
   flutter_bloc: ^9.1.1
   flutter_solo:
     path: ../
+  material_ui: ^1.2.0
   scopo: ^1.0.0
 
 dev_dependencies:
