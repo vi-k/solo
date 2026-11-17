@@ -1317,11 +1317,13 @@ the stop after 3 s. The stop went on waiting in the plugin and took the
 `Finalize` of the next recording, so the stop of the record button of that
 recording never ended, and the screen stayed `Ready` with the recording on and
 a shutter that did nothing. The bound turns that screen into `Broken` with
-Retry. By the plugin's code, a recording after Retry can lose its stop the same
-way while a stop that gave up still waits in the plugin; this rests on the
-source, and a Galaxy has not shown it yet. CameraX fixes that
-`NullPointerException` in `camera-video` 1.7.0-alpha02, and the missing
-`Finalize` only on its main branch.
+Retry. While a stop that gave up still waits in the plugin, a recording after
+Retry loses its stop the same way: on a Galaxy A55 each such stop took the
+`Finalize` of one of the next three recordings, the stop of that recording gave
+up in turn, and the screen was `Broken` again. The recordings in between
+stopped in 0.15 to 0.24 s, and their videos reached the home screen. CameraX
+fixes that `NullPointerException` in `camera-video` 1.7.0-alpha02, and the
+missing `Finalize` only on its main branch.
 
 `stopInTime` marks the camera whose stop it gave up on, in `_stopGaveUp`, and
 `stopBeforeRelease` gives up on such a camera at once. The plugin's controller
