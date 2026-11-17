@@ -1296,6 +1296,85 @@ void controllerCases(MakeDriver make) {
       });
     }
 
+    // The mark of a stop that gave up belongs to that camera alone: the
+    // camera Retry opens is stopped before its release, as any camera is.
+    testWidgets('after a stop that hangs and Retry, a loss stops the next', (
+      tester,
+    ) async {
+      final unanswered = <Object>[];
+      platform.hangStop = true;
+      final controller = await recordAndStop(tester, unanswered);
+      await tester.pump(stopTimeout);
+      await tester.pump(platform.disposeTime);
+      expect(controller.currentState, isA<Broken>());
+      platform.hangStop = false;
+      await tester.tap(retry);
+      await tester.pump(platform.openTime);
+      controller.startRecording();
+      await tester.pump(platform.recordStartTime);
+      platform.failFromOutside(2, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(
+        platform.log.skipWhile((l) => l != 'camera #2 error'),
+        containsAllInOrder([
+          'camera #2 error',
+          'stop #2 start',
+          'record #2 end',
+          'dispose #2 start',
+          'dispose #2 end',
+        ]),
+      );
+      expect(captured.map((file) => file.path), ['/fake/video-2.mp4']);
+      expect(controller.currentState, isA<Broken>());
+      expect(unanswered, isEmpty);
+      expect(platform.openCameras, 0);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
+    // Only a stop that gave up marks its camera: after a stop that ended,
+    // a loss during the next recording stops it as usual.
+    testWidgets('after a stop that ends, a loss stops the next recording', (
+      tester,
+    ) async {
+      final unanswered = <Object>[];
+      final controller = await recordAndStop(tester, unanswered);
+      await tester.pump(platform.stopTime);
+      expect(captured, hasLength(1));
+      controller.startRecording();
+      await tester.pump(platform.recordStartTime);
+      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(platform.stopTime);
+      await tester.pump(platform.disposeTime);
+
+      expect(platform.log.where((l) => l == 'stop #1 start'), hasLength(2));
+      expect(
+        platform.log.skipWhile((l) => l != 'camera #1 error'),
+        containsAllInOrder([
+          'camera #1 error',
+          'stop #1 start',
+          'record #1 end',
+          'dispose #1 start',
+          'dispose #1 end',
+        ]),
+      );
+      expect(captured.map((file) => file.path), [
+        '/fake/video-1.mp4',
+        '/fake/video-1.mp4',
+      ]);
+      expect(controller.currentState, isA<Broken>());
+      expect(unanswered, isEmpty);
+      expect(platform.openCameras, 0);
+      await tester.pumpWidget(const SizedBox());
+      await finish(tester, controller);
+    });
+
     testWidgets('a release behind a stop that hangs ends after the bound', (
       tester,
     ) async {
