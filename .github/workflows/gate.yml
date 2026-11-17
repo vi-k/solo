@@ -28,7 +28,8 @@ name: gate
 # `packages/solo/doc/accumulation.md` with
 # `packages/solo/doc/accumulation-rules.md` and runs it. `floor` replays the
 # suites from the archives on the lowest SDK the pubspecs admit, and the
-# camera app on the lowest `camera` its constraint admits.
+# camera app on the lowest `camera` its constraint admits, on the lowest
+# SDK the app admits.
 #
 # What `floor` proves is what the other four cannot. They resolve the tree:
 # every file in it, the dev dependencies along with the rest, the newest
@@ -327,14 +328,28 @@ jobs:
       - name: The archives pass their gate on the floor
         run: python3 tool/archive_floor.py run "$RUNNER_TEMP/archive"
 
+      # The app has a floor of its own, above the packages': `camera`
+      # 0.12.2 and `camera_android_camerax` 0.7.6+1 need Flutter 3.44.0 and
+      # Dart 3.12.0. 3.44.0 is the first stable with both. It comes after
+      # the archives, so the packages are done on their floor before the
+      # SDK changes.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          cache: true
+
+      - name: Toolchain of the app
+        run: flutter --version
+
       # Not the archive layout above, which has no app in it: this one runs
       # in the checked-out tree, with the `pubspec_overrides.yaml` of the
       # app that point at the sibling packages. What it proves is the
-      # plugin: `camera` taken down to the lowest version its constraint
-      # allows, and the app's tests green against that. The lock is read
-      # afterwards, because a `downgrade` that stopped short would leave
-      # the check green on the wrong version. `pubspec.lock` is ignored by
-      # git, so the step below does not see it.
+      # plugin: `camera` and `camera_android_camerax` taken down to the
+      # lowest versions their constraints allow, and the app's tests green
+      # against that. The lock is read afterwards, because a `downgrade`
+      # that stopped short would leave the check green on the wrong
+      # version. `pubspec.lock` is ignored by git, so the step below does
+      # not see it.
       - name: The camera app on the floor
         working-directory: packages/flutter_solo/camera_example
         run: |
@@ -342,7 +357,9 @@ jobs:
           flutter pub downgrade
           flutter test
           grep -A7 '^  camera:' pubspec.lock
-          grep -A7 '^  camera:' pubspec.lock | grep -q 'version: "0.12.0+2"'
+          grep -A7 '^  camera:' pubspec.lock | grep -q 'version: "0.12.2"'
+          grep -A7 '^  camera_android_camerax:' pubspec.lock
+          grep -A7 '^  camera_android_camerax:' pubspec.lock | grep -q 'version: "0.7.6+1"'
 
       - name: Nothing drifted
         run: |
