@@ -1344,6 +1344,10 @@ void main() {
         '`stopInTime` gives up after 3 s, as the stop of a release does, and '
         'a stop that ends later hands its file to no one:',
       );
+      _says(
+        _part(_losing, _failure),
+        'The bound turns that screen into `Broken` with Retry.',
+      );
       await session.close();
     });
   });

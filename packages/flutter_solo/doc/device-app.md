@@ -1282,13 +1282,10 @@ during a stop that succeeds cancels the job the same way, after the platform
 has made the file: `join` hands that file to `discard`, and the video still
 reaches the home screen.
 
-A stop that does not end fails the same way. On a Galaxy A55 the screen went
-off in the middle of the start of a recording, CameraX dropped the video
-encoder of the recording, and a stop after that never ended:
-`camera_android_camerax` 0.7.6+1 waits for the end of a recording with no
-bound, and the screen stayed `Ready` with the recording on. `stopInTime` gives
-up after 3 s, as the stop of a release does, and a stop that ends later hands
-its file to no one:
+A stop that does not end within `stopTimeout` fails as a stop that fails does:
+the screen is `Broken` with Retry, the camera is let go, and the commands
+behind the stop skip it. `stopInTime` gives up after 3 s, as the stop of a
+release does, and a stop that ends later hands its file to no one:
 
 ```dart
 const stopTimeout = Duration(seconds: 3);
@@ -1302,6 +1299,22 @@ Future<XFile> stopInTime(CameraController camera) =>
       ),
     );
 ```
+
+`camera_android_camerax` 0.7.6+1 waits for the `Finalize` event of a recording
+with no bound, and the loop that waits reads the events of the latest
+recording. On a Galaxy A55 the screen went off in the middle of the start of a
+recording, and CameraX released the video encoder of the recording before the
+stop that lets the camera go reached it: that stop failed inside CameraX with a
+`NullPointerException`, the plugin got no `Finalize`, and the app gave up on
+the stop after 3 s. The stop went on waiting in the plugin and took the
+`Finalize` of the next recording, so the stop of the record button of that
+recording never ended, and the screen stayed `Ready` with the recording on and
+a shutter that did nothing. The bound turns that screen into `Broken` with
+Retry. By the plugin's code, a recording after Retry can lose its stop the same
+way while a stop that gave up still waits in the plugin; this rests on the
+source, and a Galaxy has not shown it yet. CameraX fixes that
+`NullPointerException` in `camera-video` 1.7.0-alpha02, and the missing
+`Finalize` only on its main branch.
 
 The screen shows `Broken` with a button that calls `open()`:
 
@@ -1581,17 +1594,17 @@ Where two calls meet, the fake does what the phones did, and `phone` picks
 between the Galaxy's rules and the iPhone's. On the Galaxy's a `dispose` under
 a picture loses the picture, with the line `capture #N failed`; on the iPhone's
 the `dispose` waits for the picture. `failOpen`, `failCapture`, `failStop`,
-`failSwitch` and `failCreate` make such a call fail while they are set.
-`failFromOutside` sends an error of the camera, as the platform does when
-another app takes it, and `closeOnHide` loses the picture under way, as the
-Galaxy does once the app is `hidden`: both are steps of a test, on the rules of
-either phone. On the Galaxy's rules the fake also sends a closing event,
-`CameraClosingEvent`, when a recording starts, at a switch during a recording
-and after a stop, as the Galaxy does with the camera still open; the session
-does not listen to `onCameraClosing` and takes none of them for a loss. The
-fake answers the channel of `CameraLights` as well, from `lights`: its back
-camera has a torch and a flash, its front camera a flash alone, and
-`useCamerasOf` puts in the cameras and the answer of either phone.
+`failSwitch` and `failCreate` make such a call fail while they are set, and
+`hangStop` makes a stop never end. `failFromOutside` sends an error of the
+camera, as the platform does when another app takes it, and `closeOnHide` loses
+the picture under way, as the Galaxy does once the app is `hidden`: both are
+steps of a test, on the rules of either phone. On the Galaxy's rules the fake
+also sends a closing event, `CameraClosingEvent`, when a recording starts, at a
+switch during a recording and after a stop, as the Galaxy does with the camera
+still open; the session does not listen to `onCameraClosing` and takes none of
+them for a loss. The fake answers the channel of `CameraLights` as well, from
+`lights`: its back camera has a torch and a flash, its front camera a flash
+alone, and `useCamerasOf` puts in the cameras and the answer of either phone.
 
 The tests keep the three rules of
 [Testing](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/doc/testing.md):

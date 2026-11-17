@@ -69,11 +69,13 @@ const releaseStopTimeout = Duration(seconds: 3);
 /// How long a stop of the record button has before the camera counts as
 /// lost.
 ///
-/// The stops of the button took 16 to 195 ms on the phones, and 1.1 s on
-/// a Galaxy A55 when the app went to the background during one. On that
-/// Galaxy a screen that went off in the middle of the start of a recording
-/// left CameraX without its video encoder, and a stop after that never
-/// ended. The bound is that of [releaseStopTimeout], for the same stops.
+/// The stops of the button took 16 to 195 ms on the phones, and the stops
+/// of a release 1.1 s on a Galaxy A55 when the app went to the background.
+/// On that Galaxy a stop that CameraX failed got no `Finalize`, and once
+/// the app had given up on it, it went on waiting in the plugin and took
+/// the `Finalize` of the next recording: the stop of the button of that
+/// recording never ended. The bound is that of [releaseStopTimeout], for
+/// the same stops.
 const stopTimeout = Duration(seconds: 3);
 
 /// Stops the recording of [camera] for the record button; a stop that
