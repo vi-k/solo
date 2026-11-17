@@ -735,9 +735,9 @@ Future<bool> stopBeforeRelease(
 time the release leaves a lit torch alone: the platform has not answered, and a
 call to it could hang as well and keep the camera from its release. The bound
 is for this stop alone: a command already under way in the queue is waited for
-whole. A stop of the record button has a bound of its own, and once it is over
-`stopBeforeRelease` gives up on that camera at once, through `_stopGaveUp`:
-both are in [Losing the camera](#losing-the-camera).
+whole, and a stop of the record button has a bound of its own, in
+[Losing the camera](#losing-the-camera), which also says why
+`stopBeforeRelease` reads `_stopGaveUp`.
 
 `CameraScreen` owns the session through an `AsyncDataScope` of
 [scopo](https://pub.dev/packages/scopo). The scope makes the session when the
@@ -1321,9 +1321,12 @@ Retry. While a stop that gave up still waits in the plugin, a recording after
 Retry loses its stop the same way: on a Galaxy A55 each such stop took the
 `Finalize` of one of the next three recordings, the stop of that recording gave
 up in turn, and the screen was `Broken` again. The recordings in between
-stopped in 0.15 to 0.24 s, and their videos reached the home screen. CameraX
-fixes that `NullPointerException` in `camera-video` 1.7.0-alpha02, and the
-missing `Finalize` only on its main branch.
+stopped in 0.15 to 0.24 s, and their videos reached the home screen. The chain
+does not end by itself: the stop that gives up in its turn stays waiting in the
+plugin, and on the Galaxy A55 recordings went on losing their stops now and
+then for as long as the app ran. CameraX fixes that `NullPointerException` in
+`camera-video` 1.7.0-alpha02; the fix of the missing `Finalize` is on its
+androidx-main branch and in no release yet.
 
 `stopInTime` marks the camera whose stop it gave up on, in `_stopGaveUp`, and
 `stopBeforeRelease` gives up on such a camera at once. The plugin's controller
