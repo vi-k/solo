@@ -717,6 +717,7 @@ Future<bool> stopBeforeRelease(
   CameraController camera,
   void Function(XFile file) onCaptured,
 ) async {
+  if (_stopGaveUp[camera] ?? false) return false;
   final XFile file;
   try {
     file = await camera.stopVideoRecording().timeout(releaseStopTimeout);
@@ -734,8 +735,9 @@ Future<bool> stopBeforeRelease(
 time the release leaves a lit torch alone: the platform has not answered, and a
 call to it could hang as well and keep the camera from its release. The bound
 is for this stop alone: a command already under way in the queue is waited for
-whole, and a stop of the record button has a bound of its own, in
-[Losing the camera](#losing-the-camera).
+whole. A stop of the record button has a bound of its own, and once it is over
+`stopBeforeRelease` gives up on that camera at once, through `_stopGaveUp`:
+both are in [Losing the camera](#losing-the-camera).
 
 `CameraScreen` owns the session through an `AsyncDataScope` of
 [scopo](https://pub.dev/packages/scopo). The scope makes the session when the
@@ -1290,13 +1292,18 @@ release does, and a stop that ends later hands its file to no one:
 ```dart
 const stopTimeout = Duration(seconds: 3);
 
+final _stopGaveUp = Expando<bool>();
+
 Future<XFile> stopInTime(CameraController camera) =>
     camera.stopVideoRecording().timeout(
       stopTimeout,
-      onTimeout: () => throw CameraException(
-        'stopTimeout',
-        'The recording did not stop in ${stopTimeout.inSeconds} s.',
-      ),
+      onTimeout: () {
+        _stopGaveUp[camera] = true;
+        throw CameraException(
+          'stopTimeout',
+          'The recording did not stop in ${stopTimeout.inSeconds} s.',
+        );
+      },
     );
 ```
 
@@ -1315,6 +1322,13 @@ way while a stop that gave up still waits in the plugin; this rests on the
 source, and a Galaxy has not shown it yet. CameraX fixes that
 `NullPointerException` in `camera-video` 1.7.0-alpha02, and the missing
 `Finalize` only on its main branch.
+
+`stopInTime` marks the camera whose stop it gave up on, in `_stopGaveUp`, and
+`stopBeforeRelease` gives up on such a camera at once. The plugin's controller
+still says that the camera records, so a camera lost while its stop hung would
+be stopped once more before its release; that second stop would wait in the
+plugin beside the first, one more loop to take the events of the next
+recording.
 
 The screen shows `Broken` with a button that calls `open()`:
 

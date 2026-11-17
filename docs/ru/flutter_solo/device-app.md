@@ -712,6 +712,7 @@ Future<bool> stopBeforeRelease(
   CameraController camera,
   void Function(XFile file) onCaptured,
 ) async {
+  if (_stopGaveUp[camera] ?? false) return false;
   final XFile file;
   try {
     file = await camera.stopVideoRecording().timeout(releaseStopTimeout);
@@ -729,8 +730,9 @@ Future<bool> stopBeforeRelease(
 по времени, освобождение не трогает горящий фонарик: платформа не ответила,
 и вызов к ней тоже мог бы зависнуть и удержать камеру от освобождения.
 Граница — только для этого стопа: команду, которая уже идёт в очереди,
-освобождение ждёт целиком, а у стопа кнопкой записи граница своя, в разделе
-[Потеря камеры](#потеря-камеры).
+освобождение ждёт целиком. У стопа кнопкой записи граница своя, и после неё
+`stopBeforeRelease` сразу сдаётся на этой камере, по `_stopGaveUp`:
+то и другое — в разделе [Потеря камеры](#потеря-камеры).
 
 `CameraScreen` владеет сессией через `AsyncDataScope` пакета
 [scopo](https://pub.dev/packages/scopo). Скоуп создаёт сессию, когда экран
@@ -1281,13 +1283,18 @@ Job<XFile?> stopRecording() => _ask(
 ```dart
 const stopTimeout = Duration(seconds: 3);
 
+final _stopGaveUp = Expando<bool>();
+
 Future<XFile> stopInTime(CameraController camera) =>
     camera.stopVideoRecording().timeout(
       stopTimeout,
-      onTimeout: () => throw CameraException(
-        'stopTimeout',
-        'The recording did not stop in ${stopTimeout.inSeconds} s.',
-      ),
+      onTimeout: () {
+        _stopGaveUp[camera] = true;
+        throw CameraException(
+          'stopTimeout',
+          'The recording did not stop in ${stopTimeout.inSeconds} s.',
+        );
+      },
     );
 ```
 
@@ -1304,6 +1311,12 @@ Future<XFile> stopInTime(CameraController camera) =>
 отказалось; это следует из исходника, а на Galaxy ещё не показано.
 `NullPointerException` стопа CameraX исправляет в `camera-video` 1.7.0-alpha02,
 а пропавший `Finalize` — только в своей основной ветке.
+
+`stopInTime` отмечает камеру, от стопа которой отказался, в `_stopGaveUp`,
+а `stopBeforeRelease` на такой камере сразу сдаётся. Контроллер плагина всё ещё
+считает, что камера пишет, поэтому камеру, потерянную, пока висел её стоп,
+перед освобождением остановили бы ещё раз; этот второй стоп ждал бы в плагине
+рядом с первым — ещё один цикл, который заберёт события следующей записи.
 
 Экран показывает `Broken` с кнопкой, которая зовёт `open()`:
 

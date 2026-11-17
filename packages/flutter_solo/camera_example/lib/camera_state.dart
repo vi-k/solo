@@ -78,18 +78,26 @@ const releaseStopTimeout = Duration(seconds: 3);
 /// the same stops.
 const stopTimeout = Duration(seconds: 3);
 
+/// The cameras whose stop [stopInTime] gave up on: the plugin still waits
+/// for the end of that stop.
+final _stopGaveUp = Expando<bool>();
+
 /// Stops the recording of [camera] for the record button; a stop that
 /// has not ended within [stopTimeout] fails as a stop that fails does,
-/// with a [CameraException].
+/// with a [CameraException], and marks the camera for
+/// [stopBeforeRelease].
 ///
 /// A stop that ends after the bound hands its file to no one.
 Future<XFile> stopInTime(CameraController camera) =>
     camera.stopVideoRecording().timeout(
       stopTimeout,
-      onTimeout: () => throw CameraException(
-        'stopTimeout',
-        'The recording did not stop in ${stopTimeout.inSeconds} s.',
-      ),
+      onTimeout: () {
+        _stopGaveUp[camera] = true;
+        throw CameraException(
+          'stopTimeout',
+          'The recording did not stop in ${stopTimeout.inSeconds} s.',
+        );
+      },
     );
 
 /// Stops the recording of [camera], which is about to be released, and
@@ -97,11 +105,15 @@ Future<XFile> stopInTime(CameraController camera) =>
 /// [releaseStopTimeout] hands nothing.
 ///
 /// Gives `false` for a stop that ran out of time: the platform has not
-/// answered, and a call to it before the release could hang as well.
+/// answered, and a call to it before the release could hang as well. A
+/// camera whose stop [stopInTime] gave up on gets `false` at once, with no
+/// second stop: the plugin still waits for the first one, and a second
+/// would wait beside it for the events of the next recording.
 Future<bool> stopBeforeRelease(
   CameraController camera,
   void Function(XFile file) onCaptured,
 ) async {
+  if (_stopGaveUp[camera] ?? false) return false;
   final XFile file;
   try {
     file = await camera.stopVideoRecording().timeout(releaseStopTimeout);

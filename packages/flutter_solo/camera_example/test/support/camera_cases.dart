@@ -1229,44 +1229,72 @@ void controllerCases(MakeDriver make) {
       await finish(tester, controller);
     });
 
-    // Pinned as it is: after a stop that gave up the plugin's controller
-    // still says it records, so the loss stops the recording once more, with
-    // the bound of a release, before the camera is let go.
-    testWidgets('a loss during a stop that hangs lets the camera go once', (
-      tester,
-    ) async {
-      final unanswered = <Object>[];
-      platform.hangStop = true;
-      final controller = await recordAndStop(tester, unanswered);
-      await tester.pump(const Duration(seconds: 1));
-      platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
-      await tester.pump();
-      await tester.pump();
+    // After a stop that gave up the plugin's controller still says it
+    // records, and the plugin still waits for the end of that stop: a
+    // second stop would leave a second loop waiting there. The camera is
+    // let go without one, whichever command lets it go.
+    for (final (name, behind) in [
+      ('a loss', null),
+      ('a loss with a release behind the stop', _Behind.release),
+      ('a loss while the app is hidden', _Behind.hide),
+    ]) {
+      testWidgets('$name during a stop that hangs: no second stop', (
+        tester,
+      ) async {
+        final unanswered = <Object>[];
+        platform.hangStop = true;
+        final controller = await recordAndStop(tester, unanswered);
+        Future<void>? released;
+        switch (behind) {
+          case _Behind.release:
+            await tester.pumpWidget(const SizedBox());
+            released = controller.release();
+          case _Behind.hide:
+            for (final state in const [
+              AppLifecycleState.inactive,
+              AppLifecycleState.hidden,
+            ]) {
+              tester.binding.handleAppLifecycleStateChanged(state);
+            }
+          case null:
+        }
+        await tester.pump(const Duration(seconds: 1));
+        platform.failFromOutside(1, FakeCameraPlatform.takenOnAndroid);
+        await tester.pump();
+        await tester.pump();
 
-      expect(controller.currentState, isA<Broken>());
-      expect(retry, findsOneWidget);
-      // The second stop starts once the first has given up.
-      await tester.pump(stopTimeout - const Duration(seconds: 1));
-      expect(platform.log.where((l) => l == 'stop #1 start'), hasLength(2));
-      await tester.pump(releaseStopTimeout - const Duration(milliseconds: 1));
-      expect(platform.log, isNot(contains(startsWith('dispose'))));
-      await tester.pump(const Duration(milliseconds: 1));
-      await tester.pump(platform.disposeTime);
+        expect(controller.currentState, isA<Broken>());
+        await tester.pump(
+          stopTimeout -
+              const Duration(seconds: 1) -
+              const Duration(milliseconds: 1),
+        );
+        expect(platform.log, isNot(contains(startsWith('dispose'))));
+        await tester.pump(const Duration(milliseconds: 1));
+        await tester.pump(platform.disposeTime);
+        await letCloseEnd(tester);
 
-      expect(platform.log.skipWhile((l) => l != 'stop #1 start'), [
-        'stop #1 start',
-        'camera #1 error',
-        'stop #1 start',
-        'dispose #1 start',
-        'dispose #1 end',
-      ]);
-      expect(controller.currentState, isA<Broken>());
-      expect(captured, isEmpty);
-      expect(unanswered, isEmpty);
-      expect(platform.openCameras, 0);
-      await tester.pumpWidget(const SizedBox());
-      await finish(tester, controller);
-    });
+        // Checked before the wait: a release that hangs would never end it.
+        expect(platform.log.skipWhile((l) => l != 'stop #1 start'), [
+          'stop #1 start',
+          'camera #1 error',
+          'dispose #1 start',
+          'dispose #1 end',
+        ]);
+        await released;
+        expect(
+          controller.currentState,
+          behind == _Behind.release ? isA<Closed>() : isA<Broken>(),
+        );
+        expect(captured, isEmpty);
+        expect(unanswered, isEmpty);
+        expect(platform.openCameras, 0);
+        if (behind != _Behind.release) {
+          await tester.pumpWidget(const SizedBox());
+          await finish(tester, controller);
+        }
+      });
+    }
 
     testWidgets('a release behind a stop that hangs ends after the bound', (
       tester,
@@ -2760,3 +2788,6 @@ void appCases(String controller) {
     expect(platform.openCameras, 0);
   });
 }
+
+/// What a case puts behind a stop that hangs.
+enum _Behind { release, hide }

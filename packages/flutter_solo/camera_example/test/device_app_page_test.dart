@@ -1348,6 +1348,12 @@ void main() {
         _part(_losing, _failure),
         'The bound turns that screen into `Broken` with Retry.',
       );
+      _says(
+        _part(_losing, _failure),
+        '`stopInTime` marks the camera whose stop it gave up on, in '
+        '`_stopGaveUp`, and `stopBeforeRelease` gives up on such a camera at '
+        'once.',
+      );
       await session.close();
     });
   });
