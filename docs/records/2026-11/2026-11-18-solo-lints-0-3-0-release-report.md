@@ -102,3 +102,10 @@ async_job_lints 0.2.2», от него до связки — подготовк�
 коммит «Release solo_lints 0.3.0» с этой записью, аннотированный тег
 `solo_lints-v0.3.0` на нём, `git push --follow-tags` и `dart pub publish`
 из чистого дерева `packages/solo_lints`.
+
+Связка прошла подряд: релизный коммит `7ab7dd87` «Release solo_lints 0.3.0»,
+аннотированный тег `solo_lints-v0.3.0` на нём, `git push --follow-tags` —
+`origin/main` с `111d027f` на `7ab7dd87` вместе с тегом, —
+и `dart pub publish --force` из чистого дерева `packages/solo_lints`:
+«Successfully uploaded https://pub.dev/packages/solo_lints version 0.3.0». API
+pub.dev отдаёт версию 0.3.0 с датой публикации 2026-11-18T15:42:24Z.
