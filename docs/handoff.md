@@ -3,16 +3,14 @@
 Обновлено: 2026-11-19. В работе у агентов ничего нет: линии `solo` 2.0 выпущены
 всеми тремя частями, следующую работу выбирает владелец.
 
-На pub.dev на 2026-11-18: `async_job` 1.0.4, `solo` 2.0.0, `flutter_solo`
-2.0.0, `async_job_lints` 0.2.2, `solo_lints` 0.3.0. В «Unreleased» у `solo`
+На pub.dev на 2026-11-19: `async_job` 1.0.4, `solo` 2.0.0, `flutter_solo`
+2.0.0, `async_job_lints` 0.2.3, `solo_lints` 0.3.0. В «Unreleased» у `solo`
 и `flutter_solo` строка о README и примерах, которые просят
-`solo_lints: ^0.3.0`; у `solo` ещё рецепт ленты в `lanes.md`,
-у `async_job_lints` — ребёнок чужого контроллера и `super` в правилах очереди.
-Оверрайд один: `packages/solo_lints/pubspec_overrides.yaml` ведёт
-на `async_job_lints` из дерева, потому что тесты `solo_lints` требуют его
-правки; живёт до выпуска `async_job_lints` 0.2.3, и выпуск `solo_lints` после
-него поднимает нижнюю границу `async_job_lints`. Линии —
-`2026-11-11-solo-lanes-report.md`, выпуски —
+`solo_lints: ^0.3.0`; у `solo` ещё рецепт ленты в `lanes.md`, Оверрайд один:
+`packages/solo_lints/pubspec_overrides.yaml` ведёт на `async_job_lints`
+из дерева, потому что тесты `solo_lints` требуют правок 0.2.3; следующий выпуск
+`solo_lints` снимает его и поднимает нижнюю границу `async_job_lints`
+до `^0.2.3`. Линии — `2026-11-11-solo-lanes-report.md`, выпуски —
 `2026-11-18-solo-2-0-0-release-report.md`,
 `2026-11-18-flutter-solo-2-0-0-release-report.md`,
 `2026-11-18-async-job-1-0-4-release-report.md`,
@@ -25,9 +23,9 @@
 
 **Ждёт слова владельца.**
 
-- Выпуск `async_job_lints` 0.2.3 подготовлен —
-  `2026-11-19-async-job-lints-0-2-3-release-report.md`; связку запускает только
-  отдельное слово «публикуй».
+- `async_job_lints` 0.2.3 выпущен 2026-11-19 —
+  `2026-11-19-async-job-lints-0-2-3-release-report.md`; следующим может выйти
+  `solo_lints` без оверрайда.
 
 - Бэклог: пул в линии; `onCancel` в `ctx.join` к первому минору ядра.
 

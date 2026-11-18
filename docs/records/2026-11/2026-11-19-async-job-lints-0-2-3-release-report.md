@@ -1,6 +1,7 @@
-> **Состояние на 2026-11-19:** подготовлено, не выпущено. Связку — коммит
-> «Release async_job_lints 0.2.3», тег `async_job_lints-v0.2.3`, push
-> и `dart pub publish` — запускает только отдельное слово владельца.
+> **Состояние на 2026-11-19:** выпущено по слову владельца «публикуй»:
+> релизный коммит «Release async_job_lints 0.2.3», тег
+> `async_job_lints-v0.2.3`, `dart pub publish`. Следом — выпуск
+> `solo_lints` со снятием оверрайда и границей `^0.2.3`.
 > **Что это:** подготовка патча `async_job_lints` 0.2.3 — правки распознавания
 > тела задачи по находкам повторного ревью ветки `solo-lanes`.
 > **Связанные записи:** `2026-11-18-solo-lanes-astra-review-report.md`,
@@ -67,3 +68,11 @@
 - раскладка архивов и прогон на полу Flutter 3.38.1 — «every archive passes its
   gate on the floor: 7 roots»; из архива `async_job` +1917, `solo` +2484,
   `async_job_lints` +231, `solo_lints` +132 с оверрайдом дерева.
+
+## Состояние
+
+2026-11-19 по слову владельца «публикуй» — связка: релизный коммит «Release
+async_job_lints 0.2.3», аннотированный тег `async_job_lints-v0.2.3`,
+`git push --follow-tags` и `dart pub publish --force` из чистого дерева
+`packages/async_job_lints`. Перед связкой на pub.dev стояла 0.2.2, тега 0.2.3
+не было ни локально, ни в origin.
