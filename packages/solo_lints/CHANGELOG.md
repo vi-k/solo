@@ -1,3 +1,11 @@
+## 0.3.1
+
+- Requires `async_job_lints` 0.2.3. `await_own_queue` and `stale_emit` no
+  longer report `close()` or `emit` in the child of a job that a `SoloLanes`
+  hands to a `Solo`: the child runs in that `Solo`. `await super.close()` and
+  `await super.cancelAll()` in a job body are reported as `await close()` is,
+  and a body given to `super.enqueue(...)` counts as queued here.
+
 ## 0.3.0
 
 - Two new rules for the lanes of `SoloLanes` in `solo` 2.0. `stale_emit`, a

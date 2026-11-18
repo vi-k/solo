@@ -1,3 +1,12 @@
+## 0.3.1
+
+- Требует `async_job_lints` 0.2.3. `await_own_queue` и `stale_emit` больше
+  не сообщают о `close()` или `emit` в ребёнке задачи, которую `SoloLanes`
+  передаёт `Solo`: ребёнок идёт в том `Solo`. О `await super.close()`
+  и `await super.cancelAll()` в теле задачи сообщается так же, как
+  об `await close()`, а тело, переданное `super.enqueue(...)`, считается
+  поставленным здесь.
+
 ## 0.3.0
 
 - Два новых правила для линий `SoloLanes` в `solo` 2.0. `stale_emit`, линт,
