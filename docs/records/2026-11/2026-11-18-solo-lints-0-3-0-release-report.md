@@ -1,6 +1,7 @@
-> **Состояние на 2026-11-18:** подготовлено, не выпущено: коммит подготовки
-> «chore: prepare solo_lints 0.3.0», проверки пройдены. Связка — по отдельному
-> слову владельца.
+> **Состояние на 2026-11-18:** выпущено по слову владельца «публикуй»: релизный
+> коммит «Release solo_lints 0.3.0», тег `solo_lints-v0.3.0`,
+> `dart pub publish`. Часть C ветки линий выпущена целиком; дальше — подъём
+> `solo_lints: ^0.3.0` в README и примерах `solo` и `flutter_solo`.
 > **Что это:** подготовка минора `solo_lints` 0.3.0 — правила `stale_emit`
 > и `lane_outside_constructor` для линий `SoloLanes`, пакет требует
 > `async_job_lints` 0.2.2.
@@ -87,8 +88,17 @@ README `solo` и `flutter_solo`, их переводы и примеры про�
 
 ## Состояние
 
-На 2026-11-18: на pub.dev `solo_lints` 0.2.1, `async_job_lints` 0.2.2. Тега
-`solo_lints-v0.3.0` нет ни локально, ни в origin. Связка — релизный коммит
-«Release solo_lints 0.3.0», аннотированный тег `solo_lints-v0.3.0`,
-`git push --follow-tags` и `dart pub publish` из чистого дерева
-`packages/solo_lints` — только по отдельному слову владельца.
+На 2026-11-18 до связки: на pub.dev `solo_lints` 0.2.1, `async_job_lints`
+0.2.2, тега `solo_lints-v0.3.0` нет ни локально, ни в origin.
+
+## Связка
+
+По слову владельца 2026-11-18 «публикуй» — отдельный запрос, состоящий только
+из просьбы опубликовать. Перед связкой: `main` чистый, впереди `origin/main`
+на 3 коммита и не отстаёт; гейт CI зелёный на `111d027f` «Release
+async_job_lints 0.2.2», от него до связки — подготовка `solo_lints` и записи.
+На дереве `main` пакет прошёл формат, `dart analyze --fatal-infos`, `dart test`
+(+158) и `dart pub publish --dry-run` без предупреждений. Связка — релизный
+коммит «Release solo_lints 0.3.0» с этой записью, аннотированный тег
+`solo_lints-v0.3.0` на нём, `git push --follow-tags` и `dart pub publish`
+из чистого дерева `packages/solo_lints`.
