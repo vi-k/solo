@@ -105,3 +105,10 @@ README не называет.
 flutter_solo 2.0.0» с этой записью, аннотированный тег `flutter_solo-v2.0.0`
 на нём, `git push --follow-tags` и `dart pub publish` из чистого дерева
 `packages/flutter_solo`.
+
+Связка прошла подряд: релизный коммит `76544a46` «Release flutter_solo 2.0.0»,
+аннотированный тег `flutter_solo-v2.0.0` на нём, `git push --follow-tags` —
+`origin/main` с `3e279d43` на `76544a46` вместе с тегом, —
+и `dart pub publish --force` из чистого дерева `packages/flutter_solo`:
+«Successfully uploaded https://pub.dev/packages/flutter_solo version 2.0.0».
+API pub.dev отдаёт версию 2.0.0 с датой публикации 2026-11-18.
