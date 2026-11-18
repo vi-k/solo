@@ -223,3 +223,11 @@ Package has 0 warnings.
 «Release async_job_lints 0.2.1» с этой записью, аннотированный тег
 `async_job_lints-v0.2.1` на нём, `git push --follow-tags` и `dart pub publish`
 из чистого дерева `packages/async_job_lints`.
+
+Связка прошла подряд: релизный коммит `b01a0dcb` «Release async_job_lints
+0.2.1», аннотированный тег `async_job_lints-v0.2.1` на нём,
+`git push --follow-tags` — `origin/main` с `f0f55386` на `b01a0dcb` вместе
+с тегом, — и `dart pub publish --force` из чистого дерева
+`packages/async_job_lints`: «Successfully uploaded
+https://pub.dev/packages/async_job_lints version 0.2.1». API pub.dev отдаёт
+версию 0.2.1 с датой публикации 2026-11-18.
