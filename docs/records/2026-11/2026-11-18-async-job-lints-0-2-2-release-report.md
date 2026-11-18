@@ -233,4 +233,6 @@ async_job_lints 0.2.2», аннотированный тег `async_job_lints-v0
 `git push --follow-tags` и `dart pub publish` из чистого дерева
 `packages/async_job_lints`. Перед связкой на дереве `main` пакет прошёл
 `dart format`, `dart analyze --fatal-infos`, `dart test` (+231)
-и `dart pub publish --dry-run` без предупреждений.
+и `dart pub publish --dry-run` без предупреждений. Релизный коммит `111d027f`,
+тег и `main` отправлены в origin, `dart pub publish --force` загрузил пакет;
+на pub.dev версия 0.2.2 опубликована 2026-11-18T15:18:19Z.
