@@ -1593,6 +1593,11 @@ void main() {
       final release = Completer<void>();
       var counting = false;
       var groupListened = 0;
+      // The second listening is the owner's, and it comes only once the
+      // body of the root is over. `unheard` is let go after it and not after
+      // a delay: a timer of the test may fire before the one of the body,
+      // and the owner would find `unheard` over and pass it by.
+      final takenUp = Completer<void>();
       late ProbeJob<void> failing;
       late ProbeJob<void> unheard;
       Object? thrown;
@@ -1639,6 +1644,9 @@ void main() {
                     '_RunAllGroup._hear',
                   ) &&
                   ++groupListened <= 2) {
+                if (groupListened == 2) {
+                  takenUp.complete();
+                }
                 throw const StackOverflowError();
               }
               return parent.registerUnaryCallback(zone, callback);
@@ -1646,7 +1654,13 @@ void main() {
           ),
         );
       }, (error, _) => zone.add(error));
-      await delay(10);
+      // With no frame of `_hear` the zone counts nothing and the owner's
+      // listening never comes: the wait gives up, and the check below says
+      // why.
+      await takenUp.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {},
+      );
       expect(
         groupListened,
         isPositive,
