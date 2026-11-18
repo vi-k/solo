@@ -89,3 +89,10 @@
 async_job 1.0.4» с этой записью, аннотированный тег `async_job-v1.0.4` на нём,
 `git push --follow-tags` и `dart pub publish` из чистого дерева
 `packages/async_job`.
+
+Связка прошла подряд: релизный коммит `07dbdfc1` «Release async_job 1.0.4»,
+аннотированный тег `async_job-v1.0.4` на нём, `git push --follow-tags` —
+`origin/main` с `76544a46` на `07dbdfc1` вместе с тегом, —
+и `dart pub publish --force` из чистого дерева `packages/async_job`:
+«Successfully uploaded https://pub.dev/packages/async_job version 1.0.4». API
+pub.dev отдаёт версию 1.0.4 с датой публикации 2026-11-18.
