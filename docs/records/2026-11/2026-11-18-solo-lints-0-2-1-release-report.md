@@ -108,3 +108,10 @@
 solo_lints 0.2.1» с этой записью, аннотированный тег `solo_lints-v0.2.1`
 на нём, `git push --follow-tags` и `dart pub publish` из чистого дерева
 `packages/solo_lints`.
+
+Связка прошла подряд: релизный коммит `3e279d43` «Release solo_lints 0.2.1»,
+аннотированный тег `solo_lints-v0.2.1` на нём, `git push --follow-tags` —
+`origin/main` с `b01a0dcb` на `3e279d43` вместе с тегом, —
+и `dart pub publish --force` из чистого дерева `packages/solo_lints`:
+«Successfully uploaded https://pub.dev/packages/solo_lints version 0.2.1». API
+pub.dev отдаёт версию 0.2.1 с датой публикации 2026-11-18.
