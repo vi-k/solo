@@ -1,3 +1,11 @@
+## Unreleased
+
+### Documentation
+
+- The README asks for `solo_lints: ^0.3.0`, which brings the warning
+  `lane_outside_constructor` and the lint `stale_emit` for the lanes of
+  `SoloLanes`.
+
 ## 2.0.0
 
 ### Breaking changes

@@ -36,7 +36,7 @@ most of the [common mistakes](doc/mistakes.md) in the code. Name it in
 
 ```yaml
 plugins:
-  solo_lints: ^0.2.0
+  solo_lints: ^0.3.0
 ```
 
 That turns on its warnings; the lints are turned on by name, as its

@@ -1,7 +1,8 @@
 > **Состояние на 2026-11-18:** выпущено по слову владельца «публикуй»: релизный
 > коммит «Release solo_lints 0.3.0», тег `solo_lints-v0.3.0`,
-> `dart pub publish`. Часть C ветки линий выпущена целиком; дальше — подъём
-> `solo_lints: ^0.3.0` в README и примерах `solo` и `flutter_solo`.
+> `dart pub publish`. Часть C ветки линий выпущена целиком. README и примеры
+> `solo` и `flutter_solo` подняты до `solo_lints: ^0.3.0` тем же днём,
+> коммитом «docs: ask for solo_lints 0.3.0 in solo and flutter_solo».
 > **Что это:** подготовка минора `solo_lints` 0.3.0 — правила `stale_emit`
 > и `lane_outside_constructor` для линий `SoloLanes`, пакет требует
 > `async_job_lints` 0.2.2.
@@ -109,3 +110,20 @@ async_job_lints 0.2.2», от него до связки — подготовк�
 и `dart pub publish --force` из чистого дерева `packages/solo_lints`:
 «Successfully uploaded https://pub.dev/packages/solo_lints version 0.3.0». API
 pub.dev отдаёт версию 0.3.0 с датой публикации 2026-11-18T15:42:24Z.
+
+## Подъём в README соседей
+
+По слову владельца 2026-11-18 «Подними solo_lints до ^0.3.0 в README и примерах
+solo и flutter_solo» — коммит «docs: ask for solo_lints 0.3.0 in solo and
+flutter_solo». `solo_lints: ^0.3.0` теперь просят README `solo`
+и `flutter_solo`, их переводы, `analysis_options.yaml` примера `solo`, примера
+и приложения `camera_example` `flutter_solo`. В списках изменений обоих пакетов
+и их переводах — раздел «Unreleased» с этой строкой. Набор диагностик примеров
+не менялся: `stale_emit` — линт и включается по имени, а примеры `SoloLanes`
+не используют.
+
+Проверено: сторожа `readme_rakes_test.dart` — `solo` +42, `flutter_solo` +93;
+`dart analyze --fatal-infos` пакетов, примеров и `camera_example`
+и `flutter analyze` `flutter_solo` — без замечаний; сервер анализа разрешил
+плагин `solo_lints` 0.3.0 с `async_job_lints` 0.2.2. Переводы, ссылки, ширина
+и заливка — чистые.
