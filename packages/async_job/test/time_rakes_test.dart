@@ -8,10 +8,12 @@ import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/cancel_reason.dart';
 import 'support/cancellation_page.dart' show nameTheStop;
 import 'support/cancellation_stubs.dart';
 import 'support/delay.dart';
 import 'support/page_code.dart';
+import 'support/probe_job.dart';
 import 'support/time_page.dart' as page;
 
 /// The first attempts of `doc/time.md`, and what each one costs.
@@ -43,11 +45,23 @@ const quoted = [
     'outcome: Cancelled(timeout)',
   ],
   ['outcome: Done(page without a thumbnail after 15 ms)'],
+  ['cancel'],
+  [
+    'device released',
+    'outcome: Cancelled(body: Job(stop): Cancelled(timeout))',
+  ],
+  ['cancel', 'device released', 'outcome: Cancelled(manual)', 'device stopped'],
+  ['log: the device did not answer', 'device released', 'outcome: Done(null)'],
+  ['cancel', 'device stopped', 'device released', 'outcome: Cancelled(manual)'],
 ];
 
 /// When the user cancels in "Letting time pass": the page's "500 ms in",
 /// halfway through the second between two reads.
 const pauseCancelMs = 500;
+
+/// When the user cancels in "A call that may not come back": the page's
+/// "5 ms in", halfway through a stop of the device.
+const stopCancelMs = 5;
 
 /// Runs the job [start] makes, cancels it [pauseCancelMs] in, and returns
 /// how many ms after the cancellation the job ended and for how many more
@@ -539,6 +553,209 @@ void main() {
     }
   });
 
+  group('A call that may not come back', () {
+    final text = File('doc/time.md').readAsStringSync();
+    final section = text
+        .substring(text.indexOf('## A call that may not come back'))
+        .replaceAll(RegExp(r'\s+'), ' ');
+
+    /// The error of a stop that has not answered within the bound.
+    final timedOut =
+        '${TimeoutException('Future not completed', page.stopBound)}';
+
+    /// Runs the job [start] makes on a stop that never comes back, cancels it
+    /// [stopCancelMs] in, lets an hour pass, and returns whether the job and
+    /// the future of its `cancel()` have ended.
+    ({bool finished, bool cancelReturned}) hanging(
+      Job<Object?> Function() start,
+    ) {
+      freshRun();
+      stage.stopHangs = true;
+      var finished = true;
+      var cancelReturned = true;
+      fakeAsync((async) {
+        final job = start()..ignoreFailure();
+        async.elapse(const Duration(milliseconds: stopCancelMs));
+        var returned = false;
+        unawaited(job.cancel().then((_) => returned = true));
+        async.elapse(const Duration(hours: 1));
+        finished = job.isFinished;
+        cancelReturned = returned;
+      });
+      return (finished: finished, cancelReturned: cancelReturned);
+    }
+
+    /// Runs [body] in a job of an engine, and [stopCancelMs] in cancels it
+    /// with a cancellation it cannot refuse, as a rule of an engine does.
+    List<String> cancelledByARule(Future<void> Function(JobContext ctx) body) {
+      freshRun();
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          final job = ProbeJob<void>(body, observer: printing)..launch();
+          unawaited(job.done.then((outcome) => say('outcome: $outcome')));
+          async.elapse(const Duration(milliseconds: stopCancelMs));
+          say('rule');
+          job.cancelBy(
+            const Cancelled.by(reason: TestCancelReason('rules')),
+            rejectable: false,
+          );
+          async.flushTimers();
+        }),
+        (error, stackTrace) => say('zone: $error'),
+      );
+      return printed.toList();
+    }
+
+    test('a join on a stop that never comes back never ends', () {
+      stage.stopHangs = true;
+      expect(watch(page.stopInAJoin, cancelAt: stopCancelMs), quoted[3]);
+      expect(hanging(page.stopInAJoin), (
+        finished: false,
+        cancelReturned: false,
+      ));
+    });
+
+    test(
+      'a child with a deadline gives up on a stop that never comes back',
+      () {
+        stage.stopHangs = true;
+        expect(watch(page.stopInAChild), quoted[4]);
+      },
+    );
+
+    test('with join in the child, its deadline waits for the stop too', () {
+      expect(hanging(page.stopJoinedInAChild), (
+        finished: false,
+        cancelReturned: false,
+      ));
+      expect(
+        section,
+        contains(
+          'with `join` in it, the deadline would wait for the stop as well',
+        ),
+      );
+    });
+
+    test('a cancellation of the job walks away from the stop in the child', () {
+      expect(watch(page.stopInAChild, cancelAt: stopCancelMs), quoted[5]);
+    });
+
+    test('a timeout inside join gives up on a stop that never comes back', () {
+      stage.stopHangs = true;
+      expect(watch(page.stopInATimedJoin), quoted[6]);
+      expect(watch(page.stopInATimedJoin, cancelAt: stopCancelMs), [
+        'cancel',
+        'log: the device did not answer',
+        'device released',
+        'outcome: Cancelled(manual)',
+      ]);
+      expect(hanging(page.stopInATimedJoin), (
+        finished: true,
+        cancelReturned: true,
+      ));
+    });
+
+    test('a timeout inside join waits for the stop through a cancellation', () {
+      expect(watch(page.stopInATimedJoin, cancelAt: stopCancelMs), quoted[7]);
+    });
+
+    test('without the try, the TimeoutException ends the job Failed', () {
+      stage.stopHangs = true;
+      expect(watch(page.stopInATimedJoinUnmapped), [
+        'onError: $timedOut',
+        'device released',
+        'outcome: Failed($timedOut)',
+      ]);
+      expect(watch(page.stopInATimedJoinUnmapped, cancelAt: stopCancelMs), [
+        'cancel',
+        'onError: $timedOut',
+        'device released',
+        'zone: $timedOut',
+        'outcome: Cancelled(manual)',
+      ]);
+    });
+
+    test('what comes after the bound of a timeout reaches nobody', () {
+      stage.stopMs = 30;
+      expect(watch(page.stopInATimedJoin), [...quoted[6], 'device stopped']);
+      stage.stopFails = true;
+      expect(watch(page.stopInATimedJoin), quoted[6]);
+    });
+
+    test(
+      'in a section, the child waits for the stop through a cancellation',
+      () {
+        expect(
+          watch(page.stopInAHeldChildJob, cancelAt: stopCancelMs),
+          quoted[7],
+        );
+        stage.stopHangs = true;
+        expect(watch(page.stopInAHeldChildJob), quoted[4]);
+      },
+    );
+
+    test('in a section, a stop that fails late reaches observer and zone', () {
+      stage
+        ..stopMs = 30
+        ..stopFails = true;
+      expect(watch(page.stopInAHeldChildJob), [
+        ...quoted[4],
+        'onError: Bad state: device did not stop',
+        'zone: Bad state: device did not stop',
+      ]);
+      expect(
+        section,
+        contains(
+          'so its error reaches the observer and the zone, where '
+          '`Future.timeout` drops it.',
+        ),
+      );
+    });
+
+    test('a cancellation the job cannot refuse: the section does not hold '
+        'it, join waits', () {
+      expect(cancelledByARule(page.stopInAHeldChild), [
+        'rule',
+        'device released',
+        'outcome: Cancelled(rules)',
+        'device stopped',
+      ]);
+      expect(cancelledByARule(page.stopWithATimeout), [
+        'rule',
+        'device stopped',
+        'device released',
+        'outcome: Cancelled(rules)',
+      ]);
+      expect(
+        section,
+        contains(
+          'A cancellation the job cannot refuse, such as a rule an engine '
+          'adds, is not held, and the child walks away from the stop as in '
+          'the second attempt, while `join` waits through it.',
+        ),
+      );
+    });
+
+    test('names the durations its code takes', () {
+      List<String?> after(String pattern) => [
+        for (final match in RegExp(pattern).allMatches(section)) match.group(1),
+      ];
+
+      final stopMs = '${Stage().stopMs}';
+      final bound = '${page.stopBound.inMilliseconds}';
+      expect(after(r'A stop takes (\d+) ms'), [stopMs]);
+      expect(after(r'answers in (\d+) ms'), [stopMs, stopMs]);
+      expect(after(r'[Aa]fter (\d+) ms'), [bound, bound, bound]);
+      expect(after(r'(\d+) ms short of its end'), [
+        '${Stage().stopMs - stopCancelMs}',
+      ]);
+      expect(
+        RegExp(r'whose\s+stop\s+takes\s+(\d+)\s+ms').firstMatch(text)!.group(1),
+        stopMs,
+      );
+    });
+  });
+
   group('The page', () {
     test('quotes what its code prints', () {
       final text = File('doc/time.md').readAsStringSync();
@@ -558,7 +775,10 @@ void main() {
 
       expect(after(r'reads\s+the\s+rows\s+in\s+(\d+)\s+ms'), ['$readMs']);
       expect(after(r'three\s+steps\s+of\s+(\d+)\s+ms'), ['$stepMs']);
-      expect(after(r'(\d+)\s+ms\s+in\b'), ['$pauseCancelMs']);
+      expect(after(r'(\d+)\s+ms\s+in\b'), [
+        '$pauseCancelMs',
+        for (var i = 0; i < 3; i++) '$stopCancelMs',
+      ]);
       expect(
         [
           ...after(r'is\s+given\s+(\d+)\s+ms'),

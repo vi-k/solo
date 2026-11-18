@@ -38,7 +38,8 @@ final class ProbeJob<T> extends JobBase<T> implements ChildJob<T> {
   void drop(Outcome<T> outcome) => finish(outcome);
 
   /// Cancels the job with a cancellation of its own, the way an engine does.
-  void cancelBy(Cancelled cancelled) => cancelWith(cancelled);
+  void cancelBy(Cancelled cancelled, {bool rejectable = true}) =>
+      cancelWith(cancelled, rejectable: rejectable);
 
   /// Tells the observer about an error the way an engine does, through the
   /// door the core leaves it.
@@ -556,7 +557,8 @@ final class CheckingJob<T> extends JobBase<T> implements ChildJob<T> {
   void launch() => start();
 
   /// Cancels the job with a cancellation of its own, the way an engine does.
-  void cancelBy(Cancelled cancelled) => cancelWith(cancelled);
+  void cancelBy(Cancelled cancelled, {bool rejectable = true}) =>
+      cancelWith(cancelled, rejectable: rejectable);
 
   @override
   JobContextBase createContext() => CheckingContext(this);

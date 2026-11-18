@@ -146,3 +146,83 @@ Future<String> pageWithAThumbnail(JobContext ctx) async {
   }
   // #enddocregion
 }
+
+/// The bound of "A call that may not come back", the page's "after 15 ms".
+const stopBound = Duration(milliseconds: 15);
+
+/// The first attempt of "A call that may not come back": the stop of the
+/// device in a `join`, before its release.
+Job<void> stopInAJoin() => Job<void>(observer: printing, (ctx) async {
+  // #docregion
+  ctx.onDispose(device.release);
+  await ctx.join(device.stop);
+  // #enddocregion
+});
+
+/// The second attempt: the stop in a child with a deadline.
+Job<void> stopInAChild() => Job<void>(observer: printing, (ctx) async {
+  // #docregion
+  ctx.onDispose(device.release);
+  await ctx.run(
+    ctx.child(
+      (ctx) => ctx.abandonable(device.stop),
+      key: 'stop',
+      timeout: const Duration(milliseconds: 15),
+    ),
+  );
+  // #enddocregion
+});
+
+/// The second attempt with `join` in the child, which the page names: the
+/// deadline of the child waits for the stop as well.
+Job<void> stopJoinedInAChild() => Job<void>(observer: printing, (ctx) async {
+  ctx.onDispose(device.release);
+  await ctx.run(
+    ctx.child((ctx) => ctx.join(device.stop), key: 'stop', timeout: stopBound),
+  );
+});
+
+/// The body of "A timeout inside `join`", for a job a test makes itself.
+Future<void> stopWithATimeout(JobContext ctx) async {
+  // #docregion
+  ctx.onDispose(device.release);
+  try {
+    await ctx.join(
+      () => device.stop().timeout(const Duration(milliseconds: 15)),
+    );
+  } on TimeoutException {
+    ctx.log('the device did not answer');
+  }
+  // #enddocregion
+}
+
+/// "A timeout inside `join`": the stop is waited for whole, for 15 ms at
+/// most.
+Job<void> stopInATimedJoin() => Job<void>(observer: printing, stopWithATimeout);
+
+/// The answer without its `try`, which the page names: the
+/// `TimeoutException` ends the job.
+Job<void> stopInATimedJoinUnmapped() =>
+    Job<void>(observer: printing, (ctx) async {
+      ctx.onDispose(device.release);
+      await ctx.join(() => device.stop().timeout(stopBound));
+    });
+
+/// The body of the second attempt in an uncancellable section, which the
+/// page names, for a job a test makes itself.
+Future<void> stopInAHeldChild(JobContext ctx) async {
+  ctx.onDispose(device.release);
+  await ctx.uncancellable(
+    () => ctx.run(
+      ctx.child(
+        (ctx) => ctx.abandonable(device.stop),
+        key: 'stop',
+        timeout: stopBound,
+      ),
+    ),
+  );
+}
+
+/// The second attempt in an uncancellable section.
+Job<void> stopInAHeldChildJob() =>
+    Job<void>(observer: printing, stopInAHeldChild);

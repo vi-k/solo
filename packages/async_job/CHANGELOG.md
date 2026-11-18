@@ -5,6 +5,9 @@
 - The README says that `Solo` of `solo` runs one root job at a time and
   `SoloLanes` one at a time in each of its lanes, in place of exclusive access
   to state.
+- [Time](doc/time.md) shows how to wait whole for a call that may not come
+  back: `ctx.join` around `Future.timeout`, whose `TimeoutException` the body
+  turns into what a call without an answer means.
 
 ## 1.0.3
 

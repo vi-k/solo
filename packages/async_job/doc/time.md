@@ -2,8 +2,10 @@
 
 A pause and a deadline are the two places where cancellation meets time:
 `ctx.pause` waits and ends the moment the job is cancelled, and `timeout`
-cancels the job once its limit runs out. The rest of cancellation is on
-[Cancellation](cancellation.md).
+cancels the job once its limit runs out. A wait that a cancellation must not
+cut short takes its bound from `Future.timeout` instead, as
+[A call that may not come back](#a-call-that-may-not-come-back) shows. The rest
+of cancellation is on [Cancellation](cancellation.md).
 
 The code works with the database of the cancellation page: `database.readAll`
 reads the rows in 10 ms, and the migration takes three steps of 10 ms. Before
@@ -11,13 +13,15 @@ each step the migration reads a `CancelToken`, the database client's stop
 signal and not a type of this package; finding it cancelled, it stops by
 throwing `DatabaseStopped`. The app names that stop once, in `main`, as
 [A token through `onCancel`](cancellation.md#a-token-through-oncancel) shows,
-and every job on this page runs with that line.
+and every job on this page runs with that line. The last section stops the
+device of that page, whose stop takes 10 ms.
 
-The lines under the code are what it prints when it runs. The database says
-what it writes, and `printing`, the observer of the migration jobs, prints what
-reaches it: `onError:` for an error. `outcome:` is what `job.done` completes
-with. A failure nobody observes goes on to the answer, which for `printing` is
-the zone, as
+The lines under the code are what it prints when it runs. The database and the
+device say what they do, `cancel` is the moment the user cancels, and
+`printing`, the observer of every job with lines under it, prints what reaches
+it: `log:` for `ctx.log`, `onError:` for an error. `outcome:` is what
+`job.done` completes with. A failure nobody observes goes on to the answer,
+which for `printing` is the zone, as
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) shows.
 
 ## Letting time pass
@@ -257,3 +261,131 @@ duration. The `else` rethrows a thumbnail somebody else cancelled. Let out, the
 child's deadline ends the parent
 `Cancelled(body: Job(thumbnail): Cancelled(timeout))`. The key is there for
 that line: a child without one prints as `Job()`.
+
+## A call that may not come back
+
+The job stops the device and then releases it, and it waits for the stop whole:
+a device released while it is still stopping is what
+[A stop that takes time](cancellation.md#a-stop-that-takes-time) on the
+cancellation page sets out to avoid. A stop takes 10 ms, but now and then the
+device does not answer one at all. After 15 ms the job should give up on such a
+stop and release the device all the same.
+
+### The first attempt
+
+```dart
+// The first attempt: a stop the device never answers holds the job for good.
+ctx.onDispose(device.release);
+await ctx.join(device.stop);
+```
+
+The device does not answer the stop, and the user cancels 5 ms in:
+
+```text
+cancel
+```
+
+Nothing comes after that line: the job never ends, and the device is never
+released. `join` waits for its action whole, through a cancellation too, and
+this action never comes back. `cancel()` returns once the job has ended, so the
+future it returns never completes either.
+
+### The second attempt
+
+A deadline bounds a wait, and
+[A deadline for one step](#a-deadline-for-one-step) gives one to a single step
+as a child:
+
+```dart
+// The second attempt: a cancellation of the job walks away from the stop.
+ctx.onDispose(device.release);
+await ctx.run(
+  ctx.child(
+    (ctx) => ctx.abandonable(device.stop),
+    key: 'stop',
+    timeout: const Duration(milliseconds: 15),
+  ),
+);
+```
+
+The device does not answer the stop:
+
+```text
+device released
+outcome: Cancelled(body: Job(stop): Cancelled(timeout))
+```
+
+The bound holds. The child ends `Cancelled(timeout)` after 15 ms, the device is
+released, and the deadline of the child, let out of the body, ends the job. The
+child waits for the stop with `abandonable`: with `join` in it, the deadline
+would wait for the stop as well, and a stop that never comes back would hold
+the child as the first attempt holds the job.
+
+The device answers in 10 ms, and the user cancels 5 ms in:
+
+```text
+cancel
+device released
+outcome: Cancelled(manual)
+device stopped
+```
+
+A cancellation of the job passes to its children, and `abandonable` in the
+child walks away from a stop 5 ms short of its end: the device is released
+while it is still stopping. It is the trace of the first attempt of
+[A stop that takes time](cancellation.md#a-stop-that-takes-time), and the stop
+is the call the job wanted to wait for whole.
+
+### A timeout inside `join`
+
+```dart
+ctx.onDispose(device.release);
+try {
+  await ctx.join(
+    () => device.stop().timeout(const Duration(milliseconds: 15)),
+  );
+} on TimeoutException {
+  ctx.log('the device did not answer');
+}
+```
+
+The device does not answer the stop:
+
+```text
+log: the device did not answer
+device released
+outcome: Done(null)
+```
+
+The device answers in 10 ms, and the user cancels 5 ms in:
+
+```text
+cancel
+device stopped
+device released
+outcome: Cancelled(manual)
+```
+
+`join` waits for the stop whole, through a cancellation of the job, and
+`Future.timeout` bounds that wait: after 15 ms the future `join` waits for
+fails with a `TimeoutException`. It is the `TimeoutException` of Dart, an error
+of the call, and not a deadline of the core: no job is cancelled, and no
+`TimeoutCancelReason` is made. `join` throws an error of its action as it is,
+cancelled or not, so the body says what a stop without an answer means: here a
+line in the log, and the job ends `Done`, or `Cancelled` when the user
+cancelled meanwhile. Without the `try` the job ends `Failed` with the
+`TimeoutException`; a job cancelled meanwhile ends `Cancelled`, and the error
+goes where any failure of the body of a cancelled job goes: to the observer and
+then to the zone. A stop that ends or fails after the bound reaches nobody:
+`Future.timeout` drops what comes too late itself.
+
+`ctx.uncancellable` around the child of the second attempt waits for the stop
+as well: the section holds the cancellation of the job back, and the child does
+not hear it, as
+[Holding the cancellation back](cancellation.md#holding-the-cancellation-back)
+on the cancellation page shows. Two things set it apart from a timeout inside
+`join`. A cancellation the job cannot refuse, such as a rule an engine adds, is
+not held, and the child walks away from the stop as in the second attempt,
+while `join` waits through it. And a stop that fails after the bound fails in a
+call the child walked away from, so its error reaches the observer and the
+zone, where `Future.timeout` drops it.

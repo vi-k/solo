@@ -24,6 +24,12 @@ final class Stage {
   /// Whether [Device.stop] fails instead of stopping the device.
   bool stopFails = false;
 
+  /// Whether [Device.stop] never comes back: the device does not answer.
+  bool stopHangs = false;
+
+  /// How long [Device.stop] takes before it stops the device or fails.
+  int stopMs = 10;
+
   /// What [renderThumbnail] does instead of taking its 20 ms.
   Thumbnail thumbnail = Thumbnail.renders;
 }
@@ -137,7 +143,8 @@ final class Store {
 /// The store of the page.
 final store = Store();
 
-/// A device that records until it has stopped; a stop takes 10 ms.
+/// A device that records until it has stopped; a stop takes 10 ms, unless
+/// the stage says otherwise.
 final class Device {
   // Made by the first recording, inside the job: a future made outside the
   // zone of `fakeAsync` would complete where its timers never run.
@@ -146,8 +153,15 @@ final class Device {
   /// Records until the device has stopped.
   Future<void> record() => (_stopped ??= Completer<void>()).future;
 
-  Future<void> stop() async {
-    await delay(10);
+  Future<void> stop() {
+    if (stage.stopHangs) {
+      return Completer<void>().future;
+    }
+    return _stop();
+  }
+
+  Future<void> _stop() async {
+    await delay(stage.stopMs);
     if (stage.stopFails) {
       throw StateError('device did not stop');
     }
