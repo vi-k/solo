@@ -4,9 +4,14 @@
 всеми тремя частями, следующую работу выбирает владелец.
 
 На pub.dev на 2026-11-18: `async_job` 1.0.4, `solo` 2.0.0, `flutter_solo`
-2.0.0, `async_job_lints` 0.2.2, `solo_lints` 0.3.0. Оверрайдов в дереве нет.
-В «Unreleased» у `solo` и `flutter_solo` одна строка: README и примеры просят
-`solo_lints: ^0.3.0`; на pub.dev она уйдёт с их следующими выпусками. Линии —
+2.0.0, `async_job_lints` 0.2.2, `solo_lints` 0.3.0. В «Unreleased» у `solo`
+и `flutter_solo` строка о README и примерах, которые просят
+`solo_lints: ^0.3.0`; у `solo` ещё рецепт ленты в `lanes.md`,
+у `async_job_lints` — ребёнок чужого контроллера и `super` в правилах очереди.
+Оверрайд один: `packages/solo_lints/pubspec_overrides.yaml` ведёт
+на `async_job_lints` из дерева, потому что тесты `solo_lints` требуют его
+правки; живёт до выпуска `async_job_lints` 0.2.3, и выпуск `solo_lints` после
+него поднимает нижнюю границу `async_job_lints`. Линии —
 `2026-11-11-solo-lanes-report.md`, выпуски —
 `2026-11-18-solo-2-0-0-release-report.md`,
 `2026-11-18-flutter-solo-2-0-0-release-report.md`,
@@ -14,21 +19,12 @@
 `2026-11-18-async-job-lints-0-2-2-release-report.md`
 и `2026-11-18-solo-lints-0-3-0-release-report.md`. Три теста ядра, красневшие
 под нагрузкой машины, исправлены 2026-11-18 — раздел «Красные тесты ядра»
-`2026-11-18-async-job-lints-0-2-2-release-report.md`.
+`2026-11-18-async-job-lints-0-2-2-release-report.md`. Находки повторного ревью
+ветки `solo-lanes` моделью gpt-6.2-astra проверены и закрыты 2026-11-18 —
+`2026-11-18-solo-lanes-astra-review-report.md`.
 
 **Ждёт слова владельца.**
 
-- Повторное ревью ветки `solo-lanes` моделью astra прислала соседняя сессия
-  2026-11-18: восемь находок, по её словам подтверждённых и не исправленных
-  в `main`. Здесь они не проверены и в запись под гитом не перенесены. Среди
-  них: `lanes.md` и перевод в абзаце под `StudioController` говорят
-  `ctx.state.notice` в снимке, хотя `shoot` сохраняет камеру; CHANGELOG `solo`
-  называет `Solo._step`, которого в 1.x нет; `_queuedHere` в `context.dart`
-  `async_job_lints` даёт ложные `await_own_queue` и `stale_emit` на ребёнке
-  чужого `Solo` в методе `SoloLanes`; `queueLaneOf` и `_ownMethodOf`
-  на `await super.close()` из тела своей линии дают unknown и пропускают
-  дедлок; `_ladder` в RF5 `lanes_close_test` не доказывает «one microtask»;
-  подмена в `SoloController._reevaluate` на `_cores.first` не роняет тестов.
 - Бэклог: пул в линии.
 - P1 Fable (`ctx.join` с `onCancel` в ядре) и P3 Fable (навык для агентов
   в пакете) — только по слову владельца; P2 Astra (фасад свежести) не сделана
@@ -59,10 +55,11 @@
 
 Не трогать: процессы `codex` на машине — не этой сессии.
 
-Дерево: `main`, `origin` на момент записи — `00381121`; три коммита уборки
-handoff, последний с этой строкой, лежат поверх и не отправлены. CI
-на `00381121`: сборка сайта зелёная, `gate` шёл. `dart test`: `async_job` +1917
-на стабильном SDK и на полу, `async_job_lints` +231, `solo_lints` +158.
+Дерево: `main`, `origin` на момент записи — `00381121`; поверх лежат
+и не отправлены три коммита уборки handoff и четыре коммита находок astra,
+последний с этой строкой. CI на `00381121`: сборка сайта зелёная, `gate` шёл.
+`dart test`: `async_job` +1917 на стабильном SDK и на полу, `async_job_lints`
++231, `solo_lints` +163, `solo` +2498.
 
 ## Что стоит помнить
 

@@ -606,12 +606,13 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
 /// takes a `SoloContext` and is given to a call on this controller, on the
 /// context of a body queued here or on a lane field, or to no call; the
 /// class or the mixin around is a controller. A child runs where its parent
-/// does: the child of a job of another controller runs there. The lane is
-/// `null` for a body given to anything but `enqueue` of a lane: a body given
-/// to `job` may run as a child in another lane, and a handler of `collect`
-/// or `accumulate` runs where its group goes. A rule that reports a wait for
-/// the own queue or the own lane looks at this body, and a rule that leaves
-/// a wait for the own lane to it asks the same.
+/// does: the child of a job of another controller runs there.
+///
+/// The lane is `null` for a body given to anything but `enqueue` of a lane:
+/// a body given to `job` may run as a child in another lane, and a handler
+/// of `collect` or `accumulate` runs where its group goes. A rule that
+/// reports a wait for the own queue or the own lane looks at this body, and
+/// a rule that leaves a wait for the own lane to it asks the same.
 ({Element ctx, Element? lane})? queuedBodyOf(AstNode node) {
   final around = controllerAround(node);
   if (!isSolo(around) && !isSoloController(around)) return null;
