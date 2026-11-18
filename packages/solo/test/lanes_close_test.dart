@@ -99,6 +99,22 @@ final class _Closing extends SoloObserver {
   void onClose(SoloController<Object> solo) => log.add('observer onClose');
 }
 
+/// Logs the end of every job and the close of every controller, each with
+/// the number [turn] gives.
+final class _Ends extends SoloObserver {
+  final List<(String, int)> ends;
+  final int Function() turn;
+
+  _Ends(this.ends, this.turn);
+
+  @override
+  void onFinish(SoloController<Object> solo, Job<Object?> job) =>
+      ends.add(('${job.key}', turn()));
+
+  @override
+  void onClose(SoloController<Object> solo) => ends.add(('close', turn()));
+}
+
 /// A job that waits until [gate] completes, whatever cancels it meanwhile.
 Future<void> Function(SoloContext<int, int> ctx) _waits(Completer<void> gate) =>
     (ctx) => gate.future;
@@ -181,37 +197,48 @@ void main() {
     });
 
     test('two lanes that end in one microtask close once', () {
+      final log = <String>[];
+      final ends = <(String, int)>[];
+      var scheduled = 0;
+      var running = 0;
+      // Numbers every microtask: two ends logged with the number of the
+      // microtask they ran in tell one microtask from two neighbouring ones,
+      // which the order of a log does not.
+      final numbered = ZoneSpecification(
+        scheduleMicrotask: (self, parent, zone, callback) {
+          final number = ++scheduled;
+          parent.scheduleMicrotask(zone, () {
+            running = number;
+            callback();
+          });
+        },
+      );
       fakeAsync((async) {
-        final log = <String>[];
-        Solo.observer = _Closing(log);
-        final controller = _Two(log);
-        final gate = Completer<void>();
-        controller.a.enqueue<int, void>(key: 'a', _waits(gate));
-        controller.b.enqueue<int, void>(key: 'b', _waits(gate));
-        async.flushMicrotasks();
-        log.clear();
+        runZoned(zoneSpecification: numbered, () {
+          Solo.observer = _Ends(ends, () => running);
+          final controller = _Two(log);
+          final gate = Completer<void>();
+          // Both cleanups wait for one future, and its listeners run in the
+          // microtask that completes it: both jobs end there.
+          Future<void> waits(SoloContext<int, int> ctx) async {
+            ctx.onDispose(() => gate.future);
+          }
 
-        final first = controller.close()..then((_) => log.add('done'));
-        final second = controller.close();
-        gate.complete();
-        _ladder(log, 6);
-        async.flushMicrotasks();
+          controller.a.enqueue<int, void>(key: 'a', waits);
+          controller.b.enqueue<int, void>(key: 'b', waits);
+          async.flushMicrotasks();
+          log.clear();
 
-        expect(second, same(first));
-        // No tick between the two ends: they are one microtask.
-        expect(log, [
-          'tick 0',
-          'finish a',
-          'finish b',
-          'tick 1',
-          'observer onClose',
-          'onClose',
-          'tick 2',
-          'done',
-          'tick 3',
-          'tick 4',
-          'tick 5',
-        ]);
+          final first = controller.close()..then((_) => log.add('done'));
+          final second = controller.close();
+          gate.complete();
+          async.flushMicrotasks();
+
+          expect(second, same(first));
+          expect(log, ['finish a', 'finish b', 'onClose', 'done']);
+          expect([for (final (what, _) in ends) what], ['a', 'b', 'close']);
+          expect(ends[1].$2, ends[0].$2);
+        });
       });
     });
   });

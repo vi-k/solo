@@ -40,6 +40,9 @@ final class _Rig extends SoloLanes<Board> {
     camera = lane('camera');
     notices = lane('notices');
   }
+
+  /// What the device reports, written from outside every lane.
+  void reflect(Board board) => externalSetState(board);
 }
 
 /// An epoch in the state, written by one lane and kept by the other.
@@ -199,6 +202,39 @@ void main() {
         gate.complete();
         async.flushMicrotasks();
         expect(job.outcome, isA<Done<void>>());
+        rig.close();
+        async.flushMicrotasks();
+      });
+    });
+  });
+
+  // Held by: `_reevaluate` asking only the jobs of the first lane after a
+  // write from outside every lane (`except == null`): the job of the second
+  // lane goes on.
+  group('a write from outside every lane', () {
+    test('is judged by the rules of the job of every lane', () {
+      fakeAsync((async) {
+        final rig = _Rig();
+        final gate = Completer<void>();
+        Job<void> command(SoloLane<Board> lane) => lane.enqueue<Board, void>(
+          cancellable: false,
+          keepWhile: (state) => state.camera is Ready,
+          (ctx) => gate.future,
+        );
+        final camera = command(rig.camera);
+        final notices = command(rig.notices);
+        async.flushMicrotasks();
+
+        rig.reflect((camera: const Off(), notices: 0));
+
+        // At the write, while both still wait: later the outcome could come
+        // of a check of the job's own.
+        expect(camera.isCancelled, isTrue);
+        expect(notices.isCancelled, isTrue);
+        gate.complete();
+        async.flushMicrotasks();
+        expect(camera.outcome, _byRules());
+        expect(notices.outcome, _byRules());
         rig.close();
         async.flushMicrotasks();
       });
