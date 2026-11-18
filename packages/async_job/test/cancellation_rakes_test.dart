@@ -145,16 +145,19 @@ List<String> watch(Job<Object?> Function() start, {int? cancelAt}) {
 ///
 /// After the outcome, waits for the build left running to say [until]; with
 /// no [until], waits for as long as the whole build takes, so that a build
-/// that should be dead has the time to say its other steps.
+/// that should be dead has the time to say its other steps. Every step of
+/// the build after the first holds the CPU for [laterStepMs].
 Future<List<String>> build(
   Job<Object?> Function() start, {
   bool cancel = true,
   String? until,
+  int laterStepMs = buildStepMs,
 }) async {
   freshRun();
   late Job<Object?> job;
   final heardUntil = Completer<void>();
   index = SearchIndex.listen(
+    laterStepMs: laterStepMs,
     heard: (line) {
       if (cancel && line == 'step 1') {
         say('cancel');
@@ -1345,8 +1348,20 @@ void main() {
     test(
       'the cancellation kills the isolate in the middle of a step',
       () async {
-        expect(await build(page.killTheBuild), quoted.last);
+        // A step long enough that the kill always comes in its middle, and
+        // the wait is for the isolate to exit rather than for a time: a
+        // build the kill missed says its other steps before it exits.
+        expect(
+          await build(
+            page.killTheBuild,
+            laterStepMs: killedStepMs,
+            until: buildExited,
+          ),
+          quoted.last,
+        );
       },
+      // A build the kill misses holds the CPU for two long steps more.
+      timeout: const Timeout(Duration(seconds: 30)),
     );
 
     test('uncancelled, the value comes out of runInIsolate', () async {

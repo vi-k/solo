@@ -178,6 +178,15 @@ Device device = Device();
 /// How long a step of [SearchIndex.build] holds the CPU of its isolate.
 const buildStepMs = 50;
 
+/// How long the steps after the first hold the CPU in a build the test
+/// kills: the isolate that made the index has that long to hear the first
+/// step and kill the build, however loaded the machine is.
+const killedStepMs = 5000;
+
+/// What the port of a [SearchIndex] hears once the isolate of its build has
+/// exited, killed or not; it is not printed.
+const buildExited = 'build exited';
+
 /// The ports [SearchIndex.listen] has opened and [closeIndexes] has not
 /// closed yet.
 final _indexPorts = <RawReceivePort>[];
@@ -187,22 +196,26 @@ final _indexPorts = <RawReceivePort>[];
 /// [build] runs in that isolate, where [printed] is not this one, so it says
 /// each of its steps through a port to the isolate that made the index.
 final class SearchIndex {
-  SearchIndex._(this._steps, {required this.fails});
+  SearchIndex._(this._steps, {required this.fails, required this.laterStepMs});
 
-  /// An index whose build says its steps here, and calls [heard] on each.
-  /// With [fails], the build throws after its first step.
+  /// An index whose build says its steps here, and calls [heard] on each
+  /// and on [buildExited]. With [fails], the build throws after its first
+  /// step.
   factory SearchIndex.listen({
     void Function(String line)? heard,
     bool fails = false,
+    int laterStepMs = buildStepMs,
   }) {
     void hear(Object? line) {
-      say('$line');
+      if (line != buildExited) {
+        say('$line');
+      }
       heard?.call('$line');
     }
 
     final port = RawReceivePort(hear);
     _indexPorts.add(port);
-    return SearchIndex._(port.sendPort, fails: fails);
+    return SearchIndex._(port.sendPort, fails: fails, laterStepMs: laterStepMs);
   }
 
   final SendPort _steps;
@@ -210,12 +223,18 @@ final class SearchIndex {
   /// Whether [build] throws after its first step.
   final bool fails;
 
-  /// Three steps of [buildStepMs] that hold the CPU; returns the number of
-  /// entries.
+  /// How long each step of [build] after the first holds the CPU.
+  final int laterStepMs;
+
+  /// Three steps that hold the CPU, the first for [buildStepMs] and the
+  /// others for [laterStepMs]; returns the number of entries. The isolate
+  /// it runs in says [buildExited] when it exits.
   int build() {
+    Isolate.current.addOnExitListener(_steps, response: buildExited);
     for (var step = 1; step <= 3; step++) {
       final clock = Stopwatch()..start();
-      while (clock.elapsedMilliseconds < buildStepMs) {}
+      final stepMs = step == 1 ? buildStepMs : laterStepMs;
+      while (clock.elapsedMilliseconds < stepMs) {}
       _steps.send('step $step');
       if (fails) {
         throw const FormatException('bad page');

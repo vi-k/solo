@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:async_job/async_job.dart';
 import 'package:test/test.dart';
@@ -17,46 +18,48 @@ void main() {
     // between the passes, and in a cleanup — and wakes up together with
     // the others each time. Measured on this test, 30 000 branches: 40 s
     // with the loops in the routine, 13 s with them in one big local
-    // function, under 0.4 s with them in small ones. The bound sits
-    // between the last and the others with room on both sides.
+    // function, under 0.4 s with them in small ones.
     //
     // A clock, and not the timeout: the branches end in microtasks, and no
     // timer of the runner gets a turn until they are over.
-    const count = 30000;
-    final release = Completer<void>();
-    final cleanups = Completer<void>();
-    var cleaned = 0;
-    final job = Job<List<int>>(
-      (ctx) => ctx.runAll([
-        for (var i = 0; i < count; i++)
-          Job.deferred<int>((ctx) async {
-            ctx
-              ..onDispose(() => cleaned++)
-              ..onDispose(() => cleanups.future);
-            await release.future;
-            return i;
-          }),
-      ]),
-    );
-    // Every body is asleep on the same future before any of them wakes.
-    await Future<void>.delayed(Duration.zero);
-    final watch = Stopwatch()..start();
-    release.complete();
-    // And every cleanup on another one.
-    await Future<void>.delayed(Duration.zero);
-    cleanups.complete();
-    final values = await job.value;
-    watch.stop();
-    expect(values, [for (var i = 0; i < count; i++) i]);
-    expect(cleaned, count);
-    expect(
-      watch.elapsedMilliseconds,
-      lessThan(3000),
+    Future<int> letGo() async {
+      const count = 30000;
+      final release = Completer<void>();
+      final cleanups = Completer<void>();
+      var cleaned = 0;
+      final job = Job<List<int>>(
+        (ctx) => ctx.runAll([
+          for (var i = 0; i < count; i++)
+            Job.deferred<int>((ctx) async {
+              ctx
+                ..onDispose(() => cleaned++)
+                ..onDispose(() => cleanups.future);
+              await release.future;
+              return i;
+            }),
+        ]),
+      );
+      // Every body is asleep on the same future before any of them wakes.
+      await Future<void>.delayed(Duration.zero);
+      final watch = Stopwatch()..start();
+      release.complete();
+      // And every cleanup on another one.
+      await Future<void>.delayed(Duration.zero);
+      cleanups.complete();
+      final values = await job.value;
+      watch.stop();
+      expect(values, [for (var i = 0; i < count; i++) i]);
+      expect(cleaned, count);
+      return watch.elapsedMilliseconds;
+    }
+
+    await _expectFirstRunLikeTheNext(
+      letGo,
       reason:
           'no frame of a job wakes up at the header of a loop in a '
           'routine as big as the one of a job',
     );
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, timeout: const Timeout(Duration(minutes: 3)));
 
   test('thousands of jobs whose skipped discards wake together end in linear '
       'time', () async {
@@ -66,44 +69,76 @@ void main() {
     // cancelled there, and then sleeps in both its discards at once.
     // Measured on 30 000 jobs: 6 to 8.5 s with a loop in that pass,
     // under 0.3 s without.
-    const count = 30000;
-    final slow = Completer<void>();
-    final discards = Completer<void>();
-    var discarded = 0;
-    final jobs = [
-      for (var i = 0; i < count; i++)
-        Job<int>((ctx) async {
-          ctx
-            ..onDispose(() => slow.future)
-            ..onDiscard(() async {
-              await discards.future;
-              discarded++;
-            })
-            ..onDiscard(() async {
-              await discards.future;
-              discarded++;
-            });
-          return i;
-        }),
-    ];
-    // Every job is asleep in its cleanup, both discards skipped.
-    await Future<void>.delayed(Duration.zero);
-    final watch = Stopwatch()..start();
-    for (final job in jobs) {
-      job.cancel().ignore();
+    Future<int> wakeTheDiscards() async {
+      const count = 30000;
+      final slow = Completer<void>();
+      final discards = Completer<void>();
+      var discarded = 0;
+      final jobs = [
+        for (var i = 0; i < count; i++)
+          Job<int>((ctx) async {
+            ctx
+              ..onDispose(() => slow.future)
+              ..onDiscard(() async {
+                await discards.future;
+                discarded++;
+              })
+              ..onDiscard(() async {
+                await discards.future;
+                discarded++;
+              });
+            return i;
+          }),
+      ];
+      // Every job is asleep in its cleanup, both discards skipped.
+      await Future<void>.delayed(Duration.zero);
+      final watch = Stopwatch()..start();
+      for (final job in jobs) {
+        job.cancel().ignore();
+      }
+      slow.complete();
+      await Future<void>.delayed(Duration.zero);
+      discards.complete();
+      await Future.wait([for (final job in jobs) job.done]);
+      watch.stop();
+      expect(discarded, 2 * count);
+      return watch.elapsedMilliseconds;
     }
-    slow.complete();
-    await Future<void>.delayed(Duration.zero);
-    discards.complete();
-    await Future.wait([for (final job in jobs) job.done]);
-    watch.stop();
-    expect(discarded, 2 * count);
-    expect(
-      watch.elapsedMilliseconds,
-      lessThan(3000),
+
+    await _expectFirstRunLikeTheNext(
+      wakeTheDiscards,
       reason:
           'no frame of a job wakes up at the header of a loop in the '
           'pass over its skipped discards',
     );
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, timeout: const Timeout(Duration(minutes: 3)));
+}
+
+/// How many times the fastest of the later runs the first one may take.
+const _firstRunFactor = 8;
+
+/// Runs [measure] four times in a row, each time on fresh jobs, and checks
+/// that the first run takes no more than [_firstRunFactor] times the fastest
+/// of the other three.
+///
+/// The first run meets the code of a job not optimized yet, and only it
+/// shows the trouble: by the last run the VM has optimized that code. The
+/// time of the later runs stands for how fast the machine is at the moment,
+/// so a machine loaded by other work slows both sides alike, where a bound
+/// in milliseconds was crossed by load alone. Measured, 30 000 jobs a run:
+/// without the trouble the first run took 1 to 2.1 times the fastest later
+/// one, with 28 busy loops on 14 cores as well; with a loop put back in
+/// either place, 24 to 58 times. A later run is slow with such a loop now
+/// and then too, the second or the fourth, so the fastest of three stands.
+Future<void> _expectFirstRunLikeTheNext(
+  Future<int> Function() measure, {
+  required String reason,
+}) async {
+  final first = await measure();
+  final later = [for (var run = 0; run < 3; run++) await measure()];
+  expect(
+    first,
+    lessThanOrEqualTo(_firstRunFactor * later.reduce(min)),
+    reason: '$reason; the runs took ${[first, ...later].join(', ')} ms',
+  );
 }
