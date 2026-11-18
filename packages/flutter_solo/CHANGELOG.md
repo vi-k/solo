@@ -1,4 +1,4 @@
-## Unreleased
+## 2.0.0
 
 This package re-exports `solo`, and this release comes with `solo` 2.0.0:
 `SoloLanes`, a controller with several queues over one state, and the base
