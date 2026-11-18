@@ -72,9 +72,14 @@ final class Feed {
   final List<Post> posts;
   final Map<String, Mark> marks;
 
-  const Feed({this.posts = const [], this.marks = const {}});
+  /// The confirmations the posts cover: the reload that brought them was
+  /// sent after that many.
+  final int seen;
 
-  Feed withPosts(List<Post> posts) => Feed(posts: posts, marks: marks);
+  const Feed({this.posts = const [], this.marks = const {}, this.seen = 0});
+
+  Feed withPosts(List<Post> posts) =>
+      Feed(posts: posts, marks: marks, seen: seen);
 
   Feed mark(String postId, Mark? mark) => Feed(
     posts: posts,
@@ -83,6 +88,7 @@ final class Feed {
         if (key != postId) key: value,
       postId: ?mark,
     },
+    seen: seen,
   );
 
   /// Drops the marks of the likes the server had confirmed when a reload
@@ -94,7 +100,15 @@ final class Feed {
         if (value.confirmation == null || value.confirmation! > seen)
           key: value,
     },
+    seen: seen,
   );
+
+  /// Puts back the mark [before] after a like that failed or was cancelled,
+  /// unless the posts cover it: then they say what the server holds.
+  Feed restored(String postId, Mark? before) => mark(postId, switch (before) {
+    Mark(confirmation: final number?) when number <= seen => null,
+    _ => before,
+  });
 }
 
 final class FeedController extends SoloLanes<Feed> {
@@ -122,8 +136,8 @@ final class FeedController extends SoloLanes<Feed> {
   Job<void> setLiked(String postId, {required bool liked}) {
     Mark? before;
     return _likes.enqueue<Feed, void>(
-      ifFailed: (feed, error, stackTrace) => feed.mark(postId, before),
-      ifCancelled: (feed, cancelled) => feed.mark(postId, before),
+      ifFailed: (feed, error, stackTrace) => feed.restored(postId, before),
+      ifCancelled: (feed, cancelled) => feed.restored(postId, before),
       isExpectedError: (error) => error is ApiException,
       (ctx) async {
         before = ctx.state.marks[postId];

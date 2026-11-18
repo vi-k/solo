@@ -1105,34 +1105,77 @@ void main() {
       });
     });
 
-    test('an unlike failed after a reload puts back the confirmed mark', () {
+    test('a droppable continuation during a drain gets the accepted job', () {
       _says(
-        'The correction puts back the confirmed mark the unlike found. It '
-        'says what the server says, and the next reload takes it away.',
+        'A `droppable` continuation whose key the other lane has accepted gets '
+        'that job, as it would before the close.',
       );
-      final shown = <String>[];
-      _trace((async, say) {
-        final api = FeedApi((_) {});
-        final feed = page.FeedController(api);
-        void show() => shown.add(_feed(feed.currentState));
-        feed.setLiked('p1', liked: true);
-        async.elapse(_ms(100));
-        feed.reload();
-        async.elapse(_ms(1980));
-        api.failNext = true;
-        feed.setLiked('p1', liked: false);
-        async.elapse(_ms(20));
-        show();
-        async.elapse(_ms(30));
-        show();
-        feed.reload();
-        async.elapse(_ms(2000));
-        show();
+      fakeAsync((async) {
+        final two = _Two();
+        final aGate = Completer<void>();
+        final bGate = Completer<void>();
+        final accepted = two.b.enqueue<int, void>(
+          key: 'sync',
+          policy: Policy.droppable,
+          (ctx) => ctx.join(() => bGate.future),
+        );
+        SoloJob<void>? continuation;
+        two.a.enqueue<int, void>((ctx) async {
+          await ctx.join(() => aGate.future);
+          continuation = two.b.enqueue<int, void>(
+            key: 'sync',
+            policy: Policy.droppable,
+            (ctx) async {},
+          );
+        });
+        async.flushMicrotasks();
+        two.close(mode: SoloCloseMode.drain).ignore();
+        aGate.complete();
+        async.flushMicrotasks();
+
+        expect(continuation, same(accepted));
+        bGate.complete();
+        async.flushMicrotasks();
+        expect(continuation?.outcome, isA<Done<void>>());
       });
-      expect(shown, [
+    });
+
+    test('an unlike failed after a reload puts back no mark', () {
+      _says(
+        'The correction puts back no mark: the posts say what the server held '
+        'when the reload was sent, an unlike from another device included.',
+      );
+      // The like is confirmed before the reload is sent, and the unlike
+      // fails after the reload answered. [elsewhere] unlikes on the server
+      // from another device right after the like.
+      List<String> unlikeFailing({required bool elsewhere}) {
+        final shown = <String>[];
+        _trace((async, say) {
+          final api = FeedApi((_) {});
+          final feed = page.FeedController(api);
+          void show() => shown.add(_feed(feed.currentState));
+          feed.setLiked('p1', liked: true);
+          async.elapse(_ms(100));
+          if (elsewhere) api.liked.remove('p1');
+          feed.reload();
+          async.elapse(_ms(1980));
+          api.failNext = true;
+          feed.setLiked('p1', liked: false);
+          async.elapse(_ms(20));
+          show();
+          async.elapse(_ms(30));
+          show();
+        });
+        return shown;
+      }
+
+      expect(unlikeFailing(elsewhere: false), [
         'posts p1 liked, p2; marks p1 unliked',
-        'posts p1 liked, p2; marks p1 liked #1',
         'posts p1 liked, p2; marks none',
+      ]);
+      expect(unlikeFailing(elsewhere: true), [
+        'posts p1, p2; marks p1 unliked',
+        'posts p1, p2; marks none',
       ]);
     });
   });

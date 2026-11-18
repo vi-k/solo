@@ -5,6 +5,9 @@
 - The README asks for `solo_lints: ^0.3.0`, which brings the warning
   `lane_outside_constructor` and the lint `stale_emit` for the lanes of
   `SoloLanes`.
+- The feed of [A merge](doc/lanes.md#a-merge) puts back no confirmed mark that
+  the posts of a reload cover when a like fails or is cancelled: the posts say
+  what the server holds, an unlike from another device included.
 
 ## 2.0.0
 
@@ -61,10 +64,14 @@
 
 ### Changed
 
-- The frames `Solo._reevaluate`, `Solo._setState`, `Solo.externalSetState` and
-  `Solo._step` of a stack trace read `SoloController.…` now: the members moved
-  to the base, and the order and the depth of the frames are the same. The
-  frames of a stack trace are not part of the public API.
+- The frames `Solo._reevaluate`, `Solo._setState`, `Solo.externalSetState`,
+  `Solo._pump` and `Solo._schedulePump` of a stack trace read
+  `SoloController.…` now: the members moved to the base. A cancellation by the
+  rules at a write keeps the order and the depth of its frames. A job the pump
+  cancels at its start, as by `canStart`, has one frame more,
+  `SoloController._step`, called from `SoloController._pump`: the pump takes
+  the queue of one lane a step. The frames of a stack trace are not part of the
+  public API.
 - Queuing a job, removing one and starting the next no longer walk the queue,
   and tens of thousands of queued jobs take milliseconds where they took
   seconds. A policy that looks for a job of the same key, `droppable`,

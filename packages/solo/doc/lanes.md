@@ -286,9 +286,14 @@ final class Feed {
   final List<Post> posts;
   final Map<String, Mark> marks;
 
-  const Feed({this.posts = const [], this.marks = const {}});
+  /// The confirmations the posts cover: the reload that brought them was
+  /// sent after that many.
+  final int seen;
 
-  Feed withPosts(List<Post> posts) => Feed(posts: posts, marks: marks);
+  const Feed({this.posts = const [], this.marks = const {}, this.seen = 0});
+
+  Feed withPosts(List<Post> posts) =>
+      Feed(posts: posts, marks: marks, seen: seen);
 
   Feed mark(String postId, Mark? mark) => Feed(
     posts: posts,
@@ -297,6 +302,7 @@ final class Feed {
         if (key != postId) key: value,
       postId: ?mark,
     },
+    seen: seen,
   );
 
   /// Drops the marks of the likes the server had confirmed when a reload
@@ -308,7 +314,15 @@ final class Feed {
         if (value.confirmation == null || value.confirmation! > seen)
           key: value,
     },
+    seen: seen,
   );
+
+  /// Puts back the mark [before] after a like that failed or was cancelled,
+  /// unless the posts cover it: then they say what the server holds.
+  Feed restored(String postId, Mark? before) => mark(postId, switch (before) {
+    Mark(confirmation: final number?) when number <= seen => null,
+    _ => before,
+  });
 }
 
 final class FeedController extends SoloLanes<Feed> {
@@ -336,8 +350,8 @@ final class FeedController extends SoloLanes<Feed> {
   Job<void> setLiked(String postId, {required bool liked}) {
     Mark? before;
     return _likes.enqueue<Feed, void>(
-      ifFailed: (feed, error, stackTrace) => feed.mark(postId, before),
-      ifCancelled: (feed, cancelled) => feed.mark(postId, before),
+      ifFailed: (feed, error, stackTrace) => feed.restored(postId, before),
+      ifCancelled: (feed, cancelled) => feed.restored(postId, before),
       isExpectedError: (error) => error is ApiException,
       (ctx) async {
         before = ctx.state.marks[postId];
@@ -373,11 +387,14 @@ second reload sent at 2100 ms:
 `setLiked` is the like of the last section with a correction. `before` is the
 mark the post had when the like started, and when the like fails or is
 cancelled, `ifFailed` or `ifCancelled` puts it back: the post shows what it
-showed before the tap. Each handler changes the `feed` it is given and returns
-that: the reload may have written since the like started, and a state kept from
-then, returned whole, would take its posts away. Nobody reads the outcome of a
-tap, so `isExpectedError` names the `ApiException` of a failed request, and it
-does not go on to the zone.
+showed before the tap. A confirmed mark the posts cover does not come back. The
+feed keeps the `seen` of the reload its posts came from, and those posts say
+what the server holds, an unlike from another device included: `restored`
+leaves the post to them. Each handler changes the `feed` it is given and
+returns that: the reload may have written since the like started, and a state
+kept from then, returned whole, would take its posts away. Nobody reads the
+outcome of a tap, so `isExpectedError` names the `ApiException` of a failed
+request, and it does not go on to the zone.
 
 A like does not wait for a reload. A like of a second post still waits for the
 first: there is one likes lane. The settling is part of the reload's write
@@ -546,11 +563,11 @@ On a record `W` works. `Ready` is a subtype of `Camera`, so the record
 50 ms: shoot: Cancelled(rules: is not ({Ready camera, Notice? notice}))
 ```
 
-On either form a write keeps the other part by hand: `ctx.state.notice` in the
-shot, `ctx.state.camera` in the acceptance. Lanes fit where the parts speak of
-one thing: the `Permit` that one lane writes and another reads, the posts and
-the marks over them. Parts that live for different times, such as notices that
-outlive the camera, still need two controllers, as in
+On either form both writes keep the camera by hand, `ctx.state.camera` in the
+shot and in the acceptance: each changes only the notice. Lanes fit where the
+parts speak of one thing: the `Permit` that one lane writes and another reads,
+the posts and the marks over them. Parts that live for different times, such as
+notices that outlive the camera, still need two controllers, as in
 [A board of its own](state.md#a-board-of-its-own): the lanes of one controller
 close together.
 
@@ -639,8 +656,8 @@ in
 | A job awaits `close()` or `cancelAll()` of its controller | It waits for itself: both wait for the jobs of every lane. |
 | `close()` | The queues of every lane are cleared, and the running job of every lane is asked to cancel; a `cancellable: false` job turns that down and runs on. `close` completes when the last of them ends, as [Three ways to stop](cancellation.md#three-ways-to-stop) tells. |
 | `close(mode: SoloCloseMode.drain)` | Every lane runs its queue out, and `close` completes when all of them are empty. |
-| During a drain, a job of one lane queues a continuation in another | The continuation ends `Cancelled(closed)`: a closed controller takes no new root job, whichever lane asks. |
-| An unlike fails after a reload has brought the server's word on the like | The correction puts back the confirmed mark the unlike found. It says what the server says, and the next reload takes it away. |
+| During a drain, a job of one lane queues a continuation in another | The continuation ends `Cancelled(closed)`: a closed controller takes no new root job, whichever lane asks. A `droppable` continuation whose key the other lane has accepted gets that job, as it would before the close. |
+| An unlike fails after a reload has brought the server's word on the like | The correction puts back no mark: the posts say what the server held when the reload was sent, an unlike from another device included. |
 
 Two controllers could take the continuation of a drain: the one drained first
 and the other closed later. One controller closes its lanes together, so a
