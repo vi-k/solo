@@ -423,6 +423,10 @@ behind it, and the user signs out at 10 ms:
   every write. From then on the like writes nothing, and a job its rules
   cancelled gets no `ifCancelled`: an old correction does not land on the new
   data.
+- Nothing of the like takes down the mark it put up at 0 ms. The sign-out does:
+  it writes the new epoch as a new `Feed`, whose marks are empty. A sign-out
+  that carried the marks over to the new epoch would leave the mark of `p1` on
+  its way for good.
 - The like of `p2` was queued in the old epoch and comes to start in the new
   one. `keepWhile` is asked at the start too, and its body never runs.
 - A write that keeps the epoch cancels nobody.

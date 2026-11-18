@@ -783,7 +783,7 @@ permit the operation and the correction after it.
 
 | What happens | What becomes of the handlers |
 | --- | --- |
-| An incompatible update the job did not make (`externalSetState`, or the `emit` of its parent, of its child or of another child of the same parent), whenever it arrives | Disabled for good; a later compatible update does not bring them back. |
+| An incompatible update the job did not make (`externalSetState`, or the `emit` of its parent, of its child, of another child of the same parent or of a job of another lane), whenever it arrives | Disabled for good; a later compatible update does not bring them back. |
 | A parent loses its permission | Its children's handlers are blocked as well. |
 | Success, a discarded duplicate, a body that never started | Not run at all. |
 | The job's own `emit` | Stay enabled: the job's own `emit` does not disable them. |

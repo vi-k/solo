@@ -189,6 +189,37 @@ final class _CorrectedEpochs extends SoloLanes<epochs.Feed> {
   );
 }
 
+/// The like of the epoch, and a sign-out that carries the marks over to the
+/// new epoch.
+final class _CarryingEpochs extends SoloLanes<epochs.Feed> {
+  final FeedApi api;
+  late final SoloLane<epochs.Feed> account;
+  late final SoloLane<epochs.Feed> likes;
+
+  _CarryingEpochs(this.api) : super(const epochs.Feed()) {
+    account = lane('account');
+    likes = lane('likes');
+  }
+
+  SoloJob<void> like(String postId) {
+    final epoch = currentState.epoch;
+    return likes.enqueue<epochs.Feed, void>(
+      keepWhile: (feed) => feed.epoch == epoch,
+      (ctx) async {
+        ctx.emit(ctx.state.mark(postId, const page.Mark(true)));
+        await ctx.join(() => api.setLiked(postId, liked: true));
+        ctx.emit(ctx.state.mark(postId, const page.Mark(true, 1)));
+      },
+    );
+  }
+
+  void signOut() => account.enqueue<epochs.Feed, void>(
+    (ctx) async => ctx.emit(
+      epochs.Feed(epoch: ctx.state.epoch + 1, marks: ctx.state.marks),
+    ),
+  );
+}
+
 /// The like of the epoch with `ctx.abandonable` in place of `ctx.join`.
 final class _AbandoningEpochs extends SoloLanes<epochs.Feed> {
   final FeedApi api;
@@ -556,6 +587,37 @@ void main() {
 
         expect(like.outcome, isA<Cancelled>());
         expect(feed.corrections, isEmpty);
+      });
+    });
+
+    test('the sign-out takes down the mark the like put up', () {
+      _says(
+        'Nothing of the like takes down the mark it put up at 0 ms. The '
+        'sign-out does: it writes the new epoch as a new `Feed`, whose marks '
+        'are empty.',
+      );
+      _says(
+        'A sign-out that carried the marks over to the new epoch would leave '
+        'the mark of `p1` on its way for good.',
+      );
+      fakeAsync((async) {
+        final feed = epochs.EpochFeedController(FeedApi((_) {}))..like('p1');
+        async.flushMicrotasks();
+        expect(feed.currentState.marks['p1']?.confirmation, isNull);
+        expect(feed.currentState.marks['p1']?.liked, isTrue);
+        async.elapse(_ms(10));
+        feed.signOut();
+        async.elapse(_ms(100));
+        expect(feed.currentState.marks, isEmpty);
+      });
+      fakeAsync((async) {
+        final feed = _CarryingEpochs(FeedApi((_) {}))..like('p1');
+        async.elapse(_ms(10));
+        feed.signOut();
+        async.elapse(_ms(100));
+        final mark = feed.currentState.marks['p1'];
+        expect(mark?.liked, isTrue);
+        expect(mark?.confirmation, isNull);
       });
     });
 
