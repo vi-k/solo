@@ -1,7 +1,10 @@
-## Unreleased
+## 1.0.4
 
 ### Documentation
 
+- The README asks for `async_job_lints: ^0.2.1` in place of `^0.1.1`, which let
+  in neither 0.2.0 nor 0.2.1.
+- The dartdoc of `Job.key` adds that `solo` looks keys up by `hashCode` too.
 - The README says that `Solo` of `solo` runs one root job at a time and
   `SoloLanes` one at a time in each of its lanes, in place of exclusive access
   to state.

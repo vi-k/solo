@@ -33,7 +33,7 @@ on by name:
 ```yaml
 plugins:
   async_job_lints:
-    version: ^0.1.1
+    version: ^0.2.1
     diagnostics:
       catch_without_check: true
       bare_await: true
