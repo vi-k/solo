@@ -11,7 +11,7 @@ lint, turned on by name:
 ```yaml
 plugins:
   solo_lints:
-    version: ^0.2.0
+    version: ^0.2.1
     diagnostics:
       catch_without_check: true
 ```

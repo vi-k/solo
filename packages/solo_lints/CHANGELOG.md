@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.1
 
 - `await_own_queue` knows the lanes of `SoloLanes` in `solo` 2.0. It reports a
   job that waits for a job of the lane it runs in, queued by
