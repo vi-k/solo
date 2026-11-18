@@ -1,4 +1,4 @@
-## Unreleased
+## 0.3.0
 
 - Two new rules for the lanes of `SoloLanes` in `solo` 2.0. `stale_emit`, a
   lint, reports `ctx.emit` in a job of a `SoloLanes` that writes a value built

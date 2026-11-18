@@ -1,4 +1,0 @@
-# Until async_job_lints 0.2.2 is published.
-dependency_overrides:
-  async_job_lints:
-    path: ../async_job_lints
