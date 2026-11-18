@@ -1,3 +1,13 @@
+## Unreleased
+
+- `queuedBodyOf` takes a child made on the context of a job of another
+  controller for a body of that controller, not of this one: `await_own_queue`
+  and `stale_emit` of `solo_lints` no longer report `close()` or `emit` in the
+  child of a job that a `SoloLanes` hands to a `Solo`. A call on `super` is the
+  controller's own, as a call on `this` is: `await super.close()` in a job body
+  waits for the own queue, and a body given to `super.enqueue(...)` is queued
+  here.
+
 ## 0.2.2
 
 - `plugin_api.dart` exports `isSoloLanes`, `controllerAround`, `declaresLane`,

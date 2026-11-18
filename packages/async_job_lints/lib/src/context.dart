@@ -384,7 +384,9 @@ QueueLane queueLaneOf(Expression waited) {
   if (call == null) return QueueLane.unknown;
   final jobOf = waited is PropertyAccess;
   final target = call.realTarget;
-  if (target != null && target is! ThisExpression) {
+  if (target != null &&
+      target is! ThisExpression &&
+      target is! SuperExpression) {
     // A job queued in a lane right here: `_likes.enqueue(...).done`.
     final lane = jobOf ? _laneQueuedBy(call) : null;
     return lane == null ? QueueLane.unknown : _laneAgainst(lane, waited);
@@ -429,11 +431,15 @@ MethodInvocation? queueCallOf(Expression waited) {
   return null;
 }
 
-/// The method of a class or a mixin that [call] calls on `this`, and the
-/// type that declares it.
+/// The method of a class or a mixin that [call] calls on `this` or
+/// `super`, and the type that declares it.
 (MethodElement, InterfaceType)? _ownMethodOf(MethodInvocation call) {
   final target = call.realTarget;
-  if (target != null && target is! ThisExpression) return null;
+  if (target != null &&
+      target is! ThisExpression &&
+      target is! SuperExpression) {
+    return null;
+  }
   final method = call.methodName.element;
   if (method is! MethodElement) return null;
   final owner = method.enclosingElement;
@@ -597,14 +603,15 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
 ///
 /// [node] is in the body itself, in the actions of waiting calls on its
 /// context or in its cleanup, which the queue waits for as well. The body
-/// takes a `SoloContext` and is given to a call on this controller, on a
-/// context or on a lane field, or to no call; the class or the mixin around
-/// is a controller. The lane is `null` for a body given to anything but
-/// `enqueue` of a lane: a body given to `job` may run as a child in another
-/// lane, and a handler of `collect` or `accumulate` runs where its group
-/// goes. A rule that reports a wait for the own queue or the own lane looks
-/// at this body, and a rule that leaves a wait for the own lane to it asks
-/// the same.
+/// takes a `SoloContext` and is given to a call on this controller, on the
+/// context of a body queued here or on a lane field, or to no call; the
+/// class or the mixin around is a controller. A child runs where its parent
+/// does: the child of a job of another controller runs there. The lane is
+/// `null` for a body given to anything but `enqueue` of a lane: a body given
+/// to `job` may run as a child in another lane, and a handler of `collect`
+/// or `accumulate` runs where its group goes. A rule that reports a wait for
+/// the own queue or the own lane looks at this body, and a rule that leaves
+/// a wait for the own lane to it asks the same.
 ({Element ctx, Element? lane})? queuedBodyOf(AstNode node) {
   final around = controllerAround(node);
   if (!isSolo(around) && !isSoloController(around)) return null;
@@ -625,9 +632,9 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
 }
 
 /// [body] with its context [ctx] when it is given to a call on this
-/// controller, on a context or on a lane field, or to no call, rather than
-/// to another controller's `enqueue`; with the lane when it is given to
-/// `enqueue` of a lane field.
+/// controller, on the context of a body queued here or on a lane field, or
+/// to no call, rather than to another controller's `enqueue`; with the lane
+/// when it is given to `enqueue` of a lane field.
 ({Element ctx, Element? lane})? _queuedHere(
   FunctionExpression body,
   Element ctx,
@@ -640,10 +647,19 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
     return (ctx: ctx, lane: null);
   }
   final target = call.realTarget;
-  if (target == null ||
-      target is ThisExpression ||
-      isJobContext(target.staticType)) {
+  if (target == null || target is ThisExpression || target is SuperExpression) {
     return (ctx: ctx, lane: null);
+  }
+  if (isJobContext(target.staticType)) {
+    // `outer.child(...)`: here when `outer` is the context of a body queued
+    // here, not of a job of another controller.
+    final parent = target.unParenthesized;
+    final outer = queuedBodyOf(call);
+    return parent is SimpleIdentifier &&
+            outer != null &&
+            parent.element == outer.ctx
+        ? (ctx: ctx, lane: null)
+        : null;
   }
   if (_laneField(target) == null) return null;
   return (ctx: ctx, lane: _laneQueuedBy(call));

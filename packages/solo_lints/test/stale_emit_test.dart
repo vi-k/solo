@@ -492,6 +492,29 @@ final class Desk extends Solo<Feed> {
 }
 ''', []);
 
+  // A child of a job of another controller writes the state of that
+  // controller, which has no other lane.
+  Future<void> test_child_of_another_controller() => assertAt('''
+$_feed
+  late final Desk desk;
+
+  Job<void> relay(String post) => desk.hand((outer) async {
+    await outer.run(outer.child((child) async {
+      final copy = child.state;
+      await child.join(() => send(post));
+      child.emit(copy.confirm(post));
+    }));
+  });
+}
+
+final class Desk extends Solo<Feed> {
+  Desk() : super(const Feed());
+
+  Job<void> hand(Future<void> Function(SoloContext<Feed, Feed> ctx) body) =>
+      enqueue(body);
+}
+''', []);
+
   // A record state rebuilt field by field: a field passed on from the copy
   // read before the wait writes back what that copy held.
   Future<void> test_record_field_from_the_copy() => _assertMessage(

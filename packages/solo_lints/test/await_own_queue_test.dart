@@ -79,6 +79,30 @@ $_syncer
     ['cancelAll()', 'this.close()'],
   );
 
+  // `super` calls the same controller as `this`.
+  Future<void> test_close_and_cancel_all_through_super() => assertAt(
+    '''
+$_syncer
+  Job<void> stop() => enqueue<int, void>((ctx) async {
+    await super.cancelAll();
+    await super.close();
+  });
+}
+''',
+    ['super.cancelAll()', 'super.close()'],
+  );
+
+  Future<void> test_body_queued_through_super() => assertAt(
+    '''
+$_syncer
+  Job<void> stop() => super.enqueue<int, void>((ctx) async {
+    await close();
+  });
+}
+''',
+    ['await [[close()]]'],
+  );
+
   Future<void> test_actions_the_body_waits_for() => assertAt(
     '''
 $_syncer
@@ -256,6 +280,36 @@ $_feed
 }
 ''', []);
 
+  // A child runs where its parent runs: a child of a job of this controller
+  // waits for its close, a child of a job of another controller does not.
+  Future<void> test_child_of_this_and_of_another_controller() => assertAt(
+    '''
+$_feed
+  late final Desk desk;
+
+  Job<void> stop() => _likes.enqueue<int, void>((ctx) async {
+    await ctx.run(ctx.child((child) async {
+      await close();
+    }));
+  });
+
+  Job<void> relay() => desk.hand((outer) async {
+    await outer.run(outer.child((child) async {
+      await close();
+    }));
+  });
+}
+
+final class Desk extends Solo<int> {
+  Desk() : super(0);
+
+  Job<void> hand(Future<void> Function(SoloContext<int, int> ctx) body) =>
+      enqueue(body);
+}
+''',
+    ['await [[close()]]'],
+  );
+
   Future<void> test_body_queued_in_a_lane_of_another_controller() =>
       assertAt('''
 $_feed
@@ -375,6 +429,18 @@ $_feed
 }
 ''',
     ['cancelAll()', 'this.close()'],
+  );
+
+  Future<void> test_close_of_lanes_through_super() => assertAt(
+    '''
+$_feed
+  Job<void> stop() => _likes.enqueue<int, void>((ctx) async {
+    await super.cancelAll();
+    await super.close();
+  });
+}
+''',
+    ['super.cancelAll()', 'super.close()'],
   );
 
   Future<void> test_close_of_a_solo_stream() => assertAt(
