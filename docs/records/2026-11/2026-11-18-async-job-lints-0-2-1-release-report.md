@@ -1,9 +1,8 @@
-> **Состояние на 2026-11-18:** подготовлено в ветке `lanes-part-b`, не влито
-> в `main` и не выпущено: часть B ветки `solo-lanes` перебазирована на `main`,
-> оверрайды на `solo` сняты, коммит подготовки «chore: prepare async_job_lints
-> 0.2.1». Полный гейт на нём зелёный. Тега `async_job_lints-v0.2.1` нет,
-> на pub.dev `async_job_lints` 0.2.0. Дальше — вливание `lanes-part-b`
-> в `main` и связка по отдельному слову владельца.
+> **Состояние на 2026-11-18:** выпущено: `lanes-part-b` влита в `main`
+> перемоткой (`c5ee937a`), связка по слову владельца «публикуй» — релизный
+> коммит «Release async_job_lints 0.2.1», аннотированный тег
+> `async_job_lints-v0.2.1`, `async_job_lints` 0.2.1 на pub.dev. Дальше —
+> `solo_lints` 0.2.1 по отдельному слову владельца.
 > **Что это:** подготовка патча `async_job_lints` 0.2.1 — правила ядра узнают
 > `SoloController` и линии `SoloLanes` из `solo` 2.0 — и то, как часть B ветки
 > линий вошла в эту подготовку.
@@ -209,3 +208,18 @@ Package has 0 warnings.
 `async_job_lints-v0.2.1`, `git push --follow-tags` и `dart pub publish`
 из чистого дерева `packages/async_job_lints` — только по отдельному слову
 владельца, после вливания `lanes-part-b` в `main`.
+
+## Связка
+
+`lanes-part-b` влита в `main` перемоткой 2026-11-18, голова `c5ee937a`. После
+вливания на `main`: `async_job_lints` — анализ чистый, `dart test` +230;
+`solo_lints` — анализ чистый, `dart test` +124; пробная публикация —
+«Publishing async_job_lints 0.2.1», «Package has 0 warnings».
+
+По слову владельца 2026-11-18 «публикуй» — отдельный запрос, состоящий только
+из просьбы опубликовать. Перед связкой: `main` чистый, впереди `origin/main`
+на 14 коммитов и не отстаёт, тега `async_job_lints-v0.2.1` нет ни локально,
+ни в origin, на pub.dev `async_job_lints` 0.2.0. Связка — релизный коммит
+«Release async_job_lints 0.2.1» с этой записью, аннотированный тег
+`async_job_lints-v0.2.1` на нём, `git push --follow-tags` и `dart pub publish`
+из чистого дерева `packages/async_job_lints`.
