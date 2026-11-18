@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.1
 
 - The rules know `solo` 2.0: `SoloController`, the base of `Solo` and of the
   new `SoloLanes`, and `SoloLane`, a lane of `SoloLanes`. `outcome_after_await`

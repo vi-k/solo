@@ -1,4 +1,4 @@
-## Не выпущено
+## 0.2.1
 
 - Правила знают `solo` 2.0: `SoloController`, базу `Solo` и нового `SoloLanes`,
   и `SoloLane`, линию `SoloLanes`. `outcome_after_await` берёт `job` линии
