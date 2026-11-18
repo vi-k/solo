@@ -27,7 +27,7 @@ workspace:
 
 ```yaml
 plugins:
-  async_job_lints: ^0.2.2
+  async_job_lints: ^0.2.3
 ```
 
 The analysis server fetches the plugin itself, so it is not a dependency in
@@ -45,7 +45,7 @@ The warnings are on as soon as the plugin is named. The two lints,
 ```yaml
 plugins:
   async_job_lints:
-    version: ^0.2.2
+    version: ^0.2.3
     diagnostics:
       catch_without_check: true
       bare_await: true

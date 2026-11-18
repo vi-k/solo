@@ -25,6 +25,10 @@
 
 **Ждёт слова владельца.**
 
+- Выпуск `async_job_lints` 0.2.3 подготовлен —
+  `2026-11-19-async-job-lints-0-2-3-release-report.md`; связку запускает только
+  отдельное слово «публикуй».
+
 - Бэклог: пул в линии; `onCancel` в `ctx.join` к первому минору ядра.
 
 - Вторая фаза страниц о bloc — сценарии `vs-bloc.md` на нотифаере riverpod —
@@ -43,11 +47,10 @@
   Подробности — `2026-11-13-device-app-phones-report.md`.
 - Черновики анонса 1.0 публикует владелец сам —
   `2026-11-05-one-zero-announcement-draft.md`.
-- Уборка, только по слову владельца: ветки `solo-lanes`, `lanes-part-b`
-  и резервные `solo-lanes-before-*` целиком в `main`, копия
-  `.claude/worktrees/solo-lanes` чистая; в `.claude/worktrees/` ещё копии
-  прошлых работ; `~/fvm/versions/master` поставлен только для ревью riverpod
-  и снимается `fvm remove master`.
+- Уборка, только по слову владельца: ветка `worktree-solo-listener-spike`
+  держит два коммита спайка `SoloListener`, которых нет в `main`, — заметки
+  о нём влиты; `~/fvm/versions/master` поставлен только для ревью riverpod
+  и снимается `fvm remove master`. Остальные копии и ветки убраны 2026-11-19.
 
 Тесты `solo`, которые сами зовут `dart analyze`, под нагрузкой полного прогона
 иногда падают на `SocketException` к `www.google-analytics.com`; по одному

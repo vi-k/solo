@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.3
 
 - `queuedBodyOf` takes a child made on the context of a job of another
   controller for a body of that controller, not of this one: `await_own_queue`
