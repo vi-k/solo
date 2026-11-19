@@ -1,6 +1,6 @@
-> **Состояние на 2026-11-19:** `solo` 2.0.1 выпущен по слову владельца
-> «публикуй»: релизный коммит «Release solo 2.0.1», тег `solo-v2.0.1`,
-> `dart pub publish`. Следом — связка `flutter_solo` 2.0.1.
+> **Состояние на 2026-11-19:** выпущено по слову владельца «публикуй»:
+> релизные коммиты «Release solo 2.0.1» и «Release flutter_solo 2.0.1»,
+> теги `solo-v2.0.1` и `flutter_solo-v2.0.1`, оба пакета на pub.dev.
 > **Что это:** подготовка патчей `solo` 2.0.1 и `flutter_solo` 2.0.1 —
 > документация после 2.0.0.
 > **Связанные записи:** `2026-11-18-solo-2-0-0-release-report.md`,
@@ -77,3 +77,13 @@
 Связка `solo`: релизный коммит «Release solo 2.0.1», аннотированный тег
 `solo-v2.0.1`, `git push --follow-tags` и `dart pub publish --force` из чистого
 дерева `packages/solo`.
+
+Связка `solo` прошла подряд: релизный коммит `540f8607` «Release solo 2.0.1»,
+аннотированный тег `solo-v2.0.1` на нём, `git push --follow-tags` —
+`origin/main` с `5ae8079f` на `540f8607` вместе с тегом, —
+и `dart pub publish --force` из чистого дерева `packages/solo`: «Successfully
+uploaded … version 2.0.1». Следом идёт связка `flutter_solo` 2.0.1.
+
+Связка `flutter_solo`: релизный коммит «Release flutter_solo 2.0.1»,
+аннотированный тег `flutter_solo-v2.0.1`, `git push --follow-tags`
+и `flutter pub publish --force` из чистого дерева `packages/flutter_solo`.
