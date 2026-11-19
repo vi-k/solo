@@ -4,26 +4,23 @@
 всеми тремя частями, следующую работу выбирает владелец.
 
 На pub.dev на 2026-11-19: `async_job` 1.0.4, `solo` 2.0.0, `flutter_solo`
-2.0.0, `async_job_lints` 0.2.3, `solo_lints` 0.3.0. В «Unreleased» у `solo`
+2.0.0, `async_job_lints` 0.2.3, `solo_lints` 0.3.1. В «Unreleased» у `solo`
 и `flutter_solo` строка о README и примерах, которые просят
 `solo_lints: ^0.3.0`; у `solo` ещё рецепт ленты в `lanes.md`. Оверрайдов
 в дереве нет. Линии — `2026-11-11-solo-lanes-report.md`, выпуски —
 `2026-11-18-solo-2-0-0-release-report.md`,
 `2026-11-18-flutter-solo-2-0-0-release-report.md`,
 `2026-11-18-async-job-1-0-4-release-report.md`,
-`2026-11-18-async-job-lints-0-2-2-release-report.md`
-и `2026-11-18-solo-lints-0-3-0-release-report.md`. Три теста ядра, красневшие
+`2026-11-18-async-job-lints-0-2-2-release-report.md`,
+`2026-11-18-solo-lints-0-3-0-release-report.md`,
+`2026-11-19-async-job-lints-0-2-3-release-report.md`
+и `2026-11-19-solo-lints-0-3-1-release-report.md`. Три теста ядра, красневшие
 под нагрузкой машины, исправлены 2026-11-18 — раздел «Красные тесты ядра»
 `2026-11-18-async-job-lints-0-2-2-release-report.md`. Находки повторного ревью
 ветки `solo-lanes` моделью gpt-6.2-astra проверены и закрыты 2026-11-18 —
 `2026-11-18-solo-lanes-astra-review-report.md`.
 
 **Ждёт слова владельца.**
-
-- `async_job_lints` 0.2.3 выпущен 2026-11-19 —
-  `2026-11-19-async-job-lints-0-2-3-release-report.md`. Выпуск `solo_lints`
-  0.3.1 подготовлен — `2026-11-19-solo-lints-0-3-1-release-report.md`; связку
-  запускает только отдельное слово «публикуй».
 
 - Бэклог: пул в линии; `onCancel` в `ctx.join` к первому минору ядра.
 

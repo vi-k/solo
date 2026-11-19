@@ -1,6 +1,6 @@
-> **Состояние на 2026-11-19:** подготовлено, не выпущено. Связку — коммит
-> «Release solo_lints 0.3.1», тег `solo_lints-v0.3.1`, push
-> и `dart pub publish` — запускает только отдельное слово владельца.
+> **Состояние на 2026-11-19:** выпущено по слову владельца «публикуй»:
+> релизный коммит «Release solo_lints 0.3.1», тег `solo_lints-v0.3.1`,
+> `dart pub publish`.
 > **Что это:** подготовка патча `solo_lints` 0.3.1 — граница
 > `async_job_lints: ^0.2.3` и снятый оверрайд.
 > **Связанные записи:** `2026-11-19-async-job-lints-0-2-3-release-report.md`,
@@ -49,3 +49,11 @@
   its gate on the floor: 7 roots»: `async_job` +1917, `solo` +2484,
   `async_job_lints` +231, `solo_lints` +132 после `pub downgrade`
   до `async_job_lints` 0.2.3 с pub.dev, `flutter_solo` +344.
+
+## Состояние
+
+2026-11-19 по слову владельца «публикуй» — связка: релизный коммит «Release
+solo_lints 0.3.1», аннотированный тег `solo_lints-v0.3.1`,
+`git push --follow-tags` и `dart pub publish --force` из чистого дерева
+`packages/solo_lints`. Перед связкой на pub.dev стояла 0.3.0, тега 0.3.1
+не было ни локально, ни в origin.
