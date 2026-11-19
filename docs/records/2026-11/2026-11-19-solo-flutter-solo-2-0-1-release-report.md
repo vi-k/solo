@@ -1,6 +1,13 @@
-> **Состояние на 2026-11-19:** подготовлено, не выпущено. Связки — коммиты «Release solo 2.0.1» и «Release flutter_solo 2.0.1», теги `solo-v2.0.1` и `flutter_solo-v2.0.1`, push и `dart pub publish` — запускает только отдельное слово владельца.
-> **Что это:** подготовка патчей `solo` 2.0.1 и `flutter_solo` 2.0.1 — документация после 2.0.0.
-> **Связанные записи:** `2026-11-18-solo-2-0-0-release-report.md`, `2026-11-18-flutter-solo-2-0-0-release-report.md`, `2026-11-18-solo-lanes-astra-review-report.md`, `2026-11-18-solo-lints-0-3-0-release-report.md`, `2026-11-19-solo-lints-0-3-1-release-report.md`.
+> **Состояние на 2026-11-19:** `solo` 2.0.1 выпущен по слову владельца
+> «публикуй»: релизный коммит «Release solo 2.0.1», тег `solo-v2.0.1`,
+> `dart pub publish`. Следом — связка `flutter_solo` 2.0.1.
+> **Что это:** подготовка патчей `solo` 2.0.1 и `flutter_solo` 2.0.1 —
+> документация после 2.0.0.
+> **Связанные записи:** `2026-11-18-solo-2-0-0-release-report.md`,
+> `2026-11-18-flutter-solo-2-0-0-release-report.md`,
+> `2026-11-18-solo-lanes-astra-review-report.md`,
+> `2026-11-18-solo-lints-0-3-0-release-report.md`,
+> `2026-11-19-solo-lints-0-3-1-release-report.md`.
 
 # Выпуск solo 2.0.1 и flutter_solo 2.0.1
 
@@ -57,3 +64,16 @@
   floor: 7 roots»: `async_job` +1917, `solo` +2484, пример `solo` +112,
   `async_job_lints` +231, `solo_lints` +132, `flutter_solo` +344, пример
   `flutter_solo` +6.
+
+## Связка
+
+Владелец разрешил публикацию 2026-11-19 отдельным запросом «публикуй»,
+следующим сообщением после подготовки; запрос покрывает оба пакета. Перед
+связками на pub.dev стояли `solo` 2.0.0 и `flutter_solo` 2.0.0, тегов
+`solo-v2.0.1` и `flutter_solo-v2.0.1` не было ни локально, ни в origin, `main`
+был впереди `origin/main` на подготовку и правку handoff — они уходят в origin
+вместе с релизным коммитом `solo`.
+
+Связка `solo`: релизный коммит «Release solo 2.0.1», аннотированный тег
+`solo-v2.0.1`, `git push --follow-tags` и `dart pub publish --force` из чистого
+дерева `packages/solo`.
