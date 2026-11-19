@@ -1,11 +1,14 @@
 # Анонс 1.0: статья, два поста и ответ в bloc#3069, черновики
 
-> **Состояние на 2026-11-06:** черновики написаны по слову владельца «давай
+> **Состояние на 2026-11-19:** черновики написаны по слову владельца «давай
 > анонс» и исправлены по независимому ревью Opus (раздел «Ревью»); публикует
 > владелец сам. Ничего не опубликовано. Переводы для чтения добавлены тем же
 > днём по слову «сделай мне переводы черновиков». 2026-11-06 по слову владельца
 > «да» в статье переписан абзац о раннем `done`, а в пост r/dartlang добавлена
-> фраза о структурной конкурентности, обе правки — с переводом.
+> фраза о структурной конкурентности, обе правки — с переводом. 2026-11-19
+> по слову владельца «Освежи черновики анонса под текущие версии» версии
+> в текстах подняты до `async_job` 1.0.4, а зонды прогнаны заново
+> на опубликованных пакетах — раздел «Зонды», «Перепрогон 2026-11-19».
 > **Что это:** четыре текста для каналов после 1.0 — статья «What cancelling
 > a Future takes in Dart», посты в r/FlutterDev и r/dartlang, ответ
 > в bloc#3069 — их переводы и зонды, которыми проверен их код.
@@ -259,7 +262,7 @@ A body starts a child job with `ctx.run`. The parent ends after its children and
 - **`ctx.join` waits for the call in flight.** A long call needs its own stop signal, as above, or `ctx.abandonable`.
 - **It is not state management.** A job goes under a riverpod provider or a bloc handler without changing the state layer, and [With riverpod and bloc](https://docs.yet-another.dev/async_job/riverpod-and-bloc/) shows where each of them cancels it.
 
-`async_job` 1.0.0 is on [pub.dev](https://pub.dev/packages/async_job). It depends only on `meta`, and from 1.0 it follows semantic versioning. The [documentation](https://docs.yet-another.dev/async_job/) covers outcomes, cancellation, cleanup, children, streams and testing under `fake_async`. For state with a queue on top of jobs there is [solo](https://pub.dev/packages/solo), from the same repository.
+`async_job` 1.0.4 is on [pub.dev](https://pub.dev/packages/async_job). It depends only on `meta`, and from 1.0 it follows semantic versioning. The [documentation](https://docs.yet-another.dev/async_job/) covers outcomes, cancellation, cleanup, children, streams and testing under `fake_async`. For state with a queue on top of jobs there is [solo](https://pub.dev/packages/solo), from the same repository.
 ````
 
 ## r/FlutterDev
@@ -388,7 +391,7 @@ class MyCubit extends Cubit<MyState> {
 }
 ```
 
-If the cubit is closed while A runs, `close()` cancels the job; `ctx.join` waits for A and then throws `Cancelled` instead of returning, so neither `emit(MyState.loadedA)` nor B runs, and `super.close()` comes after the job has ended: no `StateError` and no `isClosed` checks. Reading `done` never throws, so `load()` rethrows a failure of A or B itself. With A and B printing when they start and finish, a listener printing the states and `print('closed')` after `await cubit.close()`, on bloc 9.2.1 and async_job 1.0.0 (the stream delivers states asynchronously, so `loading` prints after `A started`):
+If the cubit is closed while A runs, `close()` cancels the job; `ctx.join` waits for A and then throws `Cancelled` instead of returning, so neither `emit(MyState.loadedA)` nor B runs, and `super.close()` comes after the job has ended: no `StateError` and no `isClosed` checks. Reading `done` never throws, so `load()` rethrows a failure of A or B itself. With A and B printing when they start and finish, a listener printing the states and `print('closed')` after `await cubit.close()`, on bloc 9.2.1 and async_job 1.0.4 (the stream delivers states asynchronously, so `loading` prints after `A started`):
 
 ```text
 A started
@@ -682,7 +685,7 @@ http 1.5 и новее делает то же через `AbortableRequest` и �
   [«With riverpod and bloc»](https://docs.yet-another.dev/async_job/riverpod-and-bloc/)
   показывает, где каждый из них её отменяет.
 
-`async_job` 1.0.0 лежит на [pub.dev](https://pub.dev/packages/async_job). Он
+`async_job` 1.0.4 лежит на [pub.dev](https://pub.dev/packages/async_job). Он
 зависит только от `meta` и с 1.0 следует семантическому версионированию.
 [Документация](https://docs.yet-another.dev/async_job/) рассказывает
 об исходах, отмене, уборке, дочерних задачах, стримах и тестах под
@@ -857,7 +860,7 @@ class MyCubit extends Cubit<MyState> {
 того, как задача кончилась: ни `StateError`, ни проверок `isClosed`. Чтение
 `done` никогда не бросает, поэтому `load()` сам перебрасывает сбой A или B. A
 и B печатают, когда начинаются и кончаются, слушатель печатает состояния, после
-`await cubit.close()` стоит `print('closed')`; на bloc 9.2.1 и async_job 1.0.0
+`await cubit.close()` стоит `print('closed')`; на bloc 9.2.1 и async_job 1.0.4
 (стрим доставляет состояния асинхронно, поэтому `loading` печатается после
 `A started`):
 
@@ -1216,3 +1219,24 @@ A started
 MyState.loading
 load threw: Bad state: A failed
 ```
+
+### Перепрогон 2026-11-19
+
+После выпусков `async_job` 1.0.1–1.0.4, `solo` 2.0 и линтов оба зонда собраны
+заново из блоков этого раздела и ответа, без правок, в отдельном пакете
+с pub.dev: `async_job: ^1.0.4`, `async` и `bloc` без ограничений. Разрешились
+`async_job` 1.0.4, `async` 2.13.1 и `bloc` 9.2.1 — новее bloc на pub.dev нет.
+`dart analyze` без замечаний, вывод обеих программ совпал с трассами выше
+строка в строку. Поэтому в текстах поменялись только версии: «`async_job` 1.0.0
+is on pub.dev» в статье и «on bloc 9.2.1 and async_job 1.0.0» в ответе стали
+1.0.4, с переводами.
+
+Блоки, взятые из документации ядра, сверены с ней в тот же день. Трасса
+«Walking away» и трасса поста в r/FlutterDev стоят в README и на странице «With
+riverpod and bloc» дословно. Блок «Walking away» — тело `main` из README без
+обёртки, блок dio — блок страницы, фильтр `isCancellationError` сужен до dio,
+как и сказано в статье, а блок поста в r/FlutterDev склеен из `readRows`
+и провайдера раздела «Cancelling on disposal». Живы все ссылки текстов:
+страницы сайта, якорь `#a-handler-that-restarts`, пакеты на pub.dev;
+dart-lang/sdk#42855 и felangel/bloc#3069 по-прежнему открыты, комментарий
+2764251377 на месте.

@@ -38,7 +38,8 @@
   [flutter/flutter#196775](https://github.com/flutter/flutter/issues/196775).
   Подробности — `2026-11-13-device-app-phones-report.md`.
 - Черновики анонса 1.0 публикует владелец сам —
-  `2026-11-05-one-zero-announcement-draft.md`.
+  `2026-11-05-one-zero-announcement-draft.md`; освежены 2026-11-19 под
+  `async_job` 1.0.4, зонды прогнаны заново на pub.dev.
 - Уборка, только по слову владельца: `~/fvm/versions/master` поставлен только
   для ревью riverpod и снимается `fvm remove master`. Старые копии и ветки,
   со спайком `SoloListener`, убраны 2026-11-19.
