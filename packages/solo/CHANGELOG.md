@@ -1,13 +1,25 @@
-## Unreleased
+## 2.0.1
 
 ### Documentation
 
 - The README asks for `solo_lints: ^0.3.0`, which brings the warning
   `lane_outside_constructor` and the lint `stale_emit` for the lanes of
   `SoloLanes`.
+- [A read at the write](doc/lanes.md#a-read-at-the-write) says that the lint
+  `stale_emit` of `solo_lints` reports its first attempt, and that the lint
+  does not see a reload whose answer is written whole.
 - The feed of [A merge](doc/lanes.md#a-merge) puts back no confirmed mark that
   the posts of a reload cover when a like fails or is cancelled: the posts say
   what the server holds, an unlike from another device included.
+- [W on a record](doc/lanes.md#w-on-a-record) says what the writes of
+  `StudioController` keep: both keep the camera by hand and change only the
+  notice.
+- [The table of cases](doc/lanes.md#the-table-of-cases) says that a `droppable`
+  continuation queued during a drain gets the job its key has in the other
+  lane, as it would before the close.
+- The entry of 2.0.0 on the frames of a stack trace names `Solo._pump` and
+  `Solo._schedulePump` too, and the frame `SoloController._step` that a job the
+  pump cancels at its start gains.
 
 ## 2.0.0
 

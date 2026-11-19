@@ -3,7 +3,7 @@ description: >-
   State management for Flutter: sequential jobs over one state, in one queue
   or in each of several lanes, cooperative cancellation, rebuilds through
   SoloBuilder or ValueListenable.
-version: 2.0.0
+version: 2.0.1
 repository: https://github.com/vi-k/solo/tree/main/packages/flutter_solo
 documentation: https://docs.yet-another.dev/flutter_solo/
 issue_tracker: https://github.com/vi-k/solo/issues

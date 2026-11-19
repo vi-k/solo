@@ -4,10 +4,8 @@
 всеми тремя частями, следующую работу выбирает владелец.
 
 На pub.dev на 2026-11-19: `async_job` 1.0.4, `solo` 2.0.0, `flutter_solo`
-2.0.0, `async_job_lints` 0.2.3, `solo_lints` 0.3.1. В «Unreleased» у `solo`
-и `flutter_solo` строка о README и примерах, которые просят
-`solo_lints: ^0.3.0`; у `solo` ещё рецепт ленты в `lanes.md`. Оверрайдов
-в дереве нет. Линии — `2026-11-11-solo-lanes-report.md`, выпуски —
+2.0.0, `async_job_lints` 0.2.3, `solo_lints` 0.3.1. Оверрайдов в дереве нет.
+Линии — `2026-11-11-solo-lanes-report.md`, выпуски —
 `2026-11-18-solo-2-0-0-release-report.md`,
 `2026-11-18-flutter-solo-2-0-0-release-report.md`,
 `2026-11-18-async-job-1-0-4-release-report.md`,
@@ -21,6 +19,10 @@
 `2026-11-18-solo-lanes-astra-review-report.md`.
 
 **Ждёт слова владельца.**
+
+- Патчи `solo` 2.0.1 и `flutter_solo` 2.0.1 с документацией после 2.0.0
+  подготовлены — `2026-11-19-solo-flutter-solo-2-0-1-release-report.md`; связки
+  запускает только отдельное слово «публикуй».
 
 - Бэклог: пул в линии; `onCancel` в `ctx.join` к первому минору ядра.
 
