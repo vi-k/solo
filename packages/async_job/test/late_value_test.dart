@@ -12,12 +12,6 @@ import 'support/error_observer.dart';
 import 'support/journal.dart';
 import 'support/probe_job.dart';
 
-// A named constant rather than adjacent literals inside the list: the
-// analyzer forbids the latter.
-const _refusedByJob =
-    'Bad state: Job(job) has already finished, '
-    'cannot take the value of a call it made';
-
 void main() {
   test('a value returned after cancellation goes to the disposer', () {
     fakeAsync((async) {
@@ -250,46 +244,60 @@ void main() {
     });
   });
 
-  test('a value taken after the job was ended by hand in the cascade of its '
-      'cancellation', () {
-    // The job is marked, but the callback of the race went with `finish`
-    // before the pass reached it. Only work handed over with `unattended`
-    // is told the cancellation then; the body hears about the job, as it
-    // does when the engine ends it with no cancellation at all.
-    final seen = <String>[];
-    fakeAsync((async) {
-      final action = Completer<String>();
-      late final ProbeJob<void> job;
-      job =
-          ProbeJob<void>(key: 'job', (ctx) async {
-              ctx
-                  .run(
-                    Job.deferred<void>((ctx) async {
-                      ctx.onCancel(() => job.drop(const Cancelled('by hand')));
-                      await ctx.abandonable(() => delay(50));
-                    }),
-                  )
-                  .ignore();
-              try {
-                final value = await ctx.abandonable<String>(
-                  () => action.future,
-                  dispose: (value) => seen.add('released $value'),
-                );
-                seen.add('got $value');
-              } on Object catch (error) {
-                seen.add('$error');
+  for (final catches in [true, false]) {
+    test('a value taken after the job was ended by hand in the cascade of its '
+        'cancellation, the body catching: $catches', () {
+      // The job is marked, but the callback of the race went with `finish`
+      // before the pass reached it. The body is told the cancellation that
+      // arrived while its call was in flight, as the race would have told it:
+      // a body that lets it through raises nothing for anyone to hear.
+      final seen = <String>[];
+      final errors = <Object>[];
+      final zone = <Object>[];
+      runZonedGuarded(() {
+        fakeAsync((async) {
+          final action = Completer<String>();
+          late final ProbeJob<void> job;
+          job = ProbeJob<void>(key: 'job', observer: ErrorObserver(errors), (
+            ctx,
+          ) async {
+            ctx
+                .run(
+                  Job.deferred<void>((ctx) async {
+                    ctx.onCancel(() => job.drop(const Cancelled('by hand')));
+                    await ctx.abandonable(() => delay(50));
+                  }),
+                )
+                .ignore();
+            try {
+              final value = await ctx.abandonable<String>(
+                () => action.future,
+                dispose: (value) => seen.add('released $value'),
+              );
+              seen.add('got $value');
+            } on Object catch (error) {
+              seen.add('$error');
+              if (!catches) {
+                rethrow;
               }
-            })
-            ..ignoreFailure()
-            ..launch();
-      async.flushMicrotasks();
-      job.cancel().ignore();
-      seen.add('${job.outcome}');
-      action.complete('db');
-      async.flushTimers();
+            }
+          })..launch();
+          async.flushMicrotasks();
+          job.cancel().ignore();
+          seen.add('${job.outcome}');
+          action.complete('db');
+          async.flushTimers();
+        });
+      }, (error, stackTrace) => zone.add(error));
+      expect(seen, [
+        'Cancelled(body: by hand)',
+        'released db',
+        'Cancelled(manual)',
+      ]);
+      expect(errors, isEmpty);
+      expect(zone, isEmpty);
     });
-    expect(seen, ['Cancelled(body: by hand)', 'released db', _refusedByJob]);
-  });
+  }
 
   test('an action failing after the body walked away is not swallowed', () {
     final errors = <Object>[];

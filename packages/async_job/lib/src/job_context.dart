@@ -1092,14 +1092,16 @@ abstract class JobContextBase implements JobContext {
           // The cancellation finished the call first, so the value reaches
           // nobody: cleaned up whatever the outcome, and at once.
           _releaseAbandoned(dispose, discard, value);
-        } else if (fromFork && pendingCancel != null) {
-          // The work waits for the value, and the job is marked without this
-          // race having heard it: the pass over the callbacks never reached it.
-          // An engine ended the job by hand while its cancellation went down to
-          // the children, and `finish` dropped the callbacks; or a raw callback
-          // registered before this one threw and stopped the pass. The work
-          // gets what the body would: the cancellation, and the value is
-          // released.
+        } else if (pendingCancel != null && (fromFork || !_owner.bodyEnded)) {
+          // The body or work handed over with `unattended` waits for the
+          // value, and the job is marked without this race having heard it:
+          // the pass over the callbacks never reached it. An engine ended the
+          // job by hand while its cancellation went down to the children, and
+          // `finish` dropped the callbacks; or a raw callback registered before
+          // this one threw and stopped the pass. The caller gets what the race
+          // would have given it: the cancellation that arrived while the call
+          // was in flight, not a complaint that the job is over, and the value
+          // is released.
           onCancel();
           final disposer = dispose ?? discard;
           if (disposer != null) {

@@ -1,3 +1,12 @@
+## Unreleased
+
+### Fixed
+
+- A call of `ctx.abandonable` whose job an engine ends by hand while the job's
+  cancellation goes down to its children throws that cancellation when its
+  value comes, not a `StateError`; a body that let it through reported an error
+  to `onError` and the zone.
+
 ## 1.0.4
 
 ### Documentation
