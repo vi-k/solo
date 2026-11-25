@@ -2853,6 +2853,90 @@ final parent = Job<void>((ctx) async {
     expect(leaked.check, returnsNormally);
   });
 
+  test('a branch an engine ends by hand at the first barrier', () {
+    fakeAsync((async) {
+      // The branch returns at once and waits at the first barrier for the
+      // slow one; the engine ends it there. When the slow one arrives the
+      // group lets both past, and the slow one stays in its first pass on
+      // its cleanup. The branch ended by hand is over: it is not in a phase
+      // of the core's unwinding, then or ever.
+      final arrive = Completer<int>();
+      final unwound = Completer<void>();
+      final branch = ProbeJob<int>(key: 'a', (ctx) async => 1);
+      final slow = Job.deferred<int>(key: 'slow', (ctx) async {
+        ctx.onDispose(() => unwound.future);
+        return arrive.future;
+      });
+      List<int>? values;
+      Job<void>(key: 'parent', (ctx) async {
+        values = await ctx.runAll(<ChildJob<int>>[branch, slow]);
+      });
+      async.flushMicrotasks();
+      expect(branch.isFinished, isFalse, reason: 'held at the first barrier');
+      branch.drop(const Done(10));
+      arrive.complete(3);
+      async.flushMicrotasks();
+      expect(slow.isFinished, isFalse, reason: 'still in its first pass');
+      expect(
+        [branch.isFinished, branch.isDisposingNow],
+        [true, false],
+        reason: 'a job ended by hand does not read as disposing',
+      );
+      unwound.complete();
+      async.flushTimers();
+      expect(values, [10, 3]);
+      expect(branch.isDisposingNow, isFalse);
+    });
+  });
+
+  for (final byHand in [false, true]) {
+    test('a branch at the second barrier with a registration that landed '
+        'there, byHand: $byHand', () {
+      fakeAsync((async) {
+        // The branch has unwound its first pass and waits at the second
+        // barrier for the slow one, still in its own first pass. A
+        // registration lands on it there, which is legal: the stack is read
+        // again past the barrier, and the pass after it runs it. Unless the
+        // engine ends the branch by hand first: a job ended by hand unwinds no
+        // cleanup stack.
+        final unwound = Completer<void>();
+        final ran = <String>[];
+        late JobContext held;
+        final branch = ProbeJob<int>(key: 'a', (ctx) async {
+          held = ctx;
+          return 1;
+        });
+        final slow = Job.deferred<int>(key: 'slow', (ctx) async {
+          ctx.onDispose(() => unwound.future);
+          return 3;
+        });
+        List<int>? values;
+        Job<void>(key: 'parent', (ctx) async {
+          values = await ctx.runAll(<ChildJob<int>>[branch, slow]);
+        });
+        async.flushMicrotasks();
+        expect(
+          [branch.isFinished, branch.isDisposingNow],
+          [false, true],
+          reason: 'held at the second barrier',
+        );
+        held.onDispose(() => ran.add('landed at the barrier'));
+        if (byHand) branch.drop(const Done(10));
+        unwound.complete();
+        async.flushTimers();
+        expect(values, [if (byHand) 10 else 1, 3]);
+        expect(
+          ran,
+          [if (!byHand) 'landed at the barrier'],
+          reason: byHand
+              ? 'dropped with the job ended by hand, never run'
+              : 'run by the pass after the barrier',
+        );
+        expect(branch.isDisposingNow, isFalse);
+      });
+    });
+  }
+
   test('branches that end one a turn are gathered in linear time', () async {
     // The group looks at the barriers of its branches each time one of them
     // moves. Looked at from the first branch every time, the walk passes
