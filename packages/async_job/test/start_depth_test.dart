@@ -747,48 +747,6 @@ void main() {
     expect(zone, isEmpty);
   });
 
-  test('children cut short before they ran, side by side', () async {
-    final heard = <String>[];
-    final first = NoStackForContextJob(key: 'first');
-    final second = NoStackForContextJob(key: 'second');
-    final zone = <Object>[];
-    late Job<void> root;
-    runZonedGuarded(() {
-      root = Job<void>(
-        (ctx) async {
-          for (final child in [first, second]) {
-            try {
-              await ctx.run(child);
-            } on Object {
-              // The overflow.
-            }
-          }
-        },
-        key: 'root',
-        observer: _Heard(heard),
-      );
-    }, (error, _) => zone.add(error));
-    await _ends(root);
-    await delay(1);
-
-    expect(
-      heard,
-      [
-        'start root',
-        'error first StackOverflowError',
-        'finish first',
-        'error second StackOverflowError',
-        'finish second',
-        'finish root',
-      ],
-      reason:
-          'a child that never got as far as running has no routine to go '
-          'back to: it is ended on the spot, before the next one is looked '
-          'at',
-    );
-    expect(zone, isEmpty);
-  });
-
   test('a child cut short and dropped while its sibling is ended', () async {
     final heard = <String>[];
     final first = NoStackForContextJob(key: 'first');

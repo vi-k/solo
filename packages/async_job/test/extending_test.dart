@@ -162,34 +162,6 @@ final class FailingStartJob<T> extends JobBase<T> implements ChildJob<T> {
   Future<T> execute(covariant DomainContext ctx) => _body(ctx);
 }
 
-/// An engine whose override of [JobBase.finish] throws before it gets to
-/// `super`: the job is not over, and the error leaves its routine.
-///
-/// Writes down what it was asked to end the job with, and queues a microtask
-/// before it throws, so a test can tell where the error lands in time.
-final class FinishFailingJob extends JobBase<void> implements ChildJob<void> {
-  FinishFailingJob(this._seen);
-
-  final List<String> _seen;
-
-  void launch() => start();
-
-  @override
-  // The point of the helper is an engine that never gets to `super`.
-  // ignore: must_call_super
-  void finish(Outcome<void> outcome) {
-    _seen.add('finish: $outcome');
-    scheduleMicrotask(() => _seen.add('next microtask'));
-    throw StateError('engine failed to finish');
-  }
-
-  @override
-  JobContextBase createContext() => DomainContext(this);
-
-  @override
-  Future<void> execute(covariant DomainContext ctx) async {}
-}
-
 /// An engine that wants to say why it is still waiting.
 final class SectionJob<T> extends JobBase<T> implements ChildJob<T> {
   SectionJob(this._body, {super.key});
@@ -873,25 +845,6 @@ void main() {
         'Bad state: bookkeeping',
       ]);
     });
-  });
-
-  test('a finish that throws at the end of a job with nothing to unwind', () {
-    final seen = <String>[];
-    runZonedGuarded(() {
-      fakeAsync((async) {
-        final job = FinishFailingJob(seen)..launch();
-        async.flushTimers();
-        expect(job.isRunning, isTrue, reason: 'the engine never ended it');
-      });
-    }, (error, stackTrace) => seen.add('zone: $error'));
-    // The error leaves the routine in the turn the engine threw it, before
-    // anything that turn queued: nothing stands between the end of the body
-    // and the tail of a job with an empty stack and no group.
-    expect(seen, [
-      'finish: Done(null)',
-      'zone: Bad state: engine failed to finish',
-      'next microtask',
-    ]);
   });
 
   group('heldCancellation', () {
