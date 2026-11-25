@@ -646,6 +646,53 @@ void main() {
     },
   );
 
+  test(
+    'a child cut short under a body that then failed with an error of its own',
+    () async {
+      final heard = <String>[];
+      final child = NoStackForContextJob(key: 'child');
+      final zone = <Object>[];
+      late Job<void> root;
+      runZonedGuarded(() {
+        root = Job<void>(
+          (ctx) async {
+            try {
+              await ctx.run(child);
+            } on Object {
+              // The overflow, answered with a failure of the body's own.
+            }
+            throw StateError('of the body');
+          },
+          key: 'root',
+          // Every job below inherits it as it is adopted.
+          observer: _Heard(heard),
+        );
+      }, (error, _) => zone.add(error));
+      await _ends(root);
+      await delay(1);
+
+      expect(
+        child.outcome,
+        isA<Failed>().having(
+          (failed) => failed.error,
+          'error',
+          isA<StackOverflowError>(),
+        ),
+        reason:
+            'what cut the child short was the stack, not whatever the body '
+            'of its parent failed with afterwards',
+      );
+      expect(heard, [
+        'start root',
+        'error root StateError',
+        'error child StackOverflowError',
+        'finish child',
+        'finish root',
+      ]);
+      expect(zone, isEmpty, reason: 'reading `done` answers for the root');
+    },
+  );
+
   test('children cut short one under another are ended a stack each', () async {
     final order = <Object?>[];
     final grandchild = NoStackForContextJob(key: 'grandchild');
@@ -697,6 +744,91 @@ void main() {
           'the parent goes round its own children before any of them '
           'is back for its own: no job is ended under another',
     );
+    expect(zone, isEmpty);
+  });
+
+  test('children cut short before they ran, side by side', () async {
+    final heard = <String>[];
+    final first = NoStackForContextJob(key: 'first');
+    final second = NoStackForContextJob(key: 'second');
+    final zone = <Object>[];
+    late Job<void> root;
+    runZonedGuarded(() {
+      root = Job<void>(
+        (ctx) async {
+          for (final child in [first, second]) {
+            try {
+              await ctx.run(child);
+            } on Object {
+              // The overflow.
+            }
+          }
+        },
+        key: 'root',
+        observer: _Heard(heard),
+      );
+    }, (error, _) => zone.add(error));
+    await _ends(root);
+    await delay(1);
+
+    expect(
+      heard,
+      [
+        'start root',
+        'error first StackOverflowError',
+        'finish first',
+        'error second StackOverflowError',
+        'finish second',
+        'finish root',
+      ],
+      reason:
+          'a child that never got as far as running has no routine to go '
+          'back to: it is ended on the spot, before the next one is looked '
+          'at',
+    );
+    expect(zone, isEmpty);
+  });
+
+  test('a child cut short and dropped while its sibling is ended', () async {
+    final heard = <String>[];
+    final first = NoStackForContextJob(key: 'first');
+    final second = NoStackForContextJob(key: 'second');
+    final zone = <Object>[];
+    late Job<void> root;
+    runZonedGuarded(() {
+      // The parent ends its children cut short one after another, from a
+      // list it read before the first; the end of the first drops the
+      // second, which is still on that list.
+      first.whenFinished((_) {
+        heard.add('drop second');
+        second.cancel().ignore();
+      });
+      root = Job<void>(
+        (ctx) async {
+          for (final child in [first, second]) {
+            try {
+              await ctx.run(child);
+            } on Object {
+              // The overflow.
+            }
+          }
+        },
+        key: 'root',
+        observer: _Heard(heard),
+      );
+    }, (error, _) => zone.add(error));
+    await _ends(root);
+    await delay(1);
+
+    expect(second.outcome, isA<Cancelled>());
+    expect(heard, [
+      'start root',
+      'error first StackOverflowError',
+      'finish first',
+      'drop second',
+      'finish second',
+      'finish root',
+    ], reason: 'a child that is over is not ended a second time');
     expect(zone, isEmpty);
   });
 

@@ -274,6 +274,84 @@ void main() {
   });
 
   test(
+    'a listener with a bug other than the stack, inside the window',
+    () async {
+      // The window lets through an overflow and nothing else: the root's
+      // listeners run while it is open, and an ordinary error of one of them
+      // is that listener's own, wherever it happens to run.
+      final chain = _Chain(depth);
+      final journal = <Object>[];
+      final root = chain.start(observer: ErrorObserver.answering(journal));
+      await chain.bottom.future;
+      root
+        ..whenCancelled((_) {
+          journal.add('first listener');
+          throw StateError('of the listener');
+        })
+        ..whenCancelled((_) => journal.add('second listener'));
+
+      Object? thrown;
+      try {
+        root.cancel().ignore();
+      } on Object catch (error) {
+        thrown = error;
+      }
+      expect(
+        thrown,
+        isA<StackOverflowError>(),
+        reason: 'the caller hears the cascade, not the listener',
+      );
+      expect(journal, [
+        'first listener',
+        isStateError,
+        'second listener',
+      ], reason: 'the error goes to onError and the next listener still runs');
+    },
+  );
+
+  test(
+    'an onCancel with a bug other than the stack, inside the window',
+    () async {
+      // The same rule in the guard of `JobContext.onCancel`.
+      final chain = _Chain(depth);
+      final journal = <Object>[];
+      final never = Completer<void>();
+      final root = Job<void>(
+        (ctx) async {
+          ctx
+            ..onCancel(() {
+              journal.add('first callback');
+              throw StateError('of the callback');
+            })
+            ..onCancel(() => journal.add('second callback'));
+          ctx.run(chain.deferred()).ignore();
+          await never.future;
+        },
+        observer: ErrorObserver.answering(journal),
+      )..whenCancelled((_) => journal.add('listener'));
+      await chain.bottom.future;
+
+      Object? thrown;
+      try {
+        root.cancel().ignore();
+      } on Object catch (error) {
+        thrown = error;
+      }
+      expect(
+        thrown,
+        isA<StackOverflowError>(),
+        reason: 'the caller hears the cascade, not the callback',
+      );
+      expect(journal, [
+        'first callback',
+        isStateError,
+        'second callback',
+        'listener',
+      ], reason: 'the error goes to onError and the pass goes on');
+    },
+  );
+
+  test(
     'a callback that runs out of stack on its own is still its own',
     () async {
       // No cascade and no depth: one job, a listener with a bug of its
