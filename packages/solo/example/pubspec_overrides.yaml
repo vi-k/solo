@@ -1,0 +1,7 @@
+# Until async_job 1.0.5 is published.
+# The overrides of the package above do not reach here: pub applies only
+# the ones of the package it resolves, and a path dependency brings its
+# `pubspec.yaml` alone.
+dependency_overrides:
+  async_job:
+    path: ../../async_job
