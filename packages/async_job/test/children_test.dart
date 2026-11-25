@@ -1064,6 +1064,29 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
       expect(parent.outcome, isA<Done<void>>());
     });
   });
+  test('a child its rule ended and let in, with no stack for its start', () {
+    fakeAsync((async) {
+      final child = NoStackToStartJob(key: 'child');
+      Object? thrown;
+      final parent = ChildEndingRulesJob<void>((ctx) async {
+        try {
+          await ctx.run(child);
+        } on Object catch (error) {
+          thrown = error;
+        }
+        await delay(50);
+      }, letsIn: true)..launch();
+      async.flushMicrotasks();
+      expect(thrown, isA<StackOverflowError>());
+      expect(child.outcome, isA<Cancelled>());
+      // The overflow leaves the child where the throw found it: on the list,
+      // with the mark of its start up. It is over, so the parent has nothing
+      // to wait for and nothing to end there.
+      expect(parent.childrenList, [same(child)]);
+      async.flushTimers();
+      expect(parent.outcome, isA<Done<void>>());
+    });
+  });
   test('a child started from a cancel callback of a self-cancelled body is '
       'refused', () {
     fakeAsync((async) {
@@ -1383,4 +1406,22 @@ final class _NamedContext extends JobContextBase {
 final class _ImplementedJobBase implements JobBase<void>, ChildJob<void> {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// A job with no stack left at the door of its start.
+///
+/// Stands in for a start called at the bottom of a stack: the throw comes
+/// before the start has looked at anything, at a job that is over too.
+final class NoStackToStartJob extends JobBase<void> implements ChildJob<void> {
+  NoStackToStartJob({super.key});
+
+  @override
+  void start() => throw const StackOverflowError();
+
+  @override
+  JobContextBase createContext() => throw StateError('never built');
+
+  @override
+  Future<void> execute(covariant JobContextBase ctx) async =>
+      throw StateError('never runs');
 }

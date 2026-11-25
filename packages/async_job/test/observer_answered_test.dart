@@ -591,6 +591,59 @@ void main() {
       },
     );
 
+    test('an envelope that walks in another order the second time', () {
+      final a = StateError('a');
+      const stop = Stopped();
+      final envelope = Shifting(
+        [AsyncError(a, StackTrace.empty), AsyncError(stop, StackTrace.empty)],
+        [AsyncError(stop, StackTrace.empty), AsyncError(a, StackTrace.empty)],
+      );
+      Job.isCancellationError = (error) {
+        asked.add('$error');
+        envelope.shifted = true;
+        return error is Stopped;
+      };
+      final heard = HeardToTheEnd();
+      expect(stoppedAfterCancel(envelope, heard), isEmpty);
+      expect(asked, ['Bad state: a', 'Stopped']);
+      // Each failure is told what its own verdict says, whatever place it
+      // takes in the second walk.
+      expect(heard.seen, [
+        'onError: Stopped, cancellation',
+        'onError: Bad state: a, answered',
+        'onFinish',
+        'onUnanswered: Bad state: a',
+      ]);
+    });
+
+    test('an envelope that meets one failure twice the second time', () {
+      final a = StateError('a');
+      const stop = Stopped();
+      final envelope = Shifting(
+        [AsyncError(a, StackTrace.empty), AsyncError(stop, StackTrace.empty)],
+        [
+          AsyncError(stop, StackTrace.empty),
+          AsyncError(stop, StackTrace.empty),
+        ],
+      );
+      Job.isCancellationError = (error) {
+        asked.add('$error');
+        envelope.shifted = true;
+        return error is Stopped;
+      };
+      final heard = HeardToTheEnd();
+      expect(stoppedAfterCancel(envelope, heard), isEmpty);
+      expect(asked, ['Bad state: a', 'Stopped']);
+      // One verdict serves one failure: the second meeting the first walk
+      // never had is asked about by nobody.
+      expect(heard.seen, [
+        'onError: Stopped, cancellation',
+        'onError: Stopped, never',
+        'onFinish',
+        'onUnanswered: Bad state: a',
+      ]);
+    });
+
     test('a filter set after onError is not asked: the verdict stands', () {
       nameTheStop();
       final heard = Swapping();
