@@ -142,6 +142,37 @@ void main() {
     expect(journal.take().where((line) => line.contains('error')), isEmpty);
   });
 
+  test('join inside unattended work while the body runs, a rule of the '
+      'domain broken in flight', () {
+    // The body is still there, so the rules of the domain still speak to
+    // the call: the checkpoint after the action is the body's whole one,
+    // not the cancellation alone, and the value is released before the
+    // work hears the rule.
+    final journal = JobJournal();
+    final seen = <String>[];
+    fakeAsync((async) {
+      CheckingJob<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.unattended(() async {
+          try {
+            final value = await ctx.join(() async {
+              await delay(5);
+              ctx.rules = () => throw StateError('rule');
+              return 'res';
+            }, dispose: (value) => seen.add('disposed $value'));
+            seen.add('got $value');
+          } on Object catch (error) {
+            seen.add('$error');
+          }
+        });
+        await ctx.abandonable(() => delay(50));
+        seen.add('body over');
+      }).launch();
+      async.flushTimers();
+    });
+    expect(seen, ['disposed res', 'Bad state: rule', 'body over']);
+    expect(journal.take(), ['[j] started', '[j] finished Done(null)']);
+  });
+
   test("a job of its own may run a child from inside another job's fork", () {
     final journal = JobJournal();
     var childRan = false;

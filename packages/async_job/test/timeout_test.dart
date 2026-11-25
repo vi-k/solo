@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 import 'support/error_observer.dart';
+import 'support/journal.dart';
 import 'support/reachability.dart';
 
 Duration ms(int milliseconds) => Duration(milliseconds: milliseconds);
@@ -49,6 +50,7 @@ final class Engine<T> extends JobBase<T> implements ChildJob<T> {
 
   Engine(
     this._body, {
+    super.key,
     super.timeout,
     super.observer,
     this.onStarted,
@@ -753,6 +755,36 @@ void main() {
         );
       });
     });
+
+    test(
+      'arriving behind the deadline with the very reason of the deadline',
+      () {
+        // The other side of identity: a request that carries the instance the
+        // timer made is the deadline's own, whoever sends it, and it goes with
+        // the timer instead of waiting behind it for the cleanup.
+        final journal = JobJournal();
+        fakeAsync((async) {
+          var discarded = false;
+          final job = Engine<int>(key: 'j', timeout: ms(10), (ctx) async {
+            ctx
+              ..onDiscard(() => discarded = true)
+              ..onDispose(() => delay(100));
+            unawaited(ctx.uncancellable(() => delay(50)));
+            await ctx.join(() => delay(20));
+            return 1;
+          }, observer: journal)..launch();
+          async.elapse(ms(15));
+          final deadline = job.held!.reason;
+          expect(deadline, isA<TimeoutCancelReason>());
+          job.cancel(reason: deadline).ignore();
+          async.elapse(ms(10));
+          expect(job.held, isNull, reason: 'lifted with the deadline');
+          async.elapse(ms(300));
+          expect(discarded, isFalse);
+        });
+        expect(journal.take(), ['[j] started', '[j] finished Done(1)']);
+      },
+    );
   });
 
   group('a request behind the deadline is let go of', () {
@@ -862,4 +894,29 @@ void main() {
       });
     });
   });
+
+  test(
+    'a request behind a manual one a section holds, before the deadline',
+    () {
+      // Only a request behind the deadline is kept apart: behind any other
+      // one it is turned around at once, as `??=` turns it around, and
+      // nothing holds it while the section runs.
+      fakeAsync((async) {
+        final section = Completer<void>();
+        final job = Engine<int>(timeout: ms(10), (ctx) async {
+          await ctx.uncancellable(() => section.future);
+          return 1;
+        })..launch();
+        async.elapse(ms(5));
+        job.cancel().ignore();
+        final reason = cancelHeavily(job);
+        expect(collectedIn(async, reason), isTrue);
+        async.elapse(ms(10));
+        expect(job.held?.reason, isA<ManualCancelReason>());
+        section.complete();
+        async.flushMicrotasks();
+        expect('${job.outcome}', 'Cancelled(manual)');
+      });
+    },
+  );
 }

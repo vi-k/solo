@@ -12,6 +12,12 @@ import 'support/error_observer.dart';
 import 'support/journal.dart';
 import 'support/probe_job.dart';
 
+// A named constant rather than adjacent literals inside the list: the
+// analyzer forbids the latter.
+const _refusedByJob =
+    'Bad state: Job(job) has already finished, '
+    'cannot take the value of a call it made';
+
 void main() {
   test('a value returned after cancellation goes to the disposer', () {
     fakeAsync((async) {
@@ -242,6 +248,47 @@ void main() {
       );
       expect('$caught', contains('has already finished'));
     });
+  });
+
+  test('a value taken after the job was ended by hand in the cascade of its '
+      'cancellation', () {
+    // The job is marked, but the callback of the race went with `finish`
+    // before the pass reached it. Only work handed over with `unattended`
+    // is told the cancellation then; the body hears about the job, as it
+    // does when the engine ends it with no cancellation at all.
+    final seen = <String>[];
+    fakeAsync((async) {
+      final action = Completer<String>();
+      late final ProbeJob<void> job;
+      job =
+          ProbeJob<void>(key: 'job', (ctx) async {
+              ctx
+                  .run(
+                    Job.deferred<void>((ctx) async {
+                      ctx.onCancel(() => job.drop(const Cancelled('by hand')));
+                      await ctx.abandonable(() => delay(50));
+                    }),
+                  )
+                  .ignore();
+              try {
+                final value = await ctx.abandonable<String>(
+                  () => action.future,
+                  dispose: (value) => seen.add('released $value'),
+                );
+                seen.add('got $value');
+              } on Object catch (error) {
+                seen.add('$error');
+              }
+            })
+            ..ignoreFailure()
+            ..launch();
+      async.flushMicrotasks();
+      job.cancel().ignore();
+      seen.add('${job.outcome}');
+      action.complete('db');
+      async.flushTimers();
+    });
+    expect(seen, ['Cancelled(body: by hand)', 'released db', _refusedByJob]);
   });
 
   test('an action failing after the body walked away is not swallowed', () {
@@ -544,6 +591,40 @@ void main() {
         );
       },
     );
+  });
+
+  test('abandonable with a value at hand after the body ended, called from '
+      'outside unattended work', () {
+    // A timer the body left behind asks for the value, not work handed over
+    // with `unattended`: nothing waits for it on the body's terms, so it is
+    // cleaned up whatever the outcome, `discard` too, as one that came back
+    // late from the future of an action is.
+    final journal = JobJournal();
+    final seen = <String>[];
+    fakeAsync((async) {
+      _Resource? made;
+      Job<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.run(Job.deferred<void>(key: 'child', (_) => delay(30))).ignore();
+        unawaited(
+          delay(10).then((_) async {
+            final resource = await ctx.abandonable(
+              () => made = _Resource(),
+              discard: (resource) => resource.closed = true,
+            );
+            seen.add('got it, closed: ${resource.closed}');
+          }),
+        );
+      });
+      async.flushTimers();
+      seen.add('in the end closed: ${made?.closed}');
+    });
+    expect(seen, ['got it, closed: false', 'in the end closed: true']);
+    expect(journal.take(), [
+      '[j] started',
+      '> [child] started',
+      '> [child] finished Done(null)',
+      '[j] finished Done(null)',
+    ]);
   });
 
   group('a value that reached nobody is released before the unwinding', () {
