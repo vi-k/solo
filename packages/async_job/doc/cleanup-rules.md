@@ -367,6 +367,11 @@ waits for the release. Kept for the second pass, the value would keep the slot
 from the cleanup of another branch the group waits for, and the group would
 wait for good.
 
+After the job has ended, the fourth row, the release comes first: whoever holds
+the future of a call the body walked away from still gets the value, already
+released. Work started with `ctx.unattended` that waits for the call gets a
+`StateError` instead, since its job is over.
+
 In the last row the value is not late: the body walked away from the call
 without a cancellation, so the value still goes to whoever holds the call's
 future, and its release waits for the unwinding on the stack. The core takes a
