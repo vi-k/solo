@@ -8,7 +8,10 @@
 > отличает, и на его месте ядро расходится с dartdoc `abandonable` — держатель
 > брошенного вызова получает уже освобождённое значение вместо `Cancelled`.
 > 2026-11-27 ядро поправлено, раздел «Правка M10»; в pub.dev уйдёт выпуском
-> `async_job` 1.0.6. Третий порядок, ручной `finish` без отмены, не тронут.
+> `async_job` 1.0.6. Третий порядок разобран зондом, раздел «Третий порядок:
+> зонд»: держатель получает освобождённое значение на любой кончившейся
+> задаче, не только после ручного `finish`; ядро не правилось, решение
+> за владельцем.
 > **Что это:** третий шаг перебора порядков на настоящем ядре: новые слова,
 > оракулы к ним, прогон на 20 местах и разбор непойманных.
 > **Связанные записи:** `2026-11-26-core-explorer-vocabulary-report.md`
@@ -467,6 +470,170 @@ from ending until the release is over». Прежний `_keepLate` держал
 Ревьюер отметил и то, что держатель без `onError` теперь отдаёт в зону
 `Cancelled` там, где раньше получал значение. Обычный путь отмены делает
 так же, и правка выравнивает с ним.
+
+### Третий порядок: зонд
+
+Владелец попросил 2026-11-27 разобрать зондом третий порядок, `hand-no-cancel`:
+движок кончает задачу руками без отмены, значение вызова приходит после конца.
+Зонд ниже гоняет `abandonable` и `join`, по четыре получателя на каждый: тело,
+которое ждёт вызов, работу `unattended`, держателя будущего, от которого ушло
+тело, и вызов, который никто не слушает. Концов три: ручной `finish` (`hand`),
+задача жива, потому что ждёт ребёнка (`none`), и задача без ребёнка, которая
+кончается сама, как только тело вернулось (`alone`). Прогон на ядре с правкой
+M10. У `abandonable` и `join` ответы совпадают строка в строку:
+
+| Получатель | `none` | `hand` | `alone` |
+| --- | --- | --- | --- |
+| тело ждёт вызов | `v`, освобождение на стеке | `StateError`, освобождено сразу | как `none`: тело держит задачу |
+| работа `unattended` | `v`, на стеке | `StateError`, освобождено сразу | `StateError`, освобождено сразу |
+| держатель будущего | `v`, на стеке | `v`, уже освобождённое | `v`, уже освобождённое |
+| никто | освобождено на стеке, тихо | освобождено сразу, тихо | освобождено сразу, тихо |
+
+`StateError` — «Job() has already finished, cannot take the value of a call it
+made» из `_keepOnStack`. Ни `onError`, ни зона ничего не получили ни в одной
+строке.
+
+Главное в столбце `alone`: ручной `finish` тут ни при чём. Держатель получает
+освобождённое значение всякий раз, когда задача кончилась раньше, чем пришло
+значение, и обычный конец — самый частый путь к этому. Это четвёртая строка
+таблицы «A value that comes late» в `cleanup-rules.md`, «After the job has
+ended | at once, late and alone, with nobody waiting for it», и dartdoc
+`_keepLate`: «on a job that has finished the disposer runs on the spot … the
+call still hands the value to whoever holds its future». Что держатель получает
+значение уже освобождённым, не сказано нигде. Страница отмены и таблица велят
+не уходить от вызова, который выдаёт ресурс: «a call that gives out a resource
+is not one to walk away from».
+
+Прототип отдавал держателю на кончившейся задаче тот же `StateError`, что
+и телу: в ветке `_race` после `_keepLate` и в `join` после `_keepLate`. Зонд
+показал ожидаемое: держатель получает `StateError`, а `join`, который никто
+не слушает, отдаёт его в зону; у `abandonable` прямое будущее гасит `ignore`.
+Весь набор ядра на прототипе роняет три теста, и все три — про обычный конец
+задачи, не про ручной `finish`:
+
+- `cleanup_test.dart`, «a value that arrives after the job has finished is
+  cleaned up»: `unawaited(ctx.join(...))` и `unawaited(ctx.abandonable(...))`
+  в задаче, которая возвращает `1`;
+- `pause_test.dart`, «a pause the body walked away from, in a job that ends
+  Done»: `unawaited(ctx.pause(second))`;
+- `zone_test.dart`, «a join the body walked away from puts no cancellation in
+  the zone».
+
+Правка третьего порядка, таким образом, меняет поведение любого брошенного
+вызова на кончившейся задаче, а не одного ручного `finish`, и выводит в зону
+ошибку там, где тесты закрепляют тишину. Прототип в дерево не вошёл.
+
+Зонд, `test/probe/hand_no_cancel_test.dart` в копии пакета:
+
+```dart
+import 'dart:async';
+
+import 'package:async_job/engine.dart';
+import 'package:test/test.dart';
+
+final class PJob<T> extends JobBase<T> implements ChildJob<T> {
+  PJob(this._body, {super.observer});
+  final Future<T> Function(JobContext ctx) _body;
+
+  void launch() => start();
+
+  void drop(Outcome<T> outcome) => finish(outcome);
+
+  @override
+  JobContextBase createContext() => PContext(this);
+
+  @override
+  Future<T> execute(covariant PContext ctx) => _body(ctx);
+}
+
+final class PContext extends JobContextBase {
+  PContext(super.owner);
+}
+
+final class Errors extends JobObserver {
+  Errors(this.log);
+  final List<String> log;
+
+  @override
+  void onError(
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace, {
+    required JobErrorAnswer answer,
+  }) => log.add('onError: $error');
+}
+
+/// A value that comes to `abandonable` or `join` after an engine finished
+/// the job by hand with no cancellation (`hand`), or with the job still
+/// running (`none`). The receiver is the body waiting for the call (`body`),
+/// work handed over with `unattended` (`unattended`), or the holder of a
+/// future the body walked away from (`holder`).
+Future<List<String>> scenario(String call, String receiver, String end) async {
+  final log = <String>[];
+  final gate = Completer<String>();
+  final forever = Completer<void>();
+  late PJob<String> job;
+  await runZonedGuarded(() async {
+    job = PJob<String>(observer: Errors(log), (ctx) async {
+      // A child keeps the job alive past its body.
+      if (end != 'alone') {
+        ctx.start(PJob<void>((_) => forever.future));
+      }
+      Future<String> make() => call == 'abandonable'
+          ? ctx.abandonable(
+              () => gate.future,
+              dispose: (v) => log.add('dispose $v'),
+            )
+          : ctx.join(() => gate.future, dispose: (v) => log.add('dispose $v'));
+      Future<void> take(String who) async {
+        try {
+          log.add('$who got ${await make()}');
+        } on Object catch (e) {
+          log.add('$who got $e');
+        }
+      }
+
+      switch (receiver) {
+        case 'body':
+          await take('body');
+        case 'unattended':
+          ctx.unattended(() => take('work'));
+        case 'holder':
+          unawaited(take('holder'));
+        case 'nobody':
+          unawaited(make());
+      }
+      return 'body';
+    })..launch();
+    await pumpEventQueue();
+    log.add('body ended: ${receiver != 'body'}');
+    if (end == 'hand') {
+      job.drop(const Done('hand'));
+    }
+    await pumpEventQueue();
+    log.add('job ${job.isFinished ? job.outcome : 'running'}');
+    gate.complete('v');
+    await pumpEventQueue();
+    forever.complete();
+    await pumpEventQueue();
+    log.add('in the end ${job.outcome}');
+  }, (e, _) => log.add('zone: $e'));
+  return log;
+}
+
+void main() {
+  for (final call in ['abandonable', 'join']) {
+    for (final receiver in ['body', 'unattended', 'holder', 'nobody']) {
+      for (final end in ['hand', 'none', 'alone']) {
+        test('$call, $receiver, $end', () async {
+          final log = await scenario(call, receiver, end);
+          print('== $call, $receiver, $end\n${log.join('\n')}');
+        });
+      }
+    }
+  }
+}
+```
 
 ## Вывод
 
