@@ -87,6 +87,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// queue whenever it inserts the job; a lane and a [Solo] leave it `0`.
   int _seq = 0;
 
+  /// The number a pool gives each of its root jobs when it queues it, and a
+  /// child takes from its parent: what tells a write of another job of the
+  /// pool from one of this job's own work. A lane and a [Solo] leave it `0`.
+  int _writer = 0;
+
   /// The revision of the state this job saw last, by a read or by a write
   /// of its own; `null` before the first.
   int? _seenRevision;
@@ -170,6 +175,9 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     _taken = true;
     // The child runs where its parent runs, whichever core made it.
     _execution = parent._job._execution;
+    // A write of a child is the work of its root, and not of another job of
+    // the pool.
+    _writer = parent._job._writer;
     _parentJob = parent._job;
     // A predicate of its own is stronger; a child without one -- `ctx.child`,
     // `each`, a `job(...)` made without it -- takes the one of the job whose

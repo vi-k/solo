@@ -323,14 +323,25 @@ final class _SoloContext<S extends Object, W extends S, R>
                 'its next checkpoint',
     );
     // A state read before a wait and written back after it undoes what
-    // another lane wrote meanwhile, and nothing else says so: the write is
-    // legal, and a snapshot from the server is written over on purpose.
-    if (_solo._wroteSinceSeen(_job) case final lane?) {
+    // another lane, another pool or another job of the own pool wrote
+    // meanwhile, and nothing else says so: the write is legal, and a
+    // snapshot from the server is written over on purpose.
+    if (_solo._wroteSinceSeen(_job) case (:final name, :final by)?) {
       SoloController._debug(
-        () =>
-            '$_job emit over a write of lane $lane made after $_job last '
-            'read the state: read ctx.state after the wait, or this write '
-            'undoes the work of $lane',
+        () => switch (by) {
+          _Wrote.lane =>
+            '$_job emit over a write of lane $name made after $_job last '
+                'read the state: read ctx.state after the wait, or this write '
+                'undoes the work of $name',
+          _Wrote.pool =>
+            '$_job emit over a write of pool $name made after $_job last '
+                'read the state: read ctx.state after the wait, or this write '
+                'undoes the work of $name',
+          _Wrote.ownPool =>
+            '$_job emit over a write of another job of pool $name made after '
+                '$_job last read the state: read ctx.state after the wait, or '
+                'this write undoes the work of that job',
+        },
       );
     }
     _solo._setState(next, emitter: _job);

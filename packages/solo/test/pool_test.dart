@@ -93,10 +93,73 @@ final class _TouchyError implements Exception {
   const _TouchyError();
 }
 
+/// A pool `p` of two places over a state of any kind, for a job whose
+/// working type is narrower than the state.
+final class _Any extends SoloLanes<Object> {
+  late final SoloPool<Object> p;
+
+  _Any() : super('off') {
+    p = pool('p', concurrency: 2);
+  }
+}
+
+/// The lines [Solo.debug] prints while [body] runs.
+List<String> _debugLines(void Function(FakeAsync async) body) {
+  final lines = <String>[];
+  Solo.debug = lines.add;
+  try {
+    fakeAsync(body);
+  } finally {
+    Solo.debug = null;
+  }
+  return lines;
+}
+
+/// A controller with the pools `likes` of two places and `uploads` of one,
+/// and the lane `l`.
+_Pools _writers() => _Pools(
+  (self) => self
+    ..declarePool('likes', 2)
+    ..declarePool('uploads', 1)
+    ..declareLane('l'),
+);
+
+/// The lines about a write over another, from the job `p1` of `likes` that
+/// reads the state, waits while [write] writes, and writes what it read.
+List<String> _overWrites(
+  void Function(_Pools controller, FakeAsync async) write,
+) {
+  final trace = _debugLines((async) {
+    final controller = _writers();
+    final gate = Completer<void>();
+    controller.declaredPools.first.enqueue<int, void>(key: 'p1', (ctx) async {
+      final saved = ctx.state;
+      await ctx.join(() => gate.future);
+      ctx.emit(saved);
+    });
+    async.flushMicrotasks();
+    write(controller, async);
+    async.flushMicrotasks();
+    gate.complete();
+    async.flushMicrotasks();
+  });
+  return [
+    for (final line in trace)
+      if (line.contains('emit over')) line,
+  ];
+}
+
 /// The outcome of a job its start rules turned down.
 final _cancelledByRules = isA<Cancelled>()
     .having((c) => c.reason, 'reason', isA<RulesCancelReason>())
     .having((c) => c.started, 'started', isFalse);
+
+/// The outcome of a job that a policy replaced.
+final _replaced = isA<Cancelled>().having(
+  (c) => c.reason,
+  'reason',
+  isA<ReplacedCancelReason>(),
+);
 
 void main() {
   tearDown(() => Solo.debug = null);
@@ -932,6 +995,400 @@ void main() {
               'it starts when one is free',
         ],
       );
+    });
+  });
+
+  group('policies', () {
+    /// Queues in [pool] a droppable job of key `a` named [name] that never
+    /// ends.
+    SoloJob<void> droppable(
+      SoloPool<int> pool,
+      String name, {
+      bool Function(int state)? canStart,
+    }) => pool.enqueue<int, void>(
+      key: 'a',
+      policy: Policy.droppable,
+      describe: () => name,
+      canStart: canStart,
+      (ctx) => Completer<void>().future,
+    );
+
+    test('droppable hands back the running job of the key', () {
+      late SoloJob<void> a1;
+      late SoloJob<void> again;
+      final lines = _debugLines((async) {
+        final (_, pool) = _onePool(2);
+        a1 = droppable(pool, 'a1');
+        async.flushMicrotasks();
+        again = droppable(pool, 'a2');
+      });
+
+      expect(again, same(a1));
+      expect(
+        lines,
+        contains(
+          'p: enqueue Job(a: a2): duplicate of Job(a: a1), which is running: '
+          'if awaited from inside Job(a: a1), it waits for itself',
+        ),
+      );
+    });
+
+    test('droppable hands back the queued job of the key', () {
+      late SoloJob<void> a1;
+      late SoloJob<void> again;
+      final lines = _debugLines((async) {
+        final (controller, pool) = _onePool(1);
+        pool.enqueue<int, void>(
+          describe: () => 'x',
+          _gated(controller.log, 'x', Completer()),
+        );
+        async.flushMicrotasks();
+        a1 = droppable(pool, 'a1');
+        again = droppable(pool, 'a2');
+      });
+
+      expect(again, same(a1));
+      expect(
+        lines,
+        contains(
+          'p: enqueue Job(a: a2): duplicate of Job(a: a1), which is queued',
+        ),
+      );
+    });
+
+    test('droppable in the window of the rules hands back the job there', () {
+      late SoloJob<void> a1;
+      SoloJob<void>? again;
+      final lines = _debugLines((async) {
+        final (_, pool) = _onePool(2);
+        a1 = droppable(
+          pool,
+          'a1',
+          canStart: (state) {
+            again = droppable(pool, 'a2');
+            return true;
+          },
+        );
+        async.flushMicrotasks();
+      });
+
+      expect(again, same(a1));
+      expect(lines, contains('p: enqueue Job(a: a2): duplicate of Job(a: a1)'));
+    });
+
+    test('droppable in a drain hands back the accepted job of the key', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(1);
+        final log = controller.log;
+        final x = Completer<void>();
+        pool.enqueue<int, void>(describe: () => 'x', _gated(log, 'x', x));
+        final a1 = _keyed(pool, log, 'a', 'a1', Completer()..complete());
+        async.flushMicrotasks();
+        unawaited(controller.close(mode: SoloCloseMode.drain));
+        final again = pool.enqueue<int, void>(
+          key: 'a',
+          policy: Policy.droppable,
+          _gated(log, 'a2', Completer()),
+        );
+        x.complete();
+        async.flushMicrotasks();
+
+        expect(again, same(a1));
+        expect(log, ['start x', 'end x', 'start a1', 'end a1']);
+      });
+    });
+
+    test(
+      'keepLatest drops the queued jobs of the key, not the running one',
+      () {
+        fakeAsync((async) {
+          final (controller, pool) = _onePool(2);
+          final log = controller.log;
+          final gate = Completer<void>();
+          SoloJob<void> latest(String name, Completer<void> gate) =>
+              pool.enqueue<int, void>(
+                key: 'a',
+                policy: Policy.keepLatest,
+                describe: () => name,
+                _gated(log, name, gate),
+              );
+          final a1 = latest('a1', gate);
+          async.flushMicrotasks();
+          final a2 = latest('a2', Completer());
+          final a3 = latest('a3', Completer());
+          async.flushMicrotasks();
+
+          expect(a2.outcome, _replaced);
+          expect(a1.isCancelled, isFalse);
+          expect(pool.running, [same(a1)]);
+          expect(pool.queue.jobs, [same(a3)]);
+          gate.complete();
+          async.flushMicrotasks();
+          expect(log, ['start a1', 'end a1', 'start a3']);
+        });
+      },
+    );
+
+    test('restart cancels the running job of the key and starts after its '
+        'end', () {
+      late SoloJob<void> a1;
+      final log = <String>[];
+      final lines = _debugLines((async) {
+        final (_, pool) = _onePool(2);
+        a1 = pool.enqueue<int, void>(
+          key: 'a',
+          policy: Policy.restart,
+          describe: () => 'a1',
+          ifCancelled: (state, cancelled) {
+            log.add('a1 ifCancelled');
+            return 7;
+          },
+          (ctx) async {
+            log.add('start a1');
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+            ctx.emit(1);
+          },
+        );
+        async.flushMicrotasks();
+        pool.enqueue<int, void>(
+          key: 'a',
+          policy: Policy.restart,
+          describe: () => 'a2',
+          (ctx) async => log.add('start a2 with ${ctx.state}'),
+        );
+        async.elapse(const Duration(seconds: 1));
+      });
+
+      expect(a1.outcome, _replaced);
+      expect(log, ['start a1', 'a1 ifCancelled', 'start a2 with 7']);
+      // a2 read 7 at its start: the cleanup of a1 wrote it before.
+      expect(
+        lines,
+        containsAllInOrder(['p: restart: cancel Job(a: a1)', 'state: 7']),
+      );
+    });
+
+    test('restart from the window of the rules leaves the job there to the '
+        'queue', () {
+      final log = <String>[];
+      final lines = _debugLines((async) {
+        final (_, pool) = _onePool(2);
+        // Not cancellable, a1 turns down the cancellation of the queue and
+        // starts; it is not running yet, and restart does not ask it again.
+        pool.enqueue<int, void>(
+          key: 'a',
+          policy: Policy.restart,
+          cancellable: false,
+          describe: () => 'a1',
+          canStart: (state) {
+            pool.enqueue<int, void>(
+              key: 'a',
+              policy: Policy.restart,
+              describe: () => 'a2',
+              (ctx) async => log.add('start a2'),
+            );
+            return true;
+          },
+          (ctx) async => log.add('start a1'),
+        );
+        async.flushMicrotasks();
+      });
+
+      expect(log, ['start a1', 'start a2']);
+      expect(lines.where((line) => line.contains('restart:')), isEmpty);
+    });
+
+    test('restart leaves the running jobs of other keys alone', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final b = _keyed(pool, log, 'b', 'b', Completer());
+        final a1 = pool.enqueue<int, void>(
+          key: 'a',
+          policy: Policy.restart,
+          _gated(log, 'a1', Completer()),
+        );
+        async.flushMicrotasks();
+        pool.enqueue<int, void>(
+          key: 'a',
+          policy: Policy.restart,
+          _gated(log, 'a2', Completer()),
+        );
+
+        expect(a1.isCancelled, isTrue);
+        expect(b.isCancelled, isFalse);
+      });
+    });
+  });
+
+  group('rules', () {
+    test('canStart and W are asked at the start, after an overtaking', () {
+      fakeAsync((async) {
+        final pool = _Any().p;
+        final log = <String>[];
+        final gate = Completer<void>();
+        pool.enqueue<Object, void>(key: 'a', (ctx) async {
+          log.add('start a1');
+          await gate.future;
+        });
+        async.flushMicrotasks();
+        // The state is not an int yet, and rules asked now would drop a2.
+        final a2 = pool.enqueue<int, void>(
+          key: 'a',
+          canStart: (state) => state > 0,
+          (ctx) async => log.add('start a2 with ${ctx.state}'),
+        );
+        pool.enqueue<Object, void>((ctx) async {
+          log.add('start b');
+          ctx.emit(1);
+        });
+        async.flushMicrotasks();
+        expect(log, ['start a1', 'start b']);
+        gate.complete();
+        async.flushMicrotasks();
+
+        expect(a2.outcome, isA<Done<void>>());
+        expect(log, ['start a1', 'start b', 'start a2 with 1']);
+      });
+    });
+
+    test('a write of another job of the pool over a stale read says so', () {
+      expect(
+        _overWrites(
+          (controller, async) => controller.declaredPools.first
+              .enqueue<int, void>(key: 'p2', (ctx) async => ctx.emit(1)),
+        ),
+        [
+          'Job(p1) emit over a write of another job of pool likes made after '
+              'Job(p1) last read the state: read ctx.state after the wait, or '
+              'this write undoes the work of that job',
+        ],
+      );
+    });
+
+    test('a write of a child of the same root says nothing', () {
+      final trace = _debugLines((async) {
+        final controller = _writers();
+        controller.declaredPools.first.enqueue<int, void>(key: 'p1', (
+          ctx,
+        ) async {
+          final saved = ctx.state;
+          await ctx.run(
+            ctx.child<void>(key: 'child', (ctx) async => ctx.emit(7)),
+          );
+          ctx.emit(saved);
+        });
+        async.flushMicrotasks();
+      });
+
+      expect(trace, contains('state: 7'));
+      expect(trace.where((line) => line.contains('emit over')), isEmpty);
+    });
+
+    test('a write of a child after another job of the pool wrote still '
+        'says so', () {
+      final trace = _debugLines((async) {
+        final likes = _writers().declaredPools.first;
+        final gate = Completer<void>();
+        likes.enqueue<int, void>(key: 'p1', (ctx) async {
+          final saved = ctx.state;
+          await ctx.join(() => gate.future);
+          // The child writes blind: it never read, and its write leaves
+          // the read of its root where it was.
+          await ctx.run(
+            ctx.child<void>(key: 'child', (ctx) async => ctx.emit(7)),
+          );
+          ctx.emit(saved);
+        });
+        async.flushMicrotasks();
+        likes.enqueue<int, void>(key: 'p2', (ctx) async => ctx.emit(1));
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+      });
+
+      expect(trace.where((line) => line.contains('emit over')), [
+        startsWith('Job(p1) emit over a write of another job of pool likes'),
+      ]);
+    });
+
+    test('a write of another lane over a pool job reads as today', () {
+      expect(
+        _overWrites(
+          (controller, async) => controller.declaredLanes.single
+              .enqueue<int, void>(key: 'l1', (ctx) async => ctx.emit(1)),
+        ),
+        [
+          'Job(p1) emit over a write of lane l made after Job(p1) last read '
+              'the state: read ctx.state after the wait, or this write undoes '
+              'the work of l',
+        ],
+      );
+    });
+
+    test('a write of another pool says pool', () {
+      expect(
+        _overWrites(
+          (controller, async) => controller.declaredPools.last
+              .enqueue<int, void>(key: 'u1', (ctx) async => ctx.emit(1)),
+        ),
+        [
+          'Job(p1) emit over a write of pool uploads made after Job(p1) last '
+              'read the state: read ctx.state after the wait, or this write '
+              'undoes the work of uploads',
+        ],
+      );
+    });
+
+    test('the line names the latest write, of the own pool or not', () {
+      /// A write of another job of `likes` and one of `l`, in this order
+      /// or the other.
+      List<String> twoWrites({required bool poolFirst}) =>
+          _overWrites((controller, async) {
+            void pool() => controller.declaredPools.first.enqueue<int, void>(
+              key: 'p2',
+              (ctx) async => ctx.emit(1),
+            );
+            void lane() => controller.declaredLanes.single.enqueue<int, void>(
+              key: 'l1',
+              (ctx) async => ctx.emit(2),
+            );
+            (poolFirst ? pool : lane)();
+            async.flushMicrotasks();
+            (poolFirst ? lane : pool)();
+          });
+
+      expect(twoWrites(poolFirst: true), [
+        contains('a write of lane l made after'),
+      ]);
+      expect(twoWrites(poolFirst: false), [
+        contains('a write of another job of pool likes made after'),
+      ]);
+    });
+
+    test('a write of the own root after another job of the pool wrote says '
+        'nothing more', () {
+      final trace = _debugLines((async) {
+        final likes = _writers().declaredPools.first;
+        final gate = Completer<void>();
+        final second = Completer<void>();
+        likes.enqueue<int, void>(key: 'p1', (ctx) async {
+          final saved = ctx.state;
+          await ctx.join(() => gate.future);
+          ctx.emit(saved);
+          await ctx.join(() => second.future);
+          ctx.emit(ctx.state + 1);
+        });
+        async.flushMicrotasks();
+        likes.enqueue<int, void>(key: 'p2', (ctx) async => ctx.emit(1));
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+        second.complete();
+        async.flushMicrotasks();
+      });
+
+      expect(trace.where((line) => line.contains('emit over')), hasLength(1));
     });
   });
 }

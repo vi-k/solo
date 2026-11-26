@@ -508,7 +508,7 @@ final class _SoloLaneCore<S extends Object> {
 
   /// The revision of the last write of the state made by a job running in
   /// this core, `0` before the first; what tells a debug line that a job
-  /// writes over the work of another lane.
+  /// writes over the work of another lane or pool.
   int lastWrite = 0;
 
   _SoloLaneCore(this.controller, {required String? name})
@@ -524,6 +524,10 @@ final class _SoloLaneCore<S extends Object> {
   /// The running root jobs of this core, taken now: [current] of a lane or
   /// of a [Solo], every running job of a pool.
   List<_SoloJob<S, S, Object?>> get runningJobs => [?current];
+
+  /// Takes note of a write of the state at [revision] by a job running in
+  /// this core, [writer] being the number of its root in a pool.
+  void wrote(int revision, int writer) => lastWrite = revision;
 
   /// What the debug lines call this core; `null` for the core of a [Solo].
   String? get name => id?.name;
@@ -549,6 +553,18 @@ final class _SoloPoolCore<S extends Object> extends _SoloLaneCore<S> {
   /// The queue of this pool, the one [queue] holds, by its own type.
   late final _SoloPoolQueue<S> poolQueue = _SoloPoolQueue<S>(this);
 
+  /// The number given to the last root job queued in this pool; each one
+  /// gets the next.
+  int _writers = 0;
+
+  /// The number of the root whose job made the last write, `0` before the
+  /// first.
+  int lastWriter = 0;
+
+  /// The revision of the last write made by a root other than
+  /// [lastWriter], `0` before the first.
+  int otherWrite = 0;
+
   _SoloPoolCore(
     super.controller, {
     required super.name,
@@ -563,4 +579,18 @@ final class _SoloPoolCore<S extends Object> extends _SoloLaneCore<S> {
 
   @override
   List<_SoloJob<S, S, Object?>> get runningJobs => [...running];
+
+  @override
+  void wrote(int revision, int writer) {
+    if (writer != lastWriter) {
+      otherWrite = lastWrite;
+      lastWriter = writer;
+    }
+    lastWrite = revision;
+  }
+
+  /// The last write made by a root of this pool other than [writer]: a job
+  /// of the pool writes over that one, and over none of its own root.
+  int writeOtherThan(int writer) =>
+      writer == lastWriter ? otherWrite : lastWrite;
 }

@@ -65,6 +65,19 @@ enum _StepEnd {
   stop,
 }
 
+/// Who wrote the state over the read of a job, for the line of
+/// [Solo.debug] that says so.
+enum _Wrote {
+  /// A job of another lane.
+  lane,
+
+  /// Another root job of the job's own pool, or a child of one.
+  ownPool,
+
+  /// A job of a pool the job does not run in.
+  pool,
+}
+
 /// The base of a controller: state, closing, hooks and its own listeners:
 /// [addListener], and [addChangeListener] for a listener that takes the two
 /// states of a change.
@@ -720,7 +733,7 @@ abstract class SoloController<S extends Object> {
       // stays a job that has not read, so a write it makes blind is not
       // taken for a read.
       if (emitter._seenRevision != null) emitter._seenRevision = revision;
-      emitter._execution?.lastWrite = revision;
+      emitter._execution?.wrote(revision, emitter._writer);
     }
     _debug(() => 'state: $next');
     _unpublished.add((previous, next));
@@ -1045,6 +1058,9 @@ abstract class SoloController<S extends Object> {
     // After the refusals and before any outcome: a job this call ends at
     // once comes to `onFinish` with the core it was queued in.
     impl._execution = core;
+    // A number of its own for each root of a pool, past every refusal: a
+    // job enqueued twice throws above and keeps the one it has.
+    if (core is _SoloPoolCore<S>) impl._writer = ++core._writers;
     if (isClosed && duplicate == null) {
       _debug(() => core.said('enqueue $impl: closed'));
       impl._drop(
@@ -1065,6 +1081,9 @@ abstract class SoloController<S extends Object> {
       _debug(() {
         final name = '$duplicate';
         final line = 'enqueue $impl: duplicate of $name';
+        if (core is _SoloPoolCore<S>) {
+          return core.said(_duplicateInPool(core, duplicate, line));
+        }
         final current = core.current;
         // A droppable method called from inside the running job -- its
         // body, a child of it, its cleanup -- hands back that very job,
@@ -1152,9 +1171,41 @@ abstract class SoloController<S extends Object> {
         // and from it alone a refused restart reads as `sequential`.
         _debug(() => core.said('restart: ${current._restartAnswer}'));
       }
+      // A pool leaves `current` empty: its running job of the key is the
+      // one that holds the key. One that holds it in the window of its
+      // rules was taken off with the queue above.
+      if (core is _SoloPoolCore<S> &&
+          policy == Policy.restart &&
+          !impl.isFinished) {
+        final holder = core.poolQueue._holderOf(impl.key!);
+        if (holder != null && core.running.contains(holder)) {
+          unawaited(holder.cancel(reason: const ReplacedCancelReason()));
+          _debug(() => core.said('restart: ${holder._restartAnswer}'));
+        }
+      }
     }
     _schedulePump();
     return impl;
+  }
+
+  /// [line], the duplicate line of [duplicate] in the pool of [core], with
+  /// where [duplicate] is: a running job waits for itself if awaited from
+  /// inside it, a queued one says so, and one in the window of its rules
+  /// is said as a lane says a duplicate with nothing running.
+  ///
+  /// Not the words of a lane: that a queued job starts after the running
+  /// one ends is true in a pool only of a job of the same key.
+  String _duplicateInPool(
+    _SoloPoolCore<S> core,
+    _SoloJob<S, S, Object?> duplicate,
+    String line,
+  ) {
+    if (core.running.contains(duplicate)) {
+      return '$line, which is running: if awaited from inside $duplicate, '
+          'it waits for itself';
+    }
+    if (core.queue._has(duplicate)) return '$line, which is queued';
+    return line;
   }
 
   /// [line], the enqueue line of [job] in the pool of [core], with what the
@@ -1502,20 +1553,41 @@ abstract class SoloController<S extends Object> {
     return _stepEnd;
   }
 
-  /// The name of the lane, not [job]'s own, that wrote the state last after
-  /// [job] last saw it; `null` when none did, when [job] has not read the
-  /// state, outside lanes, and with [Solo.debug] off, which is the only one
-  /// to ask.
-  String? _wroteSinceSeen(_SoloJob<S, S, Object?> job) {
+  /// The name of the lane or pool that wrote the state last after [job]
+  /// last saw it, and by whom; `null` when none did, when [job] has not
+  /// read the state, outside lanes, and with [Solo.debug] off, which is the
+  /// only one to ask.
+  ///
+  /// The own lane of [job] does not count; its own pool counts by the
+  /// writes of its other roots, a root and its children being one work.
+  ({String name, _Wrote by})? _wroteSinceSeen(_SoloJob<S, S, Object?> job) {
     final seen = job._seenRevision;
     final own = job._execution;
     if (Solo.debug == null || seen == null || own?.id == null) return null;
     _SoloLaneCore<S>? latest;
+    var latestWrite = 0;
     for (final core in _cores) {
-      if (identical(core, own) || core.lastWrite <= seen) continue;
-      if (latest == null || core.lastWrite > latest.lastWrite) latest = core;
+      final int write;
+      if (!identical(core, own)) {
+        write = core.lastWrite;
+      } else if (core is _SoloPoolCore<S>) {
+        write = core.writeOtherThan(job._writer);
+      } else {
+        continue;
+      }
+      if (write <= seen) continue;
+      if (latest == null || write > latestWrite) {
+        latest = core;
+        latestWrite = write;
+      }
     }
-    return latest?.name;
+    if (latest == null) return null;
+    final by = identical(latest, own)
+        ? _Wrote.ownPool
+        : latest is _SoloPoolCore<S>
+        ? _Wrote.pool
+        : _Wrote.lane;
+    return (name: latest.name!, by: by);
   }
 
   static void _debug(String Function() message) {
