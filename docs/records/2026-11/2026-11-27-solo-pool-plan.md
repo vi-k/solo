@@ -1,6 +1,7 @@
 > **Состояние на 2026-11-27:** план написан по дизайну, одобренному владельцем
-> 2026-11-27 («да, одобряю, пиши план»); ждёт независимого ревью и одобрения
-> владельца. Кода нет.
+> 2026-11-27 («да, одобряю, пиши план»), прошёл независимое ревью Opus
+> и исправлен по нему (раздел «Ревью плана»). Ждёт ответа владельца о группе
+> накопителя, которая ждёт окна, и одобрения. Кода нет.
 > **Что это:** план работ по пулу в `SoloLanes`: одно ядро с N местами, ключ,
 > политики, закрытие и `pending`, накопитель, линты, документы и переводы.
 > **Связанные записи:** `2026-11-27-solo-pool-design.md` (дизайн),
@@ -42,9 +43,14 @@
   по отдельному слову владельца.
 - **Неизменность `Solo` и линий.** Прежние тесты `solo` не правятся: в файлах
   `packages/solo/test/` до этой работы допустимы только добавления (новые
-  `test(...)` и новые хелперы в `support/`), ни одно прежнее ожидание
-  не меняется. Отладочные строки, тексты ошибок, порядок событий и число
-  микрозадач `Solo` и линий — прежние, слово в слово.
+  `test(...)`, новые хелперы в `support/`, новые классы в `_classes`
+  `reference_page_test.dart`), ни одно прежнее ожидание не меняется. Исключение
+  одно — счётчики сторожа страницы линий в `lanes_rakes_test.dart`
+  (`hasLength(5)` первых попыток, `:1187`; `hasLength(11)` цитат трасс,
+  `:1192`; карта `holders`, `:1204`): новый раздел страницы обязан их поднять,
+  и задача 8 поднимает их ровно на свои разделы и трассы. Отладочные строки,
+  тексты ошибок, порядок событий и число микрозадач `Solo` и линий — прежние,
+  слово в слово.
 - **Ветвление.** Код линий и `Solo` в `_step`, `_enqueueIn`, `_lastJobWhereIn`,
   `_onJobFinished`, `_pendingOf` и накопителе остаётся текстом как был; пул
   идёт отдельной веткой `core is _SoloPoolCore<S>` или членом `_SoloPoolCore`.
@@ -95,9 +101,12 @@
 - Modify: `packages/solo/lib/src/job.dart` (поле `_seq`)
 - Modify: `packages/solo/lib/src/solo.dart` (`pool`, `pools`, `_step`,
   `_onJobFinished`, `_stopWork`, `cancelAll`, `_lastJobWhereIn`)
-- Create: `pubspec_overrides.yaml` у `packages/solo/example`,
-  `packages/async_job_lints`, `packages/solo_lints`, `packages/flutter_solo`,
+- Create: `pubspec_overrides.yaml` у `packages/async_job_lints`,
+  `packages/solo_lints`, `packages/flutter_solo`,
   `packages/flutter_solo/example`, `packages/flutter_solo/camera_example`
+- Modify: `packages/solo/doc/reference.md`, `docs/ru/solo/reference.md`,
+  `packages/solo/test/reference_page_test.dart` (`_classes`: добавить
+  `SoloQueueOwner` и `SoloPool`)
 
 **Interfaces:**
 - Produces (публичное, `lane.dart`):
@@ -142,14 +151,17 @@
 
 - [ ] **Step 1: Ветка, копия и оверрайды**
 
-`EnterWorktree` с именем `solo-pool`, `git merge --ff-only main`. Шесть файлов
+`EnterWorktree` с именем `solo-pool`, `git merge --ff-only main`. Пять файлов
 `pubspec_overrides.yaml` по образцу снятых в `66332a82`
 (`git show 66332a82^:packages/<пакет>/pubspec_overrides.yaml`): первая строка
-`# Until solo 2.1.0 is published.`, вместо `async_job` — `solo` с путём
-к `packages/solo`. У `packages/solo_lints` ещё `async_job_lints` путём
-к `../async_job_lints`: он меняется в задаче 7. `dart pub get` (во Flutter-
-пакетах `flutter pub get`) в каждом, `git status` — только новые оверрайды и их
-`pubspec.lock`, если он под гитом.
+`# Until solo 2.1.0 is published.`, вместо `async_job` — `solo`: `../solo`
+у `async_job_lints`, `solo_lints` и `flutter_solo`, `../../solo`
+у `flutter_solo/example` и `flutter_solo/camera_example`. У `solo_lints` ещё
+`async_job_lints: path: ../async_job_lints`: он меняется в задаче 7.
+`packages/solo/example` зависит от `solo` путём сам
+(`solo/example/pubspec.yaml:11-12`), оверрайд ему не нужен. `dart pub get`
+(во Flutter- пакетах `flutter pub get`) в каждом, `git status` — только новые
+оверрайды и их `pubspec.lock`, если он под гитом.
 
 - [ ] **Step 2: Написать падающие тесты**
 
@@ -230,11 +242,12 @@ Run: `cd packages/solo && dart test test/pool_test.dart` Expected: FAIL —
 `SoloLane`, слово «lane» там, где речь о любом владельце очереди, — «lane or
 pool»); `SoloLane<S> implements SoloQueueOwner<S>` сохраняет все свои члены
 и dartdoc как есть. `SoloPool<S>` с dartdoc: до [concurrency] корней сразу,
-ключ держит порядок своих задач и с `Policy.sequential`, ссылка на раздел
-страницы линий, который заводит задача 8 (`#a-pool-of-places`).
-`_SoloQueueFace<S>` берёт тела нынешних членов `_SoloLane`; `enqueueJob`
-отказывает чужой задаче текстом своего вида: у линии `_notCreatedByLane` как
-есть, у пула новая константа рядом с ним:
+ключ держит порядок своих задач и с `Policy.sequential`. Ссылку на раздел
+страницы (`lanes.md#a-pool-of-places`) ставит задача 8 вместе с разделом:
+`tool/check_links.py` проверяет якоря и в dartdoc, и ссылка раньше раздела
+красит гейт `docs`. `_SoloQueueFace<S>` берёт тела нынешних членов `_SoloLane`;
+`enqueueJob` отказывает чужой задаче текстом своего вида: у линии
+`_notCreatedByLane` как есть, у пула новая константа рядом с ним:
 
 ```dart
 const _notCreatedByPool =
@@ -262,11 +275,17 @@ const _notCreatedByPool =
 `SoloLanes`: список `_pools`, вид `_poolsView`; `pool` проверяет сначала
 `concurrency`
 (`ArgumentError.value(concurrency, 'concurrency', 'must be at least 1')`),
-затем печать набора и `close` теми же `why`, где «lane» — «pool» («Cannot
-declare pool $name of $runtimeType $why; see $_declaringLanes»), затем имя
-по всем `_cores`. Тексты `lane` не меняются; имя, занятое пулом, даёт у `lane`
-ту же фразу с «a pool named»: `'$runtimeType has a pool named $name already:
-every call of lane declares a new lane,
+затем печать набора и `close`:
+`'Cannot declare pool $name of $runtimeType $why; see $_declaringLanes'`, где
+`why` —
+`'after its constructor: lanes and pools are declared in the constructor body,
+and a late final field declares its pool on its first read'`, `'after
+enqueueJob of one of its lanes or pools was called: from the first call on,
+the lanes and pools are what the pump walks'` или
+`'after close: a closed controller takes no pool'`; затем имя по всем `_cores`.
+Тексты `lane` не меняются; имя, занятое пулом, даёт у `lane` ту же фразу с «a
+pool named»: `'$runtimeType has a pool named $name already: every call of lane
+declares a new lane,
 and two of one name would read as one; see $_declaringLanes'`; у `pool` — `'...
 has a {lane|pool} named $name already: every call of pool declares a new pool,
 and two of one name would read as one; see ...'`.
@@ -284,10 +303,13 @@ and two of one name would read as one; see ...'`.
 if closed and not draining: return _stepEnd
 loop while !core.isFull:
   job = core.poolQueue._takeNext()
-  null -> drained when draining && queue.isEmpty && running.isEmpty;
-          otherwise the 'queue has no ready jobs' rule of a lane
-          (said when the step took and dropped jobs, or once for a group
-          waiting for its window, by saidWaiting); return _stepEnd
+    null -> drained when draining && queue.isEmpty && running.isEmpty;
+          otherwise 'queue has no ready jobs' is said when a job was
+          dropped since the last launch of this step (a `dropped` flag,
+          reset at every launch), or once, by saidWaiting, when the
+          only candidates left are groups waiting for their window;
+          nothing is said for jobs that wait for a held key or a
+          place: their enqueue line said it; return _stepEnd
   the window and the rules exactly as in _step: inTransition, _rejectStart,
   a rule that threw, a job ended in the window, a rejection — each continues
   the loop
@@ -302,18 +324,29 @@ return _stepEnd
 доказывают прежние тесты.
 
 `_onJobFinished`: для ядра пула `wasCurrent = core.running.remove(job)`; дальше
-как сейчас.
+как сейчас. Освобождение ключа в задаче 2 встаёт после `_schedulePump`: `==`
+и `hashCode` ключа — код пользователя, и бросок не должен оставить насос
+незапланированным.
 
-- [ ] **Step 8: Прогнать — зелёное**
+- [ ] **Step 8: Страница справки**
+
+`packages/solo/doc/reference.md`: строки `pool` и `pools` в разделе
+`## SoloLanes`, разделы `## SoloQueueOwner` и `## SoloPool` по образцу
+`## SoloLane`, перевод в `docs/ru/solo/reference.md` тем же коммитом.
+`reference_page_test.dart` через mirrors требует строку на каждый публичный
+член (`:34`, `:81-109`).
+
+- [ ] **Step 9: Прогнать — зелёное**
 
 Run: `cd packages/solo && dart test test/pool_test.dart && dart test` Expected:
 PASS всего набора, `git diff main -- packages/solo/test` — только новый файл.
 
-- [ ] **Step 9: Проверки и коммит**
+- [ ] **Step 10: Проверки и коммит**
 
 `dart format`, `dart analyze --fatal-infos` в `packages/solo`;
 `dart analyze --fatal-infos` и `dart test` в `packages/solo/example`
-и `packages/solo_lints` (оверрайды на месте).
+и `packages/solo_lints` (оверрайды на месте);
+`python3 tool/check_translations.py`.
 
 ```bash
 git add packages/solo packages/*/pubspec_overrides.yaml \
@@ -363,9 +396,10 @@ test('first: true with a held key waits for the running job', ...);
 test('a key not equal to itself shares nothing', ...);
   // two jobs with key double.nan in a pool of 2 start together.
 test('a job dropped in the window frees its key at once', ...);
-  // a1 with canStart false, a2 of the same key: in one pass a1 ends
-  // Cancelled(rules) and a2 starts — no second pump needed
-  // (flushMicrotasks once).
+  // real async, not fakeAsync: a1 with canStart false, a2 of the same
+  // key; after one `await Future<void>.value()` a1 has ended
+  // Cancelled(rules) and a2 has started — a second pass would come
+  // after this continuation.
 test('removing the head of a free key lets the next one start', ...);
   // pool of 1 busy with x; a1, a2 of key 'a' queued; queue.remove(a1);
   // open x: a2 starts.
@@ -398,13 +432,21 @@ FAIL — `a2` стартует вместе с `a1`.
 - `_release(job)`: если `_holders[key]` — эта задача, ключ уходит
   из `_holders`, голова ключа (если есть) входит в `_ready`.
 
+Новый кандидат, допущенный вне насоса, будит насос: `_unlink`, который делает
+кандидатом новую голову свободного ключа (снятие головы через `remove`,
+`cancel`, перенос `_moveToTail` при `AccumulationPolicy.replace`), зовёт
+`_core.controller._schedulePump()`. `_onJobFinished` будит насос только при
+`wasCurrent || _draining` (`solo.dart:1207`), и без этого задача стояла бы
+до чужого события. Тесты: снятие головы ключа из очереди при свободном месте
+и свободном ключе; группа ключа, перенесённая в хвост `replace`.
+
 `_onJobFinished` ядра пула зовёт `poolQueue._release(job)` для любой своей
-задачи: так ключ отпускают и конец идущей, и задача, законченная в окне правил.
-Цена каждой операции — `O(log R)`, где `R` — число кандидатов; задачи занятых
-ключей в `_ready` не лежат и не стоят ничего. Это расходится
-с «амортизированным O(1)» дизайна: упорядоченный набор кандидатов — сортировка
-по порядку очереди, и `O(1)` на произвольную вставку нет. Требование дизайна
-«при любом числе задач занятых ключей» держится; расхождение — в отчёт.
+задачи, после `_schedulePump`: так ключ отпускают и конец идущей, и задача,
+законченная в окне правил. Цена каждой операции — `O(log R)`, где `R` — число
+кандидатов; задачи занятых ключей в `_ready` не лежат и не стоят ничего. Это
+расходится с «амортизированным O(1)» дизайна: упорядоченный набор кандидатов —
+сортировка по порядку очереди, и `O(1)` на произвольную вставку нет. Требование
+дизайна «при любом числе задач занятых ключей» держится; расхождение — в отчёт.
 
 - [ ] **Step 4: Строки постановки пула**
 
@@ -454,7 +496,7 @@ git commit -am "feat(solo): keep two jobs of one key apart in a pool"
 **Interfaces:**
 - Consumes: задача 2 — `_holderOf`.
 - Produces: `_SoloLaneCore.wrote(int revision, int writer)` — у линии
-  `lastWrite = revision`; `_wroteSinceSeen` → `({String name, bool pool})?`.
+  `lastWrite = revision`; `_wroteSinceSeen` → `({String name, _Wrote by})?`.
 
 - [ ] **Step 1: Написать падающие тесты** (группа `policies`, `rules`)
 
@@ -480,6 +522,8 @@ test('a write of another job of the pool over a stale read says so', ...);
 test('a write of a child of the same root says nothing', ...);
 test('a write of another lane over a pool job reads as today', ...);
   // the lane line word for word, naming the lane.
+test('a write of another pool says pool', ...);
+  // 'Job(p1) emit over a write of pool uploads made after ...'.
 ```
 
 - [ ] **Step 2: Прогнать — падают**
@@ -493,7 +537,8 @@ FAIL на `restart` и строке о записи.
 - `droppable`: поиск `_lastJobWhereIn` уже видит `running` (задача 1); строка
   дубликата для идущей — как у линии (`'$line,
   which is running: if awaited from inside $name, it waits for itself'`), для
-  стоящей в очереди — `'$line, which is queued'`;
+  стоящей в очереди — `'$line, which is queued'`, для задачи в окне правил —
+  `$line` как есть, как у линии без `current`;
 - `keepLatest`/`restart`: снятие очереди ключа как есть; `restart` отменяет
   `poolQueue._holderOf(key)`, если это идущая задача (а не окно), с тем же
   `ReplacedCancelReason` и строкой `'restart: ${current._restartAnswer}'`.
@@ -502,9 +547,11 @@ FAIL на `restart` и строке о записи.
 
 Строка «emit over» должна видеть запись другого корня своего пула, но не своего
 ребёнка. Корню пула при постановке ядро даёт номер
-(`job._writer = ++core._writers`), ребёнок берёт номер родителя. Ядро пула
-держит три числа, `_setState` зовёт
-`emitter._execution?.wrote(revision, emitter._writer)`:
+(`job._writer = ++core._writers`) рядом с `impl._execution = core`
+(`solo.dart:1040`), после всех отказов `_enqueueIn` и только для ядра пула:
+повторная постановка идущей задачи бросает раньше и номер не трогает. Ребёнок
+берёт номер родителя. Ядро пула держит четыре числа — `_writers` и три ниже,
+`_setState` зовёт `emitter._execution?.wrote(revision, emitter._writer)`:
 
 ```dart
 // _SoloPoolCore:
@@ -525,9 +572,12 @@ int writeOtherThan(int writer) =>
 
 `_wroteSinceSeen`: своё ядро линии пропускается как сейчас; своё ядро пула
 участвует числом `writeOtherThan(job._writer)`; побеждает самая поздняя запись,
-как сейчас. Ответ `(name: ..., pool: true)` — запись другой задачи своего пула,
-и `job_context.dart:328` пишет строку пула из шага 1; иначе — нынешняя строка
-линии слово в слово.
+как сейчас. Ответ — `({String name, _Wrote by})?`, где
+`enum _Wrote { lane, ownPool, pool }`: `ownPool` — строка пула из шага 1;
+`pool` — строка линии, где «lane» — «pool»: `'$_job emit over a write of pool
+$name made after $_job last read the state: read ctx.state after the wait,
+or this write undoes the work of $name'`; `lane` — нынешняя строка слово
+в слово.
 
 - [ ] **Step 5: Прогнать — зелёное, коммит**
 
@@ -545,7 +595,8 @@ git commit -am "feat(solo): run the policies and the rules in a pool"
 - Modify: `packages/solo/lib/src/solo.dart` (`_pendingOf`, `_pending`
   `SoloLanes`, `_stepPool`)
 - Modify: `packages/solo/lib/src/lane.dart` (`_SoloPool.pending`)
-- Modify: `packages/solo/lib/src/pending.dart` (dartdoc)
+- Modify: `packages/solo/lib/src/pending.dart` (dartdoc, `_SoloPendingPlaces`)
+- Modify: `packages/solo/doc/diagnostics.md`, `docs/ru/solo/diagnostics.md`
 - Test: `packages/solo/test/pool_test.dart`
 
 **Interfaces:**
@@ -596,7 +647,15 @@ queued: List.unmodifiable(<задачи её ключа в очереди>)))`; 
 записи, для линии — как сейчас. `SoloPendingLanes.lanes`
 и `SoloPendingLane.pending` в dartdoc говорят: у пула записей столько, сколько
 идёт задач, плюс одна очередь; `SoloPendingQueue` — что у пула она бывает и без
-`drain`, когда заняты все места.
+`drain`, когда заняты все места; абзац dartdoc о группах, которые держит окно
+(`pending.dart:180-185`), — что у пула там бывают и задачи, ждущие места. Вне
+`drain` запись — закрытый подкласс
+`_SoloPendingPlaces extends SoloPendingQueue` в `pending.dart` (подкласс
+`final`-класса в своей библиотеке разрешён, публичного API нет) с `toString`
+`'SoloPending(waiting for a place, ${jobs.length} queued: $jobs)'`: нынешний
+`'SoloPending(draining, ...)'` (`pending.dart:203-205`) сказал бы неправду.
+Тест на обе строки. `doc/diagnostics.md:164-183` и перевод: у пула записей
+столько, сколько идёт задач, и одна очередь.
 
 - [ ] **Step 4: Прогнать — зелёное, коммит**
 
@@ -630,14 +689,20 @@ test('groups of an accumulator with a key run one at a time', ...);
 test('a throttle wakes the pump when the pool has a free place', ...);
   // pool of 2, one long job of another key runs, a throttled group
   // waits out its interval: it starts at the end of the interval, not at
-  // the end of the long job.
-test('an idle accumulator of a pool sees its own group among running', ...);
+  // the end of the long job. A guard: green before this task too, since
+  // a pool core never sets current.
+test('a group of a pool running past its interval does not rearm it', ...);
+  // throttle without startAtOnce, a group longer than the interval;
+  // an add after the interval while the group still runs: the new group
+  // starts as soon as a place is free, without a second interval —
+  // red today: _isIdle reads current, which a pool never sets.
 ```
 
 - [ ] **Step 2: Прогнать — падают**
 
 Run: `cd packages/solo && dart test test/pool_test.dart -N accumulation`
-Expected: FAIL на пробуждении throttle.
+Expected: FAIL на «does not rearm it»: `_isIdle` (`accumulator.dart:231-233`)
+не видит своей группы среди идущих пула.
 
 - [ ] **Step 3: Реализация**
 
@@ -668,14 +733,16 @@ test('a controller with a pool keeps the lines of its lanes', ...);
   // the same scenario on a SoloLanes with lane 'a' only and with lane 'a'
   // and pool 'p' idle: the Solo.debug lines of lane 'a' are equal.
 test('a lane next to a busy pool counts its microtasks as before', ...);
-  // the number of flushMicrotasks rounds until a lane job ends is the same
-  // with and without a busy pool declared after it.
+  // real async: the number of `await Future<void>.value()` turns until a
+  // lane job ends is the same with and without a busy pool declared
+  // after it.
 ```
 
 - [ ] **Step 2: Сверка прежнего набора**
 
 Run: `git diff main --stat -- packages/solo/test` — только добавления;
-`git diff main -- packages/solo/test | grep '^-[^-]'` — пусто. Run:
+`git diff main -- packages/solo/test | grep '^-[^-]'` — пусто, кроме счётчиков
+`lanes_rakes_test.dart`, которые поднимет задача 8. Run:
 `cd packages/solo && dart test` и `cd packages/solo/example && dart test`.
 Expected: PASS.
 
@@ -694,8 +761,8 @@ git commit -am "test(solo): pin the lanes beside a pool"
   `:480`, `:578`), `packages/async_job_lints/lib/plugin_api.dart`
 - Modify: `packages/async_job_lints/CHANGELOG.md`, его перевод
   `docs/ru/async_job_lints/CHANGELOG.md`
-- Modify: `packages/solo_lints/lib/src/rules/lane_outside_constructor.dart`,
-  `await_own_queue.dart`, `stale_emit.dart` (`:117`)
+- Modify: `packages/solo_lints/lib/src/rules/lane_outside_constructor.dart`
+  (`:51-52`), `await_own_queue.dart`, `stale_emit.dart` (`:117`)
 - Modify: `packages/solo_lints/CHANGELOG.md`, `README.md` и переводы
 - Test: `packages/async_job_lints/test/` (файлы правил, где лежат тесты
   `queueLaneOf`),
@@ -747,6 +814,15 @@ Run: `cd packages/solo_lints && dart test`
 `context.dart`: `isSoloQueueOwner`, `isSoloPool`; `_laneField` берёт поля
 `isSoloQueueOwner`; `_laneQueuedBy` принимает владельца `SoloLane`, `SoloPool`
 и `SoloQueueOwner`; `isSoloMember` для `type == 'Solo'` — член любого из трёх.
+Поле — «своя очередь», только если записано объявлением в теле конструктора:
+`_LaneDeclarations.visitAssignmentExpression` (`:521`) зовёт `declaresLane`
+(`:559-570`), а та знает один `lane`. Новая
+`bool declaresQueueOwner(MethodInvocation call)` — то же для `lane` и `pool`,
+экспорт в `plugin_api.dart`; `_LaneDeclarations` зовёт её. `declaresLane`
+экспортирована (`plugin_api.dart:27`) и смысла не меняет. Тест
+в `async_job_lints`: `bare_await` и `discarded_outcome` при
+`ownLaneReportedElsewhere` молчат на ожидании своего пула
+(`bare_await.dart:112-113`, `discarded_outcome.dart:92-93`).
 
 - [ ] **Step 4: Правила `solo_lints`**
 
@@ -764,7 +840,8 @@ Run: `cd packages/solo_lints && dart test`
   );
   ```
   `diagnosticCodes` — `[code, poolCode]`; визитор узнаёт
-  `isSoloMember(..., 'SoloLanes', 'pool')`.
+  `isSoloMember(..., 'SoloLanes', 'pool')` и пропускает
+  `declaresQueueOwner(node)` (сегодня `declaresLane`, `:52`).
 - `AwaitOwnQueue.poolCode`:
   ```dart
   static const LintCode poolCode = LintCode(
@@ -780,16 +857,18 @@ Run: `cd packages/solo_lints && dart test`
   );
   ```
   `severity` и прочие поля — как у `laneCode`; выбор кода —
-  по `isSoloPool(lane.type)` поля.
+  по `isSoloPool((lane as FieldElement).type)`: `queuedBodyOf(...).lane` —
+  `Element?` (`context.dart:616`), а `_laneField` отдаёт `FieldElement`.
 - `stale_emit`: `isSoloLane` → `isSoloQueueOwner` (`:117`).
 
 - [ ] **Step 5: CHANGELOG, README, переводы**
 
-`async_job_lints`: «Unreleased» — `isSoloQueueOwner` и `isSoloPool`; поле
-`SoloPool` — поле своей очереди для `queueLaneOf`. `solo_lints`: «Unreleased» —
-три правила о пуле; требует `async_job_lints` нового патча (ограничение
-поднимает подготовка выпуска). Переводы тем же коммитом;
-`python3 tool/check_translations.py`.
+`async_job_lints`: «Unreleased» — экспортированы `isSoloQueueOwner`,
+`isSoloPool` и `declaresQueueOwner`; поле `SoloPool`, объявленное в теле
+конструктора, — поле своей очереди для `queueLaneOf`; `declaresLane`
+по-прежнему только о `lane`. `solo_lints`: «Unreleased» — три правила о пуле;
+требует `async_job_lints` нового патча (ограничение поднимает подготовка
+выпуска). Переводы тем же коммитом; `python3 tool/check_translations.py`.
 
 - [ ] **Step 6: Прогнать, проверки, коммит**
 
@@ -809,13 +888,16 @@ git commit -am "feat(lints): know the pools of SoloLanes"
 - Modify: `packages/solo/doc/lanes.md` — раздел `## A pool of places` перед
   `## Declaring lanes`, строки в `## The table of cases`, абзац о `pool`
   в `## Declaring lanes`
-- Modify: `packages/solo/test/support/lanes_page.dart` и соседи,
-  `packages/solo/test/reference_page_test.dart` или тест страницы линий —
-  трассы нового раздела
+- Modify: `packages/solo/test/support/lanes_page.dart` и соседи — драйверы
+  нового раздела; `packages/solo/test/lanes_rakes_test.dart` — сторож страницы:
+  счётчики `:1187`, `:1192`, карта `holders` `:1204`, тест «every heading with
+  code under it is held to a file» `:1236`
 - Modify: `packages/solo/doc/vs-bloc.md:94-96`, `tool/doc_snippets.py`
   (`QUOTED`, `SAID`), если цитата касается этих строк
 - Modify: dartdoc `Policy`, `Policy.sequential` (`policy.dart`),
-  `SoloPendingJob.queued`
+  `SoloPendingJob.queued`, `SoloQueue` (`queue.dart:11-19`: в пуле задачу
+  занятого ключа обгоняют), библиотеки (`lib/solo.dart:1-2`: «One job at a
+  time…»), `lane`, `close`, `cancelAll` («the current job of every lane»)
 - Modify: `packages/solo/CHANGELOG.md` («Unreleased»), README `solo`, если его
   таблица выбора контроллера говорит «по одному корню»
 - Modify: переводы — `docs/ru/solo/lanes.md`, `docs/ru/solo/vs-bloc.md`,
@@ -839,8 +921,9 @@ git commit -am "feat(lints): know the pools of SoloLanes"
 
 Фраза «There is no concurrent root-job policy…» становится правдой о пуле:
 корни `Solo` и линии идут по одному, пул `SoloLanes` — до N, по ключу
-по одному; ссылка на `lanes.md#a-pool-of-places`. Прогнать стенд:
-`python3 tool/doc_snippets.py` и `python3 tool/check_traces.py`.
+по одному; ссылка на `lanes.md#a-pool-of-places`; та же ссылка — в dartdoc
+`SoloPool`. Прогнать стенд: `python3 tool/doc_snippets.py`
+и `python3 tool/check_traces.py`.
 
 - [ ] **Step 3: dartdoc, CHANGELOG, README**
 
@@ -853,8 +936,12 @@ git commit -am "feat(lints): know the pools of SoloLanes"
 
 Переводы каждого изменённого английского абзаца; `humanizer--ru` на изменённых
 абзацах переводов (только `ERROR` линтера скилла). `docs/settled.md`, решение
-84: посылка — «не больше суммы объявленных мест линий и пулов».
-`docs/architecture.md` — ядро пула в устройстве `solo`.
+84: посылка — «не больше суммы объявленных мест линий и пулов»; там же
+«постановка, удаление и запуск за O(1)» дополняется: у очереди пула —
+`O(log R)` по числу кандидатов, задачи занятых ключей не стоят ничего. Решения
+50 («текущую задачу своей линии») и 54 («дедлок — внутри одной линии»):
+формулировки — о линии или пуле. `docs/architecture.md` — ядро пула
+в устройстве `solo`.
 
 - [ ] **Step 5: Проверки и коммит**
 
@@ -895,3 +982,113 @@ git commit -am "docs(solo): a pool of places on the lanes page"
 и плана — «исполнено, ждёт выпуска». `docs/handoff.md`. Вливание в `main` —
 `git merge --ff-only solo-pool` после проверки ветки и `git status` основной
 копии.
+
+## Ревью плана
+
+План `9168fdbe` прочёл свежий агент на Opus в своей копии дерева: где план
+расходится с кодом и дизайном, что исполнитель не сможет сделать однозначно.
+Каждое его утверждение о коде сверено с кодом. Находки — его словами вкратце.
+
+1. Задача 7 не трогает `declaresLane` и `_LaneDeclarations`
+   (`context.dart:521`, `:559-570`): поле `pool(...)` не станет своей очередью,
+   новые тесты линтов покраснеют, а `lane_outside_constructor` сообщит
+   и о `pool` в теле конструктора.
+
+   Вердикт: принято. В задачу 7 вписана `declaresQueueOwner`; экспортированная
+   `declaresLane` смысла не меняет; добавлен тест молчания `bare_await`
+   и `discarded_outcome`.
+
+2. «В тестах только добавления» нарушают `reference_page_test.dart` (требует
+   строку справки на каждый член) и счётчики `lanes_rakes_test.dart`.
+
+   Вердикт: принято. Справка `doc/reference.md` с переводом — в задаче 1;
+   счётчики сторожа страницы — названное исключение ограничения и задачи 6.
+
+3. Новый кандидат, допущенный вне насоса (снятие головы ключа, `_moveToTail`),
+   не будит насос: `_onJobFinished` будит только при `wasCurrent || _draining`
+   (`solo.dart:1207`).
+
+   Вердикт: принято. `_unlink` очереди пула будит насос, два теста.
+
+4. Строгий порядок ключа сталкивается с решением 53 `docs/settled.md`
+   («ожидающая группа пропускает готовую») и dartdoc `SoloQueue.jobs`:
+   держит ли группа, ждущая окна, готовые задачи своего ключа.
+
+   Вердикт: вынесено владельцу; до ответа задача 2 исполняется как написана
+   (голова ключа держит ключ), а ответ впишется правилом с тестом.
+
+5. Тест throttle в задаче 5 зелёный до неё: ядро пула не ставит `current`.
+   Падает `_isIdle` при группе длиннее интервала.
+
+   Вердикт: принято. Тест throttle оставлен сторожем, добавлен тест
+   на `_isIdle`, ожидаемое падение названо.
+
+6. `SoloPendingQueue.toString` говорит «draining» и вне `drain`
+   (`pending.dart:203-205`), абзац dartdoc `:180-185` для пула ложен,
+   `doc/diagnostics.md:164-183` не правится.
+
+   Вердикт: принято. Закрытый подкласс `_SoloPendingPlaces` со своей строкой,
+   правка dartdoc и страницы диагностики с переводом.
+
+7. Строка «emit over» о записи другого пула назвала бы его линией.
+
+   Вердикт: принято. Три вида ответа: линия, свой пул, другой пул.
+
+8. Место, где корень пула получает номер писателя, не названо; счётчик
+   `_writers` не объявлен.
+
+   Вердикт: принято. Номер — рядом с `impl._execution = core`, после отказов;
+   чисел четыре.
+
+9. Причина отказа `pool` после `enqueueJob` назвала бы только пулы.
+
+   Вердикт: принято. Тексты `why` пула выписаны целиком.
+
+10. Строка «queue has no ready jobs» в `_stepPool` неоднозначна: `took` в линии
+    значит «взял и отбросил».
+
+    Вердикт: принято. Флаг `dropped`, сброс при запуске, молчание о задачах
+    занятых ключей.
+
+11. Тест «один проход» и счёт микрозадач в задаче 6 на `flushMicrotasks` ничего
+    не различают.
+
+    Вердикт: принято. Оба — на настоящем async, счёт продолжений
+    `await Future<void>.value()`.
+
+12. `O(log R)` держится, но решение 84 говорит «за O(1)».
+
+    Вердикт: принято. Решение 84 дополняется в задаче 8.
+
+13. Второе расхождение (`async_job_lints`) держится; новый экспорт —
+    в CHANGELOG.
+
+    Вердикт: принято. CHANGELOG `async_job_lints` перечисляет экспорт.
+
+14. Документы, которых нет в задаче 8: `doc/diagnostics.md`, dartdoc
+    `SoloQueue`, библиотеки, `lane`, `close`, `cancelAll`, решения 50 и 54.
+
+    Вердикт: принято. Вписаны в задачи 4 и 8.
+
+15. Ссылка `#a-pool-of-places` в dartdoc задачи 1 мертва до задачи 8,
+    а `check_links.py` проверяет dartdoc.
+
+    Вердикт: принято. Ссылку ставит задача 8.
+
+16. У `queuedBodyOf(...).lane` тип `Element?`, `.type` нет.
+
+    Вердикт: принято. `(lane as FieldElement).type`.
+
+17. Строка дубликата `droppable` для задачи в окне правил не названа.
+
+    Вердикт: принято. `$line` как есть, как у линии без `current`.
+
+18. `packages/solo/example` зависит от `solo` путём, оверрайд лишний; пути
+    не названы.
+
+    Вердикт: принято. Пять файлов, пути выписаны.
+
+19. `_release` до `_schedulePump` при броске ключа оставит насос
+    незапланированным.
+
+    Вердикт: принято. `_release` — после планирования насоса.
