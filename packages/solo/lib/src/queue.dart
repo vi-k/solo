@@ -404,8 +404,12 @@ final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
 
   @override
   void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
-    // The queue first: an insertion that throws there leaves the job in no
-    // list, and here as well.
+    // The holders are asked before anything is inserted: the key's `==` and
+    // `hashCode` are the caller's code, and one that throws here or in the
+    // queue leaves the job in no list. Past the queue only places are
+    // compared. A key not equal to itself is held by no job.
+    final key = job.key;
+    final held = key != null && _holders.containsKey(key);
     super._insert(job, first: first);
     final seq = job._seq = first ? --_first : ++_last;
     // The index holds only a key equal to itself, so a job with no entry
@@ -417,7 +421,7 @@ final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
     }
     // A job of a key is a candidate only as the head of a free key, and the
     // head it takes over from is a candidate no longer.
-    if (entry.previous != null || _holders.containsKey(entry.by)) return;
+    if (entry.previous != null || held) return;
     if (entry.next case final behind?) _ready.remove(behind.job._seq);
     _ready[seq] = job;
   }
@@ -425,15 +429,17 @@ final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
   @override
   void _unlink(_SoloJob<S, S, Object?> job) {
     // Read before the job leaves the index: the one after it there is the
-    // next head of its key.
+    // next head of its key. The holders are asked here too, before the
+    // queue changes: a key whose `==` or `hashCode` throws in that lookup
+    // leaves the job where it was, in the queue and among the candidates.
     final entry = job._keyEntry;
     final next = entry?.next?.job;
+    final held = next != null && _holders.containsKey(entry!.by);
     super._unlink(job);
     // A job of a key is a candidate only as the head of a free key, so the
     // next one heads a free key as well, unless the pump has just taken
     // this one and holds the key for it.
-    if (_ready.remove(job._seq) == null || next == null) return;
-    if (_holders.containsKey(entry!.by)) return;
+    if (_ready.remove(job._seq) == null || next == null || held) return;
     _ready[next._seq] = next;
     // A removal or a move made by the caller's code ends no running job,
     // so nothing else brings the pump back for this one. In the step of

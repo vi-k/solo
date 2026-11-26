@@ -10,6 +10,7 @@ library;
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
+import 'package:meta/meta.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -65,6 +66,32 @@ SoloJob<void> _keyed(
   describe: () => name,
   _gated(log, name, gate),
 );
+
+/// A key whose `==` throws at any other key of its kind: one hash for
+/// all, so a map compares it with every key of the kind it holds.
+@immutable
+final class _Touchy {
+  final String name;
+
+  const _Touchy(this.name);
+
+  @override
+  bool operator ==(Object other) {
+    if (other is! _Touchy) return false;
+    if (other.name != name) throw const _TouchyError();
+    return true;
+  }
+
+  @override
+  int get hashCode => 0;
+
+  @override
+  String toString() => name;
+}
+
+final class _TouchyError implements Exception {
+  const _TouchyError();
+}
 
 /// The outcome of a job its start rules turned down.
 final _cancelledByRules = isA<Cancelled>()
@@ -586,15 +613,51 @@ void main() {
     });
 
     test('a key not equal to itself shares nothing', () {
+      final lines = <String>[];
+      Solo.debug = lines.add;
       fakeAsync((async) {
         final (controller, pool) = _onePool(2);
         final log = controller.log;
+        final x = Completer<void>();
         final one = _keyed(pool, log, double.nan, 'one', Completer());
+        pool.enqueue<int, void>(describe: () => 'x', _gated(log, 'x', x));
+        async.flushMicrotasks();
         final two = _keyed(pool, log, double.nan, 'two', Completer());
+        x.complete();
         async.flushMicrotasks();
 
-        expect(log, ['start one', 'start two']);
+        expect(log, ['start one', 'start x', 'end x', 'start two']);
         expect(pool.running, [same(one), same(two)]);
+      });
+      Solo.debug = null;
+
+      // Every place is taken when `two` comes, and `one` runs with a key
+      // of the same value: what `two` waits for is a place, not the key.
+      expect(
+        lines,
+        contains(
+          'p: enqueue Job(NaN: two) while all 2 places are taken: '
+          'it starts when one is free',
+        ),
+      );
+    });
+
+    test('a key whose == throws at a held key leaves the job in no list', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        _keyed(pool, log, const _Touchy('a'), 'a', Completer());
+        async.flushMicrotasks();
+
+        expect(
+          () => _keyed(pool, log, const _Touchy('b'), 'b', Completer()),
+          throwsA(isA<_TouchyError>()),
+        );
+        expect(pool.queue.jobs, isEmpty);
+        // Nothing is left behind for the next job of the key to wait on.
+        _keyed(pool, log, 'c', 'c', Completer());
+        async.flushMicrotasks();
+        expect(log, ['start a', 'start c']);
       });
     });
 
@@ -752,7 +815,7 @@ void main() {
         printOnFailure('${watch.elapsed}');
         expect(watch.elapsed, lessThan(const Duration(seconds: 6)));
       });
-    }, timeout: const Timeout(Duration(seconds: 30)));
+    });
   });
 
   group('debug lines', () {

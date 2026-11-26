@@ -1421,78 +1421,85 @@ abstract class SoloController<S extends Object> {
   /// over and over while a place is free, so one step fills every free
   /// place before the pass goes on to the next core.
   _StepEnd _stepPool(_SoloPoolCore<S> core) {
-    if (isClosed && !_draining) {
-      return _stepEnd;
-    }
     final queue = core.poolQueue.._stepping = true;
     try {
-      // Whether a job was taken and let go since the last launch of this
-      // step: what `took` is to a lane, which launches once and returns.
-      var dropped = false;
-      // A step that launched a job is not drained even when that job is
-      // already over, as in a lane: the end of the job brings the pump back.
-      var launched = false;
-      while (!core.isFull) {
-        final job = queue._takeNext();
-        if (job == null) {
-          if (_draining && !launched && queue.isEmpty && core.running.isEmpty) {
-            return _StepEnd.drained;
-          }
-          // As a lane says it: a step that dropped jobs says it, and a group
-          // waiting for its window is said once. The candidates left are
-          // all such groups when the step took none of them.
-          final waiting = queue._ready.isNotEmpty;
-          if (dropped || (waiting && !core.saidWaiting)) {
-            _debug(() => core.said('queue has no ready jobs'));
-          }
-          core.saidWaiting = !dropped && waiting;
-          return _stepEnd;
-        }
-        dropped = true;
-        // The window of the start rules, as in `_step`: the text there is the
-        // lane's, and a lane launches once and returns where this goes on.
-        core.inTransition = job;
-        try {
-          final String? rejection;
-          try {
-            rejection = job._rejectStart(_state);
-          } on Object catch (error, stackTrace) {
-            _debug(() => core.said('rule of $job threw: $error'));
-            job._drop(Failed(error, stackTrace));
-            continue;
-          }
-          if (job.isFinished) {
-            _debug(
-              () => core.said('start $job: ended while the rules were asked'),
-            );
-            continue;
-          }
-          if (rejection != null) {
-            final cancelled = Cancelled.by(
-              reason: const RulesCancelReason(),
-              started: false,
-              description: rejection,
-              stackTrace: StackTrace.current,
-            );
-            _debug(() => core.said('drop $job: $cancelled'));
-            job._drop(cancelled);
-            continue;
-          }
-          core.running.add(job);
-          core
-            ..inTransition = null
-            ..saidWaiting = false;
-          dropped = false;
-          launched = true;
-          job._launch();
-        } finally {
-          core.inTransition = null;
-        }
-      }
-      return _stepEnd;
+      return _fillPool(core);
     } finally {
       queue._stepping = false;
     }
+  }
+
+  /// The work of [_stepPool], done while the queue knows that the pump is
+  /// in the step of the pool.
+  _StepEnd _fillPool(_SoloPoolCore<S> core) {
+    if (isClosed && !_draining) {
+      return _stepEnd;
+    }
+    final queue = core.poolQueue;
+    // Whether a job was taken and let go since the last launch of this
+    // step: what `took` is to a lane, which launches once and returns.
+    var dropped = false;
+    // A step that launched a job is not drained even when that job is
+    // already over, as in a lane: the end of the job brings the pump back.
+    var launched = false;
+    while (!core.isFull) {
+      final job = queue._takeNext();
+      if (job == null) {
+        if (_draining && !launched && queue.isEmpty && core.running.isEmpty) {
+          return _StepEnd.drained;
+        }
+        // As a lane says it: a step that dropped jobs says it, and a group
+        // waiting for its window is said once. The candidates left are
+        // all such groups when the step took none of them.
+        final waiting = queue._ready.isNotEmpty;
+        if (dropped || (waiting && !core.saidWaiting)) {
+          _debug(() => core.said('queue has no ready jobs'));
+        }
+        core.saidWaiting = !dropped && waiting;
+        return _stepEnd;
+      }
+      dropped = true;
+      // The window of the start rules, as in `_step`: the text there is the
+      // lane's, and a lane launches once and returns where this goes on.
+      core.inTransition = job;
+      try {
+        final String? rejection;
+        try {
+          rejection = job._rejectStart(_state);
+        } on Object catch (error, stackTrace) {
+          _debug(() => core.said('rule of $job threw: $error'));
+          job._drop(Failed(error, stackTrace));
+          continue;
+        }
+        if (job.isFinished) {
+          _debug(
+            () => core.said('start $job: ended while the rules were asked'),
+          );
+          continue;
+        }
+        if (rejection != null) {
+          final cancelled = Cancelled.by(
+            reason: const RulesCancelReason(),
+            started: false,
+            description: rejection,
+            stackTrace: StackTrace.current,
+          );
+          _debug(() => core.said('drop $job: $cancelled'));
+          job._drop(cancelled);
+          continue;
+        }
+        core.running.add(job);
+        core
+          ..inTransition = null
+          ..saidWaiting = false;
+        dropped = false;
+        launched = true;
+        job._launch();
+      } finally {
+        core.inTransition = null;
+      }
+    }
+    return _stepEnd;
   }
 
   /// The name of the lane, not [job]'s own, that wrote the state last after
