@@ -1,6 +1,7 @@
-> **Состояние на 2026-11-26:** выпускается по слову владельца «публикуй»:
-> подготовка `2ee807b8`, релизный коммит «Release async_job 1.0.5»,
-> аннотированный тег `async_job-v1.0.5`.
+> **Состояние на 2026-11-26:** выпущено по слову владельца «публикуй»:
+> подготовка `2ee807b8`, релизный коммит `2b728670` «Release async_job 1.0.5»,
+> аннотированный тег `async_job-v1.0.5`, `async_job` 1.0.5 на pub.dev.
+> Оверрайды семи пакетов выше ядра ещё не сняты.
 > **Что это:** подготовка патча `async_job` 1.0.5 — исправление
 > `ctx.abandonable` под ручным `finish` движка.
 > **Связанные записи:** `2026-11-18-async-job-1-0-4-release-report.md`,
@@ -84,3 +85,11 @@
 релизный коммит «Release async_job 1.0.5» с этой записью, аннотированный тег
 `async_job-v1.0.5` на нём, `git push --follow-tags` и `dart pub publish`
 из чистого дерева `packages/async_job`.
+
+Связка прошла подряд: релизный коммит `2b728670` «Release async_job 1.0.5»,
+аннотированный тег `async_job-v1.0.5` на нём, `git push --follow-tags` —
+`origin/main` с `2ee67131` на `2b728670` вместе с тегом, —
+и `dart pub publish --force` из чистого дерева `packages/async_job`:
+«Successfully uploaded https://pub.dev/packages/async_job version 1.0.5». API
+pub.dev отдаёт версию 1.0.5 с датой публикации 2026-11-26. CI по `2b728670`
+зелёный: гейт — `dart`, `flutter`, `docs`, `snippets` и `floor`, — и сайт.
