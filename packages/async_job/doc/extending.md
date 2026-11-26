@@ -203,6 +203,14 @@ Since `finish` unwinds nothing, an engine that finishes a running job by hand
 releases what the job holds first. Only the debug channel, switched on with
 `Job.debug = print;`, says how many cleanups `finish` left behind.
 
+A job already unwinding its stack when `finish` comes, because an engine calls
+it from a cleanup or while one is awaited, goes on with the unwinding under
+way. The registrations left in it still run, after `onFinish`, and decide on
+`discard` by the outcome of the body, not by the one handed in: a body that
+returned closes nothing through `discard`, even when the job ends `Cancelled`.
+A branch of `runAll` finished by hand at the barrier between its two passes
+runs neither pass again, and what is left is dropped unrun.
+
 A job that has accepted a cancellation ends `Cancelled` whatever `finish` is
 handed. A `Done` or a `Failed` gives way to the cancellation the job accepted,
 and a value handed in goes nowhere. Only another `Cancelled` handed in stands.
