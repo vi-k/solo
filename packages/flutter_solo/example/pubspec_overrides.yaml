@@ -1,0 +1,7 @@
+# Until solo 2.1.0 is published.
+# The overrides of the package above do not reach here: pub applies only
+# the ones of the package it resolves, and a path dependency brings its
+# `pubspec.yaml` alone.
+dependency_overrides:
+  solo:
+    path: ../../solo

@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 
 /// `doc/reference.md` and its translation against the code.
 ///
-/// The page lists every member of eight classes in tables, one row a
+/// The page lists every member of ten classes in tables, one row a
 /// member, under a heading of the class. The members are read from the
 /// classes themselves, so a member added to the code and not to the page
 /// turns this red, and so does a row left after its member went. A
@@ -33,6 +33,8 @@ final _classes = <String, Type>{
   'Solo': Solo,
   'SoloLanes': SoloLanes,
   'SoloLane': SoloLane,
+  'SoloPool': SoloPool,
+  'SoloQueueOwner': SoloQueueOwner,
   'SoloContext': SoloContext,
   'SoloJob': SoloJob,
   'SoloQueue': SoloQueue,

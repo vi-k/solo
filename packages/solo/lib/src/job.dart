@@ -83,6 +83,10 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// while it is in no queue or carries no group.
   _IndexEntry<S>? _ownerEntry;
 
+  /// The place of this job in the order of the queue of a pool, set by that
+  /// queue whenever it inserts the job; a lane and a [Solo] leave it `0`.
+  int _seq = 0;
+
   /// The revision of the state this job saw last, by a read or by a write
   /// of its own; `null` before the first.
   int? _seenRevision;

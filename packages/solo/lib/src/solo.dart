@@ -43,6 +43,11 @@ const _notCreatedByLane =
     'was not created by this lane (make it with job(...) of this lane, or '
     'with ctx.child of a job running in it)';
 
+/// The same for a pool.
+const _notCreatedByPool =
+    'was not created by this pool (make it with job(...) of this pool, or '
+    'with ctx.child of a job running in it)';
+
 /// Why a job a [Policy.droppable] call may hand back refuses `then`.
 const _handedBack =
     'is handed back to every call of its key under Policy.droppable';
@@ -393,8 +398,9 @@ abstract class SoloController<S extends Object> {
   /// is final and cannot change.
   ///
   /// [SoloCloseMode.cancel], the default, drops every queued job with
-  /// `Cancelled(closed)` and cancels the current job of every lane (the one
-  /// job of a [Solo]) — a `cancellable: false` job is waited for instead.
+  /// `Cancelled(closed)` and cancels the current job of every lane and every
+  /// running job of a pool (the one job of a [Solo]) — a `cancellable: false`
+  /// job is waited for instead.
   /// [SoloCloseMode.drain] leaves the queues alone and closes once every one
   /// has run: new root jobs are refused from the call onwards, and the ones
   /// already accepted go by the usual rules, children, cleanup and
@@ -477,7 +483,7 @@ abstract class SoloController<S extends Object> {
         ),
       );
     }
-    final running = [for (final core in _cores) ?core.current];
+    final running = [for (final core in _cores) ...core.runningJobs];
     if (running.isEmpty) {
       // Nothing to wait for, but still finish on a microtask: `onClose`
       // never arrives from inside `close`, whether the engine was busy or
@@ -540,8 +546,9 @@ abstract class SoloController<S extends Object> {
   }
 
   /// {@template solo.SoloController.cancelAll}
-  /// Clears every queue and cancels the current job of every lane (the one
-  /// job of a [Solo]); `force` affects only the queues.
+  /// Clears every queue and cancels the current job of every lane and every
+  /// running job of a pool (the one job of a [Solo]); `force` affects only
+  /// the queues.
   ///
   /// Completes when every current job has actually finished.
   ///
@@ -570,7 +577,7 @@ abstract class SoloController<S extends Object> {
     }
     // The running jobs are read once the queues are cleared, and before
     // any of them is cancelled.
-    final running = [for (final core in _cores) ?core.current];
+    final running = [for (final core in _cores) ...core.runningJobs];
     return switch (running) {
       [] => Future<void>.value(),
       // As it is: one running job is waited for through its own `cancel`.
@@ -1177,6 +1184,18 @@ abstract class SoloController<S extends Object> {
         _goingOn(transition)) {
       return transition;
     }
+    if (core is _SoloPoolCore<S>) {
+      // The running jobs of a pool, the last started first, as the queue
+      // is asked from its tail; asked before and after, as the current job
+      // of a lane is. A snapshot: a job the predicate cancels may end while
+      // it answers.
+      for (final job in core.running.reversed.toList()) {
+        if (_goingOn(job) && test(job) && _goingOn(job)) {
+          return job;
+        }
+      }
+      return null;
+    }
     final current = core.current;
     return current != null &&
             _goingOn(current) &&
@@ -1193,6 +1212,10 @@ abstract class SoloController<S extends Object> {
   void _onJobFinished(_SoloJob<S, S, Object?> job) {
     var wasCurrent = false;
     final core = job._execution;
+    // A pool leaves `current` empty, so the branch of a lane below finds
+    // nothing in it. A child of a job of the pool has the pool for its
+    // core too, and is not among the running.
+    if (core is _SoloPoolCore<S>) wasCurrent = core.running.remove(job);
     if (core != null && identical(job, core.current)) {
       core.current = null;
       wasCurrent = true;
@@ -1257,6 +1280,7 @@ abstract class SoloController<S extends Object> {
   /// start rules, steps over the jobs they turn down and launches the first
   /// one they accept.
   _StepEnd _step(_SoloLaneCore<S> core) {
+    if (core is _SoloPoolCore<S>) return _stepPool(core);
     if (core.current != null || (isClosed && !_draining)) {
       return _stepEnd;
     }
@@ -1352,6 +1376,80 @@ abstract class SoloController<S extends Object> {
         core.inTransition = null;
       }
     }
+  }
+
+  /// What the pump does in the core of a pool: what [_step] does in a lane,
+  /// over and over while a place is free, so one step fills every free
+  /// place before the pass goes on to the next core.
+  _StepEnd _stepPool(_SoloPoolCore<S> core) {
+    if (isClosed && !_draining) {
+      return _stepEnd;
+    }
+    final queue = core.poolQueue;
+    // Whether a job was taken and let go since the last launch of this
+    // step: what `took` is to a lane, which launches once and returns.
+    var dropped = false;
+    // A step that launched a job is not drained even when that job is
+    // already over, as in a lane: the end of the job brings the pump back.
+    var launched = false;
+    while (!core.isFull) {
+      final job = queue._takeNext();
+      if (job == null) {
+        if (_draining && !launched && queue.isEmpty && core.running.isEmpty) {
+          return _StepEnd.drained;
+        }
+        // As a lane says it: a step that dropped jobs says it, and a group
+        // waiting for its window is said once. The candidates left are
+        // all such groups when the step took none of them.
+        final waiting = queue._ready.isNotEmpty;
+        if (dropped || (waiting && !core.saidWaiting)) {
+          _debug(() => core.said('queue has no ready jobs'));
+        }
+        core.saidWaiting = !dropped && waiting;
+        return _stepEnd;
+      }
+      dropped = true;
+      // The window of the start rules, as in `_step`: the text there is the
+      // lane's, and a lane launches once and returns where this goes on.
+      core.inTransition = job;
+      try {
+        final String? rejection;
+        try {
+          rejection = job._rejectStart(_state);
+        } on Object catch (error, stackTrace) {
+          _debug(() => core.said('rule of $job threw: $error'));
+          job._drop(Failed(error, stackTrace));
+          continue;
+        }
+        if (job.isFinished) {
+          _debug(
+            () => core.said('start $job: ended while the rules were asked'),
+          );
+          continue;
+        }
+        if (rejection != null) {
+          final cancelled = Cancelled.by(
+            reason: const RulesCancelReason(),
+            started: false,
+            description: rejection,
+            stackTrace: StackTrace.current,
+          );
+          _debug(() => core.said('drop $job: $cancelled'));
+          job._drop(cancelled);
+          continue;
+        }
+        core.running.add(job);
+        core
+          ..inTransition = null
+          ..saidWaiting = false;
+        dropped = false;
+        launched = true;
+        job._launch();
+      } finally {
+        core.inTransition = null;
+      }
+    }
+    return _stepEnd;
   }
 
   /// The name of the lane, not [job]'s own, that wrote the state last after
@@ -1789,11 +1887,13 @@ abstract class Solo<S extends Object> extends SoloController<S> {
 /// and the lanes run side by side over one state.
 ///
 /// The lanes are declared in the constructor with [lane], and one pump walks
-/// them in that order. A write of one lane asks the rules of the jobs of the
-/// others again, as [externalSetState] does: a job whose `W` or `keepWhile`
-/// no longer holds is cancelled. The trap is a write of a whole state read
-/// before an `await`: it loses what the other lanes wrote in between, so a
-/// job reads `ctx.state` where it writes.
+/// them in that order. A pool, declared with [pool], is one queue whose root
+/// jobs run up to its `concurrency` at once; the pump walks it among the
+/// lanes, in the order of declaration. A write of one lane asks the rules of
+/// the jobs of the others again, as [externalSetState] does: a job whose `W`
+/// or `keepWhile` no longer holds is cancelled. The trap is a write of a
+/// whole state read before an `await`: it loses what the other lanes wrote
+/// in between, so a job reads `ctx.state` where it writes.
 ///
 /// The state, the listeners, closing and the hooks come from [SoloController].
 ///
@@ -1808,15 +1908,23 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   /// right after the constructor.
   late final _lanesView = UnmodifiableListView<SoloLane<S>>(_lanes);
 
-  // Filled by `lane`, from the constructor body; the observer's `onCreate`
-  // runs before that body and finds no lane yet.
+  /// The pools in the order of creation.
+  final _pools = <_SoloPool<S>>[];
+
+  /// What [pools] hands out, one view for every call, as [lanes] does.
+  late final _poolsView = UnmodifiableListView<SoloPool<S>>(_pools);
+
+  // Filled by `lane` and `pool`, from the constructor body, in the order of
+  // the calls; the observer's `onCreate` runs before that body and finds no
+  // lane yet.
   @override
   final List<_SoloLaneCore<S>> _cores = [];
 
-  /// What sealed the set of lanes first, or `null` while it is open: the
-  /// microtask the constructor schedules, or the first call of `enqueueJob`
-  /// of any lane, whatever came of it. A closed controller takes no lane
-  /// either; `lane` asks [isClosed] for that.
+  /// What sealed the set of lanes and pools first, or `null` while it is
+  /// open: the microtask the constructor schedules, or the first call of
+  /// `enqueueJob` of any lane or pool, whatever came of it. A closed
+  /// controller takes no lane or pool either; `lane` and `pool` ask
+  /// [isClosed] for that.
   _Sealed? _sealed;
 
   /// Creates a controller in [initialState], with no lane until the body of
@@ -1832,11 +1940,12 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   /// Declares a lane named [name] and returns it.
   ///
   /// Called in the body of the constructor, and kept in a private field.
-  /// Throws [StateError] for a [name] this controller has a lane of already,
-  /// and once the set of lanes is sealed: once any lane's `enqueueJob` has
-  /// been called (a refused or duplicate call seals too), after [close], or
-  /// after a microtask the constructor schedules. So a lane in a `late final`
-  /// field is an error: the field read after the constructor throws.
+  /// Throws [StateError] for a [name] this controller has a lane or a pool
+  /// of already, and once the set of lanes is sealed: once any lane's or
+  /// pool's `enqueueJob` has been called (a refused or duplicate call seals
+  /// too), after [close], or after a microtask the constructor schedules. So
+  /// a lane in a `late final` field is an error: the field read after the
+  /// constructor throws.
   ///
   /// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
   /// on the lanes page.
@@ -1866,6 +1975,16 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
         );
       }
     }
+    // Lanes and pools share their names, which are for logs.
+    for (final pool in _pools) {
+      if (pool.name == name) {
+        throw StateError(
+          '$runtimeType has a pool named $name already: every call of lane '
+          'declares a new lane, and two of one name would read as one; see '
+          '$_declaringLanes',
+        );
+      }
+    }
     final lane = _SoloLane<S>(this, name);
     _lanes.add(lane);
     _cores.add(lane._core);
@@ -1879,6 +1998,67 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   /// on the lanes page.
   @protected
   List<SoloLane<S>> get lanes => _lanesView;
+
+  /// Declares a pool named [name], whose root jobs run up to [concurrency]
+  /// at once, and returns it.
+  ///
+  /// Declared as a lane is, by the same rules: in the body of the
+  /// constructor, kept in a private field, and the pump walks lanes and
+  /// pools together in the order of declaration. Throws [ArgumentError] for
+  /// a [concurrency] below 1, and [StateError] where [lane] throws it: for a
+  /// [name] this controller has a lane or a pool of already, and once the
+  /// set is sealed.
+  ///
+  /// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
+  /// on the lanes page.
+  @protected
+  SoloPool<S> pool(String name, {required int concurrency}) {
+    if (concurrency < 1) {
+      throw ArgumentError.value(
+        concurrency,
+        'concurrency',
+        'must be at least 1',
+      );
+    }
+    final why = switch (_sealed) {
+      _Sealed.constructor =>
+        'after its constructor: lanes and pools are declared in the '
+            'constructor body, and a late final field declares its pool on '
+            'its first read',
+      _Sealed.enqueue =>
+        'after enqueueJob of one of its lanes or pools was called: from the '
+            'first call on, the lanes and pools are what the pump walks',
+      null when isClosed => 'after close: a closed controller takes no pool',
+      null => null,
+    };
+    if (why != null) {
+      throw StateError(
+        'Cannot declare pool $name of $runtimeType $why; see $_declaringLanes',
+      );
+    }
+    for (final core in _cores) {
+      if (core.name == name) {
+        final kind = core is _SoloPoolCore<S> ? 'pool' : 'lane';
+        throw StateError(
+          '$runtimeType has a $kind named $name already: every call of pool '
+          'declares a new pool, and two of one name would read as one; see '
+          '$_declaringLanes',
+        );
+      }
+    }
+    final pool = _SoloPool<S>(this, name, concurrency: concurrency);
+    _pools.add(pool);
+    _cores.add(pool._core);
+    return pool;
+  }
+
+  /// The pools of this controller in the order they were declared; an
+  /// unmodifiable list.
+  ///
+  /// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
+  /// on the lanes page.
+  @protected
+  List<SoloPool<S>> get pools => _poolsView;
 
   // The busy lanes in the order of creation, each by the rules of a `Solo`.
   // No busy lane is `null`, and one is a `SoloPendingLanes` as several are:
@@ -1901,7 +2081,7 @@ enum _Sealed {
   /// The microtask the constructor schedules.
   constructor,
 
-  /// The first call of `enqueueJob` of any lane.
+  /// The first call of `enqueueJob` of any lane or pool.
   enqueue,
 }
 

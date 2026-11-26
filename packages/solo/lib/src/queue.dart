@@ -355,3 +355,58 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     return drained;
   }
 }
+
+/// The queue of a pool: the queue of a lane, plus the jobs the pump may
+/// take next, by their place in the order of the queue.
+///
+/// A job's place is a number given at its insertion: below every other
+/// with `first: true`, above every other without. The pump takes the
+/// first candidate that is ready, so the order of the queue holds without
+/// a walk of the queue.
+final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
+  /// The place the last job inserted with `first: true` got.
+  var _first = 0;
+
+  /// The place the last job inserted at the tail got.
+  var _last = 0;
+
+  /// The jobs the pump may take next, by their place.
+  final _ready = SplayTreeMap<int, _SoloJob<S, S, Object?>>();
+
+  _SoloPoolQueue(super._core);
+
+  @override
+  void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
+    // The queue first: an insertion that throws there leaves the job in no
+    // list, and here as well.
+    super._insert(job, first: first);
+    final seq = job._seq = first ? --_first : ++_last;
+    _ready[seq] = job;
+  }
+
+  @override
+  void _unlink(_SoloJob<S, S, Object?> job) {
+    super._unlink(job);
+    _ready.remove(job._seq);
+  }
+
+  @override
+  List<_SoloJob<S, S, Object?>> _drain() {
+    _ready.clear();
+    return super._drain();
+  }
+
+  /// Takes the first candidate that is ready out of the queue: a group
+  /// waiting for its window is stepped over, as [_takeFirst] steps over it.
+  _SoloJob<S, S, Object?>? _takeNext() {
+    for (final job in _ready.values) {
+      if (!(job._accumulation?._ready ?? true)) continue;
+      // The walk ends here, so taking the job out of the map it walks is
+      // safe.
+      _unlink(job);
+      job._accumulation?._seal();
+      return job;
+    }
+    return null;
+  }
+}

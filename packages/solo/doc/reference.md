@@ -1,10 +1,11 @@
 # Reference
 
-One line for every member of `Solo`, of `SoloLanes` and its lanes, and of their
-base `SoloController`, of the context their jobs get, of the jobs they return,
-of the queue and of the accumulators, with the section that explains it. One
-line, too, for every parameter of the methods that make jobs. What `solo` takes
-from the core is listed where it is explained. The rest of `ctx` is in
+One line for every member of `Solo`, of `SoloLanes` and its lanes and pools,
+and of their base `SoloController`, of the context their jobs get, of the jobs
+they return, of the queue and of the accumulators, with the section that
+explains it. One line, too, for every parameter of the methods that make jobs.
+What `solo` takes from the core is listed where it is explained. The rest of
+`ctx` is in
 [The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/reference.md#the-context-at-a-glance)
 on the reference page of `async_job`, and `value`, `done` or `cancel()` of a
 job are in [Jobs and results](jobs.md#jobs-and-results) on the jobs page.
@@ -120,6 +121,8 @@ fields. Every member here is protected.
 | `SoloLanes(initialState)` | The constructor a subclass calls as `super(initialState)`, with the first state; its body declares the lanes | [Declaring lanes](lanes.md#declaring-lanes) |
 | `lane(name)` | Declares a lane and returns it; throws `StateError` for a name declared already, and once any lane's `enqueueJob` has been called (a refused or duplicate call seals too), the controller is closed or a microtask after the constructor has run | [Declaring lanes](lanes.md#declaring-lanes) |
 | `lanes` | The lanes in the order they were declared | [Declaring lanes](lanes.md#declaring-lanes) |
+| `pool(name, concurrency: n)` | Declares a pool whose root jobs run up to `n` at once and returns it; throws `ArgumentError` for `n` below 1, and `StateError` where `lane` throws it, for a name a lane or a pool has already | [Declaring lanes](lanes.md#declaring-lanes) |
+| `pools` | The pools in the order they were declared | [Declaring lanes](lanes.md#declaring-lanes) |
 
 ## SoloLane
 
@@ -142,6 +145,39 @@ queued it, and a `Policy` looks for its key in that lane only. A lane has no
 | `lane.lastJobWhere(test)` | The last queued job of this lane that passes the test, else its running one if it passes and has not been cancelled, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `lane.current` | The running root job of this lane, or `null` when the lane is idle | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `lane.pending` | What is holding this lane right now, by the rules `pending` has for a `Solo`, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
+
+## SoloPool
+
+The type `pool` returns: one queue of a `SoloLanes` whose root jobs run up to
+`concurrency` at once. A key keeps the order of its jobs here under every
+`Policy`: two jobs of one key never run at once. A child of a running job takes
+no place. The rest of its members are those of `SoloQueueOwner`, which it
+shares with `SoloLane`; `running` stands where a lane has `current`.
+
+| Member | What it does | Where |
+| --- | --- | --- |
+| `pool.concurrency` | How many root jobs of this pool run at once at most | [Declaring lanes](lanes.md#declaring-lanes) |
+| `pool.running` | The running root jobs of this pool in the order they started, an unmodifiable snapshot | [Working the queue directly](jobs.md#working-the-queue-directly) |
+
+## SoloQueueOwner
+
+What `SoloLane` and `SoloPool` have in common: a queue of root jobs and the
+members that make jobs and queue them. Code that reads neither `current` nor
+`running` takes this type and accepts both. A job runs in the lane or pool that
+queued it, and a `Policy` looks for its key there only.
+
+| Member | What it does | Where |
+| --- | --- | --- |
+| `owner.name` | The name the lane or pool was declared with, for logs | [Declaring lanes](lanes.md#declaring-lanes) |
+| `owner.id` | The `SoloLaneId` a job of this lane or pool returns from `job.lane` | [Declaring lanes](lanes.md#declaring-lanes) |
+| `owner.enqueue(body)` | Makes and queues a job of this lane or pool | [Two queues over one state](lanes.md#two-queues-over-one-state) |
+| `owner.job(body)` | Makes a job of this lane or pool without queueing it, for `enqueueJob` or for `ctx.run` as a child | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `owner.enqueueJob(job)` | Queues a job this lane or pool made under a `Policy`, at the tail or, with `first: true`, at the head; a job of another lane or pool, or of another controller, is refused with an `ArgumentError` | [Two queues over one state](lanes.md#two-queues-over-one-state) |
+| `owner.collect(handler)` | Makes an accumulator whose groups go into this lane or pool, each handing one job the list of its events | [One request per log line](accumulation.md#one-request-per-log-line) |
+| `owner.accumulate(handler, merge: ...)` | Makes an accumulator whose groups go into this lane or pool, each merging its events into one value | [Settings saved on every flip of a switch](accumulation.md#settings-saved-on-every-flip-of-a-switch) |
+| `owner.queue` | The jobs waiting in this lane or pool, a `SoloQueue` | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `owner.lastJobWhere(test)` | The last queued job of this lane or pool that passes the test, else a running one that passes and has not been cancelled, the last started first, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `owner.pending` | What is holding this lane or pool right now, by the rules `pending` has for a `Solo`, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 
 ## Parameters of a job
 
