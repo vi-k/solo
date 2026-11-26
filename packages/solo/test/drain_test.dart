@@ -157,6 +157,27 @@ void main() {
     });
   });
 
+  test('a plain close over a plain close says nothing of a drain', () {
+    // Only a drain gives way to a plain close: a second plain close finds
+    // the work already stopped, and a line about a drain would describe a
+    // close that never happened.
+    final lines = <String>[];
+    Solo.debug = lines.add;
+    addTearDown(() => Solo.debug = null);
+    runSolo((solo, journal, async) {
+      step(solo, 'running');
+      async.flushMicrotasks();
+      solo.close().ignore();
+      solo.close().ignore();
+      async.flushTimers();
+      journal.take();
+    });
+    expect(lines.where((line) => line.startsWith('close')), [
+      'close',
+      'closed',
+    ]);
+  });
+
   test('repeated drains share one future and close once', () {
     runSolo((solo, journal, async) {
       step(solo, 'job');
