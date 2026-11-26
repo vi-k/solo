@@ -1,2 +1,5 @@
 # Russian translation, kept in the repository but not published.
 README.ru.md
+
+# Development tools of the repository, not part of what a user takes.
+tool/
