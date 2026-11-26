@@ -1,0 +1,4 @@
+# Until async_job 1.0.6 is published.
+dependency_overrides:
+  async_job:
+    path: ../async_job
