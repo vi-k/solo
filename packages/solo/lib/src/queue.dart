@@ -115,6 +115,12 @@ final class _QueueIndex<S extends Object> {
   /// Whether a queued job shares [by].
   bool _holds(Object by) => _lists.containsKey(by);
 
+  /// The first queued job that shares [by], or `null` when none does.
+  _SoloJob<S, S, Object?>? _firstOf(Object by) {
+    final list = _lists[by];
+    return list == null || list.isEmpty ? null : list.first.job;
+  }
+
   /// The queued jobs that share [by], in the order of the queue, taken now:
   /// the caller asks them questions whose answers may change the queue.
   List<_SoloJob<S, S, Object?>> _of(Object by) => [
@@ -357,12 +363,20 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
 }
 
 /// The queue of a pool: the queue of a lane, plus the jobs the pump may
-/// take next, by their place in the order of the queue.
+/// take next, by their place in the order of the queue, and the keys held
+/// by the jobs of the pool.
 ///
 /// A job's place is a number given at its insertion: below every other
 /// with `first: true`, above every other without. The pump takes the
 /// first candidate that is ready, so the order of the queue holds without
 /// a walk of the queue.
+///
+/// A job with a key equal to itself holds the key from the moment the pump
+/// takes it to its end, and two jobs of one key never run together. The
+/// candidates are the jobs without such a key and the head of every key
+/// that no job holds; the others of a key wait out of the candidates and
+/// cost nothing to the jobs of other keys. The head holds its key even as
+/// a group waiting for its window: the jobs of its key stay behind it.
 final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
   /// The place the last job inserted with `first: true` got.
   var _first = 0;
@@ -373,7 +387,20 @@ final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
   /// The jobs the pump may take next, by their place.
   final _ready = SplayTreeMap<int, _SoloJob<S, S, Object?>>();
 
+  /// The job that holds each key, by the key, compared with `==` as the
+  /// keys of jobs are: one that runs in the pool, or whose start rules are
+  /// asked in its window.
+  final _holders = <Object, _SoloJob<S, S, Object?>>{};
+
+  /// Whether the pump is in the step of this pool: a candidate that comes
+  /// in there is taken by the same step, and one that comes in elsewhere
+  /// has to bring the pump back.
+  var _stepping = false;
+
   _SoloPoolQueue(super._core);
+
+  /// The job that holds [key], or `null` when none does.
+  _SoloJob<S, S, Object?>? _holderOf(Object key) => _holders[key];
 
   @override
   void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
@@ -381,13 +408,37 @@ final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
     // list, and here as well.
     super._insert(job, first: first);
     final seq = job._seq = first ? --_first : ++_last;
+    // The index holds only a key equal to itself, so a job with no entry
+    // there goes as a job without a key.
+    final entry = job._keyEntry;
+    if (entry == null) {
+      _ready[seq] = job;
+      return;
+    }
+    // A job of a key is a candidate only as the head of a free key, and the
+    // head it takes over from is a candidate no longer.
+    if (entry.previous != null || _holders.containsKey(entry.by)) return;
+    if (entry.next case final behind?) _ready.remove(behind.job._seq);
     _ready[seq] = job;
   }
 
   @override
   void _unlink(_SoloJob<S, S, Object?> job) {
+    // Read before the job leaves the index: the one after it there is the
+    // next head of its key.
+    final entry = job._keyEntry;
+    final next = entry?.next?.job;
     super._unlink(job);
-    _ready.remove(job._seq);
+    // A job of a key is a candidate only as the head of a free key, so the
+    // next one heads a free key as well, unless the pump has just taken
+    // this one and holds the key for it.
+    if (_ready.remove(job._seq) == null || next == null) return;
+    if (_holders.containsKey(entry!.by)) return;
+    _ready[next._seq] = next;
+    // A removal or a move made by the caller's code ends no running job,
+    // so nothing else brings the pump back for this one. In the step of
+    // the pool its loop takes the job anyway.
+    if (!_stepping) _core.controller._schedulePump();
   }
 
   @override
@@ -398,9 +449,14 @@ final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
 
   /// Takes the first candidate that is ready out of the queue: a group
   /// waiting for its window is stepped over, as [_takeFirst] steps over it.
+  ///
+  /// The job holds its key from here: it is put among the holders before
+  /// it leaves the queue, so the next job of its key does not become a
+  /// candidate.
   _SoloJob<S, S, Object?>? _takeNext() {
     for (final job in _ready.values) {
       if (!(job._accumulation?._ready ?? true)) continue;
+      if (job._keyEntry case final entry?) _holders[entry.by] = job;
       // The walk ends here, so taking the job out of the map it walks is
       // safe.
       _unlink(job);
@@ -408,5 +464,15 @@ final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
       return job;
     }
     return null;
+  }
+
+  /// Lets the key of [job] go if [job] holds it, and makes the head of the
+  /// key a candidate: for every job of the pool that ends, a running one or
+  /// one ended in the window of its start rules.
+  void _release(_SoloJob<S, S, Object?> job) {
+    final key = job.key;
+    if (key == null || !identical(_holders[key], job)) return;
+    _holders.remove(key);
+    if (_byKey._firstOf(key) case final head?) _ready[head._seq] = head;
   }
 }
