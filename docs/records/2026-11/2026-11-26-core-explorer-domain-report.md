@@ -4,7 +4,10 @@
 > целиком в конце записи. Пойманы четыре мутанта из 20 — M08, M11, M12, M19;
 > все семь калибровочных поломок, три из них новые, ловятся за первые сотни
 > путей. На чистом ядре нарушений нет; ложные тревоги по дороге оказались
-> ошибками самих оракулов.
+> ошибками самих оракулов. Разбор непойманных: M13 эквивалентен; M10 зонд
+> отличает, и на его месте ядро расходится с dartdoc `abandonable` — держатель
+> брошенного вызова получает уже освобождённое значение вместо `Cancelled`.
+> Править ли ядро, не решено.
 > **Что это:** третий шаг перебора порядков на настоящем ядре: новые слова,
 > оракулы к ним, прогон на 20 местах и разбор непойманных.
 > **Связанные записи:** `2026-11-26-core-explorer-vocabulary-report.md`
@@ -221,10 +224,7 @@
   когда удержанное — не дедлайн, а читается поле, только когда удержанное —
   дедлайн. M07 требует, чтобы второй запрос был своим дедлайном при удержанном
   дедлайне, а дедлайн у задачи один;
-- M13, `job_base.dart:2452`: вердикты тела и ошибка исхода расходятся,
-  по чтению, только когда исход — не падение тела, а `decided`
-  из `_pendingCancel ?? outcome` рядом с `Failed` тела другого не даёт. Уборки,
-  которая бросает и меняет исход, в словаре нет; не проверено;
+- M13, `job_base.dart:2452`, эквивалентен, см. «Разбор M10 и M13»;
 - M14, `job_context.dart:1248`: пустая группа через `_RunAllGroup`. Асинхронная
   `_settle` без веток не встаёт ни на одном `await` и доходит до `_ctx.check()`
   синхронно, как `Future.sync` прямого пути. Разница — число микрозадач
@@ -234,23 +234,204 @@
   детей и на первом барьере ядро и мутант дают одно и то же;
 - M10, `job_context.dart:1095`, на новых границах не достигнут: его место —
   в `aband`, а новые границы этого слова не берут. Во втором шаге оно было
-  достигнуто, и мутант чист; не разобран;
+  достигнуто, и мутант чист. Зонд его отличает, см. «Разбор M10 и M13»;
 - M09 и M01–M05 не достигнуты, M20 эквивалентен по плану.
+
+## Разбор M10 и M13
+
+Разобраны после итогового прогона, по слову владельца «разбери M10 и M13».
+
+### M13 эквивалентен
+
+Мутант убирает из `_reportCovered` сверку
+`identical(verdicts.error, outcome.error)`: вердикты тела шли бы к ответу
+на любую ошибку исхода. Разойтись им не с чем. `_bodyVerdicts` пишет одно
+место, `_announceBodyFailure` (`job_base.dart:2493`), и зовёт его одно место
+в `_execute` (строка 2074) — в той же ветке, что ставит
+`outcome = Failed(error, stackTrace)` с той же ошибкой. Локальное `outcome`
+после этого не переписывается, и оба вызова `_reportCovered` с вердиктами —
+строка 2248 и `_answerForHandFinished` на строке 2529 — получают именно его.
+Сверка — страховка на будущее, а не ветка, которую можно пройти. Догадка первой
+редакции этой записи, что расхождение даст уборка, которая бросает, неверна:
+падение уборки исход тела не переписывает.
+
+### M10: значение брошенного вызова после ручного `finish` в отмене
+
+Место — `_race` под `ctx.abandonable`, ветка «значение пришло, задача отмечена
+отменённой, а колбэк гонки не слышал отмену». Ядро идёт в неё, только если ждёт
+тело или работа `unattended`:
+`pendingCancel != null && (fromFork || !_owner.bodyEnded)`. Тогда вызов
+кончается отменой, как кончила бы его гонка. Если тело уже кончилось, ядро
+считает, что значения не ждёт никто, и идёт в `_keepLate`: на кончившейся
+задаче освобождает значение и отдаёт его в будущее вызова. Мутант пускает
+в первую ветку и тело, которое кончилось.
+
+Колбэк гонки не слышит отмену, когда движок кончает задачу руками, пока отмена
+спускается к детям: `cancelWith` зовёт `_cascadeToChildren`,
+а `_markCancelled` — только если задача ещё не кончена. Чтобы отличить мутанта,
+нужны четыре вещи сразу: тело ушло от `abandonable`, но его будущее кто-то
+держит; задача жива после тела, потому что ждёт ребёнка; `onCancel` ребёнка
+кончает родителя руками; значение приходит после этого. В словаре перебора нет
+ни ухода от `abandonable` с удержанием будущего, ни ручного `finish` из колбэка
+ребёнка, поэтому место не достигается даже там, где есть `aband`.
+
+Зонд — тест против `package:async_job/engine.dart`, в трёх порядках:
+
+```dart
+import 'dart:async';
+
+import 'package:async_job/engine.dart';
+import 'package:test/test.dart';
+
+final class PJob<T> extends JobBase<T> implements ChildJob<T> {
+  PJob(this._body);
+  final Future<T> Function(JobContext ctx) _body;
+
+  void launch() => start();
+
+  void drop(Outcome<T> outcome) => finish(outcome);
+
+  @override
+  JobContextBase createContext() => PContext(this);
+
+  @override
+  Future<T> execute(covariant PContext ctx) => _body(ctx);
+}
+
+final class PContext extends JobContextBase {
+  PContext(super.owner);
+}
+
+/// The holder of the future of an `abandonable` the body walked away from:
+/// what does it get when the value comes after the job was cancelled
+/// (`cascade-plain`), cancelled and finished by hand in the cascade
+/// (`cascade-hand`), or finished by hand with no cancellation
+/// (`hand-no-cancel`)?
+Future<(Object?, List<String>)> scenario(String mode) async {
+  final log = <String>[];
+  final gate = Completer<String>();
+  final forever = Completer<void>();
+  late Future<String> held;
+  late PJob<String> parent;
+  parent = PJob<String>((ctx) async {
+    // A child keeps the job alive past its body. Its `onCancel` runs in the
+    // cascade, before the callbacks of the parent.
+    ctx.start(
+      PJob<void>((c) async {
+        c.onCancel(() {
+          log.add('child hears the cancel');
+          if (mode == 'cascade-hand') parent.drop(const Done('hand'));
+        });
+        await forever.future;
+      }),
+    );
+    held = ctx.abandonable(
+      () => gate.future,
+      dispose: (v) => log.add('dispose $v'),
+    )..ignore();
+    return 'body';
+  })..launch();
+  await pumpEventQueue();
+  log.add('body ended, parent finished: ${parent.isFinished}');
+  if (mode == 'hand-no-cancel') {
+    parent.drop(const Done('hand'));
+  } else {
+    unawaited(parent.cancel());
+  }
+  await pumpEventQueue();
+  log.add('parent ${parent.isFinished ? parent.outcome : 'running'}');
+  gate.complete('v');
+  Object? got;
+  try {
+    got = await held;
+  } on Object catch (e) {
+    got = e;
+  }
+  await pumpEventQueue();
+  forever.complete();
+  await pumpEventQueue();
+  return (got, log);
+}
+
+void main() {
+  for (final mode in ['cascade-hand', 'cascade-plain', 'hand-no-cancel']) {
+    test('M10: $mode', () async {
+      final (got, log) = await scenario(mode);
+      print(log.join('\n'));
+      print('holder got: $got');
+    });
+  }
+}
+```
+
+На ядре:
+
+```text
+00:00 +0: M10: cascade-hand
+body ended, parent finished: false
+child hears the cancel
+parent Cancelled(manual)
+dispose v
+holder got: v
+00:00 +1: M10: cascade-plain
+body ended, parent finished: false
+child hears the cancel
+parent running
+dispose v
+holder got: Cancelled(manual)
+00:00 +2: M10: hand-no-cancel
+body ended, parent finished: false
+parent Done(hand)
+dispose v
+holder got: v
+00:00 +3: All tests passed!
+```
+
+На мутанте отличается одна строка, в `cascade-hand`:
+
+```text
+holder got: Cancelled(manual)
+```
+
+В обоих отменных порядках отмена пришла раньше значения, и держатель видит одно
+и то же: отмену, потом значение. Обычным путём он получает `Cancelled`. Если
+движок кончил задачу в каскаде, он получает `v` — уже после `dispose v`.
+Dartdoc `abandonable` обещает первое: «If a cancellation arrives while [action]
+is in flight, the wait ends there with that [Cancelled] … its result is
+dropped». Комментарий ветки описывает тот же порядок: «An engine ended the job
+by hand while its cancellation went down to the children, and `finish` dropped
+the callbacks», — но говорит о теле или работе, которые ждут значение,
+и условие на `bodyEnded` отрезает от ветки держателя, которого оставило тело.
+Что такой держатель бывает, говорит соседний `_keepLate`: «a body that walked
+away may have handed that future to a child».
+
+Мутант здесь ведёт себя по dartdoc, а ядро — нет. Правка в духе мутанта:
+в ветке `_owner.bodyEnded && !fromFork` при `pendingCancel != null` кончать
+вызов отменой, а значение отдавать `_releaseAbandoned`, как отдала бы его
+гонка, услышавшая отмену. Правка меняет ядро и требует выпуска `async_job`; её
+не делали.
+
+Третий порядок, `hand-no-cancel`, мутант не затрагивает, но он из того же
+семейства. Движок кончил задачу руками без отмены, значение пришло после конца,
+и держатель получает его уже освобождённым. Тело, которое ждало бы сам вызов,
+на том же порядке, по чтению кода, получило бы `StateError` из `_keepOnStack`:
+«the caller hears the plain truth about the job instead». Таблица «A value that
+comes late» в `cleanup-rules.md` о держателе после конца задачи не говорит.
 
 ## Вывод
 
 Слова, названные во втором шаге, оказались теми: домен поймал M08, ответы — M11
 и M12, `discard` с вклиниванием — M19. Для M11 одного словаря мало:
-неустойчивый конверт нужен именно того вида, от которого защищается
-сопоставление, — повтор позади неиспользованного вердикта. Пустую группу (M14)
-домен не поймал, и, по чтению, ловить там нечего, кроме числа микрозадач.
+неустойчивый конверт нужен именно того вида, который ловит сопоставление
+вердиктов, — `[x, x]` при первом обходе и `[y, x]` при втором. Пустую группу
+(M14) домен не поймал, и, по чтению, ловить там нечего, кроме числа микрозадач.
 
 Цена — границы. `answer` и `free` вместе тяжелее всего; `rule` и `free` с двумя
 шагами тянутся только на одной задаче.
 
-Что осталось: M10 и M13. Для M13 нужна уборка, которая бросает; M10
-не разобран. Остальные непойманные — эквивалентны или видны лишь по числу
-микрозадач.
+Непойманные, кроме M10, эквивалентны или видны лишь по числу микрозадач. M10
+перебор не достигает, а зонд показывает, что на его месте ядро отдаёт держателю
+брошенного вызова освобождённое значение вместо обещанной отмены.
 
 ## Как запустить
 
