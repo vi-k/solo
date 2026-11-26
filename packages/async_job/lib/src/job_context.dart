@@ -1092,23 +1092,22 @@ abstract class JobContextBase implements JobContext {
           // The cancellation finished the call first, so the value reaches
           // nobody: cleaned up whatever the outcome, and at once.
           _releaseAbandoned(dispose, discard, value);
-        } else if (pendingCancel != null && (fromFork || !_owner.bodyEnded)) {
-          // The body or work handed over with `unattended` waits for the
-          // value, and the job is marked without this race having heard it:
-          // the pass over the callbacks never reached it. An engine ended the
-          // job by hand while its cancellation went down to the children, and
+        } else if (pendingCancel != null) {
+          // The job is marked without this race having heard it: the pass
+          // over the callbacks never reached it. An engine ended the job by
+          // hand while its cancellation went down to the children, and
           // `finish` dropped the callbacks; or a raw callback registered before
-          // this one threw and stopped the pass. The caller gets what the race
-          // would have given it: the cancellation that arrived while the call
-          // was in flight, not a complaint that the job is over, and the value
-          // is released.
+          // this one threw and stopped the pass. Whoever waits for the value
+          // -- the body, work handed over with `unattended`, or the holder of
+          // a future the body walked away from -- gets what the race would
+          // have given it: the cancellation that arrived while the call was in
+          // flight, not a complaint that the job is over and not the value.
+          // The value goes where the race would have sent it: on a job still
+          // running its release keeps the job from ending.
           onCancel();
-          final disposer = dispose ?? discard;
-          if (disposer != null) {
-            await _dispose(disposer, value);
-          }
+          _releaseAbandoned(dispose, discard, value);
         } else if (_owner.bodyEnded && !fromFork) {
-          // Nobody is waiting for the value. Work handed over with
+          // The body is not waiting for the value. Work handed over with
           // `unattended` is, and it takes the branch below: the value is
           // its on the terms the call asked for, and on a job that is over
           // `_keepOnStack` releases it and throws, and the work hears that.

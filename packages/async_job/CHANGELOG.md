@@ -1,3 +1,15 @@
+## Unreleased
+
+### Fixed
+
+- A call of `ctx.abandonable` the body walked away from hands whoever holds its
+  future the job's cancellation, not the value, when the value comes after a
+  cancellation the call never heard: an engine ended the job by hand while the
+  cancellation went down to its children, or a raw cancel callback registered
+  before the call threw.
+- The release of such a value keeps a job still running from ending until the
+  release is over, whether the body waits for the call or walked away from it.
+
 ## 1.0.5
 
 ### Fixed

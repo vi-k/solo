@@ -299,6 +299,126 @@ void main() {
     });
   }
 
+  test('a value a holder the body walked away from takes after the job was '
+      'ended by hand in the cascade of its cancellation', () {
+    // The body does not wait for the call, and the job does not end with it:
+    // it waits for its child, whose callback ends it by hand in the cascade
+    // of the cancellation. The holder of the call's future is told the
+    // cancellation, as the race would have told it, and not handed a value
+    // already released.
+    final seen = <String>[];
+    final errors = <Object>[];
+    final zone = <Object>[];
+    runZonedGuarded(() {
+      fakeAsync((async) {
+        final action = Completer<String>();
+        late final ProbeJob<void> job;
+        job = ProbeJob<void>(key: 'job', observer: ErrorObserver(errors), (
+          ctx,
+        ) async {
+          ctx
+              .run(
+                Job.deferred<void>((ctx) async {
+                  ctx.onCancel(() => job.drop(const Cancelled('by hand')));
+                  await ctx.abandonable(() => delay(50));
+                }),
+              )
+              .ignore();
+          unawaited(
+            ctx
+                .abandonable<String>(
+                  () => action.future,
+                  dispose: (value) => seen.add('released $value'),
+                )
+                .then(
+                  (value) => seen.add('holder got $value'),
+                  onError: (Object error) => seen.add('holder got $error'),
+                ),
+          );
+        })..launch();
+        async.flushMicrotasks();
+        job.cancel().ignore();
+        seen.add('${job.outcome}');
+        action.complete('db');
+        async.flushTimers();
+      });
+    }, (error, stackTrace) => zone.add(error));
+    expect(seen, [
+      'Cancelled(body: by hand)',
+      'released db',
+      'holder got Cancelled(manual)',
+    ]);
+    expect(errors, isEmpty);
+    expect(zone, isEmpty);
+  });
+
+  for (final walksAway in [true, false]) {
+    test('a value taken after a raw callback threw, on a job still waiting '
+        'for a child, the body walking away: $walksAway', () {
+      // The pass over the callbacks stops at the throw, which reaches
+      // whoever cancelled, and the race never hears the cancellation. The
+      // caller is told it all the same, whether it is the body or the holder
+      // of a future the body walked away from, and the release of the value
+      // keeps the job from ending, as it does when the race hears the
+      // cancellation.
+      final seen = <String>[];
+      final zone = <Object>[];
+      late final ProbeJob<void> job;
+      runZonedGuarded(() {
+        fakeAsync((async) {
+          void note(String what) =>
+              seen.add('${async.elapsed.inMilliseconds} $what');
+          job =
+              ProbeJob<void>(key: 'job', (ctx) async {
+                  (ctx as ProbeContext).onCancelRaw(
+                    () => throw StateError('boom'),
+                  );
+                  ctx.run(Job.deferred<void>((_) => delay(100))).ignore();
+                  final call = ctx
+                      .abandonable<String>(
+                        () async {
+                          await delay(20);
+                          return 'db';
+                        },
+                        dispose: (value) async {
+                          note('release $value');
+                          await delay(200);
+                          note('released $value');
+                        },
+                      )
+                      .then(
+                        (value) => note('got $value'),
+                        onError: (Object error) => note('got $error'),
+                      );
+                  if (walksAway) {
+                    unawaited(call);
+                  } else {
+                    await call;
+                  }
+                })
+                ..ignoreFailure()
+                ..launch();
+          async.flushMicrotasks();
+          job.whenFinished((outcome) => note('$outcome'));
+          try {
+            job.cancel().ignore();
+          } on Object catch (error) {
+            note('cancel threw $error');
+          }
+          async.flushTimers();
+        });
+      }, (error, stackTrace) => zone.add(error));
+      expect(seen, [
+        '0 cancel threw Bad state: boom',
+        '20 release db',
+        '20 got Cancelled(manual)',
+        '220 released db',
+        '220 Cancelled(manual)',
+      ]);
+      expect(zone, isEmpty);
+    });
+  }
+
   test('an action failing after the body walked away is not swallowed', () {
     final errors = <Object>[];
     final zone = <Object>[];
