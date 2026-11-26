@@ -13,6 +13,8 @@
   Пересматривает посылку решения 84. Доводы —
   `2026-11-12-bloc-vs-solo-second-debate-report.md`, раунды 4 и 5 и «Итог».
 - `onCancel` в `ctx.join` — взять в первый минорный выпуск `async_job`, который
-  понадобится по другой причине: `join(..., onCancel: req.abort)` вместо связки
-  `ctx.join`, `ctx.onCancel` и `Job.isCancellationError`. Отдельно минорный
-  выпуск ради неё не делаем — решение 164 `docs/settled.md`.
+  понадобится по другой причине: `join(..., onCancel: req.abort)` вместо пары
+  `ctx.onCancel(req.abort)` и `ctx.join`, с колбэком, который живёт только пока
+  идёт вызов. `Job.isCancellationError` в `main` остаётся и с параметром:
+  ошибку оборванного запроса отменой называет он. Отдельно минорный выпуск ради
+  неё не делаем — решение 164 `docs/settled.md`.
