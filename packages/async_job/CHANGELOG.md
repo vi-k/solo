@@ -1,4 +1,4 @@
-## Unreleased
+## 1.0.6
 
 ### Fixed
 
@@ -9,6 +9,16 @@
   before the call threw.
 - The release of such a value keeps a job still running from ending until the
   release is over, whether the body waits for the call or walked away from it.
+
+### Documentation
+
+- [Building on the core](doc/extending.md) says that a job already unwinding
+  its cleanup stack when an engine calls `finish` goes on with the unwinding,
+  and that a branch of `ctx.runAll` finished by hand between its two passes
+  runs neither.
+- [Cleanup rules](doc/cleanup-rules.md) says that once the job has ended,
+  whoever holds the future of a call the body walked away from gets the value
+  already released.
 
 ## 1.0.5
 
