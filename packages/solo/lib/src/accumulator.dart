@@ -228,9 +228,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   bool get _hasQueuedGroup => _core.queue._holdsGroupOf(this);
 
   /// Whether this accumulator has no group of its own queued or running.
-  bool get _isIdle =>
-      !_hasQueuedGroup &&
-      !identical(_core.current?._accumulation?._owner, this);
+  bool get _isIdle => !_hasQueuedGroup && !_core.runsGroupOf(this);
 
   @override
   Timer _startTimer(Duration duration, void Function(Timer) callback) =>
@@ -275,9 +273,9 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     timer = _startTimer(timing.duration, (elapsed) {
       if (!identical(_throttleTimer, elapsed)) return;
       _throttleTimer = null;
-      // The current job of its own core: another core that is busy holds
+      // A free place of its own core: another core that is busy holds
       // nothing up here.
-      if (_core.current == null && _hasQueuedGroup) _schedulePump();
+      if (!_core.isFull && _hasQueuedGroup) _schedulePump();
     });
     _throttleTimer = timer;
   }

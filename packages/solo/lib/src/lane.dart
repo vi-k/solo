@@ -538,6 +538,14 @@ final class _SoloLaneCore<S extends Object> {
   /// of a [Solo], every running job of a pool.
   List<_SoloJob<S, S, Object?>> get runningJobs => [?current];
 
+  /// Whether no more root jobs can start in this core now: a lane or a
+  /// [Solo] runs one at a time.
+  bool get isFull => current != null;
+
+  /// Whether a running root job of this core is a group of [owner].
+  bool runsGroupOf(Object owner) =>
+      identical(current?._accumulation?._owner, owner);
+
   /// Takes note of a write of the state at [revision] by a job running in
   /// this core, [writer] being the number of its root in a pool.
   void wrote(int revision, int writer) => lastWrite = revision;
@@ -585,7 +593,13 @@ final class _SoloPoolCore<S extends Object> extends _SoloLaneCore<S> {
   });
 
   /// Whether every place of this pool is taken.
+  @override
   bool get isFull => running.length >= concurrency;
+
+  /// Whether any running root job of this pool is a group of [owner].
+  @override
+  bool runsGroupOf(Object owner) =>
+      running.any((job) => identical(job._accumulation?._owner, owner));
 
   @override
   _SoloQueue<S> makeQueue() => poolQueue;

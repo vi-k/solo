@@ -878,6 +878,136 @@ void main() {
     });
   });
 
+  group('accumulation', () {
+    /// An accumulator of [pool] of [key] whose group logs its start and
+    /// end with the time and runs for [length].
+    SoloAccumulator<bool, void> groups(
+      FakeAsync async,
+      SoloPool<int> pool,
+      List<String> log, {
+      required AccumulationTiming timing,
+      required Duration length,
+      Object? key,
+    }) {
+      String at() => '${async.elapsed.inMilliseconds}';
+      return pool.collect<int, bool, void>(key: key, timing: timing, (
+        ctx,
+        events,
+      ) async {
+        log.add('start group ${at()}');
+        await ctx.join(() => Future<void>.delayed(length));
+        log.add('end group ${at()}');
+      });
+    }
+
+    test('groups of an accumulator without a key run side by side', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final likes = groups(
+          async,
+          pool,
+          log,
+          timing: AccumulationTiming.debounce(
+            const Duration(milliseconds: 100),
+          ),
+          length: const Duration(milliseconds: 500),
+        );
+        likes.add(true);
+        async.elapse(const Duration(milliseconds: 150));
+        likes.add(false);
+        async.elapse(const Duration(seconds: 1));
+
+        expect(log, [
+          'start group 100',
+          'start group 250',
+          'end group 600',
+          'end group 750',
+        ]);
+      });
+    });
+
+    test('groups of an accumulator with a key run one at a time', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final likes = groups(
+          async,
+          pool,
+          log,
+          key: 'k',
+          timing: AccumulationTiming.debounce(
+            const Duration(milliseconds: 100),
+          ),
+          length: const Duration(milliseconds: 500),
+        );
+        likes.add(true);
+        async.elapse(const Duration(milliseconds: 150));
+        likes.add(false);
+        async.elapse(const Duration(seconds: 2));
+
+        expect(log, [
+          'start group 100',
+          'end group 600',
+          'start group 600',
+          'end group 1100',
+        ]);
+      });
+    });
+
+    test('a throttle wakes the pump when the pool has a free place', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        pool.enqueue<int, void>(key: 'long', _gated(log, 'long', Completer()));
+        final likes = groups(
+          async,
+          pool,
+          log,
+          timing: AccumulationTiming.throttle(
+            const Duration(milliseconds: 100),
+            startAtOnce: false,
+          ),
+          length: const Duration(milliseconds: 50),
+        );
+        likes.add(true);
+        async.elapse(const Duration(seconds: 1));
+
+        expect(log, ['start long', 'start group 100', 'end group 150']);
+      });
+    });
+
+    test('a group of a pool running past its interval does not rearm it', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final likes = groups(
+          async,
+          pool,
+          log,
+          timing: AccumulationTiming.throttle(
+            const Duration(milliseconds: 100),
+            startAtOnce: false,
+          ),
+          length: const Duration(milliseconds: 300),
+        );
+        likes.add(true);
+        // The group starts at 100 and its interval runs out at 200, while
+        // the group still runs: a new group is not counted another one.
+        async.elapse(const Duration(milliseconds: 250));
+        likes.add(false);
+        async.elapse(const Duration(seconds: 1));
+
+        expect(log, [
+          'start group 100',
+          'start group 250',
+          'end group 400',
+          'end group 550',
+        ]);
+      });
+    });
+  });
+
   group('debug lines', () {
     /// The enqueue lines of a pool `p` of two places while [body] runs.
     List<String> enqueues(
@@ -1598,7 +1728,6 @@ void main() {
         );
         // In a drain the rest of the queue is what the drain has still to
         // run, and says so, as in a lane.
-        expect(lanes[2].pending.runtimeType, SoloPendingQueue);
         expect(
           lanes[2].pending,
           isA<SoloPendingQueue>().having((p) => p.jobs, 'jobs', [same(c)]),
