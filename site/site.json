@@ -2,6 +2,6 @@
   "site": "https://docs.yet-another.dev",
   "base": "/",
   "title": "async_job and solo",
-  "tagline": "Cancellation, child tasks and cleanup for asynchronous Dart, and a controller that runs one job at a time, in one queue or in each of several lanes.",
+  "tagline": "Cancellation, child tasks and cleanup for asynchronous Dart, and a controller that runs jobs one at a time, in one queue or in each of several lanes, or up to a set number at once in a pool.",
   "repo": "https://github.com/vi-k/solo"
 }

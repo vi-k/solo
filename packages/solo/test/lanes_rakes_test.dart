@@ -1073,13 +1073,28 @@ void main() {
         'one ends.',
       );
       fakeAsync((async) {
-        final places = _Places();
+        // Three places: the job of another key takes the second, and the
+        // third stays free, so a job that waits waits for its key.
+        final places = _Places(concurrency: 3);
         final gate = Completer<void>();
-        final running = places.places.enqueue<int, void>(
-          key: 'k',
-          (ctx) => ctx.abandonable(() => gate.future),
-        );
+        final unwound = Completer<void>();
+        final running = places.places.enqueue<int, void>(key: 'k', (ctx) async {
+          try {
+            await ctx.abandonable(() => gate.future);
+          } finally {
+            await unwound.future;
+          }
+        });
         async.flushMicrotasks();
+        expect(
+          places.places.enqueue<int, void>(
+            key: 'k',
+            policy: Policy.droppable,
+            (ctx) async {},
+          ),
+          same(running),
+          reason: 'with nothing queued, the running job of the key',
+        );
         final waiting = places.places.enqueue<int, void>(
           key: 'k',
           (ctx) async {},
@@ -1090,27 +1105,33 @@ void main() {
             policy: Policy.droppable,
             (ctx) async {},
           ),
-          anyOf(same(running), same(waiting)),
+          same(waiting),
+          reason: 'the queue is asked from its tail first',
         );
-        expect(
-          places.places.enqueue<int, void>(
-            key: 'other',
-            policy: Policy.droppable,
-            (ctx) => ctx.abandonable(() => gate.future),
-          ),
-          isNot(anyOf(same(running), same(waiting))),
+        final other = places.places.enqueue<int, void>(
+          key: 'other',
+          policy: Policy.droppable,
+          (ctx) => ctx.abandonable(() => gate.future),
         );
+        expect(other, isNot(anyOf(same(running), same(waiting))));
+        async.flushMicrotasks();
+        expect(places.places.running, [same(running), same(other)]);
 
+        var started = false;
         final restarted = places.places.enqueue<int, void>(
           key: 'k',
           policy: Policy.restart,
-          (ctx) async {},
+          (ctx) async => started = true,
         );
+        async.flushMicrotasks();
         expect(running.isCancelled, isTrue);
+        expect(running.outcome, isNull, reason: 'it is still unwinding');
         expect(waiting.outcome, isA<Cancelled>());
-        expect(restarted.outcome, isNull);
+        expect(started, isFalse, reason: 'a place is free, the key is not');
+        unwound.complete();
         async.flushMicrotasks();
         expect(running.outcome, isA<Cancelled>());
+        expect(started, isTrue);
         expect(restarted.outcome, isA<Done<void>>());
         places.close().ignore();
         gate.complete();

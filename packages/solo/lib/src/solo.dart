@@ -2069,8 +2069,8 @@ abstract class Solo<S extends Object> extends SoloController<S> {
 ///
 /// The state, the listeners, closing and the hooks come from [SoloController].
 ///
-/// See [Two queues over one state](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#two-queues-over-one-state)
-/// [A write that keeps the other lane's work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-write-that-keeps-the-other-lanes-work)
+/// See [Two queues over one state](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#two-queues-over-one-state),
+/// [A write that keeps the other lane's work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-write-that-keeps-the-other-lanes-work),
 /// and [A pool of places](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-pool-of-places)
 /// on the lanes page.
 abstract class SoloLanes<S extends Object> extends SoloController<S> {

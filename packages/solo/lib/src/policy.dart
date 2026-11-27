@@ -13,8 +13,8 @@
 ///
 /// A policy looks into one queue: that of a `Solo`, of a lane or of a pool
 /// of a `SoloLanes`. In a pool a key keeps the order of its jobs whatever
-/// the policy: a job whose key a running job of the pool holds waits for
-/// that one to end, and the jobs of other keys go past it. See
+/// the policy: a queued job whose key a running job of the pool holds
+/// waits for that one to end, and the jobs of other keys go past it. See
 /// [A pool of places](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-pool-of-places)
 /// on the lanes page.
 enum Policy {

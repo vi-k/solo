@@ -1,13 +1,14 @@
 ---
 title: async_job and solo
-description: Cancellation, child tasks and cleanup for asynchronous Dart, and a controller that runs one job at a time, in one queue or in each of several lanes.
+description: Cancellation, child tasks and cleanup for asynchronous Dart, and a controller that runs jobs one at a time, in one queue or in each of several lanes, or up to a set number at once in a pool.
 template: splash
 editUrl: false
 hero:
   tagline: |
     Cancellation, child tasks and cleanup for asynchronous Dart, and a
-    controller built on them that runs one job at a time over its state, in
-    one queue or in each of several lanes.
+    controller built on them that runs jobs over its state one at a time, in
+    one queue or in each of several lanes, or up to a set number at once in a
+    pool.
   actions:
     - text: Cancel async work
       link: async_job/
@@ -29,8 +30,8 @@ runs on a server, in a CLI, or under a riverpod provider or a bloc handler, as
 
 **State with a lifecycle.** [solo](solo/) is a controller over one immutable
 state that runs jobs over it one at a time, in one queue or in each of several
-lanes, with policies for a second call and rules for the states a job may run
-in; `flutter_solo` brings it to widgets.
+lanes, or up to a set number at once in a pool, with policies for a second call
+and rules for the states a job may run in; `flutter_solo` brings it to widgets.
 [solo and bloc, side by side](solo/vs-bloc/) puts eleven controller scenarios
 in both packages.
 

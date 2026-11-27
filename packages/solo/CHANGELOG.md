@@ -5,9 +5,9 @@
 - `SoloLanes.pool(name, concurrency: n)`, which declares a pool in the
   constructor body as `lane` declares a lane, and `pools`, which lists them. A
   pool is one queue whose root jobs run up to `n` at once; a key keeps the
-  order of its jobs there under every `Policy`, so a job whose key a running
-  job of the pool holds waits for that one, and the jobs of other keys go past
-  it. A child takes no place. See
+  order of its jobs there under every `Policy`, so a queued job whose key a
+  running job of the pool holds waits for that one, and the jobs of other keys
+  go past it. A child takes no place. See
   [A pool of places](doc/lanes.md#a-pool-of-places).
 - `SoloPool<S>`, a pool, with the members of a lane and `running`, the jobs
   that run now in the order they started, in place of `current`.
