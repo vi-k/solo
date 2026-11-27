@@ -1051,6 +1051,16 @@ final class Feed extends SoloLanes<int> {
     ['[[await]] current'],
   );
 
+  // A pool declared by pool(...) in the constructor body is the controller's
+  // own as a lane is, typed SoloPool or SoloQueueOwner: the waits for the
+  // pool a body runs in are left to await_own_queue, the waits for another
+  // pool or a lane are reported.
+  Future<void> test_pools() => assertAt(_pools, [
+    '[[await]] _saves',
+    '[[await]] reload()',
+    '[[await]] _likes',
+  ]);
+
   Future<void> test_lane_of_a_job_from_a_parameter() => assertAt(
     '''
 import 'package:solo/solo.dart';
@@ -1070,6 +1080,43 @@ final class Feed extends SoloLanes<int> {
     ['[[await]] job.done'],
   );
 }
+
+/// Waits from a body of the pool `_likes`, for jobs of its own pool, of the
+/// pool `_saves` and of the lane `_reload`, and from a body of the pool
+/// `_audit`, typed `SoloQueueOwner`, for its own pool and for `_likes`.
+const _pools = '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _reload = lane('reload');
+    _likes = pool('likes', concurrency: 4);
+    _saves = pool('saves', concurrency: 2);
+    _audit = pool('audit', concurrency: 2);
+  }
+
+  late final SoloLane<int> _reload;
+  late final SoloPool<int> _likes;
+  late final SoloPool<int> _saves;
+  late final SoloQueueOwner<int> _audit;
+
+  Job<void> reload() => _reload.enqueue<int, void>((ctx) async {});
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await like().done;
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+    await _saves.enqueue<int, void>((ctx) async {}).done;
+    await reload().done;
+  });
+
+  Job<void> record() => _audit.enqueue<int, void>((ctx) async {
+    await _audit.enqueue<int, void>((ctx) async {}).done;
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''';
 
 /// A `SoloLanes` with a lane it takes rather than declares, waited from a
 /// body queued in that lane.

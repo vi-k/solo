@@ -477,6 +477,64 @@ final class Feed extends SoloLanes<int> with SoloStream<int> {
     ['await [[close()]]'],
   );
 
+  // A job of the same pool waits for a free place or for its key, and with
+  // every place taken by such waits it never starts: the wait is reported
+  // whatever the key, with the message of a pool.
+  Future<void> test_await_own_pool() => _assertPool(
+    '''
+$_pools
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    '_likes.enqueue<int, void>((ctx) async {})',
+    'enqueue',
+  );
+
+  // The pool of a method is read in its body, as the lane of one is.
+  Future<void> test_method_of_the_pool() => _assertPool(
+    '''
+$_pools
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await like().value;
+    await save().done;
+  });
+}
+''',
+    'like()',
+    'like',
+  );
+
+  // A job of another pool or of a lane runs on its own pump.
+  Future<void> test_await_other_pool() => assertAt('''
+$_pools
+  Job<void> likeAndSave() => _likes.enqueue<int, void>((ctx) async {
+    await save().done;
+    await _saves.enqueue<int, void>((ctx) async {}).done;
+    await reload().done;
+  });
+
+  Job<void> reloadAndLike() => _reload.enqueue<int, void>((ctx) async {
+    await like().done;
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''', []);
+
+  /// Asserts one diagnostic at [span], the first one awaited in [code],
+  /// that names [member] and the pool `_likes`.
+  Future<void> _assertPool(String code, String span, String member) =>
+      assertDiagnostics(code, [
+        lint(
+          code.indexOf('await $span') + 'await '.length,
+          span.length,
+          messageContainsAll: [
+            "'$member' waits for a job of the pool '_likes' this job runs in",
+          ],
+        ),
+      ]);
+
   /// Asserts one diagnostic at [span], the first one awaited in [code],
   /// that names [member] and the lane `_likes`.
   Future<void> _assertLane(String code, String span, String member) =>
@@ -506,4 +564,28 @@ final class Feed extends SoloLanes<int> {
   Job<void> reload() => _reload.enqueue<int, void>((ctx) async {});
 
   SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+''';
+
+/// A controller of a lane and two pools, to be completed: `reload` queues in
+/// the lane `_reload`, `like` in the pool `_likes` and `save` in the pool
+/// `_saves`.
+const _pools = '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _reload = lane('reload');
+    _likes = pool('likes', concurrency: 4);
+    _saves = pool('saves', concurrency: 2);
+  }
+
+  late final SoloLane<int> _reload;
+  late final SoloPool<int> _likes;
+  late final SoloPool<int> _saves;
+
+  Job<void> reload() => _reload.enqueue<int, void>((ctx) async {});
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  SoloJob<void> save() => _saves.enqueue<int, void>((ctx) async {});
 ''';

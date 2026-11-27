@@ -463,6 +463,38 @@ mixin Steps on SoloLanes<Feed> {
     ],
   );
 
+  // A body given to a pool runs in a SoloLanes as one given to a lane does,
+  // a pool the code does not declare included: the other jobs of the pool
+  // and the lanes write while it waits.
+  Future<void> test_pool_member_body() => assertAt(
+    '''
+$_state
+final class Likes extends SoloLanes<Feed> {
+  Likes() : super(const Feed()) {
+    _likes = pool('likes', concurrency: 4);
+  }
+
+  late final SoloPool<Feed> _likes;
+
+  Job<void> like(String post) => _likes.enqueue<Feed, void>((ctx) async {
+    final feed = ctx.state;
+    await ctx.join(() => send(post));
+    ctx.emit(feed.confirm(post));
+  });
+}
+
+mixin Steps on SoloLanes<Feed> {
+  Job<void> step(SoloPool<Feed> places, String post) =>
+      places.enqueue<Feed, void>((ctx) async {
+        final feed = ctx.state;
+        await ctx.join(() => send(post));
+        ctx.emit(feed.confirm(post));
+      });
+}
+''',
+    ['ctx.emit(feed.confirm(post))', 'ctx.emit(feed.confirm(post))'],
+  );
+
   // A body handed to a Solo runs in the Solo. A value read in the body of a
   // parent is not followed into the body of its child: the rule looks at
   // one body.

@@ -1,3 +1,20 @@
+## Unreleased
+
+- `plugin_api.dart` exports `isSoloQueueOwner`, `isSoloPool` and
+  `declaresQueueOwner`, for the rules of a plugin on top about the pools of
+  `SoloLanes` in `solo` 2.1. `isSoloQueueOwner` tells a `SoloQueueOwner`, a
+  `SoloLane` or a `SoloPool`, and `declaresQueueOwner` tells whether a
+  `lane(...)` or a `pool(...)` on `this` or `super` declares a lane or a pool
+  right in a constructor body; `declaresLane` still speaks of `lane(...)` only.
+  A `SoloPool` field declared there by `pool(...)` is a field of the own queue
+  for `queueLaneOf`, as a lane field is: a wait in a body of the pool for a job
+  of the same pool is `QueueLane.own`, one for a job of another pool or lane
+  `QueueLane.other`, and under `ownLaneReportedElsewhere` `bare_await` and
+  `discarded_outcome` leave the wait for the own pool to the plugin on top.
+  `isSoloMember` takes a member of a pool for that of a `Solo`, as it takes one
+  of a lane: `outcome_after_await` sees that `job` of a pool makes a job
+  without queueing it.
+
 ## 0.2.3
 
 - `queuedBodyOf` takes a child made on the context of a job of another

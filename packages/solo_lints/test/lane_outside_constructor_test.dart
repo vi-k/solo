@@ -117,6 +117,53 @@ mixin Audit on SoloLanes<int> {
     ["lane('audit')"],
   );
 
+  Future<void> test_pool_in_constructor_body() => assertAt('''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = pool('likes', concurrency: 4);
+    this._saves = super.pool('saves', concurrency: 2);
+  }
+
+  late final SoloPool<int> _likes;
+  late final SoloPool<int> _saves;
+}
+''', []);
+
+  // A pool is sealed with the lanes, and its message names the pool.
+  Future<void> test_pool_in_late_final_initializer() {
+    const code = '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0);
+
+  late final _likes = pool('likes', concurrency: 4);
+}
+''';
+    const span = "pool('likes', concurrency: 4)";
+    return assertDiagnostics(code, [
+      lint(
+        code.indexOf(span),
+        span.length,
+        messageContainsAll: [
+          "'pool' outside the constructor body throws",
+          'its set of lanes and pools',
+        ],
+      ),
+    ]);
+  }
+
+  // Only pool of SoloLanes declares a pool.
+  Future<void> test_not_pools() => assertAt('''
+final class Road {
+  late final _left = pool('left', concurrency: 2);
+
+  int pool(String name, {required int concurrency}) => concurrency;
+}
+''', []);
+
   // Only lane of SoloLanes declares a lane.
   Future<void> test_not_lanes() => assertAt('''
 import 'package:solo/solo.dart';

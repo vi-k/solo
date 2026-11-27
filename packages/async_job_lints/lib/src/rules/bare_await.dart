@@ -39,7 +39,7 @@ class BareAwait extends MultiAnalysisRule {
   ///
   /// With [ownQueueReportedElsewhere], a wait for a job of the controller's
   /// own queue is left to another rule, and with [ownLaneReportedElsewhere]
-  /// a wait for a job of the lane the waiting job runs in.
+  /// a wait for a job of the lane or the pool the waiting job runs in.
   BareAwait({
     this.ownQueueReportedElsewhere = false,
     this.ownLaneReportedElsewhere = false,

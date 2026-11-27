@@ -592,6 +592,34 @@ final class Feed extends SoloLanes<int> {
     ['{}).[[done]]'],
   );
 
+  // A pool declared in the constructor body is the controller's own: an
+  // awaited done of the pool the body runs in is left to await_own_queue,
+  // one of another pool is a dropped outcome.
+  Future<void> test_pools() => assertAt(
+    '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = pool('likes', concurrency: 4);
+    _saves = pool('saves', concurrency: 2);
+  }
+
+  late final SoloPool<int> _likes;
+  late final SoloPool<int> _saves;
+
+  SoloJob<void> like() => _likes.enqueue<int, void>((ctx) async {});
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await like().done;
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+    await _saves.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''',
+    ['_saves.enqueue<int, void>((ctx) async {}).[[done]]'],
+  );
+
   // Not awaited, the outcome is dropped and nothing waits for itself.
   Future<void> test_own_lane_not_awaited() => assertAt(
     '''

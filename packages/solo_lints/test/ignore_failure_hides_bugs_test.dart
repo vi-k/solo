@@ -226,6 +226,29 @@ $_lanes
     'enqueue',
   );
 
+  // A pool queues by the members of a lane.
+  Future<void> test_pool_enqueue() => _assertOne(
+    '''
+$_header
+final class Feed extends SoloLanes<State> {
+  Feed() : super(Ready()) {
+    _profiles = pool('profiles', concurrency: 4);
+  }
+
+  late final SoloPool<State> _profiles;
+
+  void reload() {
+    _profiles.enqueue<Ready, Profile>(
+      (ctx) => api.load(),
+      isExpectedError: (e) => e is ApiException,
+    ).ignoreFailure();
+  }
+}
+''',
+    'ignoreFailure()',
+    'enqueue',
+  );
+
   Future<void> test_lane_job_through_enqueue_job() => _assertOne(
     '''
 $_lanes

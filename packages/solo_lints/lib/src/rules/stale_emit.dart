@@ -104,9 +104,10 @@ FunctionExpression? _bodyOf(AstNode node, Element ctx) {
 /// a `SoloLanes`, whose other lanes write while it waits; in a `Solo` only a
 /// child of the job or `externalSetState` does.
 ///
-/// A body given to a member of a lane runs in a `SoloLanes`, whichever lane
-/// it is; any other body runs there when it is queued on the controller
-/// around, a child's or a handler's included, and that is a `SoloLanes`.
+/// A body given to a member of a lane or a pool runs in a `SoloLanes`,
+/// whichever it is; any other body runs there when it is queued on the
+/// controller around, a child's or a handler's included, and that is a
+/// `SoloLanes`.
 bool _runsInLanes(MethodInvocation emit, FunctionExpression body, Element ctx) {
   // A body is a positional argument or, by its name, a named one.
   final parent = body.parent;
@@ -114,7 +115,7 @@ bool _runsInLanes(MethodInvocation emit, FunctionExpression body, Element ctx) {
   final call = list?.parent;
   if (list is ArgumentList &&
       call is MethodInvocation &&
-      isSoloLane(call.realTarget?.staticType)) {
+      isSoloQueueOwner(call.realTarget?.staticType)) {
     return true;
   }
   return queuedBodyOf(emit)?.ctx == ctx && isSoloLanes(controllerAround(emit));

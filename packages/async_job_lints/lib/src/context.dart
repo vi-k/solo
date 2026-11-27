@@ -74,6 +74,19 @@ bool isSoloController(DartType? type) => _isA(type, 'SoloController', _solo);
 /// subtypes.
 bool isSoloLane(DartType? type) => _isA(type, 'SoloLane', _solo);
 
+/// Whether [type] is `SoloPool` of solo, a pool of `SoloLanes`, or one of its
+/// subtypes.
+bool isSoloPool(DartType? type) => _isA(type, 'SoloPool', _solo);
+
+/// Whether [type] is `SoloQueueOwner` of solo, what a lane and a pool of
+/// `SoloLanes` have in common, or one of its subtypes: `SoloLane`, `SoloPool`
+/// and theirs.
+///
+/// Solo before 2.1 has no `SoloQueueOwner` and no pool, and its `SoloLane`
+/// is no subtype of one: this asks [isSoloLane] too.
+bool isSoloQueueOwner(DartType? type) =>
+    _isA(type, 'SoloQueueOwner', _solo) || isSoloLane(type);
+
 /// Whether [type] is `SoloLanes` of solo, the controller with lanes, or one
 /// of its subtypes; a mixin on `SoloLanes` is one too.
 bool isSoloLanes(DartType? type) => _isA(type, 'SoloLanes', _solo);
@@ -92,15 +105,22 @@ bool isDeferredJob(DartType? type) =>
 /// Whether [element] is the member [name] of the class or enum [type]
 /// declared in solo.
 ///
-/// For [type] `Solo` the member of the same name of `SoloLane` counts too:
-/// a lane queues its jobs by the members of the queue of a `Solo`.
+/// For [type] `Solo` the member of the same name of `SoloLane`, `SoloPool`
+/// and `SoloQueueOwner` counts too: a lane and a pool queue their jobs by the
+/// members of the queue of a `Solo`.
 bool isSoloMember(Element? element, String type, String name) {
   if (element == null || element.name != name) return false;
   final owner = element.enclosingElement;
   if (owner is! InterfaceElement) return false;
-  return _named(owner, type, _solo) ||
-      (type == 'Solo' && _named(owner, 'SoloLane', _solo));
+  return _named(owner, type, _solo) || (type == 'Solo' && _ownsAQueue(owner));
 }
+
+/// Whether [owner] is `SoloLane`, `SoloPool` or `SoloQueueOwner` of solo,
+/// whose members queue jobs in a lane or a pool.
+bool _ownsAQueue(InterfaceElement owner) =>
+    _named(owner, 'SoloLane', _solo) ||
+    _named(owner, 'SoloPool', _solo) ||
+    _named(owner, 'SoloQueueOwner', _solo);
 
 /// Whether [element] is the class [name] declared in async_job.
 bool isCoreClass(Element? element, String name) =>
@@ -356,10 +376,11 @@ MethodInvocation? ownQueueCall(Expression waited) {
 
 /// Whose queue a wait is for, as [queueLaneOf] tells it.
 enum QueueLane {
-  /// The queue or the lane the waiting job runs in: the wait never ends.
+  /// The queue, the lane or the pool the waiting job runs in: the wait never
+  /// ends, or in a pool may never end.
   own,
 
-  /// Another lane of the same controller, which runs on its own.
+  /// Another lane or pool of the same controller, which runs on its own.
   other,
 
   /// Not known: not a wait for a queue, or a lane that is not seen.
@@ -379,6 +400,9 @@ enum QueueLane {
 /// the same is [QueueLane.own], both seen and different is
 /// [QueueLane.other]; anything else, a body of a child or of a handler of
 /// an accumulator included, is [QueueLane.unknown].
+///
+/// A pool is a lane here: its field, declared by `pool(...)`, is a lane
+/// field as one declared by `lane(...)` is.
 QueueLane queueLaneOf(Expression waited) {
   final call = queueCallOf(waited);
   if (call == null) return QueueLane.unknown;
@@ -461,11 +485,13 @@ DartType? controllerAround(AstNode node) {
 }
 
 /// The lane field of this controller that [expression] reads, `_likes` or
-/// `this._likes`: an instance field typed `SoloLane` whose every write in its
-/// class is a `lane(...)` declaration in a constructor body. A getter is not
-/// one, nor is a lane the controller takes rather than declares, or may take
-/// as well: which lane it gives is not seen, and a lane is public, so it may
-/// be another controller's.
+/// `this._likes`: an instance field typed `SoloLane`, `SoloPool` or
+/// `SoloQueueOwner` whose every write in its class is a `lane(...)` or
+/// `pool(...)` declaration in a constructor body. A getter is not one, nor is
+/// a lane or a pool the controller takes rather than declares, or may take as
+/// well: which one it gives is not seen, and a lane is public, so it may be
+/// another controller's. A pool is a lane here: the rules ask the same of
+/// both.
 Element? _laneField(Expression? expression) {
   final node = expression?.unParenthesized;
   final read = switch (node) {
@@ -477,7 +503,7 @@ Element? _laneField(Expression? expression) {
   if (field is! FieldElement || field.isStatic || !field.isOriginDeclaration) {
     return null;
   }
-  if (!isSoloLane(field.type)) return null;
+  if (!isSoloQueueOwner(field.type)) return null;
 
   return _ownLaneFields(node!.root).contains(field.baseElement)
       ? field.baseElement
@@ -493,10 +519,10 @@ Set<Element> _ownLaneFields(AstNode root) =>
     _ownLaneFieldsOf[root] ??= (_LaneDeclarations()..walk(root)).own;
 
 /// Finds the writes of the fields of a unit: `field = lane(...)` or
-/// `this.field = lane(...)` right in a constructor body of the class that
-/// declares it, where `SoloLanes` lets a controller declare its lanes, and
-/// every other write, which makes the field one that may hold another
-/// controller's lane.
+/// `this.field = lane(...)`, and the same with `pool(...)`, right in a
+/// constructor body of the class that declares it, where `SoloLanes` lets a
+/// controller declare its lanes and pools, and every other write, which makes
+/// the field one that may hold another controller's lane.
 class _LaneDeclarations extends RecursiveAstVisitor<void> {
   final _declared = <Element>{};
   final _written = <Element>{};
@@ -518,7 +544,7 @@ class _LaneDeclarations extends RecursiveAstVisitor<void> {
     final declares =
         node.operator.type == TokenType.EQ &&
         value is MethodInvocation &&
-        declaresLane(value) &&
+        declaresQueueOwner(value) &&
         inConstructor?.declaredFragment?.element.enclosingElement ==
             field.enclosingElement;
     (declares ? _declared : _written).add(field);
@@ -556,12 +582,29 @@ class _LaneDeclarations extends RecursiveAstVisitor<void> {
 /// A `lane(...)` anywhere else, a `late final` initializer or a method,
 /// throws once `SoloLanes` has sealed its lanes, a microtask after the
 /// constructor.
-bool declaresLane(MethodInvocation call) {
+bool declaresLane(MethodInvocation call) =>
+    isSoloMember(call.methodName.element, 'SoloLanes', 'lane') &&
+    _inConstructorBody(call);
+
+/// Whether [call] declares a lane or a pool where `SoloLanes` lets a
+/// controller declare it: `lane(...)` or `pool(...)` of `SoloLanes` on `this`
+/// or `super`, right in a constructor body rather than in a function declared
+/// there.
+///
+/// `pool(...)` anywhere else throws as `lane(...)` does: `SoloLanes` seals
+/// its lanes and pools at once.
+bool declaresQueueOwner(MethodInvocation call) {
+  final element = call.methodName.element;
+  return (isSoloMember(element, 'SoloLanes', 'lane') ||
+          isSoloMember(element, 'SoloLanes', 'pool')) &&
+      _inConstructorBody(call);
+}
+
+/// Whether [call] is on `this` or `super` right in a constructor body rather
+/// than in a function declared there.
+bool _inConstructorBody(MethodInvocation call) {
   final on = call.realTarget;
   if (on != null && on is! ThisExpression && on is! SuperExpression) {
-    return false;
-  }
-  if (!isSoloMember(call.methodName.element, 'SoloLanes', 'lane')) {
     return false;
   }
   final constructor = call.thisOrAncestorOfType<ConstructorDeclaration>();
@@ -570,14 +613,13 @@ bool declaresLane(MethodInvocation call) {
 }
 
 /// The lane field [call] queues a job in: `enqueue` or `enqueueJob` of a
-/// `SoloLane` read from a field of this controller.
+/// `SoloLane` or a `SoloPool`, declared there or in their `SoloQueueOwner`,
+/// read from a field of this controller.
 Element? _laneQueuedBy(MethodInvocation call) {
   final name = call.methodName.name;
   if (name != 'enqueue' && name != 'enqueueJob') return null;
   final owner = call.methodName.element?.enclosingElement;
-  if (owner is! InterfaceElement || !_named(owner, 'SoloLane', _solo)) {
-    return null;
-  }
+  if (owner is! InterfaceElement || !_ownsAQueue(owner)) return null;
   return _laneField(call.realTarget);
 }
 

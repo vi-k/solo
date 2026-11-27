@@ -3,12 +3,13 @@ import 'package:analyzer/analysis_rule/rule_context.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/error/error.dart';
 import 'package:async_job_lints/plugin_api.dart';
 
 /// Reports a job of a controller that waits for a job of the same
-/// controller's queue or of the lane the job runs in, or for its `close` or
-/// `cancelAll`.
+/// controller's queue or of the lane or the pool the job runs in, or for its
+/// `close` or `cancelAll`.
 class AwaitOwnQueue extends MultiAnalysisRule {
   /// The diagnostic for a wait for the queue of a `Solo`, and for `close`
   /// or `cancelAll` of any controller.
@@ -34,6 +35,20 @@ class AwaitOwnQueue extends MultiAnalysisRule {
     uniqueName: 'LintCode.await_own_queue_lane',
   );
 
+  /// The diagnostic for a wait for the pool of a `SoloLanes` the job runs
+  /// in.
+  static const LintCode poolCode = LintCode(
+    'await_own_queue',
+    "'{0}' waits for a job of the pool '{1}' this job runs in: a job of the "
+        'same key never starts while this one runs, and with every place '
+        'taken no job of the pool does.',
+    correctionMessage:
+        "Run the job with 'ctx.run' instead of the pool, or queue it in "
+        'another lane or pool.',
+    severity: DiagnosticSeverity.WARNING,
+    uniqueName: 'LintCode.await_own_queue_pool',
+  );
+
   /// Creates the rule.
   AwaitOwnQueue()
     : super(
@@ -44,7 +59,7 @@ class AwaitOwnQueue extends MultiAnalysisRule {
       );
 
   @override
-  List<DiagnosticCode> get diagnosticCodes => const [code, laneCode];
+  List<DiagnosticCode> get diagnosticCodes => const [code, laneCode, poolCode];
 
   @override
   void registerNodeProcessors(
@@ -95,9 +110,12 @@ class _Visitor extends SimpleAstVisitor<void> {
         arguments: [name],
       );
     } else {
+      // A pool waits for its key or a free place rather than for one
+      // running job, and says so.
+      final pool = isSoloPool((lane as FieldElement).type);
       rule.reportAtNode(
         call,
-        diagnosticCode: AwaitOwnQueue.laneCode,
+        diagnosticCode: pool ? AwaitOwnQueue.poolCode : AwaitOwnQueue.laneCode,
         arguments: [name, lane.displayName],
       );
     }

@@ -81,7 +81,7 @@ diagnostic of the analyzer itself twice. Dart 3.13 prints it once.
 | `key_per_request` | lint | one key for a `Policy.droppable` job whose body reads an argument |
 | `ignore_failure_hides_bugs` | lint | `ignoreFailure()` on a job that names its expected errors |
 | `stale_emit` | lint | an `emit` in a job of `SoloLanes` of a value read from the state before an `await` |
-| `lane_outside_constructor` | warning | `lane(...)` of `SoloLanes` called outside the constructor body |
+| `lane_outside_constructor` | warning | `lane(...)` or `pool(...)` of `SoloLanes` called outside the constructor body |
 | [`bare_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#bare_await) | lint | an `await` in a job body that does not go through the context |
 | [`discarded_outcome`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#discarded_outcome) | warning | an outcome of `done` that is awaited and dropped |
 | [`outcome_after_await`](https://github.com/vi-k/solo/blob/main/packages/async_job_lints/README.md#outcome_after_await) | warning | the first read of a job's result that comes after a wait |
@@ -113,14 +113,19 @@ the actions that body waits for through `join`, `abandonable` and
 wait for every lane, so is any `SoloController`. In a `SoloLanes` the deadlock
 is within one lane: the rule reports a body queued by `_likes.enqueue(...)`
 that waits for a job of `_likes`, queued there directly or by a method whose
-body queues it there, and names the lane. A job of another lane runs on that
-lane's pump, and where the lane is not seen, as with a lane from a getter, a
-lane the controller takes rather than declares by `lane(...)` in its
-constructor body, a lane declared in another file (a superclass there or
-another part of the library), a job from a field or a parameter, a body of a
-child or a handler of an accumulator, the rule is quiet. `bare_await`, which
-reports the other plain waits of a body, is quiet on the waits this rule
-reports. See
+body queues it there, and names the lane. A pool declared by `pool(...)` is
+reported the same way, with a message of its own: a job of the same key never
+starts while the waiting one runs, and a job of another key waits for a free
+place, so with every place taken by such waits no job of the pool starts. A
+test with an idle pool passes and the code hangs under load, so the rule
+reports a wait for the own pool whatever the key. A job of another lane or pool
+runs on its own pump, and where the lane is not seen, as with a lane from a
+getter, a lane the controller takes rather than declares by `lane(...)` or
+`pool(...)` in its constructor body, a lane declared in another file (a
+superclass there or another part of the library), a job from a field or a
+parameter, a body of a child or a handler of an accumulator, the rule is quiet.
+`bare_await`, which reports the other plain waits of a body, is quiet on the
+waits this rule reports. See
 [Steps as children](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#steps-as-children).
 
 ### key_per_request
@@ -190,7 +195,7 @@ published in the meantime are gone. Read the state where the job writes:
 `ctx.emit(ctx.state.mark(postId, Mark(liked, ++_confirmations)))`.
 
 The rule takes `ctx.emit` in a job body that runs in a lane: a body given to a
-lane, whichever lane it is, or a body queued on a `SoloLanes` around it, a
+lane or a pool, whichever it is, or a body queued on a `SoloLanes` around it, a
 child's included. It reports the write when the value is built on `ctx.state`
 or `ctx.stateAs<T>()`, through member calls, property and index reads,
 cascades, casts and `!`, in any branch of `?:`, `??` and a switch expression,
@@ -232,15 +237,18 @@ FeedController(this.api) : super(const Feed());
 lane in a `late final` field is declared on the first read of the field, in the
 first call of a method, where `lane` throws a `StateError`. Declare the lanes
 in the constructor body, `_reload = lane('reload');`, into a field
-`late final SoloLane<Feed> _reload;`. The rule takes `lane(...)` of `SoloLanes`
-anywhere but right in a constructor body on `this` or `super`: a field
-initializer, a method, a getter, a function declared in the constructor body. A
-lambda is such a function, though `map` runs it at once:
+`late final SoloLane<Feed> _reload;`. A pool is sealed with the lanes:
+`pool(...)` is reported the same way, with a message of its own, and goes into
+the constructor body too, `_likes = pool('likes', concurrency: 4);`, into a
+field `late final SoloPool<Feed> _likes;`. The rule takes `lane(...)` and
+`pool(...)` of `SoloLanes` anywhere but right in a constructor body on `this`
+or `super`: a field initializer, a method, a getter, a function declared in the
+constructor body. A lambda is such a function, though `map` runs it at once:
 `_lanes = names.map((name) => lane(name)).toList();` is reported, and a
 collection for, `_lanes = [for (final name in names) lane(name)];`, declares
 the same lanes right in the body. A method the constructor calls is reported
-too, though the call there works: `await_own_queue` does not see a lane
-declared there either. See
+too, though the call there works: `await_own_queue` does not see a lane or a
+pool declared there either. See
 [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes).
 
 ## Versions

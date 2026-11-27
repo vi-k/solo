@@ -1,3 +1,19 @@
+## Не выпущено
+
+- `plugin_api.dart` экспортирует `isSoloQueueOwner`, `isSoloPool`
+  и `declaresQueueOwner` — для правил плагина поверх о пулах `SoloLanes`
+  в `solo` 2.1. `isSoloQueueOwner` узнаёт `SoloQueueOwner`, `SoloLane` или
+  `SoloPool`, а `declaresQueueOwner` говорит, объявляет ли `lane(...)` или
+  `pool(...)` на `this` или `super` линию или пул прямо в теле конструктора;
+  `declaresLane` по-прежнему говорит только о `lane(...)`. Поле `SoloPool`,
+  объявленное там через `pool(...)`, для `queueLaneOf` — поле своей очереди,
+  как и поле линии: ожидание в теле пула задачи того же пула — `QueueLane.own`,
+  задачи другого пула или линии — `QueueLane.other`, и при
+  `ownLaneReportedElsewhere` `bare_await` и `discarded_outcome` оставляют
+  ожидание своего пула плагину поверх. `isSoloMember` принимает член пула
+  за член `Solo`, как и член линии: `outcome_after_await` видит, что `job` пула
+  делает задачу, не ставя её в очередь.
+
 ## 0.2.3
 
 - `queuedBodyOf` относит ребёнка, сделанного на контексте задачи другого

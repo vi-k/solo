@@ -300,6 +300,28 @@ final class Feed extends SoloLanes<int> {
 }
 ''', []);
 
+  // job of a pool makes a job without queueing it, as job of a lane does.
+  Future<void> test_pool_job_not_queued_yet() => assertAt('''
+import 'package:solo/solo.dart';
+
+Future<int> commit() async => 1;
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = pool('likes', concurrency: 4);
+  }
+
+  late final SoloPool<int> _likes;
+
+  Future<void> like() async {
+    final step = _likes.job<int, int>((ctx) => ctx.join(commit));
+    await commit();
+    step.ignoreFailure();
+    _likes.enqueueJob(step);
+  }
+}
+''', []);
+
   Future<void> test_enqueued_job() => assertAt(
     '''
 import 'package:solo/solo.dart';

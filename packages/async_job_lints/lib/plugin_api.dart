@@ -25,6 +25,7 @@ export 'src/context.dart'
         cleanupContext,
         controllerAround,
         declaresLane,
+        declaresQueueOwner,
         firstPositional,
         functionOf,
         isDartCoreClass,
@@ -36,6 +37,8 @@ export 'src/context.dart'
         isSoloLane,
         isSoloLanes,
         isSoloMember,
+        isSoloPool,
+        isSoloQueueOwner,
         jobContextOf,
         namedValue,
         ownQueueCall,
@@ -55,8 +58,8 @@ export 'src/context.dart'
 ///
 /// With [ownLaneReportedElsewhere], `bare_await` and `discarded_outcome`
 /// stay quiet on a wait in a job body of a `SoloLanes` for a job of the
-/// lane that body runs in, for the same reason. A plugin that does not
-/// report such a wait leaves it to them.
+/// lane or the pool that body runs in, for the same reason. A plugin that
+/// does not report such a wait leaves it to them.
 void registerAsyncJobLints(
   PluginRegistry registry, {
   bool ownQueueReportedElsewhere = false,

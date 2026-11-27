@@ -27,7 +27,7 @@ class DiscardedOutcome extends AnalysisRule {
   /// Creates the rule.
   ///
   /// With [ownLaneReportedElsewhere], a wait in a job body for a job of the
-  /// lane that body runs in is left to another rule.
+  /// lane or the pool that body runs in is left to another rule.
   DiscardedOutcome({this.ownLaneReportedElsewhere = false})
     : super(
         name: 'discarded_outcome',

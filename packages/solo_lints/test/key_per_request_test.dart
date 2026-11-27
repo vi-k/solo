@@ -297,6 +297,20 @@ $_feed
     ['key: [[_Op.load]]'],
   );
 
+  // A pool queues by the members of a lane.
+  Future<void> test_pool_enqueue() => assertAt(
+    '''
+$_pool
+  Job<Profile> load(String id) => _profiles.enqueue<Ready, Profile>(
+    key: _Op.load,
+    policy: Policy.droppable,
+    (ctx) => ctx.abandonable(() => api.load(id)),
+  );
+}
+''',
+    ['key: [[_Op.load]]'],
+  );
+
   Future<void> test_lane_enqueue_job() => assertAt(
     '''
 $_feed
@@ -334,4 +348,30 @@ final class Feed extends SoloLanes<State> {
   }
 
   late final SoloLane<State> _profiles;
+''';
+
+/// [_profiles] with a pool in place of the queue of a `Solo`.
+const _pool = '''
+import 'package:solo/solo.dart';
+
+sealed class State {}
+
+final class Ready extends State {}
+
+class Profile {}
+
+enum _Op { load }
+
+abstract interface class Api {
+  Future<Profile> load(String id);
+}
+
+late final Api api;
+
+final class Feed extends SoloLanes<State> {
+  Feed() : super(Ready()) {
+    _profiles = pool('profiles', concurrency: 4);
+  }
+
+  late final SoloPool<State> _profiles;
 ''';
