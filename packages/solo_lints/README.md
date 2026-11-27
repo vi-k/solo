@@ -118,14 +118,15 @@ reported the same way, with a message of its own: a job of the same key never
 starts while the waiting one runs, and a job of another key waits for a free
 place, so with every place taken by such waits no job of the pool starts. A
 test with an idle pool passes and the code hangs under load, so the rule
-reports a wait for the own pool whatever the key. A job of another lane or pool
-runs on its own pump, and where the lane is not seen, as with a lane from a
-getter, a lane the controller takes rather than declares by `lane(...)` or
-`pool(...)` in its constructor body, a lane declared in another file (a
-superclass there or another part of the library), a job from a field or a
-parameter, a body of a child or a handler of an accumulator, the rule is quiet.
-`bare_await`, which reports the other plain waits of a body, is quiet on the
-waits this rule reports. See
+reports a wait for the own pool whatever the key, as
+[A pool of places](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-pool-of-places)
+shows. A job of another lane or pool runs on its own pump, and where the lane
+is not seen, as with a lane from a getter, a lane the controller takes rather
+than declares by `lane(...)` or `pool(...)` in its constructor body, a lane
+declared in another file (a superclass there or another part of the library), a
+job from a field or a parameter, a body of a child or a handler of an
+accumulator, the rule is quiet. `bare_await`, which reports the other plain
+waits of a body, is quiet on the waits this rule reports. See
 [Steps as children](https://github.com/vi-k/solo/blob/main/packages/solo/doc/mistakes.md#steps-as-children).
 
 ### key_per_request

@@ -173,7 +173,9 @@ declared. A lane that holds nothing is left out, and with no lane left
 `pending` is `null`. A pool has as many entries as it has running jobs, a
 `SoloPendingJob` each, and one `SoloPendingQueue` after them with the queued
 jobs whose key no running job holds: in a drain, or while every place is taken.
-Outside a drain that queue prints as `SoloPending(waiting for a place, ...)`.
+Outside a drain that queue prints as `SoloPending(waiting for a place, ...)`. A
+job whose start rules are being asked is off the queue and not started yet, and
+it comes first in the `SoloPendingQueue` of its lane or pool.
 
 The three print alike, so the line above needs no switch:
 

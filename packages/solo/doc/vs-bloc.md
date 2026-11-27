@@ -91,10 +91,12 @@ key.
 [Awaiting a particular request](#awaiting-a-particular-request) and
 [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting)
 show where the two part. `Policy.keepLatest` removes queued work with the same
-key while leaving the running job alone. There is no concurrent root-job
-policy: the root jobs of a `Solo` run one at a time, and so do those of each
-lane of a `SoloLanes`. Independent concurrent work goes to children, to lanes
-of their own, as in
+key while leaving the running job alone. No policy runs root jobs side by side:
+the root jobs of a `Solo` run one at a time, and so do those of each lane of a
+`SoloLanes`, while a pool of a `SoloLanes` runs up to a set number at once and
+the jobs of one key one at a time, as in
+[A pool of places](lanes.md#a-pool-of-places). Other independent concurrent
+work goes to children, to lanes of their own, as in
 [Two queues over one state](lanes.md#two-queues-over-one-state), or to separate
 controllers, as in
 [A tap that does not wait for a reload](jobs.md#a-tap-that-does-not-wait-for-a-reload).

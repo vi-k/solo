@@ -31,7 +31,7 @@ subclass, and an override in the subclass.
 | `isDraining` | Whether a `close()` that drains is still running the queue | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isFinished` | Whether closing has finished and the state can no longer change | [externalSetState](state.md#externalsetstate) |
 | `pending` | What is holding the controller right now, a running job included, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
-| `cancelAll()` | Clears every queue and cancels every running job, one per lane of a `SoloLanes`; the controller stays open. `force: true` removes queued jobs made with `cancellable: false` too, and `reason:` names the reason every job it ends carries | [Three ways to stop](cancellation.md#three-ways-to-stop) |
+| `cancelAll()` | Clears every queue and cancels every running job, one per lane and up to `concurrency` per pool of a `SoloLanes`; the controller stays open. `force: true` removes queued jobs made with `cancellable: false` too, and `reason:` names the reason every job it ends carries | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `close()` | Stops taking work and closes, dropping what is queued and asking what runs to cancel or, with `mode: SoloCloseMode.drain`, running the queues first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 
 ### What the subclass uses
@@ -107,9 +107,9 @@ sees those. Every member here is protected.
 ## SoloLanes
 
 `SoloLanes<S>` is the class a controller with lanes extends: its root jobs run
-one at a time in each lane, and the lanes run side by side over one state. It
-has no queue of its own. It declares its lanes, and the rest of its members
-come from `SoloController`.
+one at a time in each lane and up to a set number in each pool, and the lanes
+and pools run side by side over one state. It has no queue of its own. It
+declares its lanes, and the rest of its members come from `SoloController`.
 
 ### What the subclass uses
 
@@ -156,8 +156,8 @@ shares with `SoloLane`; `running` stands where a lane has `current`.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `pool.concurrency` | How many root jobs of this pool run at once at most | [Declaring lanes](lanes.md#declaring-lanes) |
-| `pool.running` | The running root jobs of this pool in the order they started, an unmodifiable snapshot | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `pool.concurrency` | How many root jobs of this pool run at once at most | [A pool of places](lanes.md#a-pool-of-places) |
+| `pool.running` | The running root jobs of this pool in the order they started, an unmodifiable snapshot | [A pool of places](lanes.md#a-pool-of-places) |
 
 ## SoloQueueOwner
 
@@ -181,10 +181,10 @@ queued it, and a `Policy` looks for its key there only.
 
 ## Parameters of a job
 
-`enqueue`, `job`, `collect` and `accumulate`, of a `Solo` and of a `SoloLane`
-alike, take the body first — for an accumulator, a handler that also gets the
-events of its group — and these named parameters after it. The first type
-argument of each is the working type, in
+`enqueue`, `job`, `collect` and `accumulate`, of a `Solo`, of a `SoloLane` and
+of a `SoloPool` alike, take the body first — for an accumulator, a handler that
+also gets the events of its group — and these named parameters after it. The
+first type argument of each is the working type, in
 [State and rules](state.md#state-and-rules) on the state page.
 
 | Parameter | Taken by | What it does | Where |

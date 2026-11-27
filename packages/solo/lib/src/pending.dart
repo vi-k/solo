@@ -27,9 +27,9 @@ enum SoloPhase {
 ///
 /// * [SoloPendingJob] — a job the controller is waiting for: its body,
 ///   its children or its cleanup;
-/// * [SoloPendingQueue] — a drain with no job running, and the queue it
-///   has still to run;
-/// * [SoloPendingLanes] — those two for each busy lane of a `SoloLanes`;
+/// * [SoloPendingQueue] — queued jobs that hold the controller: what a
+///   drain has still to run, or the jobs of a pool that wait for a place;
+/// * [SoloPendingLanes] — those two for each busy lane and pool;
 /// * [SoloPendingStream] — the engine has closed, and the stream of
 ///   `SoloStream` waits for a subscription to take its done event.
 ///
@@ -112,7 +112,8 @@ final class SoloPendingJob extends SoloPending {
   final bool draining;
 
   /// The jobs queued behind this one, in queue order, within its lane for a
-  /// `SoloLanes`: none of them starts before this one is over.
+  /// `SoloLanes` and within its key for a pool: none of them starts before
+  /// this one is over.
   ///
   /// Taken when the snapshot is: the queue moving on does not change it.
   ///
@@ -121,6 +122,10 @@ final class SoloPendingJob extends SoloPending {
   /// waits for the slot the body is holding, and neither moves until `close`
   /// or `cancelAll` cancels both; a drain waits for them for good. The
   /// snapshot names them side by side.
+  ///
+  /// In a pool the jobs of other keys and those with none are not here: they
+  /// wait for a place rather than for this job, and a [SoloPendingQueue] of
+  /// the pool names them when they hold the controller.
   final List<Job<Object?>> queued;
 
   /// Creates a snapshot; the engine makes these, a domain reads them.
@@ -173,13 +178,15 @@ final class SoloPendingJob extends SoloPending {
   }
 }
 
-/// A drain with no job running: the queue it has still to run holds the
-/// `close`.
+/// Queued jobs that hold the controller: what a drain has still to run, or
+/// the jobs of a pool that wait for a place.
 ///
-/// Only a drain makes one in a `Solo` and in a lane. Without `close` a
-/// queued group waiting for its window holds nothing — the controller is
-/// idle, and `Solo.pending` is `null` — and a plain `close` drops the queue
-/// at once. A pool of a `SoloLanes` makes one without a drain as well, when
+/// Only a drain makes one in a `Solo` and in a lane, once no job runs: the
+/// queue it has still to run holds the `close`. Without `close` a queued
+/// group waiting for its window holds nothing — the controller is idle, and
+/// `Solo.pending` is `null` — and a plain `close` drops the queue at once.
+///
+/// A pool of a `SoloLanes` makes one without a drain as well, when
 /// every place is taken: its [jobs] wait for a place, and it prints as
 /// `SoloPending(waiting for a place, ...)`. In a drain a pool makes one
 /// beside its running jobs, for the queued jobs whose key none of them
@@ -193,7 +200,8 @@ final class SoloPendingJob extends SoloPending {
 /// comes back to the queue. In a pool whose every place is taken, the jobs
 /// here wait for a place as well, ready or not.
 final class SoloPendingQueue extends SoloPending {
-  /// The jobs the drain has still to run, in queue order.
+  /// The jobs a drain has still to run, or those of a pool that wait for a
+  /// place, in queue order.
   ///
   /// Taken when the snapshot is: the queue moving on does not change it.
   ///
@@ -241,6 +249,10 @@ SoloPendingQueue soloPendingPlaces(List<Job<Object?>> jobs) =>
 /// taken. Only the lanes and pools that hold the controller are listed, so
 /// one busy lane of three is still this, with one entry, and no busy lane
 /// is `null`, not an empty list.
+///
+/// A job whose start rules are being asked is off the queue and not started
+/// yet, and it comes first in the [SoloPendingQueue] of its lane or pool, as
+/// [SoloPendingQueue.jobs] says.
 ///
 /// It prints as the others do, `SoloPending(...)`, with the name and the
 /// snapshot of each lane inside: `SoloPending(a: SoloPending(...), ...)`.

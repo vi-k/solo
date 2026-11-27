@@ -3,8 +3,9 @@
 `solo` manages state and asynchronous work in Dart. A controller holds the
 current state and processes jobs one at a time, hence the name: a `Solo` keeps
 one queue of jobs, and a `SoloLanes` keeps several queues over one state, one
-job at a time in each. Each job can declare which states allow it to start and
-continue, and callers can await its result or request cancellation.
+job at a time in each lane and up to a set number in a pool. Each job can
+declare which states allow it to start and continue, and callers can await its
+result or request cancellation.
 
 Use it for screens, sessions and devices where operations share state and need
 an explicit order. The package has no Flutter dependency.
@@ -324,12 +325,12 @@ from bloc, solo under riverpod and under bloc for one who stays on either.
 | [Streams](doc/streams.md) | `ctx.each` in a controller, following another controller |
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle in four recipes |
 | [Accumulation rules](doc/accumulation-rules.md) | When a group is ready, `AccumulationPolicy`, one job for a group and `shared()`, `merge`, `close()` |
-| [Lanes](doc/lanes.md) | `SoloLanes`: several queues over one state, a write that keeps another lane's work, a merge, an epoch, declaring lanes |
+| [Lanes](doc/lanes.md) | `SoloLanes`: several queues over one state, a write that keeps another lane's work, a merge, an epoch, a pool of places, declaring lanes and pools |
 | [Diagnostics](doc/diagnostics.md) | `SoloObserver`, `pending`, logs, a slow cancellation |
 | [Errors](doc/errors.md) | `onError`, `unansweredHandler`, catching and retrying, `ctx.unattended` |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |
 | [Common mistakes](doc/mistakes.md) | Nine mistakes that often pass a first test, and the right way for each |
-| [Reference](doc/reference.md) | Every member of `Solo`, of `SoloLanes` and its lanes, of their base `SoloController`, of the context, jobs, queue and accumulators, with the section that explains it |
+| [Reference](doc/reference.md) | Every member of `Solo`, of `SoloLanes` and its lanes and pools, of their base `SoloController`, of the context, jobs, queue and accumulators, with the section that explains it |
 | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md) | The `flutter_solo` package: `SoloListenable`, owning a controller, rebuilding a screen |
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
 | [solo and bloc, side by side](doc/vs-bloc.md) | Eleven scenarios in both packages |
@@ -358,6 +359,7 @@ section linked beside it.
 | The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Pausing the queue](doc/jobs.md#pausing-the-queue) |
 | A job has to start later, and the queue must not wait for it | a `Job` of its own for the wait, cancelled from `cancelAll` and `onClose` | [A delayed start](doc/jobs.md#a-delayed-start) |
 | Two kinds of work over one state must not wait for each other | `SoloLanes`, with a lane for each | [Two queues over one state](doc/lanes.md#two-queues-over-one-state) |
+| Up to a set number of jobs of one kind run at once, and the jobs of one key in order | a pool of a `SoloLanes` | [A pool of places](doc/lanes.md#a-pool-of-places) |
 | A tap must not wait for a long reload of the same screen | a controller of its own for the taps, and marks the reload settles | [A tap that does not wait for a reload](doc/jobs.md#a-tap-that-does-not-wait-for-a-reload) |
 | The screen has to show news until the user closes it, and the camera must go on working | a controller of its own for the notices, and an acceptance that names the notice | [A notice the screen accepts](doc/state.md#a-notice-the-screen-accepts) |
 | A stream event arrives a microtask late, and that is too late | `addListener`, which calls back inside the change | [Observing state](doc/state.md#observing-state) |
@@ -428,12 +430,13 @@ that asks for the new `async_job` itself does not resolve.
 
 Callers invoke controller methods and receive a job for each operation. Queue
 policy is selected per call. All root jobs of a `Solo` share one queue, and a
-`SoloLanes` gives each lane a queue of its own.
-[solo and bloc, side by side](doc/vs-bloc.md) holds the API correspondences and
-compares eleven application scenarios with implementations in both packages.
+`SoloLanes` gives each lane and each pool a queue of its own; a pool runs up to
+a set number of its jobs at once. [solo and bloc, side by side](doc/vs-bloc.md)
+holds the API correspondences and compares eleven application scenarios with
+implementations in both packages.
 
-The package does not include retry policies, worker pools, dependency
-injection, persistence or state equality filtering. If work needs cancellation
-and cleanup but no state rules or controller queue,
+The package does not include retry policies, dependency injection, persistence
+or state equality filtering. If work needs cancellation and cleanup but no
+state rules or controller queue,
 [async_job](https://pub.dev/packages/async_job) can be used directly. For a
 value with no asynchronous lifecycle, a `ValueNotifier` may suffice.

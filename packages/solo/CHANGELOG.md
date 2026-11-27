@@ -1,3 +1,29 @@
+## Unreleased
+
+### Added
+
+- `SoloLanes.pool(name, concurrency: n)`, which declares a pool in the
+  constructor body as `lane` declares a lane, and `pools`, which lists them. A
+  pool is one queue whose root jobs run up to `n` at once; a key keeps the
+  order of its jobs there under every `Policy`, so a job whose key a running
+  job of the pool holds waits for that one, and the jobs of other keys go past
+  it. A child takes no place. See
+  [A pool of places](doc/lanes.md#a-pool-of-places).
+- `SoloPool<S>`, a pool, with the members of a lane and `running`, the jobs
+  that run now in the order they started, in place of `current`.
+- `SoloQueueOwner<S>`, what a lane and a pool have in common, for code that
+  reads neither `current` nor `running`. `SoloLane` implements it and gains no
+  member.
+- `pending` of a `SoloLanes` lists a pool with an entry for each running job
+  and one `SoloPendingQueue` for the jobs that wait for a place, which prints
+  as `SoloPending(waiting for a place, ...)` outside a drain. A `Solo.debug`
+  line says what a queued job of a pool waits for: a key or a place.
+
+### Notes
+
+- A subclass of `SoloLanes` with a member of its own named `pool` or `pools`
+  either no longer compiles or overrides the new protected member: rename it.
+
 ## 2.0.1
 
 ### Documentation

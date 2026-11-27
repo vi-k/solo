@@ -3,9 +3,13 @@
 // `lanes_rakes_test.dart` runs it. The page shows a method or a field of a
 // controller on its own; here each version stands in a class of its own,
 // with the rest of its controller taken from the answers.
+import 'dart:async';
+
 import 'package:solo/solo.dart';
 
 import 'lanes_page.dart' show Feed, Mark;
+import 'lanes_pool_stubs.dart' as pool;
+import 'lanes_pool_stubs.dart' show Photo;
 import 'lanes_stubs.dart';
 
 final class Gate extends Solo<Permit> {
@@ -155,4 +159,44 @@ final class FeedController extends SoloLanes<Feed> {
         await ctx.join(() => api.setLiked(postId, liked: liked));
         ctx.emit(ctx.state.mark(postId, Mark(liked, ++_confirmations)));
       });
+}
+
+/// The feed whose uploads go to a worker job of a lane, which runs each of
+/// them as a child.
+final class WorkerFeed extends SoloLanes<Feed> {
+  final pool.FeedApi api;
+
+  late final SoloLane<Feed> _uploads;
+
+  WorkerFeed(this.api) : super(const Feed()) {
+    _uploads = lane('uploads');
+    _work();
+  }
+
+  /// Not on the page: the worker, once the pump has started it.
+  SoloJob<Object?>? get worker => _uploads.current;
+
+  final _inbox = <SoloJob<Photo>>[];
+  Completer<void>? _wake;
+
+  // Queued by the constructor, after `_uploads = lane('uploads');`.
+  void _work() => _uploads.enqueue<Feed, void>((ctx) async {
+    while (true) {
+      if (_inbox.isEmpty) {
+        final wake = _wake = Completer<void>();
+        await ctx.abandonable(() => wake.future);
+      }
+      ctx.run(_inbox.removeAt(0)).ignore();
+    }
+  });
+
+  SoloJob<Photo> upload(String file) {
+    final job = _uploads.job<Feed, Photo>(
+      (ctx) => ctx.join(() => api.upload(file)),
+    );
+    _inbox.add(job);
+    _wake?.complete();
+    _wake = null;
+    return job;
+  }
 }

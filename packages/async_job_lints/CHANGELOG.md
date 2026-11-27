@@ -17,6 +17,9 @@
   takes a member of a pool for that of a `Solo`, as it takes one of a lane:
   `outcome_after_await` sees that `job` of a pool makes a job without queueing
   it.
+- The README says in the sections of `bare_await` and `discarded_outcome` that
+  a wait for the own pool goes to `await_own_queue` of solo_lints, as a wait
+  for the own lane does.
 
 ## 0.2.3
 

@@ -254,7 +254,8 @@ abstract interface class SoloLane<S extends Object>
 /// the later waits for the earlier to end. A child of a running job takes
 /// no place; [concurrency] counts the root jobs.
 ///
-/// See [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
+/// See [A pool of places](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-pool-of-places)
+/// and [Declaring lanes](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#declaring-lanes)
 /// on the lanes page.
 abstract interface class SoloPool<S extends Object>
     implements SoloQueueOwner<S> {

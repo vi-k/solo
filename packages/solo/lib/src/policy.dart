@@ -10,8 +10,20 @@
 /// `enqueueJob`. Its `isQueued` says `false` all the same. [droppable] hands
 /// that job back, so a rule that turns its job down afterwards ends the job the
 /// call got as well.
+///
+/// A policy looks into one queue: that of a `Solo`, of a lane or of a pool
+/// of a `SoloLanes`. In a pool a key keeps the order of its jobs whatever
+/// the policy: a job whose key a running job of the pool holds waits for
+/// that one to end, and the jobs of other keys go past it. See
+/// [A pool of places](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-pool-of-places)
+/// on the lanes page.
 enum Policy {
-  /// Append to the queue; keys are ignored.
+  /// Append to the queue; keys are ignored, except in a pool.
+  ///
+  /// In a `Solo` and in a lane the key of a job of this policy changes
+  /// nothing. In a pool of a `SoloLanes` it keeps the order: two jobs of one
+  /// key never run at once there, and the later waits for the earlier to
+  /// end.
   sequential,
 
   /// If a job with the same key is queued or is the root job the controller is

@@ -11,6 +11,9 @@ import 'package:test/test.dart';
 import 'support/lanes_epoch.dart' as epochs;
 import 'support/lanes_first_attempts.dart' as first;
 import 'support/lanes_page.dart' as page;
+import 'support/lanes_pool.dart' as pooled;
+import 'support/lanes_pool_stubs.dart' as server;
+import 'support/lanes_pool_stubs.dart' show Photo;
 import 'support/lanes_stubs.dart';
 import 'support/page_code.dart';
 
@@ -310,6 +313,131 @@ final class _Loads extends SoloLanes<_Load> {
     reload = lane('reload');
     likes = lane('likes');
   }
+}
+
+/// The uploads of "A pool of places", under one face for the scenarios:
+/// the worker of the first attempt, or `null` for the pool, and what the
+/// controller says of its uploads after the taps, or `null` for the worker.
+typedef _Uploads = ({
+  SoloController<page.Feed> controller,
+  Job<Photo> Function(String file) upload,
+  SoloJob<Object?>? Function() worker,
+  String? Function() counts,
+});
+
+_Uploads _worker(server.FeedApi api) {
+  final feed = first.WorkerFeed(api);
+  return (
+    controller: feed,
+    upload: feed.upload,
+    worker: () => feed.worker,
+    counts: () => null,
+  );
+}
+
+_Uploads _pooled(server.FeedApi api) {
+  final feed = pooled.FeedController(api);
+  return (
+    controller: feed,
+    upload: feed.upload,
+    worker: () => null,
+    counts: () => 'uploading ${feed.uploading}, waiting ${feed.waiting}',
+  );
+}
+
+/// The scenario of "A pool of places": four photos picked at 0 ms, the
+/// third cancelled at once when [cancelThird], a drain asked for at 20 ms,
+/// and the rest of a minute; then whatever is still left without an end.
+List<String> _uploadsTrace(
+  _Uploads Function(server.FeedApi api) make, {
+  required bool cancelThird,
+  List<Object>? errors,
+}) => _trace((async, say) {
+  final uploads = make(server.FeedApi(say));
+  // The worker of the first attempt starts in the turn after the
+  // constructor.
+  async.flushMicrotasks();
+  uploads.worker()?.whenFinished((outcome) => say('worker: $outcome'));
+  final jobs = <String, Job<Photo>>{};
+  for (final file in ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg']) {
+    final job = jobs[file] = uploads.upload(file)
+      ..whenFinished((outcome) => say('$file: $outcome'));
+    if (cancelThird && file == 'c.jpg') job.cancel();
+  }
+  async.flushMicrotasks();
+  if (uploads.counts() case final counts?) say(counts);
+  async.elapse(_ms(20));
+  say('close(mode: drain)');
+  final controller = uploads.controller;
+  controller.close(mode: SoloCloseMode.drain).then((_) => say('closed'));
+  async.elapse(const Duration(minutes: 1) - _ms(20));
+  for (final MapEntry(key: file, value: job) in jobs.entries) {
+    if (job.outcome == null) say('$file: no outcome');
+  }
+  if (!controller.isFinished) say('closing is held by ${controller.pending}');
+}, errors: errors);
+
+/// The marks of a feed, as the listener of the likes in "A pool of places"
+/// prints them: the posts play no part there.
+String _marks(page.Feed feed) => 'marks ${_feed(feed).split('; marks ').last}';
+
+/// The likes of "A pool of places" in one lane, as the likes lane of "A
+/// merge" runs them.
+final class _LaneLikes extends SoloLanes<page.Feed> {
+  final server.FeedApi api;
+  late final SoloLane<page.Feed> likes;
+
+  _LaneLikes(this.api) : super(const page.Feed()) {
+    likes = lane('likes');
+  }
+
+  Job<void> setLiked(String postId, {required bool liked}) =>
+      likes.enqueue<page.Feed, void>(key: postId, (ctx) async {
+        ctx.emit(ctx.state.mark(postId, page.Mark(liked)));
+        await ctx.join(() => api.setLiked(postId, liked: liked));
+      });
+}
+
+/// The taps of the likes in "A pool of places": a like of `p1` at 10 ms,
+/// which the server takes two seconds over, its unlike at 20 ms, and a like
+/// of `p2` at 150 ms.
+List<String> _likesTrace<C extends SoloController<page.Feed>>(
+  C Function(server.FeedApi api) make,
+  Job<void> Function(C feed, String postId, {required bool liked}) setLiked,
+) => _trace((async, say) {
+  final feed = make(server.FeedApi(say)..slow.add('like p1'));
+  feed.addListener(() => say(_marks(feed.currentState)));
+  async.elapse(_ms(10));
+  setLiked(feed, 'p1', liked: true);
+  async.elapse(_ms(10));
+  setLiked(feed, 'p1', liked: false);
+  async.elapse(_ms(130));
+  setLiked(feed, 'p2', liked: true);
+});
+
+/// A pool over a number between two lanes, in the order `before`, `places`,
+/// `after`, and a log of the starts of root jobs.
+final class _Places extends SoloLanes<int> {
+  final log = <String>[];
+  late final SoloLane<int> before;
+  late final SoloPool<int> places;
+  late final SoloLane<int> after;
+
+  _Places({int concurrency = 2}) : super(0) {
+    before = lane('before');
+    places = pool('places', concurrency: concurrency);
+    after = lane('after');
+  }
+
+  List<SoloPool<int>> get declared => pools;
+
+  SoloPool<int> declare(String name, {int concurrency = 1}) =>
+      pool(name, concurrency: concurrency);
+
+  SoloLane<int> declareLane(String name) => lane(name);
+
+  @override
+  void onStart(Job<Object?> job) => log.add('start ${job.key}');
 }
 
 void main() {
@@ -766,6 +894,349 @@ void main() {
     });
   });
 
+  group('A pool of places', () {
+    test('the worker falls on an upload cancelled before it comes to it', () {
+      _says(
+        'Four photos are picked at 0 ms, the user cancels the third at once, '
+        'and a drain is asked for at 20 ms',
+      );
+      _says(
+        'The body of the worker fails, and the error goes to the zone. The '
+        'worker ends at 100 ms, once its children `a.jpg` and `b.jpg` have, '
+        'and the drain closes the controller.',
+      );
+      final errors = <Object>[];
+      final trace = _uploadsTrace(_worker, cancelThird: true, errors: errors);
+
+      expect(trace, _quotes()[9]);
+      expect(errors, [isA<StateError>()]);
+    });
+
+    test('the worker sends every upload at once and holds a drain', () {
+      _says('Without the cancellation, the same four photos');
+      _says(
+        'All four go to the server at once: nothing holds the uploads to two. '
+        'And the drain never ends',
+      );
+      final trace = _uploadsTrace(_worker, cancelThird: false);
+
+      expect(trace, _quotes()[10]);
+    });
+
+    test('a pool sends two at a time, and its drain ends', () {
+      _says('The same four photos, the third cancelled at once');
+      _says(
+        'The drain runs the queue out and completes once no job of the pool '
+        'runs.',
+      );
+      expect(_uploadsTrace(_pooled, cancelThird: true), _quotes()[11]);
+      final whole = _uploadsTrace(_pooled, cancelThird: false);
+      expect(whole, containsAllInOrder(['200 ms: closed']));
+      expect(whole.where((line) => line.contains('sent')), [
+        '0 ms: upload a.jpg sent',
+        '0 ms: upload b.jpg sent',
+        '100 ms: upload c.jpg sent',
+        '100 ms: upload d.jpg sent',
+      ]);
+    });
+
+    test('a child takes no place', () {
+      _says(
+        'A child of a job of the pool takes no place: `concurrency` counts the '
+        'root jobs.',
+      );
+      fakeAsync((async) {
+        final places = _Places(concurrency: 1);
+        final gate = Completer<void>();
+        var children = 0;
+        final root = places.places.enqueue<int, void>(key: 'root', (ctx) async {
+          await [
+            for (var i = 0; i < 3; i++)
+              ctx.run(
+                ctx.child<void>((child) async {
+                  children++;
+                  await gate.future;
+                }),
+              ),
+          ].wait;
+        });
+        async.flushMicrotasks();
+
+        expect(children, 3);
+        expect(places.places.running, [same(root)]);
+        gate.complete();
+        async.flushMicrotasks();
+        expect(root.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('running lists the jobs in the order they started', () {
+      _says(
+        'It has `running`, the jobs that run now in the order they started, '
+        'so `uploading` reads `running.length`.',
+      );
+      _says(
+        'Code that reads neither member takes a `SoloQueueOwner`, which a lane '
+        'and a pool both are.',
+      );
+      fakeAsync((async) {
+        final places = _Places();
+        final gate = Completer<void>();
+        final first = places.places.enqueue<int, void>(
+          key: 'first',
+          (ctx) => gate.future,
+        );
+        final second = places.places.enqueue<int, void>(
+          key: 'second',
+          (ctx) => gate.future,
+        );
+        async.flushMicrotasks();
+
+        expect(places.places.running, [same(first), same(second)]);
+        expect(places.places, isNot(isA<SoloLane<int>>()));
+        expect(places.places, isA<SoloQueueOwner<int>>());
+        expect(places.before, isA<SoloQueueOwner<int>>());
+        gate.complete();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a held key waits, and the likes of other keys go past it', () {
+      _says(
+        'The like of `p1` is tapped at 10 ms and takes the server two '
+        'seconds, the unlike of `p1` is tapped at 20 ms, and the like of `p2` '
+        'at 150 ms',
+      );
+      _says(
+        'The like of `p2` takes a free place at 150 ms and goes past the '
+        'unlike of `p1`: in one likes lane it would be sent at 2060 ms, after '
+        'both.',
+      );
+      _says(
+        'the body writes the mark, and the body starts at 2010 ms, so the '
+        'heart stays lit for two seconds after the tap',
+      );
+      _says(
+        'It waits until that job ends, and the jobs behind it with other keys '
+        'go past it while a place is free.',
+      );
+      final trace = _likesTrace(
+        pooled.FeedController.new,
+        (feed, postId, {required liked}) => feed.setLiked(postId, liked: liked),
+      );
+      expect(trace, _quotes()[12]);
+
+      final inOneLane = _likesTrace(
+        _LaneLikes.new,
+        (feed, postId, {required liked}) => feed.setLiked(postId, liked: liked),
+      );
+      expect(inOneLane.where((line) => line.contains('sent')), [
+        '10 ms: like p1 sent',
+        '2010 ms: unlike p1 sent',
+        '2060 ms: like p2 sent',
+      ]);
+    });
+
+    test('one key for every job runs them one at a time, in order', () {
+      _says(
+        'The key keeps the order under `Policy.sequential` too, the policy a '
+        'call takes by default, though in a `Solo` and in a lane that policy '
+        'ignores keys. So one key given to every job of a pool runs them one '
+        'at a time, in the order of the queue.',
+      );
+      fakeAsync((async) {
+        final places = _Places(concurrency: 3);
+        final gates = [for (var i = 0; i < 3; i++) Completer<void>()];
+        final jobs = [
+          for (final (index, gate) in gates.indexed)
+            places.places.enqueue<int, void>(
+              key: 'one',
+              describe: () => '$index',
+              (ctx) => gate.future,
+            ),
+        ];
+        for (final (index, gate) in gates.indexed) {
+          async.flushMicrotasks();
+          expect(places.places.running, [same(jobs[index])]);
+          gate.complete();
+        }
+        async.flushMicrotasks();
+        expect(places.places.running, isEmpty);
+      });
+    });
+
+    test('droppable and restart look into the pool as into a lane', () {
+      _says(
+        'The other policies look into the pool as into a lane: `droppable` '
+        'hands out the job of the key that waits or runs, and `restart` '
+        'cancels the running job of the key, and the new job starts once that '
+        'one ends.',
+      );
+      fakeAsync((async) {
+        final places = _Places();
+        final gate = Completer<void>();
+        final running = places.places.enqueue<int, void>(
+          key: 'k',
+          (ctx) => ctx.abandonable(() => gate.future),
+        );
+        async.flushMicrotasks();
+        final waiting = places.places.enqueue<int, void>(
+          key: 'k',
+          (ctx) async {},
+        );
+        expect(
+          places.places.enqueue<int, void>(
+            key: 'k',
+            policy: Policy.droppable,
+            (ctx) async {},
+          ),
+          anyOf(same(running), same(waiting)),
+        );
+        expect(
+          places.places.enqueue<int, void>(
+            key: 'other',
+            policy: Policy.droppable,
+            (ctx) => ctx.abandonable(() => gate.future),
+          ),
+          isNot(anyOf(same(running), same(waiting))),
+        );
+
+        final restarted = places.places.enqueue<int, void>(
+          key: 'k',
+          policy: Policy.restart,
+          (ctx) async {},
+        );
+        expect(running.isCancelled, isTrue);
+        expect(waiting.outcome, isA<Cancelled>());
+        expect(restarted.outcome, isNull);
+        async.flushMicrotasks();
+        expect(running.outcome, isA<Cancelled>());
+        expect(restarted.outcome, isA<Done<void>>());
+        places.close().ignore();
+        gate.complete();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a job awaiting its own pool waits for good, or for a place', () {
+      _says(
+        'A job that awaits a job it queued under its own key in its own pool '
+        'waits for good at once: it holds the key itself. Under another key, '
+        'or with none, it gets the job while a place is free, and once every '
+        'place is taken by jobs that wait so, none of them moves.',
+      );
+      _says('It waits for good: it holds the key itself.');
+      _says(
+        'It gets the job while a place is free; once every place is taken by '
+        'jobs that wait so, they wait for good.',
+      );
+      _says(
+        'the `await_own_queue` lint of '
+        '[solo_lints](https://pub.dev/packages/solo_lints) reports a wait for '
+        'a job of the own pool whatever the key',
+      );
+      fakeAsync((async) {
+        final places = _Places(concurrency: 3);
+        final own = places.places.enqueue<int, void>(key: 'a', (ctx) async {
+          await places.places.enqueue<int, void>(key: 'a', (ctx) async {}).done;
+        });
+        final other = places.places.enqueue<int, void>(key: 'b', (ctx) async {
+          await places.places.enqueue<int, void>((ctx) async {}).done;
+        });
+        async.elapse(const Duration(seconds: 100));
+
+        expect(own.outcome, isNull);
+        expect(other.outcome, isA<Done<void>>());
+        places.close().ignore();
+        async.flushMicrotasks();
+      });
+      fakeAsync((async) {
+        final places = _Places();
+        final waiting = [
+          for (final (key, inner) in [('a', 'c'), ('b', 'd')])
+            places.places.enqueue<int, void>(key: key, (ctx) async {
+              await places.places
+                  .enqueue<int, void>(key: inner, (ctx) async {})
+                  .done;
+            }),
+        ];
+        async.elapse(const Duration(seconds: 100));
+
+        expect([for (final job in waiting) job.outcome], [null, null]);
+        expect(places.places.queue.length, 2);
+        places.close().ignore();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a write of one job of a pool asks the rules of the others', () {
+      _says(
+        'To a job of a pool, a write of another job of the same pool is what a '
+        'write of another lane is',
+      );
+      fakeAsync((async) {
+        final places = _Places();
+        final gate = Completer<void>();
+        final watching = places.places.enqueue<int, void>(
+          key: 'watching',
+          keepWhile: (state) => state == 0,
+          (ctx) => ctx.abandonable(() => gate.future),
+        );
+        places.places.enqueue<int, void>(
+          key: 'writing',
+          (ctx) async => ctx.emit(1),
+        );
+        async.flushMicrotasks();
+
+        expect(watching.outcome, isA<Cancelled>());
+      });
+    });
+
+    test('close and a drain take a pool as one queue with several jobs', () {
+      _says(
+        '`close` clears the queue of a pool and asks every running job of it '
+        'to cancel, and a drain of a pool ends once its queue is empty and '
+        'none of its jobs runs.',
+      );
+      fakeAsync((async) {
+        final places = _Places();
+        final running = [
+          for (final key in ['a', 'b'])
+            places.places.enqueue<int, void>(
+              key: key,
+              (ctx) => ctx.abandonable(() => Completer<void>().future),
+            ),
+        ];
+        final queued = places.places.enqueue<int, void>((ctx) async {});
+        async.flushMicrotasks();
+        var closed = false;
+        places.close().then((_) => closed = true);
+        async.flushMicrotasks();
+
+        expect([for (final job in running) job.isCancelled], [true, true]);
+        expect(queued.outcome, isA<Cancelled>());
+        expect(closed, isTrue);
+      });
+      fakeAsync((async) {
+        final places = _Places();
+        final jobs = [
+          for (final ms in [10, 30, 15])
+            places.places.enqueue<int, void>(
+              (ctx) => Future<void>.delayed(_ms(ms)),
+            ),
+        ];
+        async.flushMicrotasks();
+        var closed = false;
+        places.close(mode: SoloCloseMode.drain).then((_) => closed = true);
+        async.elapse(_ms(29));
+        expect(closed, isFalse);
+        expect(jobs.last.outcome, isA<Done<void>>());
+        async.elapse(_ms(1));
+        expect(closed, isTrue);
+      });
+    });
+  });
+
   group('Declaring lanes', () {
     test('a late final lane read after the constructor throws', () {
       _says('so the first `reload()` throws whenever it comes');
@@ -775,7 +1246,7 @@ void main() {
         expect(
           feed.reload,
           throwsA(
-            isA<StateError>().having((e) => '$e', 'text', _quotes()[9].single),
+            isA<StateError>().having((e) => '$e', 'text', _quotes()[13].single),
           ),
         );
       });
@@ -792,7 +1263,7 @@ void main() {
         expect(
           () => feed.setLiked('p1', liked: true),
           throwsA(
-            isA<StateError>().having((e) => '$e', 'text', _quotes()[10].single),
+            isA<StateError>().having((e) => '$e', 'text', _quotes()[14].single),
           ),
         );
         feed.close().ignore();
@@ -826,6 +1297,47 @@ void main() {
         expect(job.lane, same(two.b.id));
         expect(job.lane!.name, 'b');
         expect(plain.lane, isNull);
+      });
+    });
+
+    test('a pool is declared as a lane, and the pump walks both in order', () {
+      _says(
+        'A pool is declared the same way, by `pool` in the constructor body, '
+        'and `pools` gives the pools in the order of their lines.',
+      );
+      _says(
+        'The pump walks the lanes and the pools together, in the order they '
+        'were declared.',
+      );
+      _says(
+        '`pool` throws as `lane` does, for a name of a lane or a pool the '
+        'controller has already and once the set is sealed, and it throws an '
+        '`ArgumentError` for a `concurrency` below one.',
+      );
+      _says(
+        'A job of a pool tells the pool with `job.lane`: the places have no id '
+        'of their own.',
+      );
+      fakeAsync((async) {
+        final places = _Places();
+        expect(places.declared, [same(places.places)]);
+        expect(() => places.declare('places'), throwsStateError);
+        expect(() => places.declare('before'), throwsStateError);
+        expect(() => places.declareLane('places'), throwsStateError);
+        expect(
+          () => places.declare('none', concurrency: 0),
+          throwsArgumentError,
+        );
+        final jobs = [
+          places.after.enqueue<int, void>(key: 'after', (ctx) async {}),
+          places.places.enqueue<int, void>(key: 'places', (ctx) async {}),
+          places.before.enqueue<int, void>(key: 'before', (ctx) async {}),
+        ];
+        async.flushMicrotasks();
+
+        expect(places.log, ['start before', 'start places', 'start after']);
+        expect(jobs[1].lane, same(places.places.id));
+        expect(() => places.declare('late'), throwsStateError);
       });
     });
   });
@@ -1181,15 +1693,15 @@ void main() {
   });
 
   group('The page', () {
-    test('five sections open with a first attempt', () {
+    test('six sections open with a first attempt', () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
-        hasLength(5),
+        hasLength(6),
       );
     });
 
-    test('quotes ten traces', () {
-      expect(_quotes(), hasLength(11));
+    test('quotes fifteen traces', () {
+      expect(_quotes(), hasLength(15));
     });
 
     test('has no fence the checks do not read', () {
@@ -1201,6 +1713,7 @@ void main() {
     const answers = 'test/support/lanes_page.dart';
     const attempts = 'test/support/lanes_first_attempts.dart';
     const epochFile = 'test/support/lanes_epoch.dart';
+    const poolFile = 'test/support/lanes_pool.dart';
     const holders = {
       '### The first attempt': attempts,
       '### Two lanes': answers,
@@ -1208,6 +1721,7 @@ void main() {
       '### A merge': answers,
       '## Work that a new epoch makes stale': epochFile,
       '### W on a record': answers,
+      '### A pool': poolFile,
       '### In the constructor body': answers,
     };
     for (final MapEntry(key: heading, value: holder) in holders.entries) {
@@ -1226,7 +1740,7 @@ void main() {
           codeMissingFrom(
             'doc/lanes.md',
             answers,
-            alsoIn: [attempts, epochFile],
+            alsoIn: [attempts, epochFile, poolFile],
           ),
           isEmpty,
         );

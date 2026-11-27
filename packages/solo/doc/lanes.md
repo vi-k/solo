@@ -4,7 +4,9 @@
 Each queue is a lane: its jobs run one at a time, in the order a `Solo` keeps,
 and the jobs of different lanes run side by side. To a job of one lane, a write
 of another lane is what `externalSetState` is to a job of a `Solo`: its rules
-are asked again, and a `W` or a `keepWhile` that no longer holds cancels it.
+are asked again, and a `W` or a `keepWhile` that no longer holds cancels it. A
+pool is a queue whose jobs run up to a set number at once and one at a time for
+each key, as [A pool of places](#a-pool-of-places) shows.
 
 Two consequences of that are easy to miss coming from a `Solo`. A reload lane
 that writes `Loading` cancels every like with `W = Loaded`: the like that runs
@@ -397,9 +399,9 @@ outcome of a tap, so `isExpectedError` names the `ApiException` of a failed
 request, and it does not go on to the zone.
 
 A like does not wait for a reload. A like of a second post still waits for the
-first: there is one likes lane. The settling is part of the reload's write
-rather than a job of the likes, so it waits for no like, and the screen listens
-to one controller.
+first: there is one likes lane. In [A pool of places](#a-pool-of-places) it
+goes past. The settling is part of the reload's write rather than a job of the
+likes, so it waits for no like, and the screen listens to one controller.
 
 ## Work that a new epoch makes stale
 
@@ -571,6 +573,190 @@ notices that outlive the camera, still need two controllers, as in
 [A board of its own](state.md#a-board-of-its-own): the lanes of one controller
 close together.
 
+## A pool of places
+
+The feed takes photos besides likes. A user picks several at once, the server
+takes two uploads at a time, and an upload the user cancels before it starts
+must not go. A lane runs one job at a time, so its uploads would go one by one,
+and in one likes lane a like of one post waits behind a like of another, though
+the server takes them side by side.
+
+### The first attempt
+
+```dart
+// The first attempt: a job of the lane that runs each upload as its child.
+final _inbox = <SoloJob<Photo>>[];
+Completer<void>? _wake;
+
+// Queued by the constructor, after `_uploads = lane('uploads');`.
+void _work() => _uploads.enqueue<Feed, void>((ctx) async {
+  while (true) {
+    if (_inbox.isEmpty) {
+      final wake = _wake = Completer<void>();
+      await ctx.abandonable(() => wake.future);
+    }
+    ctx.run(_inbox.removeAt(0)).ignore();
+  }
+});
+
+SoloJob<Photo> upload(String file) {
+  final job = _uploads.job<Feed, Photo>(
+    (ctx) => ctx.join(() => api.upload(file)),
+  );
+  _inbox.add(job);
+  _wake?.complete();
+  _wake = null;
+  return job;
+}
+```
+
+The worker is a root job of the lane that never ends, and the uploads are its
+children, so they run side by side. Four photos are picked at 0 ms, the user
+cancels the third at once, and a drain is asked for at 20 ms:
+
+```text
+0 ms: c.jpg: Cancelled(manual)
+0 ms: upload a.jpg sent
+0 ms: upload b.jpg sent
+20 ms: close(mode: drain)
+100 ms: a.jpg: Done(Photo(a.jpg))
+100 ms: b.jpg: Done(Photo(b.jpg))
+100 ms: worker: Failed(Bad state: Job() has already finished; a job runs once, and a child needs a new Job.deferred)
+100 ms: closed
+60000 ms: d.jpg: no outcome
+```
+
+The cancel ends `c.jpg` at once, but it stays in the inbox, and `ctx.run` of a
+job that has finished throws. The body of the worker fails, and the error goes
+to the zone. The worker ends at 100 ms, once its children `a.jpg` and `b.jpg`
+have, and the drain closes the controller. `d.jpg` never runs and never ends:
+whoever awaits it waits for good.
+
+Without the cancellation, the same four photos:
+
+```text
+0 ms: upload a.jpg sent
+0 ms: upload b.jpg sent
+0 ms: upload c.jpg sent
+0 ms: upload d.jpg sent
+20 ms: close(mode: drain)
+100 ms: a.jpg: Done(Photo(a.jpg))
+100 ms: b.jpg: Done(Photo(b.jpg))
+100 ms: c.jpg: Done(Photo(c.jpg))
+100 ms: d.jpg: Done(Photo(d.jpg))
+60000 ms: closing is held by SoloPending(uploads: SoloPending([no key] in its body, draining))
+```
+
+All four go to the server at once: nothing holds the uploads to two. And the
+drain never ends, since the worker waits for the next photo, and a drain waits
+for the job of the lane. A limit of two, the cancels and the end of the inbox
+would make the worker a second queue beside the lane's, one that its `queue`,
+`pending` and `close` do not see.
+
+### A pool
+
+```dart
+final class FeedController extends SoloLanes<Feed> {
+  final FeedApi api;
+  int _confirmations = 0;
+
+  late final SoloPool<Feed> _likes;
+  late final SoloPool<Feed> _uploads;
+
+  FeedController(this.api) : super(const Feed()) {
+    _likes = pool('likes', concurrency: 4);
+    _uploads = pool('uploads', concurrency: 2);
+  }
+
+  // No key: any two uploads may run together, two at a time.
+  Job<Photo> upload(String file) =>
+      _uploads.enqueue<Feed, Photo>((ctx) => ctx.join(() => api.upload(file)));
+
+  int get uploading => _uploads.running.length;
+  int get waiting => _uploads.queue.length;
+
+  // Likes of different posts run side by side, up to four at once; a like
+  // and an unlike of one post run in the order of the taps.
+  Job<void> setLiked(String postId, {required bool liked}) =>
+      _likes.enqueue<Feed, void>(key: postId, (ctx) async {
+        ctx.emit(ctx.state.mark(postId, Mark(liked)));
+        await ctx.join(() => api.setLiked(postId, liked: liked));
+        ctx.emit(ctx.state.mark(postId, Mark(liked, ++_confirmations)));
+      });
+}
+```
+
+A pool is a queue whose root jobs run up to `concurrency` at once, each in a
+place of its own. The same four photos, the third cancelled at once:
+
+```text
+0 ms: c.jpg: Cancelled(manual)
+0 ms: upload a.jpg sent
+0 ms: upload b.jpg sent
+0 ms: uploading 2, waiting 1
+20 ms: close(mode: drain)
+100 ms: a.jpg: Done(Photo(a.jpg))
+100 ms: upload d.jpg sent
+100 ms: b.jpg: Done(Photo(b.jpg))
+200 ms: d.jpg: Done(Photo(d.jpg))
+200 ms: closed
+```
+
+The cancel takes `c.jpg` out of the queue, as in a lane, and `d.jpg` takes the
+place that `a.jpg` leaves at 100 ms. The drain runs the queue out and completes
+once no job of the pool runs. A child of a job of the pool takes no place:
+`concurrency` counts the root jobs.
+
+A pool has no `current`, since several jobs run at once. It has `running`, the
+jobs that run now in the order they started, so `uploading` reads
+`running.length`. Code written for a lane that reads `current` does not compile
+with a pool, so it cannot read one job of several. Code that reads neither
+member takes a `SoloQueueOwner`, which a lane and a pool both are.
+
+A key keeps the order in a pool. While a job runs under a key, the jobs of that
+key wait in the queue, and the jobs behind them with other keys go past them.
+The like of `p1` is tapped at 10 ms and takes the server two seconds, the
+unlike of `p1` is tapped at 20 ms, and the like of `p2` at 150 ms:
+
+```text
+10 ms: marks p1 liked
+10 ms: like p1 sent
+150 ms: marks p1 liked, p2 liked
+150 ms: like p2 sent
+200 ms: like p2 confirmed
+200 ms: marks p1 liked, p2 liked #1
+2010 ms: like p1 confirmed
+2010 ms: marks p2 liked #1, p1 liked #2
+2010 ms: marks p2 liked #1, p1 unliked
+2010 ms: unlike p1 sent
+2060 ms: unlike p1 confirmed
+2060 ms: marks p2 liked #1, p1 unliked #3
+```
+
+The unlike goes to the server after the like of its post, in the order of the
+taps. The like of `p2` takes a free place at 150 ms and goes past the unlike of
+`p1`: in one likes lane it would be sent at 2060 ms, after both. The heart of
+the unlike goes out late, though: the body writes the mark, and the body starts
+at 2010 ms, so the heart stays lit for two seconds after the tap.
+
+The key keeps the order under `Policy.sequential` too, the policy a call takes
+by default, though in a `Solo` and in a lane that policy ignores keys. So one
+key given to every job of a pool runs them one at a time, in the order of the
+queue. The other policies look into the pool as into a lane: `droppable` hands
+out the job of the key that waits or runs, and `restart` cancels the running
+job of the key, and the new job starts once that one ends. To a job of a pool,
+a write of another job of the same pool is what a write of another lane is: the
+recipes of this page hold in a pool as they are.
+
+A wait inside a pool hangs in a way of its own. A job that awaits a job it
+queued under its own key in its own pool waits for good at once: it holds the
+key itself. Under another key, or with none, it gets the job while a place is
+free, and once every place is taken by jobs that wait so, none of them moves. A
+test with an empty pool passes, and the screen hangs under load. So the
+`await_own_queue` lint of [solo_lints](https://pub.dev/packages/solo_lints)
+reports a wait for a job of the own pool whatever the key, as it reports a wait
+for a job of the own lane.
+
 ## Declaring lanes
 
 A lane is declared once, and the set of lanes stays as it is while the
@@ -633,6 +819,13 @@ Two lanes differ by identity, not by name: the name is for logs and `toString`.
 A job tells the lane it runs in with `job.lane`, a `SoloLaneId` with that name,
 and a job of a `Solo` has none.
 
+A pool is declared the same way, by `pool` in the constructor body, and `pools`
+gives the pools in the order of their lines. The pump walks the lanes and the
+pools together, in the order they were declared. `pool` throws as `lane` does,
+for a name of a lane or a pool the controller has already and once the set is
+sealed, and it throws an `ArgumentError` for a `concurrency` below one. A job
+of a pool tells the pool with `job.lane`: the places have no id of their own.
+
 A set declared once fits a lane for each kind of work over one state: the
 reload, the likes, the commands to a device. It does not fit a lane for each
 item of a list that grows and shrinks, and the seal is not the only reason. The
@@ -657,6 +850,10 @@ in
 | `close()` | The queues of every lane are cleared, and the running job of every lane is asked to cancel; a `cancellable: false` job turns that down and runs on. `close` completes when the last of them ends, as [Three ways to stop](cancellation.md#three-ways-to-stop) tells. |
 | `close(mode: SoloCloseMode.drain)` | Every lane runs its queue out, and `close` completes when all of them are empty. |
 | During a drain, a job of one lane queues a continuation in another | The continuation ends `Cancelled(closed)`: a closed controller takes no new root job, whichever lane asks. A `droppable` continuation whose key the other lane has accepted gets that job, as it would before the close. |
+| A job of a pool is queued under a key that a running job of the pool holds | It waits until that job ends, and the jobs behind it with other keys go past it while a place is free. |
+| A job of a pool awaits a job it queued in its own pool under its own key | It waits for good: it holds the key itself. |
+| A job of a pool awaits a job it queued in its own pool under another key or with none | It gets the job while a place is free; once every place is taken by jobs that wait so, they wait for good. |
+| `close()` or a drain over a pool | `close` clears the queue of a pool and asks every running job of it to cancel, and a drain of a pool ends once its queue is empty and none of its jobs runs. |
 | An unlike fails after a reload has brought the server's word on the like | The correction puts back no mark: the posts say what the server held when the reload was sent, an unlike from another device included. |
 
 Two controllers could take the continuation of a drain: the one drained first

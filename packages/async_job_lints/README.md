@@ -225,11 +225,14 @@ pattern.
 In a solo controller, a job that waits for a job of the controller's own queue
 waits for itself: the job it waits for is queued behind it. In a `SoloLanes` of
 solo 2.0 that holds within one lane, since a job of another lane runs on that
-lane's pump. This rule reports such a wait like any other plain one. solo_lints
-reports a wait for the own queue, and a solo_lints newer than 0.2.0 reports a
-wait for the own lane too, from a body queued on that controller as
-`await_own_queue`, with a message about the queue or the lane, and keeps
-`bare_await` quiet there.
+lane's pump. A pool of solo 2.1 runs several jobs at once, and a job that waits
+for a job of its own pool waits for good under its own key, and under any once
+every place is taken by such waits. This rule reports such a wait like any
+other plain one. solo_lints reports a wait for the own queue, a solo_lints
+newer than 0.2.0 reports a wait for the own lane too, and one newer than 0.3.1
+a wait for the own pool, from a body queued on that controller as
+`await_own_queue`, with a message about the queue, the lane or the pool, and
+keeps `bare_await` quiet there.
 
 It is a lint rather than a warning because tests wait in bodies on purpose, to
 cancel a job midway. A project that gates CI on it turns it on as
@@ -266,7 +269,8 @@ whose `outcome`, `value` or `done` is read later in the same function, when
 `ignoreFailure()` was called on it before, as a statement or in a cascade of
 its declaration, and in a job body on a `done` of a job of the own queue of a
 `Solo`, or, under a solo_lints newer than 0.2.0, on an awaited `done` of the
-own lane from a body queued in that lane. An awaited `done` there is a wait of
+own lane from a body queued in that lane, and under one newer than 0.3.1 of the
+own pool from a body queued in that pool. An awaited `done` there is a wait of
 the job for itself, a deadlock rather than a dropped failure: solo_lints
 reports it as `await_own_queue` when the body is queued on the controller, and
 without solo_lints `bare_await` reports its `await` right in the body. A `done`

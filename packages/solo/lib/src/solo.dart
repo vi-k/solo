@@ -324,14 +324,14 @@ abstract class SoloController<S extends Object> {
   /// controller knows of is.
   ///
   /// Not `null` while a job runs. In a [Solo] a running job is a
-  /// [SoloPendingJob], which names the job, says what it is doing and whether
-  /// it has been asked to stop; a drain with no job running is a
-  /// [SoloPendingQueue]: the queue it has still to run, where a group of
-  /// `collect` or `accumulate` stays until its timing lets it go. A
-  /// [SoloLanes] gives a [SoloPendingLanes], one of those two for each busy
-  /// lane. With `SoloStream`, once the engine has closed, a subscription left
-  /// paused holds the stream, and that is a [SoloPendingStream]. Read it for
-  /// a `close` that has not come back, or a `cancel` that is taking its time.
+  /// [SoloPendingJob]: the job, what it is doing and whether it has been asked
+  /// to stop; a drain with no job running is a [SoloPendingQueue] of what it
+  /// has still to run, where a group of `collect` or `accumulate` stays until
+  /// its timing lets it go. A [SoloLanes] gives a [SoloPendingLanes], those two
+  /// for each busy lane and pool, where a full pool adds the jobs that wait for
+  /// a place. With `SoloStream`, once the engine has closed, a subscription
+  /// left paused holds the stream: a [SoloPendingStream]. Read it for a `close`
+  /// that has not come back, or a `cancel` that is taking its time.
   ///
   /// ```dart
   /// unawaited(controller.close().timeout(
@@ -471,12 +471,12 @@ abstract class SoloController<S extends Object> {
   /// new work.
   ///
   /// A plain `close()` over a running drain stops it where it is: the
-  /// queues are dropped and the current jobs cancelled, and the same future
+  /// queues are dropped and the running jobs cancelled, and the same future
   /// everybody is holding completes after that. There is no way back the
   /// other way — a drain cannot be started over a `close` that is already
   /// cancelling.
   ///
-  /// Awaiting the returned future from inside the body of a current job never
+  /// Awaiting the returned future from inside the body of a running job never
   /// completes: it waits for that very body.
   /// {@endtemplate}
   @mustCallSuper
@@ -612,13 +612,13 @@ abstract class SoloController<S extends Object> {
   /// running job of a pool (the one job of a [Solo]); `force` affects only
   /// the queues.
   ///
-  /// Completes when every current job has actually finished.
+  /// Completes when every running root job has actually finished.
   ///
   /// Every job it ends carries [reason], a [ManualCancelReason] unless the
   /// caller names one: a policy of the domain that clears the controller
   /// can tell its own cancellations from a user's.
   ///
-  /// Awaiting the returned future from inside the body of a current job never
+  /// Awaiting the returned future from inside the body of a running job never
   /// completes: it waits for that very body.
   /// {@endtemplate}
   Future<void> cancelAll({
@@ -1288,8 +1288,8 @@ abstract class SoloController<S extends Object> {
     return line;
   }
 
-  /// The last job of [core] matching [test]: [Solo.lastJobWhere] and
-  /// [SoloLane.lastJobWhere].
+  /// The last job of [core] matching [test]: [Solo.lastJobWhere], and
+  /// [SoloQueueOwner.lastJobWhere] of a lane or a pool.
   ///
   /// [queued], when given, is the part of the queue worth asking, from the
   /// last job to the first, taken before any of them is asked.
@@ -2054,8 +2054,9 @@ abstract class Solo<S extends Object> extends SoloController<S> {
   }) => super.cancelAll(force: force, reason: reason);
 }
 
-/// The controller with lanes: its root jobs run one at a time in each lane,
-/// and the lanes run side by side over one state.
+/// The controller with lanes and pools: its root jobs run one at a time in
+/// each lane and up to a set number in each pool, side by side over one
+/// state.
 ///
 /// The lanes are declared in the constructor with [lane], and one pump walks
 /// them in that order. A pool, declared with [pool], is one queue whose root
@@ -2069,7 +2070,8 @@ abstract class Solo<S extends Object> extends SoloController<S> {
 /// The state, the listeners, closing and the hooks come from [SoloController].
 ///
 /// See [Two queues over one state](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#two-queues-over-one-state)
-/// and [A write that keeps the other lane's work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-write-that-keeps-the-other-lanes-work)
+/// [A write that keeps the other lane's work](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-write-that-keeps-the-other-lanes-work)
+/// and [A pool of places](https://github.com/vi-k/solo/blob/main/packages/solo/doc/lanes.md#a-pool-of-places)
 /// on the lanes page.
 abstract class SoloLanes<S extends Object> extends SoloController<S> {
   /// The lanes in the order of creation.

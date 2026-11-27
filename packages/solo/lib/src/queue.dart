@@ -16,7 +16,10 @@ abstract interface class SoloQueue {
   /// An unmodifiable view of queued jobs in their current order.
   ///
   /// A job waiting for an accumulation timing window can be bypassed by a
-  /// ready job later in this view.
+  /// ready job later in this view. In a pool of a `SoloLanes` the order of a
+  /// key holds instead: a group waiting for its window keeps the jobs of its
+  /// own key behind it, and a job whose key a running job of the pool holds
+  /// is bypassed by the jobs of other keys.
   Iterable<SoloJob<Object?>> get jobs;
 
   /// The number of queued jobs.
