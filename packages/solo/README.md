@@ -430,10 +430,9 @@ that asks for the new `async_job` itself does not resolve.
 
 Callers invoke controller methods and receive a job for each operation. Queue
 policy is selected per call. All root jobs of a `Solo` share one queue, and a
-`SoloLanes` gives each lane and each pool a queue of its own; a pool runs up to
-a set number of its jobs at once. [solo and bloc, side by side](doc/vs-bloc.md)
-holds the API correspondences and compares eleven application scenarios with
-implementations in both packages.
+`SoloLanes` gives each lane and each pool a queue of its own.
+[solo and bloc, side by side](doc/vs-bloc.md) holds the API correspondences and
+compares eleven application scenarios with implementations in both packages.
 
 The package does not include retry policies, dependency injection, persistence
 or state equality filtering. If work needs cancellation and cleanup but no
