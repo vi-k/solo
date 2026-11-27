@@ -15,18 +15,15 @@
 `solo_lints` 0.3.1 видит пулы, а ложное предупреждение на коде с пулом ушло.
 Сайт с пушем связки `solo` показывает тексты `solo_lints` о пуле, поэтому его
 связка — сразу за `async_job_lints` (решения 172 и 173 `docs/settled.md`, ревью
-подготовки — `2026-11-27-pool-releases-prep-review-report.md`). Подготовка
-`solo_lints` 0.4.0 — в локальной ветке `pool-lints-release`, один коммит поверх
-`main` «chore: prepare solo_lints 0.4.0» с записью
-`2026-11-27-solo-lints-0-4-0-release-report.md`, вне `main` до своей очереди:
-её README просят версию, которой на pub.dev ещё нет, а сайт собирается
-из `main`. После выхода `async_job_lints` 0.2.4 коммит встаёт на `main`,
-снимается оверрайд `solo_lints`, проверка — против опубликованного, и только
-потом отдельный запрос на связку. `flutter_solo` выпуска не требует: после
-выхода `solo` 2.1.0 его три оверрайда сняты, и пакет, пример и `camera_example`
-зелёные против опубликованного `solo`. `gate` и `site` CI на релизном коммите
-`a23aef7a` зелёные; до связки `gate` прогнан на `3d2830db` с полом приложения
-`camera_example` на Flutter 3.44.0.
+подготовки — `2026-11-27-pool-releases-prep-review-report.md`). `solo_lints`
+0.4.0 подготовлен и проверен против опубликованных `async_job_lints` 0.2.4
+и `solo` 2.1.0, коммит «chore: prepare solo_lints 0.4.0» в `main`, ждёт
+отдельного запроса на связку: `2026-11-27-solo-lints-0-4-0-release-report.md`.
+`flutter_solo` выпуска не требует: после выхода `solo` 2.1.0 его три оверрайда
+сняты, и пакет, пример и `camera_example` зелёные против опубликованного
+`solo`. `gate` и `site` CI на релизном коммите `a23aef7a` зелёные; до связки
+`gate` прогнан на `3d2830db` с полом приложения `camera_example` на Flutter
+3.44.0.
 
 На pub.dev на 2026-11-27: `async_job` 1.0.6, `solo` 2.1.0, `flutter_solo`
 2.0.1, `async_job_lints` 0.2.4, `solo_lints` 0.3.1. Оверрайдов в дереве нет:
@@ -49,11 +46,11 @@ override on async_job_lints». Линии — `2026-11-11-solo-lanes-report.md`,
 
 **Ждёт слова владельца.**
 
-- Подготовка `solo_lints` 0.4.0 встаёт на `main`: снимается его оверрайд,
-  проверка — против опубликованных `async_job_lints` 0.2.4 и `solo` 2.1.0.
-  Затем связка — отдельным запросом владельца, состоящим только из просьбы
-  опубликовать: коммит «Release solo_lints 0.4.0», тег `solo_lints-v0.4.0`,
-  `git push --follow-tags`, `dart pub publish`.
+- Связка `solo_lints` 0.4.0 — отдельным запросом владельца, состоящим только
+  из просьбы опубликовать: коммит «Release solo_lints 0.4.0», тег
+  `solo_lints-v0.4.0`, `git push --follow-tags`, `dart pub publish`. После
+  неё — отдельной правкой `solo_lints: ^0.4.0` в README и примерах `solo`
+  и `flutter_solo`; до pub.dev она дойдёт с их следующими выпусками.
 
 - Бэклог: `onCancel` в `ctx.join` к первому минору ядра.
 
