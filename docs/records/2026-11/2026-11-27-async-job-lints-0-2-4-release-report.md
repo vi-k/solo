@@ -113,3 +113,8 @@ async_job_lints 0.2.4», следующим сообщением после вы
 Связка: релизный коммит «Release async_job_lints 0.2.4», аннотированный тег
 `async_job_lints-v0.2.4`, `git push --follow-tags` и `dart pub publish --force`
 из чистого дерева `packages/async_job_lints`.
+
+Пуш запустил `gate` и `site` CI на `376416df`, оба зелёные. Следом коммит
+«chore: drop the override on async_job_lints» снял последний оверрайд дерева,
+у `solo_lints`; против опубликованных `async_job_lints` 0.2.4 и `solo` 2.1.0
+`solo_lints` +174.

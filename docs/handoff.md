@@ -21,9 +21,9 @@
 отдельного запроса на связку: `2026-11-27-solo-lints-0-4-0-release-report.md`.
 `flutter_solo` выпуска не требует: после выхода `solo` 2.1.0 его три оверрайда
 сняты, и пакет, пример и `camera_example` зелёные против опубликованного
-`solo`. `gate` и `site` CI на релизном коммите `a23aef7a` зелёные; до связки
-`gate` прогнан на `3d2830db` с полом приложения `camera_example` на Flutter
-3.44.0.
+`solo`. `gate` и `site` CI на релизных коммитах `a23aef7a` и `376416df`
+зелёные; до связки `gate` прогнан на `3d2830db` с полом приложения
+`camera_example` на Flutter 3.44.0.
 
 На pub.dev на 2026-11-27: `async_job` 1.0.6, `solo` 2.1.0, `flutter_solo`
 2.0.1, `async_job_lints` 0.2.4, `solo_lints` 0.3.1. Оверрайдов в дереве нет:
