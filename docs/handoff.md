@@ -29,11 +29,11 @@
 `camera_example` на Flutter 3.44.0.
 
 На pub.dev на 2026-11-27: `async_job` 1.0.6, `solo` 2.1.0, `flutter_solo`
-2.0.1, `async_job_lints` 0.2.4, `solo_lints` 0.3.1. В дереве один оверрайд,
-у `solo_lints`, первой строкой `# Until async_job_lints 0.2.4 is published.`:
-он ведёт на `async_job_lints` из дерева. Остальное идёт против опубликованных
-`async_job` 1.0.6 и `solo` 2.1.0: оверрайды на `solo` сняты коммитом «chore:
-drop the overrides on solo». Линии — `2026-11-11-solo-lanes-report.md`,
+2.0.1, `async_job_lints` 0.2.4, `solo_lints` 0.3.1. Оверрайдов в дереве нет:
+пакеты идут против опубликованных `async_job` 1.0.6, `solo` 2.1.0
+и `async_job_lints` 0.2.4. На `solo` их сняли коммитом «chore: drop the
+overrides on solo», последний, у `solo_lints`, — коммитом «chore: drop the
+override on async_job_lints». Линии — `2026-11-11-solo-lanes-report.md`,
 выпуски — `2026-11-18-solo-2-0-0-release-report.md`,
 `2026-11-18-flutter-solo-2-0-0-release-report.md`,
 `2026-11-18-async-job-1-0-4-release-report.md`,
