@@ -1388,4 +1388,374 @@ void main() {
       expect(trace.where((line) => line.contains('emit over')), hasLength(1));
     });
   });
+
+  group('closing', () {
+    test('drain ends once the queue is empty and every place is over', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final gates = [for (var i = 0; i < 3; i++) Completer<void>()];
+        final jobs = [
+          for (final (i, name) in ['a', 'b', 'c'].indexed)
+            pool.enqueue<int, void>(_gated(log, name, gates[i])),
+        ];
+        async.flushMicrotasks();
+        var closed = false;
+        controller.close(mode: SoloCloseMode.drain).then((_) => closed = true);
+
+        gates[0].complete();
+        async.flushMicrotasks();
+        expect(log, ['start a', 'start b', 'end a', 'start c']);
+        expect(closed, isFalse);
+
+        // The queue is empty and a place is free, and b still runs.
+        gates[2].complete();
+        async.flushMicrotasks();
+        expect(pool.running, [same(jobs[1])]);
+        expect(closed, isFalse);
+
+        gates[1].complete();
+        async.flushMicrotasks();
+        expect(closed, isTrue);
+        expect([
+          for (final job in jobs) job.outcome,
+        ], everyElement(isA<Done<void>>()));
+      });
+    });
+
+    test('drain of a pool with a canceled queued upload ends', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final gates = [Completer<void>(), Completer<void>()];
+        final up1 = _keyed(pool, log, 'up1', 'up1', gates[0]);
+        final up2 = _keyed(pool, log, 'up2', 'up2', gates[1]);
+        final up3 = _keyed(pool, log, 'up3', 'up3', Completer());
+        async.flushMicrotasks();
+        var closed = false;
+        controller.close(mode: SoloCloseMode.drain).then((_) => closed = true);
+
+        unawaited(up3.cancel());
+        async.flushMicrotasks();
+        expect(
+          up3.outcome,
+          isA<Cancelled>()
+              .having((c) => c.reason, 'reason', isA<ManualCancelReason>())
+              .having((c) => c.started, 'started', isFalse),
+        );
+        expect(closed, isFalse);
+
+        gates[0].complete();
+        gates[1].complete();
+        async.flushMicrotasks();
+        expect(up1.outcome, isA<Done<void>>());
+        expect(up2.outcome, isA<Done<void>>());
+        expect(log, ['start up1', 'start up2', 'end up1', 'end up2']);
+        expect(closed, isTrue);
+      });
+    });
+
+    test('close with a cancel drops the queue before any running job '
+        'hears', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final gate = Completer<void>();
+        final a = pool.enqueue<int, void>(_gated(log, 'a', gate));
+        final b = pool.enqueue<int, void>(_gated(log, 'b', gate));
+        final c = pool.enqueue<int, void>(_gated(log, 'c', gate));
+        async.flushMicrotasks();
+        final heard = <String>[];
+        for (final (name, job) in [('a', a), ('b', b)]) {
+          job.whenCancelled(
+            (_) => heard.add('$name hears, c is finished: ${c.isFinished}'),
+          );
+        }
+
+        unawaited(controller.close());
+        expect(heard, [
+          'a hears, c is finished: true',
+          'b hears, c is finished: true',
+        ]);
+        expect(
+          c.outcome,
+          isA<Cancelled>()
+              .having((c) => c.reason, 'reason', isA<ClosedCancelReason>())
+              .having((c) => c.started, 'started', isFalse),
+        );
+
+        gate.complete();
+        async.flushMicrotasks();
+        expect(controller.isFinished, isTrue);
+      });
+    });
+  });
+
+  group('pending', () {
+    test('pending gives an entry for every running job', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final a1 = _keyed(pool, log, 'a', 'a1', Completer());
+        final b = _keyed(pool, log, 'b', 'b', Completer());
+        final a2 = _keyed(pool, log, 'a', 'a2', Completer());
+        async.flushMicrotasks();
+
+        final pending = controller.pending;
+        expect(pending, isA<SoloPendingLanes>());
+        final lanes = (pending! as SoloPendingLanes).lanes;
+        expect([for (final entry in lanes) entry.lane], [pool.id, pool.id]);
+        expect(
+          lanes[0].pending,
+          isA<SoloPendingJob>().having((p) => p.job, 'job', same(a1)).having(
+            (p) => p.queued,
+            'queued',
+            [same(a2)],
+          ),
+        );
+        expect(
+          lanes[1].pending,
+          isA<SoloPendingJob>()
+              .having((p) => p.job, 'job', same(b))
+              .having((p) => p.queued, 'queued', isEmpty),
+        );
+        expect(
+          () => (lanes[0].pending as SoloPendingJob).queued.add(b),
+          throwsUnsupportedError,
+        );
+        expect(
+          '$pending',
+          'SoloPending(p: SoloPending([a: a1] in its body, 1 queued: [a: a2]), '
+              'p: SoloPending([b: b] in its body))',
+        );
+        expect('${pool.pending}', '$pending');
+      });
+    });
+
+    test('pending shows the jobs that wait for a place', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(1);
+        final log = controller.log;
+        final x = pool.enqueue<int, void>(
+          describe: () => 'x',
+          _gated(log, 'x', Completer()),
+        );
+        final c = pool.enqueue<int, void>(
+          describe: () => 'c',
+          _gated(log, 'c', Completer()),
+        );
+        async.flushMicrotasks();
+
+        final [job, places] = (controller.pending! as SoloPendingLanes).lanes;
+        expect(
+          job.pending,
+          isA<SoloPendingJob>()
+              .having((p) => p.job, 'job', same(x))
+              .having((p) => p.queued, 'queued', isEmpty),
+        );
+        expect(places.lane, pool.id);
+        expect(
+          places.pending,
+          isA<SoloPendingQueue>().having((p) => p.jobs, 'jobs', [same(c)]),
+        );
+        expect(
+          '${places.pending}',
+          'SoloPending(waiting for a place, 1 queued: [no key: c])',
+        );
+      });
+    });
+
+    test('pending in a drain shows what has not started', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        final gates = [Completer<void>(), Completer<void>()];
+        final a1 = _keyed(pool, log, 'a', 'a1', gates[0]);
+        final b = _keyed(pool, log, 'b', 'b', gates[1]);
+        final a2 = _keyed(pool, log, 'a', 'a2', Completer());
+        final c = pool.enqueue<int, void>(
+          describe: () => 'c',
+          _gated(log, 'c', Completer()),
+        );
+        async.flushMicrotasks();
+        unawaited(controller.close(mode: SoloCloseMode.drain));
+
+        final lanes = (pool.pending! as SoloPendingLanes).lanes;
+        expect(lanes, hasLength(3));
+        expect(
+          lanes[0].pending,
+          isA<SoloPendingJob>()
+              .having((p) => p.job, 'job', same(a1))
+              .having((p) => p.draining, 'draining', isTrue)
+              .having((p) => p.queued, 'queued', [same(a2)]),
+        );
+        expect(
+          lanes[1].pending,
+          isA<SoloPendingJob>()
+              .having((p) => p.job, 'job', same(b))
+              .having((p) => p.draining, 'draining', isTrue)
+              .having((p) => p.queued, 'queued', isEmpty),
+        );
+        // In a drain the rest of the queue is what the drain has still to
+        // run, and says so, as in a lane.
+        expect(lanes[2].pending.runtimeType, SoloPendingQueue);
+        expect(
+          lanes[2].pending,
+          isA<SoloPendingQueue>().having((p) => p.jobs, 'jobs', [same(c)]),
+        );
+        expect(
+          '${lanes[2].pending}',
+          'SoloPending(draining, 1 queued: [no key: c])',
+        );
+
+        // b ends and c takes its place: nothing waits for a place now.
+        gates[1].complete();
+        async.flushMicrotasks();
+        expect(
+          [
+            for (final entry in (pool.pending! as SoloPendingLanes).lanes)
+              (entry.pending as SoloPendingJob).job,
+          ],
+          [same(a1), same(c)],
+        );
+      });
+    });
+
+    test('pending in a drain names the job its rules are asked for', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(1);
+        final log = controller.log;
+        final gate = Completer<void>();
+        pool.enqueue<int, void>(describe: () => 'x', _gated(log, 'x', gate));
+        String? seen;
+        pool.enqueue<int, void>(
+          describe: () => 'w',
+          _gated(log, 'w', Completer()),
+          canStart: (state) {
+            seen = '${pool.pending}';
+            return true;
+          },
+        );
+        async.flushMicrotasks();
+        unawaited(controller.close(mode: SoloCloseMode.drain));
+        gate.complete();
+        async.flushMicrotasks();
+
+        expect(
+          seen,
+          'SoloPending(p: SoloPending(draining, 1 queued: [no key: w]))',
+        );
+      });
+    });
+
+    test('pool.pending is a list for one running job as for two', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final log = controller.log;
+        expect(pool.pending, isNull);
+
+        final a = _keyed(pool, log, 'a', 'a', Completer());
+        async.flushMicrotasks();
+        final one = pool.pending;
+        expect(one, isA<SoloPendingLanes>());
+        expect((one! as SoloPendingLanes).lanes, hasLength(1));
+
+        _keyed(pool, log, 'b', 'b', Completer());
+        async.flushMicrotasks();
+        final two = pool.pending! as SoloPendingLanes;
+        expect(two.lanes, hasLength(2));
+        expect(() => two.lanes.add(two.lanes.first), throwsUnsupportedError);
+        expect((one as SoloPendingLanes).lanes, hasLength(1));
+        expect((two.lanes.first.pending as SoloPendingJob).job, same(a));
+      });
+    });
+
+    test('the entries of a pool stand where the pool was declared', () {
+      fakeAsync((async) {
+        final controller = _Pools(
+          (self) => self
+            ..declareLane('l1')
+            ..declarePool('p', 2)
+            ..declareLane('l2'),
+        );
+        final [l1, l2] = controller.declaredLanes;
+        final p = controller.declaredPools.single;
+        final log = controller.log;
+        for (final owner in <SoloQueueOwner<int>>[l2, p, p, l1]) {
+          owner.enqueue<int, void>(_gated(log, 'job', Completer()));
+        }
+        async.flushMicrotasks();
+
+        expect(
+          [
+            for (final entry in (controller.pending! as SoloPendingLanes).lanes)
+              entry.lane.name,
+          ],
+          ['l1', 'p', 'p', 'l2'],
+        );
+      });
+    });
+  });
+
+  group('awaiting the own pool', () {
+    test('a job awaiting a job of its own key in its pool waits for good', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        late final SoloJob<void> inner;
+        final outer = pool.enqueue<int, void>(key: 'a', (ctx) async {
+          inner = pool.enqueue<int, void>(key: 'a', (ctx) async {});
+          await inner.done;
+        });
+        async.elapse(const Duration(hours: 1));
+
+        expect(outer.isRunning, isTrue);
+        expect(inner.isQueued, isTrue);
+        expect(pool.running, [same(outer)]);
+
+        unawaited(controller.close());
+        async.flushMicrotasks();
+        expect(controller.isFinished, isTrue);
+      });
+    });
+
+    test('a job awaiting another key of its pool with a free place ends', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        Outcome<void>? inner;
+        final outer = pool.enqueue<int, void>(key: 'a', (ctx) async {
+          inner = await pool.enqueue<int, void>(key: 'b', (ctx) async {}).done;
+        });
+        async.flushMicrotasks();
+
+        expect(inner, isA<Done<void>>());
+        expect(outer.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('every place awaiting its pool waits for good, and pending says '
+        'it', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        for (final (key, inner) in [('a', 'c'), ('b', 'd')]) {
+          pool.enqueue<int, void>(key: key, (ctx) async {
+            await pool.enqueue<int, void>(key: inner, (ctx) async {}).done;
+          });
+        }
+        async.elapse(const Duration(hours: 1));
+
+        expect(pool.running.map((job) => job.key), ['a', 'b']);
+        expect(pool.queue.jobs.map((job) => job.key), ['c', 'd']);
+        expect(
+          '${pool.pending}',
+          'SoloPending(p: SoloPending([a] in its body), '
+              'p: SoloPending([b] in its body), '
+              'p: SoloPending(waiting for a place, 2 queued: [c], [d]))',
+        );
+
+        unawaited(controller.close());
+        async.flushMicrotasks();
+        expect(controller.isFinished, isTrue);
+      });
+    });
+  });
 }

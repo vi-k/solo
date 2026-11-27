@@ -380,6 +380,55 @@ abstract class SoloController<S extends Object> {
     return null;
   }
 
+  /// What is holding the pool of [core] right now, one entry each: every
+  /// running job in the order they started, with the queued jobs of its
+  /// key, then, in a drain or while every place is taken, the queued jobs
+  /// whose key no running job holds. Empty when nothing holds the pool.
+  List<SoloPendingLane> _pendingEntriesOf(_SoloPoolCore<S> core) {
+    final id = core.id!;
+    final queue = core.poolQueue;
+    // The jobs that wait for a running job of their key, by identity: the
+    // queue below is told from them without asking any key again.
+    final behind = HashSet<_SoloJob<S, S, Object?>>.identity();
+    final entries = <SoloPendingLane>[];
+    for (final job in core.running) {
+      final key = job.key;
+      // A copy, not a view, as in `_pendingOf`; a key not equal to itself
+      // has no jobs in the index, and none waits for it.
+      final queued = key == null
+          ? <_SoloJob<S, S, Object?>>[]
+          : queue._keyed(key);
+      behind.addAll(queued);
+      entries.add(
+        SoloPendingLane(
+          id,
+          job._pending(
+            closing: isClosed,
+            draining: _draining,
+            queued: List<Job<Object?>>.unmodifiable(queued),
+          ),
+        ),
+      );
+    }
+    if (_draining || core.isFull) {
+      // The job whose rules are being asked goes first, as in a lane.
+      final jobs = List<Job<Object?>>.unmodifiable([
+        if (core.inTransition case final job? when !job.isFinished) job,
+        for (final job in queue._jobs)
+          if (!behind.contains(job)) job,
+      ]);
+      if (jobs.isNotEmpty) {
+        entries.add(
+          SoloPendingLane(
+            id,
+            _draining ? SoloPendingQueue(jobs) : soloPendingPlaces(jobs),
+          ),
+        );
+      }
+    }
+    return entries;
+  }
+
   /// Reflects state already changed by an external source, such as a device or
   /// socket.
   ///
@@ -2182,14 +2231,17 @@ abstract class SoloLanes<S extends Object> extends SoloController<S> {
   @protected
   List<SoloPool<S>> get pools => _poolsView;
 
-  // The busy lanes in the order of creation, each by the rules of a `Solo`.
-  // No busy lane is `null`, and one is a `SoloPendingLanes` as several are:
-  // the shape does not depend on how many lanes hold the controller.
+  // The busy lanes in the order of creation, each by the rules of a `Solo`,
+  // and every entry of a busy pool where it was declared. No busy lane is
+  // `null`, and one is a `SoloPendingLanes` as several are: the shape does
+  // not depend on how many lanes hold the controller.
   @override
   SoloPending? get _pending {
     final lanes = <SoloPendingLane>[
       for (final core in _cores)
-        if (_pendingOf(core) case final pending?)
+        if (core is _SoloPoolCore<S>)
+          ..._pendingEntriesOf(core)
+        else if (_pendingOf(core) case final pending?)
           SoloPendingLane(core.id!, pending),
     ];
     return lanes.isEmpty

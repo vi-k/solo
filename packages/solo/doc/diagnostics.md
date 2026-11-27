@@ -170,7 +170,10 @@ A `SoloLanes` waits for every lane, and its `pending` is a `SoloPendingLanes`.
 Its `lanes`, each a `SoloPendingLane`, pair each lane that holds the close with
 that lane's `SoloPendingJob` or `SoloPendingQueue`, in the order the lanes were
 declared. A lane that holds nothing is left out, and with no lane left
-`pending` is `null`.
+`pending` is `null`. A pool has as many entries as it has running jobs, a
+`SoloPendingJob` each, and one `SoloPendingQueue` after them with the queued
+jobs whose key no running job holds: in a drain, or while every place is taken.
+Outside a drain that queue prints as `SoloPending(waiting for a place, ...)`.
 
 The three print alike, so the line above needs no switch:
 

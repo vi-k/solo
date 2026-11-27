@@ -177,7 +177,7 @@ queued it, and a `Policy` looks for its key there only.
 | `owner.accumulate(handler, merge: ...)` | Makes an accumulator whose groups go into this lane or pool, each merging its events into one value | [Settings saved on every flip of a switch](accumulation.md#settings-saved-on-every-flip-of-a-switch) |
 | `owner.queue` | The jobs waiting in this lane or pool, a `SoloQueue` | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `owner.lastJobWhere(test)` | The last queued job of this lane or pool that passes the test, else a running one that passes and has not been cancelled, the last started first, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
-| `owner.pending` | What is holding this lane or pool right now, by the rules `pending` has for a `Solo`, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
+| `owner.pending` | What is holding this lane or pool right now, or `null`: a lane by the rules `pending` has for a `Solo`, a pool as a `SoloPendingLanes` of its own entries | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 
 ## Parameters of a job
 
@@ -275,7 +275,7 @@ field: events combine only within one accumulator, even under the same key.
 | `SoloUnansweredHandler` | The type of `Solo.unansweredHandler`: a function of the controller, the job, the error and its stack trace | [Answering for an error](errors.md#answering-for-an-error) |
 | `SoloObserver` | What `Solo.observer` takes, one or several joined by `SoloObserver.all`: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate` | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](diagnostics.md#watching-every-controller) |
-| `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `job` and `phase`, a `SoloPendingQueue` with its `jobs`, a `SoloPendingLanes` whose `lanes` hold a `SoloPendingLane` with one of those two for each busy lane of a `SoloLanes`, or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
+| `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `job` and `phase`, a `SoloPendingQueue` with its `jobs`, a `SoloPendingLanes` whose `lanes` hold a `SoloPendingLane` with one of those two for each busy lane of a `SoloLanes` and for each running job and the queue of a pool, or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `SoloPhase` | Where the job of a `SoloPendingJob` stands: `body`, `children` or `cleanup` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `SoloStream` | A mixin that adds a broadcast `stream` of the states | [Observing state](state.md#observing-state) |
 | `AccumulationPolicy` | Which waiting group an event joins: `join`, `adjacent` or `replace` | [Choosing where events join](accumulation-rules.md#choosing-where-events-join) |

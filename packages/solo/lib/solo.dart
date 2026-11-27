@@ -6,7 +6,7 @@ export 'package:async_job/async_job.dart';
 
 export 'src/close_mode.dart';
 export 'src/observer.dart';
-export 'src/pending.dart';
+export 'src/pending.dart' hide soloPendingPlaces;
 export 'src/policy.dart';
 export 'src/solo.dart';
 export 'src/solo_cancel_reason.dart';

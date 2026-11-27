@@ -176,16 +176,22 @@ final class SoloPendingJob extends SoloPending {
 /// A drain with no job running: the queue it has still to run holds the
 /// `close`.
 ///
-/// Only a drain makes one. Without `close` a queued group waiting for its
-/// window holds nothing — the controller is idle, and `Solo.pending` is
-/// `null` — and a plain `close` drops the queue at once.
+/// Only a drain makes one in a `Solo` and in a lane. Without `close` a
+/// queued group waiting for its window holds nothing — the controller is
+/// idle, and `Solo.pending` is `null` — and a plain `close` drops the queue
+/// at once. A pool of a `SoloLanes` makes one without a drain as well, when
+/// every place is taken: its [jobs] wait for a place, and it prints as
+/// `SoloPending(waiting for a place, ...)`. In a drain a pool makes one
+/// beside its running jobs, for the queued jobs whose key none of them
+/// holds.
 ///
 /// Once a microtask has passed with no job running, every job in [jobs] is
 /// a group of `collect` or `accumulate` its timing still holds back: the
 /// engine goes past such a group to a ready job behind it, and starts that
 /// one. A ready job is seen here only synchronously — right after
 /// `close(mode: SoloCloseMode.drain)`, or from a hook before the engine
-/// comes back to the queue.
+/// comes back to the queue. In a pool whose every place is taken, the jobs
+/// here wait for a place as well, ready or not.
 final class SoloPendingQueue extends SoloPending {
   /// The jobs the drain has still to run, in queue order.
   ///
@@ -207,19 +213,44 @@ final class SoloPendingQueue extends SoloPending {
       '${jobs.map(_name).join(', ')})';
 }
 
-/// What is holding a `SoloLanes`: the snapshot of each lane that holds it.
+/// The queued jobs of a pool whose every place is taken, with no drain:
+/// a [SoloPendingQueue] that does not say "draining".
+final class _SoloPendingPlaces extends SoloPendingQueue {
+  const _SoloPendingPlaces(super.jobs);
+
+  @override
+  String toString() =>
+      'SoloPending(waiting for a place, ${jobs.length} queued: '
+      '${jobs.map(_name).join(', ')})';
+}
+
+/// The queued jobs of a pool whose every place is taken, outside a drain;
+/// the engine makes these, and the library does not export it.
+@internal
+SoloPendingQueue soloPendingPlaces(List<Job<Object?>> jobs) =>
+    _SoloPendingPlaces(jobs);
+
+/// What is holding a `SoloLanes`: the snapshot of each lane and pool that
+/// holds it.
 ///
 /// A lane says what a `Solo` would: [SoloPendingJob] for its running job,
-/// [SoloPendingQueue] for what a drain has still to run in it. Only the
-/// lanes that hold the controller are listed, so one busy lane of three is
-/// still this, with one entry, and no busy lane is `null`, not an empty
-/// list.
+/// [SoloPendingQueue] for what a drain has still to run in it. A pool has
+/// as many entries as it has running jobs, a [SoloPendingJob] each in the
+/// order they started, and one [SoloPendingQueue] after them for its queued
+/// jobs whose key none of them holds, in a drain or while every place is
+/// taken. Only the lanes and pools that hold the controller are listed, so
+/// one busy lane of three is still this, with one entry, and no busy lane
+/// is `null`, not an empty list.
 ///
 /// It prints as the others do, `SoloPending(...)`, with the name and the
 /// snapshot of each lane inside: `SoloPending(a: SoloPending(...), ...)`.
 final class SoloPendingLanes extends SoloPending {
   /// Each lane that holds the controller and its snapshot, in the order the
   /// lanes were declared.
+  ///
+  /// A pool stands where it was declared, with as many entries of its `id`
+  /// as it has running jobs, and one more when its queue holds the
+  /// controller: several entries may name one pool.
   ///
   /// Taken when the snapshot is: the lanes moving on do not change it.
   final List<SoloPendingLane> lanes;
@@ -237,12 +268,17 @@ final class SoloPendingLanes extends SoloPending {
 /// a lane without breaking the code that reads this.
 @immutable
 final class SoloPendingLane {
-  /// The lane that holds the controller.
+  /// The lane or pool that holds the controller.
   final SoloLaneId lane;
 
   /// What holds the lane: a [SoloPendingJob] for its running job, or a
   /// [SoloPendingQueue] for what a drain has still to run in it, and
   /// nothing else.
+  ///
+  /// A pool gives one entry for each of its running jobs, a
+  /// [SoloPendingJob], and one for its queue, a [SoloPendingQueue] of the
+  /// jobs that wait for a place or for the drain; each of these names the
+  /// pool.
   ///
   /// The type is the wider [SoloPending], so a `switch` over it that names
   /// only those two needs a `_` branch for the rest, which never comes.

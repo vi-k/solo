@@ -121,8 +121,10 @@ abstract interface class SoloQueueOwner<S extends Object> {
   /// [Solo.lastJobWhere].
   SoloJob<Object?>? lastJobWhere(bool Function(SoloJob<Object?> job) test);
 
-  /// What is holding this lane or pool right now, as
-  /// [SoloController.pending] says it for a [Solo], or `null`.
+  /// What is holding this lane or pool right now, or `null`: a lane says it
+  /// as [SoloController.pending] does for a [Solo], a pool as a
+  /// [SoloPendingLanes] of its own entries however many jobs run in it, one
+  /// for each running job and one for its queue when the queue holds it.
   SoloPending? get pending;
 }
 
@@ -464,6 +466,17 @@ final class _SoloPool<S extends Object> extends _SoloQueueFace<S>
   @override
   List<SoloJob<Object?>> get running =>
       List<SoloJob<Object?>>.unmodifiable(_pool.running);
+
+  // The entries of this pool as the controller lists them: one running job
+  // is a `SoloPendingLanes` as several are, so the shape does not depend on
+  // how many jobs run.
+  @override
+  SoloPending? get pending {
+    final entries = _controller._pendingEntriesOf(_pool);
+    return entries.isEmpty
+        ? null
+        : SoloPendingLanes(List<SoloPendingLane>.unmodifiable(entries));
+  }
 
   @override
   String toString() => 'SoloPool($name)';
