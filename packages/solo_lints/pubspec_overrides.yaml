@@ -1,6 +1,4 @@
-# Until solo 2.1.0 is published.
+# Until async_job_lints 0.2.4 is published.
 dependency_overrides:
   async_job_lints:
     path: ../async_job_lints
-  solo:
-    path: ../solo
