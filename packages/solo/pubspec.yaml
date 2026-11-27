@@ -3,7 +3,7 @@ description: >-
   One job at a time, in one queue or in each of several lanes, or a set
   number at once in a pool: jobs over one state, declarative rules and
   cooperative cancellation. Pure Dart.
-version: 2.0.1
+version: 2.1.0
 repository: https://github.com/vi-k/solo/tree/main/packages/solo
 documentation: https://docs.yet-another.dev/solo/
 issue_tracker: https://github.com/vi-k/solo/issues
