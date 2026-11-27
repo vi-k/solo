@@ -510,13 +510,30 @@ Element? _laneField(Expression? expression) {
       : null;
 }
 
-/// The own lane fields of each unit, found in one walk of it.
-final _ownLaneFieldsOf = Expando<Set<Element>>('own lane fields');
+/// The declarations of lanes and pools of each unit, found in one walk of it.
+final _declarationsOf = Expando<_LaneDeclarations>('lane declarations');
+
+/// The declarations of lanes and pools in the unit [root] is in.
+_LaneDeclarations _declarationsIn(AstNode root) =>
+    _declarationsOf[root] ??= (_LaneDeclarations()..walk(root));
 
 /// The fields of the unit [root] is in that are their controller's own
 /// lanes.
-Set<Element> _ownLaneFields(AstNode root) =>
-    _ownLaneFieldsOf[root] ??= (_LaneDeclarations()..walk(root)).own;
+Set<Element> _ownLaneFields(AstNode root) => _declarationsIn(root).own;
+
+/// Whether the lane field [lane], as [queuedBodyOf] gives it for a body
+/// around [node], holds a pool: declared by `pool(...)` in the unit of
+/// [node], or typed `SoloPool` when no declaration of it is seen there.
+///
+/// A field typed `SoloQueueOwner` holds whatever declared it, so the type
+/// alone does not tell a pool.
+bool isPoolField(Element lane, AstNode node) {
+  final declarations = _declarationsIn(node.root);
+  if (declarations.declared.contains(lane)) {
+    return declarations.pools.contains(lane);
+  }
+  return lane is FieldElement && isSoloPool(lane.type);
+}
 
 /// Finds the writes of the fields of a unit: `field = lane(...)` or
 /// `this.field = lane(...)`, and the same with `pool(...)`, right in a
@@ -524,11 +541,16 @@ Set<Element> _ownLaneFields(AstNode root) =>
 /// controller declare its lanes and pools, and every other write, which makes
 /// the field one that may hold another controller's lane.
 class _LaneDeclarations extends RecursiveAstVisitor<void> {
-  final _declared = <Element>{};
+  /// The fields written by a declaration, whatever else writes them.
+  final declared = <Element>{};
+
+  /// The fields of [declared] that a `pool(...)` declares.
+  final pools = <Element>{};
+
   final _written = <Element>{};
 
   /// The fields written only by a declaration.
-  Set<Element> get own => _declared.difference(_written);
+  late final Set<Element> own = declared.difference(_written);
 
   void walk(AstNode root) => root.accept(this);
 
@@ -547,7 +569,11 @@ class _LaneDeclarations extends RecursiveAstVisitor<void> {
         declaresQueueOwner(value) &&
         inConstructor?.declaredFragment?.element.enclosingElement ==
             field.enclosingElement;
-    (declares ? _declared : _written).add(field);
+    (declares ? declared : _written).add(field);
+    if (declares &&
+        isSoloMember(value.methodName.element, 'SoloLanes', 'pool')) {
+      pools.add(field);
+    }
   }
 
   @override
@@ -655,6 +681,9 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
 /// of `collect` or `accumulate` runs where its group goes. A rule that
 /// reports a wait for the own queue or the own lane looks at this body, and
 /// a rule that leaves a wait for the own lane to it asks the same.
+///
+/// A pool is a lane here: a body given to `enqueue` of a pool field has
+/// that field for its lane, and [isPoolField] tells the pool apart.
 ({Element ctx, Element? lane})? queuedBodyOf(AstNode node) {
   final around = controllerAround(node);
   if (!isSolo(around) && !isSoloController(around)) return null;
@@ -677,7 +706,7 @@ Element? _laneOfMethod(MethodInvocation call, MethodElement method) {
 /// [body] with its context [ctx] when it is given to a call on this
 /// controller, on the context of a body queued here or on a lane field, or
 /// to no call, rather than to another controller's `enqueue`; with the lane
-/// when it is given to `enqueue` of a lane field.
+/// when it is given to `enqueue` of a lane field, a pool field included.
 ({Element ctx, Element? lane})? _queuedHere(
   FunctionExpression body,
   Element ctx,

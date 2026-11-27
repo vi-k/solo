@@ -522,6 +522,60 @@ $_pools
 }
 ''', []);
 
+  // A field typed SoloQueueOwner holds what declared it: the message follows
+  // the declaration, pool(...) or lane(...), not the type.
+  Future<void> test_queue_owner_fields() {
+    const code = '''
+import 'package:solo/solo.dart';
+
+final class Feed extends SoloLanes<int> {
+  Feed() : super(0) {
+    _likes = pool('likes', concurrency: 4);
+    _reload = lane('reload');
+  }
+
+  late final SoloQueueOwner<int> _likes;
+  late final SoloQueueOwner<int> _reload;
+
+  Job<void> likeTwice() => _likes.enqueue<int, void>((ctx) async {
+    await _likes.enqueue<int, void>((ctx) async {}).done;
+  });
+
+  Job<void> reloadTwice() => _reload.enqueue<int, void>((ctx) async {
+    await _reload.enqueue<int, void>((ctx) async {}).done;
+  });
+}
+''';
+    const pool = '_likes.enqueue<int, void>((ctx) async {})';
+    const lane = '_reload.enqueue<int, void>((ctx) async {})';
+    return assertDiagnostics(code, [
+      lint(
+        code.indexOf('await $pool') + 'await '.length,
+        pool.length,
+        messageContainsAll: ["'enqueue' waits for a job of the pool '_likes'"],
+      ),
+      lint(
+        code.indexOf('await $lane') + 'await '.length,
+        lane.length,
+        messageContainsAll: ["the running job of the lane '_reload'"],
+      ),
+    ]);
+  }
+
+  // close and cancelAll wait for every lane and pool: from a body of a pool
+  // they are reported as from a body of a lane.
+  Future<void> test_close_of_lanes_from_a_pool() => assertAt(
+    '''
+$_pools
+  Job<void> stop() => _likes.enqueue<int, void>((ctx) async {
+    await cancelAll();
+    await this.close();
+  });
+}
+''',
+    ['cancelAll()', 'this.close()'],
+  );
+
   /// Asserts one diagnostic at [span], the first one awaited in [code],
   /// that names [member] and the pool `_likes`.
   Future<void> _assertPool(String code, String span, String member) =>

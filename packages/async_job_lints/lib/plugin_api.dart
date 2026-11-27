@@ -31,6 +31,7 @@ export 'src/context.dart'
         isDartCoreClass,
         isFromJobPackages,
         isJobContext,
+        isPoolField,
         isSolo,
         isSoloContext,
         isSoloController,

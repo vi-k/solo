@@ -3,7 +3,6 @@ import 'package:analyzer/analysis_rule/rule_context.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
-import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/error/error.dart';
 import 'package:async_job_lints/plugin_api.dart';
 
@@ -111,8 +110,9 @@ class _Visitor extends SimpleAstVisitor<void> {
       );
     } else {
       // A pool waits for its key or a free place rather than for one
-      // running job, and says so.
-      final pool = isSoloPool((lane as FieldElement).type);
+      // running job, and says so. The declaration tells a pool, since a
+      // field typed SoloQueueOwner holds a lane or a pool alike.
+      final pool = isPoolField(lane, node);
       rule.reportAtNode(
         call,
         diagnosticCode: pool ? AwaitOwnQueue.poolCode : AwaitOwnQueue.laneCode,

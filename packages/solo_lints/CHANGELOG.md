@@ -1,6 +1,6 @@
 ## Unreleased
 
-- Three rules learn the pools of `SoloLanes` in `solo` 2.1.
+- Five rules learn the pools of `SoloLanes` in `solo` 2.1.
   `lane_outside_constructor` reports `pool(...)` outside the constructor body,
   with a message of its own: a pool is sealed with the lanes. `await_own_queue`
   reports a body queued in a pool that waits for a job of the same pool, with a
@@ -9,8 +9,9 @@
   the rule reports the wait whatever the key. `stale_emit` takes a body given
   to a pool as one given to a lane. `key_per_request` and
   `ignore_failure_hides_bugs` take the members of a pool as those of a lane.
-  The README describes the pools in the sections of the three rules. Requires
-  the next patch of `async_job_lints`, which recognizes the pools.
+  The README describes the pools in the sections of `lane_outside_constructor`,
+  `await_own_queue` and `stale_emit`. Requires the next patch of
+  `async_job_lints`, which recognizes the pools.
 
 ## 0.3.1
 
