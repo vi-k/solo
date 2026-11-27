@@ -15,6 +15,11 @@
   типа `SoloQueueOwner` держит и линию, и пул. `isSoloMember` принимает член
   пула за член `Solo`, как и член линии: `outcome_after_await` видит, что `job`
   пула делает задачу, не ставя её в очередь.
+- solo_lints 0.3.1 берёт эту версию по своему `^0.2.3` и с ней видит пулы:
+  ожидание своего пула из тела, поставленного в него, — его `await_own_queue`
+  с сообщением о линии, а не `bare_await` или `discarded_outcome`, а его
+  `key_per_request` и `ignore_failure_hides_bugs` принимают члены пула как
+  члены линии. О пуле говорит solo_lints 0.4.0.
 - README в разделах `bare_await` и `discarded_outcome` говорит, что ожидание
   своего пула достаётся `await_own_queue` из solo_lints, как и ожидание своей
   линии.

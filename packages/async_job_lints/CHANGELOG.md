@@ -17,6 +17,12 @@
   takes a member of a pool for that of a `Solo`, as it takes one of a lane:
   `outcome_after_await` sees that `job` of a pool makes a job without queueing
   it.
+- solo_lints 0.3.1 takes this version by its `^0.2.3` and sees the pools with
+  it: a wait for the own pool from a body queued in it is its
+  `await_own_queue`, with the message about a lane, rather than `bare_await` or
+  `discarded_outcome`, and its `key_per_request` and
+  `ignore_failure_hides_bugs` take the members of a pool as those of a lane.
+  solo_lints 0.4.0 speaks of the pool.
 - The README says in the sections of `bare_await` and `discarded_outcome` that
   a wait for the own pool goes to `await_own_queue` of solo_lints, as a wait
   for the own lane does.

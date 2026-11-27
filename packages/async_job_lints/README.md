@@ -229,10 +229,11 @@ lane's pump. A pool of solo 2.1 runs several jobs at once, and a job that waits
 for a job of its own pool waits for good under its own key, and under any once
 every place is taken by such waits. This rule reports such a wait like any
 other plain one. solo_lints reports a wait for the own queue, a solo_lints
-newer than 0.2.0 reports a wait for the own lane too, and one newer than 0.3.1
-a wait for the own pool, from a body queued on that controller as
-`await_own_queue`, with a message about the queue, the lane or the pool, and
-keeps `bare_await` quiet there.
+newer than 0.2.0 reports a wait for the own lane too, and 0.3.1 or newer a wait
+for the own pool, from a body queued on that controller as `await_own_queue`,
+with a message about the queue, the lane or the pool, and keeps `bare_await`
+quiet there. solo_lints 0.3.1 speaks of a wait for the own pool as of one for
+the own lane; the message about the pool comes with 0.4.0.
 
 It is a lint rather than a warning because tests wait in bodies on purpose, to
 cancel a job midway. A project that gates CI on it turns it on as
@@ -269,14 +270,14 @@ whose `outcome`, `value` or `done` is read later in the same function, when
 `ignoreFailure()` was called on it before, as a statement or in a cascade of
 its declaration, and in a job body on a `done` of a job of the own queue of a
 `Solo`, or, under a solo_lints newer than 0.2.0, on an awaited `done` of the
-own lane from a body queued in that lane, and under one newer than 0.3.1 of the
-own pool from a body queued in that pool. An awaited `done` there is a wait of
-the job for itself, a deadlock rather than a dropped failure: solo_lints
-reports it as `await_own_queue` when the body is queued on the controller, and
-without solo_lints `bare_await` reports its `await` right in the body. A `done`
-of the own queue that is not awaited waits for nothing, and no rule reports it.
-A test that waits for a job only to look at it afterwards reads `job.outcome`
-after `await job.done;` and keeps the rule quiet that way.
+own lane from a body queued in that lane, and under 0.3.1 or newer of the own
+pool from a body queued in that pool. An awaited `done` there is a wait of the
+job for itself, a deadlock rather than a dropped failure: solo_lints reports it
+as `await_own_queue` when the body is queued on the controller, and without
+solo_lints `bare_await` reports its `await` right in the body. A `done` of the
+own queue that is not awaited waits for nothing, and no rule reports it. A test
+that waits for a job only to look at it afterwards reads `job.outcome` after
+`await job.done;` and keeps the rule quiet that way.
 
 The failure is answered for without anybody reading the outcome when the job is
 continued with `then` or a handle of `shared()`, when it runs under `ctx.run`
