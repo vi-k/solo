@@ -94,7 +94,7 @@ of `solo` in the code. Name it in `analysis_options.yaml`:
 
 ```yaml
 plugins:
-  solo_lints: ^0.3.0
+  solo_lints: ^0.4.0
 ```
 
 That turns on its warnings; the lints are turned on by name, as its

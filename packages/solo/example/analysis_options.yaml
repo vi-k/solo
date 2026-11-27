@@ -260,7 +260,7 @@ linter:
 
 plugins:
   solo_lints:
-    version: ^0.3.0
+    version: ^0.4.0
     diagnostics:
       catch_without_check: true
       key_per_request: true

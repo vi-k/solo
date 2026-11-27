@@ -1,8 +1,9 @@
 > **Состояние на 2026-11-28:** выпущен по слову владельца «опубликуй
 > solo_lints 0.4.0»: релизный коммит «Release solo_lints 0.4.0», аннотированный
 > тег `solo_lints-v0.4.0`, `git push --follow-tags`, `dart pub publish`.
-> Следом — подъём `solo_lints: ^0.4.0` в README и примерах `solo`
-> и `flutter_solo`.
+> README и примеры `solo` и `flutter_solo` подняты до `solo_lints: ^0.4.0`
+> тем же днём, коммитом «docs: ask for solo_lints 0.4.0 in solo and
+> flutter_solo».
 > **Что это:** подготовка минора `solo_lints` 0.4.0 — пять правил узнают пулы
 > `SoloLanes`.
 > **Связанные записи:** `2026-11-27-async-job-lints-0-2-4-release-report.md`,
@@ -130,3 +131,23 @@ solo_lints 0.4.0», следующим сообщением после докл�
 
 pub.dev показал `solo_lints` 0.4.0 через пару минут после загрузки. Пуш
 запустил `gate` и `site` CI на `281d2c9a`, оба зелёные.
+
+## Подъём в README соседей
+
+По слову владельца 2026-11-28 «подними solo_lints ^0.4.0 в README solo
+и flutter_solo» — коммит «docs: ask for solo_lints 0.4.0 in solo and
+flutter_solo». `solo_lints: ^0.4.0` теперь просят README `solo`
+и `flutter_solo`, их переводы и `analysis_options.yaml` примера `solo`, примера
+и приложения `camera_example` `flutter_solo`: сторож `readme_rakes_test.dart`
+обоих пакетов требует, чтобы README называл ту версию, с которой анализируется
+пример. В списках изменений обоих пакетов и их переводах — раздел «Unreleased»
+с этой строкой; линтер `humanizer--ru` — 0 ошибок. Набор диагностик примеров
+не менялся: 0.4.0 новых правил не вводит.
+
+Проверено против опубликованных пакетов: тесты `solo` +2588, пример `solo`
++112, `flutter_solo` +344, его пример +6, `camera_example` +291 — сторожа
+`readme_rakes_test.dart` в их числе; формат без изменений,
+`dart analyze --fatal-infos` пакетов, примеров и `camera_example` и их
+`flutter analyze` — «No issues found!»; сервер анализа разрешил плагин
+`solo_lints` 0.4.0 с `async_job_lints` 0.2.4. Переводы, ссылки, ширина
+и заливка — чистые.

@@ -1,3 +1,12 @@
+## Unreleased
+
+### Documentation
+
+- The README asks for `solo_lints: ^0.4.0`, whose rules see the pools of
+  `SoloLanes`: `lane_outside_constructor` reports `pool(...)` outside the
+  constructor body, and `await_own_queue` reports a body queued in a pool that
+  waits for a job of the same pool.
+
 ## 2.0.1
 
 ### Documentation
