@@ -386,20 +386,27 @@ void main() {
       });
     });
 
-    test('a second call joins the load already in flight', () async {
-      final api = _CountingApi();
-      final profile = ProfileController(api);
+    // On the fake clock: a real one can let the fake's 20 ms pass while the
+    // first load is let start, and the second call then starts a load anew.
+    test('a second call joins the load already in flight', () {
+      fakeAsync((async) {
+        final api = _CountingApi();
+        final profile = ProfileController(api);
 
-      final job = profile.load();
-      await pumpEventQueue();
-      final second = profile.load();
-      await job.done;
+        final job = profile.load();
+        async.flushMicrotasks();
+        expect(api.started, 1);
+        final second = profile.load();
+        async.elapse(const Duration(milliseconds: 20));
 
-      expect(second, same(job));
-      expect(api.started, 1);
-      _says('is what makes a second call join the load already in flight');
+        expect(job.isFinished, isTrue);
+        expect(second, same(job));
+        expect(api.started, 1);
+        _says('is what makes a second call join the load already in flight');
 
-      await profile.close();
+        unawaited(profile.close());
+        async.flushMicrotasks();
+      });
     });
 
     test('a test that awaits waits the fake out for real', () async {
