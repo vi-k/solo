@@ -1,12 +1,12 @@
 # Handoff: текущее состояние проекта
 
-Обновлено: 2026-11-27. Пул в `SoloLanes` из бэклога сделан и выпущен в `solo`
+Обновлено: 2026-11-28. Пул в `SoloLanes` из бэклога сделан и выпущен в `solo`
 2.1.0: `pool(name, concurrency: N)` — до N корней сразу, две задачи одного
 ключа никогда не идут вместе, порядок ключа строгий. Дизайн —
 `2026-11-27-solo-pool-design.md`, план — `2026-11-27-solo-pool-plan.md`, отчёт
 об исполнении по задачам с ревью — `2026-11-27-solo-pool-report.md`. Выпуск
 по слову владельца «готовь выпуск async_job_lints, solo 2.1.0 и solo_lints»
-идёт по порядку: `solo` 2.1.0, затем `async_job_lints` 0.2.4, затем
+прошёл по порядку: `solo` 2.1.0, затем `async_job_lints` 0.2.4, затем
 `solo_lints` 0.4.0 — тесты линтов идут против `solo` и узнают пул по его
 именам. `solo` 2.1.0 выпущен по слову владельца 2026-11-27 «опубликуй solo
 2.1.0»: `2026-11-27-solo-2-1-0-release-report.md`. `async_job_lints` 0.2.4
@@ -16,17 +16,16 @@
 Сайт с пушем связки `solo` показывает тексты `solo_lints` о пуле, поэтому его
 связка — сразу за `async_job_lints` (решения 172 и 173 `docs/settled.md`, ревью
 подготовки — `2026-11-27-pool-releases-prep-review-report.md`). `solo_lints`
-0.4.0 подготовлен и проверен против опубликованных `async_job_lints` 0.2.4
-и `solo` 2.1.0, коммит «chore: prepare solo_lints 0.4.0» в `main`, ждёт
-отдельного запроса на связку: `2026-11-27-solo-lints-0-4-0-release-report.md`.
+0.4.0 выпущен по слову владельца 2026-11-28 «опубликуй solo_lints 0.4.0»:
+`2026-11-27-solo-lints-0-4-0-release-report.md`; все три выпуска пула вышли.
 `flutter_solo` выпуска не требует: после выхода `solo` 2.1.0 его три оверрайда
 сняты, и пакет, пример и `camera_example` зелёные против опубликованного
 `solo`. `gate` и `site` CI на релизных коммитах `a23aef7a` и `376416df`
 зелёные; до связки `gate` прогнан на `3d2830db` с полом приложения
 `camera_example` на Flutter 3.44.0.
 
-На pub.dev на 2026-11-27: `async_job` 1.0.6, `solo` 2.1.0, `flutter_solo`
-2.0.1, `async_job_lints` 0.2.4, `solo_lints` 0.3.1. Оверрайдов в дереве нет:
+На pub.dev на 2026-11-28: `async_job` 1.0.6, `solo` 2.1.0, `flutter_solo`
+2.0.1, `async_job_lints` 0.2.4, `solo_lints` 0.4.0. Оверрайдов в дереве нет:
 пакеты идут против опубликованных `async_job` 1.0.6, `solo` 2.1.0
 и `async_job_lints` 0.2.4. На `solo` их сняли коммитом «chore: drop the
 overrides on solo», последний, у `solo_lints`, — коммитом «chore: drop the
@@ -46,11 +45,9 @@ override on async_job_lints». Линии — `2026-11-11-solo-lanes-report.md`,
 
 **Ждёт слова владельца.**
 
-- Связка `solo_lints` 0.4.0 — отдельным запросом владельца, состоящим только
-  из просьбы опубликовать: коммит «Release solo_lints 0.4.0», тег
-  `solo_lints-v0.4.0`, `git push --follow-tags`, `dart pub publish`. После
-  неё — отдельной правкой `solo_lints: ^0.4.0` в README и примерах `solo`
-  и `flutter_solo`; до pub.dev она дойдёт с их следующими выпусками.
+- Подъём `solo_lints: ^0.4.0` в README и примерах `solo` и `flutter_solo` —
+  отдельной правкой после связки; до pub.dev она дойдёт с их следующими
+  выпусками.
 
 - Бэклог: `onCancel` в `ctx.join` к первому минору ядра.
 
