@@ -1,4 +1,4 @@
-## Не выпущено
+## 0.2.4
 
 - `plugin_api.dart` экспортирует `isSoloQueueOwner`, `isSoloPool`,
   `declaresQueueOwner` и `isPoolField` — для правил плагина поверх о пулах

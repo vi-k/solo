@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.4
 
 - `plugin_api.dart` exports `isSoloQueueOwner`, `isSoloPool`,
   `declaresQueueOwner` and `isPoolField`, for the rules of a plugin on top
