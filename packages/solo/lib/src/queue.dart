@@ -430,16 +430,20 @@ final class _SoloPoolQueue<S extends Object> extends _SoloQueue<S> {
   void _unlink(_SoloJob<S, S, Object?> job) {
     // Read before the job leaves the index: the one after it there is the
     // next head of its key. The holders are asked here too, before the
-    // queue changes: a key whose `==` or `hashCode` throws in that lookup
-    // leaves the job where it was, in the queue and among the candidates.
+    // queue changes, and only for a candidate, the one job whose leaving
+    // can make another a candidate: a key whose `==` or `hashCode` throws
+    // in that lookup leaves the job where it was, in the queue and among
+    // the candidates.
     final entry = job._keyEntry;
     final next = entry?.next?.job;
-    final held = next != null && _holders.containsKey(entry!.by);
+    final candidate = _ready.containsKey(job._seq);
+    final held = candidate && next != null && _holders.containsKey(entry!.by);
     super._unlink(job);
+    _ready.remove(job._seq);
     // A job of a key is a candidate only as the head of a free key, so the
     // next one heads a free key as well, unless the pump has just taken
     // this one and holds the key for it.
-    if (_ready.remove(job._seq) == null || next == null || held) return;
+    if (!candidate || next == null || held) return;
     _ready[next._seq] = next;
     // A removal or a move made by the caller's code ends no running job,
     // so nothing else brings the pump back for this one. In the step of

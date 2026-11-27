@@ -676,9 +676,7 @@ void main() {
     });
 
     test('a key not equal to itself shares nothing', () {
-      final lines = <String>[];
-      Solo.debug = lines.add;
-      fakeAsync((async) {
+      final lines = _debugLines((async) {
         final (controller, pool) = _onePool(2);
         final log = controller.log;
         final x = Completer<void>();
@@ -692,7 +690,6 @@ void main() {
         expect(log, ['start one', 'start x', 'end x', 'start two']);
         expect(pool.running, [same(one), same(two)]);
       });
-      Solo.debug = null;
 
       // Every place is taken when `two` comes, and `one` runs with a key
       // of the same value: what `two` waits for is a place, not the key.

@@ -1555,7 +1555,7 @@ abstract class SoloController<S extends Object> {
 
   /// The name of the lane or pool that wrote the state last after [job]
   /// last saw it, and by whom; `null` when none did, when [job] has not
-  /// read the state, outside lanes, and with [Solo.debug] off, which is the
+  /// read the state, in a [Solo], and with [Solo.debug] off, which is the
   /// only one to ask.
   ///
   /// The own lane of [job] does not count; its own pool counts by the
