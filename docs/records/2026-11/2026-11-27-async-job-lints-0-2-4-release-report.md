@@ -1,7 +1,7 @@
-> **Состояние на 2026-11-27:** подготовлено и проверено против
-> опубликованного `solo` 2.1.0, в `main`; ждёт отдельного запроса владельца
-> на связку: релизный коммит «Release async_job_lints 0.2.4», аннотированный
-> тег `async_job_lints-v0.2.4`, `git push --follow-tags`, `dart pub publish`.
+> **Состояние на 2026-11-27:** выпущен по слову владельца «опубликуй
+> async_job_lints 0.2.4»: релизный коммит «Release async_job_lints 0.2.4»,
+> аннотированный тег `async_job_lints-v0.2.4`, `git push --follow-tags`,
+> `dart pub publish`. Следом — связка `solo_lints` 0.4.0.
 > **Что это:** подготовка патча `async_job_lints` 0.2.4 — распознавание пулов
 > `SoloLanes` и четыре новых экспорта для плагина поверх.
 > **Связанные записи:** `2026-11-27-solo-2-1-0-release-report.md`,
@@ -99,3 +99,17 @@ found!», `dart doc --dry-run` — «Found 0 warnings and 0 errors.», `dart tes
 
 На 2026-11-27: на pub.dev `async_job_lints` 0.2.3; тега
 `async_job_lints-v0.2.4` нет ни локально, ни в origin.
+
+## Связка
+
+Владелец разрешил публикацию 2026-11-27 отдельным запросом «опубликуй
+async_job_lints 0.2.4», следующим сообщением после выхода `solo` 2.1.0. Перед
+связкой на pub.dev стоял `async_job_lints` 0.2.3, тега `async_job_lints-v0.2.4`
+не было ни локально, ни в origin, `main` был впереди `origin/main` на три
+коммита — снятие оверрайдов на `solo`, эту подготовку и заметку о CI после
+выхода `solo` — и не отставал от него. Пробная публикация на `38de299a` против
+`solo` 2.1.0 с pub.dev — «Package has 0 warnings.».
+
+Связка: релизный коммит «Release async_job_lints 0.2.4», аннотированный тег
+`async_job_lints-v0.2.4`, `git push --follow-tags` и `dart pub publish --force`
+из чистого дерева `packages/async_job_lints`.

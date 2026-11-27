@@ -10,15 +10,14 @@
 `solo_lints` 0.4.0 — тесты линтов идут против `solo` и узнают пул по его
 именам. `solo` 2.1.0 выпущен по слову владельца 2026-11-27 «опубликуй solo
 2.1.0»: `2026-11-27-solo-2-1-0-release-report.md`. `async_job_lints` 0.2.4
-подготовлен и проверен против опубликованного `solo`, коммит «chore: prepare
-async_job_lints 0.2.4» в `main`, ждёт отдельного запроса на связку:
-`2026-11-27-async-job-lints-0-2-4-release-report.md`. До его выхода
-опубликованные линты ложно предупреждают на коде с пулом, а сайт с пушем связки
-`solo` уже показывает их тексты о пуле, поэтому связки линтов — сразу за `solo`
-(решения 172 и 173 `docs/settled.md`, ревью подготовки —
-`2026-11-27-pool-releases-prep-review-report.md`). Подготовка `solo_lints`
-0.4.0 — в локальной ветке `pool-lints-release`, один коммит поверх `main`
-«chore: prepare solo_lints 0.4.0» с записью
+выпущен по слову владельца 2026-11-27 «опубликуй async_job_lints 0.2.4»:
+`2026-11-27-async-job-lints-0-2-4-release-report.md`; с ним и опубликованный
+`solo_lints` 0.3.1 видит пулы, а ложное предупреждение на коде с пулом ушло.
+Сайт с пушем связки `solo` показывает тексты `solo_lints` о пуле, поэтому его
+связка — сразу за `async_job_lints` (решения 172 и 173 `docs/settled.md`, ревью
+подготовки — `2026-11-27-pool-releases-prep-review-report.md`). Подготовка
+`solo_lints` 0.4.0 — в локальной ветке `pool-lints-release`, один коммит поверх
+`main` «chore: prepare solo_lints 0.4.0» с записью
 `2026-11-27-solo-lints-0-4-0-release-report.md`, вне `main` до своей очереди:
 её README просят версию, которой на pub.dev ещё нет, а сайт собирается
 из `main`. После выхода `async_job_lints` 0.2.4 коммит встаёт на `main`,
@@ -30,7 +29,7 @@ async_job_lints 0.2.4» в `main`, ждёт отдельного запроса 
 `camera_example` на Flutter 3.44.0.
 
 На pub.dev на 2026-11-27: `async_job` 1.0.6, `solo` 2.1.0, `flutter_solo`
-2.0.1, `async_job_lints` 0.2.3, `solo_lints` 0.3.1. В дереве один оверрайд,
+2.0.1, `async_job_lints` 0.2.4, `solo_lints` 0.3.1. В дереве один оверрайд,
 у `solo_lints`, первой строкой `# Until async_job_lints 0.2.4 is published.`:
 он ведёт на `async_job_lints` из дерева. Остальное идёт против опубликованных
 `async_job` 1.0.6 и `solo` 2.1.0: оверрайды на `solo` сняты коммитом «chore:
@@ -50,11 +49,11 @@ drop the overrides on solo». Линии — `2026-11-11-solo-lanes-report.md`,
 
 **Ждёт слова владельца.**
 
-- Связка `async_job_lints` 0.2.4 — отдельным запросом владельца, состоящим
-  только из просьбы опубликовать, и скоро: до неё опубликованные линты ложно
-  предупреждают на коде с пулом. Коммит «Release async_job_lints 0.2.4», тег
-  `async_job_lints-v0.2.4`, `git push --follow-tags`, `dart pub publish`. Затем
-  подготовка `solo_lints` 0.4.0 встаёт на `main` и ждёт своего запроса.
+- Подготовка `solo_lints` 0.4.0 встаёт на `main`: снимается его оверрайд,
+  проверка — против опубликованных `async_job_lints` 0.2.4 и `solo` 2.1.0.
+  Затем связка — отдельным запросом владельца, состоящим только из просьбы
+  опубликовать: коммит «Release solo_lints 0.4.0», тег `solo_lints-v0.4.0`,
+  `git push --follow-tags`, `dart pub publish`.
 
 - Бэклог: `onCancel` в `ctx.join` к первому минору ядра.
 
