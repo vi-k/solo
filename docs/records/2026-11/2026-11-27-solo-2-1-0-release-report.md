@@ -145,3 +145,9 @@ floor: 7 roots», Flutter 3.44.0 для приложения, `flutter pub downg
 Связка: релизный коммит «Release solo 2.1.0», аннотированный тег `solo-v2.1.0`,
 `git push --follow-tags` и `dart pub publish --force` из чистого дерева
 `packages/solo`.
+
+Пуш запустил `gate` и `site` CI на `a23aef7a`, оба зелёные. Следом коммит
+«chore: drop the overrides on solo» снял оверрайды на `solo` у обоих линтов,
+`flutter_solo`, его примера и `camera_example`; против `solo` 2.1.0 с pub.dev
+`async_job_lints` +234, `solo_lints` +174, `flutter_solo` +344, его пример +6,
+`camera_example` +291.
