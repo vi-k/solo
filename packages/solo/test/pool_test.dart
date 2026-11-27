@@ -879,7 +879,7 @@ void main() {
   });
 
   group('accumulation', () {
-    /// An accumulator of [pool] of [key] whose group logs its start and
+    /// An accumulator of [pool] under [key] whose group logs its start and
     /// end with the time and runs for [length].
     SoloAccumulator<bool, void> groups(
       FakeAsync async,
@@ -959,7 +959,10 @@ void main() {
       fakeAsync((async) {
         final (controller, pool) = _onePool(2);
         final log = controller.log;
-        pool.enqueue<int, void>(key: 'long', _gated(log, 'long', Completer()));
+        pool.enqueue<int, void>(
+          key: 'long',
+          _gated(log, 'long', Completer<void>()),
+        );
         final likes = groups(
           async,
           pool,
@@ -1886,5 +1889,73 @@ void main() {
         expect(controller.isFinished, isTrue);
       });
     });
+  });
+
+  group('lanes as they were', () {
+    /// The lines of a lane `a` that runs a job with a child and a write,
+    /// next to [extra] declared after it.
+    List<String> laneLines(void Function(_Pools self)? extra) => _debugLines((
+      async,
+    ) {
+      final controller = _Pools((self) {
+        self.declareLane('a');
+        extra?.call(self);
+      });
+      controller.declaredLanes.single.enqueue<int, void>(key: 'k', (ctx) async {
+        ctx.emit(1);
+        await ctx.run(ctx.child<void>((child) async => child.emit(2)));
+      });
+      async.flushMicrotasks();
+      unawaited(controller.close());
+      async.flushMicrotasks();
+    });
+
+    test('a controller with a pool keeps the lines of its lanes', () {
+      final alone = laneLines(null);
+      final beside = laneLines((self) => self.declarePool('p', 2));
+
+      expect(alone, isNotEmpty);
+      expect(beside, alone);
+    });
+
+    /// The turns of `await Future<void>.value()` until a job of the lane
+    /// ends, with a busy pool declared after the lane or without one.
+    Future<int> laneTurns({required bool busyPool}) async {
+      final controller = _Pools((self) {
+        self.declareLane('a');
+        if (busyPool) self.declarePool('p', 1);
+      });
+      if (busyPool) {
+        controller.declaredPools.single.enqueue<int, void>(
+          _gated(controller.log, 'busy', Completer<void>()),
+        );
+      }
+      var ended = false;
+      unawaited(
+        controller.declaredLanes.single
+            .enqueue<int, void>((ctx) async => ctx.emit(1))
+            .done
+            .whenComplete(() => ended = true),
+      );
+      var turns = 0;
+      while (!ended) {
+        await Future<void>.value();
+        turns++;
+        if (turns > 1000) fail('the lane job never ended');
+      }
+      unawaited(controller.close());
+      return turns;
+    }
+
+    test(
+      'a lane next to a busy pool counts its microtasks as before',
+      () async {
+        final alone = await laneTurns(busyPool: false);
+        final beside = await laneTurns(busyPool: true);
+
+        expect(alone, greaterThan(0));
+        expect(beside, alone);
+      },
+    );
   });
 }
