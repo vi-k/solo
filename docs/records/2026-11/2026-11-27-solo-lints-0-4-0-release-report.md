@@ -127,3 +127,6 @@ solo_lints 0.4.0», следующим сообщением после докл�
 `solo_lints-v0.4.0`, `git push --follow-tags` и `dart pub publish --force`
 из чистого дерева `packages/solo_lints`. Выпуск последний из трёх: пул вышел
 в `solo` 2.1.0, `async_job_lints` 0.2.4 и `solo_lints` 0.4.0.
+
+pub.dev показал `solo_lints` 0.4.0 через пару минут после загрузки. Пуш
+запустил `gate` и `site` CI на `281d2c9a`, оба зелёные.
