@@ -109,8 +109,14 @@ second call joins the load already in flight» в `testing_rakes_test.dart`. Т�
 - дерево после прогонов не сдвинулось.
 
 Пол приложения `camera_example` на Flutter 3.44.0 локально не прогнан: SDK
-не установлен. Его прогонит CI после пуша связки; ветка пула приложение
-не трогает.
+не установлен. Поэтому до связки `gate` прогнан и в CI, на `3d2830db` — том же
+коммите, что `main` с этой подготовкой; после него только эта запись
+и `docs/handoff.md`. Ручной запуск на временной ветке origin, которую владелец
+отправил ради прогона: `main` на origin не тронут, сайт не собирался. Все пять
+заданий зелёные. В задании `floor` — «every archive passes its gate on the
+floor: 7 roots», Flutter 3.44.0 для приложения, `flutter pub downgrade` опустил
+`camera_android_camerax` с 0.7.6+2 до 0.7.6+1 при `camera` 0.12.2, тесты
+приложения — «291 tests passed».
 
 ## Состояние
 
