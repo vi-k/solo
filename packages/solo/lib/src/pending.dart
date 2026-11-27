@@ -195,7 +195,9 @@ final class SoloPendingJob extends SoloPending {
 /// Once a microtask has passed with no job running, every job in [jobs] is
 /// a group of `collect` or `accumulate` its timing still holds back: the
 /// engine goes past such a group to a ready job behind it, and starts that
-/// one. A ready job is seen here only synchronously — right after
+/// one. In a pool of a `SoloLanes` the order of a key holds instead: a group
+/// waiting for its window keeps the jobs of its own key behind it. A ready
+/// job is seen here only synchronously — right after
 /// `close(mode: SoloCloseMode.drain)`, or from a hook before the engine
 /// comes back to the queue. In a pool whose every place is taken, the jobs
 /// here wait for a place as well, ready or not.

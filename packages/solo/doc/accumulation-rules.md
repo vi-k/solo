@@ -87,9 +87,11 @@ default where the first event is what the user is waiting for.
   start as soon as they finish.
 - **What the queue shows.** Waiting groups stay visible in `queue.jobs`. The
   queue takes the first ready job in list order, allowing ready jobs to pass
-  waiting groups. The list can therefore be nonempty while no job is running.
-  Timing does not occupy the execution slot; once a handler starts, the queue
-  waits for its children and cleanup before starting another root job.
+  waiting groups. In a pool of a `SoloLanes` the order of a key holds instead:
+  a group waiting for its window keeps the jobs of its own key behind it. The
+  list can therefore be nonempty while no job is running. Timing does not
+  occupy the execution slot; once a handler starts, the queue waits for its
+  children and cleanup before starting another root job.
 - **Zero and negative durations.** Omitting `timing`, or passing
   `Duration.zero`, makes groups ready immediately and creates no timers,
   whatever `startAtOnce` says. Negative durations throw `ArgumentError`.

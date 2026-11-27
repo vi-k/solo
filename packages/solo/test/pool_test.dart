@@ -1864,6 +1864,51 @@ void main() {
       });
     });
 
+    test('a job awaiting a job of a lane waits while the lane runs it', () {
+      fakeAsync((async) {
+        final controller = _Pools((self) {
+          self.declarePool('p', 2);
+          self.declareLane('l');
+        });
+        final lane = controller.declaredLanes.single;
+        final pool = controller.declaredPools.single;
+        final gate = Completer<void>();
+        Outcome<void>? inner;
+        final outer = pool.enqueue<int, void>(key: 'a', (ctx) async {
+          inner = await lane.enqueue<int, void>(_gated([], 'l', gate)).done;
+        });
+        async.elapse(const Duration(hours: 1));
+
+        expect(outer.isRunning, isTrue);
+        expect(inner, isNull);
+
+        gate.complete();
+        async.flushMicrotasks();
+        expect(inner, isA<Done<void>>());
+        expect(outer.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('a job awaiting close of its controller waits for itself', () {
+      fakeAsync((async) {
+        final (controller, pool) = _onePool(2);
+        final outer = pool.enqueue<int, void>(key: 'a', (ctx) async {
+          await controller.close();
+        });
+        async.elapse(const Duration(hours: 1));
+
+        expect(outer.isRunning, isTrue);
+        expect(pool.running, [same(outer)]);
+
+        // Cancelling does not free it: the body still waits for its own end.
+        unawaited(controller.cancelAll());
+        async.elapse(const Duration(hours: 1));
+        expect(outer.isCancelled, isTrue);
+        expect(outer.isFinished, isFalse);
+        expect(pool.running, [same(outer)]);
+      });
+    });
+
     test('every place awaiting its pool waits for good, and pending says '
         'it', () {
       fakeAsync((async) {

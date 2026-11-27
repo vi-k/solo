@@ -127,15 +127,15 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   SoloController<S> get _solo => _core.controller;
 
   /// Queues a job of a group. A [Solo] is asked through its own
-  /// [Solo.enqueueJob], which a subclass may override, and a lane of a
-  /// [SoloLanes] through its [SoloLane.enqueueJob].
+  /// [Solo.enqueueJob], which a subclass may override, and a lane or a pool
+  /// of a [SoloLanes] through its [SoloLane.enqueueJob].
   SoloJob<T> _enqueue(_SoloJob<S, W, T> job) {
     final controller = _solo;
     if (controller is Solo<S>) {
       return controller.enqueueJob(job);
     }
-    // Only a Solo and a lane make accumulators, and a lane's core has its
-    // face.
+    // Only a Solo, a lane and a pool make accumulators, and the core of a
+    // lane or a pool has its face.
     return _core.lane!.enqueueJob(job);
   }
 
